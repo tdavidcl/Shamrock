@@ -204,6 +204,7 @@ endif()
 target_link_libraries(shamrock_lib PUBLIC shamunits)
 
 
+target_link_libraries(shamrock_lib PUBLIC coala)
 
 
 
@@ -229,6 +230,7 @@ target_link_libraries(shamrock PUBLIC fmt::fmt)
 target_link_libraries(shamrock PUBLIC shamunits)
 
 
+target_link_libraries(shamrock PUBLIC coala)
 
 if(SHAMROCK_USE_NVTX)
     target_link_libraries(shamrock PUBLIC nvtx3-cpp)
@@ -276,6 +278,7 @@ if("${BUILD_TEST}")
     endif()
 
 
+target_link_libraries(shamrock_test PUBLIC coala)
 
     if(SHAMROCK_USE_PCH)
     target_precompile_headers(shamrock_test REUSE_FROM shamrock_lib)
