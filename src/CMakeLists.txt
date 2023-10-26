@@ -9,6 +9,7 @@ add_subdirectory(shammath)
 
 add_subdirectory(shamrock)
 add_subdirectory(shammodels)
+add_subdirectory(coala)
 
 #add_subdirectory(runscript)
 

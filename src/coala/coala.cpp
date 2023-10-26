@@ -51,7 +51,7 @@ void init(){
 
 
 
-int main()
+void main_coala()
 {
 
     //setup
@@ -246,5 +246,4 @@ int main()
 
 
 
-	return 0;
 }
