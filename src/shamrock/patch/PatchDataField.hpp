@@ -6,9 +6,13 @@
 //
 // -------------------------------------------------------//
 
-//%Impl status : Good
-
 #pragma once
+
+/**
+ * @file PatchDataField.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief
+ */
 
 #include "aliases.hpp"
 #include "shamalgs/memory.hpp"
@@ -247,7 +251,7 @@ template <class T> class PatchDataField {
      * This function can be used to apply the result of a sort to the field
      * 
      * @param index_map 
-     * @param len the lenght of the map (must match with the current count)
+     * @param len the length of the map (must match with the current count)
      */
     void index_remap(sycl::buffer<u32> & index_map, u32 len);
 

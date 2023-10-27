@@ -8,11 +8,18 @@
 
 #pragma once
 
+/**
+ * @file distributedDataComm.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/sparseXchg.hpp"
 #include "shambase/DistributedData.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shamsys/SyclMpiTypes.hpp"
 #include <functional>
 #include <mpi.h>

@@ -16,8 +16,8 @@
  */
 
 
-#include "shambase/type_aliases.hpp"
-#include "shambase/sycl_vec_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shambase/exception.hpp"
 #include <variant>
 

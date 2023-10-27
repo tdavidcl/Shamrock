@@ -8,8 +8,15 @@
 
 #pragma once
 
+/**
+ * @file sycl2020reduction.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shamalgs/memory.hpp"
-#include "shambase/sycl.hpp"
+#include "shambackends/sycl.hpp"
 
 
 namespace shamalgs::reduction::details {

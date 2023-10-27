@@ -187,15 +187,15 @@ namespace shamunits {
         T s_inv, m_inv, kg_inv, A_inv, K_inv, mol_inv, cd_inv;
 
         explicit UnitSystem(T unit_time = 1 ,
-                   T unit_lenght = 1 ,
+                   T unit_length = 1 ,
                    T unit_mass = 1 ,
                    T unit_current = 1 ,
                    T unit_temperature = 1 ,
                    T unit_qte = 1 ,
                    T unit_lumint = 1 )
-            : s(1 / unit_time), m(1 / unit_lenght), kg(1 / unit_mass), A(1 / unit_current),
+            : s(1 / unit_time), m(1 / unit_length), kg(1 / unit_mass), A(1 / unit_current),
               K(1 / unit_temperature), mol(1 / unit_qte), cd(1 / unit_lumint), s_inv(unit_time),
-              m_inv(unit_lenght), kg_inv(unit_mass), A_inv(unit_current), K_inv(unit_temperature),
+              m_inv(unit_length), kg_inv(unit_mass), A_inv(unit_current), K_inv(unit_temperature),
               mol_inv(unit_qte), cd_inv(unit_lumint) {}
 
         // clang-format off
@@ -398,7 +398,7 @@ namespace shamunits {
             static constexpr T astronomical_unit = Conv::au_to_m;  //(m)
             static constexpr T light_year        = Conv::ly_to_m;  //(m)
             static constexpr T parsec            = Conv::pc_to_m;  //(m)
-            static constexpr T planck_lenght     = 1.61625518e-35; //(m)
+            static constexpr T planck_length     = 1.61625518e-35; //(m)
 
             static constexpr T proton_mass   = 1.67262192e-27;                         //(kg)
             static constexpr T electron_mass = proton_mass * electron_proton_ratio<T>; //(kg)
@@ -462,7 +462,7 @@ int main(void){
     double sol_mass = Constants<double>(si).sol_mass();
 
     /*
-    * create a unit system with time in Myr, lenght in au, mass in solar masses
+    * create a unit system with time in Myr, length in au, mass in solar masses
     */
     UnitSystem<double> astro_units {
         si.get<mega, units::years>(),
@@ -470,7 +470,7 @@ int main(void){
         si.get<units::kilogramm>()*sol_mass,
     };
 
-    //this time it returns 1 because the base lenght is the astronomical unit
+    //this time it returns 1 because the base length is the astronomical unit
     std::cout << astro_units.get<units::astronomical_unit,2>() << std::endl;
 
     Constants<double> astro_cte {astro_units};
@@ -483,6 +483,6 @@ int main(void){
     double value = 12; //here 12 Myr
 
     // print : value = 3.15576e+19 s
-    std::cout << "value = "<<astro_units.to<units::second>() << " s"<< std::endl;
+    std::cout << "value = "<< astro_units.to<units::second>() << " s"<< std::endl;
 
 }

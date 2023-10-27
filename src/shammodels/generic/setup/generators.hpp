@@ -11,11 +11,18 @@
 
 #pragma once
 
+/**
+ * @file generators.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "aliases.hpp"
 #include "shamalgs/random.hpp"
 #include "shambase/Constants.hpp"
-#include "shambase/type_aliases.hpp"
-#include "shambase/sycl.hpp"
+#include "shambackends/typeAliasVec.hpp"
+#include "shambackends/sycl.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 
@@ -110,7 +117,7 @@ namespace generic::setup::generators {
         u32 iy = std::ceil(iboc_dim.y());
         u32 iz = std::ceil(iboc_dim.z());
 
-        if(shamsys::instance::world_rank == 0) logger::info_ln("SPH", "Add fcc lattice size : (",ix,iy,iz,")");
+        if(shamcomm::world_rank() == 0) logger::info_ln("SPH", "Add fcc lattice size : (",ix,iy,iz,")");
         //std::cout << "part box size : (" << ix << ", " << iy << ", " << iz << ")" << std::endl;
 
         if((iy % 2) != 0 && (iz % 2) != 0){

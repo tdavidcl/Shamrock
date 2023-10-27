@@ -6,6 +6,12 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file PatchDataField.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief
+ */
+
 #include "PatchDataField.hpp"
 #include "shamalgs/algorithm.hpp"
 #include "shamalgs/random.hpp"
@@ -22,8 +28,8 @@ template<class T> class Kernel_Extract_element;
 
 template <class T> void PatchDataField<T>::extract_element(u32 pidx, PatchDataField<T> &to) {
 
-    auto fast_extract_ptr = [](u32 idx, u32 lenght, auto cnt) {
-        T end_ = cnt[lenght - 1];
+    auto fast_extract_ptr = [](u32 idx, u32 length, auto cnt) {
+        T end_ = cnt[length - 1];
         T extr = cnt[idx];
 
         cnt[idx] = end_;

@@ -8,10 +8,18 @@
 
 #pragma once
 
+/**
+ * @file sparseXchg.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/serialize.hpp"
+#include "shambackends/math.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/SyclMpiTypes.hpp"
@@ -43,7 +51,7 @@ namespace shamalgs::collective {
 
             i32 iterator = 0;
             for (u64 i = 0; i < message_send.size(); i++) {
-                local_send_vec_comm_ranks[i] = shambase::pack(world_rank, message_send[i].receiver_rank);
+                local_send_vec_comm_ranks[i] = sham::pack32(shamcomm::world_rank(), message_send[i].receiver_rank);
             }
 
             vector_allgatherv(local_send_vec_comm_ranks, global_comm_ranks, MPI_COMM_WORLD);
@@ -70,9 +78,9 @@ namespace shamalgs::collective {
         //send step
         u32 send_idx = 0;
         for(u32 i = 0; i < global_comm_ranks.size(); i++){
-            u32_2 comm_ranks = shambase::unpack(global_comm_ranks[i]);
+            u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
 
-            if(comm_ranks.x() == world_rank){
+            if(comm_ranks.x() == shamcomm::world_rank()){
 
                 auto & payload = message_send[send_idx].payload;
 
@@ -96,9 +104,9 @@ namespace shamalgs::collective {
 
         //recv step
         for(u32 i = 0; i < global_comm_ranks.size(); i++){
-            u32_2 comm_ranks = shambase::unpack(global_comm_ranks[i]);
+            u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
 
-            if(comm_ranks.y() == world_rank){
+            if(comm_ranks.y() == shamcomm::world_rank()){
 
                 RecvPayload payload;
                 payload.sender_ranks = comm_ranks.x();

@@ -6,6 +6,13 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file Model.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+
 #include "Model.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shammath/sphkernels.hpp"
@@ -116,7 +123,7 @@ inline void post_insert_data(PatchScheduler &sched) {
     sched.scheduler_step(false, false);
 
     /*
-            if(shamsys::instance::world_rank == 7){
+            if(shamcomm::world_rank() == 7){
                 logger::raw_ln(sched.dump_status());
             }
     */
@@ -157,7 +164,7 @@ inline void post_insert_data(PatchScheduler &sched) {
     std::string log_gathered = "";
     shamalgs::collective::gather_str(log, log_gathered);
 
-    if (shamsys::instance::world_rank == 0)
+    if (shamcomm::world_rank() == 0)
         logger::info_ln("Model", "current particle counts : ", log_gathered);
 }
 
@@ -196,7 +203,7 @@ void Model<Tvec, SPHKernel>::push_particle(
 
         log += shambase::format(
             "\n  rank = {}  patch id={}, add N={} particles, coords = {} {}",
-            shamsys::instance::world_rank,
+            shamcomm::world_rank(),
             p.id_patch,
             vec_acc.size(),
             patch_coord.lower,
@@ -235,7 +242,7 @@ void Model<Tvec, SPHKernel>::push_particle(
         std::string log_gathered = "";
         shamalgs::collective::gather_str(log, log_gathered);
 
-        if (shamsys::instance::world_rank == 0) {
+        if (shamcomm::world_rank() == 0) {
             logger::info_ln("Model", "Push particles : ", log_gathered);
         }
         log = "";
@@ -311,7 +318,7 @@ void Model<Tvec, SPHKernel>::add_cube_fcc_3d(Tscal dr, std::pair<Tvec, Tvec> _bo
 
             log += shambase::format(
                 "\n  rank = {}  patch id={}, add N={} particles, coords = {} {}",
-                shamsys::instance::world_rank,
+                shamcomm::world_rank(),
                 p.id_patch,
                 vec_acc.size(),
                 patch_coord.lower,
@@ -342,7 +349,7 @@ void Model<Tvec, SPHKernel>::add_cube_fcc_3d(Tscal dr, std::pair<Tvec, Tvec> _bo
         std::string log_gathered = "";
         shamalgs::collective::gather_str(log, log_gathered);
 
-        if (shamsys::instance::world_rank == 0) {
+        if (shamcomm::world_rank() == 0) {
             logger::info_ln("Model", "Push particles : ", log_gathered);
         }
         log = "";

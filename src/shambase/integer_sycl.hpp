@@ -8,9 +8,16 @@
 
 #pragma once
 
-#include "shambase/type_aliases.hpp"
+/**
+ * @file integer_sycl.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
+#include "shambackends/typeAliasVec.hpp"
 #include "shambase/type_traits.hpp"
-#include "shambase/sycl.hpp"
+#include "shambackends/sycl.hpp"
 
 namespace shambase {
 
@@ -64,7 +71,7 @@ namespace shambase {
     #endif
 
     /**
-     * @brief give the lenght of the common prefix
+     * @brief give the length of the common prefix
      *
      * @tparam T the type
      * @param v
@@ -103,13 +110,13 @@ namespace shambase {
      * @tparam Acc 
      * @param x 
      * @param y 
-     * @param morton_lenght 
+     * @param morton_length 
      * @param m 
      * @return i32 
      */
     template<class Acc>
-    inline i32 karras_delta(i32 x, i32 y, u32 morton_lenght, Acc m) noexcept {
-        return ((y > morton_lenght - 1 || y < 0) ? -1 : int(clz_xor(m[x] , m[y])));
+    inline i32 karras_delta(i32 x, i32 y, u32 morton_length, Acc m) noexcept {
+        return ((y > morton_length - 1 || y < 0) ? -1 : int(clz_xor(m[x] , m[y])));
     }
 
 }

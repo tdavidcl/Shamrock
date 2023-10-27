@@ -17,7 +17,7 @@
 #include "shambase/integer.hpp"
 #include "shambase/sycl_utils.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shammath/AABB.hpp"
 #include "shamrock/tree/TreeTraversal.hpp"
 #include <array>
@@ -96,7 +96,7 @@ namespace shammodels::amr {
 
             return {
                 block_min + cell_offset,
-                block_min + cell_offset + delta_cell,
+                block_min + cell_offset + delta_cell
             };
         }
 

@@ -8,9 +8,15 @@
 
 #pragma once
 
+/**
+ * @file CommunicationBufferImpl.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ */
+
 #include "shambase/exception.hpp"
-#include "shambase/type_aliases.hpp"
-#include "shambase/sycl.hpp"
+#include "shambackends/typeAliasVec.hpp"
+#include "shambackends/sycl.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <stdexcept>
 #include <variant>

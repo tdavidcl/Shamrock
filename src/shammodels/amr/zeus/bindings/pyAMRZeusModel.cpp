@@ -6,6 +6,13 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file pyAMRZeusModel.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * \todo move to shambindings
+ */
+ 
 #include <memory>
 
 #include "shambindings/pybindaliases.hpp"
@@ -31,6 +38,12 @@ namespace shammodels::zeus{
             })
             .def("set_eos_gamma",[](TConfig & self, Tscal eos_gamma){
                 self.set_eos_gamma(eos_gamma);
+            })
+            .def("set_consistent_transport",[](TConfig & self, bool enable){
+                self.use_consistent_transport = enable;
+            })
+            .def("set_van_leer",[](TConfig & self, bool enable){
+                self.use_van_leer = enable;
             });
 
         py::class_<T>(m, name_model.c_str())

@@ -6,6 +6,13 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file Solver.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shammodels/amr/zeus/Solver.hpp"
 #include "shammodels/amr/zeus/modules/AMRTree.hpp"
 #include "shammodels/amr/zeus/modules/ComputePressure.hpp"
@@ -27,7 +34,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
 
     StackEntry stack_loc{};
 
-    if(shamsys::instance::world_rank == 0){ 
+    if(shamcomm::world_rank() == 0){ 
         logger::normal_ln("amr::Zeus", shambase::format("t = {}, dt = {}", t_current, dt_input));
     }
 
@@ -72,7 +79,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
     using namespace shamrock::patch;
     using namespace shamrock;
     using Block = typename Config::AMRBlock;
-    AsciiSplitDump debug_dump("ghost_dump_debug"+std::to_string(t_current));
+    AsciiSplitDump debug_dump("ghost_dump_debug"+std::to_string(t_current) + std::to_string(solver_config.use_van_leer)+ std::to_string(solver_config.use_consistent_transport));
 
     bool do_debug_dump = false;
 
@@ -517,7 +524,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
 
     std::string log_rank_rate = shambase::format(
         "\n| {:<4} |    {:.4e}    | {:11} |   {:.3e}   |  {:3.0f} % | {:3.0f} % | {:3.0f} % |", 
-        shamsys::instance::world_rank,rate,  rank_count,  tstep.elasped_sec(),
+        shamcomm::world_rank(),rate,  rank_count,  tstep.elasped_sec(),
         100*(storage.timings_details.interface / tstep.elasped_sec()),
         100*(storage.timings_details.neighbors / tstep.elasped_sec()),
         100*(storage.timings_details.io / tstep.elasped_sec())
@@ -526,7 +533,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
     std::string gathered = "";
     shamalgs::collective::gather_str(log_rank_rate, gathered);
 
-    if(shamsys::instance::world_rank == 0){
+    if(shamcomm::world_rank() == 0){
         std::string print = "processing rate infos : \n";
         print+=("---------------------------------------------------------------------------------\n");
         print+=("| rank |  rate  (N.s^-1)  |      N      | t compute (s) | interf | neigh |   io  |\n");

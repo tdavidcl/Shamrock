@@ -8,11 +8,18 @@
 
 #pragma once
 
-#include "aliases.hpp"
+/**
+ * @file random.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
+#include "shambackends/typeAliasVec.hpp"
 #include "shambase/Constants.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
 #include <random>
-#include "shambase/sycl.hpp"
+#include "shambackends/sycl.hpp"
 
 /**
  * @brief namespace to contain utility related to random number generation in shamalgs

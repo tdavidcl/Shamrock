@@ -28,9 +28,10 @@ void sparse_comm_test(std::string prefix, shamsys::CommunicationProtocol prot){
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
     using namespace shamsys;
+    using namespace shamcomm;
 
-    const i32 wsize = world_size;
-    const i32 wrank = world_rank;
+    const i32 wsize = world_size();
+    const i32 wrank = world_rank();
     
     u32 num_buf = wsize*5;
     u32 nbytes_per_buf = 1e4;
@@ -77,7 +78,7 @@ void sparse_comm_test(std::string prefix, shamsys::CommunicationProtocol prot){
     std::vector<SendPayload> sendop;
 
     for(RefBuff & bufinfo : tests.elements){
-        if(bufinfo.sender_rank == world_rank){
+        if(bufinfo.sender_rank == world_rank()){
             sendop.push_back(SendPayload{
                 bufinfo.receiver_rank,
                 std::make_unique<CommunicationBuffer>(*bufinfo.payload, prot)

@@ -8,3 +8,4 @@ add_library(shamunits INTERFACE)
 target_include_directories(shamunits INTERFACE
 "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
 "$<INSTALL_INTERFACE:include>")
+

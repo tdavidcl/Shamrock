@@ -6,6 +6,13 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file pyShamrockCtx.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * \todo move to shambindings folder
+ */
+
 #include "shambindings/pybindaliases.hpp"
 
 #include <pybind11/stl.h>
@@ -268,6 +275,7 @@ Register_pymod(pyshamrockctxinit){
                 append_to_map<u64   >(fname, data, dic_out);
                 append_to_map<u32_3 >(fname, data, dic_out);
                 append_to_map<u64_3 >(fname, data, dic_out);
+                append_to_map<i64_3 >(fname, data, dic_out);
             }
 
             return dic_out;

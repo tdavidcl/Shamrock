@@ -8,14 +8,18 @@
 
 #pragma once
 
-//TODO remove this file
+/**
+ * @file SyclHelper.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ */
 
 
-#include "shambase/type_aliases.hpp"
-#include "shambase/sycl_vec_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include <ostream>
 #include <random> 
-#include "shambase/sycl.hpp"
+#include "shambackends/sycl.hpp"
 
 
 

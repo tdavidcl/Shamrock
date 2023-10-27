@@ -8,6 +8,13 @@
 
 #pragma once
 
+/**
+ * @file Model.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+
 #include "shamalgs/collective/exchanges.hpp"
 #include "shambase/string.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
@@ -265,7 +272,7 @@ namespace shammodels::sph {
             std::string log_gathered = "";
             shamalgs::collective::gather_str(log, log_gathered);
 
-            if(shamsys::instance::world_rank == 0) {
+            if(shamcomm::world_rank() == 0) {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
 
@@ -301,7 +308,7 @@ namespace shammodels::sph {
             log_gathered = "";
             shamalgs::collective::gather_str(log, log_gathered);
 
-            if(shamsys::instance::world_rank == 0) logger::info_ln("Model", "current particle counts : ", log_gathered);
+            if(shamcomm::world_rank() == 0) logger::info_ln("Model", "current particle counts : ", log_gathered);
             return part_mass;
         }
 
@@ -414,7 +421,7 @@ namespace shammodels::sph {
             std::string log_gathered = "";
             shamalgs::collective::gather_str(log, log_gathered);
 
-            if(shamsys::instance::world_rank == 0) {
+            if(shamcomm::world_rank() == 0) {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
 
@@ -450,7 +457,7 @@ namespace shammodels::sph {
             log_gathered = "";
             shamalgs::collective::gather_str(log, log_gathered);
 
-            if(shamsys::instance::world_rank == 0) logger::info_ln("Model", "current particle counts : ", log_gathered);
+            if(shamcomm::world_rank() == 0) logger::info_ln("Model", "current particle counts : ", log_gathered);
         }
 
         void push_particle(std::vector<Tvec> & part_pos_insert, std::vector<Tscal> & part_hpart_insert, std::vector<Tscal> &part_u_insert);

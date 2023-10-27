@@ -6,6 +6,13 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file SinkParticlesUpdate.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shamalgs/numeric.hpp"
 #include "shamalgs/reduction.hpp"
@@ -231,7 +238,7 @@ void SinkUpdate<Tvec, SPHKernel>::compute_sph_forces(Tscal gpart_mass){
 
         s.sph_acceleration = {};
 
-        for(u32 rid = 0 ; rid < shamsys::instance::world_size; rid++){
+        for(u32 rid = 0 ; rid < shamcomm::world_size(); rid++){
             s.sph_acceleration += gathered_result_acc_sinks[rid*sink_parts.size() + id_s];
         }
 

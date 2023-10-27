@@ -8,8 +8,16 @@
 
 #pragma once
 
+/**
+ * @file groupReduction.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shamalgs/memory.hpp"
-#include "shambase/sycl.hpp"
+#include "shambackends/math.hpp"
+#include "shambackends/sycl.hpp"
 #include "shambase/sycl_utils.hpp"
 #include "shambase/sycl_utils/sycl_utilities.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
@@ -36,13 +44,13 @@ class KernelSliceReduceMax;
 template<typename T = void>
 struct _tmp_max {
     HIPSYCL_UNIVERSAL_TARGET inline T operator()(const T &lhs, const T &rhs) const {
-        return shambase::sycl_utils::g_sycl_max(lhs, rhs);
+        return sham::max(lhs, rhs);
     }
 };
 template<typename T = void>
 struct _tmp_min {
     HIPSYCL_UNIVERSAL_TARGET inline T operator()(const T &lhs, const T &rhs) const {
-        return shambase::sycl_utils::g_sycl_min(lhs, rhs);
+        return sham::min(lhs, rhs);
     }
 };
     #define SYCL_SUM_OP                                                                            \

@@ -8,9 +8,16 @@
 
 #pragma once
 
-//%Impl status : Good
 
-#include "shambase/sycl.hpp"
+/**
+ * @file density.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
+
+#include "shambackends/sycl.hpp"
 namespace shamrock::sph {
 
     template<class flt>

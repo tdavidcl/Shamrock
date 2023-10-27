@@ -8,9 +8,15 @@
 
 #pragma once
 
+/**
+ * @file CommunicationBuffer.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ */
+
 #include "shambase/exception.hpp"
-#include "shambase/sycl.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/sycl.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shamsys/comm/details/CommunicationBufferImpl.hpp"
 
 namespace shamsys {

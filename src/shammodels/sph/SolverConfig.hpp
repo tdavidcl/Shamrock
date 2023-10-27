@@ -8,6 +8,13 @@
 
 #pragma once
 
+/**
+ * @file SolverConfig.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+
 #include "shambase/exception.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
 #include <shamunits/UnitSystem.hpp>
@@ -16,7 +23,7 @@
 #include "shamsys/legacy/log.hpp"
 #include <variant>
 
-#include "shambase/sycl_vec_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 
 namespace shammodels::sph {
     template<class Tvec, template<class> class SPHKernel>
@@ -222,7 +229,7 @@ struct shammodels::sph::SolverConfig {
     inline bool has_field_soundspeed() { return artif_viscosity.has_field_soundspeed(); }
 
     inline void print_status() { 
-        if(shamsys::instance::world_rank != 0){return;}
+        if(shamcomm::world_rank() != 0){return;}
         logger::raw_ln("----- SPH Solver configuration -----");
         
         artif_viscosity.print_status(); 

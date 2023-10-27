@@ -8,6 +8,13 @@
 
 #pragma once
 
+/**
+ * @file Model.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "shambase/memory.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
 #include "shammodels/amr/zeus/Solver.hpp"
@@ -91,7 +98,10 @@ namespace shammodels::zeus {
 
         inline std::pair<Tvec,Tvec> get_cell_coords(std::pair<TgridVec,TgridVec> block_coords, u32 lid){
             using Block = typename Solver::Config::AMRBlock;
-            return Block::utils_get_cell_coords(block_coords,lid);
+            auto tmp = Block::utils_get_cell_coords(block_coords,lid);
+            tmp.first *= solver.solver_config.grid_coord_to_pos_fact;
+            tmp.second *= solver.solver_config.grid_coord_to_pos_fact;
+            return tmp;
         }
 
     };
