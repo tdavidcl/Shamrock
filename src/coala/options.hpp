@@ -6,7 +6,7 @@
 // #include <quadmath.h>
 #include <ostream>
 // #include <CL/sycl.hpp>
-#include <SYCL/sycl.hpp>
+#include <sycl/sycl.hpp>
 
 
 //definitions types

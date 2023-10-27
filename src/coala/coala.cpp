@@ -1,6 +1,6 @@
 #include "options.hpp"
 #include "setup.hpp"
-#include "init_grid.hpp"
+#include "coala/init_grid.hpp"
 #include "iterate_coag.hpp"
 #include "GQ_legendre_nodes_weights.hpp"
 #include "L2proj_GQ.hpp"
@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include <SYCL/sycl.hpp>
-
+#include "coala/coala.hpp"
 
 
 
@@ -174,7 +174,7 @@ void main_coala()
     massgrid = new flt[nbins+1];
     massbins = new flt[nbins];
     xmeanlog = new flt[nbins];
-    init_grid(massmin,massmax,nbins,massgrid,massbins,xmeanlog);
+    coala::init_grid(massmin,massmax,nbins,massgrid,massbins,xmeanlog);
 
     // massgrid = new flt[nbins+1];
     // massbins = new flt[nbins];

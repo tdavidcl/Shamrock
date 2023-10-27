@@ -102,7 +102,7 @@ flt Leg_P(u32 k,flt x){
 		// exit(-1);
 	}
 	
-	
+	return 0;
 }
 
 //-------------------------------------------
@@ -125,5 +125,5 @@ flt Leg_P_sycl(u32 i, u32 k,const accfltrw_t coeff_Leg,flt x){
 		// exit(-1);
 	}
 	
-	
+	return 0;
 }

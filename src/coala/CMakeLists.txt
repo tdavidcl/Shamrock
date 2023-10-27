@@ -9,7 +9,6 @@ target_sources(shamrock_lib
     kernel_approx/intflux/termA/termA_intflux_function.cpp
     kernel_approx/intflux/termB/termB_intflux_components.cpp
     kernel_approx/intflux/termB/termB_intflux_function.cpp
-    init_grid.cpp
     polynomials_legendre.cpp
     reconstruction_gh.cpp
     limiter.cpp
