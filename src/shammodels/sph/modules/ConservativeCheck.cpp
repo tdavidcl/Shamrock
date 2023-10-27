@@ -6,10 +6,17 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file ConservativeCheck.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ * 
+ */
+ 
 #include "ConservativeCheck.hpp"
 
 #include "shambase/sycl_utils/sycl_utilities.hpp"
-#include "shamrock/sph/kernels.hpp"
+#include "shammath/sphkernels.hpp"
 #include "shamsys/legacy/log.hpp"
 
 template<class Tvec, template<class> class SPHKernel>
@@ -125,6 +132,6 @@ void shammodels::sph::modules::ConservativeCheck<Tvec, SPHKernel>::check_conserv
     }
 }
 
-using namespace shamrock::sph::kernels;
+using namespace shammath;
 template class shammodels::sph::modules::ConservativeCheck<f64_3, M4>;
 template class shammodels::sph::modules::ConservativeCheck<f64_3, M6>;

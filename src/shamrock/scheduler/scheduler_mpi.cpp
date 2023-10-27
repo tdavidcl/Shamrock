@@ -6,6 +6,12 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file scheduler_mpi.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief
+ */
+
 #include "scheduler_mpi.hpp"
 
 #include <ctime>
@@ -17,7 +23,7 @@
 
 #include "shambase/integer_sycl.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/legacy/patch/base/patchdata_field.hpp"
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
@@ -64,7 +70,7 @@ void PatchScheduler::make_patch_base_grid(std::array<u32,dim> patch_count){
 
     u64 coord_div_fact = shambase::roundup_pow2_clz(max_lin_patch_count);
 
-    u64 sz_root_patch = PatchScheduler::max_axis_patch_coord_lenght/coord_div_fact;
+    u64 sz_root_patch = PatchScheduler::max_axis_patch_coord_length/coord_div_fact;
 
     
     std::vector<shamrock::patch::PatchCoord<3>> coords;

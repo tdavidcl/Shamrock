@@ -12,15 +12,14 @@
  * @file NodeInstance.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief Header file describing a Node Instance
- * @copyright Copyright(C) 2021-2022 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
  *
  * A NodeInstance is a wrapper to perform a combined initialisation of both SYCL & MPI.
  * Essentially it handle the MPI process and corresponding accelerators
  */
 
 
-#include "aliases.hpp"
 
+#include "shambase/aliases_int.hpp"
 #include <vector>
 #include <sycl/sycl.hpp>
 

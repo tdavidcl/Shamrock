@@ -6,6 +6,12 @@
 //
 // -------------------------------------------------------//
 
+/**
+ * @file NodeInstance.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief 
+ */
+
 #include "NodeInstance.hpp"
 
 #include "shambase/SourceLocation.hpp"
@@ -13,7 +19,7 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambase/sycl_utils.hpp"
-#include "shambase/type_aliases.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shamsys/EnvVariables.hpp"
 #include "shamsys/comm/CommunicationBuffer.hpp"
 #include "shamsys/comm/details/CommunicationBufferImpl.hpp"

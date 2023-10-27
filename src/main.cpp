@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "shambindings/pybindaliases.hpp"
+#include "version.hpp"
 
 //%Impl status : Should rewrite
 
