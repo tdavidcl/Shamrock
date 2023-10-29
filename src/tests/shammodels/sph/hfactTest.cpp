@@ -6,16 +6,24 @@
 //
 // -------------------------------------------------------//
 
-
+#include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
+#include <vector>
 
-#include "shambase/Constants.hpp"
+
+inline std::vector<f64> get_h_test_vals(){
+    std::vector<f64> ret{};
+
+    for(f64 hfact = 0; hfact < 3; hfact += 0.01){
+        ret.push_back(hfact);
+    }
+
+    return ret;
+}
 
 
-TestStart(Unittest, "shambase/Constants", checkconstantmatchsycl, 1){
+TestStart(ValidationTest, "shammodels/sph/hfact_default", test_sph_hfact_default, 1) {
 
-    using namespace shambase::constants;
 
-    _AssertFloatEqual(pi<f32>, 4*sycl::atan(unity<f32>), 1e-25);
-    _AssertFloatEqual(pi<f64>, 4*sycl::atan(unity<f64>), 1e-25);
+
 }

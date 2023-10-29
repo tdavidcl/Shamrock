@@ -11,8 +11,8 @@
 #include "shambase/exception.hpp"
 #include "shambase/string.hpp"
 #include "shamsys/NodeInstance.hpp"
-#include "shamsys/comm/CommunicationBuffer.hpp"
-#include "shamsys/comm/details/CommunicationBufferImpl.hpp"
+#include "shamcomm/CommunicationBuffer.hpp"
+#include "shamcomm/details/CommunicationBufferImpl.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
@@ -23,7 +23,7 @@
 #include <stdexcept>
 #include <vector>
 
-void sparse_comm_test(std::string prefix, shamsys::CommunicationProtocol prot){
+void sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
     
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
@@ -146,9 +146,9 @@ void sparse_comm_test(std::string prefix, shamsys::CommunicationProtocol prot){
 TestStart(Unittest, "shamalgs/collective/sparseXchg", testsparsexchg, -1){
 
     if(shamsys::instance::is_direct_gpu_selected()){
-        sparse_comm_test("DirectGPU  mode : ",shamsys::DirectGPU);
+        sparse_comm_test("DirectGPU  mode : ",shamcomm::DirectGPU);
     }else{
-        sparse_comm_test("CopyToHost mode : ",shamsys::CopyToHost);
+        sparse_comm_test("CopyToHost mode : ",shamcomm::CopyToHost);
     }
 
 }

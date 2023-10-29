@@ -10,6 +10,7 @@
  * @file CommunicationBufferImpl.cpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief 
+ * \todo this file should pull queues from backends and not sys lib
  */
 
 #include "CommunicationBufferImpl.hpp"
@@ -19,12 +20,12 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace shamsys::details {
+namespace shamcomm::details {
 
 
 
     void CommunicationBuffer<CopyToHost>::alloc_usm(u64 len){
-        usm_ptr = sycl::malloc_host<u8>(len,instance::get_compute_queue());
+        usm_ptr = sycl::malloc_host<u8>(len,shamsys::instance::get_compute_queue());
     }
 
     void CommunicationBuffer<CopyToHost>::copy_to_usm(sycl::buffer<u8> & obj_ref, u64 len){   
@@ -55,13 +56,13 @@ namespace shamsys::details {
 
     
     void CommunicationBuffer<DirectGPU>::alloc_usm(u64 len){
-        usm_ptr = sycl::malloc_device<u8>(len,instance::get_compute_queue());
+        usm_ptr = sycl::malloc_device<u8>(len,shamsys::instance::get_compute_queue());
     }
 
     
     void CommunicationBuffer<DirectGPU>::copy_to_usm(sycl::buffer<u8> & obj_ref, u64 len){
         
-        auto ev = instance::get_compute_queue().submit([&](sycl::handler & cgh){
+        auto ev = shamsys::instance::get_compute_queue().submit([&](sycl::handler & cgh){
             
             sycl::accessor acc_buf {obj_ref, cgh, sycl::read_only};
 
@@ -83,7 +84,7 @@ namespace shamsys::details {
         sycl::buffer<u8> buf_ret (len);
 
 
-        auto ev = instance::get_compute_queue().submit([&](sycl::handler & cgh){
+        auto ev = shamsys::instance::get_compute_queue().submit([&](sycl::handler & cgh){
             
             sycl::accessor acc_buf {buf_ret, cgh,sycl::write_only, sycl::no_init};
 
@@ -103,7 +104,7 @@ namespace shamsys::details {
     
     void CommunicationBuffer<DirectGPU>::copy_usm(u64 len, u8* new_usm){
 
-        auto ev = instance::get_compute_queue().submit([&](sycl::handler & cgh){
+        auto ev = shamsys::instance::get_compute_queue().submit([&](sycl::handler & cgh){
             
             u8* ptr = usm_ptr;
 

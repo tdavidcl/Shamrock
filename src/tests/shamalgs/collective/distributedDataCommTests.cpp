@@ -12,14 +12,14 @@
 #include "shamalgs/reduction.hpp"
 #include "shambase/DistributedData.hpp"
 #include "shamsys/NodeInstance.hpp"
-#include "shamsys/comm/details/CommunicationBufferImpl.hpp"
+#include "shamcomm/details/CommunicationBufferImpl.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 #include <map>
 #include <memory>
 
 
-void distribdata_sparse_comm_test(std::string prefix, shamsys::CommunicationProtocol prot){
+void distribdata_sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
 
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
@@ -94,9 +94,9 @@ void distribdata_sparse_comm_test(std::string prefix, shamsys::CommunicationProt
 TestStart(Unittest, "shamalgs/collective/distributedDataComm", testdistributeddatacomm, -1) {
 
     if(shamsys::instance::is_direct_gpu_selected()){
-        distribdata_sparse_comm_test("DirectGPU  mode : ",shamsys::DirectGPU);
+        distribdata_sparse_comm_test("DirectGPU  mode : ",shamcomm::DirectGPU);
     }else{
-        distribdata_sparse_comm_test("CopyToHost mode : ",shamsys::CopyToHost);
+        distribdata_sparse_comm_test("CopyToHost mode : ",shamcomm::CopyToHost);
     }
     
 }

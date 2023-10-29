@@ -8,8 +8,8 @@
 
 #include "shamalgs/random.hpp"
 #include "shambase/sycl_utils/vec_equals.hpp"
-#include "shamsys/comm/CommunicationBuffer.hpp"
-#include "shamsys/comm/details/CommunicationBufferImpl.hpp"
+#include "shamcomm/CommunicationBuffer.hpp"
+#include "shamcomm/details/CommunicationBufferImpl.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 
@@ -47,13 +47,13 @@ TestStart(Unittest, "shamsys/comm/CommunicationBuffer/constructor", test_basic_s
     sycl::buffer<u8> buf_comp = shamalgs::random::mock_buffer<u8>(0x111, nbytes);
 
     {
-        shamsys::CommunicationBuffer cbuf {buf_comp, shamsys::CopyToHost};
+        shamcomm::CommunicationBuffer cbuf {buf_comp, shamcomm::CopyToHost};
         sycl::buffer<u8> ret = cbuf.copy_back();
         check_buf("copy to host mode", buf_comp, ret);
     }
 
     {
-        shamsys::CommunicationBuffer cbuf {buf_comp, shamsys::DirectGPU};
+        shamcomm::CommunicationBuffer cbuf {buf_comp, shamcomm::DirectGPU};
         sycl::buffer<u8> ret = cbuf.copy_back();
         check_buf("copy to host mode", buf_comp, ret);
     }

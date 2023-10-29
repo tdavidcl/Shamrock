@@ -21,7 +21,7 @@
 #include <stdexcept>
 #include <variant>
 
-namespace shamsys {
+namespace shamcomm {
 
     enum CommunicationProtocol{
         /**
@@ -83,7 +83,7 @@ namespace shamsys {
             }
 
             inline ~CommunicationBuffer(){
-                sycl::free(usm_ptr,instance::get_compute_queue());
+                sycl::free(usm_ptr,shamsys::instance::get_compute_queue());
             }
 
             inline CommunicationBuffer(CommunicationBuffer&& other) noexcept : 
@@ -161,7 +161,7 @@ namespace shamsys {
             }
 
             inline ~CommunicationBuffer(){
-                sycl::free(usm_ptr,instance::get_compute_queue());
+                sycl::free(usm_ptr,shamsys::instance::get_compute_queue());
             }
 
             inline CommunicationBuffer(CommunicationBuffer&& other) noexcept : 

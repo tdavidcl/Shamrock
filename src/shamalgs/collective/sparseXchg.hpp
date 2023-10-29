@@ -23,7 +23,7 @@
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/SyclMpiTypes.hpp"
-#include "shamsys/comm/CommunicationBuffer.hpp"
+#include "shamcomm/CommunicationBuffer.hpp"
 #include "shambase/integer.hpp"
 #include "shamsys/legacy/log.hpp"
 
@@ -31,12 +31,12 @@ namespace shamalgs::collective {
 
     struct SendPayload{
         i32 receiver_rank;
-        std::unique_ptr<shamsys::CommunicationBuffer> payload;
+        std::unique_ptr<shamcomm::CommunicationBuffer> payload;
     };
 
     struct RecvPayload{
         i32 sender_ranks; //should not be plural
-        std::unique_ptr<shamsys::CommunicationBuffer> payload;
+        std::unique_ptr<shamcomm::CommunicationBuffer> payload;
     };
 
     struct SparseCommTable{
@@ -60,7 +60,7 @@ namespace shamalgs::collective {
 
     inline void sparse_comm_c(const std::vector<SendPayload> & message_send,
         std::vector<RecvPayload> & message_recv,
-        shamsys::CommunicationProtocol protocol,
+        shamcomm::CommunicationProtocol protocol,
         const SparseCommTable & comm_table){
         StackEntry stack_loc{};
 
@@ -120,7 +120,7 @@ namespace shamalgs::collective {
                 mpi::probe(comm_ranks.x(), i,MPI_COMM_WORLD, & st);
                 mpi::get_count(&st, MPI_BYTE, &cnt);
 
-                payload.payload = std::make_unique<shamsys::CommunicationBuffer>(cnt, protocol);
+                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, protocol);
 
                 mpi::irecv(
                     payload.payload->get_ptr(), 
@@ -144,7 +144,7 @@ namespace shamalgs::collective {
     inline void base_sparse_comm(
         const std::vector<SendPayload> & message_send,
         std::vector<RecvPayload> & message_recv,
-        shamsys::CommunicationProtocol protocol
+        shamcomm::CommunicationProtocol protocol
         ) 
     {
         StackEntry stack_loc{};

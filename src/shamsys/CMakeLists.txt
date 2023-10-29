@@ -39,4 +39,3 @@ endif()
 add_subdirectory(legacy)
 
 add_subdirectory(bindings)
-add_subdirectory(comm)

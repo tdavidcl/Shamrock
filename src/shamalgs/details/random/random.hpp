@@ -30,7 +30,9 @@ namespace shamalgs::random {
     template<class T> T mock_value(std::mt19937 & eng, T min_bound, T max_bound);
 
     template<class T> T mock_gaussian(std::mt19937 & eng){
-        constexpr T _2pi = shambase::Constants<T>::pi*2;
+        using namespace shambase::constants;
+
+        constexpr T _2pi = pi<T>*2;
         T r_3 = shamalgs::random::mock_value<T>(eng,0, 1);
         T r_4 = shamalgs::random::mock_value<T>(eng,0, 1);
         return sycl::sqrt(-2*sycl::log(r_3))*sycl::cos(_2pi*r_4);

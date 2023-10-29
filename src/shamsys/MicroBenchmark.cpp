@@ -19,7 +19,7 @@
 #include "shambase/string.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
-#include "shamsys/comm/CommunicationBuffer.hpp"
+#include "shamcomm/CommunicationBuffer.hpp"
 #include "shamsys/legacy/log.hpp"
 #include <mpi.h>
 #include <stdexcept>
@@ -54,8 +54,8 @@ void shamsys::microbench::p2p_bandwith(u32 wr_sender, u32 wr_receiv){
     u32 wr = shamcomm::world_rank();
 
     u64 length = 1024UL*1014UL*8UL; //8MB messages
-    CommunicationBuffer buf_recv{length, shamsys::get_protocol()};
-    CommunicationBuffer buf_send{length, shamsys::get_protocol()};
+    shamcomm::CommunicationBuffer buf_recv{length, shamcomm::get_protocol()};
+    shamcomm::CommunicationBuffer buf_send{length, shamcomm::get_protocol()};
 
     std::vector<MPI_Request> rqs;
 
@@ -113,8 +113,8 @@ void shamsys::microbench::p2p_latency(u32 wr1, u32 wr2){
     u32 wr = shamcomm::world_rank();
 
     u64 length = 8ULL; //8B messages
-    CommunicationBuffer buf_recv{length, shamsys::get_protocol()};
-    CommunicationBuffer buf_send{length, shamsys::get_protocol()};
+    shamcomm::CommunicationBuffer buf_recv{length, shamcomm::get_protocol()};
+    shamcomm::CommunicationBuffer buf_send{length, shamcomm::get_protocol()};
 
     f64 t = 0;
     u64 loops = 0;

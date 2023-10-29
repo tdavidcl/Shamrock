@@ -13,6 +13,7 @@
  */
 
 #include "shamcomm/worldInfo.hpp"
+#include "shamcomm/mpiErrorCheck.hpp"
 #include "shamsys/MpiWrapper.hpp"
 
 namespace shamcomm {
@@ -31,8 +32,8 @@ namespace shamcomm {
 
     void fetch_world_info(){
 
-        mpi::comm_size(MPI_COMM_WORLD, &_world_size);
-        mpi::comm_rank(MPI_COMM_WORLD, & _world_rank);
+        MPICHECK(MPI_Comm_size(MPI_COMM_WORLD, &_world_size));
+        MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &_world_rank));
 
     }
 

@@ -176,7 +176,7 @@ namespace generic::setup::generators {
         std::function<flt(flt)> rot_profile,
         std::function<void(DiscOutput<flt>)> pusher
     ){
-        constexpr flt _2pi = 2*shambase::Constants<flt>::pi;
+        constexpr flt _2pi = 2*shambase::constants::pi<flt>;
 
 
         auto f_func = [&](flt r){
@@ -223,7 +223,7 @@ namespace generic::setup::generators {
 
             auto vel = vk*etheta;
 
-            flt rho = (sigma / (H * shambase::Constants<flt>::pi2_sqrt))*
+            flt rho = (sigma / (H * shambase::constants::pi2_sqrt<flt>))*
                 sycl::exp(- z*z / (2*H*H));
 
             DiscOutput<flt> out {

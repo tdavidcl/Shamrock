@@ -28,8 +28,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.2;
 
         inline static constexpr Tscal norm_1d = 2. / 3.;
-        inline static constexpr Tscal norm_2d = 10. / (7. * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 1 / shambase::Constants<Tscal>::pi;
+        inline static constexpr Tscal norm_2d = 10. / (7. * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 1 / shambase::constants::pi<Tscal>;
 
         inline static Tscal f(Tscal q) {
 
@@ -72,8 +72,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.2;
 
         inline static constexpr Tscal norm_1d = 1. / 24.;
-        inline static constexpr Tscal norm_2d = 96. / (1199 * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 1 / (20 * shambase::Constants<Tscal>::pi);
+        inline static constexpr Tscal norm_2d = 96. / (1199 * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 1 / (20 * shambase::constants::pi<Tscal>);
 
         inline static Tscal f(Tscal q) {
 
@@ -147,8 +147,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.0;
 
         inline static constexpr Tscal norm_1d = 1. / 120.;
-        inline static constexpr Tscal norm_2d = 7. / (478 * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 1 / (120 * shambase::Constants<Tscal>::pi);
+        inline static constexpr Tscal norm_2d = 7. / (478 * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 1 / (120 * shambase::constants::pi<Tscal>);
 
         inline static Tscal f(Tscal q) {
 
@@ -214,8 +214,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.0;
 
         inline static constexpr Tscal norm_1d = 3. / 4.;
-        inline static constexpr Tscal norm_2d = 7. / (4 * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 21 / (16 * shambase::Constants<Tscal>::pi);
+        inline static constexpr Tscal norm_2d = 7. / (4 * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 21 / (16 * shambase::constants::pi<Tscal>);
 
         inline static Tscal f(Tscal q) {
 
@@ -258,8 +258,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.0;
 
         inline static constexpr Tscal norm_1d = 27. / 32.;
-        inline static constexpr Tscal norm_2d = 9. / (4 * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 495. / (256. * shambase::Constants<Tscal>::pi);
+        inline static constexpr Tscal norm_2d = 9. / (4 * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 495. / (256. * shambase::constants::pi<Tscal>);
 
         inline static Tscal f(Tscal q) {
 
@@ -302,8 +302,8 @@ namespace shammath::details {
         inline static constexpr Tscal hfactd = 1.0;
 
         inline static constexpr Tscal norm_1d = 15. / 16.;
-        inline static constexpr Tscal norm_2d = 39. / (14. * shambase::Constants<Tscal>::pi);
-        inline static constexpr Tscal norm_3d = 1365. / (512. * shambase::Constants<Tscal>::pi);
+        inline static constexpr Tscal norm_2d = 39. / (14. * shambase::constants::pi<Tscal>);
+        inline static constexpr Tscal norm_3d = 1365. / (512. * shambase::constants::pi<Tscal>);
 
         inline static Tscal f(Tscal q) {
 

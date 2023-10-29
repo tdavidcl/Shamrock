@@ -71,7 +71,7 @@ namespace shamalgs::collective {
 
     void distributed_data_sparse_comm(SerializedDDataComm &send_distrib_data,
                                       SerializedDDataComm &recv_distrib_data,
-                                      shamsys::CommunicationProtocol prot,
+                                      shamcomm::CommunicationProtocol prot,
                                       std::function<i32(u64)> rank_getter,
                                       std::optional<SparseCommTable> comm_table) {
 
@@ -107,7 +107,7 @@ namespace shamalgs::collective {
         {NamedStackEntry stack_loc2{"prepare payload"};
         for (auto &[key, buf] : send_bufs) {
             send_payoad.push_back(
-                {key.second, std::make_unique<CommunicationBuffer>(get_check_ref(buf), prot)});
+                {key.second, std::make_unique<shamcomm::CommunicationBuffer>(get_check_ref(buf), prot)});
         }    
         }
         
@@ -133,9 +133,9 @@ namespace shamalgs::collective {
             NamedStackEntry stack_loc2{"move payloads"};
             for (RecvPayload &payload : recv_payload) {
 
-                shamsys::CommunicationBuffer comm_buf = extract_pointer(payload.payload);
+                shamcomm::CommunicationBuffer comm_buf = extract_pointer(payload.payload);
 
-                sycl::buffer<u8> buf = shamsys::CommunicationBuffer::convert(std::move(comm_buf));
+                sycl::buffer<u8> buf = shamcomm::CommunicationBuffer::convert(std::move(comm_buf));
 
                 recv_payload_bufs.push_back(RecvPayloadSer{
                     payload.sender_ranks,

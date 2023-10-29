@@ -11,16 +11,29 @@
 /**
  * @file CommunicationBuffer.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
- * @brief 
+ * @brief Shamrock communication buffers
+ *
+ * \todo make a better exemple
+ *
+ * \code{.cpp}
+ *   u32 nbytes = 1e5;
+ *   sycl::buffer<u8> buf_comp = shamalgs::random::mock_buffer<u8>(0x111, nbytes);
+ *   shamcomm::CommunicationBuffer cbuf {buf_comp, shamcomm::CopyToHost};
+ *   sycl::buffer<u8> ret = cbuf.copy_back();
+ * \endcode
  */
 
 #include "shambase/exception.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/typeAliasVec.hpp"
-#include "shamsys/comm/details/CommunicationBufferImpl.hpp"
+#include "shamcomm/details/CommunicationBufferImpl.hpp"
 
-namespace shamsys {
+namespace shamcomm {
 
+    /**
+     * @brief Shamrock communication buffers
+     * \todo try reducing compile time by type erasing impl
+     */
     class CommunicationBuffer {
 
         private:
