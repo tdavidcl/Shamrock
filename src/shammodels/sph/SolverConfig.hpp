@@ -24,6 +24,7 @@
 #include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
 #include <variant>
+#include <vector>
 
 #include "AVConfig.hpp"
 #include "shambackends/typeAliasVec.hpp"
@@ -36,6 +37,8 @@ namespace shammodels::sph {
     template<class Tvec>
     struct BCConfig;
 
+    template<class Tvec>
+    struct DustConfig;
 
 } // namespace shammodels::sph
 
@@ -66,6 +69,20 @@ struct shammodels::sph::BCConfig {
     inline void set_shearing_periodic(i32_3 shear_base, i32_3 shear_dir, Tscal speed) {
         config = ShearingPeriodic{shear_base, shear_dir, speed};
     }
+};
+
+template<class Tvec>
+struct shammodels::sph::DustConfig {
+
+    using Tscal              = shambase::VecComponent<Tvec>;
+    static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
+
+    struct None{};
+
+    struct DustMonofluidTvi{
+        std::vector<Tscal> dust_sizes;
+        Tscal rho_grain;
+    };
 };
 
 template<class Tvec, template<class> class SPHKernel>
