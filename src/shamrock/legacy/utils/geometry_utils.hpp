@@ -15,8 +15,7 @@
  * 
  */
 
-
-#include "aliases.hpp"
+#include "shambackends/sycl.hpp"
 #include <tuple>
 
 

@@ -24,8 +24,6 @@
 #include <variant>
 #include <vector>
 
-#include "aliases.hpp"
-#include "flags.hpp"
 #include "patchdata_field.hpp"
 #include "shamrock/legacy/patch/base/enabled_fields.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"

@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 
 #include "kernels/karras_alg.hpp"
 #include "shamalgs/memory.hpp"

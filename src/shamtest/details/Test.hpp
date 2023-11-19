@@ -14,7 +14,6 @@
  * @brief 
  */
 
-#include "aliases.hpp"
 #include "TestResult.hpp"
 
 namespace shamtest::details {

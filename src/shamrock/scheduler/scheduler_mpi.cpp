@@ -903,8 +903,8 @@ void PatchScheduler::dump_local_patches(std::string filename){
         fout.close();
 
     }else{
-        throw std::runtime_error(
-            __LOC_PREFIX__ + "the chosen type for the main field is not handled"
+        throw shambase::throw_with_loc<std::runtime_error>(
+            "the chosen type for the main field is not handled"
             );
     }
 }

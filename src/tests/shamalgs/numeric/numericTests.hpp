@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "aliases.hpp"
 #include "shamalgs/memory.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"

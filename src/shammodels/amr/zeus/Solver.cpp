@@ -14,6 +14,7 @@
  */
  
 #include "shammodels/amr/zeus/Solver.hpp"
+#include "shamcomm/collectives.hpp"
 #include "shammodels/amr/zeus/modules/AMRTree.hpp"
 #include "shammodels/amr/zeus/modules/ComputePressure.hpp"
 #include "shammodels/amr/zeus/modules/DiffOperator.hpp"
@@ -531,7 +532,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
         );
 
     std::string gathered = "";
-    shamalgs::collective::gather_str(log_rank_rate, gathered);
+    shamcomm::gather_str(log_rank_rate, gathered);
 
     if(shamcomm::world_rank() == 0){
         std::string print = "processing rate infos : \n";

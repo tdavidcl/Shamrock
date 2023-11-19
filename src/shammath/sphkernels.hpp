@@ -16,7 +16,6 @@
 
 //%Impl status : Good
 
-#include "aliases.hpp"
 #include "shambase/Constants.hpp"
 
 namespace shammath::details {

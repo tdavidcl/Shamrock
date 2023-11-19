@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include <array>
 #include <memory>
 #include <stdexcept>

@@ -3,7 +3,7 @@
    <img alt="text" src="doc/logosham_white.png" width="600">
  </picture>
  
-CI status: ![badge1](https://github.com/tdavidcl/Shamrock/actions/workflows/main.yml/badge.svg?branch=main)  
+CI status: ![badge1](https://github.com/tdavidcl/Shamrock/actions/workflows/source_checks.yml/badge.svg?branch=main)  ![badge1](https://github.com/tdavidcl/Shamrock/actions/workflows/shamrock-dpcpp.yml/badge.svg?branch=main)  ![badge1](https://github.com/tdavidcl/Shamrock/actions/workflows/shamrock-acpp-clang15.yml/badge.svg?branch=main)  ![badge1](https://github.com/tdavidcl/Shamrock/actions/workflows/shamrock-acpp-clang15-asan.yml/badge.svg?branch=main)  
 
 # The Shamrock code
 

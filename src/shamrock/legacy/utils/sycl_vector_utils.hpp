@@ -21,9 +21,9 @@
 
 
 
-#include "aliases.hpp"
 #include <ostream>
 #include <random> 
+#include "shambackends/sycl.hpp"
 
 
 template <class T> inline void print_vec(std::ostream & ostream, T a);

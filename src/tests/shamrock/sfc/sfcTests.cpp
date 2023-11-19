@@ -9,7 +9,6 @@
 #include "shamrock/sfc/morton.hpp"
 #include "shamtest/shamtest.hpp"
 
-#include "aliases.hpp"
 
 TestStart(Unittest, "shamrock/sfc/morton/min-max", mortonminmaxval, 1){
 

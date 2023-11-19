@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shambase/SourceLocation.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/string.hpp"

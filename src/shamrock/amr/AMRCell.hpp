@@ -14,8 +14,7 @@
  * @brief 
  * 
  */
-
-#include "aliases.hpp"
+ 
 #include "shambase/sycl_utils.hpp"
 #include "shambase/sycl_utils/vec_equals.hpp"
 

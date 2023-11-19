@@ -18,7 +18,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 //#include "shamrock/legacy/patch/patchdata_buffer.hpp"
 #include "shamrock/patch/PatchDataLayout.hpp"

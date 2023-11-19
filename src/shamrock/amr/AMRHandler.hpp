@@ -16,7 +16,6 @@
  */
 
 #include "AMRCell.hpp"
-#include "aliases.hpp"
 #include "shamrock/scheduler/scheduler_mpi.hpp"
 #include "shamrock/patch/PatchData.hpp"
 

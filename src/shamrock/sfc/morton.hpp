@@ -15,7 +15,6 @@
  *
  */
 
-#include "aliases.hpp"
 #include "bmi.hpp"
 #include "shammath/CoordRangeTransform.hpp"
 #include "shambase/integer_sycl.hpp"

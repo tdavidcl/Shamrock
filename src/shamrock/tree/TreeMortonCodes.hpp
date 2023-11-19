@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shamalgs/memory.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shamalgs/reduction.hpp"

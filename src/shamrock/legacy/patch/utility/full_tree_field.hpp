@@ -15,7 +15,6 @@
  * @brief 
  */
 
-#include "aliases.hpp"
 #include "patch_field.hpp"
 
 template<class T, class DeviceTree>

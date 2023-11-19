@@ -15,8 +15,6 @@
  * 
  */
 
-
-#include "aliases.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"

@@ -17,7 +17,6 @@
 
 #include "patchdata_field.hpp"
 
-#include "aliases.hpp"
 #include "shamrock/legacy/patch/base/enabled_fields.hpp"
 //#include "shamrock/legacy/patch/base/pdat_comm_impl/pdat_comm_cp_to_host.hpp"
 //#include "shamrock/legacy/patch/base/pdat_comm_impl/pdat_comm_directgpu.hpp"

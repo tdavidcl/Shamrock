@@ -15,7 +15,6 @@
  
 #include "memory.hpp"
 
-#include "aliases.hpp"
 #include "avoidCopyMemory.hpp"
 #include "fallbackMemory.hpp"
 

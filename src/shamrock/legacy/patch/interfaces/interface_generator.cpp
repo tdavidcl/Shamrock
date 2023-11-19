@@ -19,7 +19,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include "aliases.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 //#include "shamrock/legacy/patch/patchdata_buffer.hpp"

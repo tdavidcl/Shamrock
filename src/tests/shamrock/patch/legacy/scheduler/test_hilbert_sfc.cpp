@@ -8,8 +8,6 @@
 
 #include "shamtest/shamtest.hpp"
 
-#include "aliases.hpp"
-
 #include "shamrock/sfc/hilbert.hpp"
 #if false
 

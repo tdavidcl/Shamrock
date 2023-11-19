@@ -6,7 +6,6 @@
 //
 // -------------------------------------------------------//
 
-#include "aliases.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/patch/PatchDataLayout.hpp"
 #include "shamsys/legacy/sycl_mpi_interop.hpp"

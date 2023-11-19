@@ -15,7 +15,6 @@
  * 
  */
 
-#include "aliases.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "patchdata_exchanger.hpp"

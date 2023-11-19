@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "aliases.hpp"
 #include "shamalgs/algorithm.hpp"
 #include "shamalgs/memory.hpp"
 #include "shambase/time.hpp"

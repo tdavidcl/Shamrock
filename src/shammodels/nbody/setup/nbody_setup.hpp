@@ -15,7 +15,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shamrock/scheduler/scheduler_mpi.hpp"
 
 #include "shamrock/patch/Patch.hpp"

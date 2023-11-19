@@ -13,7 +13,6 @@
  */
 
 #include "karras_alg.hpp"
-#include "aliases.hpp"
 #include <stdexcept>
 
 #include "shambase/integer_sycl.hpp"

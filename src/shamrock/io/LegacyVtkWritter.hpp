@@ -21,6 +21,7 @@
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shamcomm/io.hpp"
 #include "shamrock/io/details/bufToVtkBuf.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shambase/endian.hpp"
@@ -181,7 +182,7 @@ namespace shamrock {
             }
 
             
-            shamalgs::collective::open_reset_file(mfile, fname);
+            shamcomm::open_reset_file(mfile, fname);
 
 
             std::stringstream ss;

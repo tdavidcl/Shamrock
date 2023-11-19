@@ -14,7 +14,7 @@
  * @brief 
  */
 
-#include "aliases.hpp"
+
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/legacy/patch/base/patchdata_field.hpp"
 #include "shamrock/scheduler/scheduler_mpi.hpp"

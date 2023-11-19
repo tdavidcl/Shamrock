@@ -21,7 +21,6 @@
  */
 
 
-#include "aliases.hpp"
 #include "bmi.hpp"
 #include "shambackends/sycl.hpp"
 

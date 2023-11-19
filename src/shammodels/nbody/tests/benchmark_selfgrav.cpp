@@ -13,7 +13,6 @@
  * 
  */
  
-#include "aliases.hpp"
 
 #include "shambase/time.hpp"
 #include "shamrock/patch/PatchDataLayout.hpp"

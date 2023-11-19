@@ -14,7 +14,10 @@
  * @brief This file hold the definitions for a test DataNode
  */
 
-#include "aliases.hpp"
+#include "shambase/aliases_float.hpp"
+#include "shambase/aliases_int.hpp"
+#include <string>
+#include <vector>
 
 namespace shamtest::details {
     struct DataNode {

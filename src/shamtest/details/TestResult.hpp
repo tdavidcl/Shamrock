@@ -15,7 +15,6 @@
  *
  */
 
-#include "aliases.hpp"
 #include "shamtest/details/TestAssertList.hpp"
 #include "shamtest/details/TestDataList.hpp"
 #include <utility>

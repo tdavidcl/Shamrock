@@ -15,7 +15,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shamalgs/container/BufferEventHandler.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"

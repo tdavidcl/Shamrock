@@ -15,7 +15,6 @@
  * \todo move to shammodels generic
  */
 
-#include "aliases.hpp"
 #include "shamrock/math/tensors.hpp"
 #include "shambackends/sycl.hpp"
 

@@ -14,9 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
-#include "flags.hpp"
-
 #include <memory>
 #include <vector>
 #include "shambackends/sycl.hpp"

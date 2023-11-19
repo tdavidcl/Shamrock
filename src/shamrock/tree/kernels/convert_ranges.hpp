@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shamrock/sfc/morton.hpp"
 #include <memory>
 

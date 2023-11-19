@@ -15,7 +15,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shambackends/sycl.hpp"
 
 namespace shamalgs::memory::details {

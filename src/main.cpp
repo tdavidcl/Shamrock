@@ -19,7 +19,6 @@
  */
 
 
-#include "aliases.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shamsys/MicroBenchmark.hpp"

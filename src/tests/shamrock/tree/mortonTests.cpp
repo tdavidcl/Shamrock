@@ -6,7 +6,6 @@
 //
 // -------------------------------------------------------//
 
-#include "aliases.hpp"
 #include "shamtest/shamtest.hpp"
 
 #include "shamrock/sfc/morton.hpp"

@@ -17,7 +17,6 @@
  
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/legacy/utils/syclreduction.hpp"
-#include "aliases.hpp"
 //#include "shamrock/legacy/patch/patchdata_buffer.hpp"
 
 

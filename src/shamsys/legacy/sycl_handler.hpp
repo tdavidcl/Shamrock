@@ -14,8 +14,7 @@
  * @brief header file to manage sycl
  */
 
-
-#include "aliases.hpp"
+#include "shambase/exception.hpp"
 #include <sycl/sycl.hpp>
 
 class ShamrockSyclException : public std::exception {

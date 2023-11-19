@@ -21,7 +21,6 @@
 
 #include "shamsys/legacy/sycl_mpi_interop.hpp"
 
-#include "flags.hpp"
 
 
 

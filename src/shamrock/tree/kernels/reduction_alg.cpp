@@ -12,8 +12,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
-#include "flags.hpp"
 
 #include "reduction_alg.hpp"
 #include <algorithm>

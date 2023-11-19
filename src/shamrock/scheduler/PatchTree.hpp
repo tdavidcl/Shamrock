@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/scheduler/PatchTreeNode.hpp"
 #include <unordered_set>

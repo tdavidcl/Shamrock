@@ -14,10 +14,11 @@
  * @brief
  */
 
-#include "aliases.hpp"
 
 
 //%Impl status : Clean
+
+#include "shambase/aliases_int.hpp"
 
 template <class T> struct SymTensor3d_1 {
 

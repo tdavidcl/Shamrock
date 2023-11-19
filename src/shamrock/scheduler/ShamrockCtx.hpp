@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shambase/exception.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/patch/PatchDataLayout.hpp"
@@ -210,7 +209,7 @@ class ShamrockCtx{public:
             sched->set_coord_domain_bound<f64_3>(a,b);
         }else{
             throw shambase::throw_with_loc<std::runtime_error>(
-                __LOC_PREFIX__ + "the chosen type for the main field is not handled"
+                "the chosen type for the main field is not handled"
                 );
         }
 

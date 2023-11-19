@@ -15,7 +15,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shambase/exception.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambase/sycl_utils/vec_equals.hpp"

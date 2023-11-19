@@ -14,7 +14,6 @@
  * @brief 
  */
 
-#include "aliases.hpp"
 #include "shamtest/details/DataNode.hpp"
 
 namespace shamtest::details {

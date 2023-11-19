@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shamalgs/memory.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shamalgs/numeric.hpp"
@@ -56,6 +55,9 @@ template <class T> class PatchDataField {
         XMAC_LIST_ENABLED_FIELD
 #undef X
     );
+
+    template <bool B, class Tb = void>
+    using enable_if_t = typename std::enable_if<B, Tb>;
 
     using EnableIfPrimitive = enable_if_t<isprimitive>;
 

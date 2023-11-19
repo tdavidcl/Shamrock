@@ -14,7 +14,6 @@
  * @brief
  */
 
-#include "aliases.hpp"
 #include "shammath/CoordRange.hpp"
 #include "shambackends/sycl.hpp"
 

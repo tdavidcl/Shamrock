@@ -14,9 +14,9 @@
  * @brief 
  */
 
-#include "aliases.hpp"
 #include <memory>
 #include <vector>
+#include "shambase/exception.hpp"
 #include "shamrock/legacy/utils/geometry_utils.hpp"
 #include <optional>
 

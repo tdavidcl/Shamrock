@@ -15,7 +15,9 @@
  * \todo move to shammodels generic
  */
 
-#include "aliases.hpp"
+#include "shambackends/typeAliasFp16.hpp"
+#include "shambase/aliases_float.hpp"
+#include "shambackends/sycl.hpp"
 #include <memory>
 
 

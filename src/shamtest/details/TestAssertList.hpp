@@ -14,8 +14,6 @@
  * @brief 
  */
 
-#include "aliases.hpp"
-
 #include "shambase/SourceLocation.hpp"
 
 #include "TestAssert.hpp"

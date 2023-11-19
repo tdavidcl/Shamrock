@@ -100,7 +100,7 @@ jobs:
 
   publish_release:
 
-    runs-on: [self-hosted, raw]
+    runs-on: [self-hosted, ubuntu20]
     
     needs: [shamrock_linux_acpp_cov, make_documentation]
 

@@ -18,7 +18,6 @@
 #include "shamsys/legacy/log.hpp"
 #include "shambackends/sycl.hpp"
 #include "shamrock/legacy/utils/syclreduction.hpp"
-#include "aliases.hpp"
 #include "shamrock/legacy/patch/interfaces/interface_handler.hpp"
 #include "shamrock/legacy/patch/interfaces/interface_selector.hpp"
 #include "shamrock/legacy/io/dump.hpp"

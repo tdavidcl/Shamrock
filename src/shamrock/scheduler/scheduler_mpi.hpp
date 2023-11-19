@@ -28,7 +28,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "aliases.hpp"
+
 #include "shamalgs/collective/distributedDataComm.hpp"
 #include "shambase/DistributedData.hpp"
 #include "shambase/stacktrace.hpp"

@@ -17,7 +17,7 @@
 
 #include "symtensors.hpp"
 
-
+#include "shambackends/sycl.hpp"
 
 //%Impl status : Good
 

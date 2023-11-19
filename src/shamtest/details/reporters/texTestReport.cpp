@@ -13,7 +13,6 @@
  */
 
 #include "texTestReport.hpp"
-#include "aliases.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/sycl.hpp"
 #include "shamsys/NodeInstance.hpp"

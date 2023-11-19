@@ -18,7 +18,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"
 #include <iostream>
 

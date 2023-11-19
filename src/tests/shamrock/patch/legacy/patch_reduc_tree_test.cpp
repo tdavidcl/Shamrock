@@ -6,7 +6,6 @@
 //
 // -------------------------------------------------------//
 
-#include "aliases.hpp"
 #include "shamrock/legacy/io/dump.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/legacy/patch/interfaces/interface_generator.hpp"

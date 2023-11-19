@@ -15,7 +15,6 @@
  * 
  */
 
-#include "aliases.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/sfc/hilbert.hpp"
 

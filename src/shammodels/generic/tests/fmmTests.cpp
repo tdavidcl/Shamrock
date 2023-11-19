@@ -14,7 +14,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shambase/time.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"

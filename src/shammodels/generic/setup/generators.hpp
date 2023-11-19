@@ -18,7 +18,6 @@
  * 
  */
  
-#include "aliases.hpp"
 #include "shamalgs/random.hpp"
 #include "shambase/Constants.hpp"
 #include "shambackends/typeAliasVec.hpp"

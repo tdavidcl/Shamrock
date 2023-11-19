@@ -14,7 +14,8 @@
  * @brief 
  */
 
-#include "aliases.hpp"
+#include "shambackends/sycl.hpp"
+#include "shambase/exception.hpp"
 #include <memory>
 #include <stdexcept>
 
