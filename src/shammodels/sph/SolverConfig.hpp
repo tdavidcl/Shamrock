@@ -83,6 +83,11 @@ struct shammodels::sph::DustConfig {
         std::vector<Tscal> dust_sizes;
         Tscal rho_grain;
     };
+
+    using Variant = std::variant<None, DustMonofluidTvi>;
+
+    Variant config = None{};
+
 };
 
 template<class Tvec, template<class> class SPHKernel>
@@ -105,11 +110,13 @@ struct shammodels::sph::SolverConfig {
     using BCConfig       = BCConfig<Tvec>;
     using EOSConfig      = shammodels::EOSConfig<Tvec>;
     using ExtForceConfig = shammodels::ExtForceConfig<Tvec>;
+    using DustConfig     = DustConfig<Tvec>;
 
     EOSConfig eos_config;
     ExtForceConfig ext_force_config{};
     BCConfig boundary_config;
     AVConfig artif_viscosity;
+    DustConfig dust_config{};
 
     inline bool is_eos_locally_isothermal() {
         using T = typename EOSConfig::LocallyIsothermal;

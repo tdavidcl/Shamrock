@@ -41,10 +41,18 @@ namespace shammodels::sph::modules {
         UpdateDustDerivsTVI(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
-        void update_dust_derivs_tvi();
+        void update_dust_derivs();
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
+
+
+
+        using DustCFG     = typename Config::DustConfig;
+        using DustCFGNone = typename DustCFG::None;
+        using DustCFGMonofluidTVI = typename DustCFG::DustMonofluidTvi;
+
+        void update_dust_derivs_tvi(DustCFGMonofluidTVI config);
 
     };
 
