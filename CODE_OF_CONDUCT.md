@@ -1,14 +1,10 @@
-
-# Contributor Covenant Code of Conduct
+# Shamrock's Code of Conduct
 
 ## Our Pledge
 
-We as members, contributors, and leaders pledge to make participation in our
-community a harassment-free experience for everyone, regardless of age, body
-size, visible or invisible disability, ethnicity, sex characteristics, gender
-identity and expression, level of experience, education, socio-economic status,
-nationality, personal appearance, race, caste, color, religion, or sexual
-identity and orientation.
+We as members, contributors, and users of Shamrock, pledge to make participation in our
+community a harassment-free experience for everyone, regardless of gender, age, nationality, 
+sexual orientation, or experience.
 
 We pledge to act and interact in ways that contribute to an open, welcoming,
 diverse, inclusive, and healthy community.
@@ -51,7 +47,7 @@ decisions when appropriate.
 
 ## Scope
 
-This Code of Conduct applies within all community spaces, and also applies when
+This Code of Conduct applies within all community spaces (including GitHub and Discord), and also applies when
 an individual is officially representing the community in public spaces.
 Examples of representing our community include using an official email address,
 posting via an official social media account, or acting as an appointed
