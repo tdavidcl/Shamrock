@@ -3,6 +3,9 @@
 
 export LD_LIBRARY_PATH=$INTELLLVM_INSTALL_DIR/lib:$LD_LIBRARY_PATH
 
+export CUDA_PATH=/usr/local/cuda-12.2
+export CUDA_NVCC_EXECUTABLE=${CUDA_PATH}/bin/nvcc
+
 function setupcompiler {
 
     python3 ${INTELLLVM_GIT_DIR}/buildbot/configure.py \
@@ -29,7 +32,7 @@ function shamconfigure {
         -DSYCL_IMPLEMENTATION=IntelLLVM \
         -DINTEL_LLVM_PATH="${INTELLLVM_INSTALL_DIR}" \
         -DCMAKE_CXX_COMPILER="${INTELLLVM_INSTALL_DIR}/bin/clang++" \
-        -DCMAKE_CXX_FLAGS="-fsycl -fsycl-targets=nvidia_gpu_sm_80" \
+        -DCMAKE_CXX_FLAGS="-fsycl -fsycl-targets=nvidia_gpu_sm_90" \
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DBUILD_TEST=Yes
 }
