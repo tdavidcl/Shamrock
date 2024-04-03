@@ -10,7 +10,7 @@ function setupcompiler {
 
     python3 ${INTELLLVM_GIT_DIR}/buildbot/configure.py \
         --cuda \
-        --cmake-opt="-DCUDA_TOOLKIT_ROOT_DIR=/usr/lib/cuda" \
+        --cmake-opt="-DCUDA_TOOLKIT_ROOT_DIR=${CUDA_PATH}" \
         --cmake-gen "${CMAKE_GENERATOR}" \
         --cmake-opt="-DCMAKE_INSTALL_PREFIX=${INTELLLVM_INSTALL_DIR}"
 
