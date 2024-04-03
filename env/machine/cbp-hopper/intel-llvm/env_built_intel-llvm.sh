@@ -13,7 +13,7 @@ function setupcompiler {
         --cmake-opt="-DCUDA_TOOLKIT_ROOT_DIR=${CUDA_PATH}" \
         --cmake-gen "${CMAKE_GENERATOR}" \
         --cmake-opt="-DCMAKE_INSTALL_PREFIX=${INTELLLVM_INSTALL_DIR}" \
-        --host-target aarch64
+        --host-target AArch64
 
     (cd ${INTELLLVM_GIT_DIR}/build && $MAKE_EXEC "${MAKE_OPT[@]}" all libsycldevice)
     (cd ${INTELLLVM_GIT_DIR}/build && $MAKE_EXEC install)
