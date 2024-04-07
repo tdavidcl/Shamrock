@@ -291,8 +291,6 @@ void do_benchmark_build(u32 reduc_level){
         import numpy as np
         import matplotlib.pyplot as plt
 
-        plt.style.use('custom_style.mplstyle')
-
         Npart = np.array(Npart)
         times_morton = np.array(times_morton)
         times_reduc = np.array(times_reduc)
@@ -317,6 +315,7 @@ void do_benchmark_build(u32 reduc_level){
         np.save("tests/figures/"+name+"times_morton_sort.npy",times_morton_sort)
         np.save("tests/figures/"+name+"times_full_tree.npy",times_full_tree)
 
+        plt.style.use('custom_style.mplstyle')
         plt.plot(Npart, Npart / times_morton, lw=2, label="morton build")
         plt.plot(Npart, Npart / times_reduc, lw=2, label="reduction")
         plt.plot(Npart, Npart / times_karras, lw=2, label="T. Karras")
