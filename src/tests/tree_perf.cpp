@@ -236,9 +236,16 @@ void do_benchmark_build(u32 reduc_level){
 
     std::vector<f64> Npart;
 
+    u32 last_n = 0;
     for(Tscal dr = 0.25; dr > 0.02; dr /= 1.1){
 
         sycl::buffer<Tvec> pos = generate_positions(dr, box_min, box_max);
+
+        if(last_n == pos.size()){
+            continue;
+        }else{
+            last_n = pos.size();
+        }
 
         shamalgs::memory::move_buffer_on_queue(
             shamsys::instance::get_compute_queue(), 
