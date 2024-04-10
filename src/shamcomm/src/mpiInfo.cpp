@@ -60,8 +60,8 @@ namespace shamcomm {
 
         if(force_aware){
             forced_on = true;
-            mpi_cuda_aware = Yes;
-            mpi_rocm_aware = Yes;
+            mpi_cuda_aware = No;
+            mpi_rocm_aware = No;
         }
     }
 

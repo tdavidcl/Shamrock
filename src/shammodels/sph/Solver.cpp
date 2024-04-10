@@ -1682,6 +1682,7 @@ void shammodels::sph::Solver<Tvec, Kern>::evolve_once()
 
     u64 rank_count = scheduler().get_rank_count();
     f64 rate       = f64(rank_count) / tstep.elasped_sec();
+    f64 rate_cache = f64(rank_count) / storage.timings_details.neighbors; 
 
     // logger::info_ln("SPHSolver", "process rate : ", rate, "particle.s-1");
 
@@ -1708,6 +1709,10 @@ void shammodels::sph::Solver<Tvec, Kern>::evolve_once()
     std::string gathered = "";
     shamcomm::gather_str(log_rank_rate, gathered);
 
+    logger::raw_ln("-benchmark- cache rate : ",rate_cache);
+    logger::raw_ln("-benchmark- N : ",rank_count);
+    logger::raw_ln("-benchmark- rate : ",rate);
+    
     if (shamcomm::world_rank() == 0) {
         std::string print = "processing rate infos : \n";
         print +=

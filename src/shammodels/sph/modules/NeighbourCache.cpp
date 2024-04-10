@@ -32,7 +32,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec,Tmorton, SPHKernel>::start_ne
     using GhostHandleCache   = typename GhostHandle::CacheMap;
     using PreStepMergedField = typename GhostHandle::PreStepMergedField;
     using RTree = RadixTree<Tmorton, Tvec>;
-
+shamsys::instance::get_compute_queue().wait();
     shambase::Timer time_neigh;
     time_neigh.start();
 
@@ -190,6 +190,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec,Tmorton, SPHKernel>::start_ne
         storage.neighbors_cache.get().preload(cur_p.id_patch);
     });
 
+    logger::raw_ln("1stage");
+shamsys::instance::get_compute_queue().wait();
     time_neigh.end();
     storage.timings_details.neighbors += time_neigh.elasped_sec();
 
@@ -205,6 +207,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec,Tmorton, SPHKernel>::start_ne
     using PreStepMergedField = typename GhostHandle::PreStepMergedField;
     using RTree = RadixTree<Tmorton, Tvec>;
 
+shamsys::instance::get_compute_queue().wait();
     shambase::Timer time_neigh;
     time_neigh.start();
 
@@ -566,7 +569,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec,Tmorton, SPHKernel>::start_ne
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchData &pdat) {
         storage.neighbors_cache.get().preload(cur_p.id_patch);
     });
-
+    logger::raw_ln("2stage");
+shamsys::instance::get_compute_queue().wait();
     time_neigh.end();
     storage.timings_details.neighbors += time_neigh.elasped_sec();
 

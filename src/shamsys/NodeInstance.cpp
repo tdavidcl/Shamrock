@@ -130,10 +130,10 @@ namespace syclinit {
         sched_compute->test();
         sched_alt->test();
 
-        //logger::raw_ln("--- Compute ---");
-        //sched_compute->print_info();
-        //logger::raw_ln("--- Alternative ---");
-        //sched_alt->print_info();
+        logger::raw_ln("--- Compute ---");
+        sched_compute->print_info();
+        logger::raw_ln("--- Alternative ---");
+        sched_alt->print_info();
     }
 
     void init_queues_auto(std::string search_key) {
@@ -487,6 +487,11 @@ namespace shamsys::instance {
 
         syclinit::device_compute->update_mpi_prop();
         syclinit::device_alt->update_mpi_prop();
+
+        logger::raw_ln("--- Compute ---");
+	syclinit::sched_compute->print_info();
+        logger::raw_ln("--- Alternative ---");
+        syclinit::sched_alt->print_info();
     }
 
     void init(SyclInitInfo sycl_info, MPIInitInfo mpi_info) {

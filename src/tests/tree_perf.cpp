@@ -237,10 +237,12 @@ void do_benchmark_build(u32 reduc_level){
     std::vector<f64> Npart;
 
     u32 last_n = 0;
-    for(Tscal dr = 0.25; dr > 0.02; dr /= 1.1){
+    for(Tscal dr = 0.25; dr > 0.002; dr /= 1.02){
 
         sycl::buffer<Tvec> pos = generate_positions(dr, box_min, box_max);
-
+	if(pos.size() > 1.3e8){
+		break;
+	}
         if(last_n == pos.size()){
             continue;
         }else{
@@ -364,5 +366,15 @@ TestStart(Benchmark, "tree_build_benchmark", tree_build_benchmark, 1){
     do_benchmark_build<f64_3,u64>(2);
     do_benchmark_build<f64_3,u32>(3);
     do_benchmark_build<f64_3,u64>(3);
+    do_benchmark_build<f64_3,u32>(4);
+    do_benchmark_build<f64_3,u64>(4);
+    do_benchmark_build<f64_3,u32>(5);
+    do_benchmark_build<f64_3,u64>(5);
+    do_benchmark_build<f64_3,u32>(6);
+    do_benchmark_build<f64_3,u64>(6);
+    do_benchmark_build<f64_3,u32>(7);
+    do_benchmark_build<f64_3,u64>(7);
+    do_benchmark_build<f64_3,u32>(8);
+    do_benchmark_build<f64_3,u64>(8);
 
 }

@@ -18,6 +18,7 @@
 #include "shambackends/Device.hpp"
 #include <stdexcept>
 #include <variant>
+#include "shamcomm/logs.hpp"
 
 namespace shamcomm {
 
@@ -36,8 +37,10 @@ namespace shamcomm {
 
     inline CommunicationProtocol get_protocol(sham::Device &device){
         if(device.mpi_prop.is_mpi_direct_capable){
+		logger::raw_ln("using direct gpu");
             return DirectGPU;
         }else{
+		logger::raw_ln("using copy to host");
             return CopyToHost;
         }
     }

@@ -7,9 +7,9 @@ target_tot_u = 1
 bmin = (-0.6,-0.6,-0.6)
 bmax = ( 0.6, 0.6, 0.6)
 
-N_target_base = 10e6
+N_target_base = 14e6
 compute_multiplier = shamrock.sys.world_size()
-scheduler_split_val = int(4e6)
+scheduler_split_val = int(16e6/2)
 scheduler_merge_val = int(1)
 
 
