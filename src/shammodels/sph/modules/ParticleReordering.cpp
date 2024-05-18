@@ -49,3 +49,4 @@ void shammodels::sph::modules::ParticleReordering<Tvec, Tmorton, SPHKernel>::reo
 using namespace shammath;
 template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M4>;
 template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M6>;
+template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M8>;

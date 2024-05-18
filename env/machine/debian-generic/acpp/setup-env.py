@@ -9,8 +9,6 @@ import utils.amd_arch
 NAME = "Debian generic AdaptiveCpp"
 PATH = "machine/debian-generic/acpp"
 
-print("loading :",NAME)
-
 def is_acpp_already_installed(installfolder):
     return os.path.isfile(installfolder + "/bin/acpp")
 
@@ -51,10 +49,6 @@ def setup(argv,builddir, shamrockdir,buildtype):
     ENV_SCRIPT_HEADER += "export ACPP_BUILD_DIR="+ACPP_BUILD_DIR+"\n"
     ENV_SCRIPT_HEADER += "export ACPP_INSTALL_DIR="+ACPP_INSTALL_DIR+"\n"
 
-    if not (acpp_target == None):
-        ENV_SCRIPT_HEADER += "export ACPP_TARGETS=\""+acpp_target+"\"\n"
-    else:
-        ENV_SCRIPT_HEADER += "unset -f ACPP_TARGETS\n"
 
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export CMAKE_GENERATOR=\""+cmake_gen+"\"\n"
@@ -63,6 +57,7 @@ def setup(argv,builddir, shamrockdir,buildtype):
     ENV_SCRIPT_HEADER += "export MAKE_OPT=("+gen_opt+")\n"
 
     ENV_SCRIPT_HEADER += "export SHAMROCK_BUILD_TYPE=\""+cmake_build_type+"\"\n"
+    ENV_SCRIPT_HEADER += "export SHAMROCK_CXX_FLAGS=\" --acpp-targets='"+acpp_target+"'\"\n"
 
     # Get current file path
     cur_file = os.path.realpath(os.path.expanduser(__file__))

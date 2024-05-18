@@ -15,13 +15,34 @@ abs_proj_dir = os.path.abspath(os.path.join(cur_file, "../.."))
 # Get env directory
 abs_env_dir = os.path.abspath(os.path.join(abs_proj_dir, "env"))
 
+def get_machine_list():
+    list_machines = {}
+
+    import glob
+    for i in glob.glob(abs_env_dir+"/machine/**/setup-env.py", recursive=True):
+
+        path = os.path.relpath(i,abs_env_dir+"/machine").replace("/",".").replace(".setup-env.py","")
+        mod = importlib.import_module("machine."+path+".setup-env")
+
+        list_machines[path] = mod.NAME
+    return list_machines
+
 
 # Customer formatter required to print help message for "--" option.
 class CustomHelpFormatter(argparse.HelpFormatter):
     def format_help(self):
         USAGESTR="usage: new-env [-h] --machine MACHINE --builddir BUILDDIR"
         original_help = super().format_help().replace(USAGESTR,USAGESTR+" -- (argument for the env)")
-        return original_help + "  --                   Everything after this will be forwarded to the env. \n"
+
+        machines = "\nEnvironment list :\n"
+        list_machines = get_machine_list()
+        klist = [k for k in list_machines.keys()]
+        klist.sort()
+        for k in klist:
+            machines += "  " + "{:30s}".format(k) + " " + list_machines[k] + "\n"
+
+        return original_help + "  --                   Everything after this"+ \
+            " will be forwarded to the env. \n" + machines
 
 
 if __name__ == "__main__":

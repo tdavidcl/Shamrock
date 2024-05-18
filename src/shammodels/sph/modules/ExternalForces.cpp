@@ -337,3 +337,4 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::point_mass_accre
 using namespace shammath;
 template class shammodels::sph::modules::ExternalForces<f64_3, M4>;
 template class shammodels::sph::modules::ExternalForces<f64_3, M6>;
+template class shammodels::sph::modules::ExternalForces<f64_3, M8>;

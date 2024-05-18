@@ -9,8 +9,6 @@ import utils.amd_arch
 NAME = "CBP Nvidia DGX A100 AdaptiveCpp (SSCP)"
 PATH = "machine/dgx-cbp/acpp-cuda"
 
-print("loading :",NAME)
-
 def is_acpp_already_installed(installfolder):
     return os.path.isfile(installfolder + "/bin/acpp")
 

@@ -46,7 +46,7 @@
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamrock/patch/PatchField.hpp"
-#include "shambase/integer_sycl.hpp"
+#include "shambackends/math.hpp"
 
 /**
  * @brief The MPI scheduler

@@ -4,8 +4,12 @@ project(Shambackends CXX C)
 
 set(Sources
         src/comm/details/CommunicationBufferImpl.cpp
-        src/queues.cpp
+        src/comm/CommunicationBuffer.cpp
         src/usmbuffer.cpp
+        src/Device.cpp
+        src/DeviceContext.cpp
+        src/DeviceQueue.cpp
+        src/DeviceScheduler.cpp
     )
 
 if(SHAMROCK_USE_SHARED_LIB)

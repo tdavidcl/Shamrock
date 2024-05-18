@@ -16,7 +16,7 @@
 #include "exclusiveScanGPUGems39.hpp"
 #include "shamalgs/memory.hpp"
 #include "shambase/integer.hpp"
-#include "shambase/integer_sycl.hpp"
+#include "shambackends/math.hpp"
 #include "shamsys/legacy/log.hpp"
 
 /*
@@ -125,7 +125,7 @@ namespace shamalgs::numeric::details {
     template<class T>
     sycl::buffer<T> exclusive_sum_gpugems39_2(sycl::queue &q, sycl::buffer<T> &buf1, u32 len) {
 
-        u32 rounded_len = shambase::roundup_pow2_clz(len);
+        u32 rounded_len = sham::roundup_pow2_clz(len);
 
         sycl::buffer<T> out1(rounded_len);
         sycl::buffer<T> out2(rounded_len);
@@ -198,7 +198,7 @@ namespace shamalgs::numeric::details {
     template<class T>
     sycl::buffer<T> exclusive_sum_gpugems39_3(sycl::queue &q, sycl::buffer<T> &buf1, u32 len) {
 
-        u32 rounded_len = shambase::roundup_pow2_clz(len);
+        u32 rounded_len = sham::roundup_pow2_clz(len);
 
         sycl::buffer<T> out1(rounded_len);
         sycl::buffer<T> out2(rounded_len);

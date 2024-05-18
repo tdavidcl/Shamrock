@@ -48,6 +48,14 @@ check_cxx_source_compiles(
     SYCL2020_FEATURE_ISINF)
 
 
+check_cxx_source_compiles(
+      "
+      #include <sycl/sycl.hpp>
+      int main(void){
+        auto a = sycl::clz(std::uint64_t(10));
+      }
+      "    
+      SYCL2020_FEATURE_CLZ)
 
 if(NOT DEFINED SYCL_feature_reduc2020)
   message(STATUS "Performing Test " SYCL_feature_reduc2020)

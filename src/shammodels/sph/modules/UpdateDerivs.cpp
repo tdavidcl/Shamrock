@@ -712,3 +712,4 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
 using namespace shammath;
 template class shammodels::sph::modules::UpdateDerivs<f64_3, M4>;
 template class shammodels::sph::modules::UpdateDerivs<f64_3, M6>;
+template class shammodels::sph::modules::UpdateDerivs<f64_3, M8>;

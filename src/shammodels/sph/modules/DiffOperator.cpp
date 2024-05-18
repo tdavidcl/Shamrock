@@ -234,3 +234,4 @@ void shammodels::sph::modules::DiffOperators<Tvec, SPHKernel>::update_curlv() {
 using namespace shammath;
 template class shammodels::sph::modules::DiffOperators<f64_3, M4>;
 template class shammodels::sph::modules::DiffOperators<f64_3, M6>;
+template class shammodels::sph::modules::DiffOperators<f64_3, M8>;

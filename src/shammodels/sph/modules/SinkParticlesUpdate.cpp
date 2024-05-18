@@ -284,3 +284,4 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_ext
 using namespace shammath;
 template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M4>;
 template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M6>;
+template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M8>;

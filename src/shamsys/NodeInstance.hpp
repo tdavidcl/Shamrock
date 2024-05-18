@@ -20,6 +20,7 @@
 
 
 #include "shambase/aliases_int.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include <vector>
 #include <sycl/sycl.hpp>
@@ -147,24 +148,18 @@ namespace shamsys::instance {
      */
     sycl::queue &get_alt_queue(u32 id = 0);
 
+    sham::DeviceScheduler & get_compute_scheduler();
+    sham::DeviceScheduler & get_alt_scheduler();
+
     ////////////////////////////
     // MPI related routines
     ////////////////////////////
 
     // idea to handle multiple GPU with MPI : i32 get_mpi_tag(u32 tag);
 
-    /**
-     * @brief Get the process name
-     * @return std::string process name
-     */
-    std::string get_process_name();
 
     void print_mpi_capabilities();
 
     void check_dgpu_available();
-    
-    void force_direct_gpu_mode(bool force);
-    void validate_comm();
-    bool is_direct_gpu_selected();
 
 } // namespace shamsys::instance

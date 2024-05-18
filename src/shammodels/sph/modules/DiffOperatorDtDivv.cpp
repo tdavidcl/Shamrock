@@ -362,3 +362,4 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
 using namespace shammath;
 template class shammodels::sph::modules::DiffOperatorDtDivv<f64_3, M4>;
 template class shammodels::sph::modules::DiffOperatorDtDivv<f64_3, M6>;
+template class shammodels::sph::modules::DiffOperatorDtDivv<f64_3, M8>;

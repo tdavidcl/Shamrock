@@ -18,6 +18,7 @@ function shamconfigure {
         -DSHAMROCK_ENABLE_BACKEND=SYCL \
         -DSYCL_IMPLEMENTATION=ACPPDirect \
         -DCMAKE_CXX_COMPILER="${ACPP_INSTALL_DIR}/bin/acpp" \
+        -DCMAKE_CXX_FLAGS="${SHAMROCK_CXX_FLAGS}" \
         -DACPP_PATH="${ACPP_INSTALL_DIR}" \
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DBUILD_TEST=Yes

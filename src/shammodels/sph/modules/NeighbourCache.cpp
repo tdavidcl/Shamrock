@@ -576,3 +576,4 @@ void shammodels::sph::modules::NeighbourCache<Tvec,Tmorton, SPHKernel>::start_ne
 using namespace shammath;
 template class shammodels::sph::modules::NeighbourCache<f64_3,u32, M4>;
 template class shammodels::sph::modules::NeighbourCache<f64_3,u32, M6>;
+template class shammodels::sph::modules::NeighbourCache<f64_3,u32, M8>;

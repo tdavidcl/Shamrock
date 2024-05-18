@@ -1,14 +1,15 @@
 import argparse
 import os
-import utils.acpp
+import utils.intel_llvm
 import utils.sysinfo
 import utils.envscript
+import utils.amd_arch
 
-NAME = "MacOS generic AdaptiveCpp"
-PATH = "machine/macos-generic/acpp"
+NAME = "Adastra mi250x Intel LLVM ROCM"
+PATH = "machine/debian-generic/intel-llvm"
 
-def is_acpp_already_installed(installfolder):
-    return os.path.isfile(installfolder + "/bin/acpp")
+def is_intel_llvm_already_installed(installfolder):
+    return os.path.isfile(installfolder + "/bin/clang++")
 
 def setup(argv,builddir, shamrockdir,buildtype):
 
@@ -18,38 +19,34 @@ def setup(argv,builddir, shamrockdir,buildtype):
 
     parser = argparse.ArgumentParser(prog=PATH,description= NAME+' env for Shamrock')
 
-    parser.add_argument("--backend", action='store', help="sycl backend to use")
-    parser.add_argument("--arch", action='store', help="arch to build")
-    parser.add_argument("--gen", action='store', help="generator to use (ninja or make)")
-
     args = parser.parse_args(argv)
+    args.gen = "ninja"
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
     
-    ACPP_GIT_DIR = builddir+"/.env/acpp-git"
-    ACPP_BUILD_DIR = builddir + "/.env/acpp-builddir"
-    ACPP_INSTALL_DIR = builddir + "/.env/acpp-installdir"
+    INTELLLVM_GIT_DIR = builddir+"/.env/intel-llvm-git"
+    INTELLLVM_INSTALL_DIR = builddir + "/.env/intel-llvm-installdir"
 
-    utils.acpp.clone_acpp(ACPP_GIT_DIR)
+    utils.intel_llvm.clone_intel_llvm(INTELLLVM_GIT_DIR)
 
     ENV_SCRIPT_PATH = builddir+"/activate"
 
     ENV_SCRIPT_HEADER = ""
     ENV_SCRIPT_HEADER += "export SHAMROCK_DIR="+shamrockdir+"\n"
     ENV_SCRIPT_HEADER += "export BUILD_DIR="+builddir+"\n"
-    ENV_SCRIPT_HEADER += "export ACPP_GIT_DIR="+ACPP_GIT_DIR+"\n"
-    ENV_SCRIPT_HEADER += "export ACPP_BUILD_DIR="+ACPP_BUILD_DIR+"\n"
-    ENV_SCRIPT_HEADER += "export ACPP_INSTALL_DIR="+ACPP_INSTALL_DIR+"\n"
+    ENV_SCRIPT_HEADER += "export INTELLLVM_GIT_DIR="+INTELLLVM_GIT_DIR+"\n"
+    ENV_SCRIPT_HEADER += "export INTELLLVM_INSTALL_DIR="+INTELLLVM_INSTALL_DIR+"\n"
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export CMAKE_GENERATOR=\""+cmake_gen+"\"\n"
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export MAKE_EXEC="+gen+"\n"
     ENV_SCRIPT_HEADER += "export MAKE_OPT=("+gen_opt+")\n"
     ENV_SCRIPT_HEADER += "export SHAMROCK_BUILD_TYPE=\""+cmake_build_type+"\"\n"
+    ENV_SCRIPT_HEADER += "\n"
 
     # Get current file path
     cur_file = os.path.realpath(os.path.expanduser(__file__))
-    source_file = "env_built_acpp.sh"
+    source_file = "env_built_intel-llvm.sh"
     source_path = os.path.abspath(os.path.join(cur_file, "../"+source_file))
 
     utils.envscript.write_env_file(
@@ -57,9 +54,8 @@ def setup(argv,builddir, shamrockdir,buildtype):
         header = ENV_SCRIPT_HEADER, 
         path_write = ENV_SCRIPT_PATH)
 
-    if is_acpp_already_installed(ACPP_INSTALL_DIR):
-        print("-- acpp already installed => skipping")
+    if is_intel_llvm_already_installed(INTELLLVM_INSTALL_DIR):
+        print("-- intel llvm already installed => skipping")
     else:
         print("-- running compiler setup")
         os.system("bash -c 'cd "+builddir+" && source ./activate &&  updatecompiler'")
-
