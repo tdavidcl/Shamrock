@@ -17,11 +17,12 @@
 
 #include "shambase/DistributedData.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
 #include "shamrock/scheduler/InterfacesUtility.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
+#include "shamsys/NodeInstance.hpp"
 #include <variant>
 
 namespace shammodels::sph {
@@ -105,7 +106,7 @@ namespace shammodels::sph {
         shambase::DistributedDataShared<InterfaceIdTable>
         gen_id_table_interfaces(GeneratorMap &&gen);
 
-
+        void gen_debug_patch_ghost(shambase::DistributedDataShared<InterfaceIdTable> & interf_info);
 
         using CacheMap = shambase::DistributedDataShared<InterfaceIdTable>;
 
@@ -158,7 +159,7 @@ namespace shammodels::sph {
             // clang-format off
             return builder.template map<T>([&](u64 sender, u64 receiver, InterfaceIdTable &build_table) {
                 if (!bool(build_table.ids_interf)) {
-                    throw shambase::throw_with_loc<std::runtime_error>(
+                    throw shambase::make_except_with_loc<std::runtime_error>(
                         "their is an empty id table in the interface, it should have been removed");
                 }
 
@@ -191,7 +192,7 @@ namespace shammodels::sph {
             // clang-format off
             builder.for_each([&](u64 sender, u64 receiver, InterfaceIdTable &build_table) {
                 if (!bool(build_table.ids_interf)) {
-                    throw shambase::throw_with_loc<std::runtime_error>(
+                    throw shambase::make_except_with_loc<std::runtime_error>(
                         "their is an empty id table in the interface, it should have been removed");
                 }
 
@@ -252,7 +253,7 @@ namespace shammodels::sph {
             shambase::DistributedDataShared<T> ret = 
                 builder.template map<T>([&](u64 sender, u64 receiver, InterfaceIdTable &build_table) {
                 if (!bool(build_table.ids_interf)) {
-                    throw shambase::throw_with_loc<std::runtime_error>(
+                    throw shambase::make_except_with_loc<std::runtime_error>(
                         "their is an empty id table in the interface, it should have been removed");
                 }
 
@@ -344,18 +345,18 @@ namespace shammodels::sph {
 
 
             shamalgs::collective::serialize_sparse_comm<PositionInterface>(
+                shamsys::instance::get_compute_scheduler_ptr(),
                 std::forward<shambase::DistributedDataShared<PositionInterface>>(interf),
                 recv_dat,
-                shamcomm::get_protocol(), 
                 [&](u64 id){
                     return sched.get_patch_rank_owner(id);
                 }, 
                 [](PositionInterface &pos_interf) {
-                    shamalgs::SerializeHelper ser;
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
 
-                    u64 size = pos_interf.position_field.serialize_buf_byte_size();
+                    shamalgs::SerializeSize size = pos_interf.position_field.serialize_buf_byte_size();
                     size += pos_interf.hpart_field.serialize_buf_byte_size();
-                    size += 2 * shamalgs::SerializeHelper::serialize_byte_size<vec>();
+                    size += shamalgs::SerializeHelper::serialize_byte_size<vec>()*2;
 
                     ser.allocate(size);
 
@@ -369,7 +370,7 @@ namespace shammodels::sph {
                 [&](std::unique_ptr<sycl::buffer<u8>> && buf) {
                     // exchange the buffer held by the distrib data and give it to the
                     // serializer
-                    shamalgs::SerializeHelper ser(std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr(),std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
 
                     PatchDataField<vec> f = PatchDataField<vec>::deserialize_buf(ser, "xyz", 1);
                     PatchDataField<flt> hpart = PatchDataField<flt>::deserialize_buf(ser, "hpart", 1);
@@ -393,21 +394,21 @@ namespace shammodels::sph {
             shambase::DistributedDataShared<shamrock::patch::PatchData> recv_dat;
 
             shamalgs::collective::serialize_sparse_comm<shamrock::patch::PatchData>(
+                shamsys::instance::get_compute_scheduler_ptr(),
                 std::forward<shambase::DistributedDataShared<shamrock::patch::PatchData>>(interf),
                 recv_dat,
-                shamcomm::get_protocol(), 
                 [&](u64 id){
                     return sched.get_patch_rank_owner(id);
                 }, 
                 [](shamrock::patch::PatchData & pdat){
-                    shamalgs::SerializeHelper ser;
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
                     ser.allocate(pdat.serialize_buf_byte_size());
                     pdat.serialize_buf(ser);
                     return ser.finalize();
                 }, 
                 [&](std::unique_ptr<sycl::buffer<u8>> && buf){
                     //exchange the buffer held by the distrib data and give it to the serializer
-                    shamalgs::SerializeHelper ser(std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr(),std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
                     return shamrock::patch::PatchData::deserialize_buf(ser, pdl);
                 }
             );
@@ -425,21 +426,21 @@ namespace shammodels::sph {
             shambase::DistributedDataShared<PatchDataField<T>> recv_dat;
 
             shamalgs::collective::serialize_sparse_comm<PatchDataField<T>>(
+                shamsys::instance::get_compute_scheduler_ptr(),
                 std::forward<shambase::DistributedDataShared<PatchDataField<T>>>(interf),
-                recv_dat,
-                shamcomm::get_protocol(), 
+                recv_dat, 
                 [&](u64 id){
                     return sched.get_patch_rank_owner(id);
                 }, 
                 [](PatchDataField<T> & pdat){
-                    shamalgs::SerializeHelper ser;
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
                     ser.allocate(pdat.serialize_full_byte_size());
                     pdat.serialize_full(ser);
                     return ser.finalize();
                 }, 
                 [&](std::unique_ptr<sycl::buffer<u8>> && buf){
                     //exchange the buffer held by the distrib data and give it to the serializer
-                    shamalgs::SerializeHelper ser(std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
+                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr(),std::forward<std::unique_ptr<sycl::buffer<u8>>>(buf));
                     return PatchDataField<T>::deserialize_full(ser);
                 }
             );
@@ -529,8 +530,8 @@ namespace shammodels::sph {
                     merged.total_elements += pint.position_field.get_obj_cnt();
                     merged.field_pos.insert(pint.position_field);
                     merged.field_hpart.insert(pint.hpart_field);
-                    merged.bounds.upper = shambase::sycl_utils::g_sycl_max(merged.bounds.upper, pint.bmax);
-                    merged.bounds.lower = shambase::sycl_utils::g_sycl_min(merged.bounds.lower, pint.bmin);
+                    merged.bounds.upper = sham::max(merged.bounds.upper, pint.bmax);
+                    merged.bounds.lower = sham::min(merged.bounds.lower, pint.bmin);
                 });
 
         }

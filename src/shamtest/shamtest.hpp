@@ -42,7 +42,7 @@ namespace shamtest {
 
             /**
              * @brief This constructor register the given arguments into `static_init_vec_tests`
-             * 
+             *
              * @param t the test info
              */
             inline explicit TestStaticInit(Test t) {
@@ -58,20 +58,19 @@ namespace shamtest {
 
     } // namespace details
 
-
-    struct TestConfig{
+    struct TestConfig {
 
         bool print_test_list_exit = false;
 
         bool full_output = false;
 
-        bool output_tex = true;
+        bool output_tex                        = true;
         std::optional<std::string> json_output = {};
 
         bool run_long_tests = false;
-        bool run_unittest = true;
+        bool run_unittest   = true;
         bool run_validation = true;
-        bool run_benchmark = false;
+        bool run_benchmark  = false;
 
         std::optional<std::string> run_only = {};
     };
@@ -86,7 +85,7 @@ namespace shamtest {
      * @param run_unittest run unittests ?
      * @return int
      */
-    int run_all_tests(int argc, char *argv[],TestConfig cfg);
+    int run_all_tests(int argc, char *argv[], TestConfig cfg);
 
     /**
      * @brief current test asserts
@@ -106,10 +105,8 @@ namespace shamtest {
         return shamtest::details::current_test.test_data;
     };
 
-    inline std::string & test_tex_out(){
-        return shamtest::details::current_test.tex_output;
-    }
-    
+    inline std::string &test_tex_out() { return shamtest::details::current_test.tex_output; }
+
 } // namespace shamtest
 
 /**
@@ -169,6 +166,44 @@ namespace shamtest {
     shamtest::asserts().assert_float_equal(#a " ==(" #prec ") " #b, a, b, prec);
 
 /**
+ * @brief Assert macro for test, testing that a given call throws a specific exception type
+ *
+ * Usage :
+ * \code{.cpp}
+ * REQUIRE_THROW_AS(function_that_throws(), exception_type)
+ * \endcode
+ *
+ * @param call Call that is expected to throw the specified exception type
+ * @param exception_type Exception type that is expected to be thrown
+ */
+#define _Assert_throw(call, exception_type)                                                        \
+    try {                                                                                          \
+        /* Try to call the function that is expected to throw */                                                                                                \
+        call;                                                                                      \
+        /* If no exception is thrown, assert that the test failed                               */ \
+        shamtest::asserts().assert_bool(                                                           \
+            "Expected throw of type " #exception_type ", but nothing was thrown",                  \
+            false,                                                                                 \
+            SourceLocation{});                                                                     \
+    } catch (const exception_type &ex) {                                                           \
+        /* If wanted exception is thrown, assert that the test pass */                                                                                                \
+        shamtest::asserts().assert_bool(                                                           \
+            "Found wanted throw of type " #exception_type, true, SourceLocation{});                \
+    } catch (const std::exception &e) {                                                            \
+        /* If another exception type is thrown, assert that the test failed                     */ \
+        shamtest::asserts().assert_bool(                                                           \
+            "Expected throw of type " #exception_type ", but got " + std::string(e.what()),        \
+            false,                                                                                 \
+            SourceLocation{});                                                                     \
+    } catch (...) {                                                                                \
+        /* If an unknown exception is thrown, assert that the test failed                      */  \
+        shamtest::asserts().assert_bool(                                                           \
+            "Expected throw of type " #exception_type ", but got unknown exception",               \
+            false,                                                                                 \
+            SourceLocation{});                                                                     \
+    }
+
+/**
  * @brief Macro to write stuff to the tex test report
  *
  * Usage :
@@ -179,3 +214,6 @@ namespace shamtest {
  * \endcode
  */
 #define TEX_REPORT(src) shamtest::details::current_test.tex_output += src;
+
+#define REQUIRE(a) _Assert(a)
+#define REQUIRE_THROW_AS(call, expt_type) _Assert_throw(call, expt_type)

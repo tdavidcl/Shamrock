@@ -1,6 +1,15 @@
 
 set(Sources
     GhostZones.cpp
+    AMRTree.cpp
+    StencilGenerator.cpp
+    AMRGraphGen.cpp
+    ComputeGradient.cpp
+    ComputeCellInfos.cpp
+    FaceInterpolate.cpp
+    ComputeFlux.cpp
+    ComputeTimeDerivative.cpp
+    TimeIntegrator.cpp
 )
 set(Headers
 )

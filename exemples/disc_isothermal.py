@@ -32,7 +32,7 @@ model.resize_simulation_box(bmin,bmax)
 
 disc_mass = 0.001
 
-pmass = model.add_disc_3d(
+pmass = model.add_big_disc_3d(
     (0,0,0),
     1,
     100000,
@@ -40,7 +40,7 @@ pmass = model.add_disc_3d(
     disc_mass,
     1.,
     0.05,
-    1./4.)
+    1./4., 11)
 
 model.set_cfl_cour(0.3)
 model.set_cfl_force(0.25)
@@ -82,62 +82,34 @@ def plot_vertical_profile(r, rrange, label = ""):
     plt.scatter(ysel, rhosel/rhobar, s=1, label = label)
 
 
-print("Small timestep")
-model.evolve(0,1e-7, False, "", False)
-
-print("Plot timestep")
-
-
-
-
-#plt.xscale('log')
-#plt.yscale('log')
-
-
 
 print("Run")
-
+model.change_htolerance(1.3)
+model.evolve_once_override_time(0,0)
+model.change_htolerance(1.1)
 
 print("Current part mass :", pmass)
 
-#for it in range(5):
-#    setup.update_smoothing_length(ctx)
-
-
-
-
-
-
-
-#for i in range(9):
-#    model.evolve(5e-4, False, False, "", False)
-plot_vertical_profile(1,0.5, label = "init")
-
 t_sum = 0
 t_target = 4e-1
-current_dt = 1e-7
-i = 0
+
 i_dump = 0
-while t_sum < t_target:
+dt_dump = 1e-2
+next_dt_target = t_sum + dt_dump
 
-    print("step : t=",t_sum)
+while next_dt_target <= t_target:
 
-    do_dump = (i % 50 == 0)  
-    next_dt = model.evolve(t_sum,current_dt, do_dump, "dump_{:04}.vtk".format(i_dump), do_dump)
+    fname = "dump_{:04}.phfile".format(i_dump)
 
-    if i % 50 == 0:
-        i_dump += 1
+    model.evolve_until(next_dt_target)
+    dump = model.make_phantom_dump()
+    dump.save_dump(fname)
 
-    t_sum += current_dt
-    current_dt = next_dt
+    i_dump += 1
 
-    if (t_target - t_sum) < next_dt:
-        current_dt = t_target - t_sum
+    next_dt_target += dt_dump
 
-    i+= 1
+model.do_vtk_dump("end.vtk", True)
+dump = model.make_phantom_dump()
+dump.save_dump("end.phdump")
 
-
-plot_vertical_profile(1,0.5, label = "end")
-
-plt.legend()
-plt.show()

@@ -11,8 +11,8 @@
 #include "shambase/exception.hpp"
 #include "shambase/string.hpp"
 #include "shamsys/NodeInstance.hpp"
-#include "shamcomm/CommunicationBuffer.hpp"
-#include "shamcomm/details/CommunicationBufferImpl.hpp"
+#include "shambackends/comm/CommunicationBuffer.hpp"
+#include "shambackends/comm/details/CommunicationBufferImpl.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
@@ -23,7 +23,7 @@
 #include <stdexcept>
 #include <vector>
 
-void sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
+void sparse_comm_test(std::string prefix, sham::DeviceScheduler & qdet){
     
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
@@ -81,14 +81,14 @@ void sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
         if(bufinfo.sender_rank == world_rank()){
             sendop.push_back(SendPayload{
                 bufinfo.receiver_rank,
-                std::make_unique<CommunicationBuffer>(*bufinfo.payload, prot)
+                std::make_unique<CommunicationBuffer>(*bufinfo.payload, qdet)
             });
         }
     }
 
 
     std::vector<RecvPayload> recvop;
-    base_sparse_comm(sendop, recvop, prot);
+    base_sparse_comm(get_compute_scheduler_ptr(), sendop, recvop);
 
     std::vector<RefBuff> recv_data;
     for(RecvPayload & load : recvop){
@@ -131,10 +131,10 @@ void sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
 
                 shamtest::asserts().assert_equal(prefix+"same sender", recv_buf.sender_rank , ref.sender_rank);
                 shamtest::asserts().assert_equal(prefix+"same receiver", recv_buf.receiver_rank , ref.receiver_rank);
-                shamtest::asserts().assert_bool(prefix+"same buffer", shamalgs::reduction::equals_ptr(ref.payload, recv_buf.payload));
+                shamtest::asserts().assert_bool(prefix+"same buffer", shamalgs::reduction::equals_ptr(get_compute_queue(),ref.payload, recv_buf.payload));
 
             }else{
-                throw shambase::throw_with_loc<std::runtime_error>(prefix+"missing recv mesages");
+                throw shambase::make_except_with_loc<std::runtime_error>(prefix+"missing recv mesages");
             }
 
             ref_idx ++;
@@ -145,10 +145,6 @@ void sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
 
 TestStart(Unittest, "shamalgs/collective/sparseXchg", testsparsexchg, -1){
 
-    if(shamsys::instance::is_direct_gpu_selected()){
-        sparse_comm_test("DirectGPU  mode : ",shamcomm::DirectGPU);
-    }else{
-        sparse_comm_test("CopyToHost mode : ",shamcomm::CopyToHost);
-    }
+    sparse_comm_test("",shamsys::instance::get_compute_scheduler());
 
 }

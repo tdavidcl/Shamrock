@@ -26,16 +26,37 @@ if(NOT SYCL_COMPILER_IS_ACPP)
     "-DCMAKE_CXX_COMPILER=<path_to_compiler>")
 endif()
 
+variable_watch(__CMAKE_CXX_COMPILER_OUTPUT)
+
+if(NOT DEFINED HAS_SYCL2020_HEADER)
+  try_compile(
+      HAS_SYCL2020_HEADER ${CMAKE_BINARY_DIR}/compile_tests
+      ${CMAKE_SOURCE_DIR}/cmake/feature_test/sycl2020_sycl_header.cpp OUTPUT_VARIABLE TRY_COMPILE_OUTPUT)
+endif()
+
+if(NOT HAS_SYCL2020_HEADER)
+  message(FATAL_ERROR "Acpp can not compile a simple exemple including <sycl/sycl.hpp> \n Logs: ${TRY_COMPILE_OUTPUT}" )
+endif()
+
+
 check_cxx_source_compiles(
     "
     #include <sycl/sycl.hpp>
-    int main(void){}
+    int main(void){
+      bool a = sycl::isinf(0.f / 1.f);
+    }
     "    
-    HAS_SYCL2020_HEADER)
+    SYCL2020_FEATURE_ISINF)
 
-if(NOT HAS_SYCL2020_HEADER)
-  message(FATAL_ERROR "Acpp can not compile a simple exemple including <sycl/sycl.hpp>")
-endif()
+
+check_cxx_source_compiles(
+      "
+      #include <sycl/sycl.hpp>
+      int main(void){
+        auto a = sycl::clz(std::uint64_t(10));
+      }
+      "    
+      SYCL2020_FEATURE_CLZ)
 
 if(NOT DEFINED SYCL_feature_reduc2020)
   message(STATUS "Performing Test " SYCL_feature_reduc2020)
@@ -116,6 +137,10 @@ endif()
 
 
 message(" ---- Acpp compiler direct config ---- ")
+message("  ACPP_PATH : ${ACPP_PATH}")
+message("  HAS_ACPP_HEADER_FOLDER : ${HAS_ACPP_HEADER_FOLDER}")
+message("  HAS_OpenSYCL_HEADER_FOLDER : ${HAS_OpenSYCL_HEADER_FOLDER}")
+message("  HAS_hipSYCL_HEADER_FOLDER : ${HAS_hipSYCL_HEADER_FOLDER}")
 message("  ACPP_FAST_MATH : ${ACPP_FAST_MATH}")
 message(" ------------------------------------- ")
 

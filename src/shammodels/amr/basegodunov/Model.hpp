@@ -16,7 +16,7 @@
  */
  
 #include "shambase/memory.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/amr/basegodunov/Solver.hpp"
 #include "shamrock/amr/AMRGrid.hpp"
 #include "shamrock/legacy/utils/geometry_utils.hpp"
@@ -47,7 +47,53 @@ namespace shammodels::basegodunov {
         void dump_vtk(std::string filename);
 
         Tscal evolve_once(Tscal t_current,Tscal dt_input);
+        
+        template<class T>
+        inline void set_field_value_lambda(
+            std::string field_name, const std::function<T(Tvec, Tvec)> pos_to_val) {
 
+            StackEntry stack_loc{};
+
+            using Block = typename Solver::Config::AMRBlock;
+
+            PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
+            sched.patch_data.for_each_patchdata([&](u64 patch_id,
+                                                    shamrock::patch::PatchData &pdat) {
+                sycl::buffer<TgridVec> &buf_cell_min = pdat.get_field_buf_ref<TgridVec>(0);
+                sycl::buffer<TgridVec> &buf_cell_max = pdat.get_field_buf_ref<TgridVec>(1);
+
+                PatchDataField<T> &f =
+                    pdat.template get_field<T>(sched.pdl.get_field_idx<T>(field_name));
+
+                {
+                    auto &buf = shambase::get_check_ref(f.get_buf());
+                    sycl::host_accessor acc{buf};
+
+                    sycl::host_accessor cell_min{buf_cell_min, sycl::read_only};
+                    sycl::host_accessor cell_max{buf_cell_max, sycl::read_only};
+
+                    Tscal scale_factor = solver.solver_config.grid_coord_to_pos_fact;
+                    for (u32 i = 0; i < pdat.get_obj_cnt(); i++) {
+                        Tvec block_min  = cell_min[i].template convert<Tscal>()*scale_factor;
+                        Tvec block_max  = cell_max[i].template convert<Tscal>()*scale_factor;
+                        Tvec delta_cell = (block_max - block_min) / Block::side_size;
+
+                        Block::for_each_cell_in_block(delta_cell, [&](u32 lid, Tvec delta) {
+                            Tvec bmin                        = block_min + delta;
+                            acc[i * Block::block_size + lid] = pos_to_val(bmin, bmin + delta_cell);
+                        });
+                    }
+                }
+            });
+        }
+
+        inline std::pair<Tvec,Tvec> get_cell_coords(std::pair<TgridVec,TgridVec> block_coords, u32 lid){
+            using Block = typename Solver::Config::AMRBlock;
+            auto tmp = Block::utils_get_cell_coords(block_coords,lid);
+            tmp.first *= solver.solver_config.grid_coord_to_pos_fact;
+            tmp.second *= solver.solver_config.grid_coord_to_pos_fact;
+            return tmp;
+        }
         
     };
 

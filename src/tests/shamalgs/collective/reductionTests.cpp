@@ -8,7 +8,7 @@
 
 #include "shamalgs/collective/reduction.hpp"
 #include "shamalgs/random.hpp"
-#include "shambase/sycl_utils/vec_equals.hpp"
+#include "shambackends/math.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
@@ -28,7 +28,7 @@ inline void test(){
         ref_sum += tmp;
     }
 
-    shamtest::asserts().assert_bool("same value", shambase::vec_equals(sum,ref_sum));
+    shamtest::asserts().assert_bool("same value", sham::equals(sum,ref_sum));
 }
 
 

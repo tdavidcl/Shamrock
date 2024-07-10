@@ -1,30 +1,24 @@
+cmake_minimum_required(VERSION 3.9)
+
+project(Shammath CXX C)
 
 set(Sources
-    CoordRangeTransform.cpp
-    CoordRange.cpp
-)
-set(SourcesTest
-    
-)
-set(Headers
-
-)
-set(HeadersTest
-
+    src/CoordRangeTransform.cpp
+    src/CoordRange.cpp
 )
 
-target_sources(shamrock_lib
-    PRIVATE
-        ${Sources}
-    PUBLIC
-        ${Headers}
-    )
-
-if("${BUILD_TEST}")
-target_sources(shamrock_test
-    PRIVATE
-        ${SourcesTest}
-    PUBLIC
-        ${HeadersTest}
-    )
+if(SHAMROCK_USE_SHARED_LIB)
+message("-- adding shammath target (Shared lib)")
+add_library(shammath SHARED ${Sources})
+else()
+message("-- adding shammath target (object lib)")
+add_library(shammath OBJECT ${Sources})
 endif()
+
+add_library(shammath::shammath ALIAS shammath)
+
+target_link_libraries(shammath PUBLIC shambackends)
+
+target_include_directories(shammath PUBLIC
+"$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+"$<INSTALL_INTERFACE:include>")

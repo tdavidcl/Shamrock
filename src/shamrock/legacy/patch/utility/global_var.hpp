@@ -15,7 +15,7 @@
  */
 
 #include "shamrock/legacy/patch/base/patchdata.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 
 enum GlobalVariableType{
     min,max,sum
@@ -55,7 +55,7 @@ class GlobalVariable{
 
     inline T get_val(){
         if(!is_reduced){
-            throw shambase::throw_with_loc<std::runtime_error>("Global value has not been reduced");
+            throw shambase::make_except_with_loc<std::runtime_error>("Global value has not been reduced");
         }
         return final_val;
     }

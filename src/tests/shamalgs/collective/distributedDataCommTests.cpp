@@ -12,14 +12,14 @@
 #include "shamalgs/reduction.hpp"
 #include "shambase/DistributedData.hpp"
 #include "shamsys/NodeInstance.hpp"
-#include "shamcomm/details/CommunicationBufferImpl.hpp"
+#include "shambackends/comm/details/CommunicationBufferImpl.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 #include <map>
 #include <memory>
 
 
-void distribdata_sparse_comm_test(std::string prefix, shamcomm::CommunicationProtocol prot){
+void distribdata_sparse_comm_test(std::string prefix){
 
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
@@ -61,18 +61,18 @@ void distribdata_sparse_comm_test(std::string prefix, shamcomm::CommunicationPro
 
     dat_ref.for_each([&](u64 sender, u64 receiver, std::unique_ptr<sycl::buffer<u8>> &buf) {
         if (rank_owner[sender] == wrank) {
-            send_data.add_obj(sender, receiver, shamalgs::memory::duplicate(buf));
+            send_data.add_obj(sender, receiver, shamalgs::memory::duplicate(get_compute_queue(), buf));
         }
     });
 
     shamalgs::collective::SerializedDDataComm recv_data;
-    distributed_data_sparse_comm(
-        send_data, recv_data, prot, [&](u64 id) { return rank_owner[id]; });
+    distributed_data_sparse_comm(get_compute_scheduler_ptr(),
+        send_data, recv_data, [&](u64 id) { return rank_owner[id]; });
 
     shamalgs::collective::SerializedDDataComm recv_data_ref;
     dat_ref.for_each([&](u64 sender, u64 receiver, std::unique_ptr<sycl::buffer<u8>> &buf) {
         if (rank_owner[receiver] == wrank) {
-            recv_data_ref.add_obj(sender, receiver, shamalgs::memory::duplicate(buf));
+            recv_data_ref.add_obj(sender, receiver, shamalgs::memory::duplicate(get_compute_queue(),buf));
         }
     });
 
@@ -87,16 +87,12 @@ void distribdata_sparse_comm_test(std::string prefix, shamcomm::CommunicationPro
 
         shamtest::asserts().assert_bool(
             "correct buffer",
-            shamalgs::reduction::equals_ptr(buf, it->second));
+            shamalgs::reduction::equals_ptr(get_compute_queue(), buf, it->second));
     });
 }
 
 TestStart(Unittest, "shamalgs/collective/distributedDataComm", testdistributeddatacomm, -1) {
 
-    if(shamsys::instance::is_direct_gpu_selected()){
-        distribdata_sparse_comm_test("DirectGPU  mode : ",shamcomm::DirectGPU);
-    }else{
-        distribdata_sparse_comm_test("CopyToHost mode : ",shamcomm::CopyToHost);
-    }
+    distribdata_sparse_comm_test("");
     
 }

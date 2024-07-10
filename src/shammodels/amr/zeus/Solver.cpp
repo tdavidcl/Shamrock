@@ -28,10 +28,7 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 
 template<class Tvec, class TgridVec>
-using Solver = shammodels::zeus::Solver<Tvec, TgridVec>;
-
-template<class Tvec, class TgridVec>
-auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tscal{
+auto shammodels::zeus::Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tscal{
 
     StackEntry stack_loc{};
 
@@ -41,6 +38,10 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
 
     shambase::Timer tstep;
     tstep.start();
+
+    scheduler().update_local_load_value([&](shamrock::patch::Patch p){
+        return scheduler().patch_data.owned_data.get(p.id_patch).get_obj_cnt();
+    });
 
     SerialPatchTree<TgridVec> _sptree = SerialPatchTree<TgridVec>::build(scheduler());
     _sptree.attach_buf();
@@ -355,7 +356,7 @@ auto Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tscal dt_input) -> Tsc
 
         if (mpdat.pdat.has_nan()) {
             logger::err_ln("[Zeus]", "nan detected in write back");
-            throw shambase::throw_with_loc<std::runtime_error>("detected nan");
+            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
         }
 
     });

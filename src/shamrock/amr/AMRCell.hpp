@@ -16,7 +16,7 @@
  */
  
 #include "shambase/sycl_utils.hpp"
-#include "shambase/sycl_utils/vec_equals.hpp"
+#include "shambackends/math.hpp"
 
 namespace shamrock::amr {
 
@@ -129,8 +129,8 @@ namespace shamrock::amr {
             if constexpr (dim == 3) {
                 for (u32 i = 0; i < splts_count; i++) {
                     are_same = are_same &&
-                               shambase::vec_equals(others[i].bmin, splitted[i].bmin) &&
-                               shambase::vec_equals(others[i].bmax, splitted[i].bmax);
+                               sham::equals(others[i].bmin, splitted[i].bmin) &&
+                               sham::equals(others[i].bmax, splitted[i].bmax);
                 }
             }
 

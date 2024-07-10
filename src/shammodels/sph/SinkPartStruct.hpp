@@ -15,7 +15,7 @@
  * 
  */
 
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 namespace shammodels::sph {
 
     template<class Tvec>

@@ -19,9 +19,10 @@
 #include "shamalgs/reduction.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammath/CoordRange.hpp"
 #include "shamrock/tree/RadixTreeMortonBuilder.hpp"
+#include "shamsys/NodeInstance.hpp"
 #include <stdexcept>
 
 namespace shamrock::tree {
@@ -93,8 +94,8 @@ namespace shamrock::tree {
         inline TreeMortonCodes() = default;
 
         inline TreeMortonCodes(const TreeMortonCodes &other)
-            : obj_cnt(other.obj_cnt), buf_morton(shamalgs::memory::duplicate(other.buf_morton)),
-              buf_particle_index_map(shamalgs::memory::duplicate(other.buf_particle_index_map)) {}
+            : obj_cnt(other.obj_cnt), buf_morton(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(), other.buf_morton)),
+              buf_particle_index_map(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_particle_index_map)) {}
 
         inline TreeMortonCodes &operator=(TreeMortonCodes &&other) noexcept {
             obj_cnt                = std::move(other.obj_cnt);
@@ -111,8 +112,8 @@ namespace shamrock::tree {
 
             using namespace shamalgs::reduction;
 
-            cmp = cmp && equals(*t1.buf_morton, *t2.buf_morton, t1.obj_cnt);
-            cmp = cmp && equals(*t1.buf_particle_index_map, *t2.buf_particle_index_map, t1.obj_cnt);
+            cmp = cmp && equals(shamsys::instance::get_compute_queue(),*t1.buf_morton, *t2.buf_morton, t1.obj_cnt);
+            cmp = cmp && equals(shamsys::instance::get_compute_queue(),*t1.buf_particle_index_map, *t2.buf_particle_index_map, t1.obj_cnt);
 
             return cmp;
         }
@@ -127,12 +128,12 @@ namespace shamrock::tree {
 
             serializer.write(obj_cnt);
             if (!buf_morton) {
-                throw shambase::throw_with_loc<std::runtime_error>("missing buffer");
+                throw shambase::make_except_with_loc<std::runtime_error>("missing buffer");
             }
             // serializer.write(buf_morton->size());
             serializer.write_buf(*buf_morton, obj_cnt);
             if (!buf_particle_index_map) {
-                throw shambase::throw_with_loc<std::runtime_error>("missing buffer");
+                throw shambase::make_except_with_loc<std::runtime_error>("missing buffer");
             }
             serializer.write_buf(*buf_particle_index_map, obj_cnt);
         }
@@ -168,7 +169,7 @@ namespace shamrock::tree {
          *
          * @return u64
          */
-        inline u64 serialize_byte_size() {
+        inline shamalgs::SerializeSize serialize_byte_size() {
             using H = shamalgs::SerializeHelper;
             return H::serialize_byte_size<u32>() + H::serialize_byte_size<u32>(obj_cnt) +
                    H::serialize_byte_size<u_morton>(obj_cnt);

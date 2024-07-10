@@ -16,7 +16,7 @@
  */
  
 #include "shambase/memory.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/amr/zeus/Solver.hpp"
 #include "shamrock/amr/AMRGrid.hpp"
 #include "shamrock/legacy/utils/geometry_utils.hpp"

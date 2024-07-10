@@ -16,7 +16,7 @@
  */
 
 #include "shambase/endian.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/sycl.hpp"
 

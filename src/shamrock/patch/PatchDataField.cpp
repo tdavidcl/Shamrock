@@ -18,7 +18,7 @@
 #include "shamalgs/reduction.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -96,7 +96,7 @@ template<class T> class PdatField_append_subset_to;
 template <class T> void PatchDataField<T>::append_subset_to(sycl::buffer<u32> &idxs_buf,u32 sz, PatchDataField &pfield) {
 
     if (pfield.nvar != nvar)
-        throw shambase::throw_with_loc<std::invalid_argument>("field must be similar for extraction");
+        throw shambase::make_except_with_loc<std::invalid_argument>("field must be similar for extraction");
 
     const u32 start_enque = pfield.size();
 
@@ -147,8 +147,8 @@ template <class T> void PatchDataField<T>::append_subset_to(sycl::buffer<u32> &i
     
     shamsys::instance::get_compute_queue().submit([&](sycl::handler &cgh) {
 
-        sycl::accessor acc_curr {*get_buf(), cgh, sycl::read_only};
-        sycl::accessor acc_other {*buf_other, cgh, sycl::write_only, sycl::no_init};
+        sycl::accessor acc_curr {shambase::get_check_ref(get_buf()), cgh, sycl::read_only};
+        sycl::accessor acc_other {shambase::get_check_ref(buf_other), cgh, sycl::write_only, sycl::no_init};
         sycl::accessor acc_idxs {idxs_buf, cgh, sycl::read_only};
 
         const u32 nvar_loc = nvar;
@@ -176,7 +176,7 @@ template <class T> void PatchDataField<T>::append_subset_to(sycl::buffer<u32> &i
 template <class T> void PatchDataField<T>::append_subset_to(const std::vector<u32> &idxs, PatchDataField &pfield) {
 
     if (pfield.nvar != nvar){
-        throw shambase::throw_with_loc<std::invalid_argument>("field must be similar for extraction");
+        throw shambase::make_except_with_loc<std::invalid_argument>("field must be similar for extraction");
     }
     
     using buf_t = std::unique_ptr<sycl::buffer<T>>;
@@ -202,7 +202,7 @@ template<class T> void PatchDataField<T>::insert_element(T v){
 
         auto id_ins = ins_pos;
         auto val = v;
-        sycl::accessor acc {*get_buf(), cgh, sycl::write_only};
+        sycl::accessor acc {shambase::get_check_ref(get_buf()), cgh, sycl::write_only};
 
 
         cgh.single_task<PdatField_insert_element<T>>([=] () {
@@ -223,15 +223,17 @@ template<class T> class PdatField_apply_offset;
 
 template<class T> void PatchDataField<T>::apply_offset(T off){
 
-    shamsys::instance::get_compute_queue().submit([&] (sycl::handler& cgh) {
-        
-        auto val = off;
-        sycl::accessor acc {*get_buf(), cgh, sycl::read_write};
+    if(get_obj_cnt() > 0){
+        shamsys::instance::get_compute_queue().submit([&] (sycl::handler& cgh) {
+            
+            auto val = off;
+            sycl::accessor acc {shambase::get_check_ref(get_buf()), cgh, sycl::read_write};
 
-        cgh.parallel_for<PdatField_apply_offset<T>>(sycl::range<1>{size()}, [=](sycl::id<1> idx){
-            acc[idx] += val;
+            cgh.parallel_for<PdatField_apply_offset<T>>(sycl::range<1>{size()}, [=](sycl::id<1> idx){
+                acc[idx] += val;
+            });
         });
-    });
+    }
 
 }
 
@@ -252,9 +254,9 @@ template<class T> void PatchDataField<T>::insert(PatchDataField<T> &f2){
 
         //This is triggering a warning in OpenSycl when the buffer was just allocated
         // TODO fix the warning
-        sycl::accessor acc {*get_buf(), cgh, sycl::write_only}; 
+        sycl::accessor acc {shambase::get_check_ref(get_buf()), cgh, sycl::write_only}; 
 
-        sycl::accessor acc_f2 {*f2.get_buf(), cgh, sycl::read_only};
+        sycl::accessor acc_f2 {shambase::get_check_ref(f2.get_buf()), cgh, sycl::read_only};
 
         cgh.parallel_for<PdatField_insert<T>>(sycl::range<1>{f2.size()}, [=](sycl::id<1> idx){
             acc[idx_st + idx] = acc_f2[idx];
@@ -280,7 +282,7 @@ template<class T> void PatchDataField<T>::index_remap_resize(sycl::buffer<u32> &
 template<class T> void PatchDataField<T>::index_remap(sycl::buffer<u32> & index_map, u32 len){
 
     if(len != get_obj_cnt()){
-        throw shambase::throw_with_loc<std::invalid_argument>("the match of the new index map does not match with the patchdatafield obj count");
+        throw shambase::make_except_with_loc<std::invalid_argument>("the match of the new index map does not match with the patchdatafield obj count");
     }
 
     index_remap_resize(index_map,len);
@@ -296,13 +298,20 @@ template<class T> void PatchDataField<T>::index_remap(sycl::buffer<u32> & index_
 
 
 template<class T>
-PatchDataField<T> PatchDataField<T>::mock_field(u64 seed, u32 obj_cnt, std::string name, u32 nvar){
+PatchDataField<T> PatchDataField<T>::mock_field(u64 seed, u32 obj_cnt, std::string name, u32 nvar, T vmin, T vmax){
     using Prop = shambase::VectorProperties<T>;
 
     return PatchDataField<T>(
-        shamalgs::ResizableBuffer<T>::mock_buffer(seed, obj_cnt*nvar, Prop::get_min(), Prop::get_max()),
+        shamalgs::ResizableBuffer<T>::mock_buffer(shamsys::instance::get_compute_scheduler_ptr(),seed, obj_cnt*nvar, vmin, vmax),
         obj_cnt, name, nvar
     );
+}
+
+
+template<class T>
+PatchDataField<T> PatchDataField<T>::mock_field(u64 seed, u32 obj_cnt, std::string name, u32 nvar){
+    using Prop = shambase::VectorProperties<T>;
+    return PatchDataField<T>::mock_field(seed, obj_cnt, name, nvar,Prop::get_min(), Prop::get_max());
 }
 
 
@@ -325,20 +334,24 @@ PatchDataField<T> PatchDataField<T>::mock_field(u64 seed, u32 obj_cnt, std::stri
 
 template<class T>
 void PatchDataField<T>::serialize_buf(shamalgs::SerializeHelper & serializer){
+    StackEntry stack_loc{false};
     serializer.write(obj_cnt);
+    logger::debug_sycl_ln("PatchDataField", "serialize patchdatafield len=",obj_cnt);
     buf.serialize_buf(serializer);
 }
 
 template<class T>
 PatchDataField<T> PatchDataField<T>::deserialize_buf(shamalgs::SerializeHelper &serializer, std::string field_name, u32 nvar){
+    StackEntry stack_loc{false};
     u32 cnt;
     serializer.load(cnt);
+    logger::debug_sycl_ln("PatchDataField", "deserialize patchdatafield len=",cnt);
     shamalgs::ResizableBuffer<T> rbuf = shamalgs::ResizableBuffer<T>::deserialize_buf(serializer, cnt*nvar);
     return PatchDataField<T>(std::move(rbuf), cnt, field_name, nvar);
 }
 
 template<class T>
-u64 PatchDataField<T>::serialize_buf_byte_size(){
+shamalgs::SerializeSize PatchDataField<T>::serialize_buf_byte_size(){
 
     using H = shamalgs::SerializeHelper;
     return H::serialize_byte_size<u32>() + buf.serialize_buf_byte_size();
@@ -349,6 +362,7 @@ u64 PatchDataField<T>::serialize_buf_byte_size(){
 
 template<class T>
 void PatchDataField<T>::serialize_full(shamalgs::SerializeHelper &serializer){
+    StackEntry stack_loc{false};
     serializer.write(obj_cnt);
     serializer.write(nvar);
     serializer.write(field_name);
@@ -356,14 +370,15 @@ void PatchDataField<T>::serialize_full(shamalgs::SerializeHelper &serializer){
 }
 
 template<class T>
-u64 PatchDataField<T>::serialize_full_byte_size(){
+shamalgs::SerializeSize PatchDataField<T>::serialize_full_byte_size(){
     using H = shamalgs::SerializeHelper;
-    return 2*H::serialize_byte_size<u32>() + H::serialize_byte_size(field_name) + buf.serialize_buf_byte_size();
+    return (H::serialize_byte_size<u32>()*2) + H::serialize_byte_size(field_name) + buf.serialize_buf_byte_size();
     
 }
 
 template<class T>
 PatchDataField<T> PatchDataField<T>::deserialize_full(shamalgs::SerializeHelper &serializer){
+    StackEntry stack_loc{false};
     u32 cnt,nvar;
     serializer.load(cnt);
     serializer.load(nvar);
@@ -382,7 +397,7 @@ PatchDataField<T> PatchDataField<T>::deserialize_full(shamalgs::SerializeHelper 
 
 template<class T>    T PatchDataField<T>::compute_max(){StackEntry stack_loc{};
     if(is_empty()){
-        throw shambase::throw_with_loc<std::invalid_argument>("the field is empty");
+        throw shambase::make_except_with_loc<std::invalid_argument>("the field is empty");
     }
     return shamalgs::reduction::max(
         shamsys::instance::get_compute_queue(), 
@@ -393,7 +408,7 @@ template<class T>    T PatchDataField<T>::compute_max(){StackEntry stack_loc{};
 
 template<class T>    T PatchDataField<T>::compute_min(){StackEntry stack_loc{};
     if(is_empty()){
-        throw shambase::throw_with_loc<std::invalid_argument>("the field is empty");
+        throw shambase::make_except_with_loc<std::invalid_argument>("the field is empty");
     }
     return shamalgs::reduction::min(
         shamsys::instance::get_compute_queue(), 
@@ -404,7 +419,7 @@ template<class T>    T PatchDataField<T>::compute_min(){StackEntry stack_loc{};
 
 template<class T> T PatchDataField<T>::compute_sum(){StackEntry stack_loc{};
     if(is_empty()){
-        throw shambase::throw_with_loc<std::invalid_argument>("the field is empty");
+        throw shambase::make_except_with_loc<std::invalid_argument>("the field is empty");
     }
     return shamalgs::reduction::sum(
         shamsys::instance::get_compute_queue(), 
@@ -415,7 +430,7 @@ template<class T> T PatchDataField<T>::compute_sum(){StackEntry stack_loc{};
 
 template<class T> shambase::VecComponent<T> PatchDataField<T>::compute_dot_sum(){StackEntry stack_loc{};
     if(is_empty()){
-        throw shambase::throw_with_loc<std::invalid_argument>("the field is empty");
+        throw shambase::make_except_with_loc<std::invalid_argument>("the field is empty");
     }
     return shamalgs::reduction::dot_sum(
         shamsys::instance::get_compute_queue(), 

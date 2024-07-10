@@ -25,6 +25,7 @@
 #include "shambase/floats.hpp"
 #include "shambase/integer.hpp"
 #include "shamrock/sfc/MortonKernels.hpp"
+#include "shamsys/NodeInstance.hpp"
 
 
 
@@ -34,7 +35,7 @@ RadixTree<u_morton, vec3>::RadixTree(
     sycl::queue &queue, std::tuple<vec3, vec3> treebox, sycl::buffer<vec3> & pos_buf, u32 cnt_obj, u32 reduc_level
 ) {
     if (cnt_obj > i32_max - 1) {
-        throw shambase::throw_with_loc<std::runtime_error>("number of element in patch above i32_max-1");
+        throw shambase::make_except_with_loc<std::runtime_error>("number of element in patch above i32_max-1");
     }
 
     logger::debug_sycl_ln("RadixTree", "box dim :", std::get<0>(treebox), std::get<1>(treebox));
@@ -77,7 +78,7 @@ void RadixTree<u_morton, vec3>::serialize(shamalgs::SerializeHelper &serializer)
 }
 
 template <class u_morton, class pos_t >
-u64 RadixTree<u_morton, pos_t>::serialize_byte_size(){
+shamalgs::SerializeSize RadixTree<u_morton, pos_t>::serialize_byte_size(){
     using H = shamalgs::SerializeHelper;
     return H::serialize_byte_size<pos_t>()*2 
         + tree_morton_codes.serialize_byte_size()
@@ -248,7 +249,7 @@ auto RadixTree<u_morton, vec>::compute_int_boxes(
     {
         if(shamalgs::reduction::has_nan(queue, *buf_cell_int_rad_buf, tree_struct.internal_cell_count + tree_reduced_morton_codes.tree_leaf_count)){
             shamalgs::memory::print_buf(*buf_cell_int_rad_buf, tree_struct.internal_cell_count + tree_reduced_morton_codes.tree_leaf_count, 8, "{} ");
-            throw  shambase::throw_with_loc<std::runtime_error>("the structure of the tree as issue in ids");
+            throw shambase::make_except_with_loc<std::runtime_error>("the structure of the tree as issue in ids");
         }
     }
 
@@ -1047,7 +1048,7 @@ typename RadixTree<u_morton, vec3>::CuttedTree RadixTree<u_morton, vec3>::cut_tr
             std::move(ret), 
             std::move(new_node_id_to_old_v2), 
             std::make_unique<sycl::buffer<u32>>(
-                shamalgs::memory::vector_to_buf(std::move(extract_id))
+                shamalgs::memory::vector_to_buf(shamsys::instance::get_compute_queue(),std::move(extract_id))
                 )};
 
     }

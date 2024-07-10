@@ -7,9 +7,11 @@
 // -------------------------------------------------------//
 
 #include "shamalgs/random.hpp"
-#include "shambase/sycl_utils/vec_equals.hpp"
-#include "shamcomm/CommunicationBuffer.hpp"
-#include "shamcomm/details/CommunicationBufferImpl.hpp"
+#include "shambackends/comm/CommunicationBuffer.hpp"
+#include "shambackends/math.hpp"
+#include "shamcomm/worldInfo.hpp"
+#include "shamcomm/mpi.hpp"
+#include "shamsys/NodeInstance.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 
@@ -26,7 +28,7 @@ inline void check_buf(std::string prefix, sycl::buffer<u8> & b1, sycl::buffer<u8
 
         bool eq = true;
         for(u32 i = 0; i < b1.size(); i++){
-            if(!shambase::vec_equals(acc1[i] , acc2[i])){
+            if(!sham::equals(acc1[i] , acc2[i])){
                 eq = false;
                 //id_err_list += std::to_string(i) + " ";
             }
@@ -47,15 +49,40 @@ TestStart(Unittest, "shamsys/comm/CommunicationBuffer/constructor", test_basic_s
     sycl::buffer<u8> buf_comp = shamalgs::random::mock_buffer<u8>(0x111, nbytes);
 
     {
-        shamcomm::CommunicationBuffer cbuf {buf_comp, shamcomm::CopyToHost};
+        shamcomm::CommunicationBuffer cbuf {buf_comp, shamsys::instance::get_compute_scheduler()};
         sycl::buffer<u8> ret = cbuf.copy_back();
         check_buf("copy to host mode", buf_comp, ret);
     }
 
     {
-        shamcomm::CommunicationBuffer cbuf {buf_comp, shamcomm::DirectGPU};
+        shamcomm::CommunicationBuffer cbuf {buf_comp, shamsys::instance::get_compute_scheduler()};
         sycl::buffer<u8> ret = cbuf.copy_back();
         check_buf("copy to host mode", buf_comp, ret);
     }
+
+}
+
+
+TestStart(Unittest, "shamsys/comm/CommunicationBuffer/send_recv", test_basic_serialized_send_recv, 2){
+
+
+    u32 nbytes = 1e5;
+    sycl::buffer<u8> buf_comp = shamalgs::random::mock_buffer<u8>(0x111, nbytes);
+
+
+    if(shamcomm::world_rank() == 0){
+        shamcomm::CommunicationBuffer cbuf {buf_comp, shamsys::instance::get_compute_scheduler()};
+        MPI_Send(cbuf.get_ptr(), nbytes, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
+    }
+
+    if(shamcomm::world_rank() == 1){
+        shamcomm::CommunicationBuffer cbuf {nbytes, shamsys::instance::get_compute_scheduler()};
+        MPI_Recv(cbuf.get_ptr(), nbytes, MPI_BYTE, 0, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+
+
+        sycl::buffer<u8> ret = cbuf.copy_back();
+        check_buf("copy to host mode", buf_comp, ret);
+    }
+
 
 }

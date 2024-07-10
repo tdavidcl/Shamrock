@@ -17,14 +17,11 @@
 #include "shambase/memory.hpp"
 #include "shambase/sycl_utils.hpp"
 #include "shamrock/io/LegacyVtkWritter.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
 
 template<class Tvec, class TgridVec>
-using Model = shammodels::basegodunov::Model<Tvec, TgridVec>;
-
-template<class Tvec, class TgridVec>
-void Model<Tvec, TgridVec>::init_scheduler(u32 crit_split, u32 crit_merge){
+void shammodels::basegodunov::Model<Tvec, TgridVec>::init_scheduler(u32 crit_split, u32 crit_merge){
 
     solver.init_required_fields();
     //solver.init_ghost_layout();
@@ -44,7 +41,27 @@ void Model<Tvec, TgridVec>::init_scheduler(u32 crit_split, u32 crit_merge){
 }
 
 template<class Tvec, class TgridVec>
-void Model<Tvec, TgridVec>::make_base_grid(TgridVec bmin, TgridVec cell_size, u32_3 cell_count){
+void shammodels::basegodunov::Model<Tvec, TgridVec>::make_base_grid(TgridVec bmin, TgridVec cell_size, u32_3 cell_count){
+
+    if(cell_size.x() < Solver::Config::AMRBlock::Nside){
+        shambase::throw_with_loc<std::invalid_argument>(
+            shambase::format("the x block size must be larger than {}, currently : cell_size = {}",
+            Solver::Config::AMRBlock::Nside, cell_size)
+            );
+    }
+    if(cell_size.y() < Solver::Config::AMRBlock::Nside){
+        shambase::throw_with_loc<std::invalid_argument>(
+            shambase::format("the y block size must be larger than {}, currently : cell_size = {}",
+            Solver::Config::AMRBlock::Nside, cell_size)
+            );
+    }
+    if(cell_size.z() < Solver::Config::AMRBlock::Nside){
+        shambase::throw_with_loc<std::invalid_argument>(
+            shambase::format("the z block size must be larger than {}, currently : cell_size = {}",
+            Solver::Config::AMRBlock::Nside, cell_size)
+            );
+    }
+
     shamrock::amr::AMRGrid<TgridVec, 3> grid (shambase::get_check_ref(ctx.sched));
     grid.make_base_grid(bmin, cell_size, {cell_count.x(), cell_count.y(), cell_count.z()});
 
@@ -52,52 +69,93 @@ void Model<Tvec, TgridVec>::make_base_grid(TgridVec bmin, TgridVec cell_size, u3
 
     sched.owned_patch_id = sched.patch_list.build_local();
     sched.patch_list.build_local_idx_map();
-    sched.update_local_dtcnt_value();
-    sched.update_local_load_value();
+    sched.update_local_load_value([&](shamrock::patch::Patch p){
+        return sched.patch_data.owned_data.get(p.id_patch).get_obj_cnt();
+    });
     sched.scheduler_step(true, true);
 
 }
 
 template<class Tvec, class TgridVec>
-void Model<Tvec, TgridVec>::dump_vtk(std::string filename){
+void shammodels::basegodunov::Model<Tvec, TgridVec>::dump_vtk(std::string filename){
 
     StackEntry stack_loc{};
     shamrock::LegacyVtkWritter writer(filename, true, shamrock::UnstructuredGrid);
 
-    PatchScheduler & sched = shambase::get_check_ref(ctx.sched);
+    try {
+        
+        PatchScheduler & sched = shambase::get_check_ref(ctx.sched);
 
-    u64 num_obj = sched.get_rank_count();
+        u32 block_size = Solver::AMRBlock::block_size;
 
-    std::unique_ptr<sycl::buffer<TgridVec>> pos1 = sched.rankgather_field<TgridVec>(0);
-    std::unique_ptr<sycl::buffer<TgridVec>> pos2 = sched.rankgather_field<TgridVec>(1);
+        u64 num_obj = sched.get_rank_count();
 
-    sycl::buffer<Tvec> pos_min_cell(num_obj);
-    sycl::buffer<Tvec> pos_max_cell(num_obj);
+        std::unique_ptr<sycl::buffer<TgridVec>> pos1 = sched.rankgather_field<TgridVec>(0);
+        std::unique_ptr<sycl::buffer<TgridVec>> pos2 = sched.rankgather_field<TgridVec>(1);
 
-    shamsys::instance::get_compute_queue().submit([&](sycl::handler & cgh){
-        sycl::accessor acc_p1 {shambase::get_check_ref(pos1), cgh, sycl::read_only};
-        sycl::accessor acc_p2 {shambase::get_check_ref(pos2), cgh, sycl::read_only};
-        sycl::accessor cell_min {pos_min_cell, cgh, sycl::write_only, sycl::no_init};
-        sycl::accessor cell_max {pos_max_cell, cgh, sycl::write_only, sycl::no_init};
+        sycl::buffer<Tvec> pos_min_cell(num_obj*block_size);
+        sycl::buffer<Tvec> pos_max_cell(num_obj*block_size);
 
-        shambase::parralel_for(cgh, num_obj,"rescale cells", [=](u64 id_a){
-            cell_min[id_a] = acc_p1[id_a].template convert<Tscal>();
-            cell_max[id_a] = acc_p2[id_a].template convert<Tscal>();
-        });
-    });
-    
-    writer.write_voxel_cells(pos_min_cell,pos_max_cell, num_obj);
+        if(num_obj > 0){
 
-    writer.add_cell_data_section();
-    writer.add_field_data_section(1);
+            shamsys::instance::get_compute_queue().submit([&,block_size](sycl::handler & cgh){
+                sycl::accessor acc_p1 {shambase::get_check_ref(pos1), cgh, sycl::read_only};
+                sycl::accessor acc_p2 {shambase::get_check_ref(pos2), cgh, sycl::read_only};
+                sycl::accessor cell_min {pos_min_cell, cgh, sycl::write_only, sycl::no_init};
+                sycl::accessor cell_max {pos_max_cell, cgh, sycl::write_only, sycl::no_init};
 
-    std::unique_ptr<sycl::buffer<Tscal>> field_vals = sched.rankgather_field<Tscal>(2);
-    writer.write_field("rho", field_vals, num_obj);
+                using Block = typename Solver::AMRBlock;
+
+                shambase::parralel_for(cgh, num_obj,"rescale cells", [=](u64 id_a){
+                    Tvec block_min = acc_p1[id_a].template convert<Tscal>();
+                    Tvec block_max = acc_p2[id_a].template convert<Tscal>();
+
+                    Tvec delta_cell = (block_max - block_min)/Block::side_size;
+                    #pragma unroll
+                    for (u32 ix = 0; ix < Block::side_size; ix ++) {
+                        #pragma unroll
+                        for (u32 iy = 0; iy < Block::side_size; iy ++) {
+                            #pragma unroll
+                            for (u32 iz = 0; iz < Block::side_size; iz ++) {
+                                u32 i = Block::get_index({ix,iy,iz});
+                                Tvec delta_val = delta_cell*Tvec{ix,iy,iz};
+                                cell_min[id_a*block_size + i] = block_min+delta_val;
+                                cell_max[id_a*block_size + i] = block_min+(delta_cell)+delta_val;
+                            }
+                        }
+                    }
+
+                });
+            });
+        
+        }
+        
+        writer.write_voxel_cells(pos_min_cell,pos_max_cell, num_obj*block_size);
+
+        writer.add_cell_data_section();
+        writer.add_field_data_section(3);
+
+        std::unique_ptr<sycl::buffer<Tscal>> fields_rho = sched.rankgather_field<Tscal>(2);
+        writer.write_field("rho", fields_rho, num_obj*block_size);
+
+        std::unique_ptr<sycl::buffer<Tvec>> fields_vel = sched.rankgather_field<Tvec>(3);
+        writer.write_field("rhovel", fields_vel, num_obj*block_size);
+
+        std::unique_ptr<sycl::buffer<Tscal>> fields_eint = sched.rankgather_field<Tscal>(4);
+        writer.write_field("rhoetot", fields_eint, num_obj*block_size);
+
+    } catch (std::runtime_error e) {
+        logger::err_ln("Godunov", "std::runtime_error catched while MPI file open -> unrecoverable\n what():\n",e.what());
+    } catch (std::exception e) {
+        logger::err_ln("Godunov", "exception catched while MPI file open -> unrecoverable\n what():\n",e.what());
+    } catch (...) {
+        logger::err_ln("Godunov", "something unknwon catched while MPI file open -> unrecoverable");
+    }
 
 }
 
 template<class Tvec, class TgridVec>
-auto Model<Tvec, TgridVec>::evolve_once(Tscal t_current,Tscal dt_input)-> Tscal{
+auto shammodels::basegodunov::Model<Tvec, TgridVec>::evolve_once(Tscal t_current,Tscal dt_input)-> Tscal{
     return solver.evolve_once(t_current, dt_input);
 }
 

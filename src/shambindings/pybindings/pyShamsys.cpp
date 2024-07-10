@@ -14,9 +14,11 @@
 
 #include "pyNodeInstance.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shambindings/pybindaliases.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "version.hpp"
+#include "shamsys/SignalCatch.hpp"
 
 Register_pymod(pysyslibinit) {
 
@@ -24,7 +26,7 @@ Register_pymod(pysyslibinit) {
         "change_loglevel",
         [](u32 loglevel) {
             if (loglevel > i8_max) {
-                throw shambase::throw_with_loc<std::invalid_argument>("loglevel must be below 128");
+                throw shambase::make_except_with_loc<std::invalid_argument>("loglevel must be below 128");
             }
 
             if (loglevel == i8_max) {
@@ -32,9 +34,9 @@ Register_pymod(pysyslibinit) {
                     "If you've seen spam in your life i can garantee you, this is worst");
             }
 
-            logger::raw_ln("-> modified loglevel to", logger::loglevel, "enabled log types : ");
+            logger::raw_ln("-> modified loglevel to", logger::get_loglevel(), "enabled log types : ");
 
-            logger::loglevel = loglevel;
+            logger::set_loglevel(loglevel);
             logger::print_active_level();
         },
         R"pbdoc(
@@ -79,7 +81,39 @@ Register_pymod(pysyslibinit) {
         print compile_arg
     )pbdoc");
 
+    m.def(
+        "dump_profiling",
+        [](std::string prefix) {
+            shambase::details::dump_profilings(prefix, shamcomm::world_rank());
+        },
+        R"pbdoc(
+        dump profiling data
+    )pbdoc");
+
+    m.def(
+        "dump_profiling_chrome",
+        [](std::string prefix) {
+            shambase::details::dump_profilings_chrome(prefix, shamcomm::world_rank());
+        },
+        R"pbdoc(
+        dump profiling data
+    )pbdoc");
+
+    
+
+    m.def(
+        "clear_profiling_data",
+        []() {
+            shambase::details::clear_profiling_data();
+        },
+        R"pbdoc(
+        dump profiling data
+    )pbdoc");
+
+
     py::module sys_module = m.def_submodule("sys", "system handling part of shamrock");
+    sys_module.def("signal_handler",&shamsys::details::signal_callback_handler);
+
 
     shamsys::instance::register_pymodules(sys_module);
 }

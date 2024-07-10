@@ -8,5 +8,9 @@ target_sources(shamrock_lib
         ConservativeCheck.cpp
         ExternalForces.cpp
         ComputeEos.cpp
+        UpdateDerivs.cpp
+        ComputeLoadBalanceValue.cpp
+        NeighbourCache.cpp
+        ParticleReordering.cpp
     PUBLIC
     )

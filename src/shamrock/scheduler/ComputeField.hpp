@@ -17,9 +17,8 @@
 #include "shambase/DistributedData.hpp"
 #include "shambase/memory.hpp"
 #include "shambackends/sycl.hpp"
-#include "shambase/sycl_utils/sycl_utilities.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shambackends/vec.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamrock/math/integrators.hpp"
 #include "shamsys/NodeInstance.hpp"
 
@@ -31,12 +30,12 @@ namespace shamrock {
         public:
         shambase::DistributedData<PatchDataField<T>> field_data;
 
-        inline void generate(PatchScheduler &sched, std::string name) {StackEntry stack_loc{};
+        inline void generate(PatchScheduler &sched, std::string name, u32 nvar = 1) {StackEntry stack_loc{};
 
             using namespace shamrock::patch;
 
             sched.for_each_patch_data([&](u64 id_patch, Patch cur_p, PatchData &pdat) {
-                field_data.insert({id_patch, PatchDataField<T>(name, 1)});
+                field_data.add_obj(id_patch, PatchDataField<T>(name, nvar));
                 field_data.get(id_patch).resize(pdat.get_obj_cnt());
             });
         }
@@ -55,7 +54,7 @@ namespace shamrock {
             T ret = shambase::VectorProperties<T>::get_min();
             field_data.for_each([&](u64 id, PatchDataField<T> & cfield){
                 if(!cfield.is_empty()){
-                    ret = shambase::sycl_utils::g_sycl_max(ret, cfield.compute_max());
+                    ret = sham::max(ret, cfield.compute_max());
                 }
             });
 
@@ -66,7 +65,7 @@ namespace shamrock {
             T ret = shambase::VectorProperties<T>::get_max();
             field_data.for_each([&](u64 id, PatchDataField<T> & cfield){
                 if(!cfield.is_empty()){
-                    ret = shambase::sycl_utils::g_sycl_min(ret, cfield.compute_min());
+                    ret = sham::min(ret, cfield.compute_min());
                 }
             });
 
@@ -77,19 +76,47 @@ namespace shamrock {
             T ret = shambase::VectorProperties<T>::get_zero();
             field_data.for_each([&](u64 id, PatchDataField<T> & cfield){
                 if(!cfield.is_empty()){
-                    ret = shambase::sycl_utils::g_sycl_min(ret, cfield.compute_min());
+                    ret +=  cfield.compute_sum();
                 }
             });
 
             return ret;
         }
 
-        inline std::unique_ptr<sycl::buffer<T>> rankgather_computefield(PatchScheduler &sched){StackEntry stack_loc{};
+        inline u32 get_nvar() {
+
+            std::optional<u32> nvar = std::nullopt;
+
+            field_data.for_each([&](u64 id, PatchDataField<T> & cfield){
+
+                u32 loc_nvar = cfield.get_nvar();
+                if(!bool(nvar)){
+                    nvar = loc_nvar;
+                }
+
+                if(nvar != loc_nvar){
+                    shambase::throw_with_loc<std::runtime_error>(
+                        shambase::format("mismatch in nvar excepted={} found={}",*nvar,loc_nvar)
+                        );
+                }
+            });
+
+            if(!bool(nvar)){
+                shambase::throw_with_loc<std::runtime_error>(
+                        "you cannot querry this function when you have no fields"
+                        );
+            }
+
+            return *nvar;
+        }
+
+        inline std::unique_ptr<sycl::buffer<T>> rankgather_computefield(PatchScheduler &sched){
+            StackEntry stack_loc{};
+            
             std::unique_ptr<sycl::buffer<T>> ret;
 
-            u64 nvar = 1;
-
             u64 num_obj = sched.get_rank_count();
+            u64 nvar = get_nvar();
 
             if(num_obj > 0){
                 ret = std::make_unique<sycl::buffer<T>>(num_obj*nvar);
@@ -100,14 +127,17 @@ namespace shamrock {
                 sched.for_each_patch_data([&](u64 id_patch, Patch cur_p, PatchData &pdat) {
                     using namespace shamalgs::memory;
                     using namespace shambase;
+                    
+                    if(pdat.get_obj_cnt() > 0){
+                        write_with_offset_into(
+                            shamsys::instance::get_compute_queue(),
+                            get_check_ref(ret), 
+                            get_check_ref(get_buf(id_patch)), 
+                            ptr, 
+                            pdat.get_obj_cnt()*nvar);
 
-                    write_with_offset_into(
-                        get_check_ref(ret), 
-                        get_check_ref(get_buf(id_patch)), 
-                        ptr, 
-                        pdat.get_obj_cnt()*nvar);
-
-                    ptr += pdat.get_obj_cnt()*nvar;
+                        ptr += pdat.get_obj_cnt()*nvar;
+                    }
                 });
             }
 

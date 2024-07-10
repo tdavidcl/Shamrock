@@ -22,6 +22,7 @@
 #include "shamrock/sfc/morton.hpp"
 #include "shamrock/tree/TreeReducedMortonCodes.hpp"
 #include "shamrock/tree/TreeStructure.hpp"
+#include "shamsys/NodeInstance.hpp"
 
 namespace shamrock::tree {
 
@@ -140,13 +141,13 @@ namespace shamrock::tree {
 
         inline TreeCellRanges(const TreeCellRanges &other)
             : buf_pos_min_cell(
-                  shamalgs::memory::duplicate(other.buf_pos_min_cell)), // size = total count
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_pos_min_cell)), // size = total count
               buf_pos_max_cell(
-                  shamalgs::memory::duplicate(other.buf_pos_max_cell)), // size = total count
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_pos_max_cell)), // size = total count
               buf_pos_min_cell_flt(
-                  shamalgs::memory::duplicate(other.buf_pos_min_cell_flt)), // size = total count
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_pos_min_cell_flt)), // size = total count
               buf_pos_max_cell_flt(
-                  shamalgs::memory::duplicate(other.buf_pos_max_cell_flt)) // size = total count
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_pos_max_cell_flt)) // size = total count
         {}
 
         inline TreeCellRanges &operator=(TreeCellRanges &&other) noexcept {
@@ -180,10 +181,10 @@ namespace shamrock::tree {
 
             using namespace shamalgs::reduction;
 
-            cmp = cmp && equals_ptr(t1.buf_pos_min_cell, t2.buf_pos_min_cell);
-            cmp = cmp && equals_ptr(t1.buf_pos_max_cell, t2.buf_pos_max_cell);
-            cmp = cmp && equals_ptr(t1.buf_pos_min_cell_flt, t2.buf_pos_min_cell_flt);
-            cmp = cmp && equals_ptr(t1.buf_pos_max_cell_flt, t2.buf_pos_max_cell_flt);
+            cmp = cmp && equals_ptr(shamsys::instance::get_compute_queue(),t1.buf_pos_min_cell, t2.buf_pos_min_cell);
+            cmp = cmp && equals_ptr(shamsys::instance::get_compute_queue(),t1.buf_pos_max_cell, t2.buf_pos_max_cell);
+            cmp = cmp && equals_ptr(shamsys::instance::get_compute_queue(),t1.buf_pos_min_cell_flt, t2.buf_pos_min_cell_flt);
+            cmp = cmp && equals_ptr(shamsys::instance::get_compute_queue(),t1.buf_pos_max_cell_flt, t2.buf_pos_max_cell_flt);
 
             return cmp;
         }
@@ -194,7 +195,7 @@ namespace shamrock::tree {
             } else if (buf_pos_min_cell_flt) {
                 return buf_pos_min_cell_flt->size();
             } else {
-                throw shambase::throw_with_loc<std::runtime_error>("no buffers are allocated");
+                throw shambase::make_except_with_loc<std::runtime_error>("no buffers are allocated");
             }
         }
 
@@ -224,11 +225,11 @@ namespace shamrock::tree {
             }
         }
 
-        inline u64 serialize_byte_size() {
+        inline shamalgs::SerializeSize serialize_byte_size() {
 
             using H = shamalgs::SerializeHelper;
 
-            u64 sum = H::serialize_byte_size<u32>();
+            shamalgs::SerializeSize sum = H::serialize_byte_size<u32>();
 
             u32 state = (bool(buf_pos_min_cell) ? 1 : 0) + (bool(buf_pos_min_cell_flt) ? 1 : 0) * 2;
 
