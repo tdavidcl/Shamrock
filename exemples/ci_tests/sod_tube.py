@@ -72,61 +72,42 @@ model.evolve_until(t_target)
 
 sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1,P_1 = 1,rho_5 = 0.125,P_5 = 0.1)
 sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, 0.0, -0.5,0.5)
-print(sodanalysis.compute_L2_dist())
 
+#################
+### Test CD
+#################
+rho, v, P = sodanalysis.compute_L2_dist()
+vx,vy,vz = v
 
-model.do_vtk_dump("end.vtk", True)
-dump = model.make_phantom_dump()
-dump.save_dump("end.phdump")
+# normally : 
+# rho 0.0001615491818848632
+# v (0.0011627047434807855, 2.9881306160215856e-05, 1.7413547093275864e-07)
+# P0.0001248364612976704
 
-import numpy as np
-dic = ctx.collect_data()
+test_pass = True
+pass_rho = 0.0001615491818848697
+pass_vx = 0.0011627047434809158
+pass_vy = 2.9881306160215856e-05
+pass_vz = 1.7413547093275864e-07
+pass_P = 0.0001248364612976704
 
-x =np.array(dic['xyz'][:,0]) + 0.5
-vx = dic['vxyz'][:,0]
-uint = dic['uint'][:]
+err_log = ""
 
-hpart = dic["hpart"]
-alpha = dic["alpha_AV"]
+if rho > pass_rho:
+    err_log += ("error on rho is too high "+str(rho) +">"+str(pass_rho) ) + "\n"
+    test_pass = False
+if vx > pass_vx:
+    err_log += ("error on vx is too high "+str(vx) +">"+str(pass_vx) )+ "\n"
+    test_pass = False
+if vy > pass_vy:
+    err_log += ("error on vy is too high "+str(vy) +">"+str(pass_vy) )+ "\n"
+    test_pass = False
+if vz > pass_vz:
+    err_log += ("error on vz is too high "+str(vz) +">"+str(pass_vz) )+ "\n"
+    test_pass = False
+if P > pass_P:
+    err_log += ("error on P is too high "+str(P) +">"+str(pass_P) )+ "\n"
+    test_pass = False
 
-rho = pmass*(model.get_hfact()/hpart)**3
-P = (gamma-1) * rho *uint
-
-
-plt.plot(x,rho,'.',label="rho")
-plt.plot(x,vx,'.',label="v")
-plt.plot(x,P,'.',label="P")
-plt.plot(x,alpha,'.',label="alpha")
-#plt.plot(x,hpart,'.',label="hpart")
-#plt.plot(x,uint,'.',label="uint")
-
-
-#### add analytical soluce
-x = np.linspace(-0.5,0.5,1000)
-
-rho = []
-P = []
-vx = []
-
-for i in range(len(x)):
-    x_ = x[i]
-
-    _rho,_vx,_P = sod.get_value(t_target, x_)
-    rho.append(_rho)
-    vx.append(_vx)
-    P.append(_P)
-
-x += 0.5
-plt.plot(x,rho,color = "black",label="analytic")
-plt.plot(x,vx,color = "black")
-plt.plot(x,P,color = "black")
-#######
-
-
-
-plt.legend()
-plt.grid()
-plt.ylim(0,1.1)
-plt.xlim(0,1)
-plt.title("t="+str(t_target))
-plt.show()
+if test_pass == False:
+    exit("Test did not pass L2 margins : \n"+err_log)
