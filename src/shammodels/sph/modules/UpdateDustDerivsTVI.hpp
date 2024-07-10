@@ -15,7 +15,8 @@
  * 
  */
 
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/modules/SolverStorage.hpp"
@@ -45,8 +46,6 @@ namespace shammodels::sph::modules {
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
-
-
 
         using DustCFG     = typename Config::DustConfig;
         using DustCFGNone = typename DustCFG::None;

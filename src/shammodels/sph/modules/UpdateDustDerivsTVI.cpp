@@ -14,7 +14,7 @@
  */
 
 #include "UpdateDustDerivsTVI.hpp"
-#include "shambase/Constants.hpp"
+#include "shambase/constants.hpp"
 #include "shambase/exception.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -184,9 +184,11 @@ void shammodels::sph::modules::UpdateDustDerivsTVI<Tvec, SPHKernel>::update_dust
 
                     Tscal rab       = sycl::sqrt(rab2);
                     Tvec r_ab_unit = dr / rab;
+                    Tscal inv_rab = 1/rab;
 
                     if (rab < 1e-9) {
                         r_ab_unit = {0, 0, 0};
+                        inv_rab = 0;
                     }
 
                     Tvec vxyz_b     = vxyz[id_b];
@@ -203,15 +205,17 @@ void shammodels::sph::modules::UpdateDustDerivsTVI<Tvec, SPHKernel>::update_dust
                     Tscal Fab_a = Kernel::dW_3d(rab, h_a);
                     Tscal Fab_b = Kernel::dW_3d(rab, h_b);
 
+
+
                     dS_sum += m1half * (pmass * S_b / rho_b) * (
                         Tsja/rho_a + Tsjb/rho_b
-                    )* (P_a - P_b)* 0.5*(Fab_a + Fab_b)/rab +
+                    )* (P_a - P_b)* 0.5*(Fab_a + Fab_b)*inv_rab +
                     (S_a / (2*rho_a*omega_a)) * pmass *sycl::dot(v_ab, r_ab_unit)*Fab_a;
-
 
                 });
 
-
+                
+                dS[id_a] = dS_sum;
 
 
             });
@@ -229,3 +233,4 @@ void shammodels::sph::modules::UpdateDustDerivsTVI<Tvec, SPHKernel>::update_dust
 using namespace shammath;
 template class shammodels::sph::modules::UpdateDustDerivsTVI<f64_3, M4>;
 template class shammodels::sph::modules::UpdateDustDerivsTVI<f64_3, M6>;
+template class shammodels::sph::modules::UpdateDustDerivsTVI<f64_3, M8>;
