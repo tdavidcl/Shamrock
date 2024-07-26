@@ -81,12 +81,12 @@ namespace shamrock::tree {
                 one_cell_mode   = true;
 
                 buf_tree_morton = std::make_unique<sycl::buffer<u_morton>>(
-                    shamalgs::memory::vector_to_buf(std::vector<u_morton>{0, 0})
+                    shamalgs::memory::vector_to_buf(shamsys::instance::get_compute_queue(),std::vector<u_morton>{0, 0})
                     // tree morton = {0,0} is a flag for the one cell mode
                 );
 
             } else {
-                throw shambase::throw_with_loc<std::runtime_error>("0 leaf tree cannot exists");
+                throw shambase::make_except_with_loc<std::runtime_error>("0 leaf tree cannot exists");
             }
         }
 
@@ -111,8 +111,8 @@ namespace shamrock::tree {
 
         inline TreeReducedMortonCodes(const TreeReducedMortonCodes &other)
             : tree_leaf_count(other.tree_leaf_count),
-              buf_reduc_index_map(shamalgs::memory::duplicate(other.buf_reduc_index_map)),
-              buf_tree_morton(shamalgs::memory::duplicate(other.buf_tree_morton)) {}
+              buf_reduc_index_map(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_reduc_index_map)),
+              buf_tree_morton(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_tree_morton)) {}
 
         inline TreeReducedMortonCodes &operator=(TreeReducedMortonCodes &&other) noexcept {
             tree_leaf_count     = std::move(other.tree_leaf_count    );
@@ -132,10 +132,10 @@ namespace shamrock::tree {
 
             cmp = cmp && (t1.buf_reduc_index_map->size() == t2.buf_reduc_index_map->size());
 
-            cmp = cmp && equals(*t1.buf_reduc_index_map,
+            cmp = cmp && equals(shamsys::instance::get_compute_queue(),*t1.buf_reduc_index_map,
                                 *t2.buf_reduc_index_map,
                                 t1.buf_reduc_index_map->size());
-            cmp = cmp && equals(*t1.buf_tree_morton, *t2.buf_tree_morton, t1.tree_leaf_count);
+            cmp = cmp && equals(shamsys::instance::get_compute_queue(),*t1.buf_tree_morton, *t2.buf_tree_morton, t1.tree_leaf_count);
 
             return cmp;
         }
@@ -150,12 +150,12 @@ namespace shamrock::tree {
 
             serializer.write(tree_leaf_count);
             if (!buf_reduc_index_map) {
-                throw shambase::throw_with_loc<std::runtime_error>("missing buffer");
+                throw shambase::make_except_with_loc<std::runtime_error>("missing buffer");
             }
             serializer.write<u32>(buf_reduc_index_map->size());
             serializer.write_buf(*buf_reduc_index_map, buf_reduc_index_map->size());
             if (!buf_tree_morton) {
-                throw shambase::throw_with_loc<std::runtime_error>("missing buffer");
+                throw shambase::make_except_with_loc<std::runtime_error>("missing buffer");
             }
             serializer.write_buf(*buf_tree_morton, tree_leaf_count);
         }
@@ -178,7 +178,7 @@ namespace shamrock::tree {
             return ret;
         }
 
-        inline u64 serialize_byte_size() {
+        inline shamalgs::SerializeSize serialize_byte_size() {
 
 
             using H = shamalgs::SerializeHelper;

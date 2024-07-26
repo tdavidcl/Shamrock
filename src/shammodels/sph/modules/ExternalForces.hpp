@@ -16,7 +16,7 @@
  */
 
 #include "shambackends/typeAliasVec.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/modules/SolverStorage.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
@@ -56,6 +56,14 @@ namespace shammodels::sph::modules {
         void point_mass_accrete_particles();
 
         private:
+
+
+        using SolverConfigExtForce = typename Config::ExtForceConfig;
+        using EF_PointMass         = typename SolverConfigExtForce::PointMass;
+        using EF_LenseThirring    = typename SolverConfigExtForce::LenseThirring;
+        using EF_ShearingBoxForce    = typename SolverConfigExtForce::ShearingBoxForce;
+
+        
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 

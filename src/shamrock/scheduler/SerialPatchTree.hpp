@@ -26,7 +26,7 @@
 #include "shamrock/legacy/patch/utility/patch_field.hpp"
 #include "shamrock/patch/PatchField.hpp"
 #include "shamrock/scheduler/PatchTree.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamrock/legacy/patch/utility/patch_reduc_tree.hpp"
@@ -50,16 +50,16 @@ class SerialPatchTree{public:
     std::unique_ptr<sycl::buffer<u64>>    linked_patch_ids_buf;
 
     inline void attach_buf(){
-        if(bool(serial_tree_buf)) throw shambase::throw_with_loc<std::runtime_error>("serial_tree_buf is already allocated");
-        if(bool(linked_patch_ids_buf)) throw shambase::throw_with_loc<std::runtime_error>("linked_patch_ids_buf is already allocated");
+        if(bool(serial_tree_buf)) throw shambase::make_except_with_loc<std::runtime_error>("serial_tree_buf is already allocated");
+        if(bool(linked_patch_ids_buf)) throw shambase::make_except_with_loc<std::runtime_error>("linked_patch_ids_buf is already allocated");
 
         serial_tree_buf = std::make_unique<sycl::buffer<PtNode>>(serial_tree.data(),serial_tree.size());
         linked_patch_ids_buf = std::make_unique<sycl::buffer<u64>>(linked_patch_ids.data(),linked_patch_ids.size());
     }
 
     inline void detach_buf(){
-        if(!bool(serial_tree_buf)) throw shambase::throw_with_loc<std::runtime_error>("serial_tree_buf wasn't allocated");
-        if(!bool(linked_patch_ids_buf)) throw shambase::throw_with_loc<std::runtime_error>("linked_patch_ids_buf wasn't allocated");
+        if(!bool(serial_tree_buf)) throw shambase::make_except_with_loc<std::runtime_error>("serial_tree_buf wasn't allocated");
+        if(!bool(linked_patch_ids_buf)) throw shambase::make_except_with_loc<std::runtime_error>("linked_patch_ids_buf wasn't allocated");
 
         serial_tree_buf.reset();
         linked_patch_ids_buf.reset();
@@ -79,7 +79,7 @@ class SerialPatchTree{public:
     std::vector<PtNode> serial_tree;
     std::vector<u64> linked_patch_ids;
     std::vector<u64> roots_ids;
-    
+
 
     void build_from_patch_tree(PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform);
 
@@ -88,9 +88,18 @@ class SerialPatchTree{public:
     public: 
 
     inline void print_status(){
+        if(shamcomm::world_rank() == 0){
         for(PtNode n : serial_tree){
-            logger::raw_ln(n.box_min, n.box_max);
-        }
+            logger::raw_ln(n.box_min, n.box_max, "[",
+            n.childs_id[0], 
+            n.childs_id[1], 
+            n.childs_id[2], 
+            n.childs_id[3], 
+            n.childs_id[4], 
+            n.childs_id[5], 
+            n.childs_id[6], 
+            n.childs_id[7], "]");
+        }}
     }
 
     inline SerialPatchTree(PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform){

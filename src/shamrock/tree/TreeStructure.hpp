@@ -19,6 +19,7 @@
 #include "shamalgs/memory.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shamalgs/reduction.hpp"
+#include "shamsys/NodeInstance.hpp"
 #include "shambase/exception.hpp"
 
 namespace shamrock::tree {
@@ -45,7 +46,7 @@ namespace shamrock::tree {
         build(sycl::queue &queue, u32 _internal_cell_count, sycl::buffer<u_morton> &morton_buf) {
 
             if (!(_internal_cell_count < morton_buf.size())) {
-                throw shambase::throw_with_loc<std::runtime_error>(
+                throw shambase::make_except_with_loc<std::runtime_error>(
                     "morton buf must be at least with size() greater than internal_cell_count");
             }
 
@@ -119,15 +120,15 @@ namespace shamrock::tree {
 
             cmp = cmp && (t1.internal_cell_count == t2.internal_cell_count);
 
-            cmp = cmp && shamalgs::reduction::equals(
+            cmp = cmp && shamalgs::reduction::equals(shamsys::instance::get_compute_queue(),
                              *t1.buf_lchild_id, *t2.buf_lchild_id, t1.internal_cell_count);
-            cmp = cmp && shamalgs::reduction::equals(
+            cmp = cmp && shamalgs::reduction::equals(shamsys::instance::get_compute_queue(),
                              *t1.buf_rchild_id, *t2.buf_rchild_id, t1.internal_cell_count);
-            cmp = cmp && shamalgs::reduction::equals(
+            cmp = cmp && shamalgs::reduction::equals(shamsys::instance::get_compute_queue(),
                              *t1.buf_lchild_flag, *t2.buf_lchild_flag, t1.internal_cell_count);
-            cmp = cmp && shamalgs::reduction::equals(
+            cmp = cmp && shamalgs::reduction::equals(shamsys::instance::get_compute_queue(),
                              *t1.buf_rchild_flag, *t2.buf_rchild_flag, t1.internal_cell_count);
-            cmp = cmp && shamalgs::reduction::equals(
+            cmp = cmp && shamalgs::reduction::equals(shamsys::instance::get_compute_queue(),
                              *t1.buf_endrange, *t2.buf_endrange, t1.internal_cell_count);
             cmp = cmp && (t1.one_cell_mode == t2.one_cell_mode);
 
@@ -138,13 +139,13 @@ namespace shamrock::tree {
 
         inline TreeStructure(const TreeStructure &other)
             : internal_cell_count(other.internal_cell_count), one_cell_mode(other.one_cell_mode),
-              buf_lchild_id(shamalgs::memory::duplicate(other.buf_lchild_id)), // size = internal
-              buf_rchild_id(shamalgs::memory::duplicate(other.buf_rchild_id)), // size = internal
+              buf_lchild_id(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_lchild_id)), // size = internal
+              buf_rchild_id(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_rchild_id)), // size = internal
               buf_lchild_flag(
-                  shamalgs::memory::duplicate(other.buf_lchild_flag)), // size = internal
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_lchild_flag)), // size = internal
               buf_rchild_flag(
-                  shamalgs::memory::duplicate(other.buf_rchild_flag)),      // size = internal
-              buf_endrange(shamalgs::memory::duplicate(other.buf_endrange)) // size = internal
+                  shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_rchild_flag)),      // size = internal
+              buf_endrange(shamalgs::memory::duplicate(shamsys::instance::get_compute_queue(),other.buf_endrange)) // size = internal
         {}
 
         inline TreeStructure &operator=(TreeStructure &&other) noexcept {
@@ -182,7 +183,7 @@ namespace shamrock::tree {
             serializer.write_buf(*buf_endrange, internal_cell_count);
         }
 
-        inline u64 serialize_byte_size() {
+        inline shamalgs::SerializeSize serialize_byte_size() {
 
             using H = shamalgs::SerializeHelper;
 

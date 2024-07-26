@@ -15,11 +15,9 @@
  
 #include "shammodels/amr/zeus/modules/AMRTree.hpp"
 
-template<class Tvec, class TgridVec>
-using Module = shammodels::zeus::modules::AMRTree<Tvec, TgridVec>;
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::build_trees(){
+void shammodels::zeus::modules::AMRTree<Tvec, TgridVec>::build_trees(){
 
     StackEntry stack_loc{};
 
@@ -86,7 +84,7 @@ void Module<Tvec, TgridVec>::build_trees(){
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::correct_bounding_box(){
+void shammodels::zeus::modules::AMRTree<Tvec, TgridVec>::correct_bounding_box(){
 
     StackEntry stack_loc{};
 
@@ -131,8 +129,8 @@ void Module<Tvec, TgridVec>::correct_bounding_box(){
                     TgridVec bmin = acc_bmin[block_id];
                     TgridVec bmax = acc_bmax[block_id];
 
-                    min = shambase::sycl_utils::g_sycl_min(min, bmin);
-                    max = shambase::sycl_utils::g_sycl_max(max, bmax);
+                    min = sham::min(min, bmin);
+                    max = sham::max(max, bmax);
                 });
 
                 comp_min[leaf_offset + leaf_id] = min;
@@ -165,8 +163,8 @@ void Module<Tvec, TgridVec>::correct_bounding_box(){
                 TgridVec bmaxl = comp_max[lid];
                 TgridVec bmaxr = comp_max[rid];
 
-                TgridVec bmin = shambase::sycl_utils::g_sycl_min(bminl, bminr);
-                TgridVec bmax = shambase::sycl_utils::g_sycl_max(bmaxl, bmaxr);
+                TgridVec bmin = sham::min(bminl, bminr);
+                TgridVec bmax = sham::max(bmaxl, bmaxr);
 
                 comp_min[gid] = bmin;
                 comp_max[gid] = bmax;
@@ -224,7 +222,7 @@ void Module<Tvec, TgridVec>::correct_bounding_box(){
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::build_neigh_cache(){
+void shammodels::zeus::modules::AMRTree<Tvec, TgridVec>::build_neigh_cache(){
 
     using MergedPDat = shamrock::MergedPatchData;
     using RTree = typename Storage::RTree;

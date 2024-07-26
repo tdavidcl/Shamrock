@@ -12,6 +12,7 @@
  * @brief 
  */
 
+#include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamsys/MicroBenchmark.hpp"
 #include "shamsys/NodeInstance.hpp"
@@ -30,6 +31,7 @@ int main(int argc, char *argv[]) {
     opts::register_opt("--benchmark-mpi", {}, "micro benchmark for MPI");
 
     opts::register_opt("--test-list", {}, "print test availables");
+    opts::register_opt("--gen-test-list", {}, "print test availables");
     opts::register_opt("--run-only", {"(test name)"}, "run only this test");
     opts::register_opt("--full-output", {}, "print the assertions in the tests");
 
@@ -37,11 +39,18 @@ int main(int argc, char *argv[]) {
     opts::register_opt("--validation", {}, "run only validation tests");
     opts::register_opt("--unittest", {}, "run only unittest");
     opts::register_opt("--long-test", {}, "run also long tests");
+    opts::register_opt("--force-dgpu",{}, "for direct mpi comm on");
 
     opts::register_opt("-o", {"(filepath)"}, "output test report in that file");
 
     opts::init(argc, argv);
     if (opts::is_help_mode()) {
+        return 0;
+    }
+
+    if (opts::has_option("--gen-test-list")) {
+        std::string_view outfile = opts::get_option("--gen-test-list");
+        shamtest::gen_test_list(outfile);
         return 0;
     }
 
@@ -54,7 +63,7 @@ int main(int argc, char *argv[]) {
             logger::err_ln("Cmd OPT", "you must select a loglevel in a 8bit integer range");
         }
 
-        logger::loglevel = a;
+        logger::set_loglevel(a);
     }
 
     if (opts::has_option("--sycl-cfg")) {
@@ -66,8 +75,8 @@ int main(int argc, char *argv[]) {
         logger::print_faint_row();
 
         std::cout << "\n"
-                  << terminal_effects::colors_foreground_8b::cyan + "Git infos " +
-                         terminal_effects::reset + ":\n";
+                  << shambase::term_colors::col8b_cyan() + "Git infos " +
+                        shambase::term_colors::reset() + ":\n";
         std::cout << git_info_str << std::endl;
 
         logger::print_faint_row();
@@ -76,14 +85,14 @@ int main(int argc, char *argv[]) {
 
         logger::raw_ln(
             " - MPI & SYCL init :",
-            terminal_effects::colors_foreground_8b::green + "Ok" + terminal_effects::reset);
+            shambase::term_colors::col8b_green() + "Ok" + shambase::term_colors::reset());
 
         shamsys::instance::print_mpi_capabilities();
 
         shamsys::instance::check_dgpu_available();
     }
 
-    shamsys::instance::validate_comm();
+    shamcomm::validate_comm(shamsys::instance::get_compute_scheduler());
 
     if (opts::has_option("--benchmark-mpi")) {
         shamsys::run_micro_benchmark();
@@ -92,11 +101,11 @@ int main(int argc, char *argv[]) {
     if (shamcomm::world_rank() == 0) {
         logger::print_faint_row();
         logger::raw_ln("log status : ");
-        if (logger::loglevel == i8_max) {
+        if (logger::get_loglevel() == i8_max) {
             logger::raw_ln("If you've seen spam in your life i can garantee you, this is worst");
         }
 
-        logger::raw_ln(" - Loglevel :", u32(logger::loglevel), ", enabled log types : ");
+        logger::raw_ln(" - Loglevel :", u32(logger::get_loglevel()), ", enabled log types : ");
         logger::print_active_level();
     }
 
@@ -121,10 +130,10 @@ int main(int argc, char *argv[]) {
         logger::print_faint_row();
         logger::raw_ln(
             " - Code init",
-            terminal_effects::colors_foreground_8b::green + "DONE" + terminal_effects::reset,
+            shambase::term_colors::col8b_green() + "DONE" + shambase::term_colors::reset(),
             "now it's time to",
-            terminal_effects::colors_foreground_8b::cyan + terminal_effects::blink + "ROCK" +
-                terminal_effects::reset);
+            shambase::term_colors::col8b_cyan() + shambase::term_colors::blink() + "ROCK" +
+                shambase::term_colors::reset());
         logger::print_faint_row();
     }
 

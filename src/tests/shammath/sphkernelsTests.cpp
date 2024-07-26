@@ -8,8 +8,8 @@
 
 
 #include "shamalgs/details/random/random.hpp"
-#include "shambase/Constants.hpp"
-#include "shambase/sycl_utils.hpp"
+#include "shambase/constants.hpp"
+#include "shambackends/sycl_utils.hpp"
 #include "shambase/time.hpp"
 #include "shammath/derivatives.hpp"
 #include "shammath/integrator.hpp"
@@ -108,6 +108,27 @@ TestStart(Unittest, "shammath/sphkernels/M5", validateM5kernel, 1){
 TestStart(Unittest, "shammath/sphkernels/M6", validateM6kernel, 1){
     validate_kernel_3d<shammath::M6<f32>>(1e-3,1e-3,1e-3);
     validate_kernel_3d<shammath::M6<f64>>(1e-5,1e-5,1e-5);
+}
+
+TestStart(Unittest, "shammath/sphkernels/M7", validateM7kernel, 1){
+    validate_kernel_3d<shammath::M7<f32>>(1e-3,1e-3,1e-3);
+    validate_kernel_3d<shammath::M7<f64>>(1e-5,1e-5,1e-5);
+}
+
+TestStart(Unittest, "shammath/sphkernels/M8", validateM8kernel, 1){
+    validate_kernel_3d<shammath::M8<f32>>(1e-3,1e-3,1e-3);
+    //TODO check why do we need to reduce tol for 2D integ, value from T. Tricco 2019
+    validate_kernel_3d<shammath::M8<f64>>(1e-3,1e-5,1e-6);
+}
+
+TestStart(Unittest, "shammath/sphkernels/M9", validateM9kernel, 1){
+    validate_kernel_3d<shammath::M9<f32>>(1e-3,1e-3,1e-3);
+    validate_kernel_3d<shammath::M9<f64>>(1e-5,1e-5,1e-5); 
+}
+
+TestStart(Unittest, "shammath/sphkernels/M10", validateM10kernel, 1){
+    validate_kernel_3d<shammath::M10<f32>>(1e-3,1e-3,1e-3);
+    validate_kernel_3d<shammath::M10<f64>>(1e-5,1e-5,1e-5);
 }
 
 TestStart(Unittest, "shammath/sphkernels/C2", validateC2kernel, 1){

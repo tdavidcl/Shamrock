@@ -20,10 +20,7 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 
 template<class Tvec, class TgridVec>
-using Module = shammodels::zeus::modules::TransportStep<Tvec, TgridVec>;
-
-template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_cell_centered_momentas() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_cell_centered_momentas() {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -109,7 +106,7 @@ void Module<Tvec, TgridVec>::compute_cell_centered_momentas() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_limiter() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_limiter() {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -283,23 +280,23 @@ void Module<Tvec, TgridVec>::compute_limiter() {
 
         if (a_x.get_field(p.id_patch).has_nan()) {
             logger::err_ln("[Zeus]", "nan detected in a_x");
-            throw shambase::throw_with_loc<std::runtime_error>("detected nan");
+            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
         }
 
         if (a_y.get_field(p.id_patch).has_nan()) {
             logger::err_ln("[Zeus]", "nan detected in a_y");
-            throw shambase::throw_with_loc<std::runtime_error>("detected nan");
+            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
         }
 
         if (a_z.get_field(p.id_patch).has_nan()) {
             logger::err_ln("[Zeus]", "nan detected in a_z");
-            throw shambase::throw_with_loc<std::runtime_error>("detected nan");
+            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
         }
     });
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_face_centered_moments(Tscal dt_in) {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_face_centered_moments(Tscal dt_in) {
 
     StackEntry stack_loc{};
 
@@ -519,7 +516,7 @@ void Module<Tvec, TgridVec>::compute_face_centered_moments(Tscal dt_in) {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::exchange_face_centered_gz() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::exchange_face_centered_gz() {
 
     StackEntry stack_loc{};
 
@@ -546,7 +543,7 @@ void Module<Tvec, TgridVec>::exchange_face_centered_gz() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_flux() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_flux() {
 
     StackEntry stack_loc{};
 
@@ -711,7 +708,7 @@ void Module<Tvec, TgridVec>::compute_flux() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_stencil_flux() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_stencil_flux() {
 
     StackEntry stack_loc{};
 
@@ -735,7 +732,7 @@ void Module<Tvec, TgridVec>::compute_stencil_flux() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::update_Q(Tscal dt) {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::update_Q(Tscal dt) {
 
     StackEntry stack_loc{};
 
@@ -836,7 +833,7 @@ void Module<Tvec, TgridVec>::update_Q(Tscal dt) {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_new_qte() {
+void shammodels::zeus::modules::TransportStep<Tvec, TgridVec>::compute_new_qte() {
 
     StackEntry stack_loc{};
 

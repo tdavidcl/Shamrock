@@ -16,7 +16,7 @@
  */
 
 #include "shamrock/legacy/patch/utility/compute_field.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "interface_generator.hpp"
 #include "shamrock/legacy/patch/comm/patchdata_exchanger.hpp"
 #include <vector>
@@ -24,6 +24,7 @@
 namespace impl {
     
     template <class vectype, class primtype>
+    [[deprecated("Legacy module")]]
     void comm_interfaces(PatchScheduler &sched, std::vector<InterfaceComm<vectype>> &interface_comm_list,
                         std::unordered_map<u64, std::vector<std::tuple<u64, std::unique_ptr<shamrock::patch::PatchData>>>> &interface_map,bool periodic) {
         StackEntry stack_loc{};
@@ -40,7 +41,7 @@ namespace impl {
 
             for (u64 i = 0; i < interface_comm_list.size(); i++) {
 
-                if (sched.patch_list.global[interface_comm_list[i].global_patch_idx_send].data_count > 0) {
+                if (sched.patch_list.global[interface_comm_list[i].global_patch_idx_send].load_value > 0) {
 
                     auto patch_in = sched.patch_data.get_pdat(interface_comm_list[i].sender_patch_id);
 
@@ -68,6 +69,7 @@ namespace impl {
 
 
     template <class T,class vectype>
+    [[deprecated("Legacy module")]]
     void comm_interfaces_field(PatchScheduler &sched, PatchComputeField<T> &pcomp_field, std::vector<InterfaceComm<vectype>> &interface_comm_list,
                         std::unordered_map<u64, std::vector<std::tuple<u64, std::unique_ptr<PatchDataField<T>>>>> &interface_field_map,bool periodic) {
 
@@ -86,7 +88,7 @@ namespace impl {
 
             for (u64 i = 0; i < interface_comm_list.size(); i++) {
 
-                if (sched.patch_list.global[interface_comm_list[i].global_patch_idx_send].data_count > 0) {
+                if (sched.patch_list.global[interface_comm_list[i].global_patch_idx_send].load_value > 0) {
 
 
                     std::vector<std::unique_ptr<PCField>> pret = InterfaceVolumeGenerator::append_interface_field<T,vectype>(

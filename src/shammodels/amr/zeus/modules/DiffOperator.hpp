@@ -15,7 +15,7 @@
  * 
  */
  
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/amr/zeus/Solver.hpp"
 #include "shammodels/amr/zeus/modules/SolverStorage.hpp"
 

@@ -74,7 +74,7 @@ namespace shamrock::patch{
                 if constexpr (std::is_same<t1, t2>::value){
                     field.extract_element(pidx,out_field);
                 }else{  
-                    throw shambase::throw_with_loc<std::invalid_argument>("missmatch");
+                    throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
                 }
 
             }, fields[idx].value, out_pdat.fields[idx].value);
@@ -97,7 +97,7 @@ namespace shamrock::patch{
                 if constexpr (std::is_same<t1, t2>::value){
                     field.insert(out_field);
                 }else{  
-                    throw shambase::throw_with_loc<std::invalid_argument>("missmatch");
+                    throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
                 }
 
             }, fields[idx].value, pdat.fields[idx].value);
@@ -119,7 +119,7 @@ namespace shamrock::patch{
                 if constexpr (std::is_same<t1, t2>::value){
                     field.overwrite(out_field,obj_cnt);
                 }else{  
-                    throw shambase::throw_with_loc<std::invalid_argument>("missmatch");
+                    throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
                 }
 
             }, fields[idx].value, pdat.fields[idx].value);
@@ -199,7 +199,7 @@ namespace shamrock::patch{
                 if constexpr (std::is_same<t1, t2>::value){
                     field.append_subset_to(idxs, sz, out_field);
                 }else{  
-                    throw shambase::throw_with_loc<std::invalid_argument>("missmatch");
+                    throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
                 }
 
             }, fields[idx].value, pdat.fields[idx].value);
@@ -220,7 +220,7 @@ namespace shamrock::patch{
                 if constexpr (std::is_same<t1, t2>::value){
                     field.append_subset_to(idxs, out_field);
                 }else{  
-                    throw shambase::throw_with_loc<std::invalid_argument>("missmatch");
+                    throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
                 }
 
             }, fields[idx].value, pdat.fields[idx].value);
@@ -236,8 +236,8 @@ namespace shamrock::patch{
         });        
     }
 
-    u64 PatchData::serialize_buf_byte_size(){
-        u64 sum = 0;
+    shamalgs::SerializeSize PatchData::serialize_buf_byte_size(){
+        shamalgs::SerializeSize sum {};
         for_each_field_any([&](auto & f){
             sum += f.serialize_buf_byte_size();
         }); 
@@ -307,7 +307,6 @@ namespace shamrock::patch{
 
         if(get_obj_cnt() != el_cnt_new){
 
-            using namespace shambase::sycl_utils;
 
             logger::err_ln("PatchData", "error in patchdata split, the new element count doesn't match the old one");
             
@@ -320,21 +319,21 @@ namespace shamrock::patch{
             logger::err_ln("PatchData", min_box[6],max_box[6]);
             logger::err_ln("PatchData", min_box[7],max_box[7]);
 
-            T vmin = g_sycl_min(min_box[0],min_box[1]);
-            vmin = g_sycl_min(vmin,min_box[2]);
-            vmin = g_sycl_min(vmin,min_box[3]);
-            vmin = g_sycl_min(vmin,min_box[4]);
-            vmin = g_sycl_min(vmin,min_box[5]);
-            vmin = g_sycl_min(vmin,min_box[6]);
-            vmin = g_sycl_min(vmin,min_box[7]);
+            T vmin = sham::min(min_box[0],min_box[1]);
+            vmin = sham::min(vmin,min_box[2]);
+            vmin = sham::min(vmin,min_box[3]);
+            vmin = sham::min(vmin,min_box[4]);
+            vmin = sham::min(vmin,min_box[5]);
+            vmin = sham::min(vmin,min_box[6]);
+            vmin = sham::min(vmin,min_box[7]);
 
-            T vmax = g_sycl_max(max_box[0],max_box[1]);
-            vmax = g_sycl_max(vmax,max_box[2]);
-            vmax = g_sycl_max(vmax,max_box[3]);
-            vmax = g_sycl_max(vmax,max_box[4]);
-            vmax = g_sycl_max(vmax,max_box[5]);
-            vmax = g_sycl_max(vmax,max_box[6]);
-            vmax = g_sycl_max(vmax,max_box[7]);
+            T vmax = sham::max(max_box[0],max_box[1]);
+            vmax = sham::max(vmax,max_box[2]);
+            vmax = sham::max(vmax,max_box[3]);
+            vmax = sham::max(vmax,max_box[4]);
+            vmax = sham::max(vmax,max_box[5]);
+            vmax = sham::max(vmax,max_box[6]);
+            vmax = sham::max(vmax,max_box[7]);
 
             main_field.check_err_range(
                 [&](T val,T vmin, T vmax){
@@ -361,6 +360,7 @@ namespace shamrock::patch{
     template void PatchData::split_patchdata(std::array<std::reference_wrapper<PatchData>,8> pdats, std::array<f64_3, 8> min_box,  std::array<f64_3, 8> max_box);
     template void PatchData::split_patchdata(std::array<std::reference_wrapper<PatchData>,8> pdats, std::array<u32_3, 8> min_box,  std::array<u32_3, 8> max_box);
     template void PatchData::split_patchdata(std::array<std::reference_wrapper<PatchData>,8> pdats, std::array<u64_3, 8> min_box,  std::array<u64_3, 8> max_box);
+    template void PatchData::split_patchdata(std::array<std::reference_wrapper<PatchData>,8> pdats, std::array<i64_3, 8> min_box,  std::array<i64_3, 8> max_box);
 
 
     

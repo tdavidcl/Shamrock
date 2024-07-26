@@ -9,10 +9,10 @@
 
 #include "shamtest/shamtest.hpp"
 
-#include "shambase/Constants.hpp"
+#include "shambase/constants.hpp"
 
 
-TestStart(Unittest, "shambase/Constants", checkconstantmatchsycl, 1){
+TestStart(Unittest, "shambase/constants", checkconstantmatchsycl, 1){
 
     using namespace shambase::constants;
 

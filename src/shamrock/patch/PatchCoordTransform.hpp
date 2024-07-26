@@ -19,7 +19,7 @@
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/patch/PatchCoord.hpp"
 #include "shamsys/legacy/log.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 
 namespace shamrock::patch {
 

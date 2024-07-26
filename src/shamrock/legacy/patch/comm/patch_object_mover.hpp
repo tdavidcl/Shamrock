@@ -20,16 +20,18 @@
 #include "patchdata_exchanger.hpp"
 #include "shamrock/legacy/patch/base/patchdata_field.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"
 #include <unordered_map>
 
 
 template<class vecprec> 
+[[deprecated("Legacy module")]]
 inline std::unordered_map<u64, sycl::buffer<u64>> get_new_id_map(PatchScheduler & sched, SerialPatchTree<vecprec> & sptree);
 
 template<> 
+[[deprecated("Legacy module")]]
 inline std::unordered_map<u64, sycl::buffer<u64>> get_new_id_map<f32_3>(PatchScheduler & sched, SerialPatchTree<f32_3> & sptree){
 
     
@@ -62,6 +64,7 @@ inline std::unordered_map<u64, sycl::buffer<u64>> get_new_id_map<f32_3>(PatchSch
 
 
 template<> 
+[[deprecated("Legacy module")]]
 inline std::unordered_map<u64, sycl::buffer<u64>> get_new_id_map<f64_3>(PatchScheduler & sched, SerialPatchTree<f64_3> & sptree){
 
     
@@ -97,9 +100,11 @@ inline std::unordered_map<u64, sycl::buffer<u64>> get_new_id_map<f64_3>(PatchSch
 
 
 template <class vecprec>
+[[deprecated("Legacy module")]]
 inline void reatribute_particles(PatchScheduler & sched, SerialPatchTree<vecprec> & sptree,bool periodic);
 
 template<>
+[[deprecated("Legacy module")]]
 inline void reatribute_particles<f32_3>(PatchScheduler & sched, SerialPatchTree<f32_3> & sptree,bool periodic){
 
     using namespace shamrock::patch;
@@ -139,7 +144,7 @@ inline void reatribute_particles<f32_3>(PatchScheduler & sched, SerialPatchTree<
 
                     if(periodic && err){
                         logger::err_ln("Patch Object Mover", "id = ",i, "is out of bound with periodic mode");
-                        throw shambase::throw_with_loc<std::runtime_error>("error");
+                        throw shambase::make_except_with_loc<std::runtime_error>("error");
                     }
                 }
             }
@@ -161,7 +166,7 @@ inline void reatribute_particles<f32_3>(PatchScheduler & sched, SerialPatchTree<
 
 
 
-        throw shambase::throw_with_loc<std::runtime_error>("box cannot be resized in periodic mode");
+        throw shambase::make_except_with_loc<std::runtime_error>("box cannot be resized in periodic mode");
     }
 
     if(synced_should_res_box){
@@ -347,6 +352,7 @@ inline void reatribute_particles<f32_3>(PatchScheduler & sched, SerialPatchTree<
 
 
 template<>
+[[deprecated("Legacy module")]]
 inline void reatribute_particles<f64_3>(PatchScheduler & sched, SerialPatchTree<f64_3> & sptree,bool periodic){
 
     using namespace shamrock::patch;
@@ -386,7 +392,7 @@ inline void reatribute_particles<f64_3>(PatchScheduler & sched, SerialPatchTree<
 
                     if(periodic && err){
                         logger::err_ln("Patch Object Mover", "id = ",i, "is out of bound with periodic mode");
-                        throw shambase::throw_with_loc<std::runtime_error>("error");
+                        throw shambase::make_except_with_loc<std::runtime_error>("error");
                     }
                 }
             }
@@ -408,7 +414,7 @@ inline void reatribute_particles<f64_3>(PatchScheduler & sched, SerialPatchTree<
 
 
 
-        throw shambase::throw_with_loc<std::runtime_error>("box cannot be resized in periodic mode");
+        throw shambase::make_except_with_loc<std::runtime_error>("box cannot be resized in periodic mode");
     }
 
     if(synced_should_res_box){

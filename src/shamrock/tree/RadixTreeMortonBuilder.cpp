@@ -16,7 +16,7 @@
 #include "kernels/key_morton_sort.hpp"
 #include "shamalgs/algorithm.hpp"
 #include "shambase/exception.hpp"
-#include "shambase/integer_sycl.hpp"
+#include "shambackends/math.hpp"
 #include "shamrock/sfc/MortonKernels.hpp"
 #include "shamrock/sfc/morton.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -34,13 +34,13 @@ void RadixTreeMortonBuilder<morton_t, pos_t, dim>::build(
     using namespace shamrock::sfc;
 
     if (cnt_obj > i32_max - 1) {
-        throw shambase::throw_with_loc<std::invalid_argument>(
+        throw shambase::make_except_with_loc<std::invalid_argument>(
             "number of element in patch above i32_max-1");
     }
 
     debug_sycl_ln("RadixTree", "box dim :", bounding_box);
 
-    u32 morton_len = shambase::roundup_pow2_clz(cnt_obj);
+    u32 morton_len = sham::roundup_pow2_clz(cnt_obj);
 
     debug_sycl_ln("RadixTree", "morton buffer length :", morton_len);
     out_buf_morton = std::make_unique<sycl::buffer<morton_t>>(morton_len);
@@ -73,7 +73,7 @@ void RadixTreeMortonBuilder<morton_t, pos_t, dim>::build_raw(
     using namespace shamrock::sfc;
 
     if (cnt_obj > i32_max - 1) {
-        throw shambase::throw_with_loc<std::invalid_argument>(
+        throw shambase::make_except_with_loc<std::invalid_argument>(
             "number of element in patch above i32_max-1");
     }
 

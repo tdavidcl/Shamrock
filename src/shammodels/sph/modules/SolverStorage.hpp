@@ -16,7 +16,7 @@
  */
 
 #include "shambase/stacktrace.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/SinkPartStruct.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
@@ -63,6 +63,9 @@ namespace shammodels::sph {
         Component<shamrock::patch::PatchDataLayout> ghost_layout;
 
         Component<shambase::DistributedData<shamrock::MergedPatchData>> merged_patchdata_ghost;
+
+        Component<shamrock::ComputeField<Tscal>> alpha_av_updated;
+        Component<shambase::DistributedData<PatchDataField<Tscal>>> alpha_av_ghost;
 
         Component<shamrock::ComputeField<Tscal>> pressure;
         Component<shamrock::ComputeField<Tscal>> soundspeed;

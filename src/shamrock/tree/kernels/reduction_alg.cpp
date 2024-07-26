@@ -21,9 +21,10 @@
 #include "shamalgs/memory.hpp"
 #include "shamalgs/numeric.hpp"
 #include "shambase/exception.hpp"
+#include "shambackends/math.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambase/string.hpp"
-#include "shambase/integer_sycl.hpp"
+#include "shambackends/math.hpp"
 
 class Kernel_generate_split_table_morton32;
 class Kernel_generate_split_table_morton64;
@@ -59,8 +60,65 @@ void sycl_generate_split_table(
     });
 }
 
+
+
+/*
+Godbolt snippet for testing
+
+#include <cstdio>
+#include <array>
+
+template<int Na, int Nb>
+void print(std::array<bool, Na> & foo, std::array<int, Nb> cursors){
+    for (int i = 0; i < Na; ++i)
+        printf("%d", foo[i]);
+    printf("\n");
+
+    for(int i : cursors){
+        for(int j = 0 ; j < i ; j++) printf(" ");
+        printf("|\n");
+    }
+}
+
+
+int main(){
+    auto a  = std::array<bool,11>{1,0,1,1,1,0,0,1,0,1,0};
+
+    int i = 7;
+    int before1 = i - 1;
+    while (!a[before1])
+        before1--;
+
+    int before2 = before1 - 1;
+    while (!a[before2])
+        before2--;
+
+
+    int next1 = i +1;
+    while (!a[next1])
+        next1++;
+
+    print<11,4>(a, {next1,i,before1, before2});
+}
+
+
+*/
+
 class Kernel_iterate_reduction_morton32;
 class Kernel_iterate_reduction_morton64;
+
+//#define OLD_BEHAVIOR
+#define NEW_BEHAVIOR
+
+#ifdef NEW_BEHAVIOR
+#define OFFSET 
+#endif
+
+#ifdef OLD_BEHAVIOR
+#define OFFSET + 1
+#endif
+
+
 
 template<class u_morton, class kername, class split_int>
 void sycl_reduction_iteration(
@@ -71,7 +129,7 @@ void sycl_reduction_iteration(
     std::unique_ptr<sycl::buffer<split_int>> &buf_split_table_out
 ) {
 
-
+    
     sycl::range<1> range_morton_count{morton_count};
 
     queue.submit([&](sycl::handler &cgh) {
@@ -84,17 +142,17 @@ void sycl_reduction_iteration(
         cgh.parallel_for<kername>(range_morton_count, [=](sycl::item<1> item) {
             int i = item.get_id(0);
 
-            auto DELTA = [=](i32 x, i32 y) { return shambase::karras_delta(x, y, _morton_cnt, m); };
+            auto DELTA = [=](i32 x, i32 y) { return sham::karras_delta(x, y, _morton_cnt, m); };
 
             // find index of preceding i-1 non duplicate morton code
             u32 before1 = i - 1;
-            while (before1 <= _morton_cnt - 1 && !split_in[before1 + 1])
+            while (before1 <= _morton_cnt - 1 && !split_in[before1 OFFSET])
                 before1--;
 
             // find index of preceding i-2 non duplicate morton code
             // safe bc delta(before1,before2) return -1 if any of the 2 are -1 because of order
             u32 before2 = before1 - 1;
-            while (before2 <= _morton_cnt - 1 && !split_in[before2 + 1])
+            while (before2 <= _morton_cnt - 1 && !split_in[before2 OFFSET])
                 before2--;
 
             // find index of next i+1 non duplicate morton code
@@ -169,7 +227,7 @@ void make_indexmap(
     if(buf){
         update_morton_buf(queue, len,morton_count, *buf, buf_reduc_index_map);
     }else{
-        throw shambase::throw_with_loc<std::runtime_error>("this result shouldn't be null");
+        throw shambase::make_except_with_loc<std::runtime_error>("this result shouldn't be null");
     }
 
     if constexpr (false){
@@ -194,20 +252,20 @@ void make_indexmap(
 
         {
              if(leafs != morton_leaf_count){
-                throw shambase::throw_with_loc<std::runtime_error>("difference");
+                throw shambase::make_except_with_loc<std::runtime_error>("difference");
             }
         
             sycl::host_accessor dest{*buf_reduc_index_map , sycl::read_only};
         
             for (unsigned int i = 0; i < morton_leaf_count+2; i++) {
                 if(dest[i] != reduc_index_map[i]){
-                    throw shambase::throw_with_loc<std::runtime_error>(shambase::format("difference i = {}, {} != {}",i, dest[i] , reduc_index_map[i]));
+                    throw shambase::make_except_with_loc<std::runtime_error>(shambase::format("difference i = {}, {} != {}",i, dest[i] , reduc_index_map[i]));
                 }
             }
         }
 
         buf_reduc_index_map =
-            std::make_unique<sycl::buffer<u32>>(shamalgs::memory::vector_to_buf(reduc_index_map));
+            std::make_unique<sycl::buffer<u32>>(shamalgs::memory::vector_to_buf(queue, reduc_index_map));
 
     }
 }

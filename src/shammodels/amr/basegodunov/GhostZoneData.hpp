@@ -50,6 +50,30 @@ namespace shammodels::basegodunov {
         GeneratorMap ghost_gen_infos;
 
         shambase::DistributedDataShared<InterfaceIdTable> ghost_id_build_map;
+
+        template<class T>
+        shambase::DistributedDataShared<T> build_interface_native(
+            std::function<T(u64,u64,InterfaceBuildInfos,sycl::buffer<u32>&,u32)> fct
+            ){
+            StackEntry stack_loc{};
+
+            // clang-format off
+            return ghost_id_build_map.template map<T>([&](u64 sender, u64 receiver, InterfaceIdTable &build_table) {
+                if (!bool(build_table.ids_interf)) {
+                    shambase::throw_with_loc<std::runtime_error>(
+                        "their is an empty id table in the interface, it should have been removed");
+                }
+
+                return fct(
+                    sender,
+                    receiver, 
+                    build_table.build_infos, 
+                    *build_table.ids_interf, 
+                    build_table.ids_interf->size());
+                    
+            });
+            // clang-format on
+        }
     };
 
 } // namespace shammodels::basegodunov

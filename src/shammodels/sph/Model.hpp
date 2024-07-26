@@ -11,17 +11,21 @@
 /**
  * @file Model.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief 
  * 
  */
 
 #include "shamalgs/collective/exchanges.hpp"
 #include "shambase/string.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambase/constants.hpp"
+#include "shamcomm/logs.hpp"
+#include "shambackends/vec.hpp"
 #include "shamcomm/collectives.hpp"
 #include "shammodels/generic/setup/generators.hpp"
 #include "shammodels/sph/Solver.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
+#include "shammodels/sph/modules/ComputeLoadBalanceValue.hpp"
 #include "shamrock/legacy/utils/geometry_utils.hpp"
 #include "shamrock/patch/PatchData.hpp"
 #include "shamrock/scheduler/ReattributeDataUtility.hpp"
@@ -84,12 +88,21 @@ namespace shammodels::sph {
         void init_from_phantom_dump(PhantomDump & phdump);
         PhantomDump make_phantom_dump();
 
+        void do_vtk_dump(std::string filename, bool add_patch_world_id){
+            solver.vtk_do_dump(filename, add_patch_world_id);
+        }
+
+        void set_debug_dump(bool _do_debug_dump, std::string _debug_dump_filename){
+            solver.set_debug_dump(_do_debug_dump, _debug_dump_filename);
+        }
+
         u64 get_total_part_count();
 
         f64 total_mass_to_part_mass(f64 totmass);
 
 
         std::pair<Tvec, Tvec> get_ideal_fcc_box(Tscal dr, std::pair<Tvec, Tvec> box);
+        std::pair<Tvec, Tvec> get_ideal_hcp_box(Tscal dr, std::pair<Tvec, Tvec> box);
 
         Tscal get_hfact(){
             return Kernel::hfactd;
@@ -99,7 +112,42 @@ namespace shammodels::sph {
             return shamrock::sph::rho_h(solver.solver_config.gpart_mass, h, Kernel::hfactd);
         }
 
+
         void add_cube_fcc_3d(Tscal dr, std::pair<Tvec, Tvec> _box);
+        void add_cube_hcp_3d(Tscal dr, std::pair<Tvec, Tvec> _box);
+
+
+//        std::function<Tscal(Tscal)> sigma_profile = [=](Tscal r, Tscal r_in, Tscal p){
+//            // we setup with an adimensional mass since it is monte carlo
+//            constexpr Tscal sigma_0 = 1;
+//            return sigma_0*sycl::pow(r/r_in, -p);
+//        };
+//
+//        std::function<Tscal(Tscal)> cs_law = [=](Tscal r, Tscal r_in, Tscal q){
+//            return sycl::pow(r/r_in, -q);
+//        };
+//
+//        std::function<Tscal(Tscal)> rot_profile = [=](Tscal r, Tscal central_mass){
+//            Tscal G = solver.solver_config.get_constant_G();
+//            return sycl::sqrt(G * central_mass/r);
+//        };
+//
+//        std::function<Tscal(Tscal)> cs_profile = [&](Tscal r, Tscal r_in, Tscal H_r_in){
+//            Tscal cs_in = H_r_in*rot_profile(r_in);
+//            return cs_law(r)*cs_in; 
+
+        void add_big_disc_3d(
+                Tvec center, 
+                Tscal central_mass,
+                u32 Npart,
+                Tscal r_in,
+                Tscal r_out,
+                Tscal disc_mass,
+                Tscal p,
+                Tscal H_r_in,
+                Tscal q,
+                std::mt19937 eng
+        );
 
         inline void add_sink(Tscal mass, Tvec pos, Tvec velocity, Tscal accretion_radius){
             if(solver.storage.sinks.is_empty()){
@@ -311,6 +359,9 @@ namespace shammodels::sph {
             if(shamcomm::world_rank() == 0) {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
+            
+            modules::ComputeLoadBalanceValue<Tvec, SPHKernel> (ctx, solver.solver_config, solver.storage).update_load_balancing();
+
 
             sched.scheduler_step(false, false);
 
@@ -474,6 +525,8 @@ namespace shammodels::sph {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
 
+            modules::ComputeLoadBalanceValue<Tvec, SPHKernel> (ctx, solver.solver_config, solver.storage).update_load_balancing();
+
             sched.scheduler_step(false, false);
 
 
@@ -508,6 +561,8 @@ namespace shammodels::sph {
 
             if(shamcomm::world_rank() == 0) logger::info_ln("Model", "current particle counts : ", log_gathered);
         }
+
+        void remap_positions(std::function<Tvec(Tvec)> map);
 
         void push_particle(std::vector<Tvec> & part_pos_insert, std::vector<Tscal> & part_hpart_insert, std::vector<Tscal> &part_u_insert);
 
@@ -632,6 +687,16 @@ namespace shammodels::sph {
 
         inline void set_solver_config(typename Solver::Config cfg) { solver.solver_config = cfg; }
 
+        inline f64 solver_logs_last_rate(){
+            return solver.solve_logs.get_last_rate();
+        }
+        inline u64 solver_logs_last_obj_count(){
+            return solver.solve_logs.get_last_obj_count();
+        }
+        inline void change_htolerance(Tscal in){
+            solver.solver_config.htol_up_tol = in;
+        }
+
         ////////////////////////////////////////////////////////////////////////////////////////////
         /////// analysis utilities
         ////////////////////////////////////////////////////////////////////////////////////////////
@@ -645,10 +710,75 @@ namespace shammodels::sph {
         ////////////////////////////////////////////////////////////////////////////////////////////
 
         f64
-        evolve_once(f64 t_curr, f64 dt_input, bool do_dump, std::string vtk_dump_name, bool vtk_dump_patch_id);
+        evolve_once_time_expl(f64 t_curr, f64 dt_input);
     
+        void timestep();
+
+        inline void evolve_once(){
+            solver.evolve_once();
+            solver.print_timestep_logs();
+        }
+
+        inline bool evolve_until(Tscal target_time,i32 niter_max){
+            return solver.evolve_until(target_time,niter_max);
+        }
+
         private:
         void add_pdat_to_phantom_block(PhantomDumpBlock & block, shamrock::patch::PatchData & pdat);
+
+        
+
+        template<class Tscal>
+        inline void warp_disc(std::vector<Tvec> & pos, std::vector<Tvec> &vel, Tscal posangle, Tscal incl, Tscal Rwarp, Tscal Hwarp) {
+            Tvec k = Tvec(-std::sin(posangle), std::cos(posangle), 0.);
+            Tscal inc;
+            Tscal psi = 0.;
+            u32 len = pos.size();
+
+            //convert to radians (sycl functions take radians)
+            Tscal incl_rad = incl * shambase::constants::pi<Tscal> / 180.;
+
+            for (i32 i=0; i < len; i++){
+                Tvec R_vec = pos[i];
+                Tscal R = sycl::sqrt(sycl::dot(R_vec, R_vec));
+                if (R < Rwarp - Hwarp){
+                    inc = 0.;
+                }
+                else if (R < Rwarp + 3. * Hwarp && R > Rwarp - Hwarp) {
+                    inc = sycl::asin(0.5 * (1. + sycl::sin(shambase::constants::pi<Tscal> / (2. * Hwarp) * (R - Rwarp))) * sycl::sin(incl_rad));
+                    psi = shambase::constants::pi<Tscal> * Rwarp / (4. * Hwarp) * sycl::sin(incl_rad) / sycl::sqrt(1. - (0.5 * sycl::pow(sycl::sin(incl_rad), 2)));
+                    Tscal psimax = sycl::max(psimax, psi);
+                    Tscal x = pos[i].x();
+                    Tscal y = pos[i].y();
+                    Tscal z = pos[i].z();
+
+                    //Tscal xp = x * sycl::cos(inc) + y * sycl::sin(inc);
+                    //Tscal yp = - x * sycl::sin(inc) + y * sycl::cos(inc);
+                    //pos[i] = Tvec(xp, yp, z);
+
+                    Tvec kk = Tvec(0., 0., 1.);
+                    Tvec w = sycl::cross(kk, pos[i]);
+                    // Rodrigues' rotation formula
+                    pos[i] = pos[i] * sycl::cos(inc) + w * sycl::sin(inc) + kk * sycl::dot(kk, pos[i]) * (1. - sycl::cos(inc));
+
+                    }
+                else{
+                    inc = 0.;
+                }
+
+            }
+
+
+        }
+
+        inline void rotate_vector(Tvec & u, Tvec & v, Tscal theta){
+            // normalize the reference direction
+            Tvec vunit = v / sycl::sqrt(sycl::dot(v, v));
+            Tvec w = sycl::cross(vunit, u);
+            // Rodrigues' rotation formula
+            u = u * sycl::cos(theta) + w * sycl::sin(theta) + vunit * sycl::dot(vunit, u) * (1. - sycl::cos(theta));
+        }
+
     };
 
-} // namespace shammodels
+} // namespace shammodels::sph

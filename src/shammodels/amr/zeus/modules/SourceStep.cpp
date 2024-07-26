@@ -21,10 +21,7 @@
 #include "shamsys/legacy/log.hpp"
 
 template<class Tvec, class TgridVec>
-using Module = shammodels::zeus::modules::SourceStep<Tvec, TgridVec>;
-
-template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_forces() {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::compute_forces() {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -173,14 +170,14 @@ void Module<Tvec, TgridVec>::compute_forces() {
         });
         if (storage.forces.get().get_field(p.id_patch).has_nan()) {
             logger::err_ln("[Zeus]", "nan detected in forces");
-            throw shambase::throw_with_loc<std::runtime_error>("detected nan");
+            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
         }
         // logger::raw_ln(storage.forces.get().get_field(p.id_patch).compute_max());
     });
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::apply_force(Tscal dt) {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::apply_force(Tscal dt) {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -217,7 +214,7 @@ void Module<Tvec, TgridVec>::apply_force(Tscal dt) {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_AV() {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::compute_AV() {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -291,7 +288,7 @@ void Module<Tvec, TgridVec>::compute_AV() {
                         vel_i_j_kp1.z() - vel_i_j_k.z()
                     };
 
-                    dv = shambase::sycl_utils::negative_part(dv);
+                    dv = sham::negative_part(dv);
 
                     constexpr Tscal C2 = 3;
 
@@ -303,7 +300,7 @@ void Module<Tvec, TgridVec>::compute_AV() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::apply_AV(Tscal dt) {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::apply_AV(Tscal dt) {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
@@ -475,7 +472,7 @@ void Module<Tvec, TgridVec>::apply_AV(Tscal dt) {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::compute_div_v() {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::compute_div_v() {
     StackEntry stack_loc{};
     using namespace shamrock::patch;
     using namespace shamrock;
@@ -552,7 +549,7 @@ void Module<Tvec, TgridVec>::compute_div_v() {
 }
 
 template<class Tvec, class TgridVec>
-void Module<Tvec, TgridVec>::update_eint_eos(Tscal dt) {
+void shammodels::zeus::modules::SourceStep<Tvec, TgridVec>::update_eint_eos(Tscal dt) {
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;

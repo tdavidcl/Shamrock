@@ -18,8 +18,8 @@
 #include "shambase/DistributedData.hpp"
 #include "shambase/memory.hpp"
 #include "shambackends/sycl.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
-#include "shamrock/scheduler/scheduler_mpi.hpp"
+#include "shambackends/vec.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamrock/math/integrators.hpp"
 #include "shamsys/NodeInstance.hpp"
 namespace shamrock {
@@ -132,7 +132,7 @@ namespace shamrock {
             using namespace shamrock::patch;
             T ret = shambase::VectorProperties<T>::get_min();
             sched.for_each_patchdata_nonempty([&](Patch cur_p, PatchData &pdat) {
-                ret = shambase::sycl_utils::g_sycl_max(ret,
+                ret = sham::max(ret,
                                                        pdat.get_field<T>(field_idx).compute_max());
             });
 
@@ -145,7 +145,7 @@ namespace shamrock {
             using namespace shamrock::patch;
             T ret = shambase::VectorProperties<T>::get_max();
             sched.for_each_patchdata_nonempty([&](Patch cur_p, PatchData &pdat) {
-                ret = shambase::sycl_utils::g_sycl_min(ret,
+                ret = sham::min(ret,
                                                        pdat.get_field<T>(field_idx).compute_min());
             });
 
@@ -158,7 +158,7 @@ namespace shamrock {
             using namespace shamrock::patch;
             T ret = shambase::VectorProperties<T>::get_zero();
             sched.for_each_patchdata_nonempty([&](Patch cur_p, PatchData &pdat) {
-                ret = shambase::sycl_utils::g_sycl_min(ret,
+                ret = sham::min(ret,
                                                        pdat.get_field<T>(field_idx).compute_sum());
             });
 
@@ -224,6 +224,9 @@ namespace shamrock {
             ComputeField<T> cfield;
             using namespace shamrock::patch;
             sched.for_each_patch_data([&](u64 id_patch, Patch cur_p, PatchData &pdat) {
+                if(pdat.get_obj_cnt() == 0){
+                    return;
+                }
                 auto it = cfield.field_data.add_obj(id_patch,
                                           PatchDataField<T>(new_name, nvar, pdat.get_obj_cnt()));
 
@@ -247,6 +250,9 @@ namespace shamrock {
             ComputeField<T> cfield;
             using namespace shamrock::patch;
             sched.for_each_patch_data([&](u64 id_patch, Patch cur_p, PatchData &pdat) {
+                if(pdat.get_obj_cnt() == 0){
+                    return;
+                }
                 auto it = cfield.field_data.add_obj(id_patch,
                                           PatchDataField<T>(new_name, nvar, size_getter(id_patch)));
 

@@ -16,7 +16,7 @@
  */
  
 #include "shambase/stacktrace.hpp"
-#include "shambase/sycl_utils/vectorProperties.hpp"
+#include "shambackends/vec.hpp"
 #include "shammodels/amr/zeus/GhostZoneData.hpp"
 #include "shammodels/amr/zeus/NeighFaceList.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"

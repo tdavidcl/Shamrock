@@ -23,7 +23,6 @@
 
 
 #include "shamalgs/memory.hpp"
-#include "shambase/sycl_utils/vec_equals.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
 #include "shamrock/tree/TreeCellRanges.hpp"
 #include "shamrock/tree/TreeReducedMortonCodes.hpp"
@@ -107,14 +106,14 @@ class RadixTree{
 
     void serialize(shamalgs::SerializeHelper &serializer);
 
-    u64 serialize_byte_size();
+    shamalgs::SerializeSize serialize_byte_size();
 
     static RadixTree deserialize(shamalgs::SerializeHelper &serializer);
 
     inline friend bool operator==(const RadixTree &t1, const RadixTree &t2) {
         bool cmp = true;
-        cmp = cmp && shambase::vec_equals( std::get<0>(t1.bounding_box) , std::get<0>(t2.bounding_box));
-        cmp = cmp && shambase::vec_equals(std::get<1>(t1.bounding_box) , std::get<1>(t2.bounding_box));
+        cmp = cmp && sham::equals( std::get<0>(t1.bounding_box) , std::get<0>(t2.bounding_box));
+        cmp = cmp && sham::equals(std::get<1>(t1.bounding_box) , std::get<1>(t2.bounding_box));
         cmp = cmp && t1.tree_morton_codes == t2.tree_morton_codes;
         cmp = cmp && t1.tree_reduced_morton_codes == t2.tree_reduced_morton_codes;
         cmp = cmp && t1.tree_struct == t2.tree_struct;
@@ -198,8 +197,8 @@ class RadixTree{
     bool is_same(RadixTree & other){
         bool cmp = true;
 
-        cmp = cmp && (shambase::vec_equals(std::get<0>(bounding_box) , std::get<0>(other.bounding_box)));
-        cmp = cmp && (shambase::vec_equals(std::get<1>(bounding_box) , std::get<1>(other.bounding_box)));
+        cmp = cmp && (sham::equals(std::get<0>(bounding_box) , std::get<0>(other.bounding_box)));
+        cmp = cmp && (sham::equals(std::get<1>(bounding_box) , std::get<1>(other.bounding_box)));
         cmp = cmp && (tree_cell_ranges == other.tree_cell_ranges);
         cmp = cmp && (tree_reduced_morton_codes.tree_leaf_count == other.tree_reduced_morton_codes.tree_leaf_count);
         cmp = cmp && (tree_struct == other.tree_struct);

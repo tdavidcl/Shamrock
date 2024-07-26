@@ -156,6 +156,7 @@ int main(){
 
 #include "BasicSPHGhosts.hpp"
 #include "shambase/exception.hpp"
+#include "shamcomm/collectives.hpp"
 #include <functional>
 #include <vector>
 
@@ -201,12 +202,15 @@ inline void for_each_patch_shift(ShearPeriodicInfo<T> shearinfo, sycl::vec<T,3> 
 
     std::vector<i32_3> list_possible;
 
+    //logger::raw_ln("testing :",shearinfo.shear_value,shearinfo.shear_dir, shearinfo.shear_base);
 
-    i32 repetition_x = 1;
-    i32 repetition_y = 1;
-    i32 repetition_z = 1;
+    // a bit of dirty fix doesn't hurt
+    // this should be done in a better way a some point
+    i32 repetition_x = 1 + abs(shearinfo.shear_dir.x());
+    i32 repetition_y = 1 + abs(shearinfo.shear_dir.y());
+    i32 repetition_z = 1 + abs(shearinfo.shear_dir.z());
 
-
+    T sz = bsize.x()*shearinfo.shear_dir.x() + bsize.y()*shearinfo.shear_dir.y() + bsize.z()*shearinfo.shear_dir.z();
 
     for (i32 xoff = -repetition_x; xoff <= repetition_x; xoff++) {
         for (i32 yoff = -repetition_y; yoff <= repetition_y; yoff++) {
@@ -219,7 +223,7 @@ inline void for_each_patch_shift(ShearPeriodicInfo<T> shearinfo, sycl::vec<T,3> 
 
                 i32 d = dx + dy + dz;
 
-                i32 df = -int(d * shearinfo.shear_value);
+                i32 df = -int(d * shearinfo.shear_value/sz);
                 
                 i32_3 off_d = {
                     shearinfo.shear_dir.x()*df,
@@ -227,14 +231,25 @@ inline void for_each_patch_shift(ShearPeriodicInfo<T> shearinfo, sycl::vec<T,3> 
                     shearinfo.shear_dir.z()*df
                 };
                 
-                list_possible.push_back({xoff+off_d.x(),yoff+off_d.y(),zoff+off_d.z()});
+                // on redhat based systems stl vector freaks out
+                // because iterator to back does *(end() - 1)
+                // the issue is that the compiler gets confused 
+                // by the sycl::vec defining the - operator
+                // creating the ambiguity and ... 
+                // ultimatly the compiler shitting itself
+                list_possible.resize(list_possible.size() + 1);
+                list_possible[list_possible.size() - 1]= i32_3{xoff+off_d.x(),yoff+off_d.y(),zoff+off_d.z()};
             }
         }
     }
 
+    //logger::raw_ln("trying", list_possible.size(), "patches ghosts");
+
     for(i32_3 off : list_possible){
 
         auto shift = compute_shift_infos(off,shearinfo,bsize);
+
+        //logger::raw_ln("check :",off,shift.shift, shift.shift_speed);
 
         funct(off,shift);
         
@@ -383,6 +398,9 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
                                             {xoff, yoff, zoff},
                                             interf_volume,
                                             interf_volume.get_volume() / sender_volume});
+
+                        //logger::raw_ln("found :",offset, shift.shift_speed, vec{xoff, yoff, zoff});
+
                     });
             });
         });
@@ -458,16 +476,14 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
         shamrock::patch::PatchData &src = sched.patch_data.get_pdat(sender);
         PatchDataField<vec> &xyz        = src.get_field<vec>(0);
 
-        std::unique_ptr<sycl::buffer<u32>> idxs = xyz.get_elements_with_range_buf(
-            [&](vec val, vec vmin, vec vmax) {
-                return Patch::is_in_patch_converted(val, vmin, vmax);
-            },
-            build.cut_volume.lower,
-            build.cut_volume.upper);
+        std::tuple<std::optional<sycl::buffer<u32>>, u32> idxs_res 
+            = xyz.get_ids_buf_where([](auto access, u32 id, vec vmin, vec vmax){
+                return Patch::is_in_patch_converted(access[id], vmin, vmax);
+            }, build.cut_volume.lower, build.cut_volume.upper);
 
         u32 pcnt = 0;
-        if (bool(idxs)) {
-            pcnt = idxs->size();
+        if (bool(std::get<0>(idxs_res))) {
+            pcnt = std::get<1>(idxs_res);
         }
 
         // prevent sending empty patches
@@ -475,9 +491,12 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
             return;
         }
 
+        std::unique_ptr<sycl::buffer<u32>> idxs 
+            = std::make_unique<sycl::buffer<u32>>(shambase::extract_value(std::get<0>(idxs_res)));
+
         f64 ratio = f64(pcnt) / f64(src.get_obj_cnt());
 
-        logger::debug_sycl_ln("InterfaceGen",
+        logger::debug_ln("InterfaceGen",
                               "gen interface :",
                               sender,
                               "->",
@@ -501,13 +520,51 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
         }
     }
 
-    if (has_warn) {
+    if (has_warn && shamcomm::world_rank() == 0) {
         logger::warn_ln("InterfaceGen",
                         "the ratio patch/interface is high, which can lead to high mpi "
                         "overhead, try incresing the patch split crit");
     }
 
     return res;
+}
+
+
+template<class vec>
+void BasicSPHGhostHandler<vec>::gen_debug_patch_ghost(
+    shambase::DistributedDataShared<InterfaceIdTable> & interf_info){
+    StackEntry stack_loc{};
+
+    static u32 cnt_dump_debug = 0;
+
+    std::string loc_graph = "";
+    interf_info.for_each([&loc_graph](u64 send, u64 recv, InterfaceIdTable & info){
+        loc_graph += shambase::format(
+            "    p{} -> p{}\n", 
+            send, recv);
+    });
+
+    sched.for_each_patch_data([&](u64 id, shamrock::patch::Patch p, shamrock::patch::PatchData & pdat){
+        if(pdat.get_obj_cnt() > 0){
+        loc_graph += shambase::format(
+            "    p{} [label= \"id={} N={}\"]\n", 
+            id,id, pdat.get_obj_cnt());}
+    });
+
+    std::string dot_graph = "";
+    shamcomm::gather_str(loc_graph, dot_graph);
+
+    dot_graph = "strict digraph {\n" 
+        + dot_graph
+        + "}";
+
+    if(shamcomm::world_rank() == 0){
+        std::string fname = shambase::format("ghost_graph_{}.dot",cnt_dump_debug);
+        logger::info_ln("SPH Ghost", "writing",fname);
+        shambase::write_string_to_file(fname, dot_graph);
+        cnt_dump_debug++;
+    } 
+
 }
 
 template class shammodels::sph::BasicSPHGhostHandler<f64_3>;

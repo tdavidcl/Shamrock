@@ -9,7 +9,7 @@
 
 /**
  * @file main.cpp
- * @author your name (you@domain.com)
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief 
  * @version 0.1
  * @date 2022-05-24
@@ -21,6 +21,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shamsys/MicroBenchmark.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/cmdopt.hpp"
@@ -47,10 +48,22 @@
 
 //%Impl status : Should rewrite
 
-const std::string run_ipython_src = R"(
+extern const char* ipython_run_src();
+
+const std::string run_ipython_src = 
+R"(
+
 from IPython import start_ipython
 from traitlets.config.loader import Config
-import sys
+
+import signal
+
+# here the signal interup for sigint is None
+# this make ipython freaks out for weird reasons
+# registering the handler fix it ...
+# i swear python c api is horrible to works with
+import shamrock.sys
+signal.signal(signal.SIGINT, shamrock.sys.signal_handler)
 
 c = Config()
 
@@ -65,6 +78,14 @@ import shamrock
 
 start_ipython(config=c)
 
+)";
+
+
+const std::string modify_path = 
+std::string("paths = ")+ ipython_run_src()+"\n"+
+R"(
+import sys
+sys.path = paths
 )";
 
 
@@ -90,6 +111,7 @@ int main(int argc, char *argv[]) {
 
     opts::register_opt("--rscript","(filepath)", "run shamrock with python runscirpt");
     opts::register_opt("--ipython",{}, "run shamrock in Ipython mode");
+    opts::register_opt("--force-dgpu",{}, "for direct mpi comm on");
 
     opts::init(argc, argv);
 
@@ -98,7 +120,7 @@ int main(int argc, char *argv[]) {
     }
 
     if(opts::has_option("--nocolor")){
-        terminal_effects::disable_colors();
+        shambase::term_colors::disable_colors();
     }
 
 
@@ -112,7 +134,7 @@ int main(int argc, char *argv[]) {
             logger::err_ln("Cmd OPT", "you must select a loglevel in a 8bit integer range");
         }
 
-        logger::loglevel = a;
+        logger::set_loglevel(a);
 
     }
 
@@ -124,14 +146,14 @@ int main(int argc, char *argv[]) {
         std::cout << shamrock_title_bar_big << std::endl;
         logger::print_faint_row();
 
-        std::cout <<"\n"<< terminal_effects::colors_foreground_8b::cyan + "Git infos "+ terminal_effects::reset+":\n";
+        std::cout <<"\n"<< shambase::term_colors::col8b_cyan() + "Git infos "+ shambase::term_colors::reset()+":\n";
         std::cout << git_info_str <<std::endl;
 
         logger::print_faint_row();
 
         logger::raw_ln("MPI status : ");
 
-        logger::raw_ln(" - MPI & SYCL init :",terminal_effects::colors_foreground_8b::green + "Ok"+ terminal_effects::reset);
+        logger::raw_ln(" - MPI & SYCL init :",shambase::term_colors::col8b_green() + "Ok"+ shambase::term_colors::reset());
 
         shamsys::instance::print_mpi_capabilities();
 
@@ -139,7 +161,7 @@ int main(int argc, char *argv[]) {
         
     }
 
-    shamsys::instance::validate_comm();
+    shamcomm::validate_comm(shamsys::instance::get_compute_scheduler());
 
     if(opts::has_option("--benchmark-mpi")){
         shamsys::run_micro_benchmark();
@@ -148,11 +170,11 @@ int main(int argc, char *argv[]) {
     if(shamcomm::world_rank() == 0){
         logger::print_faint_row();
         logger::raw_ln("log status : ");
-        if(logger::loglevel == i8_max){
+        if(logger::get_loglevel() == i8_max){
             logger::raw_ln("If you've seen spam in your life i can garantee you, this is worst");
         }
 
-        logger::raw_ln(" - Loglevel :",u32(logger::loglevel),", enabled log types : ");
+        logger::raw_ln(" - Loglevel :",u32(logger::get_loglevel()),", enabled log types : ");
         logger::print_active_level();
     
     } 
@@ -187,8 +209,8 @@ int main(int argc, char *argv[]) {
 
     if(shamcomm::world_rank() == 0){
         logger::print_faint_row();
-        logger::raw_ln(" - Code init",terminal_effects::colors_foreground_8b::green + "DONE"+ terminal_effects::reset, "now it's time to",
-        terminal_effects::colors_foreground_8b::cyan + terminal_effects::blink + "ROCK"+ terminal_effects::reset);
+        logger::raw_ln(" - Code init",shambase::term_colors::col8b_green() + "DONE"+ shambase::term_colors::reset(), "now it's time to",
+        shambase::term_colors::col8b_cyan() + shambase::term_colors::blink() + "ROCK"+ shambase::term_colors::reset());
         logger::print_faint_row();
     }
 
@@ -202,11 +224,11 @@ int main(int argc, char *argv[]) {
             StackEntry stack_loc{};
 
             if(shamcomm::world_size() > 1){
-                throw shambase::throw_with_loc<std::runtime_error>("cannot run ipython mode with > 1 processes");
+                throw shambase::make_except_with_loc<std::runtime_error>("cannot run ipython mode with > 1 processes");
             }
 
             py::scoped_interpreter guard{};
-            
+            py::exec(modify_path);
             
             std::cout << "--------------------------------------------" << std::endl;
             std::cout << "-------------- ipython ---------------------" << std::endl;
@@ -224,6 +246,7 @@ int main(int argc, char *argv[]) {
             //rscript.run_file(fname);
 
             py::scoped_interpreter guard{};
+            py::exec(modify_path);
 
             if(shamcomm::world_rank() == 0){
             std::cout << "-----------------------------------" << std::endl;
@@ -262,7 +285,7 @@ int main(int argc, char *argv[]) {
     }
 
     #ifdef SHAMROCK_USE_PROFILING
-    shambase::details::dump_profiling(shamcomm::world_rank());
+    //shambase::details::dump_profiling(shamcomm::world_rank());
     #endif
 
     shamsys::instance::close();

@@ -14,7 +14,7 @@
 
 #include "shambindings/pybindaliases.hpp"
 
-#include <pybind11/stl.h>
+#include "shambindings/pybind11_stl.hpp"
 #include <pybind11/numpy.h>
 
 #include "shamrock/scheduler/ShamrockCtx.hpp"
@@ -196,9 +196,11 @@ template<class T> void append_to_map(
 
     for (auto & pdat : lst) {
 
-        pdat->for_each_field<T>([&](auto & field){
-            appender(field);
-        });
+        if(pdat->get_obj_cnt() > 0){
+            pdat->for_each_field<T>([&](auto & field){
+                appender(field);
+            });
+        }
 
         //list_appender(pdat->get_field_list<T>());
     }
