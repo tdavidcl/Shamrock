@@ -5,6 +5,7 @@ import utils.sysinfo
 import utils.envscript
 import utils.cuda_arch
 import utils.amd_arch
+from utils.setuparg import *
 
 NAME = "Debian generic Intel LLVM"
 PATH = "machine/debian-generic/intel-llvm"
@@ -12,12 +13,22 @@ PATH = "machine/debian-generic/intel-llvm"
 def is_intel_llvm_already_installed(installfolder):
     return os.path.isfile(installfolder + "/bin/clang++")
 
-def setup(argv,builddir, shamrockdir,buildtype):
+def setup(arg : SetupArg):
+    argv = arg.argv
+    builddir = arg.builddir
+    shamrockdir = arg.shamrockdir
+    buildtype = arg.buildtype
+    pylib = arg.pylib
+    lib_mode = arg.lib_mode
 
     print("------------------------------------------")
     print("Running env setup for : "+NAME)
     print("------------------------------------------")
 
+    if(pylib):
+        print("this env does not support --pylib")
+        raise ""
+        
     parser = argparse.ArgumentParser(prog=PATH,description= NAME+' env for Shamrock')
 
     parser.add_argument("--target", action='store', help="sycl backend to use")
@@ -54,12 +65,25 @@ def setup(argv,builddir, shamrockdir,buildtype):
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export MAKE_EXEC="+gen+"\n"
     ENV_SCRIPT_HEADER += "export MAKE_OPT=("+gen_opt+")\n"
+
+    # Get current file path
+    cur_file = os.path.realpath(os.path.expanduser(__file__))
+
+    cmake_extra_args = ""
+    if pylib:
+        cmake_extra_args += " -DBUILD_PYLIB=True"
+        os.system("cp "+os.path.abspath(os.path.join(cur_file, "../"+"_pysetup.py")) +" "+ builddir+"/setup.py")
+
+    if lib_mode == "shared":
+        cmake_extra_args += " -DSHAMROCK_USE_SHARED_LIB=On"
+    elif lib_mode == "object":
+        cmake_extra_args += " -DSHAMROCK_USE_SHARED_LIB=Off"
+
+    ENV_SCRIPT_HEADER += "export CMAKE_OPT=("+cmake_extra_args+")\n"
     ENV_SCRIPT_HEADER += "export SHAMROCK_CXX_FLAGS=\""+shamcxx_args+"\"\n"
     ENV_SCRIPT_HEADER += "export SHAMROCK_BUILD_TYPE=\""+cmake_build_type+"\"\n"
     ENV_SCRIPT_HEADER += "\n"
 
-    # Get current file path
-    cur_file = os.path.realpath(os.path.expanduser(__file__))
     source_file = "env_built_intel-llvm.sh"
     source_path = os.path.abspath(os.path.join(cur_file, "../"+source_file))
 

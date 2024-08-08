@@ -5,6 +5,8 @@ project(Shamphys CXX C)
 set(Sources
     src/HydroSoundwave.cpp
     src/SodTube.cpp
+    src/bindings/pyShamphys.cpp
+    src/bindings/pyUnits.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
@@ -17,9 +19,9 @@ endif()
 
 add_library(shamphys::shamphys ALIAS shamphys)
 
-target_link_libraries(shamphys PUBLIC shambackends)
 target_link_libraries(shamphys PUBLIC shammath)
 target_link_libraries(shamphys PUBLIC shamunits)
+target_link_libraries(shamphys PUBLIC shambindings)
 
 target_include_directories(shamphys PUBLIC
 "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"

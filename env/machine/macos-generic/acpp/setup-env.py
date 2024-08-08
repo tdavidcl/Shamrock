@@ -3,6 +3,7 @@ import os
 import utils.acpp
 import utils.sysinfo
 import utils.envscript
+from utils.setuparg import *
 
 NAME = "MacOS generic AdaptiveCpp"
 PATH = "machine/macos-generic/acpp"
@@ -10,12 +11,22 @@ PATH = "machine/macos-generic/acpp"
 def is_acpp_already_installed(installfolder):
     return os.path.isfile(installfolder + "/bin/acpp")
 
-def setup(argv,builddir, shamrockdir,buildtype):
+def setup(arg : SetupArg):
+    argv = arg.argv
+    builddir = arg.builddir
+    shamrockdir = arg.shamrockdir
+    buildtype = arg.buildtype
+    pylib = arg.pylib
+    lib_mode = arg.lib_mode
 
     print("------------------------------------------")
     print("Running env setup for : "+NAME)
     print("------------------------------------------")
 
+    if(pylib):
+        print("this env does not support --pylib")
+        raise ""
+        
     parser = argparse.ArgumentParser(prog=PATH,description= NAME+' env for Shamrock')
 
     parser.add_argument("--backend", action='store', help="sycl backend to use")
@@ -45,6 +56,8 @@ def setup(argv,builddir, shamrockdir,buildtype):
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export MAKE_EXEC="+gen+"\n"
     ENV_SCRIPT_HEADER += "export MAKE_OPT=("+gen_opt+")\n"
+    cmake_extra_args = ""
+    ENV_SCRIPT_HEADER += "export CMAKE_OPT=("+cmake_extra_args+")\n"
     ENV_SCRIPT_HEADER += "export SHAMROCK_BUILD_TYPE=\""+cmake_build_type+"\"\n"
 
     # Get current file path

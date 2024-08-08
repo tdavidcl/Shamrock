@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 import importlib
-
+from utils.setuparg import *
 
 # Get current file path
 cur_file = os.path.realpath(os.path.expanduser(__file__))
@@ -63,11 +63,12 @@ if __name__ == "__main__":
     parser.add_argument("--machine", action='store', required=True , help="machine assumed for the environment")
     parser.add_argument("--builddir", action='store', required=True , help="build directory to use")
     parser.add_argument("--type", action='store', default="release", help="build type to use")
+    parser.add_argument("--pylib", action='store_true', default=False, help="build the project as python lib")
+    
+    parser.add_argument("--lib",choices=["shared","object"], action='store', default="shared", help="shamrock libraries mode")
 
     args = parser.parse_args(wrapper_program_args)
     args.underlying_tool_args = underlying_tool_args
-
-
 
     # Make everything in env importable by python
     sys.path.insert(0, abs_env_dir)
@@ -77,9 +78,13 @@ if __name__ == "__main__":
     importlib.invalidate_caches()
     mod = importlib.import_module("machine."+args.machine+".setup-env")
     mod.setup(
-        argv = underlying_tool_args,
-        builddir = os.path.abspath(os.path.expanduser(args.builddir)),
-        shamrockdir = abs_proj_dir,
-        buildtype = args.type
+            SetupArg(
+                argv = underlying_tool_args,
+                builddir = os.path.abspath(os.path.expanduser(args.builddir)),
+                shamrockdir = abs_proj_dir,
+                buildtype = args.type,
+                pylib = args.pylib,
+                lib_mode = args.lib
+            )
         )
 

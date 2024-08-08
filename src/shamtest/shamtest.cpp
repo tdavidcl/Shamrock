@@ -16,7 +16,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
-#include "shamsys/EnvVariables.hpp"
+#include "shamcmdopt/env.hpp"
 #include <pybind11/embed.h>
 #include <sstream>
 #include <string>
@@ -26,7 +26,7 @@
 #include "shambase/bytestream.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
-#include "shambase/term_colors.hpp"
+#include "shamcmdopt/term_colors.hpp"
 #include "shambase/time.hpp"
 #include "shamsys/legacy/log.hpp"
 
@@ -43,8 +43,8 @@
 
 namespace shamtest {
 
-    bool is_run_only         = false;
-    bool is_full_output_mode = false;
+    bool is_run_only         = false; ///< Is in run only mode
+    bool is_full_output_mode = false; ///< Is in full output mode
 
     /**
      * @brief print the line in terminal when a test start
@@ -136,6 +136,12 @@ namespace shamtest {
         return false;
     }
 
+    /**
+     * @brief Generate a failure log at the end of the tests
+     * 
+     * @param res 
+     * @return std::string 
+     */
     std::string gen_fail_log(details::TestResult &res) {
         std::string out = "";
 
@@ -166,6 +172,11 @@ namespace shamtest {
         return out;
     }
 
+    /**
+     * @brief Print summary of the test run
+     * 
+     * @param results 
+     */
     void _print_summary(std::vector<details::TestResult> &results) {
         if (shamcomm::world_rank() > 0) {
             return;
@@ -205,6 +216,7 @@ namespace shamtest {
         logger::print_faint_row();
     }
 
+    /// Gather a string from all MPI ranks
     std::basic_string<byte> gather_basic_string(std::basic_string<byte> in) {
         using namespace shamsys;
 
@@ -259,6 +271,7 @@ namespace shamtest {
         return out_res_string;
     }
 
+    /// Gather test results from all MPI ranks
     std::vector<details::TestResult> gather_tests(std::vector<details::TestResult> rank_result) {
         if (shamcomm::world_size() == 1) {
             return rank_result;
@@ -335,6 +348,7 @@ namespace shamtest {
         print_list(Unittest);
     }
 
+    /// Write the JSON report
     void write_json_report(std::vector<details::TestResult> &results, std::string outfile) {
         if (shamcomm::world_rank() > 0) {
             return;
@@ -384,6 +398,7 @@ namespace shamtest {
         shambase::write_string_to_file(outfile, s_out);
     }
 
+    /// Write the tex report
     void write_tex_report(std::vector<details::TestResult> &results, bool mark_fail) {
         if (shamcomm::world_rank() > 0) {
             return;
@@ -667,7 +682,7 @@ namespace shamtest {
 
         filestream << "\n";
 
-        auto REF_FILES_PATH = shamsys::env::getenv_str("REF_FILES_PATH");
+        auto REF_FILES_PATH = shamcmdopt::getenv_str("REF_FILES_PATH");
 
         if (REF_FILES_PATH) {
             filestream << "set_tests_properties(\n";

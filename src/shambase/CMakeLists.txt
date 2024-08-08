@@ -5,8 +5,8 @@ project(Shambase CXX C)
 set(Sources
     src/exception.cpp
     src/stacktrace.cpp
-    src/term_colors.cpp
     src/SourceLocation.cpp
+    src/print.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)

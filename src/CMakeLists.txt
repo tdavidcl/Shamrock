@@ -13,12 +13,22 @@ add_custom_command(
 
 
 
-set(as_subproject shamunits shambase shamcomm shambackends shammath shamalgs shamsys shamphys)
+set(as_subproject 
+  shamunits 
+  shambase 
+  shamcomm 
+  shambackends 
+  shammath 
+  shamalgs 
+  shamsys 
+  shamphys 
+  shamcmdopt
+  shambindings)
 
 # This macro originates from Daniel Pfeifer's talk at C++Now 2017:
 # https://www.youtube.com/watch?v=bsXLMQ6WgIk
 macro(find_package)
-  if(NOT "${ARGV0}" IN_LIST as_subproject)
+  if(NOT "${ARGV0}" IN LISTS as_subproject)
     message(STATUS "using native find_package for ${ARGV0}: ${ARGV}")
     _find_package(${ARGV})
   endif()
@@ -26,13 +36,14 @@ endmacro()
 
 add_subdirectory(shamunits)
 add_subdirectory(shambase)
+add_subdirectory(shambindings)
+add_subdirectory(shamcmdopt)
 add_subdirectory(shamcomm)
 add_subdirectory(shambackends)
 add_subdirectory(shammath)
 add_subdirectory(shamalgs)
-add_subdirectory(shamsys)
 add_subdirectory(shamphys)
-
+add_subdirectory(shamsys)
 
 
 
@@ -56,18 +67,9 @@ else()
     target_link_libraries(shamrock_lib PUBLIC pybind11::embed)
 endif()
 
+target_link_libraries(shamrock_lib PUBLIC nlohmann_json::nlohmann_json)
 
-target_link_libraries(shamrock_lib PUBLIC shamunits)
-target_link_libraries(shamrock_lib PUBLIC shambase)
-target_link_libraries(shamrock_lib PUBLIC shamcomm)
-target_link_libraries(shamrock_lib PUBLIC shambackends)
-target_link_libraries(shamrock_lib PUBLIC shammath)
-target_link_libraries(shamrock_lib PUBLIC shamalgs)
-target_link_libraries(shamrock_lib PUBLIC shamsys)
-target_link_libraries(shamrock_lib PUBLIC shamphys)
-
-
-
+target_link_libraries(shamrock_lib PUBLIC ${as_subproject})
 
 
 
@@ -82,17 +84,12 @@ add_executable(shamrock main.cpp)
 target_link_libraries(shamrock PUBLIC pybind11::embed)
 endif()
 
+target_link_libraries(shamrock PUBLIC nlohmann_json::nlohmann_json)
+
 target_link_libraries(shamrock PUBLIC shamrock_lib)
-target_link_libraries(shamrock PUBLIC shamalgs)
 
 
-target_link_libraries(shamrock PUBLIC shamunits)
-target_link_libraries(shamrock PUBLIC shambase)
-target_link_libraries(shamrock PUBLIC shamcomm)
-target_link_libraries(shamrock PUBLIC shambackends)
-target_link_libraries(shamrock PUBLIC shammath)
-target_link_libraries(shamrock PUBLIC shamsys)
-target_link_libraries(shamrock PUBLIC shamphys)
+target_link_libraries(shamrock PUBLIC ${as_subproject})
 
 
 
@@ -120,16 +117,11 @@ if("${BUILD_TEST}")
     add_executable(shamrock_test main_test.cpp  )
 
     target_link_libraries(shamrock_test PUBLIC pybind11::embed)
+    target_link_libraries(shamrock_test PUBLIC nlohmann_json::nlohmann_json)
 
     target_link_libraries(shamrock_test PUBLIC shamrock_lib)
-    target_link_libraries(shamrock_test PUBLIC shamalgs)
-    target_link_libraries(shamrock_test PUBLIC shamunits)
-    target_link_libraries(shamrock_test PUBLIC shambase)
-    target_link_libraries(shamrock_test PUBLIC shamcomm)
-    target_link_libraries(shamrock_test PUBLIC shambackends)
-    target_link_libraries(shamrock_test PUBLIC shammath)
-    target_link_libraries(shamrock_test PUBLIC shamsys)
-    target_link_libraries(shamrock_test PUBLIC shamphys)
+
+    target_link_libraries(shamrock_test PUBLIC ${as_subproject})
 
     
     target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/src")
@@ -168,39 +160,7 @@ if("${BUILD_TEST}")
 endif()
 
 
-
-
-execute_process(
-  COMMAND
-    "${Python_EXECUTABLE}" "-c" "
-import sys;print(sys.path, end= '')
-"
-  RESULT_VARIABLE __PYTHON_SYS_PATH_RESULT
-  OUTPUT_VARIABLE __PYTHON_SYS_PATH_OUT
-  ERROR_VARIABLE __PYTHON_SYS_PATH_ERROR)
-
-  #message(status " Python_EXECUTABLE        : ${Python_EXECUTABLE}")
-  #message(status " __PYTHON_SYS_PATH_RESULT : ${__PYTHON_SYS_PATH_RESULT}")
-  #message(status " __PYTHON_SYS_PATH_OUT    : ${__PYTHON_SYS_PATH_OUT}")
-  #message(status " __PYTHON_SYS_PATH_ERROR  : ${__PYTHON_SYS_PATH_ERROR}")
-
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/ipython_run_src.cpp
-  "const char* ipython_run_src() { return \"${__PYTHON_SYS_PATH_OUT}\"; }"
-)
-
-target_sources(shamrock PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/ipython_run_src.cpp)
-
-if("${BUILD_TEST}")
-  target_sources(shamrock_test PRIVATE  ${CMAKE_CURRENT_BINARY_DIR}/ipython_run_src.cpp)
-endif()
-
-
-
-
-
-
 add_subdirectory(shamtest)
-add_subdirectory(shambindings)
 
 
 add_subdirectory(shamrock)

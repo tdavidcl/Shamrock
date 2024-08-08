@@ -27,6 +27,12 @@ jobs:
     name: Tests
     uses: ./.github/workflows/shamrock-acpp-clang15.yml
 
+  shamrock_linux_acpp_pylib:
+    needs: [src_check]
+    name: Tests
+    uses: ./.github/workflows/shamrock-acpp-clang15-py.yml
+
+
   #shamrock_linux_acpp_macos:
   #  name: Shamrock Test
   #  needs: [src_check]
@@ -81,12 +87,12 @@ jobs:
         uses: actions/configure-pages@v3
         
       - name: 'Download Doc'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: shamrock_documentation
 
       - name: 'Download coverage report'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: code-coverage-report-acpp_omp_debug
           path: coverage
@@ -148,7 +154,11 @@ jobs:
 
   publish_release:
 
-    runs-on: [self-hosted, ubuntu20]
+    runs-on: [self-hosted,  docker-runner]
+
+    container:
+      image: ghcr.io/shamrock-code/ci-ubuntu20:main
+      
     
     needs: [shamrock_linux_acpp_cov, make_documentation]
 
@@ -156,24 +166,24 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
 
       - name: 'Download Doc'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: shamrock_documentation
 
       - name: 'Download coverage list'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: code-coverage-list-acpp_omp_debug
           path: code-coverage-list-acpp_omp_debug
 
       - name: 'Download coverage report'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: code-coverage-report-acpp_omp_debug
           path: code-coverage-report-acpp_omp_debug

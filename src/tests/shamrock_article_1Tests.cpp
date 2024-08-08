@@ -20,7 +20,7 @@
 
 #include "tests/shamrock/tree/TreeTests.hpp"
 #include "shamrock/sfc/MortonKernels.hpp"
-#include "shamrock/sfc/morton.hpp"
+#include "shammath/sfc/morton.hpp"
 
 
 

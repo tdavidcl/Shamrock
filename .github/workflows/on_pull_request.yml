@@ -2,8 +2,14 @@ name: On PR
 
 # Controls when the workflow will run
 on:
-  pull_request:
-    types: [opened,edited,synchronize,labeled]
+  pull_request_target:
+    types: [
+      opened, # pull request is created
+      #edited, # title, body, or the base branch of the PR is modified
+      synchronize, # if commit pushed
+      labeled, # a label is applied to the pull request
+      unlabeled # a label is removed from the pull request
+      ]
 
   #we do not use this one as the job is not launched on the corect branch (aka we cannot test the CI in PRs)
   #pull_request_target:
@@ -30,15 +36,18 @@ jobs:
   doxygen_warn_main:
     name: Doxygen Main branch
     needs: [make_documentation]
-    runs-on: [self-hosted, ubuntu20]
-    
+    runs-on: [self-hosted,  docker-runner]
+
+    container:
+      image: ghcr.io/shamrock-code/ci-ubuntu20:main
+      
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10' 
 
@@ -52,7 +61,7 @@ jobs:
           doxygen dox.conf
 
       - name: Archive doxygen warnings
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: doxygen_warning_main
           path: doc/doxygen/warn_doxygen.txt
@@ -68,18 +77,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10' 
 
       - name: 'Download PR doxygen warning'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: doxygen_warning
           path: PR_dox_output
 
       - name: 'Download PR doxygen warning'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: doxygen_warning_main
           path: main_dox_output
@@ -114,6 +123,12 @@ jobs:
     name: Tests
     if: ${{!contains(github.event.pull_request.labels.*.name, 'no-src-change ')}}
     uses: ./.github/workflows/shamrock-acpp-clang15.yml
+
+  shamrock_linux_acpp_pylib:
+    needs: [src_check]
+    name: Tests
+    if: ${{!contains(github.event.pull_request.labels.*.name, 'no-src-change ')}}
+    uses: ./.github/workflows/shamrock-acpp-clang15-py.yml
 
   shamrock_linux_acpp_macos:
     needs: [src_check]

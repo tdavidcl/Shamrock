@@ -5,6 +5,7 @@ import utils.sysinfo
 import utils.envscript
 import utils.cuda_arch
 import utils.amd_arch
+from utils.setuparg import *
 
 NAME = "CBP Nvidia DGX A100 AdaptiveCpp (CUDA Backend)"
 PATH = "machine/dgx-cbp/acpp-cuda"
@@ -12,12 +13,22 @@ PATH = "machine/dgx-cbp/acpp-cuda"
 def is_acpp_already_installed(installfolder):
     return os.path.isfile(installfolder + "/bin/acpp")
 
-def setup(argv,builddir, shamrockdir,buildtype):
+def setup(arg : SetupArg):
+    argv = arg.argv
+    builddir = arg.builddir
+    shamrockdir = arg.shamrockdir
+    buildtype = arg.buildtype
+    pylib = arg.pylib
+    lib_mode = arg.lib_mode
 
     print("------------------------------------------")
     print("Running env setup for : "+NAME)
     print("------------------------------------------")
 
+    if(pylib):
+        print("this env does not support --pylib")
+        raise ""
+        
     parser = argparse.ArgumentParser(prog=PATH,description= NAME+' env for Shamrock')
 
     parser.add_argument("--gen", action='store', help="generator to use (ninja or make)")
@@ -45,6 +56,8 @@ def setup(argv,builddir, shamrockdir,buildtype):
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export MAKE_EXEC="+gen+"\n"
     ENV_SCRIPT_HEADER += "export MAKE_OPT=("+gen_opt+")\n"
+    cmake_extra_args = ""
+    ENV_SCRIPT_HEADER += "export CMAKE_OPT=("+cmake_extra_args+")\n"
 
     ENV_SCRIPT_HEADER += "export SHAMROCK_BUILD_TYPE=\""+cmake_build_type+"\"\n"
 
