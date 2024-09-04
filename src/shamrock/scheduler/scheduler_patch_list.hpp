@@ -32,7 +32,6 @@
  */
 class SchedulerPatchList {
 
-
     /**
      * @brief id_patch_to_global_idx[patch_id] = index in global patch list
      */
@@ -42,7 +41,6 @@ class SchedulerPatchList {
      * @brief id_patch_to_local_idx[patch_id] = index in local patch list
      */
     std::unordered_map<u64, u64> id_patch_to_local_idx;
-
 
     /**
      * @brief recompute id_patch_to_global_idx
@@ -76,36 +74,31 @@ class SchedulerPatchList {
      */
     u64 _next_patch_id = 0;
 
-    std::vector<shamrock::patch::Patch> & get_global_editable(){
+    std::vector<shamrock::patch::Patch> &get_global_editable() {
         id_patch_to_global_idx.clear();
         return global;
     }
-    std::vector<shamrock::patch::Patch> & get_local_editable(){
+    std::vector<shamrock::patch::Patch> &get_local_editable() {
         id_patch_to_local_idx.clear();
         return local;
     }
 
-    const std::vector<shamrock::patch::Patch> & get_global()const{
-        return global;
-    }
-    const std::vector<shamrock::patch::Patch> & get_local()const {
-        return local;
-    }
+    const std::vector<shamrock::patch::Patch> &get_global() const { return global; }
+    const std::vector<shamrock::patch::Patch> &get_local() const { return local; }
 
-    const std::unordered_map<u64, u64> & get_id_patch_to_global_idx(){
-        if(id_patch_to_global_idx.empty()){
+    const std::unordered_map<u64, u64> &get_id_patch_to_global_idx() {
+        if (id_patch_to_global_idx.empty()) {
             build_global_idx_map();
         }
         return get_id_patch_to_global_idx();
     }
 
-    const std::unordered_map<u64, u64> & get_id_patch_to_local_idx(){
-        if(id_patch_to_local_idx.empty()){
+    const std::unordered_map<u64, u64> &get_id_patch_to_local_idx() {
+        if (id_patch_to_local_idx.empty()) {
             build_local_idx_map();
         }
         return get_id_patch_to_local_idx();
     }
-
 
     bool is_load_values_up_to_date = false; ///< Are patch load values up to date
 
@@ -162,8 +155,6 @@ class SchedulerPatchList {
         std::unordered_set<u64> &patch_id_lst,
         std::vector<u64> &to_send_idx,
         std::vector<u64> &to_recv_idx);
-
-
 
     /**
      * @brief reset Patch's pack index value
