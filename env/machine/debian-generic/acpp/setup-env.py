@@ -1,5 +1,6 @@
 import argparse
 import os
+from utils.oscmd import *
 import utils.acpp
 import utils.sysinfo
 import utils.envscript
@@ -33,14 +34,14 @@ def setup(arg : SetupArg):
 
     args = parser.parse_args(argv)
 
-    acpp_target = utils.acpp.get_acpp_target_env(args)  
+    acpp_target = utils.acpp.get_acpp_target_env(args)
     if (acpp_target == None):
         print("-- target not specified using acpp default")
     else:
         print("-- setting acpp target to :",acpp_target)
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
-    
+
     ACPP_GIT_DIR = builddir+"/.env/acpp-git"
     ACPP_BUILD_DIR = builddir + "/.env/acpp-builddir"
     ACPP_INSTALL_DIR = builddir + "/.env/acpp-installdir"
@@ -70,7 +71,7 @@ def setup(arg : SetupArg):
     cmake_extra_args = ""
     if pylib:
         cmake_extra_args += " -DBUILD_PYLIB=True"
-        os.system("cp "+os.path.abspath(os.path.join(cur_file, "../"+"_pysetup.py")) +" "+ builddir+"/setup.py")
+        run_cmd("cp "+os.path.abspath(os.path.join(cur_file, "../"+"_pysetup.py")) +" "+ builddir+"/setup.py")
 
     if lib_mode == "shared":
         cmake_extra_args += " -DSHAMROCK_USE_SHARED_LIB=On"
@@ -87,8 +88,8 @@ def setup(arg : SetupArg):
     source_path = os.path.abspath(os.path.join(cur_file, "../"+source_file))
 
     utils.envscript.write_env_file(
-        source_path = source_path, 
-        header = ENV_SCRIPT_HEADER, 
+        source_path = source_path,
+        header = ENV_SCRIPT_HEADER,
         path_write = ENV_SCRIPT_PATH)
 
 
@@ -96,5 +97,4 @@ def setup(arg : SetupArg):
         print("-- acpp already installed => skipping")
     else:
         print("-- running compiler setup")
-        os.system("bash -c 'cd "+builddir+" && . ./activate &&  updatecompiler'")
-
+        run_cmd("cd "+builddir+" && . ./activate &&  updatecompiler")

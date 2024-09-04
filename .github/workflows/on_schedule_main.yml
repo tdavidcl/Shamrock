@@ -10,7 +10,7 @@ on:
     # At 02:00 on Monday, Wednesday, and Friday.
     - cron:  '0 2 * * 1,3,5'
 
-  
+
 jobs:
 
   src_check:
@@ -18,7 +18,7 @@ jobs:
     #needs: [detect_changes]
     uses: ./.github/workflows/source_checks.yml
 
-  
+
   #make shamrock documentation
   make_documentation:
     needs: [src_check]
@@ -28,13 +28,13 @@ jobs:
   shamrock_linux_acpp:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15.yml
+    uses: ./.github/workflows/shamrock-acpp-clang.yml
 
   shamrock_linux_acpp_pylib:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15-py.yml
-    
+    uses: ./.github/workflows/shamrock-acpp-clang-py.yml
+
   #shamrock_linux_acpp_macos:
   #  name: Shamrock Test
   #  needs: [src_check]
@@ -43,29 +43,29 @@ jobs:
   shamrock_linux_acpp_asan:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15-asan.yml
+    uses: ./.github/workflows/shamrock-acpp-clang-asan.yml
 
   shamrock_linux_acpp_ubsan:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15-ubsan.yml
+    uses: ./.github/workflows/shamrock-acpp-clang-ubsan.yml
 
   shamrock_linux_acpp_tidy:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15-tidy.yml
+    uses: ./.github/workflows/shamrock-acpp-clang-tidy.yml
 
   shamrock_linux_acpp_cov:
     needs: [src_check]
     name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang15-coverage.yml
-    
+    uses: ./.github/workflows/shamrock-acpp-clang-coverage.yml
+
   shamrock_linux_dpcpp:
     needs: [src_check]
     name: Tests
     uses: ./.github/workflows/shamrock-dpcpp.yml
 
-  
+
   shamrock_linux_acpp_phystests:
     needs: [shamrock_linux_acpp]
     name: Tests (Phys)

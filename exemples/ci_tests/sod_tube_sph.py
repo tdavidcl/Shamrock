@@ -40,8 +40,16 @@ dr = 1/xs
 model.resize_simulation_box((-xs,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
 
-model.add_cube_fcc_3d(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
-model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
+
+setup = model.get_setup()
+gen1 = setup.make_generator_lattice_hcp(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
+gen2 = setup.make_generator_lattice_hcp(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
+comb = setup.make_combiner_add(gen1,gen2)
+#print(comb.get_dot())
+setup.apply_setup(comb)
+
+#model.add_cube_fcc_3d(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
+#model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
 model.set_value_in_a_box("uint", "f64", u_g ,(-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
 model.set_value_in_a_box("uint", "f64", u_d ,(0,-ys/2,-zs/2),(xs,ys/2,zs/2))
@@ -79,7 +87,7 @@ sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, 0.0, -0.5,0.5)
 rho, v, P = sodanalysis.compute_L2_dist()
 vx,vy,vz = v
 
-# normally : 
+# normally :
 # rho 0.0001615491818848632
 # v (0.0011627047434807855, 2.9881306160215856e-05, 1.7413547093275864e-07)
 # P0.0001248364612976704

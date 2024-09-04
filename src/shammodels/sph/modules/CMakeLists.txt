@@ -13,5 +13,7 @@ target_sources(shamrock_lib
         NeighbourCache.cpp
         ParticleReordering.cpp
         AnalysisSodTube.cpp
+        SPHSetup.cpp
+        setup/GeneratorMCDisc.cpp
     PUBLIC
     )
