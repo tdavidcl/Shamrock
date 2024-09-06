@@ -85,7 +85,7 @@ namespace shamcomm {
                 copy_to_usm(moved_obj, bytelen);
             }
 
-            inline ~CommunicationBuffer() { sycl::free(usm_ptr, bind_queue); }
+            ~CommunicationBuffer();
 
             inline CommunicationBuffer(CommunicationBuffer &&other) noexcept
                 : usm_ptr(std::exchange(other.usm_ptr, nullptr)), bytelen(other.bytelen),
@@ -157,7 +157,7 @@ namespace shamcomm {
                 copy_to_usm(moved_obj, bytelen);
             }
 
-            inline ~CommunicationBuffer() { sycl::free(usm_ptr, bind_queue); }
+            ~CommunicationBuffer();
 
             inline CommunicationBuffer(CommunicationBuffer &&other) noexcept
                 : usm_ptr(std::exchange(other.usm_ptr, nullptr)), bytelen(other.bytelen),

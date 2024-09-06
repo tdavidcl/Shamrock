@@ -20,9 +20,12 @@
 #include <stdexcept>
 
 namespace shamcomm::details {
+    u64 alloc_host = 0;
+    u64 alloc_dgpu = 0;
 
     void CommunicationBuffer<CopyToHost>::alloc_usm(u64 len) {
         usm_ptr = sycl::malloc_host<u8>(len, bind_queue);
+        alloc_host += bytelen;
     }
 
     void CommunicationBuffer<CopyToHost>::copy_to_usm(sycl::buffer<u8> &obj_ref, u64 len) {
@@ -45,10 +48,17 @@ namespace shamcomm::details {
         bind_queue.memcpy(new_usm, usm_ptr, len).wait();
     }
 
+    CommunicationBuffer<CopyToHost>::~CommunicationBuffer() {
+        sycl::free(usm_ptr, bind_queue);
+        alloc_host -= bytelen;
+        logger::raw_ln("Copy TO host free, current state", alloc_host, alloc_dgpu);
+    }
+
     ///////
 
     void CommunicationBuffer<DirectGPU>::alloc_usm(u64 len) {
         usm_ptr = sycl::malloc_device<u8>(len, bind_queue);
+        alloc_dgpu += bytelen;
     }
 
     void CommunicationBuffer<DirectGPU>::copy_to_usm(sycl::buffer<u8> &obj_ref, u64 len) {
@@ -76,4 +86,11 @@ namespace shamcomm::details {
     void CommunicationBuffer<DirectGPU>::copy_usm(u64 len, u8 *new_usm) {
         bind_queue.memcpy(new_usm, usm_ptr, len).wait();
     }
+
+    CommunicationBuffer<DirectGPU>::~CommunicationBuffer() {
+        sycl::free(usm_ptr, bind_queue);
+        alloc_dgpu -= bytelen;
+        logger::raw_ln("Copy TO host free, current state", alloc_host, alloc_dgpu);
+    }
+
 } // namespace shamcomm::details
