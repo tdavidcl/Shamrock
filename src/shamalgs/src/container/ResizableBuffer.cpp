@@ -22,11 +22,15 @@
 // memory manipulation
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+u64 alloc_counter = 0;
+
 template<class T>
 void shamalgs::ResizableBuffer<T>::alloc() {
     buf = std::make_unique<sycl::buffer<T>>(capacity);
 
     logger::debug_alloc_ln("PatchDataField", "allocate field :", "len =", capacity);
+
+    alloc_counter += capacity * sizeof(T);
 }
 
 template<class T>
@@ -36,6 +40,9 @@ void shamalgs::ResizableBuffer<T>::free() {
         logger::debug_alloc_ln("PatchDataField", "free field :", "len =", capacity);
 
         buf.reset();
+
+        alloc_counter -= capacity * sizeof(T);
+        logger::raw_ln("free buf", shambase::readable_sizeof(alloc_counter));
     }
 }
 
