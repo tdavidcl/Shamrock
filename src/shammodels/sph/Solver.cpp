@@ -1808,6 +1808,10 @@ void shammodels::sph::Solver<Tvec, Kern>::evolve_once() {
     };
 
     solver_config.time_state.cfl_multiplier = get_next_cfl_mult();
+
+    scheduler().patch_data.for_each_patchdata([&](u64 cur_p, PatchData &pdat) {
+        logger::info_ln("Patch", cur_p, "mem usage :", pdat.get_curent_device_usage());
+    });
 }
 
 using namespace shammath;

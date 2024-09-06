@@ -15,6 +15,7 @@
  *
  */
 
+#include "shambase/SourceLocation.hpp"
 #include "shambase/exception.hpp"
 #include "shamalgs/algorithm.hpp"
 #include "shamalgs/memory.hpp"
@@ -42,6 +43,8 @@
 
 namespace shamalgs {
 
+    u64 next_ibuf(SourceLocation loc = SourceLocation{});
+
     template<class T>
     class ResizableBuffer {
 
@@ -60,6 +63,8 @@ namespace shamalgs {
             #undef X
         );
         // clang-format on
+
+        u64 ibuf = next_ibuf();
 
         std::unique_ptr<sycl::buffer<T>> buf;
 
@@ -108,6 +113,14 @@ namespace shamalgs {
          */
         [[nodiscard]] inline u64 memsize() const { return val_cnt * sizeof(T); }
 
+        inline u64 get_curent_device_usage() const {
+            if (buf) {
+                return buf->byte_size();
+            } else {
+                return 0;
+            }
+        }
+
         /**
          * @brief resize the buffer size
          *
@@ -153,13 +166,10 @@ namespace shamalgs {
             }
         }
 
-        inline ResizableBuffer(
+        ResizableBuffer(
             std::shared_ptr<sham::DeviceScheduler> _dev_sched,
             sycl::buffer<T> &&moved_buf,
-            u32 val_cnt)
-            : dev_sched(std::move(_dev_sched)),
-              buf(std::make_unique<sycl::buffer<T>>(std::forward<sycl::buffer<T>>(moved_buf))),
-              val_cnt(val_cnt), capacity(moved_buf.size()) {}
+            u32 val_cnt);
 
         ResizableBuffer(const ResizableBuffer &other)
             : val_cnt(other.val_cnt), capacity(other.capacity), dev_sched(other.dev_sched) {
@@ -173,14 +183,15 @@ namespace shamalgs {
 
         ResizableBuffer(ResizableBuffer &&other) noexcept
             : dev_sched(std::move(other.dev_sched)), buf(std::move(other.buf)),
-              val_cnt(std::move(other.val_cnt)), capacity(std::move(other.capacity)) {
-        } // move constructor
+              val_cnt(std::move(other.val_cnt)), capacity(std::move(other.capacity)),
+              ibuf(other.ibuf) {} // move constructor
 
         ResizableBuffer &operator=(ResizableBuffer &&other) noexcept {
             dev_sched = std::move(other.dev_sched);
             buf       = std::move(other.buf);
             val_cnt   = std::move(other.val_cnt);
             capacity  = std::move(other.capacity);
+            ibuf      = std::move(other.ibuf);
 
             return *this;
         } // move assignment

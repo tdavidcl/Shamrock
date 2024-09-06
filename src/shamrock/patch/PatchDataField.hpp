@@ -159,6 +159,8 @@ class PatchDataField {
 
     [[nodiscard]] inline u64 memsize() const { return buf.memsize(); }
 
+    inline u64 get_curent_device_usage() const { return buf.get_curent_device_usage(); }
+
     [[nodiscard]] inline const u32 &get_nvar() const { return nvar; }
 
     [[nodiscard]] inline const u32 &get_obj_cnt() const { return obj_cnt; }

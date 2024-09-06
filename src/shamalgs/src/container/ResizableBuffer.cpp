@@ -17,37 +17,79 @@
 #include "shamalgs/random.hpp"
 #include "shamalgs/reduction.hpp"
 #include "shamcomm/logs.hpp"
-
+namespace shamalgs {
+    u64 _ibuf = 0;
+    u64 next_ibuf(SourceLocation loc) {
+        _ibuf++;
+        // if(_ibuf == 19){
+        //     shambase::throw_with_loc<std::runtime_error>("i just wanna");
+        // }
+        return _ibuf;
+    }
+} // namespace shamalgs
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // memory manipulation
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 u64 alloc_counter = 0;
 u64 buf_cnt       = 0;
+std::unordered_map<u64, i64> map_cnt;
+
+void print_state(std::string info, u64 bytesize, u64 ibuf) {
+    logger::info_ln(
+        "ResizableBuffer",
+        info,
+        bytesize,
+        "ibuf",
+        ibuf,
+        "alloc size :",
+        shambase::readable_sizeof(alloc_counter),
+        "count :",
+        buf_cnt,
+        shambase::format("{}", map_cnt));
+}
+
+void register_new(u64 bytesize, u64 ibuf) {
+
+    if (map_cnt.count(ibuf) == 0) {
+        map_cnt[ibuf] = 0;
+    }
+    map_cnt[ibuf] = bytesize;
+    // print_state("new",bytesize,ibuf);
+}
+void register_del(u64 bytesize, u64 ibuf, bool erase) {
+
+    if (map_cnt.count(ibuf) == 0) {
+        print_state("del throw", bytesize, ibuf);
+        throw "";
+    }
+    if (erase) {
+        map_cnt.erase(ibuf);
+    }
+    // print_state("del",bytesize,ibuf);
+}
 
 template<class T>
-sycl::buffer<T> get_new_buf(u64 len) {
+sycl::buffer<T> get_new_buf(u64 len, u64 ibuf) {
     alloc_counter += len * sizeof(T);
     buf_cnt++;
+
+    register_new(len * sizeof(T), ibuf);
+
     return sycl::buffer<T>(len);
 }
 
 template<class T>
-void free_sycl_buf(sycl::buffer<T> &&buf) {
+void free_sycl_buf(sycl::buffer<T> &&buf, u64 ibuf, bool reg_del) {
     alloc_counter -= buf.size() * sizeof(T);
     buf_cnt--;
-    logger::info_ln(
-        "ResizableBuffer",
-        "alloc size :",
-        shambase::readable_sizeof(alloc_counter),
-        "count :",
-        buf_cnt);
+
+    register_del(buf.size() * sizeof(T), ibuf, reg_del);
 }
 
 template<class T>
 void shamalgs::ResizableBuffer<T>::alloc() {
-    buf = std::make_unique<sycl::buffer<T>>(get_new_buf<T>(capacity));
-
+    buf = std::make_unique<sycl::buffer<T>>(get_new_buf<T>(capacity, ibuf));
     logger::debug_alloc_ln("PatchDataField", "allocate field :", "len =", capacity);
 }
 
@@ -57,7 +99,7 @@ void shamalgs::ResizableBuffer<T>::free() {
     if (buf) {
         logger::debug_alloc_ln("PatchDataField", "free field :", "len =", capacity);
 
-        free_sycl_buf(shambase::extract_pointer(buf));
+        free_sycl_buf(shambase::extract_pointer(buf), ibuf, true);
     }
 }
 
@@ -65,7 +107,7 @@ template<class T>
 void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
 
     logger::debug_alloc_ln(
-        "ResizableBuffer", "change capacity from : ", capacity, "to :", new_capa);
+        "ResizableBuffer", "ibuf", ibuf, "change capacity from : ", capacity, "to :", new_capa);
 
     if (capacity == 0) {
 
@@ -81,7 +123,9 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
             if (new_capa != capacity) {
                 capacity = new_capa;
 
+                // print_state("tmp",buf->size() * sizeof(T), ibuf);
                 auto old_buf = shambase::extract_pointer(buf);
+                // print_state("tmp",old_buf.size() * sizeof(T), ibuf);
 
                 alloc();
 
@@ -91,7 +135,7 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
                 }
 
                 logger::debug_alloc_ln("PatchDataField", "delete old buf : ");
-                free_sycl_buf(std::move(old_buf));
+                free_sycl_buf(std::move(old_buf), ibuf, false);
             }
 
         } else {
@@ -104,6 +148,9 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
 template<class T>
 void shamalgs::ResizableBuffer<T>::reserve(u32 add_size) {
     StackEntry stack_loc{false};
+
+    // logger::info_ln("ResizableBuffer","ibuf",ibuf, "reserve from : ", val_cnt, "to :", val_cnt +
+    // add_size); print_state("reserve",add_size,ibuf);
 
     u32 wanted_sz = val_cnt + add_size;
 
@@ -123,6 +170,15 @@ void shamalgs::ResizableBuffer<T>::resize(u32 new_size) {
     }
 
     val_cnt = new_size;
+}
+
+template<class T>
+shamalgs::ResizableBuffer<T>::ResizableBuffer(
+    std::shared_ptr<sham::DeviceScheduler> _dev_sched, sycl::buffer<T> &&moved_buf, u32 val_cnt)
+    : dev_sched(std::move(_dev_sched)),
+      buf(std::make_unique<sycl::buffer<T>>(std::forward<sycl::buffer<T>>(moved_buf))),
+      val_cnt(val_cnt), capacity(moved_buf.size()) {
+    register_new(buf->size() * sizeof(T), ibuf);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

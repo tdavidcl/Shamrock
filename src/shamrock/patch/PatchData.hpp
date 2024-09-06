@@ -202,6 +202,19 @@ namespace shamrock::patch {
             return sum;
         }
 
+        inline u64 get_curent_device_usage() const {
+            u64 sum = 0;
+
+            for (auto &field_var : fields) {
+
+                field_var.visit([&](auto &field) {
+                    sum += field.get_curent_device_usage();
+                });
+            }
+
+            return sum;
+        }
+
         inline bool is_empty() { return get_obj_cnt() == 0; }
 
         void overwrite(PatchData &pdat, u32 obj_cnt);
