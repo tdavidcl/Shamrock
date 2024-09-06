@@ -64,6 +64,8 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
         if (new_capa > 0) {
 
             if (new_capa != capacity) {
+                alloc_counter -= capacity*sizeof(alloc_counter);
+
                 capacity = new_capa;
 
                 sycl::buffer<T> *old_buf = buf.release();
