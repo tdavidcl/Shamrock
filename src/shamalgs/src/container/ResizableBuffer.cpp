@@ -25,12 +25,22 @@
 u64 alloc_counter = 0;
 
 template<class T>
+sycl::buffer<T> get_new_buf(u64 len) {
+    alloc_counter += len * sizeof(T);
+    return sycl::buffer<T>(len);
+}
+
+template<class T>
+void free_sycl_buf(sycl::buffer<T> &&buf) {
+    alloc_counter -= buf.size() * sizeof(T);
+    logger::raw_ln("resizable_buf_bank", shambase::readable_sizeof(alloc_counter));
+}
+
+template<class T>
 void shamalgs::ResizableBuffer<T>::alloc() {
-    buf = std::make_unique<sycl::buffer<T>>(capacity);
+    buf = std::make_unique<sycl::buffer<T>>(get_new_buf<T>(capacity));
 
     logger::debug_alloc_ln("PatchDataField", "allocate field :", "len =", capacity);
-
-    alloc_counter += capacity * sizeof(T);
 }
 
 template<class T>
@@ -39,10 +49,7 @@ void shamalgs::ResizableBuffer<T>::free() {
     if (buf) {
         logger::debug_alloc_ln("PatchDataField", "free field :", "len =", capacity);
 
-        buf.reset();
-
-        alloc_counter -= capacity * sizeof(T);
-        logger::raw_ln("free buf", shambase::readable_sizeof(alloc_counter));
+        free_sycl_buf(shambase::extract_pointer(buf));
     }
 }
 
@@ -64,21 +71,21 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
         if (new_capa > 0) {
 
             if (new_capa != capacity) {
-                alloc_counter -= capacity*sizeof(alloc_counter);
+                alloc_counter -= capacity * sizeof(alloc_counter);
 
                 capacity = new_capa;
 
-                sycl::buffer<T> *old_buf = buf.release();
+                auto old_buf = shambase::extract_pointer(buf);
 
                 alloc();
 
                 if (val_cnt > 0) {
                     shamalgs::memory::copybuf_discard(
-                        dev_sched->get_queue().q, *old_buf, *buf, std::min(val_cnt, capacity));
+                        dev_sched->get_queue().q, old_buf, *buf, std::min(val_cnt, capacity));
                 }
 
                 logger::debug_alloc_ln("PatchDataField", "delete old buf : ");
-                delete old_buf;
+                free_sycl_buf(std::move(old_buf));
             }
 
         } else {
@@ -274,5 +281,6 @@ shamalgs::ResizableBuffer<T> shamalgs::ResizableBuffer<T>::mock_buffer(
 XMAC_LIST_ENABLED_ResizableUSMBuffer
 #undef X
 
+    //////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////
