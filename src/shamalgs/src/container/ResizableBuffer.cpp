@@ -33,7 +33,7 @@ sycl::buffer<T> get_new_buf(u64 len) {
 template<class T>
 void free_sycl_buf(sycl::buffer<T> &&buf) {
     alloc_counter -= buf.size() * sizeof(T);
-    logger::raw_ln("resizable_buf_bank", shambase::readable_sizeof(alloc_counter));
+    logger::info_ln("ResizableBuffer", "alloc size :", shambase::readable_sizeof(alloc_counter));
 }
 
 template<class T>
@@ -71,8 +71,6 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
         if (new_capa > 0) {
 
             if (new_capa != capacity) {
-                alloc_counter -= capacity * sizeof(alloc_counter);
-
                 capacity = new_capa;
 
                 auto old_buf = shambase::extract_pointer(buf);
