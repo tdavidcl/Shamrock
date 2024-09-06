@@ -151,7 +151,7 @@ class PatchDataField {
         return std::make_unique<PatchDataField>(current);
     }
 
-    inline std::unique_ptr<sycl::buffer<T>> &get_buf() { return buf.get_buf_priviledge(); }
+    inline const std::unique_ptr<sycl::buffer<T>> &get_buf() { return buf.get_buf(); }
 
     [[nodiscard]] inline const u32 &size() const { return buf.size(); }
 

@@ -36,6 +36,12 @@ u64 buf_cnt       = 0;
 std::unordered_map<u64, i64> map_cnt;
 
 void print_state(std::string info, u64 bytesize, u64 ibuf) {
+    // get the sum of the map
+    u64 sum = 0;
+    for (auto &it : map_cnt) {
+        sum += it.first * it.second;
+    }
+
     logger::info_ln(
         "ResizableBuffer",
         info,
@@ -46,33 +52,44 @@ void print_state(std::string info, u64 bytesize, u64 ibuf) {
         shambase::readable_sizeof(alloc_counter),
         "count :",
         buf_cnt,
-        shambase::format("{}", map_cnt));
+        shambase::format("{}", map_cnt),
+        "sum",
+        sum,
+        alloc_counter);
 }
 
 void register_new(u64 bytesize, u64 ibuf) {
 
-    if (map_cnt.count(ibuf) == 0) {
-        map_cnt[ibuf] = 0;
+    if (map_cnt.count(bytesize) == 0) {
+        map_cnt[bytesize] = 0;
     }
-    map_cnt[ibuf] = bytesize;
-    // print_state("new",bytesize,ibuf);
-}
-void register_del(u64 bytesize, u64 ibuf, bool erase) {
+    map_cnt[bytesize]++;
 
-    if (map_cnt.count(ibuf) == 0) {
+    alloc_counter += bytesize;
+    buf_cnt++;
+
+    print_state("new", bytesize, ibuf);
+}
+void register_del(u64 bytesize, u64 ibuf) {
+
+    if (map_cnt.count(bytesize) == 0) {
         print_state("del throw", bytesize, ibuf);
         throw "";
     }
-    if (erase) {
-        map_cnt.erase(ibuf);
+    map_cnt[bytesize]--;
+
+    if (map_cnt[bytesize] == 0) {
+        map_cnt.erase(bytesize);
     }
-    // print_state("del",bytesize,ibuf);
+
+    alloc_counter -= bytesize;
+    buf_cnt--;
+
+    print_state("del", bytesize, ibuf);
 }
 
 template<class T>
 sycl::buffer<T> get_new_buf(u64 len, u64 ibuf) {
-    alloc_counter += len * sizeof(T);
-    buf_cnt++;
 
     register_new(len * sizeof(T), ibuf);
 
@@ -80,11 +97,9 @@ sycl::buffer<T> get_new_buf(u64 len, u64 ibuf) {
 }
 
 template<class T>
-void free_sycl_buf(sycl::buffer<T> &&buf, u64 ibuf, bool reg_del) {
-    alloc_counter -= buf.size() * sizeof(T);
-    buf_cnt--;
+void free_sycl_buf(sycl::buffer<T> &&buf, u64 ibuf) {
 
-    register_del(buf.size() * sizeof(T), ibuf, reg_del);
+    register_del(buf.size() * sizeof(T), ibuf);
 }
 
 template<class T>
@@ -99,7 +114,7 @@ void shamalgs::ResizableBuffer<T>::free() {
     if (buf) {
         logger::debug_alloc_ln("PatchDataField", "free field :", "len =", capacity);
 
-        free_sycl_buf(shambase::extract_pointer(buf), ibuf, true);
+        free_sycl_buf(shambase::extract_pointer(buf), ibuf);
     }
 }
 
@@ -135,7 +150,7 @@ void shamalgs::ResizableBuffer<T>::change_capacity(u32 new_capa) {
                 }
 
                 logger::debug_alloc_ln("PatchDataField", "delete old buf : ");
-                free_sycl_buf(std::move(old_buf), ibuf, false);
+                free_sycl_buf(std::move(old_buf), ibuf);
             }
 
         } else {
@@ -260,6 +275,9 @@ void shamalgs::ResizableBuffer<T>::index_remap_resize(
         };
 
         sycl::buffer<T> new_buf = get_new_buf();
+
+        register_new(new_buf.size() * sizeof(T), ibuf);
+        register_del(buf->size() * sizeof(T), ibuf);
 
         capacity = new_buf.size();
         val_cnt  = len * nvar;

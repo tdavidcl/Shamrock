@@ -97,7 +97,7 @@ namespace shamalgs {
          *
          * @return const std::unique_ptr<sycl::buffer<T>>&
          */
-        inline std::unique_ptr<sycl::buffer<T>> &get_buf_priviledge() { return buf; }
+        // inline std::unique_ptr<sycl::buffer<T>> &get_buf_priviledge() { return buf; }
 
         /**
          * @brief get the number of held values in the buffer
