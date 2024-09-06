@@ -23,17 +23,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 u64 alloc_counter = 0;
+u64 buf_cnt       = 0;
 
 template<class T>
 sycl::buffer<T> get_new_buf(u64 len) {
     alloc_counter += len * sizeof(T);
+    buf_cnt++;
     return sycl::buffer<T>(len);
 }
 
 template<class T>
 void free_sycl_buf(sycl::buffer<T> &&buf) {
     alloc_counter -= buf.size() * sizeof(T);
-    logger::info_ln("ResizableBuffer", "alloc size :", shambase::readable_sizeof(alloc_counter));
+    buf_cnt--;
+    logger::info_ln(
+        "ResizableBuffer",
+        "alloc size :",
+        shambase::readable_sizeof(alloc_counter),
+        "count :",
+        buf_cnt);
 }
 
 template<class T>
