@@ -17,5 +17,6 @@ target_sources(shamrock_lib
         setup/GeneratorMCDisc.cpp
         render/CartesianRender.cpp
         render/RenderFieldGetter.cpp
+        RigidBoundaryHandler.cpp
     PUBLIC
     )

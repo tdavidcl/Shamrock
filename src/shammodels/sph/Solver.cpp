@@ -38,6 +38,7 @@
 #include "shammodels/sph/modules/ExternalForces.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
+#include "shammodels/sph/modules/RigidBoundaryHandler.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shammodels/sph/modules/UpdateViscosity.hpp"
@@ -732,7 +733,9 @@ void shammodels::sph::Solver<Tvec, Kern>::do_predictor_leapfrog(Tscal dt) {
 
     // forward euler step positions dt
     logger::debug_ln("sph::BasicGas", "forward euler step positions dt");
-    utility.fields_forward_euler<Tvec>(ixyz, ivxyz, dt);
+    //utility.fields_forward_euler<Tvec>(ixyz, ivxyz, dt);
+
+    modules::RigidBoundaryHandler<Tvec, Kern>(context, solver_config, storage).advect_particle_apply_boundaries(dt);
 
     // forward euler step f dt/2
     logger::debug_ln("sph::BasicGas", "forward euler step f dt/2");

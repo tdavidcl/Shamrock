@@ -489,6 +489,15 @@ namespace sham {
         return sham::details::g_sycl_dot(a, b);
     }
 
+    /// Reflect a vector across a normal vector.
+    /// \param a The vector to reflect.
+    /// \param n The normal vector to reflect across.
+    /// \return The reflected vector.
+    template<class T>
+    inline T reflect(T a, T n){
+        return a - 2 * dot(a, n) * n;
+    }
+
     template<class T>
     inline T max_8points(T v0, T v1, T v2, T v3, T v4, T v5, T v6, T v7) {
         return max(max(max(v0, v1), max(v2, v3)), max(max(v4, v5), max(v6, v7)));
