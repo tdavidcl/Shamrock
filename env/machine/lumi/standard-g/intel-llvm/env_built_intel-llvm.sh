@@ -32,8 +32,6 @@ function setupcompiler {
     module list
 
     # See : https://dci.dci-gitlab.cines.fr/webextranet/software_stack/libraries/index.html#compiling-intel-llvm
-    echo " -- clone inte/llvm"
-    git clone --branch="sycl" https://github.com/intel/llvm ${INTELLLVM_GIT_DIR} || true
     cd ${INTELLLVM_GIT_DIR}
 
     module purge
