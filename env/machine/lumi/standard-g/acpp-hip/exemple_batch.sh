@@ -37,5 +37,5 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 
 #
 srun --cpu-bind=${CPU_BIND} -- \
-    ./select_gpu ./shamrock --sycl-cfg auto:HIP --loglevel 1 --sycl-ls-map \
+    ./select_gpu ./shamrock --force-dgpu-on --sycl-cfg auto:HIP --loglevel 1 --sycl-ls-map \
     --rscript $RSCRIPT

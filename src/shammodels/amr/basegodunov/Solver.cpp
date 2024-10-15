@@ -226,6 +226,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     std::string gathered = "";
     shamcomm::gather_str(log_rank_rate, gathered);
 
+    f64 tot_rate = shamalgs::collective::allreduce_sum(rate);
+
     if (shamcomm::world_rank() == 0) {
         std::string print = "processing rate infos : \n";
         print += ("--------------------------------------------------------------------------------"
@@ -237,6 +239,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         print += (gathered) + "\n";
         print += ("--------------------------------------------------------------------------------"
                   "-");
+        print += "\n"+shambase::format("Total rate : {}", tot_rate);
         logger::info_ln("amr::Godunov", print);
     }
 
