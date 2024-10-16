@@ -50,7 +50,7 @@ def setup(arg : SetupArg):
     ENV_SCRIPT_HEADER += "export ACPP_GIT_DIR="+ACPP_GIT_DIR+"\n"
     ENV_SCRIPT_HEADER += "export ACPP_BUILD_DIR="+ACPP_BUILD_DIR+"\n"
     ENV_SCRIPT_HEADER += "export ACPP_INSTALL_DIR="+ACPP_INSTALL_DIR+"\n"
-    
+
 
     run_cmd("mkdir -p "+builddir+"/.env")
 
@@ -81,4 +81,3 @@ def setup(arg : SetupArg):
         source_path = source_path,
         header = ENV_SCRIPT_HEADER,
         path_write = ENV_SCRIPT_PATH)
-        

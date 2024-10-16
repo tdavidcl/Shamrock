@@ -46,16 +46,9 @@ def setup(arg : SetupArg):
     ENV_SCRIPT_HEADER += "export BUILD_DIR="+builddir+"\n"
     ENV_SCRIPT_HEADER += "export INTELLLVM_GIT_DIR="+INTELLLVM_GIT_DIR+"\n"
     ENV_SCRIPT_HEADER += "export INTELLLVM_INSTALL_DIR="+INTELLLVM_INSTALL_DIR+"\n"
-    
+
     run_cmd("mkdir -p "+builddir+"/.env")
 
-    INTEL_LLVM_CLONE_HELPER = builddir+"/.env/clone-llvm"
-    utils.envscript.write_env_file(
-        source_path = shamrockdir + "/env/helpers/clone-intel-llvm.sh",
-        header = "",
-        path_write = INTEL_LLVM_CLONE_HELPER)
-    ENV_SCRIPT_HEADER += ". "+INTEL_LLVM_CLONE_HELPER+"\n"
-    
     ENV_SCRIPT_HEADER += "\n"
     ENV_SCRIPT_HEADER += "export CMAKE_GENERATOR=\""+cmake_gen+"\"\n"
     ENV_SCRIPT_HEADER += "\n"
@@ -76,9 +69,3 @@ def setup(arg : SetupArg):
         source_path = source_path,
         header = ENV_SCRIPT_HEADER,
         path_write = ENV_SCRIPT_PATH)
-
-    if is_intel_llvm_already_installed(INTELLLVM_INSTALL_DIR):
-        print("-- intel llvm already installed => skipping")
-    else:
-        print("-- running compiler setup")
-        os.system("bash -c 'cd "+builddir+" && source ./activate &&  updatecompiler'")

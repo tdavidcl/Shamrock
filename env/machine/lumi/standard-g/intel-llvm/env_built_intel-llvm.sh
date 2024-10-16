@@ -1,20 +1,29 @@
 # Exports will be provided by the new env script above this line
 # will be exported : ACPP_GIT_DIR, ACPP_BUILD_DIR, ACPP_INSTALL_DIR
-function loadmodules {
-    module purge
 
-    module load cpe/23.12
-    module load craype-accel-amd-gfx90a craype-x86-trento
-    module load PrgEnv-intel
-    module load cray-mpich/8.1.26
-    module load cray-python
-    module load amd-mixed/5.7.1
-    module load rocm/5.7.1
-}
+if [ ! -f "$INTELLLVM_GIT_DIR/README.md" ]; then
+    echo " ------ Clonning LLVM ------ "
+    echo "-> git clone --depth 1 -b sycl https://github.com/intel/llvm.git $INTELLLVM_GIT_DIR"
+    git clone --depth 1 -b sycl https://github.com/intel/llvm.git $INTELLLVM_GIT_DIR
+    echo " ------  LLVM Cloned  ------ "
+fi
 
-loadmodules
+echo " -- Restoring env default"
+source /opt/cray/pe/cpe/23.12/restore_lmod_system_defaults.sh
+echo " -- module purge"
+module purge
+source /opt/cray/pe/cpe/23.12/restore_lmod_system_defaults.sh
+module list
 
-export PATH=$HOMEDIR/.local/bin:$PATH
+module load LUMI/24.03
+module load partition/G
+module load cray-python
+module load rocm/6.0.3
+
+# necessay for mpi but may mess the intel llvm compilation, to check ...
+module load PrgEnv-amd
+
+export PATH=$HOME/.local/bin:$PATH
 
 export PATH=$INTELLLVM_INSTALL_DIR/bin:$PATH
 export LD_LIBRARY_PATH=$INTELLLVM_INSTALL_DIR/lib:$LD_LIBRARY_PATH
@@ -24,23 +33,8 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 function setupcompiler {
     echo " ---- Running compiler setup ----"
 
-    echo " -- Restoring env default"
-    source /opt/cray/pe/cpe/23.12/restore_lmod_system_defaults.sh
-    echo " -- module purge"
-    module purge
-    source /opt/cray/pe/cpe/23.12/restore_lmod_system_defaults.sh
-    module list
-
-    # See : https://dci.dci-gitlab.cines.fr/webextranet/software_stack/libraries/index.html#compiling-intel-llvm
+    # See : https://dci.dci-gitlab.cines.fr/webextranet/software_stack/libraries/index.html#compiling-intel-llvm
     cd ${INTELLLVM_GIT_DIR}
-
-    module purge
-
-    module load cpe/23.12
-    module load cray-python
-    module load rocm/5.7.1
-
-    module list
 
     pip3 install -U ninja cmake
 
@@ -54,13 +48,17 @@ function setupcompiler {
 
     cd build
 
-    time ninja -k0 all lib/all tools/libdevice/libsycldevice
-    time ninja -k0 install
-
-    module purge
-    loadmodules
+    time ninja "${MAKE_OPT[@]}" -k0 all lib/all tools/libdevice/libsycldevice
+    time ninja "${MAKE_OPT[@]}" -k0 install
 
 }
+
+if [ ! -f "${INTELLLVM_INSTALL_DIR}/bin/clang++" ]; then
+    echo " ----- intel llvm is not configured, compiling it ... -----"
+    setupcompiler
+    echo " ----- intel llvm configured ! -----"
+fi
+
 
 function updatecompiler {
     (cd ${ACPP_GIT_DIR} && git pull)

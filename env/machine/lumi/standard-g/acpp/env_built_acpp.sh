@@ -1,6 +1,6 @@
 module purge
 
-module load LUMI/24.03 
+module load LUMI/24.03
 module load partition/G
 module load cray-python
 module load rocm/6.0.3
@@ -8,6 +8,7 @@ module load Boost/1.83.0-cpeAMD-24.03
 
 export PATH=$HOME/.local/bin:$PATH
 pip3 install -U ninja cmake
+
 
 export ACPP_TARGETS="hip:gfx90a"
 
@@ -37,7 +38,9 @@ function setupcompiler {
 
 if [ ! -f "$ACPP_INSTALL_DIR/bin/acpp" ]; then
     echo " ----- acpp is not configured, compiling it ... -----"
+
     setupcompiler
+
     echo " ----- acpp configured ! -----"
 fi
 
