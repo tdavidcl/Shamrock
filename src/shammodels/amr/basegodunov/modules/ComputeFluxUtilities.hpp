@@ -216,18 +216,31 @@ namespace shammodels::basegodunov::modules {
         Tscal gamma,
         RiemannSolverMode mode) {
 
-        if  (mode == RiemannSolverMode::HLL) {
+        if (mode == RiemannSolverMode::HLL) {
             compute_fluxes_dir<RiemannSolverMode::HLL, Tvec, Tscal, dir>(
-                q, link_count, rho_face_dir, vel_face_dir, press_face_dir, flux_rho_face_dir,
-                flux_rhov_face_dir, flux_rhoe_face_dir, gamma);
-        } else if  (mode == RiemannSolverMode::Rusanov) {
+                q,
+                link_count,
+                rho_face_dir,
+                vel_face_dir,
+                press_face_dir,
+                flux_rho_face_dir,
+                flux_rhov_face_dir,
+                flux_rhoe_face_dir,
+                gamma);
+        } else if (mode == RiemannSolverMode::Rusanov) {
             compute_fluxes_dir<RiemannSolverMode::Rusanov, Tvec, Tscal, dir>(
-                q, link_count, rho_face_dir, vel_face_dir, press_face_dir, flux_rho_face_dir,
-                flux_rhov_face_dir, flux_rhoe_face_dir, gamma);
-        }else {
+                q,
+                link_count,
+                rho_face_dir,
+                vel_face_dir,
+                press_face_dir,
+                flux_rho_face_dir,
+                flux_rhov_face_dir,
+                flux_rhoe_face_dir,
+                gamma);
+        } else {
             shambase::throw_unimplemented();
         }
-
     }
 
     template<DustRiemannSolverMode mode, class Tvec, class Tscal, Direction dir>

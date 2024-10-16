@@ -23,10 +23,6 @@
 template<class T>
 using NGLink = shammodels::basegodunov::modules::NeighGraphLinkField<T>;
 
-
-
-
-
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux() {
 
@@ -68,10 +64,10 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-        NGLink<std::array<Tscal, 2>> &rho_face_xp = storage.rho_face_xp.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_xp = storage.vel_face_xp.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_xp   = storage.rho_face_xp.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_xp    = storage.vel_face_xp.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_xp = storage.press_face_xp.get().get(id);
-        const u32 ixp = oriented_cell_graph.xp;
+        const u32 ixp                               = oriented_cell_graph.xp;
         NGLink<Tscal> buf_flux_rho_face_xp{*oriented_cell_graph.graph_links[ixp]};
         NGLink<Tvec> buf_flux_rhov_face_xp{*oriented_cell_graph.graph_links[ixp]};
         NGLink<Tscal> buf_flux_rhoe_face_xp{*oriented_cell_graph.graph_links[ixp]};
@@ -86,7 +82,8 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_xp.link_graph_field,
             buf_flux_rhov_face_xp.link_graph_field,
             buf_flux_rhoe_face_xp.link_graph_field,
-            gamma,mode);
+            gamma,
+            mode);
         flux_rho_face_xp.add_obj(id, std::move(buf_flux_rho_face_xp));
         flux_rhov_face_xp.add_obj(id, std::move(buf_flux_rhov_face_xp));
         flux_rhoe_face_xp.add_obj(id, std::move(buf_flux_rhoe_face_xp));
@@ -96,16 +93,13 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
     storage.vel_face_xp.reset();
     storage.press_face_xp.reset();
 
-
-
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-
-        NGLink<std::array<Tscal, 2>> &rho_face_xm = storage.rho_face_xm.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_xm = storage.vel_face_xm.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_xm   = storage.rho_face_xm.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_xm    = storage.vel_face_xm.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_xm = storage.press_face_xm.get().get(id);
-        const u32 ixm = oriented_cell_graph.xm;
+        const u32 ixm                               = oriented_cell_graph.xm;
         NGLink<Tscal> buf_flux_rho_face_xm{*oriented_cell_graph.graph_links[ixm]};
         NGLink<Tvec> buf_flux_rhov_face_xm{*oriented_cell_graph.graph_links[ixm]};
         NGLink<Tscal> buf_flux_rhoe_face_xm{*oriented_cell_graph.graph_links[ixm]};
@@ -119,26 +113,24 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_xm.link_graph_field,
             buf_flux_rhov_face_xm.link_graph_field,
             buf_flux_rhoe_face_xm.link_graph_field,
-            gamma,mode);
+            gamma,
+            mode);
         flux_rho_face_xm.add_obj(id, std::move(buf_flux_rho_face_xm));
         flux_rhov_face_xm.add_obj(id, std::move(buf_flux_rhov_face_xm));
         flux_rhoe_face_xm.add_obj(id, std::move(buf_flux_rhoe_face_xm));
-
     });
 
     storage.rho_face_xm.reset();
     storage.vel_face_xm.reset();
     storage.press_face_xm.reset();
 
-
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-
-        NGLink<std::array<Tscal, 2>> &rho_face_yp = storage.rho_face_yp.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_yp = storage.vel_face_yp.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_yp   = storage.rho_face_yp.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_yp    = storage.vel_face_yp.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_yp = storage.press_face_yp.get().get(id);
-        const u32 iyp = oriented_cell_graph.yp;
+        const u32 iyp                               = oriented_cell_graph.yp;
         NGLink<Tscal> buf_flux_rho_face_yp{*oriented_cell_graph.graph_links[iyp]};
         NGLink<Tvec> buf_flux_rhov_face_yp{*oriented_cell_graph.graph_links[iyp]};
         NGLink<Tscal> buf_flux_rhoe_face_yp{*oriented_cell_graph.graph_links[iyp]};
@@ -152,27 +144,24 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_yp.link_graph_field,
             buf_flux_rhov_face_yp.link_graph_field,
             buf_flux_rhoe_face_yp.link_graph_field,
-            gamma,mode);
+            gamma,
+            mode);
         flux_rho_face_yp.add_obj(id, std::move(buf_flux_rho_face_yp));
         flux_rhov_face_yp.add_obj(id, std::move(buf_flux_rhov_face_yp));
         flux_rhoe_face_yp.add_obj(id, std::move(buf_flux_rhoe_face_yp));
-
     });
 
     storage.rho_face_yp.reset();
     storage.vel_face_yp.reset();
     storage.press_face_yp.reset();
 
-
-
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-
-        NGLink<std::array<Tscal, 2>> &rho_face_ym = storage.rho_face_ym.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_ym = storage.vel_face_ym.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_ym   = storage.rho_face_ym.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_ym    = storage.vel_face_ym.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_ym = storage.press_face_ym.get().get(id);
-        const u32 iym = oriented_cell_graph.ym;
+        const u32 iym                               = oriented_cell_graph.ym;
         NGLink<Tscal> buf_flux_rho_face_ym{*oriented_cell_graph.graph_links[iym]};
         NGLink<Tvec> buf_flux_rhov_face_ym{*oriented_cell_graph.graph_links[iym]};
         NGLink<Tscal> buf_flux_rhoe_face_ym{*oriented_cell_graph.graph_links[iym]};
@@ -186,7 +175,8 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_ym.link_graph_field,
             buf_flux_rhov_face_ym.link_graph_field,
             buf_flux_rhoe_face_ym.link_graph_field,
-            gamma,mode);
+            gamma,
+            mode);
         flux_rho_face_ym.add_obj(id, std::move(buf_flux_rho_face_ym));
         flux_rhov_face_ym.add_obj(id, std::move(buf_flux_rhov_face_ym));
         flux_rhoe_face_ym.add_obj(id, std::move(buf_flux_rhoe_face_ym));
@@ -195,14 +185,13 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
     storage.vel_face_ym.reset();
     storage.press_face_ym.reset();
 
-
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-        NGLink<std::array<Tscal, 2>> &rho_face_zp = storage.rho_face_zp.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_zp = storage.vel_face_zp.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_zp   = storage.rho_face_zp.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_zp    = storage.vel_face_zp.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_zp = storage.press_face_zp.get().get(id);
-        const u32 izp = oriented_cell_graph.zp;
+        const u32 izp                               = oriented_cell_graph.zp;
         NGLink<Tscal> buf_flux_rho_face_zp{*oriented_cell_graph.graph_links[izp]};
         NGLink<Tvec> buf_flux_rhov_face_zp{*oriented_cell_graph.graph_links[izp]};
         NGLink<Tscal> buf_flux_rhoe_face_zp{*oriented_cell_graph.graph_links[izp]};
@@ -216,7 +205,8 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_zp.link_graph_field,
             buf_flux_rhov_face_zp.link_graph_field,
             buf_flux_rhoe_face_zp.link_graph_field,
-            gamma,mode);
+            gamma,
+            mode);
         flux_rho_face_zp.add_obj(id, std::move(buf_flux_rho_face_zp));
         flux_rhov_face_zp.add_obj(id, std::move(buf_flux_rhov_face_zp));
         flux_rhoe_face_zp.add_obj(id, std::move(buf_flux_rhoe_face_zp));
@@ -225,12 +215,11 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
     storage.vel_face_zp.reset();
     storage.press_face_zp.reset();
 
-
     storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
         sycl::queue &q = shamsys::instance::get_compute_queue();
 
-        NGLink<std::array<Tscal, 2>> &rho_face_zm = storage.rho_face_zm.get().get(id);
-        NGLink<std::array<Tvec, 2>> &vel_face_zm = storage.vel_face_zm.get().get(id);
+        NGLink<std::array<Tscal, 2>> &rho_face_zm   = storage.rho_face_zm.get().get(id);
+        NGLink<std::array<Tvec, 2>> &vel_face_zm    = storage.vel_face_zm.get().get(id);
         NGLink<std::array<Tscal, 2>> &press_face_zm = storage.press_face_zm.get().get(id);
 
         const u32 izm = oriented_cell_graph.zm;
@@ -238,7 +227,6 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
         NGLink<Tscal> buf_flux_rho_face_zm{*oriented_cell_graph.graph_links[izm]};
         NGLink<Tvec> buf_flux_rhov_face_zm{*oriented_cell_graph.graph_links[izm]};
         NGLink<Tscal> buf_flux_rhoe_face_zm{*oriented_cell_graph.graph_links[izm]};
-
 
         logger::debug_ln("[AMR Flux]", "compute flux zm patch", id);
         compute_fluxes_dir_riemanmode<Tvec, Tscal, Direction::zm>(
@@ -250,8 +238,8 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             buf_flux_rho_face_zm.link_graph_field,
             buf_flux_rhov_face_zm.link_graph_field,
             buf_flux_rhoe_face_zm.link_graph_field,
-            gamma,mode);
-        
+            gamma,
+            mode);
 
         flux_rho_face_zm.add_obj(id, std::move(buf_flux_rho_face_zm));
         flux_rhov_face_zm.add_obj(id, std::move(buf_flux_rhov_face_zm));
