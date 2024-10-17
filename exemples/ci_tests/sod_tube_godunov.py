@@ -31,7 +31,7 @@ cfg.set_eos_gamma(gamma)
 #cfg.set_riemann_solver_rusanov()
 cfg.set_riemann_solver_hll()
 
-#cfg.set_slope_lim_none()
+# cfg.set_slope_lim_none()
 #cfg.set_slope_lim_vanleer_f()
 #cfg.set_slope_lim_vanleer_std()
 #cfg.set_slope_lim_vanleer_sym()
@@ -100,7 +100,7 @@ sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, xref, -xrange,
 ### Plot
 #################
 # do plot or not
-if False:
+if True:
 
     def convert_to_cell_coords(dic):
 

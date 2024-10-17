@@ -80,6 +80,27 @@ namespace shammodels::basegodunov::modules {
                     return shammath::hll_flux_mz(cL, cR, gamma);
                 }
             }
+
+            if constexpr (mode == RiemannSolverMode::HLLC) {
+                if constexpr (dir == Direction::xp) {
+                    return shammath::hllc_flux_x(cL, cR, gamma);
+                }
+                if constexpr (dir == Direction::yp) {
+                    return shammath::hllc_flux_y(cL, cR, gamma);
+                }
+                if constexpr (dir == Direction::zp) {
+                    return shammath::hllc_flux_z(cL, cR, gamma);
+                }
+                if constexpr (dir == Direction::xm) {
+                    return shammath::hllc_flux_mx(cL, cR, gamma);
+                }
+                if constexpr (dir == Direction::ym) {
+                    return shammath::hllc_flux_my(cL, cR, gamma);
+                }
+                if constexpr (dir == Direction::zm) {
+                    return shammath::hllc_flux_mz(cL, cR, gamma);
+                }
+            }
         }
     };
 
@@ -153,8 +174,14 @@ namespace shammodels::basegodunov::modules {
         Tscal gamma) {
 
         using Flux            = FluxCompute<Tvec, mode, dir>;
-        std::string flux_name = (mode == RiemannSolverMode::HLL) ? "hll flux " : "rusanov flux ";
-        auto get_dir_name     = [&]() {
+        std::string flux_name = " ";
+        if (mode == RiemannSolverMode::HLL)
+            flux_name = "hll flux";
+        else if (mode == RiemannSolverMode::HLLC)
+            flux_name = "hllc flux ";
+        else if (mode == RiemannSolverMode::Rusanov)
+            flux_name = "rusanov flux ";
+        auto get_dir_name = [&]() {
             if constexpr (dir == Direction::xp) {
                 return "xp";
             } else if constexpr (dir == Direction::xm) {
