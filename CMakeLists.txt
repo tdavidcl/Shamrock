@@ -115,9 +115,10 @@ include(ShamConfigureCXX)
 
 include(ShamBuildAsan)
 include(ShamBuildUBsan)
+include(ShamBuildTsan)
 include(ShamBuildCoverage)
 
-set(ValidShamBuildType "Debug" "Release" "ASAN" "UBSAN" "COVERAGE")
+set(ValidShamBuildType "Debug" "Release" "ASAN" "UBSAN" "TSAN" "COVERAGE")
 if(NOT CMAKE_BUILD_TYPE)
     #set default build to release
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Cmake build type" FORCE)

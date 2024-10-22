@@ -98,6 +98,8 @@ def select_generator(args, buildtype):
         cmake_buildt = "ASAN"
     elif buildtype == "ubsan":
         cmake_buildt = "UBSAN"
+    elif buildtype == "tsan":
+        cmake_buildt = "TSAN"
     elif buildtype == "coverage":
         cmake_buildt = "COVERAGE"
     else:
