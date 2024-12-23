@@ -23,6 +23,66 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamsys/legacy/log.hpp"
 
+template<class... Targ>
+struct MultiRef {
+    using storage_t = std::tuple<sham::DeviceBuffer<Targ> &...>;
+
+    storage_t storage;
+
+    MultiRef(sham::DeviceBuffer<Targ> &...arg) : storage(arg...) {}
+};
+
+template<class... Targ1, class... Targ2>
+void kernel_call(
+    MultiRef<Targ1...> in,
+    MultiRef<Targ2...> in_out,
+    u32 n,
+    std::function<void(const Targ1 *..., Targ2 *..., u32 i)> func) {
+
+    sham::EventList depends_list;
+
+    // get pointers associated to in.storage... .get_read_access(depends_list);
+    auto acc_in = std::apply(
+        [&](auto &...__a) {
+            return std::tuple<const Targ1 *...>(__a.get_read_access(depends_list)...);
+        },
+        in.storage);
+
+    // get pointers associated to in_out.storage... .get_write_access(depends_list);
+    auto acc_in_out = std::apply(
+        [&](auto &...__a) {
+            return std::tuple<Targ2 *...>(__a.get_write_access(depends_list)...);
+        },
+        in_out.storage);
+
+    sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+
+    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+        cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+            std::apply(
+                [&](auto &...__acc_in) {
+                    std::apply(
+                        [&](auto &...__acc_in_out) {
+                            func(__acc_in..., __acc_in_out..., item.get_linear_id());
+                        },
+                        acc_in_out);
+                },
+                acc_in);
+        });
+    });
+
+    std::apply(
+        [&](auto &...__in) {
+            ((__in.complete_event_state(e)), ...);
+        },
+        in.storage);
+    std::apply(
+        [&](auto &...__in_out) {
+            ((__in_out.complete_event_state(e)), ...);
+        },
+        in_out.storage);
+}
+
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
 
@@ -101,32 +161,19 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
             sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
 
-            sham::EventList depends_list;
-
-            auto P  = buf_P.get_write_access(depends_list);
-            auto cs = buf_cs.get_write_access(depends_list);
-            auto h  = buf_h.get_read_access(depends_list);
-            auto U  = buf_uint.get_read_access(depends_list);
-
-            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                Tscal pmass = gpart_mass;
-                Tscal gamma = eos_config->gamma;
-
-                cgh.parallel_for(sycl::range<1>{mpdat.total_elements}, [=](sycl::item<1> item) {
+            kernel_call(
+                MultiRef{buf_h, buf_uint},
+                MultiRef{buf_P, buf_cs},
+                mpdat.total_elements,
+                [pmass = gpart_mass, gamma = eos_config->gamma](
+                    const Tscal *h, const Tscal *U, Tscal *P, Tscal *cs, u32 i) {
                     using namespace shamrock::sph;
-
-                    Tscal rho_a = rho_h(pmass, h[item], Kernel::hfactd);
-                    Tscal P_a   = EOS::pressure(gamma, rho_a, U[item]);
+                    Tscal rho_a = rho_h(pmass, h[i], Kernel::hfactd);
+                    Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
                     Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
-                    P[item]     = P_a;
-                    cs[item]    = cs_a;
+                    P[i]        = P_a;
+                    cs[i]       = cs_a;
                 });
-            });
-
-            buf_P.complete_event_state(e);
-            buf_cs.complete_event_state(e);
-            buf_h.complete_event_state(e);
-            buf_uint.complete_event_state(e);
         });
 
     } else if (
