@@ -310,7 +310,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
 
         using EOS = shamphys::EOS_Adiabatic<Tscal>;
 
-        constexpr bool is_monofluid = false;
+        constexpr bool is_monofluid = true;
 
         storage.merged_patchdata_ghost.get().for_each([&](u64 id, MergedPatchData &mpdat) {
             sham::DeviceBuffer<Tscal> &buf_P  = storage.pressure.get().get_buf_check(id);
@@ -339,24 +339,30 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 mpdat.total_elements, gpart_mass, eos_config->gamma, Kernel::hfactd);
             */
 
-            kernel_call2(
-                get_in_refs(),
-                MultiRef{buf_P, buf_cs},
-                mpdat.total_elements,
-                [pmass = gpart_mass, gamma = eos_config->gamma](
-                    u32 i,
-                    const Tscal *__restrict__ h,
-                    const Tscal *__restrict__ U,
-                    member_if<is_monofluid, const Tscal *__restrict__> epsilon,
-                    Tscal *__restrict__ P,
-                    Tscal *__restrict__ cs) {
+            auto kernel = [pmass = gpart_mass, gamma = eos_config->gamma](
+                              u32 i,
+                              const Tscal *__restrict__ h,
+                              const Tscal *__restrict__ U,
+                              member_if<is_monofluid, const Tscal *__restrict__> epsilon,
+                              Tscal *__restrict__ P,
+                              Tscal *__restrict__ cs) {
+                auto rho = [&]() {
                     using namespace shamrock::sph;
-                    Tscal rho_a = rho_h(pmass, h[i], Kernel::hfactd);
-                    Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
-                    Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
-                    P[i]        = P_a;
-                    cs[i]       = cs_a;
-                });
+                    if constexpr (is_monofluid) {
+                        return (1 - epsilon[i]) * rho_h(pmass, h[i], Kernel::hfactd);
+                    } else {
+                        return rho_h(pmass, h[i], Kernel::hfactd);
+                    }
+                };
+
+                Tscal rho_a = rho();
+                Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+                Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+                P[i]        = P_a;
+                cs[i]       = cs_a;
+            };
+
+            kernel_call2(get_in_refs(), MultiRef{buf_P, buf_cs}, mpdat.total_elements, kernel);
         });
 
     } else if (
