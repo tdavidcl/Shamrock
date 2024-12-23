@@ -23,14 +23,15 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamsys/legacy/log.hpp"
 
-struct empty {};
+struct nobuf_t {};
+auto nobuf = nobuf_t{};
 
 template<bool cd, class T>
-using member_if = std::conditional_t<cd, T, empty>;
+using member_if = std::conditional_t<cd, T, nobuf_t>;
 
-empty read_access(empty &buffer, sham::EventList &depends_list) { return {}; }
+nobuf_t read_access(nobuf_t &buffer, sham::EventList &depends_list) { return {}; }
 
-empty write_access(empty &buffer, sham::EventList &depends_list) { return {}; }
+nobuf_t write_access(nobuf_t &buffer, sham::EventList &depends_list) { return {}; }
 
 template<class T>
 const T *read_access(sham::DeviceBuffer<T> &buffer, sham::EventList &depends_list) {
@@ -42,7 +43,7 @@ T *write_access(sham::DeviceBuffer<T> &buffer, sham::EventList &depends_list) {
     return buffer.get_write_access(depends_list);
 }
 
-void complete_state(sycl::event e, empty) {}
+void complete_state(sycl::event e, nobuf_t) {}
 
 template<class T>
 void complete_state(sycl::event e, sham::DeviceBuffer<T> &buffer) {
@@ -58,6 +59,7 @@ struct MultiRef {
     MultiRef(Targ &...arg) : storage(arg...) {}
 
     auto get_read_access(sham::EventList &depends_list) {
+        StackEntry stack_loc{};
         return std::apply(
             [&](auto &...__a) {
                 return std::tuple(read_access(__a, depends_list)...);
@@ -65,6 +67,7 @@ struct MultiRef {
             storage);
     }
     auto get_write_access(sham::EventList &depends_list) {
+        StackEntry stack_loc{};
         return std::apply(
             [&](auto &...__a) {
                 return std::tuple(write_access(__a, depends_list)...);
@@ -73,6 +76,7 @@ struct MultiRef {
     }
 
     void complete_event_state(sycl::event e) {
+        StackEntry stack_loc{};
         std::apply(
             [&](auto &...__in) {
                 ((complete_state(e, __in)), ...);
@@ -212,7 +216,7 @@ void kernel_call_mapper(Refs... args, u32 n, Functor &&func) {
 }
 template<class RefIn, class RefOut, class... Targs, class Functor>
 void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args) {
-
+    StackEntry stack_loc{};
     sham::EventList depends_list;
 
     auto acc_in     = in.get_read_access(depends_list);
@@ -310,59 +314,51 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
 
         using EOS = shamphys::EOS_Adiabatic<Tscal>;
 
-        constexpr bool is_monofluid = true;
+        constexpr bool is_monofluid = false;
 
         storage.merged_patchdata_ghost.get().for_each([&](u64 id, MergedPatchData &mpdat) {
             sham::DeviceBuffer<Tscal> &buf_P  = storage.pressure.get().get_buf_check(id);
             sham::DeviceBuffer<Tscal> &buf_cs = storage.soundspeed.get().get_buf_check(id);
 
-            auto get_in_refs = [&]() {
-                sham::DeviceBuffer<Tscal> &buf_h
-                    = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
-                sham::DeviceBuffer<Tscal> &buf_uint
-                    = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
+            sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+            sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
+
+            auto get_eps = [&]() -> auto & {
                 if constexpr (is_monofluid) {
                     sham::DeviceBuffer<Tscal> &buf_epsilon
                         = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
-
-                    return MultiRef{buf_h, buf_uint, buf_epsilon};
-                } else if constexpr (!is_monofluid) {
-                    auto e = empty{};
-                    return MultiRef{buf_h, buf_uint, e};
+                    return buf_epsilon;
+                } else {
+                    return nobuf;
                 }
             };
 
-            /*
-            kernel_call_mapper<KernelAdiabaticEos<Tvec>>(
-                get_in_refs(),
+            kernel_call2(
+                MultiRef{buf_h, buf_uint, get_eps()},
                 MultiRef{buf_P, buf_cs},
-                mpdat.total_elements, gpart_mass, eos_config->gamma, Kernel::hfactd);
-            */
+                mpdat.total_elements,
+                [pmass = gpart_mass, gamma = eos_config->gamma](
+                    u32 i,
+                    const Tscal *__restrict__ h,
+                    const Tscal *__restrict__ U,
+                    member_if<is_monofluid, const Tscal *__restrict__> epsilon,
+                    Tscal *__restrict__ P,
+                    Tscal *__restrict__ cs) {
+                    auto rho = [&]() {
+                        using namespace shamrock::sph;
+                        if constexpr (is_monofluid) {
+                            return (1 - epsilon[i]) * rho_h(pmass, h[i], Kernel::hfactd);
+                        } else {
+                            return rho_h(pmass, h[i], Kernel::hfactd);
+                        }
+                    };
 
-            auto kernel = [pmass = gpart_mass, gamma = eos_config->gamma](
-                              u32 i,
-                              const Tscal *__restrict__ h,
-                              const Tscal *__restrict__ U,
-                              member_if<is_monofluid, const Tscal *__restrict__> epsilon,
-                              Tscal *__restrict__ P,
-                              Tscal *__restrict__ cs) {
-                auto rho = [&]() {
-                    using namespace shamrock::sph;
-                    if constexpr (is_monofluid) {
-                        return (1 - epsilon[i]) * rho_h(pmass, h[i], Kernel::hfactd);
-                    } else {
-                        return rho_h(pmass, h[i], Kernel::hfactd);
-                    }
-                };
-
-                Tscal rho_a = rho();
-                Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
-                Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
-                P[i]        = P_a;
-                cs[i]       = cs_a;
-            };
-
-            kernel_call2(get_in_refs(), MultiRef{buf_P, buf_cs}, mpdat.total_elements, kernel);
+                    Tscal rho_a = rho();
+                    Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+                    Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+                    P[i]        = P_a;
+                    cs[i]       = cs_a;
+                });
         });
 
     } else if (
