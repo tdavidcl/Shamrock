@@ -23,8 +23,10 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamsys/legacy/log.hpp"
 
+// special case for DeviceBuffer
+
 template<class T>
-const T *read_access(
+const T *read_access_optional(
     std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer,
     sham::EventList &depends_list) {
     if (!buffer.has_value()) {
@@ -35,7 +37,7 @@ const T *read_access(
 }
 
 template<class T>
-T *write_access(
+T *write_access_optional(
     std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer,
     sham::EventList &depends_list) {
     if (!buffer.has_value()) {
@@ -46,8 +48,7 @@ T *write_access(
 }
 
 template<class T>
-void complete_state(
-    sycl::event e, std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer) {
+void complete_state_optional(sycl::event e, std::optional<std::reference_wrapper<T>> buffer) {
     if (buffer.has_value()) {
         buffer.value().get().complete_event_state(e);
     }
@@ -64,18 +65,18 @@ auto empty_buf_ref() {
 }
 
 template<class... Targ>
-struct MultiRef {
+struct MultiRefOpt {
     using storage_t = std::tuple<std::optional<std::reference_wrapper<Targ>>...>;
 
     storage_t storage;
 
-    MultiRef(std::optional<std::reference_wrapper<Targ>>... arg) : storage(arg...) {}
+    MultiRefOpt(std::optional<std::reference_wrapper<Targ>>... arg) : storage(arg...) {}
 
     auto get_read_access(sham::EventList &depends_list) {
         StackEntry stack_loc{};
         return std::apply(
             [&](auto &...__a) {
-                return std::tuple(read_access(__a, depends_list)...);
+                return std::tuple(read_access_optional(__a, depends_list)...);
             },
             storage);
     }
@@ -83,7 +84,7 @@ struct MultiRef {
         StackEntry stack_loc{};
         return std::apply(
             [&](auto &...__a) {
-                return std::tuple(write_access(__a, depends_list)...);
+                return std::tuple(write_access_optional(__a, depends_list)...);
             },
             storage);
     }
@@ -92,7 +93,7 @@ struct MultiRef {
         StackEntry stack_loc{};
         std::apply(
             [&](auto &...__in) {
-                ((complete_state(e, __in)), ...);
+                ((complete_state_optional(e, __in)), ...);
             },
             storage);
     }
@@ -109,139 +110,45 @@ struct mapper<std::optional<std::reference_wrapper<T>>> {
 };
 
 template<class... Targ>
-MultiRef(Targ... arg) -> MultiRef<typename mapper<Targ>::type...>;
+MultiRefOpt(Targ... arg) -> MultiRefOpt<typename mapper<Targ>::type...>;
 
-template<class... Targ1, class... Targ2>
-void kernel_call(
-    MultiRef<Targ1...> in,
-    MultiRef<Targ2...> in_out,
-    u32 n,
-    std::function<void(const Targ1 *..., Targ2 *..., u32 i)> func) {
+template<class... Targ>
+struct MultiRef {
+    using storage_t = std::tuple<Targ &...>;
 
-    sham::EventList depends_list;
+    storage_t storage;
 
-    // get pointers associated to in.storage... .get_read_access(depends_list);
-    auto acc_in = std::apply(
-        [&](auto &...__a) {
-            return std::tuple<const Targ1 *...>(__a.get_read_access(depends_list)...);
-        },
-        in.storage);
+    MultiRef(Targ &...arg) : storage(arg...) {}
 
-    // get pointers associated to in_out.storage... .get_write_access(depends_list);
-    auto acc_in_out = std::apply(
-        [&](auto &...__a) {
-            return std::tuple<Targ2 *...>(__a.get_write_access(depends_list)...);
-        },
-        in_out.storage);
-
-    sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
-            std::apply(
-                [&](auto &...__acc_in) {
-                    std::apply(
-                        [&](auto &...__acc_in_out) {
-                            func(__acc_in..., __acc_in_out..., item.get_linear_id());
-                        },
-                        acc_in_out);
-                },
-                acc_in);
-        });
-    });
-
-    std::apply(
-        [&](auto &...__in) {
-            ((__in.complete_event_state(e)), ...);
-        },
-        in.storage);
-    std::apply(
-        [&](auto &...__in_out) {
-            ((__in_out.complete_event_state(e)), ...);
-        },
-        in_out.storage);
-}
-
-template<class Kernel, class... Targ1, class... Targ2, class... Targs>
-void kernel_call_class(MultiRef<Targ1...> in, MultiRef<Targ2...> in_out, u32 n, Targs... args) {
-
-    sham::EventList depends_list;
-
-    // get pointers associated to in.storage... .get_read_access(depends_list);
-    auto acc_in = std::apply(
-        [&](auto &...__a) {
-            return std::tuple<const Targ1 *...>(__a.get_read_access(depends_list)...);
-        },
-        in.storage);
-
-    // get pointers associated to in_out.storage... .get_write_access(depends_list);
-    auto acc_in_out = std::apply(
-        [&](auto &...__a) {
-            return std::tuple<Targ2 *...>(__a.get_write_access(depends_list)...);
-        },
-        in_out.storage);
-
-    sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        auto kern = std::apply(
-            [&](auto &...__acc_in) {
-                return std::apply(
-                    [&](auto &...__acc_in_out) {
-                        return Kernel{__acc_in..., __acc_in_out..., args...};
-                    },
-                    acc_in_out);
+    auto get_read_access(sham::EventList &depends_list) {
+        StackEntry stack_loc{};
+        return std::apply(
+            [&](auto &...__a) {
+                return std::tuple(__a.get_read_access(depends_list)...);
             },
-            acc_in);
+            storage);
+    }
+    auto get_write_access(sham::EventList &depends_list) {
+        StackEntry stack_loc{};
+        return std::apply(
+            [&](auto &...__a) {
+                return std::tuple(__a.get_write_access(depends_list)...);
+            },
+            storage);
+    }
 
-        cgh.parallel_for<Kernel>(sycl::range<1>{n}, kern);
-    });
+    void complete_event_state(sycl::event e) {
+        StackEntry stack_loc{};
+        std::apply(
+            [&](auto &...__in) {
+                ((__in.complete_event_state(e)), ...);
+            },
+            storage);
+    }
+};
 
-    std::apply(
-        [&](auto &...__in) {
-            ((__in.complete_event_state(e)), ...);
-        },
-        in.storage);
-    std::apply(
-        [&](auto &...__in_out) {
-            ((__in_out.complete_event_state(e)), ...);
-        },
-        in_out.storage);
-}
-
-template<class... Mappers, class... Refs, class Functor>
-void kernel_call_mapper(Refs... args, u32 n, Functor &&func) {
-
-    std::tuple<Refs...> buf_refs = std::make_tuple(args...);
-
-    sham::EventList depends_list;
-
-    auto acc = std::apply(
-        [&](auto &...__a) {
-            return std::tuple(Mappers{__a.get_access(depends_list)}...);
-        },
-        buf_refs);
-
-    sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
-            std::apply(
-                [&](auto &...__acc) {
-                    func(item.get_linear_id(), __acc...);
-                },
-                acc);
-        });
-    });
-
-    std::apply(
-        [&](auto &...__in) {
-            ((__in.complete_event_state(e)), ...);
-        },
-        buf_refs);
-}
 template<class RefIn, class RefOut, class... Targs, class Functor>
-void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args) {
+void kernel_call(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args) {
     StackEntry stack_loc{};
     sham::EventList depends_list;
 
@@ -251,29 +158,16 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
     sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
     auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        auto ker_in     = acc_in;
-        auto ker_in_out = acc_in_out;
-
-        std::tuple args_f = std::make_tuple(args...);
-
         cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
-            /*
             std::apply(
-                [&,ker_in_out](auto &...__acc_in) {
+                [&](auto &...__acc_in) {
                     std::apply(
                         [&](auto &...__acc_in_out) {
-                            std::apply(
-                                [&](auto &...__args) {
-                                                            func(item.get_linear_id(), __acc_in...,
-            __acc_in_out..., __args...);
-
-                            },
-                                args_f);
+                            func(item.get_linear_id(), __acc_in..., __acc_in_out..., args...);
                         },
-                        ker_in_out);
+                        acc_in_out);
                 },
-                ker_in);
-                */
+                acc_in);
         });
     });
 
@@ -372,16 +266,17 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 }
             };
 
-            kernel_call2(
-                MultiRef{buf_h, buf_uint, get_eps()},
+            kernel_call(
+                MultiRefOpt{buf_h, buf_uint, get_eps()},
                 MultiRef{buf_P, buf_cs},
                 mpdat.total_elements,
-                [pmass = gpart_mass, gamma = eos_config->gamma](u32 i,
-                   const Tscal *h,
-                   const Tscal *U,
-                   const Tscal *epsilon /* set to nullptr if not is_monofluid */,
-                   Tscal *P,
-                   Tscal *cs) {
+                [pmass = gpart_mass, gamma = eos_config->gamma](
+                    u32 i,
+                    const Tscal *h,
+                    const Tscal *U,
+                    const Tscal *epsilon /* set to nullptr if not is_monofluid */,
+                    Tscal *P,
+                    Tscal *cs) {
                     auto rho = [&]() {
                         using namespace shamrock::sph;
                         if constexpr (is_monofluid) {
@@ -392,6 +287,49 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                     };
 
                     Tscal rho_a = rho();
+                    Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+                    Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+                    P[i]        = P_a;
+                    cs[i]       = cs_a;
+                });
+
+            struct RhoGetter {
+                sham::DeviceBuffer<Tscal> &buf_h;
+                Tscal pmass;
+                Tscal hfact;
+
+                struct accessed {
+                    const Tscal *h;
+                    Tscal pmass;
+                    Tscal hfact;
+
+                    Tscal operator()(u32 i) const {
+                        using namespace shamrock::sph;
+                        return rho_h(pmass, h[i], hfact);
+                    }
+                };
+
+                accessed get_read_access(sham::EventList &depends_list) {
+                    auto h = buf_h.get_read_access(depends_list);
+                    return accessed{h, pmass, hfact};
+                }
+
+                void complete_event_state(sycl::event e) { buf_h.complete_event_state(e); }
+            };
+
+            RhoGetter rho_getter{buf_h, gpart_mass, Kernel::hfactd};
+
+            kernel_call(
+                MultiRef{rho_getter, buf_uint},
+                MultiRef{buf_P, buf_cs},
+                mpdat.total_elements,
+                [gamma = eos_config->gamma](
+                    u32 i,
+                    const typename RhoGetter::accessed rho,
+                    const Tscal *U,
+                    Tscal *P,
+                    Tscal *cs) {
+                    Tscal rho_a = rho(i);
                     Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
                     Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
                     P[i]        = P_a;
