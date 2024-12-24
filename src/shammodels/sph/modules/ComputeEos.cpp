@@ -186,8 +186,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                     P[i]        = P_a;
                     cs[i]       = cs_a;
                 });
-
-
+            /*
             sham::kernel_call(
                 q,
                 sham::MultiRef{},
@@ -200,6 +199,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                     P[i]        = P_a;
                     cs[i]       = cs_a;
                 });
+            */
         });
 
     } else if (
