@@ -24,39 +24,44 @@
 #include "shamsys/legacy/log.hpp"
 
 template<class T>
-const T *read_access(std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer, sham::EventList &depends_list) {
+const T *read_access(
+    std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer,
+    sham::EventList &depends_list) {
     if (!buffer.has_value()) {
         return nullptr;
-    }else {
+    } else {
         return buffer.value().get().get_read_access(depends_list);
     }
-    
 }
 
 template<class T>
-T *write_access(std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer, sham::EventList &depends_list) {
+T *write_access(
+    std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer,
+    sham::EventList &depends_list) {
     if (!buffer.has_value()) {
         return nullptr;
-    }else {
+    } else {
         return buffer.value().get().get_write_access(depends_list);
-}
-}
-
-template<class T>
-void complete_state(sycl::event e, std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer) {
-     if (buffer.has_value()) {
-                 buffer.value().get().complete_event_state(e);
     }
 }
 
-template <class T>
-std::optional<std::reference_wrapper<T>> to_opt_ref(T& t) { return t; }
-
-template <class T>
-auto empty_buf_ref(){
-    return std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>{};
+template<class T>
+void complete_state(
+    sycl::event e, std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>> buffer) {
+    if (buffer.has_value()) {
+        buffer.value().get().complete_event_state(e);
+    }
 }
 
+template<class T>
+std::optional<std::reference_wrapper<T>> to_opt_ref(T &t) {
+    return t;
+}
+
+template<class T>
+auto empty_buf_ref() {
+    return std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>{};
+}
 
 template<class... Targ>
 struct MultiRef {
@@ -64,7 +69,7 @@ struct MultiRef {
 
     storage_t storage;
 
-    MultiRef(std::optional<std::reference_wrapper<Targ >>...arg) : storage(arg...) {}
+    MultiRef(std::optional<std::reference_wrapper<Targ>>... arg) : storage(arg...) {}
 
     auto get_read_access(sham::EventList &depends_list) {
         StackEntry stack_loc{};
@@ -94,8 +99,8 @@ struct MultiRef {
 };
 
 template<class T>
-struct mapper{
-    using type = T;   
+struct mapper {
+    using type = T;
 };
 
 template<class T>
@@ -103,12 +108,8 @@ struct mapper<std::optional<std::reference_wrapper<T>>> {
     using type = T;
 };
 
-template <class... Targ>
+template<class... Targ>
 MultiRef(Targ... arg) -> MultiRef<typename mapper<Targ>::type...>;
-
-
-
-
 
 template<class... Targ1, class... Targ2>
 void kernel_call(
@@ -250,7 +251,7 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
     sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
     auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        auto ker_in = acc_in;
+        auto ker_in     = acc_in;
         auto ker_in_out = acc_in_out;
 
         std::tuple args_f = std::make_tuple(args...);
@@ -263,7 +264,8 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
                         [&](auto &...__acc_in_out) {
                             std::apply(
                                 [&](auto &...__args) {
-                                                            func(item.get_linear_id(), __acc_in..., __acc_in_out..., __args...);
+                                                            func(item.get_linear_id(), __acc_in...,
+            __acc_in_out..., __args...);
 
                             },
                                 args_f);
@@ -360,13 +362,11 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
             sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
 
-
-
-            auto get_eps = [&]()  {
+            auto get_eps = [&]() {
                 if constexpr (is_monofluid) {
                     sham::DeviceBuffer<Tscal> &buf_epsilon
                         = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
-                    return to_opt_ref(buf_epsilon);
+                    return buf_epsilon;
                 } else {
                     return empty_buf_ref<Tscal>();
                 }
@@ -376,13 +376,14 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 MultiRef{buf_h, buf_uint, get_eps()},
                 MultiRef{buf_P, buf_cs},
                 mpdat.total_elements,
-                [](
-                    u32 i,
-                    const Tscal * h,
-                    const Tscal * U,
-                     const Tscal * epsilon /* set to nullptr if not is_monofluid */,
-                    Tscal * P,
-                    Tscal * cs,Tscal pmass , Tscal gamma ) {
+                [](u32 i,
+                   const Tscal *h,
+                   const Tscal *U,
+                   const Tscal *epsilon /* set to nullptr if not is_monofluid */,
+                   Tscal *P,
+                   Tscal *cs,
+                   Tscal pmass,
+                   Tscal gamma) {
                     auto rho = [&]() {
                         using namespace shamrock::sph;
                         if constexpr (is_monofluid) {
@@ -397,7 +398,9 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                     Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
                     P[i]        = P_a;
                     cs[i]       = cs_a;
-                }, gpart_mass, eos_config->gamma);
+                },
+                gpart_mass,
+                eos_config->gamma);
         });
 
     } else if (
