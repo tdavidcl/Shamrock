@@ -224,7 +224,7 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
 
     sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+    auto e = q.submit(depends_list, [=](sycl::handler &cgh) {
         cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
             std::apply(
                 [&](auto &...__acc_in) {
