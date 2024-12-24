@@ -231,6 +231,7 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
         std::tuple args_f = std::make_tuple(args...);
 
         cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+            /*
             std::apply(
                 [&,ker_in_out](auto &...__acc_in) {
                     std::apply(
@@ -245,6 +246,7 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
                         ker_in_out);
                 },
                 ker_in);
+                */
         });
     });
 
