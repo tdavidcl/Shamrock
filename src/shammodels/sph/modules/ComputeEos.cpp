@@ -376,14 +376,12 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 MultiRef{buf_h, buf_uint, get_eps()},
                 MultiRef{buf_P, buf_cs},
                 mpdat.total_elements,
-                [](u32 i,
+                [pmass = gpart_mass, gamma = eos_config->gamma](u32 i,
                    const Tscal *h,
                    const Tscal *U,
                    const Tscal *epsilon /* set to nullptr if not is_monofluid */,
                    Tscal *P,
-                   Tscal *cs,
-                   Tscal pmass,
-                   Tscal gamma) {
+                   Tscal *cs) {
                     auto rho = [&]() {
                         using namespace shamrock::sph;
                         if constexpr (is_monofluid) {
@@ -398,9 +396,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                     Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
                     P[i]        = P_a;
                     cs[i]       = cs_a;
-                },
-                gpart_mass,
-                eos_config->gamma);
+                });
         });
 
     } else if (
