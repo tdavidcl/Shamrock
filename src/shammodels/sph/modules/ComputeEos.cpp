@@ -23,40 +23,48 @@
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamsys/legacy/log.hpp"
 
-struct nobuf_t {};
-auto nobuf = nobuf_t{};
-
-template<bool cd, class T>
-using member_if = std::conditional_t<cd, T, nobuf_t>;
-
-nobuf_t read_access(nobuf_t &buffer, sham::EventList &depends_list) { return {}; }
-
-nobuf_t write_access(nobuf_t &buffer, sham::EventList &depends_list) { return {}; }
-
 template<class T>
-const T *read_access(sham::DeviceBuffer<T> &buffer, sham::EventList &depends_list) {
-    return buffer.get_read_access(depends_list);
+const T *read_access(std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer, sham::EventList &depends_list) {
+    if (!buffer.has_value()) {
+        return nullptr;
+    }else {
+        return buffer.value().get().get_read_access(depends_list);
+    }
+    
 }
 
 template<class T>
-T *write_access(sham::DeviceBuffer<T> &buffer, sham::EventList &depends_list) {
-    return buffer.get_write_access(depends_list);
+T *write_access(std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer, sham::EventList &depends_list) {
+    if (!buffer.has_value()) {
+        return nullptr;
+    }else {
+        return buffer.value().get().get_write_access(depends_list);
 }
-
-void complete_state(sycl::event e, nobuf_t) {}
+}
 
 template<class T>
-void complete_state(sycl::event e, sham::DeviceBuffer<T> &buffer) {
-    buffer.complete_event_state(e);
+void complete_state(sycl::event e, std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>buffer) {
+     if (buffer.has_value()) {
+                 buffer.value().get().complete_event_state(e);
+    }
 }
+
+template <class T>
+std::optional<std::reference_wrapper<T>> to_opt_ref(T& t) { return t; }
+
+template <class T>
+auto empty_buf_ref(){
+    return std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>{};
+}
+
 
 template<class... Targ>
 struct MultiRef {
-    using storage_t = std::tuple<Targ &...>;
+    using storage_t = std::tuple<std::optional<std::reference_wrapper<Targ>>...>;
 
     storage_t storage;
 
-    MultiRef(Targ &...arg) : storage(arg...) {}
+    MultiRef(std::optional<std::reference_wrapper<Targ >>...arg) : storage(arg...) {}
 
     auto get_read_access(sham::EventList &depends_list) {
         StackEntry stack_loc{};
@@ -84,6 +92,23 @@ struct MultiRef {
             storage);
     }
 };
+
+template<class T>
+struct mapper{
+    using type = T;   
+};
+
+template<class T>
+struct mapper<std::optional<std::reference_wrapper<T>>> {
+    using type = T;
+};
+
+template <class... Targ>
+MultiRef(Targ... arg) -> MultiRef<typename mapper<Targ>::type...>;
+
+
+
+
 
 template<class... Targ1, class... Targ2>
 void kernel_call(
@@ -335,13 +360,15 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
             sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
 
-            auto get_eps = [&]() -> auto & {
+
+
+            auto get_eps = [&]()  {
                 if constexpr (is_monofluid) {
                     sham::DeviceBuffer<Tscal> &buf_epsilon
                         = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
-                    return buf_epsilon;
+                    return to_opt_ref(buf_epsilon);
                 } else {
-                    return nobuf;
+                    return empty_buf_ref<Tscal>();
                 }
             };
 
@@ -351,11 +378,11 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 mpdat.total_elements,
                 [](
                     u32 i,
-                    const Tscal *__restrict__ h,
-                    const Tscal *__restrict__ U,
-                    member_if<is_monofluid, const Tscal *__restrict__> epsilon,
-                    Tscal *__restrict__ P,
-                    Tscal *__restrict__ cs,Tscal pmass , Tscal gamma ) {
+                    const Tscal * h,
+                    const Tscal * U,
+                     const Tscal * epsilon /* set to nullptr if not is_monofluid */,
+                    Tscal * P,
+                    Tscal * cs,Tscal pmass , Tscal gamma ) {
                     auto rho = [&]() {
                         using namespace shamrock::sph;
                         if constexpr (is_monofluid) {
