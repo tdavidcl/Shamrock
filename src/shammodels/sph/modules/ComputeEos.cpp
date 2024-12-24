@@ -229,7 +229,7 @@ void kernel_call2(RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args)
         auto ker_in_out = acc_in_out;
         cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
             std::apply(
-                [&](auto &...__acc_in) {
+                [&,ker_in_out](auto &...__acc_in) {
                     std::apply(
                         [&](auto &...__acc_in_out) {
                             func(item.get_linear_id(), __acc_in..., __acc_in_out..., args...);
