@@ -260,7 +260,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 if constexpr (is_monofluid) {
                     sham::DeviceBuffer<Tscal> &buf_epsilon
                         = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
-                    return buf_epsilon;
+                    return to_opt_ref(buf_epsilon);
                 } else {
                     return empty_buf_ref<Tscal>();
                 }
