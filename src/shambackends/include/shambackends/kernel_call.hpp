@@ -101,6 +101,14 @@ namespace sham {
         return std::optional<std::reference_wrapper<sham::DeviceBuffer<T>>>{};
     }
 
+    /**
+     * @brief A variant of MultiRef for optional buffers.
+     *
+     * This class is equivalent to MultiRef but it allows optional buffers. Only DeviceBuffer are
+     * supported as optional buffers.
+     *
+     * @see MultiRef
+     */
     template<class... Targ>
     struct MultiRefOpt {
         /// A tuple of optional references to the buffers.
@@ -184,6 +192,16 @@ namespace sham {
     template<class... Targ>
     MultiRefOpt(Targ... arg) -> MultiRefOpt<typename details::mapper<Targ>::type...>;
 
+    /**
+     * @brief A class that references multiple buffers or similar objects.
+     *
+     * This class serves as a means to pass multiple buffers or objects with similar accessor
+     * patterns to a kernel. It provides methods to obtain read and write access to these
+     * entities and to complete their event state.
+     *
+     * A version of this class is also available for optional references to the buffers or similar
+     * objects, @see MultiRefOpt.
+     */
     template<class... Targ>
     struct MultiRef {
         /// A tuple of references to the buffers.
