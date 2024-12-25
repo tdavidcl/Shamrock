@@ -250,7 +250,159 @@ namespace sham {
     /**
      * @brief Submit a kernel to a SYCL queue.
      *
-     * @todo Add code examples from the PR
+     * # Automatic kernel dependency handling
+     *
+     * This pr introduce a kernel call function to automatically forward buffer pointers and handle
+     * events, the ideal usage would be :
+     * @code
+     * kernel_call(input buf ..., out buf ..., element count, kernel);
+     * @endcode
+     *
+     * However, c++ does not allow multiple parameter pack so a `MultiRef` wrapper is introduced,
+     * the call then looks like:
+     * @code
+     * kernel_call(MultiRef{input buf ...}, MultiRef{out buf ...}, element count, kernel);
+     * @endcode
+     *
+     * This allows the flexibility of forwarding more complex structures, as well as optional
+     * buffers.
+     *
+     * ## Standard usage
+     * In a normal usage it is used like so
+     * @code {.cpp}
+     * sham::DeviceBuffer<Tscal> &buf_P  = storage.pressure.get().get_buf_check(id);
+     * sham::DeviceBuffer<Tscal> &buf_cs = storage.soundspeed.get().get_buf_check(id);
+     *
+     * sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+     * sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
+     *
+     * sham::kernel_call(
+     *     sham::MultiRef{buf_h, buf_uint},
+     *     sham::MultiRef{buf_P, buf_cs},
+     *     mpdat.total_elements,
+     *     [pmass = gpart_mass, gamma = eos_config->gamma](
+     *         u32 i,
+     *         const Tscal *h,
+     *         const Tscal *U,
+     *         Tscal *P,
+     *         Tscal *cs) {
+     *         Tscal rho_a = rho(i);
+     *         Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+     *         Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+     *         P[i]        = P_a;
+     *         cs[i]       = cs_a;
+     *     });
+     * @endcode
+     *
+     * Under the hood read and write access as well as complete_event_state will be called
+     * implicitly thanks to the template resolution.
+     *
+     * ## Complex accessors
+     * Since `sham::kernel_call` simply call get_read_access, get_write_access,
+     * complete_event_state. We can pass a complex struct instead of a `DeviceBuffer` as long as it
+     * defines similar accessor functions.
+     *
+     * Example :
+     * @code {.cpp}
+     * sham::DeviceBuffer<Tscal> &buf_P  = storage.pressure.get().get_buf_check(id);
+     * sham::DeviceBuffer<Tscal> &buf_cs = storage.soundspeed.get().get_buf_check(id);
+     *
+     * sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+     * sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
+     *
+     * struct RhoGetter {
+     *     sham::DeviceBuffer<Tscal> &buf_h;
+     *     Tscal pmass;
+     *     Tscal hfact;
+     *
+     *     struct accessed {
+     *         const Tscal *h;
+     *         Tscal pmass;
+     *         Tscal hfact;
+     *
+     *         Tscal operator()(u32 i) const {
+     *             using namespace shamrock::sph;
+     *             return rho_h(pmass, h[i], hfact);
+     *         }
+     *     };
+     *
+     *     accessed get_read_access(sham::EventList &depends_list) {
+     *         auto h = buf_h.get_read_access(depends_list);
+     *         return accessed{h, pmass, hfact};
+     *     }
+     *
+     *     void complete_event_state(sycl::event e) { buf_h.complete_event_state(e);}
+     * };
+     *
+     * RhoGetter rho_getter{buf_h, gpart_mass, Kernel::hfactd};
+     *
+     * sham::kernel_call(
+     *     sham::MultiRef{rho_getter, buf_uint},
+     *     sham::MultiRef{buf_P, buf_cs},
+     *     mpdat.total_elements,
+     *     [gamma = eos_config->gamma](
+     *         u32 i,
+     *         const typename RhoGetter::accessed rho,
+     *         const Tscal *U,
+     *         Tscal *P,
+     *         Tscal *cs) {
+     *         Tscal rho_a = rho(i);
+     *         Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+     *         Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+     *         P[i]        = P_a;
+     *         cs[i]       = cs_a;
+     *     });
+     * @endcode
+     *
+     * ## Optional arguments
+     * Another type of `MultiRef` called `MultiRefOpt` can be introduced to pass optional buffers to
+     * have buffer specialization thanks to dead argument elimination.
+     *
+     * It can be used as follows:
+     * @code {.cpp}
+     * sham::DeviceBuffer<Tscal> &buf_P  = storage.pressure.get().get_buf_check(id);
+     * sham::DeviceBuffer<Tscal> &buf_cs = storage.soundspeed.get().get_buf_check(id);
+     *
+     * sham::DeviceBuffer<Tscal> &buf_h = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+     * sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
+     *
+     * auto get_eps = [&]() {
+     *     if constexpr (is_monofluid) {
+     *         sham::DeviceBuffer<Tscal> &buf_epsilon
+     *             = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+     *         return to_opt_ref(buf_epsilon);
+     *     } else {
+     *         return empty_buf_ref<Tscal>();
+     *     }
+     * };
+     *
+     * sham::kernel_call(
+     *     sham::MultiRefOpt{buf_h, buf_uint, get_eps()},
+     *     sham::MultiRef{buf_P, buf_cs},
+     *     mpdat.total_elements,
+     *     [pmass = gpart_mass, gamma = eos_config->gamma](
+     *         u32 i,
+     *         const Tscal *h,
+     *         const Tscal *U,
+     *         const Tscal *epsilon, // set to nullptr if not is_monofluid
+     *         Tscal *P,
+     *         Tscal *cs) {
+     *         auto rho = [&]() {
+     *             using namespace shamrock::sph;
+     *             if constexpr (is_monofluid) {
+     *                 return (1 - epsilon[i]) * rho_h(pmass, h[i], Kernel::hfactd);
+     *             } else {
+     *                 return rho_h(pmass, h[i], Kernel::hfactd);
+     *             }
+     *         };
+     *
+     *         Tscal rho_a = rho();
+     *         Tscal P_a   = EOS::pressure(gamma, rho_a, U[i]);
+     *         Tscal cs_a  = EOS::cs_from_p(gamma, rho_a, P_a);
+     *         P[i]        = P_a;
+     *         cs[i]       = cs_a;
+     *     });
+     * @endcode
      *
      * @param q The SYCL queue to submit the kernel to.
      * @param in The input buffer or MultiRef or MultiRefOpt.
