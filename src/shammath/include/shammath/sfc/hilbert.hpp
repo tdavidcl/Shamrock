@@ -86,6 +86,10 @@ namespace shamrock::sfc {
             return details::compute_hilbert_index_3d<21>(x, y, z);
         }
 
+        inline static u64 icoord_to_hilbert(u64_3 coord) {
+            return icoord_to_hilbert(coord.x(), coord.y(), coord.z());
+        }
+
         template<class flt>
         inline static u64 coord_to_hilbert(flt x, flt y, flt z) {
 

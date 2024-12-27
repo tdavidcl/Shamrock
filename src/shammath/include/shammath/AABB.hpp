@@ -80,6 +80,12 @@ namespace shammath {
             return AABB{lower - value, upper + value};
         }
 
+        inline AABB include(AABB other) {
+            return AABB{sham::min(lower, other.lower), sham::max(upper, other.upper)};
+        }
+
+        inline static AABB empty() { return AABB{shambase::get_min<T>(), shambase::get_max<T>()}; }
+
         template<class Tb>
         inline AABB<Tb> convert() {
             using Tb_prop = shambase::VectorProperties<Tb>;

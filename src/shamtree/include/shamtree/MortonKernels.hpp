@@ -72,6 +72,7 @@ namespace shamrock::sfc {
             return MortonConverter<morton_t, pos_t, dim>::get_transform(
                 bounding_box_min, bounding_box_max);
         }
+
         inline static ipos_t to_morton_grid(pos_t pos, CoordTransform transform) {
             return MortonConverter<morton_t, pos_t, dim>::to_morton_grid(pos, transform);
         }
