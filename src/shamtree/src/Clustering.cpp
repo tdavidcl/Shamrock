@@ -14,6 +14,7 @@
  */
 
 #include "shamtree/Clustering.hpp"
+#include "shamalgs/details/algorithm/algorithm.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shammath/sfc/hilbert.hpp"
 #include "shammath/sfc/morton.hpp"
@@ -31,47 +32,59 @@ namespace shamtree {
         auto hilbert_coord_transf = shamrock::sfc::MortonConverter<u64, Tvec, 3>::get_transform(
             pos_bounding_box.lower, pos_bounding_box.upper);
 
-        sham::DeviceBuffer<u64> hilbert_codes{pos.get_size(), sched};
+        u32 hilbert_count       = pos.get_size();
+        u32 hilbert_count_round = sham::roundup_pow2_clz(hilbert_count);
+
+        using Thilbert = u64;
+
+        sham::DeviceBuffer<Thilbert> hilbert_codes{hilbert_count_round, sched};
 
         sham::kernel_call(
             sched->get_queue(),
             sham::MultiRef{pos},
             sham::MultiRef{hilbert_codes},
-            pos.get_size(),
-            [hilbert_coord_transf](u32 i, Tvec &pos, u64 &hilbert_code) {
-                auto pos_igrid = hilbert_coord_transf.reverse_transform(pos);
-                hilbert_code   = shamrock::sfc::HilbertCurve<u64, 3>::icoord_to_hilbert(
-                    pos_igrid.x(), pos_igrid.y(), pos_igrid.z());
+            hilbert_count_round,
+            [hilbert_coord_transf, hilbert_count](u32 i, const Tvec *pos, Thilbert *hilbert_code) {
+                if (i < hilbert_count) {
+                    auto pos_igrid  = hilbert_coord_transf.reverse_transform(pos[i]);
+                    hilbert_code[i] = shamrock::sfc::HilbertCurve<Thilbert, 3>::icoord_to_hilbert(
+                        pos_igrid.x(), pos_igrid.y(), pos_igrid.z());
+                } else {
+                    hilbert_code[i] = shambase::primitive_type_info<Thilbert>::max;
+                }
             });
 
         // sort hilbert codes
-        sham::DeviceBuffer<u32> object_index_map(pos.get_size(), sched);
-
-        sham::kernel_call(
-            sched->get_queue(),
-            sham::MultiRef{},
-            sham::MultiRef{object_index_map},
-            pos.get_size(),
-            [](u32 i, u32 &idx) {
-                idx = i;
-            });
-
-        // sycl_sort_morton_key_pair(
-        //     queue, morton_len, out_buf_particle_index_map, out_buf_morton);
-        shambase::throw_unimplemented();
+        sham::DeviceBuffer<u32> object_index_map(hilbert_count_round, sched);
+        shamalgs::algorithm::gen_buffer_index_usm(sched, hilbert_count_round);
+        shamalgs::algorithm::sort_by_key(
+            sched, hilbert_codes, object_index_map, hilbert_count_round);
 
         // compute cluster count
-        u32 cluster_count = pos.get_size() / cluster_obj_count;
-        if (pos.get_size() % cluster_obj_count != 0) {
-            cluster_count++;
-        }
+        auto round_up = [](u32 x, u32 mult) {
+            if (x % mult != 0) {
+                return x + mult - (x % mult);
+            } else {
+                return x;
+            }
+        };
 
-        u32 cluster_ids_count = cluster_count * cluster_obj_count;
+        u32 cluster_ids_count = round_up(hilbert_count, cluster_obj_count);
+
+        u32 cluster_count = cluster_ids_count / cluster_obj_count;
 
         // compute cluster ids
         sham::DeviceBuffer<u32> cluster_ids{cluster_ids_count, sched};
 
-        shambase::throw_unimplemented();
+        sham::kernel_call(
+            sched->get_queue(),
+            sham::MultiRef{object_index_map},
+            sham::MultiRef{cluster_ids},
+            cluster_ids_count,
+            [N       = hilbert_count,
+             nthread = cluster_ids_count](u32 i, const u32 *idxs, u32 *cluster_ids) {
+                cluster_ids[i] = (nthread < N) ? idxs[i] : ClusterList<cluster_obj_count>::err_id;
+            });
 
         // generate return object
         return ClusterList<cluster_obj_count>{cluster_count, std::move(cluster_ids)};
