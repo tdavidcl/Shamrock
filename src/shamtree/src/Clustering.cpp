@@ -16,6 +16,7 @@
 #include "shamtree/Clustering.hpp"
 #include "shamalgs/details/algorithm/algorithm.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shamcomm/mpi.hpp"
 #include "shammath/sfc/hilbert.hpp"
 #include "shammath/sfc/morton.hpp"
 
@@ -55,8 +56,8 @@ namespace shamtree {
             });
 
         // sort hilbert codes
-        sham::DeviceBuffer<u32> object_index_map(hilbert_count_round, sched);
-        shamalgs::algorithm::gen_buffer_index_usm(sched, hilbert_count_round);
+        sham::DeviceBuffer<u32> object_index_map
+            = shamalgs::algorithm::gen_buffer_index_usm(sched, hilbert_count_round);
         shamalgs::algorithm::sort_by_key(
             sched, hilbert_codes, object_index_map, hilbert_count_round);
 
@@ -81,9 +82,8 @@ namespace shamtree {
             sham::MultiRef{object_index_map},
             sham::MultiRef{cluster_ids},
             cluster_ids_count,
-            [N       = hilbert_count,
-             nthread = cluster_ids_count](u32 i, const u32 *idxs, u32 *cluster_ids) {
-                cluster_ids[i] = (nthread < N) ? idxs[i] : ClusterList<cluster_obj_count>::err_id;
+            [N = hilbert_count](u32 i, const u32 *idxs, u32 *cluster_ids) {
+                cluster_ids[i] = (i < N) ? idxs[i] : ClusterList<cluster_obj_count>::err_id;
             });
 
         // generate return object

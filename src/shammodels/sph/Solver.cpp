@@ -24,6 +24,7 @@
 #include "shamalgs/reduction.hpp"
 #include "shambackends/MemPerfInfos.hpp"
 #include "shambackends/details/memoryHandle.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shamcomm/collectives.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammath/sphkernels.hpp"
@@ -56,6 +57,7 @@
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include "shamtree/Clustering.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
 #include <memory>
 #include <stdexcept>
@@ -1786,6 +1788,82 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         }
 
     } while (need_rerun_corrector);
+
+    storage.merged_patchdata_ghost.get().for_each([&](u64 id, MergedPatchData &mpdat) {
+        auto &mfield = storage.merged_xyzh.get().get(id);
+
+        sham::DeviceBuffer<Tvec> &buf_xyz = mfield.field_pos.get_buf();
+        sham::DeviceBuffer<Tscal> &buf_h  = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+
+        auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+        shamtree::ClusterList<4> cluster_list = shamtree::cluster_objects<Tvec, 4>(
+            dev_sched,
+            buf_xyz,
+            shammath::AABB<Tvec>(mfield.bounds.lower, mfield.bounds.upper),
+            shamtree::ClusteringStrategy::Hilbert);
+
+        sham::DeviceBuffer<Tscal> cluster_vol_ratio(cluster_list.cluster_count, dev_sched);
+
+        sham::kernel_call(
+            dev_sched->get_queue(),
+            sham::MultiRef{buf_xyz, buf_h, cluster_list},
+            sham::MultiRef{cluster_vol_ratio},
+            cluster_list.cluster_count,
+            [](u32 cluster_id, const Tvec *xyz, const Tscal *h, auto clusters, Tscal *ratios) {
+                auto cluster_ids = clusters.get_cluster_ids(cluster_id);
+
+                Tscal sum_vol_indiv = Tscal(0);
+
+                shammath::AABB<Tvec> aabb_cluster
+                    = cluster_ids.template get_aabb<Tvec>([&](u32 id) -> shammath::AABB<Tvec> {
+                          auto h_a    = h[id];
+                          auto r_a    = xyz[id];
+                          auto aabb_a = shammath::AABB<Tvec>(r_a, r_a).expand_all(2 * h_a);
+                          sum_vol_indiv += aabb_a.get_volume();
+                          return aabb_a;
+                      });
+
+                Tscal vol_cluster = aabb_cluster.get_volume();
+
+                ratios[cluster_id] = vol_cluster / sum_vol_indiv;
+            });
+
+        // get historigram of cluster volume ratios
+
+        std::vector<Tscal> bins{};
+        for (Tscal f = 0; f < 10; f += 0.02) {
+            bins.push_back(f);
+        }
+
+        auto historigram_nearest
+            = [](const std::vector<Tscal> &bins, const std::vector<Tscal> &vals) {
+                  std::vector<Tscal> historigram{};
+                  for (auto b : bins) {
+                      historigram.push_back(0);
+                  }
+                  for (auto v : vals) {
+                      u32 found_id = -1;
+                      Tscal min_d  = shambase::get_max<Tscal>();
+                      for (u32 i = 0; i < bins.size(); i++) {
+                          Tscal d = std::abs(v - bins[i]);
+                          if (d < min_d) {
+                              min_d    = d;
+                              found_id = i;
+                          }
+                      }
+                      if (found_id != -1)
+                          historigram[found_id] += 1;
+                  }
+                  return historigram;
+              };
+
+        logger::raw_ln(
+            "cluster_vol_ratio",
+            cluster_list.cluster_count,
+            bins,
+            historigram_nearest(bins, cluster_vol_ratio.copy_to_stdvec()));
+    });
 
     reset_merge_ghosts_fields();
     reset_eos_fields();

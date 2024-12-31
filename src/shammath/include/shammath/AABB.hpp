@@ -80,11 +80,12 @@ namespace shammath {
             return AABB{lower - value, upper + value};
         }
 
-        inline AABB include(AABB other) {
-            return AABB{sham::min(lower, other.lower), sham::max(upper, other.upper)};
+        inline void include(AABB other) {
+            lower = sham::min(lower, other.lower);
+            upper = sham::max(upper, other.upper);
         }
 
-        inline static AABB empty() { return AABB{shambase::get_min<T>(), shambase::get_max<T>()}; }
+        inline static AABB empty() { return AABB{T_prop::get_max(), T_prop::get_min()}; }
 
         template<class Tb>
         inline AABB<Tb> convert() {

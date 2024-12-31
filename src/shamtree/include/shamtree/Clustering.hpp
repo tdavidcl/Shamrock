@@ -29,10 +29,29 @@ namespace shamtree {
         u32 cluster_count;
         sham::DeviceBuffer<u32> cluster_ids;
 
-        class accessed_ro {
+        struct accessed_ro {
             const u32 *cluster_ids;
 
-            std::array<u32, cluster_obj_count> get_cluster_ids(u32 cluster_id) {
+            struct id_list {
+                std::array<u32, cluster_obj_count> ids;
+
+                template<class Tvec, class AABBGetter>
+                shammath::AABB<Tvec> get_aabb(AABBGetter &&get_id_aabb) {
+
+                    shammath::AABB<Tvec> ret = shammath::AABB<Tvec>::empty();
+
+                    // clang-format off
+                #pragma unroll cluster_obj_count
+                for (u32 i = 0; i < cluster_obj_count; i++) {
+                    if(ids[i] != err_id) ret.include(get_id_aabb(ids[i]));
+                }
+                    // clang-format on
+
+                    return ret;
+                }
+            };
+
+            id_list get_cluster_ids(u32 cluster_id) {
                 // clang-format off
                 std::array<u32, cluster_obj_count> ret;
                 #pragma unroll cluster_obj_count
@@ -40,30 +59,15 @@ namespace shamtree {
                     ret[i] = cluster_ids[cluster_id * cluster_obj_count + i];
                 }
                 // clang-format on
-                return ret;
-            }
-
-            template<class Tvec, class AABBGetter>
-            shammath::AABB<Tvec> get_aabb(u32 cluster_id, AABBGetter &&get_id_aabb) {
-
-                std::array<u32, cluster_obj_count> cluster_ids = get_cluster_ids(cluster_id);
-
-                shammath::AABB<Tvec> ret = shammath::AABB<Tvec>::empty();
-
-                // clang-format off
-                #pragma unroll cluster_obj_count
-                for (u32 i = 0; i < cluster_obj_count; i++) {
-                    if(cluster_ids[i] != err_id) ret.include(get_id_aabb(cluster_ids[i]));
-                }
-                // clang-format on
-
-                return ret;
+                return id_list{ret};
             }
         };
 
         accessed_ro get_read_access(sham::EventList &depends_list) {
             return {cluster_ids.get_read_access(depends_list)};
         }
+
+        void complete_event_state(sycl::event e) { cluster_ids.complete_event_state(e); }
     };
 
     enum class ClusteringStrategy { Hilbert };
