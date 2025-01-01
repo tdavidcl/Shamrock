@@ -37,7 +37,7 @@ namespace shamtree {
                 std::array<u32, cluster_obj_count> ids;
 
                 template<class Lambda>
-                void for_each_object(const Lambda &&func)const {
+                void for_each_object(const Lambda &&func) const {
                     // clang-format off
                     #pragma unroll cluster_obj_count
                     for (u32 i = 0; i < cluster_obj_count; i++) {
@@ -58,7 +58,7 @@ namespace shamtree {
                 }
             };
 
-            id_list get_cluster_ids(u32 cluster_id)const {
+            id_list get_cluster_ids(u32 cluster_id) const {
                 // clang-format off
                 std::array<u32, cluster_obj_count> ret;
                 #pragma unroll cluster_obj_count

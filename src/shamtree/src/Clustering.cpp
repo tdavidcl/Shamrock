@@ -170,7 +170,6 @@ namespace shamtree {
     template ClusterListAABBs<f64_3, 1> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<1> &clusters);
 
-
     template ClusterListAABBs<f64_3, 4> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<4> &clusters);
 
@@ -219,7 +218,6 @@ namespace shamtree {
         sham::DeviceBuffer<f64_3> &pos,
         ClusterList<1> &clusters,
         sham::DeviceBuffer<f64> &interact_radius);
-
 
     template sham::DeviceBuffer<f64> compute_compression_ratios<f64_3, 4>(
         sham::DeviceScheduler_ptr sched,

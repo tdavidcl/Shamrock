@@ -1799,11 +1799,12 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-        shamtree::ClusterList<cluster_obj_count> cluster_list = shamtree::cluster_objects<Tvec, cluster_obj_count>(
-            dev_sched,
-            buf_xyz,
-            shammath::AABB<Tvec>(mfield.bounds.lower, mfield.bounds.upper),
-            shamtree::ClusteringStrategy::Hilbert);
+        shamtree::ClusterList<cluster_obj_count> cluster_list
+            = shamtree::cluster_objects<Tvec, cluster_obj_count>(
+                dev_sched,
+                buf_xyz,
+                shammath::AABB<Tvec>(mfield.bounds.lower, mfield.bounds.upper),
+                shamtree::ClusteringStrategy::Hilbert);
 
         shamtree::ClusterListAABBs<Tvec, cluster_obj_count> cluster_aabbs
             = shamtree::get_cluster_aabbs(dev_sched, buf_xyz, cluster_list);
@@ -1974,8 +1975,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         RadixTreeField<Tscal> h_max_field = tree.compute_int_boxes(
             shamsys::instance::get_compute_queue(), buf_h, solver_config.htol_up_tol);
 
-        sycl::buffer<Tscal> &h_max_buf
-            = shambase::get_check_ref(h_max_field.radix_tree_field_buf);
+        sycl::buffer<Tscal> &h_max_buf = shambase::get_check_ref(h_max_field.radix_tree_field_buf);
 
         ///////////////////////////////////////////////////////////////////////
         // Neigh finding
@@ -1990,10 +1990,10 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             sham::EventList depends_list;
 
-            auto xyz       = buf_xyz.get_read_access(depends_list);
-            auto hpart     = buf_h.get_read_access(depends_list);
-            auto neigh_cnt = neigh_count.get_write_access(depends_list);
-            auto clusters = cluster_list.get_read_access(depends_list);
+            auto xyz               = buf_xyz.get_read_access(depends_list);
+            auto hpart             = buf_h.get_read_access(depends_list);
+            auto neigh_cnt         = neigh_count.get_write_access(depends_list);
+            auto clusters          = cluster_list.get_read_access(depends_list);
             auto cluster_aabb_ptrs = cluster_aabbs.get_read_access(depends_list);
 
             u32 obj_cnt = buf_xyz.get_size();
@@ -2002,9 +2002,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 depends_list, [&, h_tolerance = solver_config.htol_up_tol](sycl::handler &cgh) {
                     tree::ObjectIterator cluster_looper(tree, cgh);
                     sycl::accessor h_max_tree{h_max_buf, cgh, sycl::read_only};
-                    
-                    constexpr Tscal Rker = Kernel::Rkern;
-                    constexpr Tscal Rker2 = Rker*Rker;
+
+                    constexpr Tscal Rker  = Kernel::Rkern;
+                    constexpr Tscal Rker2 = Rker * Rker;
 
                     shambase::parralel_for(
                         cgh, cluster_list.cluster_count, "compute neigh cache 1", [=](u64 gid) {
@@ -2012,7 +2012,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
                             u32 counter = 0;
 
-                            auto get_hmax_cluster = [&](u32 id_cluster){
+                            auto get_hmax_cluster = [&](u32 id_cluster) {
                                 Tscal h_max_cluster = 0;
 
                                 auto cluster_a_ids = clusters.get_cluster_ids(id_cluster);
@@ -2023,28 +2023,32 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                             };
 
                             Tscal h_max_cluster_a = get_hmax_cluster(cluster_id_a);
-                            shammath::AABB<Tvec> clust_aabb_a = cluster_aabb_ptrs.get_aabb(cluster_id_a);
-                            
+                            shammath::AABB<Tvec> clust_aabb_a
+                                = cluster_aabb_ptrs.get_aabb(cluster_id_a);
+
                             cluster_looper.rtree_for(
                                 [&](u32 node_id, Tvec bmin, Tvec bmax) -> bool {
                                     Tscal h_max_tree_b = h_max_tree[node_id];
-                                    Tscal expand_val = Rker * sham::max(h_max_cluster_a, h_max_tree_b);
-                                    auto test_aabb = shammath::AABB<Tvec>(bmin, bmax).expand_all(expand_val);
+                                    Tscal expand_val
+                                        = Rker * sham::max(h_max_cluster_a, h_max_tree_b);
+                                    auto test_aabb
+                                        = shammath::AABB<Tvec>(bmin, bmax).expand_all(expand_val);
                                     return clust_aabb_a.get_intersect(test_aabb).is_not_empty();
                                 },
                                 [&](u32 cluster_id_b) {
-                                    
                                     Tscal h_max_cluster_b = get_hmax_cluster(cluster_id_b);
-                                    shammath::AABB<Tvec> clust_aabb_b = cluster_aabb_ptrs.get_aabb(cluster_id_b);
-                                    
-                                    Tscal expand_val = Rker * sham::max(h_max_cluster_a, h_max_cluster_b);
+                                    shammath::AABB<Tvec> clust_aabb_b
+                                        = cluster_aabb_ptrs.get_aabb(cluster_id_b);
+
+                                    Tscal expand_val
+                                        = Rker * sham::max(h_max_cluster_a, h_max_cluster_b);
                                     auto test_aabb = clust_aabb_b.expand_all(expand_val);
-                                    bool valid_intersect = clust_aabb_a.get_intersect(test_aabb).is_not_empty();
-                                    
-                                    if(valid_intersect){
+                                    bool valid_intersect
+                                        = clust_aabb_a.get_intersect(test_aabb).is_not_empty();
+
+                                    if (valid_intersect) {
                                         counter += cluster_obj_count;
                                     }
-
                                 });
 
                             auto cluster_a_ids = clusters.get_cluster_ids(cluster_id_a);
@@ -2052,91 +2056,90 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                             cluster_a_ids.for_each_object([&](u32 id_a) {
                                 neigh_cnt[id_a] = counter;
                             });
-                            
                         });
                 });
 
             buf_xyz.complete_event_state(e);
             buf_h.complete_event_state(e);
             neigh_count.complete_event_state(e);
-             cluster_list.complete_event_state(e);
-             cluster_aabbs.complete_event_state(e);
+            cluster_list.complete_event_state(e);
+            cluster_aabbs.complete_event_state(e);
         }
 
-        
-{
-    // get historigram of cluster volume ratios
-        std::vector<u32> bins{};
-        for (u32 i = 0; i < 1000; i += 1) {
-            bins.push_back(i);
-        }
+        {
+            // get historigram of cluster volume ratios
+            std::vector<u32> bins{};
+            for (u32 i = 0; i < 1000; i += 1) {
+                bins.push_back(i);
+            }
 
-
-        auto historigram_nearest
-            = [](const std::vector<u32> &bins, const std::vector<u32> &vals) {
-                  std::vector<u32> historigram{};
-                  for (auto b : bins) {
-                      historigram.push_back(0);
-                  }
-                  for (auto v : vals) {
-                      u32 found_id = -1;
-                      u32 min_d  = shambase::get_max<u32>();
-                      for (u32 i = 0; i < bins.size(); i++) {
-                          u32 d = std::abs(i32(v) - i32(bins[i]));
-                          if (d < min_d) {
-                              min_d    = d;
-                              found_id = i;
-                          }
+            auto historigram_nearest
+                = [](const std::vector<u32> &bins, const std::vector<u32> &vals) {
+                      std::vector<u32> historigram{};
+                      for (auto b : bins) {
+                          historigram.push_back(0);
                       }
-                      if (found_id != -1)
-                          historigram[found_id] += 1;
-                  }
-                  return historigram;
-              };
+                      for (auto v : vals) {
+                          u32 found_id = -1;
+                          u32 min_d    = shambase::get_max<u32>();
+                          for (u32 i = 0; i < bins.size(); i++) {
+                              u32 d = std::abs(i32(v) - i32(bins[i]));
+                              if (d < min_d) {
+                                  min_d    = d;
+                                  found_id = i;
+                              }
+                          }
+                          if (found_id != -1)
+                              historigram[found_id] += 1;
+                      }
+                      return historigram;
+                  };
 
-        tree::ObjectCache &pcache = storage.neighbors_cache.get().get_cache(id);
-        std::vector<u32> neigh_count_nocluster = pcache.cnt_neigh.copy_to_stdvec();
+            tree::ObjectCache &pcache              = storage.neighbors_cache.get().get_cache(id);
+            std::vector<u32> neigh_count_nocluster = pcache.cnt_neigh.copy_to_stdvec();
 
-        logger::raw_ln("bins_neigh_cluster =", bins);
-        logger::raw_ln("histo_neigh_cluster =", historigram_nearest(bins, neigh_count.copy_to_stdvec()));
-        logger::raw_ln("histo_neigh_normal =", historigram_nearest(bins, neigh_count_nocluster));
-}
-
-{
-        // get historigram of cluster volume ratios
-        std::vector<Tscal> bins{};
-        for (Tscal f = 0; f < 10; f += 0.02) {
-            bins.push_back(f);
+            logger::raw_ln("bins_neigh_cluster =", bins);
+            logger::raw_ln(
+                "histo_neigh_cluster =", historigram_nearest(bins, neigh_count.copy_to_stdvec()));
+            logger::raw_ln(
+                "histo_neigh_normal =", historigram_nearest(bins, neigh_count_nocluster));
         }
 
-        auto historigram_nearest
-            = [](const std::vector<Tscal> &bins, const std::vector<Tscal> &vals) {
-                  std::vector<Tscal> historigram{};
-                  for (auto b : bins) {
-                      historigram.push_back(0);
-                  }
-                  for (auto v : vals) {
-                      u32 found_id = -1;
-                      Tscal min_d  = shambase::get_max<Tscal>();
-                      for (u32 i = 0; i < bins.size(); i++) {
-                          Tscal d = std::abs(v - bins[i]);
-                          if (d < min_d) {
-                              min_d    = d;
-                              found_id = i;
-                          }
+        {
+            // get historigram of cluster volume ratios
+            std::vector<Tscal> bins{};
+            for (Tscal f = 0; f < 10; f += 0.02) {
+                bins.push_back(f);
+            }
+
+            auto historigram_nearest
+                = [](const std::vector<Tscal> &bins, const std::vector<Tscal> &vals) {
+                      std::vector<Tscal> historigram{};
+                      for (auto b : bins) {
+                          historigram.push_back(0);
                       }
-                      if (found_id != -1)
-                          historigram[found_id] += 1;
-                  }
-                  return historigram;
-              };
+                      for (auto v : vals) {
+                          u32 found_id = -1;
+                          Tscal min_d  = shambase::get_max<Tscal>();
+                          for (u32 i = 0; i < bins.size(); i++) {
+                              Tscal d = std::abs(v - bins[i]);
+                              if (d < min_d) {
+                                  min_d    = d;
+                                  found_id = i;
+                              }
+                          }
+                          if (found_id != -1)
+                              historigram[found_id] += 1;
+                      }
+                      return historigram;
+                  };
 
-        logger::raw_ln("cluster_vol_ratio", cluster_list.cluster_count);
-        logger::raw_ln("bins =", bins);
-        logger::raw_ln("histo =", historigram_nearest(bins, compression_ratios.copy_to_stdvec()));
-        
-        MPI_Abort(MPI_COMM_WORLD, -10);
+            logger::raw_ln("cluster_vol_ratio", cluster_list.cluster_count);
+            logger::raw_ln("bins =", bins);
+            logger::raw_ln(
+                "histo =", historigram_nearest(bins, compression_ratios.copy_to_stdvec()));
 
+            MPI_Abort(MPI_COMM_WORLD, -10);
         }
     });
 
