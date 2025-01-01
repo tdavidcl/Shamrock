@@ -18,6 +18,7 @@
 #include "shambase/aliases_int.hpp"
 #include "shambase/optional.hpp"
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shammath/AABB.hpp"
 #include <array>
 namespace shamtree {
@@ -35,17 +36,23 @@ namespace shamtree {
             struct id_list {
                 std::array<u32, cluster_obj_count> ids;
 
+                template<class Lambda>
+                void for_each_object(const Lambda &&func) {
+                    // clang-format off
+                    #pragma unroll cluster_obj_count
+                    for (u32 i = 0; i < cluster_obj_count; i++) {
+                        if(ids[i] != err_id) func(ids[i]);
+                    }
+                    // clang-format on
+                }
+
                 template<class Tvec, class AABBGetter>
                 shammath::AABB<Tvec> get_aabb(AABBGetter &&get_id_aabb) {
 
                     shammath::AABB<Tvec> ret = shammath::AABB<Tvec>::empty();
-
-                    // clang-format off
-                #pragma unroll cluster_obj_count
-                for (u32 i = 0; i < cluster_obj_count; i++) {
-                    if(ids[i] != err_id) ret.include(get_id_aabb(ids[i]));
-                }
-                    // clang-format on
+                    for_each_object([&](u32 id) {
+                        ret.include(get_id_aabb(id));
+                    });
 
                     return ret;
                 }
@@ -60,6 +67,31 @@ namespace shamtree {
                 }
                 // clang-format on
                 return id_list{ret};
+            }
+
+            u32 get_cluster_obj_id(u32 cluster_id, u32 internal_cluster_id) {
+                return cluster_ids[cluster_id * cluster_obj_count + internal_cluster_id];
+            }
+
+            template<class T, class Lambda>
+            T get_cluster_obj_value(u32 cluster_id, u32 internal_cluster_id, Lambda &&get_value) {
+                u32 id = get_cluster_obj_id(cluster_id, internal_cluster_id);
+                return (id != err_id) ? get_value(id) : T();
+            }
+
+            template<class T>
+            T load_cluster_obj_value(u32 cluster_id, u32 internal_cluster_id, const T *field) {
+                return get_cluster_obj_value(cluster_id, internal_cluster_id, [&](u32 id) {
+                    return field[id];
+                });
+            }
+
+            template<class T>
+            void
+            store_cluster_obj_value(u32 cluster_id, u32 internal_cluster_id, T *field, T value) {
+                u32 id = get_cluster_obj_id(cluster_id, internal_cluster_id);
+                if (id != err_id)
+                    field[id] = value;
             }
         };
 
@@ -76,7 +108,6 @@ namespace shamtree {
     struct ClusteringOptions {
         using Tscal = shambase::VecComponent<Tvec>;
 
-        shambase::opt_ref<shammath::AABB<Tvec>> base_bounding_boxes;
         std::optional<Tscal> cutoff_volume_factor;
     };
 
@@ -87,5 +118,73 @@ namespace shamtree {
         shammath::AABB<Tvec> pos_bounding_box,
         ClusteringStrategy strategy,
         ClusteringOptions<Tvec> options = {});
+
+    template<class Tvec, u32 cluster_obj_count>
+    struct ClusterListAABBs {
+        u32 cluster_count;
+        sham::DeviceBuffer<Tvec> clusters_aabb_min;
+        sham::DeviceBuffer<Tvec> clusters_aabb_max;
+    };
+
+    template<class Tvec, u32 cluster_obj_count>
+    ClusterListAABBs<Tvec, cluster_obj_count> get_cluster_aabbs(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<Tvec> &pos,
+        ClusterList<cluster_obj_count> clusters);
+
+    /// cluster field mirror
+    /// mirror a field to a cluster
+    /// aka mirror_field[i*4 + j] = field_ids[cluster_ids[i*4 + j]]
+    /// for a cluster of 4 objects
+    /// the mirror values fit in a burst buffer and are contiguous
+    /// this allows for peak bandwidth usage in theory
+    template<class T, u32 cluster_obj_count>
+    struct ClusterFieldMirror {
+        u32 cluster_count;
+        sham::DeviceBuffer<T> mirrored_field;
+    };
+
+    template<class T, u32 cluster_obj_count>
+    inline ClusterFieldMirror<T, cluster_obj_count> mirror_field_to_cluster(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<T> &field,
+        ClusterList<cluster_obj_count> clusters) {
+
+        ClusterFieldMirror<T, cluster_obj_count> ret{
+            clusters.cluster_count,
+            sham::DeviceBuffer<T>{clusters.cluster_count * cluster_obj_count, sched}};
+
+        sham::kernel_call(
+            sched->get_queue(),
+            sham::MultiRef{field, clusters},
+            sham::MultiRef{ret.mirrored_field},
+            clusters.cluster_count * cluster_obj_count,
+            [](u32 i, const T *field, auto clusters, T *mirrored_field) {
+                u32 cluster_id          = i / cluster_obj_count;
+                u32 internal_cluster_id = i % cluster_obj_count;
+                mirrored_field[i]
+                    = clusters.load_cluster_obj_value(cluster_id, internal_cluster_id, field);
+            });
+    }
+
+    template<class T, u32 cluster_obj_count>
+    inline void store_field_from_cluster(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<T> &field,
+        ClusterFieldMirror<T, cluster_obj_count> clusters,
+        ClusterFieldMirror<T, cluster_obj_count> mirrored_field) {
+
+        sham::kernel_call(
+            sched->get_queue(),
+            sham::MultiRef{mirrored_field, clusters},
+            sham::MultiRef{field},
+            clusters.cluster_count * cluster_obj_count,
+            [](u32 i, const T *mirrored_field, auto clusters, T *field) {
+                u32 cluster_id          = i / cluster_obj_count;
+                u32 internal_cluster_id = i % cluster_obj_count;
+                clusters.store_cluster_obj_value(
+                    cluster_id, internal_cluster_id, field, mirrored_field[i]);
+            });
+    }
 
 } // namespace shamtree

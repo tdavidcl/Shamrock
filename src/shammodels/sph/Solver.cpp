@@ -1793,7 +1793,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         auto &mfield = storage.merged_xyzh.get().get(id);
 
         sham::DeviceBuffer<Tvec> &buf_xyz = mfield.field_pos.get_buf();
-        sham::DeviceBuffer<Tscal> &buf_h  = mpdat.pdat.get_field_buf_ref<Tscal>(ihpart_interf);
+        sham::DeviceBuffer<Tscal> &buf_h  = mfield.field_hpart.get_buf();
 
         auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -1803,34 +1803,279 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             shammath::AABB<Tvec>(mfield.bounds.lower, mfield.bounds.upper),
             shamtree::ClusteringStrategy::Hilbert);
 
+        ///////////////////////////////////////////////////////////////////////
+        // compute cluster aabbs
+        ///////////////////////////////////////////////////////////////////////
+
+        sham::DeviceBuffer<Tvec> clusters_aabb_min(cluster_list.cluster_count, dev_sched);
+        sham::DeviceBuffer<Tvec> clusters_aabb_max(cluster_list.cluster_count, dev_sched);
+        sham::DeviceBuffer<Tvec> clusters_aabb_center(cluster_list.cluster_count, dev_sched);
+
         sham::DeviceBuffer<Tscal> cluster_vol_ratio(cluster_list.cluster_count, dev_sched);
 
         sham::kernel_call(
             dev_sched->get_queue(),
             sham::MultiRef{buf_xyz, buf_h, cluster_list},
-            sham::MultiRef{cluster_vol_ratio},
+            sham::MultiRef{
+                clusters_aabb_min, clusters_aabb_max, clusters_aabb_center, cluster_vol_ratio},
             cluster_list.cluster_count,
-            [](u32 cluster_id, const Tvec *xyz, const Tscal *h, auto clusters, Tscal *ratios) {
+            [](u32 cluster_id,
+               const Tvec *xyz,
+               const Tscal *h,
+               auto clusters,
+               Tvec *cluster_aabb_min,
+               Tvec *cluster_aabb_max,
+               Tvec *cluster_aabb_center,
+               Tscal *ratios) {
                 auto cluster_ids = clusters.get_cluster_ids(cluster_id);
 
                 Tscal sum_vol_indiv = Tscal(0);
 
                 shammath::AABB<Tvec> aabb_cluster
                     = cluster_ids.template get_aabb<Tvec>([&](u32 id) -> shammath::AABB<Tvec> {
-                          auto h_a    = h[id];
-                          auto r_a    = xyz[id];
-                          auto aabb_a = shammath::AABB<Tvec>(r_a, r_a).expand_all(2 * h_a);
+                          auto h_a = h[id];
+                          auto r_a = xyz[id];
+                          auto aabb_a
+                              = shammath::AABB<Tvec>(r_a, r_a).expand_all(Kernel::Rkern * h_a);
                           sum_vol_indiv += aabb_a.get_volume();
                           return aabb_a;
                       });
+
+                cluster_aabb_min[cluster_id]    = aabb_cluster.lower;
+                cluster_aabb_max[cluster_id]    = aabb_cluster.upper;
+                cluster_aabb_center[cluster_id] = aabb_cluster.get_center();
 
                 Tscal vol_cluster = aabb_cluster.get_volume();
 
                 ratios[cluster_id] = vol_cluster / sum_vol_indiv;
             });
 
-        // get historigram of cluster volume ratios
+        ///////////////////////////////////////////////////////////////////////
+        // build trees
+        ///////////////////////////////////////////////////////////////////////
 
+        Tvec bmin = mfield.bounds.lower;
+        Tvec bmax = mfield.bounds.upper;
+
+        RTree tree(
+            dev_sched,
+            {bmin, bmax},
+            clusters_aabb_center,
+            clusters_aabb_center.get_size(),
+            solver_config.tree_reduction_level);
+
+        tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
+        tree.convert_bounding_box(shamsys::instance::get_compute_queue());
+
+        ///////////////////////////////////////////////////////////////////////
+        // Compute tree AABBs
+        ///////////////////////////////////////////////////////////////////////
+
+        u32 leaf_count          = tree.tree_reduced_morton_codes.tree_leaf_count;
+        u32 internal_cell_count = tree.tree_struct.internal_cell_count;
+        u32 tot_count           = leaf_count + internal_cell_count;
+
+        sycl::buffer<Tvec> tmp_min_cell(tot_count);
+        sycl::buffer<Tvec> tmp_max_cell(tot_count);
+
+        {
+            sham::EventList depends_list;
+            auto cluster_aabb_min = clusters_aabb_min.get_read_access(depends_list);
+            auto cluster_aabb_max = clusters_aabb_max.get_read_access(depends_list);
+
+            auto e = dev_sched->get_queue().submit([&](sycl::handler &cgh) {
+                shamrock::tree::ObjectIterator cell_looper(tree, cgh);
+
+                u32 leaf_offset = tree.tree_struct.internal_cell_count;
+
+                sycl::accessor comp_min{tmp_min_cell, cgh, sycl::write_only, sycl::no_init};
+                sycl::accessor comp_max{tmp_max_cell, cgh, sycl::write_only, sycl::no_init};
+
+                Tvec imin = shambase::VectorProperties<Tvec>::get_max();
+                Tvec imax = -shambase::VectorProperties<Tvec>::get_max();
+
+                shambase::parralel_for(cgh, leaf_count, "compute leaf boxes", [=](u64 leaf_id) {
+                    Tvec min = imin;
+                    Tvec max = imax;
+
+                    cell_looper.iter_object_in_cell(leaf_id + leaf_offset, [&](u32 cluster_id) {
+                        min = sham::min(min, cluster_aabb_min[cluster_id]);
+                        max = sham::max(max, cluster_aabb_max[cluster_id]);
+                    });
+
+                    comp_min[leaf_offset + leaf_id] = min;
+                    comp_max[leaf_offset + leaf_id] = max;
+                });
+            });
+
+            clusters_aabb_min.complete_event_state(e);
+            clusters_aabb_max.complete_event_state(e);
+        }
+
+        auto ker_reduc_hmax = [&](sycl::handler &cgh) {
+            u32 offset_leaf = internal_cell_count;
+
+            sycl::accessor comp_min{tmp_min_cell, cgh, sycl::read_write};
+            sycl::accessor comp_max{tmp_max_cell, cgh, sycl::read_write};
+
+            sycl::accessor rchild_id{
+                shambase::get_check_ref(tree.tree_struct.buf_rchild_id), cgh, sycl::read_only};
+            sycl::accessor lchild_id{
+                shambase::get_check_ref(tree.tree_struct.buf_lchild_id), cgh, sycl::read_only};
+            sycl::accessor rchild_flag{
+                shambase::get_check_ref(tree.tree_struct.buf_rchild_flag), cgh, sycl::read_only};
+            sycl::accessor lchild_flag{
+                shambase::get_check_ref(tree.tree_struct.buf_lchild_flag), cgh, sycl::read_only};
+
+            shambase::parralel_for(cgh, internal_cell_count, "propagate up", [=](u64 gid) {
+                u32 lid = lchild_id[gid] + offset_leaf * lchild_flag[gid];
+                u32 rid = rchild_id[gid] + offset_leaf * rchild_flag[gid];
+
+                Tvec bminl = comp_min[lid];
+                Tvec bminr = comp_min[rid];
+                Tvec bmaxl = comp_max[lid];
+                Tvec bmaxr = comp_max[rid];
+
+                Tvec bmin = sham::min(bminl, bminr);
+                Tvec bmax = sham::max(bmaxl, bmaxr);
+
+                comp_min[gid] = bmin;
+                comp_max[gid] = bmax;
+            });
+        };
+
+        for (u32 i = 0; i < tree.tree_depth; i++) {
+            shamsys::instance::get_compute_queue().submit(ker_reduc_hmax);
+        }
+
+        sycl::buffer<Tvec> &tree_bmin
+            = shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_min_cell_flt);
+        sycl::buffer<Tvec> &tree_bmax
+            = shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_max_cell_flt);
+
+        shamsys::instance::get_compute_queue().submit([&](sycl::handler &cgh) {
+            shamrock::tree::ObjectIterator cell_looper(tree, cgh);
+
+            u32 leaf_offset = tree.tree_struct.internal_cell_count;
+
+            sycl::accessor comp_bmin{tmp_min_cell, cgh, sycl::read_only};
+            sycl::accessor comp_bmax{tmp_max_cell, cgh, sycl::read_only};
+
+            sycl::accessor tree_buf_min{tree_bmin, cgh, sycl::read_write};
+            sycl::accessor tree_buf_max{tree_bmax, cgh, sycl::read_write};
+
+            shambase::parralel_for(cgh, tot_count, "write in tree range", [=](u64 nid) {
+                Tvec load_min = comp_bmin[nid];
+                Tvec load_max = comp_bmax[nid];
+
+                tree_buf_min[nid] = load_min;
+                tree_buf_max[nid] = load_max;
+            });
+        });
+
+        logger::raw_ln(shamalgs::memory::buf_to_vec(tmp_min_cell, tot_count));
+        logger::raw_ln(shamalgs::memory::buf_to_vec(tmp_max_cell, tot_count));
+
+        sycl::buffer<Tscal> tmp_vol_cell(tot_count);
+        shamsys::instance::get_compute_queue().submit([&](sycl::handler &cgh) {
+            sycl::accessor comp_min{tmp_min_cell, cgh, sycl::read_only};
+            sycl::accessor comp_max{tmp_max_cell, cgh, sycl::read_only};
+            sycl::accessor comp_vol{tmp_vol_cell, cgh, sycl::write_only};
+
+            shambase::parralel_for(cgh, tot_count, "propagate up", [=](u64 gid) {
+                comp_vol[gid] = shammath::AABB<Tvec>(comp_max[gid], comp_min[gid]).get_volume();
+            });
+        });
+
+        logger::raw_ln(shamalgs::memory::buf_to_vec(tmp_vol_cell, tot_count));
+
+        ///////////////////////////////////////////////////////////////////////
+        // Compute hmax
+        ///////////////////////////////////////////////////////////////////////
+
+        RadixTreeField<Tscal> tree_field_rint_field = tree.compute_int_boxes(
+            shamsys::instance::get_compute_queue(), buf_h, solver_config.htol_up_tol);
+
+        sycl::buffer<Tscal> &tree_field_rint
+            = shambase::get_check_ref(tree_field_rint_field.radix_tree_field_buf);
+
+        ///////////////////////////////////////////////////////////////////////
+        // Neigh finding
+        ///////////////////////////////////////////////////////////////////////
+
+        sham::DeviceBuffer<u32> neigh_count(
+            buf_xyz.get_size(), shamsys::instance::get_compute_scheduler_ptr());
+
+        {
+
+            sham::DeviceQueue &q = dev_sched->get_queue();
+
+            sham::EventList depends_list;
+
+            auto xyz       = buf_xyz.get_read_access(depends_list);
+            auto hpart     = buf_h.get_read_access(depends_list);
+            auto neigh_cnt = neigh_count.get_write_access(depends_list);
+
+            u32 obj_cnt = buf_xyz.get_size();
+
+            auto e = q.submit(
+                depends_list, [&, h_tolerance = solver_config.htol_up_tol](sycl::handler &cgh) {
+                    tree::ObjectIterator cluster_looper(tree, cgh);
+                    sycl::accessor rint_tree{tree_field_rint, cgh, sycl::read_only};
+                    constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+                    shambase::parralel_for(
+                        cgh, cluster_list.cluster_count, "compute neigh cache 1", [=](u64 gid) {
+                            u32 cluster_id_a = (u32) gid;
+
+                            Tscal h_max_cluster_a = rint_tree[cluster_id_a];
+                            /*
+                                    Tscal rint_a = hpart[id_a] * h_tolerance;
+
+                                    Tvec xyz_a = xyz[id_a];
+
+                                    Tvec inter_box_a_min = xyz_a - rint_a * Kernel::Rkern;
+                                    Tvec inter_box_a_max = xyz_a + rint_a * Kernel::Rkern;
+
+                                    u32 cnt = 0;
+
+                                    cluster_looper.rtree_for(
+                                        [&](u32 node_id, Tvec bmin, Tvec bmax) -> bool {
+                                            Tscal int_r_max_cell = rint_tree[node_id] *
+                               Kernel::Rkern;
+
+                                            using namespace walker::interaction_crit;
+
+                                            return sph_radix_cell_crit(
+                                                xyz_a,
+                                                inter_box_a_min,
+                                                inter_box_a_max,
+                                                bmin,
+                                                bmax,
+                                                int_r_max_cell);
+                                        },
+                                        [&](u32 id_b) {
+                                            Tvec dr      = xyz_a - xyz[id_b];
+                                            Tscal rab2   = sycl::dot(dr, dr);
+                                            Tscal rint_b = hpart[id_b] * h_tolerance;
+
+                                            bool no_interact = rab2 > rint_a * rint_a * Rker2
+                                                                && rab2 > rint_b * rint_b * Rker2;
+
+                                            cnt += (no_interact) ? 0 : 1;
+                                        });
+
+                                    neigh_cnt[id_a] = cnt;
+                                    */
+                        });
+                });
+
+            buf_xyz.complete_event_state(e);
+            buf_h.complete_event_state(e);
+            neigh_count.complete_event_state(e);
+        }
+
+        // get historigram of cluster volume ratios
         std::vector<Tscal> bins{};
         for (Tscal f = 0; f < 10; f += 0.02) {
             bins.push_back(f);
@@ -1858,11 +2103,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                   return historigram;
               };
 
-        logger::raw_ln(
-            "cluster_vol_ratio",
-            cluster_list.cluster_count,
-            bins,
-            historigram_nearest(bins, cluster_vol_ratio.copy_to_stdvec()));
+        logger::raw_ln("cluster_vol_ratio", cluster_list.cluster_count);
+        logger::raw_ln("bins =", bins);
+        logger::raw_ln("histo =", historigram_nearest(bins, cluster_vol_ratio.copy_to_stdvec()));
     });
 
     reset_merge_ghosts_fields();

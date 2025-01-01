@@ -116,4 +116,44 @@ namespace shamtree {
         ClusteringStrategy strategy,
         ClusteringOptions<f64_3> options);
 
+    template<class Tvec, u32 cluster_obj_count>
+    ClusterListAABBs<Tvec, cluster_obj_count> get_cluster_aabbs(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<Tvec> &pos,
+        ClusterList<cluster_obj_count> clusters) {
+
+        ClusterListAABBs<Tvec, 4> ret{
+            clusters.cluster_count,
+            sham::DeviceBuffer<Tvec>{clusters.cluster_count, sched},
+            sham::DeviceBuffer<Tvec>{clusters.cluster_count, sched}};
+
+        sham::kernel_call(
+            sched->get_queue(),
+            sham::MultiRef{pos, clusters},
+            sham::MultiRef{ret.clusters_aabb_min, ret.clusters_aabb_max},
+            clusters.cluster_count,
+            [](u32 cluster_id,
+               const Tvec *pos,
+               auto clusters,
+               Tvec *cluster_aabbs_lower,
+               Tvec *cluster_aabbs_upper) {
+                auto cluster_ids = clusters.get_cluster_ids(cluster_id);
+
+                shammath::AABB<Tvec> aabb_cluster
+                    = cluster_ids.template get_aabb<Tvec>([&](u32 id) -> shammath::AABB<Tvec> {
+                          auto r_a    = pos[id];
+                          auto aabb_a = shammath::AABB<Tvec>(r_a, r_a);
+                          return aabb_a;
+                      });
+
+                cluster_aabbs_lower[cluster_id] = aabb_cluster.lower;
+                cluster_aabbs_upper[cluster_id] = aabb_cluster.upper;
+            });
+
+        return ret;
+    }
+
+    template ClusterListAABBs<f64_3, 4> get_cluster_aabbs(
+        sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<4> clusters);
+
 } // namespace shamtree
