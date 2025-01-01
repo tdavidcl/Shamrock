@@ -116,13 +116,27 @@ namespace shamtree {
         ClusteringStrategy strategy,
         ClusteringOptions<f64_3> options);
 
+    template ClusterList<1> cluster_objects<f64_3, 1>(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<f64_3> &pos,
+        shammath::AABB<f64_3> bounding_box,
+        ClusteringStrategy strategy,
+        ClusteringOptions<f64_3> options);
+
+    template ClusterList<8> cluster_objects<f64_3, 8>(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<f64_3> &pos,
+        shammath::AABB<f64_3> bounding_box,
+        ClusteringStrategy strategy,
+        ClusteringOptions<f64_3> options);
+
     template<class Tvec, u32 cluster_obj_count>
     ClusterListAABBs<Tvec, cluster_obj_count> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched,
         sham::DeviceBuffer<Tvec> &pos,
         ClusterList<cluster_obj_count> &clusters) {
 
-        ClusterListAABBs<Tvec, 4> ret{
+        ClusterListAABBs<Tvec, cluster_obj_count> ret{
             clusters.cluster_count,
             sham::DeviceBuffer<Tvec>{clusters.cluster_count, sched},
             sham::DeviceBuffer<Tvec>{clusters.cluster_count, sched}};
@@ -153,8 +167,15 @@ namespace shamtree {
         return ret;
     }
 
+    template ClusterListAABBs<f64_3, 1> get_cluster_aabbs(
+        sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<1> &clusters);
+
+
     template ClusterListAABBs<f64_3, 4> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<4> &clusters);
+
+    template ClusterListAABBs<f64_3, 8> get_cluster_aabbs(
+        sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<8> &clusters);
 
     template<class Tvec, u32 cluster_obj_count>
     sham::DeviceBuffer<shambase::VecComponent<Tvec>> compute_compression_ratios(
@@ -193,10 +214,23 @@ namespace shamtree {
         return ret;
     }
 
+    template sham::DeviceBuffer<f64> compute_compression_ratios<f64_3, 1>(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<f64_3> &pos,
+        ClusterList<1> &clusters,
+        sham::DeviceBuffer<f64> &interact_radius);
+
+
     template sham::DeviceBuffer<f64> compute_compression_ratios<f64_3, 4>(
         sham::DeviceScheduler_ptr sched,
         sham::DeviceBuffer<f64_3> &pos,
         ClusterList<4> &clusters,
+        sham::DeviceBuffer<f64> &interact_radius);
+
+    template sham::DeviceBuffer<f64> compute_compression_ratios<f64_3, 8>(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<f64_3> &pos,
+        ClusterList<8> &clusters,
         sham::DeviceBuffer<f64> &interact_radius);
 
 } // namespace shamtree
