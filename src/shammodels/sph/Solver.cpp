@@ -1803,52 +1803,28 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             shammath::AABB<Tvec>(mfield.bounds.lower, mfield.bounds.upper),
             shamtree::ClusteringStrategy::Hilbert);
 
+        shamtree::ClusterListAABBs<Tvec, 4> cluster_aabbs
+            = shamtree::get_cluster_aabbs(dev_sched, buf_xyz, cluster_list);
+
+        sham::DeviceBuffer<Tvec> cluster_centers = cluster_aabbs.get_cluster_centers(dev_sched);
+
         ///////////////////////////////////////////////////////////////////////
-        // compute cluster aabbs
+        // compute compression ratios
         ///////////////////////////////////////////////////////////////////////
 
-        sham::DeviceBuffer<Tvec> clusters_aabb_min(cluster_list.cluster_count, dev_sched);
-        sham::DeviceBuffer<Tvec> clusters_aabb_max(cluster_list.cluster_count, dev_sched);
-        sham::DeviceBuffer<Tvec> clusters_aabb_center(cluster_list.cluster_count, dev_sched);
-
-        sham::DeviceBuffer<Tscal> cluster_vol_ratio(cluster_list.cluster_count, dev_sched);
+        sham::DeviceBuffer<Tscal> rint_buf(buf_xyz.get_size(), dev_sched);
 
         sham::kernel_call(
             dev_sched->get_queue(),
-            sham::MultiRef{buf_xyz, buf_h, cluster_list},
-            sham::MultiRef{
-                clusters_aabb_min, clusters_aabb_max, clusters_aabb_center, cluster_vol_ratio},
-            cluster_list.cluster_count,
-            [](u32 cluster_id,
-               const Tvec *xyz,
-               const Tscal *h,
-               auto clusters,
-               Tvec *cluster_aabb_min,
-               Tvec *cluster_aabb_max,
-               Tvec *cluster_aabb_center,
-               Tscal *ratios) {
-                auto cluster_ids = clusters.get_cluster_ids(cluster_id);
-
-                Tscal sum_vol_indiv = Tscal(0);
-
-                shammath::AABB<Tvec> aabb_cluster
-                    = cluster_ids.template get_aabb<Tvec>([&](u32 id) -> shammath::AABB<Tvec> {
-                          auto h_a = h[id];
-                          auto r_a = xyz[id];
-                          auto aabb_a
-                              = shammath::AABB<Tvec>(r_a, r_a).expand_all(Kernel::Rkern * h_a);
-                          sum_vol_indiv += aabb_a.get_volume();
-                          return aabb_a;
-                      });
-
-                cluster_aabb_min[cluster_id]    = aabb_cluster.lower;
-                cluster_aabb_max[cluster_id]    = aabb_cluster.upper;
-                cluster_aabb_center[cluster_id] = aabb_cluster.get_center();
-
-                Tscal vol_cluster = aabb_cluster.get_volume();
-
-                ratios[cluster_id] = vol_cluster / sum_vol_indiv;
+            sham::MultiRef{buf_h},
+            sham::MultiRef{rint_buf},
+            buf_xyz.get_size(),
+            [](u32 i, const Tscal *h, Tscal *rint) {
+                rint[i] = h[i] * Kernel::Rkern;
             });
+
+        sham::DeviceBuffer<Tscal> compression_ratios
+            = shamtree::compute_compression_ratios(dev_sched, buf_xyz, cluster_list, rint_buf);
 
         ///////////////////////////////////////////////////////////////////////
         // build trees
@@ -1860,8 +1836,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         RTree tree(
             dev_sched,
             {bmin, bmax},
-            clusters_aabb_center,
-            clusters_aabb_center.get_size(),
+            cluster_centers,
+            cluster_centers.get_size(),
             solver_config.tree_reduction_level);
 
         tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
@@ -1880,8 +1856,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         {
             sham::EventList depends_list;
-            auto cluster_aabb_min = clusters_aabb_min.get_read_access(depends_list);
-            auto cluster_aabb_max = clusters_aabb_max.get_read_access(depends_list);
+            auto cluster_aabb_min = cluster_aabbs.clusters_aabb_min.get_read_access(depends_list);
+            auto cluster_aabb_max = cluster_aabbs.clusters_aabb_max.get_read_access(depends_list);
 
             auto e = dev_sched->get_queue().submit([&](sycl::handler &cgh) {
                 shamrock::tree::ObjectIterator cell_looper(tree, cgh);
@@ -1908,8 +1884,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 });
             });
 
-            clusters_aabb_min.complete_event_state(e);
-            clusters_aabb_max.complete_event_state(e);
+            cluster_aabbs.clusters_aabb_min.complete_event_state(e);
+            cluster_aabbs.clusters_aabb_max.complete_event_state(e);
         }
 
         auto ker_reduc_hmax = [&](sycl::handler &cgh) {
@@ -2105,7 +2081,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         logger::raw_ln("cluster_vol_ratio", cluster_list.cluster_count);
         logger::raw_ln("bins =", bins);
-        logger::raw_ln("histo =", historigram_nearest(bins, cluster_vol_ratio.copy_to_stdvec()));
+        logger::raw_ln("histo =", historigram_nearest(bins, compression_ratios.copy_to_stdvec()));
     });
 
     reset_merge_ghosts_fields();

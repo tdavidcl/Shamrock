@@ -120,7 +120,7 @@ namespace shamtree {
     ClusterListAABBs<Tvec, cluster_obj_count> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched,
         sham::DeviceBuffer<Tvec> &pos,
-        ClusterList<cluster_obj_count> clusters) {
+        ClusterList<cluster_obj_count> &clusters) {
 
         ClusterListAABBs<Tvec, 4> ret{
             clusters.cluster_count,
@@ -154,6 +154,49 @@ namespace shamtree {
     }
 
     template ClusterListAABBs<f64_3, 4> get_cluster_aabbs(
-        sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<4> clusters);
+        sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<f64_3> &pos, ClusterList<4> &clusters);
+
+    template<class Tvec, u32 cluster_obj_count>
+    sham::DeviceBuffer<shambase::VecComponent<Tvec>> compute_compression_ratios(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<Tvec> &pos,
+        ClusterList<cluster_obj_count> &clusters,
+        sham::DeviceBuffer<shambase::VecComponent<Tvec>> &interact_radius) {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+        sham::DeviceBuffer<Tscal> ret{clusters.cluster_count, sched};
+
+        sham::kernel_call(
+            sched->get_queue(),
+            sham::MultiRef{pos, interact_radius, clusters},
+            sham::MultiRef{ret},
+            clusters.cluster_count,
+            [](u32 cluster_id, const Tvec *xyz, const Tscal *rint, auto clusters, Tscal *ratios) {
+                auto cluster_ids = clusters.get_cluster_ids(cluster_id);
+
+                Tscal sum_vol_indiv = Tscal(0);
+
+                shammath::AABB<Tvec> aabb_cluster
+                    = cluster_ids.template get_aabb<Tvec>([&](u32 id) -> shammath::AABB<Tvec> {
+                          auto rint_a = rint[id];
+                          auto pos_a  = xyz[id];
+                          auto aabb_a = shammath::AABB<Tvec>(pos_a, pos_a).expand_all(rint_a);
+                          sum_vol_indiv += aabb_a.get_volume();
+                          return aabb_a;
+                      });
+
+                Tscal vol_cluster = aabb_cluster.get_volume();
+
+                ratios[cluster_id] = vol_cluster / sum_vol_indiv;
+            });
+
+        return ret;
+    }
+
+    template sham::DeviceBuffer<f64> compute_compression_ratios<f64_3, 4>(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<f64_3> &pos,
+        ClusterList<4> &clusters,
+        sham::DeviceBuffer<f64> &interact_radius);
 
 } // namespace shamtree

@@ -70,6 +70,8 @@ namespace shammath {
 
         inline T delt() const { return upper - lower; }
 
+        inline T get_radii() const { return delt() / 2; }
+
         inline Tscal get_volume() { return sham::product_accumulate(upper - lower); }
 
         inline T get_center() const noexcept { return (lower + upper) / 2; }

@@ -102,6 +102,10 @@ namespace shamtree {
         void complete_event_state(sycl::event e) { cluster_ids.complete_event_state(e); }
     };
 
+    ///////////////////////////////////////////////////////////////////////
+    // Cluster gen
+    ///////////////////////////////////////////////////////////////////////
+
     enum class ClusteringStrategy { Hilbert };
 
     template<class Tvec>
@@ -119,18 +123,69 @@ namespace shamtree {
         ClusteringStrategy strategy,
         ClusteringOptions<Tvec> options = {});
 
+    ///////////////////////////////////////////////////////////////////////
+    // Compute clusters AABB
+    ///////////////////////////////////////////////////////////////////////
+
     template<class Tvec, u32 cluster_obj_count>
     struct ClusterListAABBs {
         u32 cluster_count;
         sham::DeviceBuffer<Tvec> clusters_aabb_min;
         sham::DeviceBuffer<Tvec> clusters_aabb_max;
+
+        struct accessed_ro {
+            const Tvec *clusters_aabb_min;
+            const Tvec *clusters_aabb_max;
+
+            shammath::AABB<Tvec> get_aabb(u32 cluster_id) {
+                return shammath::AABB<Tvec>{
+                    clusters_aabb_min[cluster_id], clusters_aabb_max[cluster_id]};
+            }
+        };
+
+        accessed_ro get_read_access(sham::EventList &depends_list) {
+            return {
+                clusters_aabb_min.get_read_access(depends_list),
+                clusters_aabb_max.get_read_access(depends_list)};
+        }
+
+        void complete_event_state(sycl::event e) {
+            clusters_aabb_min.complete_event_state(e);
+            clusters_aabb_max.complete_event_state(e);
+        }
+
+        sham::DeviceBuffer<Tvec> get_cluster_centers(sham::DeviceScheduler_ptr sched) {
+            sham::DeviceBuffer<Tvec> ret(cluster_count, sched);
+            sham::kernel_call(
+                sched->get_queue(),
+                sham::MultiRef{*this},
+                sham::MultiRef{ret},
+                cluster_count,
+                [](u32 cluster_id, accessed_ro aabbs, Tvec *center) {
+                    center[cluster_id] = aabbs.get_aabb(cluster_id).get_center();
+                });
+            return ret;
+        }
     };
 
     template<class Tvec, u32 cluster_obj_count>
     ClusterListAABBs<Tvec, cluster_obj_count> get_cluster_aabbs(
         sham::DeviceScheduler_ptr sched,
         sham::DeviceBuffer<Tvec> &pos,
-        ClusterList<cluster_obj_count> clusters);
+        ClusterList<cluster_obj_count> &clusters);
+
+    /// compute for each cluser
+    /// (aabb + interact radius)_cluster / sum (aabb + interact radius)_objects
+    template<class Tvec, u32 cluster_obj_count>
+    sham::DeviceBuffer<shambase::VecComponent<Tvec>> compute_compression_ratios(
+        sham::DeviceScheduler_ptr sched,
+        sham::DeviceBuffer<Tvec> &pos,
+        ClusterList<cluster_obj_count> &clusters,
+        sham::DeviceBuffer<shambase::VecComponent<Tvec>> &interact_radius);
+
+    ///////////////////////////////////////////////////////////////////////
+    // Cluster field mirror
+    ///////////////////////////////////////////////////////////////////////
 
     /// cluster field mirror
     /// mirror a field to a cluster
