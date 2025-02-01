@@ -61,8 +61,14 @@ namespace shamtree {
             u32 cnt_obj,
             u32 morton_count);
 
-        /// Default constructor
-        MortonCodeSet() = default;
+        /// Move constructor from each members
+        MortonCodeSet(
+            shammath::AABB<Tvec> &&bounding_box,
+            u32 &&cnt_obj,
+            u32 &&morton_count,
+            sham::DeviceBuffer<Tmorton> &&morton_codes)
+            : bounding_box(std::move(bounding_box)), cnt_obj(std::move(cnt_obj)),
+              morton_count(std::move(morton_count)), morton_codes(std::move(morton_codes)) {}
     };
 
 } // namespace shamtree
