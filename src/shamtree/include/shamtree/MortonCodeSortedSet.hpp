@@ -10,16 +10,12 @@
 #pragma once
 
 /**
- * @file MortonCodeSet.hpp
+ * @file MortonCodeSortedSet.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief
  */
 
-#include "shambase/aliases_int.hpp"
-#include "shambackends/DeviceBuffer.hpp"
-#include "shambackends/DeviceScheduler.hpp"
-#include "shambackends/vec.hpp"
-#include "shammath/AABB.hpp"
+#include "shamtree/MortonCodeSet.hpp"
 
 namespace shamtree {
 
@@ -32,7 +28,7 @@ namespace shamtree {
      * @tparam dim The dimensionality, inferred from Tvec if not provided
      */
     template<class Tmorton, class Tvec, u32 dim = shambase::VectorProperties<Tvec>::dimension>
-    class MortonCodeSet {
+    class MortonCodeSortedSet {
         public:
         /// The axis-aligned bounding box for the set of positions
         shammath::AABB<Tvec> bounding_box;
@@ -43,8 +39,11 @@ namespace shamtree {
         /// The count of Morton codes in the set (rounded to a power of 2)
         u32 morton_count;
 
-        /// Device buffer holding the Morton codes
-        sham::DeviceBuffer<Tmorton> morton_codes;
+        /// Device buffer holding the sorted Morton codes
+        sham::DeviceBuffer<Tmorton> sorted_morton_codes;
+
+        /// Device buffer holding the map from sorted Morton code to object id
+        sham::DeviceBuffer<u32> map_morton_id_to_obj_id;
 
         /**
          * @brief Constructs a MortonCodeSet
@@ -54,15 +53,9 @@ namespace shamtree {
          * @param pos_buf The buffer containing the input positions
          * @param cnt_obj The number of positions in the buffer
          */
-        MortonCodeSet(
+        MortonCodeSortedSet(
             sham::DeviceScheduler_ptr dev_sched,
-            shammath::AABB<Tvec> bounding_box,
-            sham::DeviceBuffer<Tvec> &pos_buf,
-            u32 cnt_obj,
-            u32 morton_count);
-
-        /// Default constructor
-        MortonCodeSet() = default;
+            MortonCodeSet<Tmorton, Tvec, dim> &&morton_codes_set);
     };
 
 } // namespace shamtree
