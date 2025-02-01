@@ -19,17 +19,6 @@
 #include "shamtree/MortonCodeSortedSet.hpp"
 #include <vector>
 
-#undef REQUIRE
-#define REQUIRE(a)                                                                                 \
-    do {                                                                                           \
-        bool eval = a;                                                                             \
-        if (eval) {                                                                                \
-            shamtest::asserts().assert_bool_with_log(#a, eval, "");                                \
-        } else {                                                                                   \
-            shamtest::asserts().assert_bool_with_log(#a, eval, #a " evaluated to false");          \
-        }                                                                                          \
-    } while (0)
-
 using Tvec    = f64_3;
 using Tmorton = u64;
 
