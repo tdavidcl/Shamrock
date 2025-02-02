@@ -30,7 +30,6 @@ inline std::vector<Tvec> partpos{
     Tvec(0.1, 0.1, 0.0),
     Tvec(0.0, 0.1, 0.1),
     Tvec(0.1, 0.0, 0.1),
-    Tvec(0.1, 0.0, 0.1),
     Tvec(0.1, 0.1, 0.1),
     Tvec(0.2, 0.2, 0.2),
     Tvec(0.3, 0.3, 0.3),
@@ -47,7 +46,6 @@ inline std::vector<Tmorton> test_mortons
        15203360500310070U,
        7601680250155035U,
        12669467083591725U,
-       12669467083591725U,
        17737253917028415U,
        141898031336227320U,
        1011023473270619655U,
@@ -55,6 +53,7 @@ inline std::vector<Tmorton> test_mortons
        9223372036854775807U,
        9223372036854775807U,
        0U,
+       18446744073709551615U,
        18446744073709551615U};
 
 inline std::vector<Tmorton> test_mortons_sorted
@@ -65,7 +64,6 @@ inline std::vector<Tmorton> test_mortons_sorted
        7601680250155035U,
        10135573666873380U,
        12669467083591725U,
-       12669467083591725U,
        15203360500310070U,
        17737253917028415U,
        141898031336227320U,
@@ -73,9 +71,10 @@ inline std::vector<Tmorton> test_mortons_sorted
        1135184250689818560U,
        9223372036854775807U,
        9223372036854775807U,
+       18446744073709551615U,
        18446744073709551615U};
 
-inline std::vector<u32> index_map_obj_idx = {14, 0, 3, 2, 5, 1, 7, 6, 4, 8, 9, 10, 11, 13, 12, 15};
+inline std::vector<u32> index_map_obj_idx = {13, 0, 3, 2, 5, 1, 6, 4, 7, 8, 9, 10, 11, 12, 15, 14};
 
 TestStart(Unittest, "shamtree/MortonCodeSet", test_morton_codeset, 1) {
 
