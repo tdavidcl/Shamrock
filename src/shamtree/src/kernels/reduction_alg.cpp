@@ -17,6 +17,8 @@
 #include "shambase/string.hpp"
 #include "shamalgs/memory.hpp"
 #include "shamalgs/numeric.hpp"
+#include "shambackends/DeviceQueue.hpp"
+#include "shambackends/EventList.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/sycl.hpp"
 #include "shamtree/kernels/reduction_alg.hpp"
@@ -29,15 +31,18 @@ class Kernel_generate_split_table_morton64;
 
 template<class u_morton, class kername, class split_int>
 void sycl_generate_split_table(
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
-    std::unique_ptr<sycl::buffer<u_morton>> &buf_morton,
+    sham::DeviceBuffer<u_morton> &buf_morton,
     std::unique_ptr<sycl::buffer<split_int>> &buf_split_table) {
 
     sycl::range<1> range_morton_count{morton_count};
 
-    queue.submit([&](sycl::handler &cgh) {
-        sycl::accessor m{*buf_morton, cgh, sycl::read_only};
+    sham::DeviceQueue &q = dev_sched->get_queue();
+    sham::EventList depends_list;
+    auto m = buf_morton.get_read_access(depends_list);
+
+    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
         sycl::accessor split_out{*buf_split_table, cgh, sycl::write_only, sycl::no_init};
 
         cgh.parallel_for<kername>(range_morton_count, [=](sycl::item<1> item) {
@@ -54,6 +59,8 @@ void sycl_generate_split_table(
             }
         });
     });
+
+    buf_morton.complete_event_state(e);
 }
 
 /*
@@ -114,18 +121,21 @@ class Kernel_iterate_reduction_morton64;
 
 template<class u_morton, class kername, class split_int>
 void sycl_reduction_iteration(
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
-    std::unique_ptr<sycl::buffer<u_morton>> &buf_morton,
+    sham::DeviceBuffer<u_morton> &buf_morton,
     std::unique_ptr<sycl::buffer<split_int>> &buf_split_table_in,
     std::unique_ptr<sycl::buffer<split_int>> &buf_split_table_out) {
 
     sycl::range<1> range_morton_count{morton_count};
 
-    queue.submit([&](sycl::handler &cgh) {
+    sham::DeviceQueue &q = dev_sched->get_queue();
+    sham::EventList depends_list;
+    auto m = buf_morton.get_read_access(depends_list);
+
+    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
         u32 _morton_cnt = morton_count;
 
-        sycl::accessor m{*buf_morton, cgh, sycl::read_only};
         sycl::accessor split_in{*buf_split_table_in, cgh, sycl::read_only};
         sycl::accessor split_out{*buf_split_table_out, cgh, sycl::write_only, sycl::no_init};
 
@@ -163,18 +173,21 @@ void sycl_reduction_iteration(
             }
         });
     });
+
+    buf_morton.complete_event_state(e);
 }
 
 void update_morton_buf(
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 len,
     u32 val_ins,
     sycl::buffer<u32> &buf_src,
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map) {
 
     sycl::range<1> range_morton_count{len + 2};
+    sham::DeviceQueue &q = dev_sched->get_queue();
 
-    queue.submit([&](sycl::handler &cgh) {
+    q.submit([&](sycl::handler &cgh) {
         u32 _len = len;
         u32 val  = val_ins;
 
@@ -195,20 +208,21 @@ void update_morton_buf(
 
 template<class split_int>
 void make_indexmap(
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
     u32 &morton_leaf_count,
     std::unique_ptr<sycl::buffer<split_int>> &buf_split_table,
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map) {
 
-    auto [buf, len] = shamalgs::numeric::stream_compact(queue, *buf_split_table, morton_count);
+    sham::DeviceQueue &q = dev_sched->get_queue();
+    auto [buf, len]      = shamalgs::numeric::stream_compact(q.q, *buf_split_table, morton_count);
 
     morton_leaf_count = len;
 
     buf_reduc_index_map = std::make_unique<sycl::buffer<u32>>(morton_leaf_count + 2);
 
     if (buf) {
-        update_morton_buf(queue, len, morton_count, *buf, buf_reduc_index_map);
+        update_morton_buf(dev_sched, len, morton_count, *buf, buf_reduc_index_map);
     } else {
         throw shambase::make_except_with_loc<std::runtime_error>("this result shouldn't be null");
     }
@@ -249,16 +263,16 @@ void make_indexmap(
         }
 
         buf_reduc_index_map = std::make_unique<sycl::buffer<u32>>(
-            shamalgs::memory::vector_to_buf(queue, reduc_index_map));
+            shamalgs::memory::vector_to_buf(q.q, reduc_index_map));
     }
 }
 
 template<class u_morton, class kername_split, class kername_reduc_it>
 void reduction_alg_impl(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
-    std::unique_ptr<sycl::buffer<u_morton>> &buf_morton,
+    sham::DeviceBuffer<u_morton> &buf_morton,
     u32 reduction_level,
     // out
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
@@ -268,16 +282,16 @@ void reduction_alg_impl(
     auto buf_split_table2 = std::make_unique<sycl::buffer<u32>>(morton_count);
 
     sycl_generate_split_table<u_morton, kername_split>(
-        queue, morton_count, buf_morton, buf_split_table1);
+        dev_sched, morton_count, buf_morton, buf_split_table1);
 
     for (unsigned int iter = 1; iter <= reduction_level; iter++) {
 
         if (iter % 2 == 0) {
             sycl_reduction_iteration<u_morton, kername_reduc_it>(
-                queue, morton_count, buf_morton, buf_split_table2, buf_split_table1);
+                dev_sched, morton_count, buf_morton, buf_split_table2, buf_split_table1);
         } else {
             sycl_reduction_iteration<u_morton, kername_reduc_it>(
-                queue, morton_count, buf_morton, buf_split_table1, buf_split_table2);
+                dev_sched, morton_count, buf_morton, buf_split_table1, buf_split_table2);
         }
     }
 
@@ -288,15 +302,15 @@ void reduction_alg_impl(
         buf_split_table = std::move(buf_split_table2);
     }
 
-    make_indexmap(queue, morton_count, morton_leaf_count, buf_split_table, buf_reduc_index_map);
+    make_indexmap(dev_sched, morton_count, morton_leaf_count, buf_split_table, buf_reduc_index_map);
 }
 
 template<>
 void reduction_alg<u32>(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
-    std::unique_ptr<sycl::buffer<u32>> &buf_morton,
+    sham::DeviceBuffer<u32> &buf_morton,
     u32 reduction_level,
     // out
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
@@ -305,15 +319,20 @@ void reduction_alg<u32>(
         u32,
         Kernel_generate_split_table_morton32,
         Kernel_iterate_reduction_morton32>(
-        queue, morton_count, buf_morton, reduction_level, buf_reduc_index_map, morton_leaf_count);
+        dev_sched,
+        morton_count,
+        buf_morton,
+        reduction_level,
+        buf_reduc_index_map,
+        morton_leaf_count);
 }
 
 template<>
 void reduction_alg<u64>(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_count,
-    std::unique_ptr<sycl::buffer<u64>> &buf_morton,
+    sham::DeviceBuffer<u64> &buf_morton,
     u32 reduction_level,
     // out
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
@@ -322,7 +341,12 @@ void reduction_alg<u64>(
         u64,
         Kernel_generate_split_table_morton64,
         Kernel_iterate_reduction_morton64>(
-        queue, morton_count, buf_morton, reduction_level, buf_reduc_index_map, morton_leaf_count);
+        dev_sched,
+        morton_count,
+        buf_morton,
+        reduction_level,
+        buf_reduc_index_map,
+        morton_leaf_count);
 }
 
 class Kernel_remap_morton_code_morton32;
@@ -331,17 +355,20 @@ class Kernel_remap_morton_code_morton64;
 template<class u_morton, class kername>
 void __sycl_morton_remap_reduction(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_leaf_count,
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
-    std::unique_ptr<sycl::buffer<u_morton>> &buf_morton,
+    sham::DeviceBuffer<u_morton> &buf_morton,
     // out
     std::unique_ptr<sycl::buffer<u_morton>> &buf_leaf_morton) {
     sycl::range<1> range_remap_morton{morton_leaf_count};
 
-    queue.submit([&](sycl::handler &cgh) {
+    sham::DeviceQueue &q = dev_sched->get_queue();
+    sham::EventList depends_list;
+    auto m = buf_morton.get_read_access(depends_list);
+
+    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
         auto id_remaped = buf_reduc_index_map->get_access<sycl::access::mode::read>(cgh);
-        auto m          = buf_morton->template get_access<sycl::access::mode::read>(cgh);
         auto m_remaped
             = buf_leaf_morton->template get_access<sycl::access::mode::discard_write>(cgh);
 
@@ -351,30 +378,32 @@ void __sycl_morton_remap_reduction(
             m_remaped[i] = m[id_remaped[i]];
         });
     });
+
+    buf_morton.complete_event_state(e);
 }
 
 template<>
 void sycl_morton_remap_reduction<u32>(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_leaf_count,
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
-    std::unique_ptr<sycl::buffer<u32>> &buf_morton,
+    sham::DeviceBuffer<u32> &buf_morton,
     // out
     std::unique_ptr<sycl::buffer<u32>> &buf_leaf_morton) {
     __sycl_morton_remap_reduction<u32, Kernel_remap_morton_code_morton32>(
-        queue, morton_leaf_count, buf_reduc_index_map, buf_morton, buf_leaf_morton);
+        dev_sched, morton_leaf_count, buf_reduc_index_map, buf_morton, buf_leaf_morton);
 }
 
 template<>
 void sycl_morton_remap_reduction<u64>(
     // in
-    sycl::queue &queue,
+    const sham::DeviceScheduler_ptr &dev_sched,
     u32 morton_leaf_count,
     std::unique_ptr<sycl::buffer<u32>> &buf_reduc_index_map,
-    std::unique_ptr<sycl::buffer<u64>> &buf_morton,
+    sham::DeviceBuffer<u64> &buf_morton,
     // out
     std::unique_ptr<sycl::buffer<u64>> &buf_leaf_morton) {
     __sycl_morton_remap_reduction<u64, Kernel_remap_morton_code_morton64>(
-        queue, morton_leaf_count, buf_reduc_index_map, buf_morton, buf_leaf_morton);
+        dev_sched, morton_leaf_count, buf_reduc_index_map, buf_morton, buf_leaf_morton);
 }

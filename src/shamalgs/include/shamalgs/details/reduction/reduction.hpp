@@ -78,7 +78,7 @@ namespace shamalgs::reduction {
 
     template<class T>
     inline bool equals(
-        sham::DeviceScheduler_ptr &q,
+        const sham::DeviceScheduler_ptr &q,
         sham::DeviceBuffer<T> &buf1,
         sham::DeviceBuffer<T> &buf2,
         u32 cnt) {

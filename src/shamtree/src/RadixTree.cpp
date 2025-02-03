@@ -16,6 +16,7 @@
 #include "shambase/floats.hpp"
 #include "shambase/integer.hpp"
 #include "shamalgs/memory.hpp"
+#include "shambackends/BufferMirror.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamtree/MortonKernels.hpp"
@@ -173,6 +174,8 @@ auto RadixTree<u_morton, vec>::compute_int_boxes(
     sham::EventList depends_list;
 
     auto h = int_rad_buf.get_read_access(depends_list);
+    auto particle_index_map
+        = tree_morton_codes.buf_particle_index_map->get_read_access(depends_list);
 
     auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
         u32 offset_leaf = tree_struct.internal_cell_count;
@@ -182,8 +185,6 @@ auto RadixTree<u_morton, vec>::compute_int_boxes(
 
         auto cell_particle_ids = tree_reduced_morton_codes.buf_reduc_index_map
                                      ->template get_access<sycl::access::mode::read>(cgh);
-        auto particle_index_map = tree_morton_codes.buf_particle_index_map
-                                      ->template get_access<sycl::access::mode::read>(cgh);
 
         coord_t tol = tolerance;
 
@@ -205,6 +206,7 @@ auto RadixTree<u_morton, vec>::compute_int_boxes(
     });
 
     int_rad_buf.complete_event_state(e);
+    tree_morton_codes.buf_particle_index_map->complete_event_state(e);
 
 #if false
     // debug code to track the DPCPP + prime number worker issue
@@ -525,12 +527,13 @@ RadixTree<u_morton, vec3>::cut_tree(sycl::queue &queue, sycl::buffer<u8> &valid_
 
             sycl::host_accessor cell_index_map{
                 *tree_reduced_morton_codes.buf_reduc_index_map, sycl::read_only};
-            sycl::host_accessor particle_index_map{
-                *tree_morton_codes.buf_particle_index_map, sycl::read_only};
+
+            auto particle_index_map
+                = tree_morton_codes.buf_particle_index_map->template mirror_to<sham::host>();
 
             sycl::host_accessor acc_valid_tree_morton{valid_tree_morton, sycl::read_only};
 
-            sycl::host_accessor acc_morton{*tree_morton_codes.buf_morton, sycl::read_only};
+            auto acc_morton = tree_morton_codes.buf_morton->template mirror_to<sham::host>();
 
             u32 cnt = 0;
 
@@ -581,21 +584,22 @@ RadixTree<u_morton, vec3>::cut_tree(sycl::queue &queue, sycl::buffer<u8> &valid_
             ret.tree_reduced_morton_codes.tree_leaf_count = new_morton_tree.size();
             ret.tree_struct.internal_cell_count = ret.tree_reduced_morton_codes.tree_leaf_count - 1;
 
-            ret.tree_morton_codes.buf_morton
-                = std::make_unique<sycl::buffer<u_morton>>(new_buf_morton.size());
+            ret.tree_morton_codes.buf_morton = std::make_unique<sham::DeviceBuffer<u_morton>>(
+                new_buf_morton.size(), shamsys::instance::get_compute_scheduler_ptr());
             {
-                sycl::host_accessor acc{
-                    *ret.tree_morton_codes.buf_morton, sycl::write_only, sycl::no_init};
+                auto acc = ret.tree_morton_codes.buf_morton->template mirror_to<sham::host>();
                 for (u32 i = 0; i < new_buf_morton.size(); i++) {
                     acc[i] = new_buf_morton[i];
                 }
             }
 
             ret.tree_morton_codes.buf_particle_index_map
-                = std::make_unique<sycl::buffer<u32>>(new_buf_particle_index_map.size());
+                = std::make_unique<sham::DeviceBuffer<u32>>(
+                    new_buf_particle_index_map.size(),
+                    shamsys::instance::get_compute_scheduler_ptr());
             {
-                sycl::host_accessor acc{
-                    *ret.tree_morton_codes.buf_particle_index_map, sycl::write_only, sycl::no_init};
+                auto acc = ret.tree_morton_codes.buf_particle_index_map
+                               ->template mirror_to<sham::host>();
                 for (u32 i = 0; i < new_buf_particle_index_map.size(); i++) {
                     acc[i] = new_buf_particle_index_map[i];
                 }

@@ -20,11 +20,16 @@
 #include "shamalgs/memory.hpp"
 #include "shamalgs/reduction.hpp"
 #include "shamalgs/serialize.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/math.hpp"
 #include "shambackends/vec.hpp"
 #include "shammath/CoordRange.hpp"
 #include "shamsys/NodeInstance.hpp"
+#include "shamtree/MortonCodeSet.hpp"
+#include "shamtree/MortonCodeSortedSet.hpp"
 #include "shamtree/RadixTreeMortonBuilder.hpp"
 #include <stdexcept>
+#include <utility>
 
 namespace shamrock::tree {
 
@@ -33,75 +38,94 @@ namespace shamrock::tree {
         public:
         u32 obj_cnt;
 
-        std::unique_ptr<sycl::buffer<u_morton>> buf_morton;
-        std::unique_ptr<sycl::buffer<u32>> buf_particle_index_map;
+        sham::DeviceBuffer<u_morton> buf_morton;
+        sham::DeviceBuffer<u32> buf_particle_index_map;
+
+        static TreeMortonCodes create(
+            u32 obj_cnt,
+            sham::DeviceBuffer<u_morton> &&buf_morton,
+            sham::DeviceBuffer<u32> &&buf_particle_index_map) {
+            return {
+                obj_cnt,
+                std::forward<sham::DeviceBuffer<u_morton>>(buf_morton),
+                std::forward<sham::DeviceBuffer<u32>>(buf_particle_index_map)};
+        }
 
         template<class T>
-        inline void build(
+        static TreeMortonCodes create(
             sycl::queue &queue,
             shammath::CoordRange<T> coord_range,
             u32 obj_cnt,
             sycl::buffer<T> &pos_buf) {
+
             StackEntry stack_loc{};
 
-            this->obj_cnt = obj_cnt;
+            sham::DeviceBuffer<T> pos_buf2(obj_cnt, shamsys::instance::get_compute_scheduler_ptr());
+            pos_buf2.copy_from_sycl_buffer(pos_buf);
 
-            using TProp = shambase::VectorProperties<T>;
-
-            RadixTreeMortonBuilder<u_morton, T, TProp::dimension>::build(
-                queue,
+            shamtree::MortonCodeSet<u_morton, T> mset{
+                shamsys::instance::get_compute_scheduler_ptr(),
                 {coord_range.lower, coord_range.upper},
-                pos_buf,
+                pos_buf2,
                 obj_cnt,
-                buf_morton,
-                buf_particle_index_map);
+                sham::roundup_pow2_clz(obj_cnt)};
+
+            shamtree::MortonCodeSortedSet<u_morton, T> mset_sorted{
+                shamsys::instance::get_compute_scheduler_ptr(), std::move(mset)};
+
+            return create(
+                obj_cnt,
+                std::move(mset_sorted.sorted_morton_codes),
+                std::move(mset_sorted.map_morton_id_to_obj_id));
         }
+
         template<class T>
-        inline void build(
+        static TreeMortonCodes create(
             sham::DeviceScheduler_ptr dev_sched,
             shammath::CoordRange<T> coord_range,
             u32 obj_cnt,
             sham::DeviceBuffer<T> &pos_buf) {
+
             StackEntry stack_loc{};
 
-            this->obj_cnt = obj_cnt;
-
-            using TProp = shambase::VectorProperties<T>;
-
-            RadixTreeMortonBuilder<u_morton, T, TProp::dimension>::build(
-                dev_sched,
+            shamtree::MortonCodeSet<u_morton, T> mset{
+                shamsys::instance::get_compute_scheduler_ptr(),
                 {coord_range.lower, coord_range.upper},
                 pos_buf,
                 obj_cnt,
-                buf_morton,
-                buf_particle_index_map);
+                sham::roundup_pow2_clz(obj_cnt)};
+
+            shamtree::MortonCodeSortedSet<u_morton, T> mset_sorted{
+                shamsys::instance::get_compute_scheduler_ptr(), std::move(mset)};
+
+            return create(
+                obj_cnt,
+                std::move(mset_sorted.sorted_morton_codes),
+                std::move(mset_sorted.map_morton_id_to_obj_id));
         }
 
         template<class T>
-        inline static std::unique_ptr<sycl::buffer<u_morton>> build_raw(
+        TreeMortonCodes(
             sycl::queue &queue,
             shammath::CoordRange<T> coord_range,
             u32 obj_cnt,
-            sycl::buffer<T> &pos_buf) {
+            sycl::buffer<T> &pos_buf)
+            : TreeMortonCodes{create(queue, coord_range, obj_cnt, pos_buf)} {}
 
-            std::unique_ptr<sycl::buffer<u_morton>> buf_morton;
-
-            StackEntry stack_loc{};
-
-            using TProp = shambase::VectorProperties<T>;
-
-            RadixTreeMortonBuilder<u_morton, T, TProp::dimension>::build_raw(
-                queue, {coord_range.lower, coord_range.upper}, pos_buf, obj_cnt, buf_morton);
-
-            return buf_morton;
-        }
+        template<class T>
+        TreeMortonCodes(
+            sham::DeviceScheduler_ptr dev_sched,
+            shammath::CoordRange<T> coord_range,
+            u32 obj_cnt,
+            sham::DeviceBuffer<T> &pos_buf)
+            : TreeMortonCodes{create(dev_sched, coord_range, obj_cnt, pos_buf)} {}
 
         [[nodiscard]] inline u64 memsize() const {
             u64 sum = 0;
 
             auto add_ptr = [&](auto &a) {
                 if (a) {
-                    sum += a->byte_size();
+                    sum += a.get_mem_usage();
                 }
             };
 
@@ -116,11 +140,8 @@ namespace shamrock::tree {
         inline TreeMortonCodes() = default;
 
         inline TreeMortonCodes(const TreeMortonCodes &other)
-            : obj_cnt(other.obj_cnt),
-              buf_morton(shamalgs::memory::duplicate(
-                  shamsys::instance::get_compute_queue(), other.buf_morton)),
-              buf_particle_index_map(shamalgs::memory::duplicate(
-                  shamsys::instance::get_compute_queue(), other.buf_particle_index_map)) {}
+            : obj_cnt(other.obj_cnt), buf_morton(other.buf_morton->copy()),
+              buf_particle_index_map(other.buf_particle_index_map->copy()) {}
 
         inline TreeMortonCodes &operator=(TreeMortonCodes &&other) noexcept {
             obj_cnt                = std::move(other.obj_cnt);
@@ -140,14 +161,14 @@ namespace shamrock::tree {
             cmp = cmp
                   && equals(
                       shamsys::instance::get_compute_queue(),
-                      *t1.buf_morton,
-                      *t2.buf_morton,
+                      t1.buf_morton,
+                      t2.buf_morton,
                       t1.obj_cnt);
             cmp = cmp
                   && equals(
                       shamsys::instance::get_compute_queue(),
-                      *t1.buf_particle_index_map,
-                      *t2.buf_particle_index_map,
+                      t1.buf_particle_index_map,
+                      t2.buf_particle_index_map,
                       t1.obj_cnt);
 
             return cmp;
@@ -190,8 +211,10 @@ namespace shamrock::tree {
 
             // u32 morton_len;
             // serializer.load(morton_len);
-            ret.buf_morton             = std::make_unique<sycl::buffer<u_morton>>(ret.obj_cnt);
-            ret.buf_particle_index_map = std::make_unique<sycl::buffer<u32>>(ret.obj_cnt);
+            ret.buf_morton = std::make_unique<sham::DeviceBuffer<u_morton>>(
+                ret.obj_cnt, shamsys::instance::get_compute_scheduler_ptr());
+            ret.buf_particle_index_map = std::make_unique<sham::DeviceBuffer<u32>>(
+                ret.obj_cnt, shamsys::instance::get_compute_scheduler_ptr());
 
             serializer.load_buf(*ret.buf_morton, ret.obj_cnt);
             serializer.load_buf(*ret.buf_particle_index_map, ret.obj_cnt);
