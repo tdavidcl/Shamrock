@@ -80,8 +80,6 @@ TestStart(Unittest, "shamtree/MortonCodeSet", test_morton_codeset, 1) {
 
     shammath::AABB<Tvec> bb = shammath::AABB<Tvec>(Tvec(0, 0, 0), Tvec(1, 1, 1));
 
-    shamcomm::logs::raw_ln(partpos);
-
     sham::DeviceBuffer<Tvec> partpos_buf(
         partpos.size(), shamsys::instance::get_compute_scheduler_ptr());
 
@@ -90,21 +88,16 @@ TestStart(Unittest, "shamtree/MortonCodeSet", test_morton_codeset, 1) {
     auto set = shamtree::MortonCodeSet<Tmorton, Tvec, 3>(
         shamsys::instance::get_compute_scheduler_ptr(), bb, partpos_buf, partpos.size(), 16);
 
-    logger::raw_ln("test mortons: ", test_mortons);
-    logger::raw_ln("calculated mortons: ", set.morton_codes.copy_to_stdvec());
-
-    REQUIRE(set.cnt_obj == partpos.size());
-    REQUIRE(set.morton_count == 16);
-    REQUIRE(set.morton_codes.get_size() == 16);
-    REQUIRE(set.morton_codes.copy_to_stdvec() == test_mortons);
+    REQUIRE_EQUAL(set.cnt_obj, partpos.size());
+    REQUIRE_EQUAL(set.morton_count, 16);
+    REQUIRE_EQUAL(set.morton_codes.get_size(), 16);
+    REQUIRE_EQUAL(set.morton_codes.copy_to_stdvec(), test_mortons);
 }
 
 TestStart(Unittest, "shamtree/MortonCodeSortedSet", test_morton_code_sort_set, 1) {
 
     shammath::AABB<Tvec> bb = shammath::AABB<Tvec>(Tvec(0, 0, 0), Tvec(1, 1, 1));
 
-    shamcomm::logs::raw_ln(partpos);
-
     sham::DeviceBuffer<Tvec> partpos_buf(
         partpos.size(), shamsys::instance::get_compute_scheduler_ptr());
 
@@ -113,28 +106,20 @@ TestStart(Unittest, "shamtree/MortonCodeSortedSet", test_morton_code_sort_set, 1
     auto set = shamtree::MortonCodeSet<Tmorton, Tvec, 3>(
         shamsys::instance::get_compute_scheduler_ptr(), bb, partpos_buf, partpos.size(), 16);
 
-    logger::raw_ln("test mortons: ", test_mortons);
     std::vector<Tmorton> mortons = set.morton_codes.copy_to_stdvec();
-    logger::raw_ln("calculated mortons: ", mortons);
 
-    REQUIRE(set.cnt_obj == partpos.size());
-    REQUIRE(set.morton_count == 16);
-    REQUIRE(set.morton_codes.get_size() == 16);
-    REQUIRE(set.morton_codes.copy_to_stdvec() == test_mortons);
+    REQUIRE_EQUAL(set.cnt_obj, partpos.size());
+    REQUIRE_EQUAL(set.morton_count, 16);
+    REQUIRE_EQUAL(set.morton_codes.get_size(), 16);
+    REQUIRE_EQUAL(set.morton_codes.copy_to_stdvec(), test_mortons);
 
     auto sorted_set = shamtree::MortonCodeSortedSet<Tmorton, Tvec, 3>(
         shamsys::instance::get_compute_scheduler_ptr(), std::move(set));
 
-    logger::raw_ln("test mortons sorted: ", test_mortons_sorted);
-    logger::raw_ln("calculated mortons sorted: ", sorted_set.sorted_morton_codes.copy_to_stdvec());
-
-    logger::raw_ln("test index map: ", index_map_obj_idx);
-    logger::raw_ln("calculated index map: ", sorted_set.map_morton_id_to_obj_id.copy_to_stdvec());
-
-    REQUIRE(sorted_set.cnt_obj == partpos.size());
-    REQUIRE(sorted_set.morton_count == 16);
-    REQUIRE(sorted_set.sorted_morton_codes.get_size() == 16);
-    REQUIRE(sorted_set.sorted_morton_codes.copy_to_stdvec() == test_mortons_sorted);
-    REQUIRE(sorted_set.map_morton_id_to_obj_id.get_size() == 16);
-    REQUIRE(sorted_set.map_morton_id_to_obj_id.copy_to_stdvec() == index_map_obj_idx);
+    REQUIRE_EQUAL(sorted_set.cnt_obj, partpos.size());
+    REQUIRE_EQUAL(sorted_set.morton_count, 16);
+    REQUIRE_EQUAL(sorted_set.sorted_morton_codes.get_size(), 16);
+    REQUIRE_EQUAL(sorted_set.sorted_morton_codes.copy_to_stdvec(), test_mortons_sorted);
+    REQUIRE_EQUAL(sorted_set.map_morton_id_to_obj_id.get_size(), 16);
+    REQUIRE_EQUAL(sorted_set.map_morton_id_to_obj_id.copy_to_stdvec(), index_map_obj_idx);
 }
