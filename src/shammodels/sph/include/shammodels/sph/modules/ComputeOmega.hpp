@@ -10,9 +10,8 @@
 #pragma once
 
 /**
- * @file ComputeEos.hpp
+ * @file ComputeOmega.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
- * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief
  *
  */
@@ -26,7 +25,7 @@
 namespace shammodels::sph::modules {
 
     template<class Tvec, template<class> class SPHKernel>
-    class ComputeEos {
+    class ComputeOmega {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
@@ -39,15 +38,12 @@ namespace shammodels::sph::modules {
         Config &solver_config;
         Storage &storage;
 
-        ComputeEos(ShamrockCtx &context, Config &solver_config, Storage &storage)
+        ComputeOmega(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
-        void compute_eos();
+        shamrock::ComputeField<Tscal> compute_omega();
 
         private:
-        template<class RhoGetGen>
-        void compute_eos_internal(RhoGetGen &&rho_getter_gen);
-
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 
