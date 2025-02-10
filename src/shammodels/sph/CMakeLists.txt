@@ -14,6 +14,7 @@ set(Sources
     src/pySPHModel.cpp
     src/pySPHKernels.cpp
     src/pyPhantomDump.cpp
+
     src/modules/SolverStorage.cpp
     src/modules/UpdateViscosity.cpp
     src/modules/DiffOperator.cpp
@@ -29,9 +30,13 @@ set(Sources
     src/modules/ParticleReordering.cpp
     src/modules/AnalysisSodTube.cpp
     src/modules/SPHSetup.cpp
+
     src/modules/setup/GeneratorMCDisc.cpp
+
     src/modules/render/CartesianRender.cpp
     src/modules/render/RenderFieldGetter.cpp
+
+    src/modules/io/VTKDump.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
