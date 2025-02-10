@@ -16,6 +16,7 @@ set(Sources
     src/pyPhantomDump.cpp
 
     src/modules/SolverStorage.cpp
+    src/modules/BuildTrees.cpp
     src/modules/UpdateViscosity.cpp
     src/modules/DiffOperator.cpp
     src/modules/DiffOperatorDtDivv.cpp
