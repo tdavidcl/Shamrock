@@ -54,6 +54,10 @@ namespace shammodels::sph::modules {
         using VaryingCD10  = typename Cfg_AV::VaryingCD10;
         using ConstantDisc = typename Cfg_AV::ConstantDisc;
 
+        template<class AlphaGetGen>
+        void update_derivs_hydro_artif_visc(
+            AlphaGetGen &&alpha_getter_gen, Tscal _beta_AV, Tscal _alpha_u);
+
         void update_derivs_noAV(None cfg);
         void update_derivs_constantAV(Constant cfg);
         void update_derivs_mm97(VaryingMM97 cfg);
