@@ -268,7 +268,16 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
     Cfg_AV cfg_av   = solver_config.artif_viscosity;
     Cfg_MHD cfg_mhd = solver_config.mhd_config;
 
-    if (Constant *v = std::get_if<Constant>(&cfg_av.config)) {
+    if (None *v = std::get_if<None>(&cfg_av.config)) {
+
+        update_derivs_hydro_artif_visc(
+            [&](auto &storage_comp_alpha, u64 id_patch) {
+                return AlphaGetterConstant<Tscal>{0};
+            },
+            0,
+            0);
+
+    } else if (Constant *v = std::get_if<Constant>(&cfg_av.config)) {
 
         update_derivs_hydro_artif_visc(
             [&](auto &storage_comp_alpha, u64 id_patch) {
@@ -303,15 +312,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
         shambase::throw_unimplemented();
     } else if (NoneMHD *v = std::get_if<NoneMHD>(&cfg_mhd.config)) {
         shambase::throw_unimplemented();
-    } else if (None *v = std::get_if<None>(&cfg_av.config)) {
-
-        update_derivs_hydro_artif_visc(
-            [&](auto &storage_comp_alpha, u64 id_patch) {
-                return AlphaGetterConstant<Tscal>{0};
-            },
-            0,
-            0);
-
     } else {
         shambase::throw_unimplemented();
     }
@@ -467,13 +467,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
 
+                    Tscal qa_ab = q_av_disc(rho_a, h_a, rab, alpha_a, cs_a, vsig_a, v_ab_r_ab);
+                    Tscal qb_ab = q_av_disc(rho_b, h_b, rab, alpha_b, cs_b, vsig_b, v_ab_r_ab);
+
                     // Tscal vsig_u = abs_v_ab_r_ab;
                     Tscal rho_avg = (rho_a + rho_b) * 0.5;
                     Tscal abs_dp  = sham::abs(P_a - P_b);
                     Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
-
-                    Tscal qa_ab = q_av_disc(rho_a, h_a, rab, alpha_a, cs_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av_disc(rho_b, h_b, rab, alpha_b, cs_b, vsig_b, v_ab_r_ab);
 
                     add_to_derivs_sph_artif_visco_cond(
                         pmass,
