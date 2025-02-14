@@ -6,6 +6,9 @@ gamma = 1.4
 rho_g = 1
 rho_d = 0.125
 
+epsilon_start = 0.3
+deltavx_start = 0.2
+
 fact = (rho_g/rho_d)**(1./3.)
 
 P_g = 1
@@ -47,8 +50,8 @@ model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
 model.set_value_in_a_box("uint", "f64", u_g ,(-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
 model.set_value_in_a_box("uint", "f64", u_d ,(0,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
-model.set_value_in_a_box("epsilon", "f64", 0.3 ,(-xs,-ys/2,-zs/2),(xs,ys/2,zs/2))
-model.set_value_in_a_box("deltav", "f64_3", (0.2,0,0) ,(-xs,-ys/2,-zs/2),(xs,ys/2,zs/2))
+model.set_value_in_a_box("epsilon", "f64", epsilon_start ,(-xs,-ys/2,-zs/2),(xs,ys/2,zs/2))
+model.set_value_in_a_box("deltav", "f64_3", (deltavx_start,0,0) ,(-xs,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
 
 
@@ -79,7 +82,7 @@ cnt = 0
 def analyse():
     global cnt
 
-    sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1,P_1 = 1,rho_5 = 0.125,P_5 = 0.1)
+    sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1 * (1-epsilon_start),P_1 = 1* (1-epsilon_start),rho_5 = 0.125* (1-epsilon_start),P_5 = 0.1* (1-epsilon_start))
     sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), model.get_time(), 0.0, -0.5,0.5)
     print(sodanalysis.compute_L2_dist())
 
@@ -107,16 +110,29 @@ def analyse():
     rho = pmass*(model.get_hfact()/hpart)**3
     P = (gamma-1) * rho *uint
 
-    fig, axs = plt.subplots(4, sharex=True, figsize=(12,8),dpi=125)
+    rhog = (1 - epsilon)*rho
+    rhod = epsilon*rho
+    Pg = (gamma-1) * rhog * uint
+    vg = vx - epsilon*deltavx
+    vd = vx + (1-epsilon)*deltavx
 
-    axs[0].plot(x,rho,'.',label="rho")
-    axs[0].plot(x,vx,'.',label="v")
-    axs[0].plot(x,P,'.',label="P")
-    axs[1].plot(x,alpha,'.',label="alpha")
-    axs[2].plot(x,deltavx,'.',label="deltavx")
-    axs[2].plot(x,epsilon,'.',label="epsilon")
-    axs[3].plot(x,dtdeltavx,'.',label="dtdeltavx")
-    axs[3].plot(x,dtepsilon,'.',label="dtepsilon")
+    vg_init = 0 - epsilon_start*deltavx_start
+
+    fig, axs = plt.subplots(2,2,  figsize=(12,8),dpi=125)
+
+    axs[0,0].plot(x,rhog,'.',label="rhog")
+    axs[0,0].plot(x,rhod,'.',label="rhod")
+    axs[0,0].plot(x,vg,'.',label="vg")
+    axs[0,0].plot(x,vd,'.',label="vd")
+    axs[0,0].plot(x,Pg,'.',label="P")
+
+    axs[0,1].plot(x,rho,'.',label="rho")
+    axs[0,1].plot(x,vx,'.',label="v")
+    axs[0,1].plot(x,uint,'.',label="uint")
+    axs[0,1].plot(x,epsilon,'.',label="epsilon")
+
+    axs[1,0].plot(x,alpha,'.',label="alpha")
+    axs[1,1].plot(x,deltavx,'.',label="deltavx")
     #plt.plot(x,hpart,'.',label="hpart")
     #plt.plot(x,uint,'.',label="uint")
 
@@ -131,32 +147,36 @@ def analyse():
     for i in range(len(x)):
         x_ = x[i]
 
-        _rho,_vx,_P = sod.get_value(model.get_time(), x_)
+        #offset = deltavx_start
+
+        _rho,_vx,_P = sod.get_value(model.get_time(), x_ - vg_init*model.get_time())
         rho.append(_rho)
-        vx.append(_vx)
+        vx.append(_vx + vg_init)
         P.append(_P)
 
     x += 0.5
-    axs[0].plot(x,rho,color = "black",label="analytic")
-    axs[0].plot(x,vx,color = "black")
-    axs[0].plot(x,P,color = "black")
+    axs[0,0].plot(x,rho,color = "black",label="analytic")
+    axs[0,0].plot(x,vx,color = "black")
+    axs[0,0].plot(x,P,color = "black")
 
 
     #######
 
     #enable grid on all axis
-    for ax in axs:
-        ax.grid()
-        ax.legend()
+    for ax1 in axs:
+        for ax2 in ax1:
+            ax2.grid()
+            ax2.legend()
+            ax2.set_xlim(0,1)
 
 
-    axs[0].set_ylim(0,1.1)
-    axs[1].set_ylim(0,1.1)
-    axs[2].set_ylim(-1,1)
-    axs[3].set_ylim(-3,3)
+    axs[0,0].set_ylim(-0.2,1.1)
+    axs[0,1].set_ylim(0,1.1)
+    axs[1,0].set_ylim(0,1.1)
+    axs[1,1].set_ylim(-2,2)
 
-    plt.xlim(0,1)
-    axs[0].set_title("t="+str(model.get_time()))
+
+    fig.suptitle("t="+str(model.get_time()))
     plt.tight_layout()
     plt.savefig(f"dusty_sod_{cnt}.png")
     cnt += 1
