@@ -1252,13 +1252,15 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
     const u32 ihpart = pdl.get_field_idx<Tscal>("hpart");
 
     const u32 idtepsilon = pdl.get_field_idx<Tscal>("dtepsilon");
-    const u32 idtdeltav  = pdl.get_field_idx<Tvec>("dtdeletav");
+    const u32 idtdeltav  = pdl.get_field_idx<Tvec>("dtdeltav");
 
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
     u32 ihpart_interf                              = ghost_layout.get_field_idx<Tscal>("hpart");
     u32 iuint_interf                               = ghost_layout.get_field_idx<Tscal>("uint");
     u32 ivxyz_interf                               = ghost_layout.get_field_idx<Tvec>("vxyz");
     u32 iomega_interf                              = ghost_layout.get_field_idx<Tscal>("omega");
+    u32 iepsilon_interf                            = ghost_layout.get_field_idx<Tscal>("epsilon");
+    u32 ideltav_interf                             = ghost_layout.get_field_idx<Tvec>("deltav");
 
     auto &merged_xyzh                                 = storage.merged_xyzh.get();
     ComputeField<Tscal> &omega                        = storage.omega.get();
@@ -1272,6 +1274,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         sham::DeviceBuffer<Tscal> &buf_hpart = mpdat.get_field_buf_ref<Tscal>(ihpart_interf);
         sham::DeviceBuffer<Tscal> &buf_omega = mpdat.get_field_buf_ref<Tscal>(iomega_interf);
         sham::DeviceBuffer<Tscal> &buf_uint  = mpdat.get_field_buf_ref<Tscal>(iuint_interf);
+
         sham::DeviceBuffer<Tscal> &buf_pressure
             = storage.pressure.get().get_buf_check(cur_p.id_patch);
         sham::DeviceBuffer<Tscal> &buf_alpha_AV
@@ -1285,6 +1288,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
             pdat.get_field<Tscal>(idtepsilon), 0, pdat.get_obj_cnt()};
         PatchDataFieldSpan<Tvec> span_dtdeltav{
             pdat.get_field<Tvec>(idtdeltav), 0, pdat.get_obj_cnt()};
+
+        PatchDataFieldSpan<Tscal> span_epsilon{
+            mpdat.get_field<Tscal>(iepsilon_interf), 0, merged_patch.total_elements};
+
+        PatchDataFieldSpan<Tvec> span_deltav{
+            mpdat.get_field<Tvec>(ideltav_interf), 0, merged_patch.total_elements};
 
         tree::ObjectCache &pcache = storage.neighbors_cache.get().get_cache(cur_p.id_patch);
 
@@ -1302,6 +1311,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         auto alpha_AV   = buf_alpha_AV.get_read_access(depends_list);
         auto cs         = buf_cs.get_read_access(depends_list);
         auto ploop_ptrs = pcache.get_read_access(depends_list);
+        auto epsilon    = span_epsilon.get_read_access(depends_list);
+        auto deltav     = span_deltav.get_read_access(depends_list);
 
         auto axyz      = buf_axyz.get_write_access(depends_list);
         auto du        = buf_duint.get_write_access(depends_list);
@@ -1344,19 +1355,37 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     return local_sum_dtdeltav[local_id * ndust + idust];
                 };
 
+                auto epsilon_sum = [&](u32 ipart) -> Tscal {
+                    Tscal sum = 0;
+                    for (u32 idust = 0; idust < ndust; idust++) {
+                        sum += epsilon(ipart, idust);
+                    }
+                    return sum;
+                };
+
+                auto get_epsilon_deltav_sum = [&](u32 ipart) -> Tvec {
+                    Tvec sum = {0, 0, 0};
+                    for (u32 idust = 0; idust < ndust; idust++) {
+                        sum += epsilon(ipart, idust) * deltav(ipart, idust);
+                    }
+                    return sum;
+                };
+
                 using namespace shamrock::sph;
 
                 Tvec sum_axyz  = {0, 0, 0};
                 Tscal sum_du_a = 0;
 
-                Tscal h_a           = hpart[id_a];
-                Tvec xyz_a          = xyz[id_a];
-                Tvec vxyz_a         = vxyz[id_a];
-                Tscal P_a           = pressure[id_a];
-                Tscal cs_a          = cs[id_a];
-                Tscal omega_a       = omega[id_a];
-                const Tscal u_a     = u[id_a];
-                const Tscal alpha_a = alpha_AV[id_a];
+                Tscal h_a                     = hpart[id_a];
+                Tvec xyz_a                    = xyz[id_a];
+                Tvec vxyz_a                   = vxyz[id_a];
+                Tscal P_a                     = pressure[id_a];
+                Tscal cs_a                    = cs[id_a];
+                Tscal omega_a                 = omega[id_a];
+                const Tscal u_a               = u[id_a];
+                const Tscal alpha_a           = alpha_AV[id_a];
+                const Tscal epsilon_a         = epsilon_sum(id_a);
+                const Tvec epsilon_a_deltav_a = get_epsilon_deltav_sum(id_a);
 
                 Tscal rho_a     = rho_h(pmass, h_a, Kernel::hfactd);
                 Tscal rho_a_sq  = rho_a * rho_a;
@@ -1366,8 +1395,22 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                 Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
 
-                Tvec force_pressure{0, 0, 0};
-                Tscal tmpdU_pressure = 0;
+                Tvec gas_axyz_a{0, 0, 0};
+                Tscal dtuinta = 0;
+
+                u32 test_part = 10000;
+
+                if (id_a == test_part) {
+                    logger::raw_ln(
+                        shambase::format("xyz_a = {} {} {}", xyz_a[0], xyz_a[1], xyz_a[2]));
+                    logger::raw_ln(
+                        shambase::format("vxyz_a = {} {} {}", vxyz_a[0], vxyz_a[1], vxyz_a[2]));
+                    logger::raw_ln(shambase::format("h_a = {}", h_a));
+                    logger::raw_ln(shambase::format("u_a = {}", u_a));
+                    logger::raw_ln(shambase::format("P_a = {}", P_a));
+                    logger::raw_ln(shambase::format("cs_a = {}", cs_a));
+                    logger::raw_ln(shambase::format("omega_a = {}", omega_a));
+                }
 
                 particle_looper.for_each_object(id_a, [&](u32 id_b) {
                     // compute only omega_a
@@ -1388,7 +1431,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                     Tscal rab = sycl::sqrt(rab2);
 
-                    Tscal rho_b = rho_h(pmass, h_b, Kernel::hfactd);
+                    Tscal rho_b             = rho_h(pmass, h_b, Kernel::hfactd);
+                    Tscal omega_b_rho_b_inv = 1 / (omega_b * rho_b);
 
                     Tscal Fab_a = Kernel::dW_3d(rab, h_a);
                     Tscal Fab_b = Kernel::dW_3d(rab, h_b);
@@ -1435,14 +1479,52 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         vsig_u,
                         qa_ab,
                         qb_ab,
-                        force_pressure,
-                        tmpdU_pressure);
+                        gas_axyz_a,
+                        dtuinta);
+
+                    const Tscal epsilon_b         = epsilon_sum(id_b);
+                    const Tvec epsilon_b_deltav_b = get_epsilon_deltav_sum(id_b);
+                    for (u32 idust = 0; idust < ndust; idust++) {
+                        Tscal loc_term = -pmass
+                                         * (sham::dot(
+                                                epsilon(id_a, idust) * omega_a_rho_a_inv
+                                                    * (deltav(id_a, idust) - epsilon_a_deltav_a),
+                                                r_ab_unit * Fab_a)
+                                            + sham::dot(
+                                                epsilon(id_b, idust) * omega_b_rho_b_inv
+                                                    * (deltav(id_b, idust) - epsilon_b_deltav_b),
+                                                r_ab_unit * Fab_b));
+
+                        if (id_a == test_part) {
+
+                            logger::raw_ln(shambase::format(
+                                "id_a: {}, id_b: {}, idust: {}, loc_term: {}",
+                                id_a,
+                                id_b,
+                                idust,
+                                loc_term));
+                        }
+                        dtepsilon_accum(idust) += loc_term;
+                    }
                 });
 
-                axyz[id_a] = force_pressure;
-                du[id_a]   = tmpdU_pressure;
+                axyz[id_a] = /*(1 - epsilon_a) * */ gas_axyz_a;
+                du[id_a]   = dtuinta;
+
+                if (id_a == test_part) {
+                    logger::raw_ln(shambase::format(
+                        "id_a: {}, gas_axyz_a: {}, dtuinta: {}", id_a, gas_axyz_a, dtuinta));
+                }
 
                 for (u32 idust = 0; idust < ndust; idust++) {
+                    if (id_a == test_part) {
+                        logger::raw_ln(shambase::format(
+                            "id_a: {}, idust: {}, dtepsilon_accum: {}, dtdeltav_accum: {}",
+                            id_a,
+                            idust,
+                            dtepsilon_accum(idust),
+                            dtdeltav_accum(idust)));
+                    }
                     dtepsilon(id_a, idust) = dtepsilon_accum(idust);
                     dtdeltav(id_a, idust)  = dtdeltav_accum(idust);
                 }
@@ -1460,12 +1542,15 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         buf_alpha_AV.complete_event_state(e);
         buf_cs.complete_event_state(e);
 
+        span_epsilon.complete_event_state(e);
+        span_deltav.complete_event_state(e);
+        span_dtepsilon.complete_event_state(e);
+        span_dtdeltav.complete_event_state(e);
+
         sham::EventList resulting_events;
         resulting_events.add_event(e);
         pcache.complete_event_state(resulting_events);
     });
-
-    shambase::throw_unimplemented();
 }
 
 using namespace shammath;

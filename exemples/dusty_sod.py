@@ -72,77 +72,83 @@ model.dump("outfile")
 
 t_target = 0.01
 
-model.evolve_until(t_target)
-
-#model.evolve_once()
-
-sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1,P_1 = 1,rho_5 = 0.125,P_5 = 0.1)
-sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, 0.0, -0.5,0.5)
-print(sodanalysis.compute_L2_dist())
+#model.evolve_until(t_target)
 
 
-model.do_vtk_dump("end.vtk", True)
-dump = model.make_phantom_dump()
-dump.save_dump("end.phdump")
+def analyse():
 
-import numpy as np
-dic = ctx.collect_data()
-
-x =np.array(dic['xyz'][:,0]) + 0.5
-vx = dic['vxyz'][:,0]
-uint = dic['uint'][:]
-
-deltavx = dic['deltav'][:,0]
-epsilon = dic['epsilon'][:]
-
-dtdeltavx = dic['dtdeltav'][:,0]
-dtepsilon = dic['dtepsilon'][:]
-
-hpart = dic["hpart"]
-alpha = dic["alpha_AV"]
-
-rho = pmass*(model.get_hfact()/hpart)**3
-P = (gamma-1) * rho *uint
+    sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1,P_1 = 1,rho_5 = 0.125,P_5 = 0.1)
+    sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, 0.0, -0.5,0.5)
+    print(sodanalysis.compute_L2_dist())
 
 
-plt.plot(x,rho,'.',label="rho")
-plt.plot(x,vx,'.',label="v")
-plt.plot(x,P,'.',label="P")
-plt.plot(x,alpha,'.',label="alpha")
-plt.plot(x,deltavx,'.',label="deltavx")
-plt.plot(x,epsilon,'.',label="epsilon")
-plt.plot(x,dtdeltavx,'.',label="dtdeltavx")
-plt.plot(x,dtepsilon,'.',label="dtepsilon")
-#plt.plot(x,hpart,'.',label="hpart")
-#plt.plot(x,uint,'.',label="uint")
+    model.do_vtk_dump("end.vtk", True)
+    dump = model.make_phantom_dump()
+    dump.save_dump("end.phdump")
+
+    import numpy as np
+    dic = ctx.collect_data()
+
+    x =np.array(dic['xyz'][:,0]) + 0.5
+    vx = dic['vxyz'][:,0]
+    uint = dic['uint'][:]
+
+    deltavx = dic['deltav'][:,0]
+    epsilon = dic['epsilon'][:]
+
+    dtdeltavx = dic['dtdeltav'][:,0]
+    dtepsilon = dic['dtepsilon'][:]
+
+    hpart = dic["hpart"]
+    alpha = dic["alpha_AV"]
+
+    rho = pmass*(model.get_hfact()/hpart)**3
+    P = (gamma-1) * rho *uint
 
 
-#### add analytical soluce
-x = np.linspace(-0.5,0.5,1000)
-
-rho = []
-P = []
-vx = []
-
-for i in range(len(x)):
-    x_ = x[i]
-
-    _rho,_vx,_P = sod.get_value(t_target, x_)
-    rho.append(_rho)
-    vx.append(_vx)
-    P.append(_P)
-
-x += 0.5
-plt.plot(x,rho,color = "black",label="analytic")
-plt.plot(x,vx,color = "black")
-plt.plot(x,P,color = "black")
-#######
+    plt.plot(x,rho,'.',label="rho")
+    plt.plot(x,vx,'.',label="v")
+    plt.plot(x,P,'.',label="P")
+    plt.plot(x,alpha,'.',label="alpha")
+    plt.plot(x,deltavx,'.',label="deltavx")
+    plt.plot(x,epsilon,'.',label="epsilon")
+    plt.plot(x,dtdeltavx,'.',label="dtdeltavx")
+    plt.plot(x,dtepsilon,'.',label="dtepsilon")
+    #plt.plot(x,hpart,'.',label="hpart")
+    #plt.plot(x,uint,'.',label="uint")
 
 
+    #### add analytical soluce
+    x = np.linspace(-0.5,0.5,1000)
 
-plt.legend()
-plt.grid()
-plt.ylim(0,1.1)
-plt.xlim(0,1)
-plt.title("t="+str(t_target))
-plt.show()
+    rho = []
+    P = []
+    vx = []
+
+    for i in range(len(x)):
+        x_ = x[i]
+
+        _rho,_vx,_P = sod.get_value(t_target, x_)
+        rho.append(_rho)
+        vx.append(_vx)
+        P.append(_P)
+
+    x += 0.5
+    plt.plot(x,rho,color = "black",label="analytic")
+    plt.plot(x,vx,color = "black")
+    plt.plot(x,P,color = "black")
+    #######
+
+
+
+    plt.legend()
+    plt.grid()
+    plt.ylim(0,1.1)
+    plt.xlim(0,1)
+    plt.title("t="+str(t_target))
+    plt.show()
+
+
+for i in range(10):
+    model.evolve_once()
+    analyse()
