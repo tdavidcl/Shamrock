@@ -72,7 +72,7 @@ struct RhoGetterMonofluid {
             }
 
             using namespace shamrock::sph;
-            return /* (1 - epsilon_sum) * */ rho_h(pmass, h[i], hfact);
+            return (1 - epsilon_sum) * rho_h(pmass, h[i], hfact);
         }
     };
 

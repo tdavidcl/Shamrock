@@ -70,15 +70,17 @@ model.set_cfl_force(0.1)
 
 model.dump("outfile")
 
-t_target = 0.01
+t_target = 0.02
+print("Target time :", t_target)
 
 #model.evolve_until(t_target)
 
-
+cnt = 0
 def analyse():
+    global cnt
 
     sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1,P_1 = 1,rho_5 = 0.125,P_5 = 0.1)
-    sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), t_target, 0.0, -0.5,0.5)
+    sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), model.get_time(), 0.0, -0.5,0.5)
     print(sodanalysis.compute_L2_dist())
 
 
@@ -105,15 +107,16 @@ def analyse():
     rho = pmass*(model.get_hfact()/hpart)**3
     P = (gamma-1) * rho *uint
 
+    fig, axs = plt.subplots(4, sharex=True, figsize=(12,8),dpi=125)
 
-    plt.plot(x,rho,'.',label="rho")
-    plt.plot(x,vx,'.',label="v")
-    plt.plot(x,P,'.',label="P")
-    plt.plot(x,alpha,'.',label="alpha")
-    plt.plot(x,deltavx,'.',label="deltavx")
-    plt.plot(x,epsilon,'.',label="epsilon")
-    plt.plot(x,dtdeltavx,'.',label="dtdeltavx")
-    plt.plot(x,dtepsilon,'.',label="dtepsilon")
+    axs[0].plot(x,rho,'.',label="rho")
+    axs[0].plot(x,vx,'.',label="v")
+    axs[0].plot(x,P,'.',label="P")
+    axs[1].plot(x,alpha,'.',label="alpha")
+    axs[2].plot(x,deltavx,'.',label="deltavx")
+    axs[2].plot(x,epsilon,'.',label="epsilon")
+    axs[3].plot(x,dtdeltavx,'.',label="dtdeltavx")
+    axs[3].plot(x,dtepsilon,'.',label="dtepsilon")
     #plt.plot(x,hpart,'.',label="hpart")
     #plt.plot(x,uint,'.',label="uint")
 
@@ -128,27 +131,43 @@ def analyse():
     for i in range(len(x)):
         x_ = x[i]
 
-        _rho,_vx,_P = sod.get_value(t_target, x_)
+        _rho,_vx,_P = sod.get_value(model.get_time(), x_)
         rho.append(_rho)
         vx.append(_vx)
         P.append(_P)
 
     x += 0.5
-    plt.plot(x,rho,color = "black",label="analytic")
-    plt.plot(x,vx,color = "black")
-    plt.plot(x,P,color = "black")
+    axs[0].plot(x,rho,color = "black",label="analytic")
+    axs[0].plot(x,vx,color = "black")
+    axs[0].plot(x,P,color = "black")
+
+
     #######
 
+    #enable grid on all axis
+    for ax in axs:
+        ax.grid()
+        ax.legend()
 
 
-    plt.legend()
-    plt.grid()
-    plt.ylim(0,1.1)
+    axs[0].set_ylim(0,1.1)
+    axs[1].set_ylim(0,1.1)
+    axs[2].set_ylim(-1,1)
+    axs[3].set_ylim(-3,3)
+
     plt.xlim(0,1)
-    plt.title("t="+str(t_target))
-    plt.show()
+    axs[0].set_title("t="+str(model.get_time()))
+    plt.tight_layout()
+    plt.savefig(f"dusty_sod_{cnt}.png")
+    cnt += 1
+    #plt.show()
+    #clear completely the plot
+    plt.close(fig)
 
 
-for i in range(10):
+for i in range(500):
     model.evolve_once()
     analyse()
+
+model.evolve_until(t_target)
+analyse()
