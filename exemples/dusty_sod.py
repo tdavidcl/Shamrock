@@ -7,7 +7,7 @@ rho_g = 1
 rho_d = 0.125
 
 epsilon_start = 0.3
-deltavx_start = 0.2
+deltavx_start = 0.0
 
 fact = (rho_g/rho_d)**(1./3.)
 
@@ -27,7 +27,8 @@ model = shamrock.get_SPHModel(context = ctx, vector_type = "f64_3",sph_kernel = 
 cfg = model.gen_default_config()
 #cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
 #cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
-cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
+#cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
+cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 0.0,sigma_decay = 0.1, alpha_u = 0, beta_AV = 0)
 cfg.set_dust_mode_monofluid_complete(ndust = 1)
 cfg.set_boundary_periodic()
 cfg.set_eos_adiabatic(gamma)

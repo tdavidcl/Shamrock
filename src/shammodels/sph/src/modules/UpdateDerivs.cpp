@@ -17,6 +17,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambackends/math.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
@@ -1403,20 +1404,27 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                 Tvec gas_axyz_a{0, 0, 0};
                 Tvec eps_a_dust_axyz_a{0, 0, 0};
                 Tscal dtuinta = 0;
+                Tscal dtrho   = 0;
 
-                u32 test_part = 10000;
+                u32 test_part = 73753;
 
-                if (id_a == test_part) {
-                    logger::raw_ln(
-                        shambase::format("xyz_a = {} {} {}", xyz_a[0], xyz_a[1], xyz_a[2]));
-                    logger::raw_ln(
-                        shambase::format("vxyz_a = {} {} {}", vxyz_a[0], vxyz_a[1], vxyz_a[2]));
-                    logger::raw_ln(shambase::format("h_a = {}", h_a));
-                    logger::raw_ln(shambase::format("u_a = {}", u_a));
-                    logger::raw_ln(shambase::format("P_a = {}", P_a));
-                    logger::raw_ln(shambase::format("cs_a = {}", cs_a));
-                    logger::raw_ln(shambase::format("omega_a = {}", omega_a));
-                }
+                // if(xyz_a[0] < 0.01 && xyz_a[0] > -0.01) {
+                //     std::cout << id_a << std::endl;
+                // }
+                //
+                // if (id_a == test_part) {
+                //     std::cout << (
+                //         shambase::format("xyz_a = {} {} {}", xyz_a[0], xyz_a[1], xyz_a[2])) <<
+                //         std::endl;
+                //     std::cout << (
+                //         shambase::format("vxyz_a = {} {} {}", vxyz_a[0], vxyz_a[1], vxyz_a[2]))
+                //         << std::endl;
+                //     std::cout << (shambase::format("h_a = {}", h_a)) << std::endl;
+                //     std::cout << (shambase::format("u_a = {}", u_a)) << std::endl;
+                //     std::cout << (shambase::format("P_a = {}", P_a)) << std::endl;
+                //     std::cout << (shambase::format("cs_a = {}", cs_a)) << std::endl;
+                //     std::cout << (shambase::format("omega_a = {}", omega_a)) << std::endl;
+                // }
 
                 particle_looper.for_each_object(id_a, [&](u32 id_b) {
                     // compute only omega_a
@@ -1488,6 +1496,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         gas_axyz_a,
                         dtuinta);
 
+                    dtrho += (1 / omega_a) * pmass * sham::dot(v_ab, r_ab_unit * Fab_b);
+
                     const Tscal epsilon_b         = epsilon_sum(id_b);
                     const Tvec epsilon_b_deltav_b = get_epsilon_deltav_sum(id_b);
 
@@ -1520,21 +1530,21 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         eps_a_dust_axyz_a += daxyz_a_loc;
 
                         dtepsilon_accum(idust) += dtepsilon_loc;
-                        if (id_a == test_part) {
-
-                            logger::raw_ln(shambase::format(
-                                "id_a: {}, id_b: {}, idust: {}, dtepsilon_loc: {}, "
-                                "dtepsilon_accum: {}",
-                                id_a,
-                                id_b,
-                                idust,
-                                dtepsilon_loc,
-                                dtepsilon_accum(idust)));
-                            logger::raw_ln(shambase::format(
-                                "daxyz_a_loc: {}, eps_a_dust_axyz_a: {}",
-                                daxyz_a_loc,
-                                eps_a_dust_axyz_a));
-                        }
+                        // if (id_a == test_part) {
+                        //
+                        //     logger::raw_ln(shambase::format(
+                        //         "id_a: {}, id_b: {}, idust: {}, dtepsilon_loc: {}, "
+                        //         "dtepsilon_accum: {}",
+                        //         id_a,
+                        //         id_b,
+                        //         idust,
+                        //         dtepsilon_loc,
+                        //         dtepsilon_accum(idust)));
+                        //     logger::raw_ln(shambase::format(
+                        //         "daxyz_a_loc: {}, eps_a_dust_axyz_a: {}",
+                        //         daxyz_a_loc,
+                        //         eps_a_dust_axyz_a));
+                        // }
                     }
 
                     // dt deltav terms
@@ -1565,25 +1575,26 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                             = omega_a_rho_a_inv * pmass
                               * ((deltavja - epsilon_a_deltav_a) - (deltavjb - epsilon_b_deltav_b))
                               * sham::dot(deltavja, r_ab_unit * Fab_a);
+
                         Tvec delta_v_term_viscq = {};
 
                         dtdeltav_accum(idust) += delta_v_term1 + delta_v_term2 + delta_v_term3
                                                  + delta_v_term4 + delta_v_term5 + delta_v_term6
                                                  + delta_v_term_viscq;
 
-                        if (id_a == test_part) {
-                            logger::raw_ln(shambase::format(
-                                "delta_v_term1: {}, delta_v_term2: {}, delta_v_term3: {}, "
-                                "delta_v_term4: {}, delta_v_term5: {}, delta_v_term6: {}, "
-                                "delta_v_term_viscq: {}",
-                                delta_v_term1,
-                                delta_v_term2,
-                                delta_v_term3,
-                                delta_v_term4,
-                                delta_v_term5,
-                                delta_v_term6,
-                                delta_v_term_viscq));
-                        }
+                        // if (id_a == test_part) {
+                        //     logger::raw_ln(shambase::format(
+                        //         "delta_v_term1: {}, delta_v_term2: {}, delta_v_term3: {}, "
+                        //         "delta_v_term4: {}, delta_v_term5: {}, delta_v_term6: {}, "
+                        //         "delta_v_term_viscq: {}",
+                        //         delta_v_term1,
+                        //         delta_v_term2,
+                        //         delta_v_term3,
+                        //         delta_v_term4,
+                        //         delta_v_term5,
+                        //         delta_v_term6,
+                        //         delta_v_term_viscq));
+                        // }
                     }
                 });
 
@@ -1594,22 +1605,38 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     dtdeltav_accum(idust) -= gas_axyz_a;
                 }
 
-                if (id_a == test_part) {
-                    logger::raw_ln(shambase::format(
-                        "id_a: {}, gas_axyz_a: {}, dtuinta: {}", id_a, axyz[id_a], du[id_a]));
-                }
+                // if (id_a == test_part) {
+                //     logger::raw_ln(shambase::format(
+                //         "id_a: {}, gas_axyz_a: {}, dtuinta: {}", id_a, axyz[id_a], du[id_a]));
+                // }
 
                 for (u32 idust = 0; idust < ndust; idust++) {
                     if (id_a == test_part) {
-                        logger::raw_ln(shambase::format(
-                            "id_a: {}, idust: {}, dtepsilon_accum: {}, dtdeltav_accum: {}",
-                            id_a,
-                            idust,
-                            dtepsilon_accum(idust),
-                            dtdeltav_accum(idust)));
+                        // logger::raw_ln(shambase::format(
+                        //     "id_a: {}, idust: {}, dtepsilon_accum: {}, dtdeltav_accum: {}",
+                        //     id_a,
+                        //     idust,
+                        //     dtepsilon_accum(idust),
+                        //     dtdeltav_accum(idust)));
                     }
                     dtepsilon(id_a, idust) = dtepsilon_accum(idust);
                     dtdeltav(id_a, idust)  = dtdeltav_accum(idust);
+                }
+
+                if (id_a == test_part) {
+                    for (u32 idust = 0; idust < ndust; idust++) {
+                        Tscal dtrhoj
+                            = dtrho * epsilon(id_a, idust) + rho_a * dtepsilon_accum(idust);
+                        Tvec dtvdj = axyz[id_a] + dtdeltav_accum(idust);
+                        for (u32 jdust = 0; jdust < ndust; jdust++) {
+                            dtvdj -= dtepsilon_accum(jdust) * deltav(id_a, jdust)
+                                     + epsilon(id_a, jdust) * dtdeltav_accum(jdust);
+                        }
+
+                        std::cout << "id_a: " << id_a << ", idust: " << idust
+                                  << ", dtrhoj: " << dtrhoj << ", dtvdj: " << dtvdj[0] << ", "
+                                  << dtvdj[1] << ", " << dtvdj[2] << std::endl;
+                    }
                 }
             });
         });
