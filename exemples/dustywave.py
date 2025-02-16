@@ -274,17 +274,20 @@ def analyse():
 
     fig.suptitle("t/T="+str(model.get_time()/T))
     plt.tight_layout()
-    plt.savefig(f"dusty_sod_{cnt}.png")
+    plt.savefig(f"dustywave_{cnt}.png")
+    print(f"writing : dustywave_{cnt}.png (t/T={model.get_time()/T})")
     cnt += 1
     #plt.show()
     #clear completely the plot
     plt.close(fig)
 
+model.evolve_once()
 
 for i in range(300):
+    analyse()
     for i in range(10):
         model.evolve_once()
-    analyse()
+
 
 model.evolve_until(t_target)
 analyse()
