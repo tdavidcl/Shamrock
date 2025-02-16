@@ -1377,10 +1377,11 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     return sum;
                 };
 
-                using namespace shamrock::sph;
+                auto get_v_gas = [&](u32 ipart) -> Tvec {
+                    return vxyz[ipart] - get_epsilon_deltav_sum(ipart);
+                };
 
-                Tvec sum_axyz  = {0, 0, 0};
-                Tscal sum_du_a = 0;
+                using namespace shamrock::sph;
 
                 Tscal h_a                     = hpart[id_a];
                 Tvec xyz_a                    = xyz[id_a];
@@ -1396,8 +1397,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                 Tscal rho_a     = rho_h(pmass, h_a, Kernel::hfactd);
                 Tscal rho_a_sq  = rho_a * rho_a;
                 Tscal rho_a_inv = 1. / rho_a;
-
-                // f32 P_a     = cs * cs * rho_a;
 
                 Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
 
@@ -1445,61 +1444,69 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                     Tscal rab = sycl::sqrt(rab2);
 
-                    Tscal rho_b             = rho_h(pmass, h_b, Kernel::hfactd);
+                    Tscal rho_b   = rho_h(pmass, h_b, Kernel::hfactd);
+                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
+
                     Tscal omega_b_rho_b_inv = 1 / (omega_b * rho_b);
+
+                    const Tscal epsilon_b         = epsilon_sum(id_b);
+                    const Tvec epsilon_b_deltav_b = get_epsilon_deltav_sum(id_b);
+
+                    Tscal rho_gas_a = (1 - epsilon_a) * rho_a;
+                    Tscal rho_gas_b = (1 - epsilon_b) * rho_b;
 
                     Tscal Fab_a = Kernel::dW_3d(rab, h_a);
                     Tscal Fab_b = Kernel::dW_3d(rab, h_b);
 
-                    Tvec v_ab = vxyz_a - vxyz_b;
-
                     Tvec r_ab_unit = dr * sham::inv_sat_positive(rab);
 
-                    // f32 P_b     = cs * cs * rho_b;
+                    Tvec v_ab           = vxyz_a - vxyz_b;
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
+                    Tvec v_ab_gas = get_v_gas(id_a) - get_v_gas(id_b);
+
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
-
-                    // Tscal vsig_u = abs_v_ab_r_ab;
-                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
-                    Tscal abs_dp  = sham::abs(P_a - P_b);
-                    Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
 
                     Tscal qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
                     Tscal qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
 
-                    add_to_derivs_sph_artif_visco_cond(
+                    Tscal abs_dp = sham::abs(P_a - P_b);
+                    Tscal vsig_u = sycl::sqrt(abs_dp / rho_avg);
+
+                    ////////////////////
+
+                    Tscal AV_P_a = P_a + qa_ab;
+                    Tscal AV_P_b = P_b + qb_ab;
+
+                    gas_axyz_a += sph_pressure_symetric(
                         pmass,
                         rho_a_sq,
-                        omega_a_rho_a_inv,
-                        rho_a_inv,
-                        rho_b,
+                        rho_b * rho_b,
+                        AV_P_a,
+                        AV_P_b,
                         omega_a,
                         omega_b,
-                        Fab_a,
-                        Fab_b,
-                        u_a,
-                        u_b,
-                        P_a,
-                        P_b,
+                        r_ab_unit * Fab_a,
+                        r_ab_unit * Fab_b);
+
+                    // compared to Phantom_2018 eq.35 we move lambda shock artificial viscosity
+                    // pressure part as just a modified SPH pressure (which is the case already in
+                    // phantom paper but not written that way)
+                    dtuinta += duint_dt_pressure(
+                        pmass, AV_P_a, omega_a_rho_a_inv / rho_gas_a, v_ab_gas, r_ab_unit * Fab_a);
+
+                    dtuinta += lambda_shock_conductivity(
+                        pmass,
                         alpha_u,
-                        v_ab,
-                        r_ab_unit,
                         vsig_u,
-                        qa_ab,
-                        qb_ab,
-                        gas_axyz_a,
-                        dtuinta);
+                        u_a - u_b,
+                        Fab_a * omega_a_rho_a_inv,
+                        Fab_b / (rho_b * omega_b));
+                    ////////////////////
 
                     dtrho += (1 / omega_a) * pmass * sham::dot(v_ab, r_ab_unit * Fab_b);
-
-                    const Tscal epsilon_b         = epsilon_sum(id_b);
-                    const Tvec epsilon_b_deltav_b = get_epsilon_deltav_sum(id_b);
 
                     // dt epsilon and dust term in barycenter velocity
                     for (u32 idust = 0; idust < ndust; idust++) {
