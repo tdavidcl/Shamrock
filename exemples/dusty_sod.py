@@ -27,8 +27,8 @@ model = shamrock.get_SPHModel(context = ctx, vector_type = "f64_3",sph_kernel = 
 cfg = model.gen_default_config()
 #cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
 #cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
-#cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
-cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 0.0,sigma_decay = 0.1, alpha_u = 0, beta_AV = 0)
+cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
+#cfg.set_artif_viscosity_VaryingCD10(alpha_min = 0.0,alpha_max = 0.0,sigma_decay = 0.1, alpha_u = 0, beta_AV = 0)
 cfg.set_dust_mode_monofluid_complete(ndust = 1)
 cfg.set_boundary_periodic()
 cfg.set_eos_adiabatic(gamma)
@@ -119,21 +119,25 @@ def analyse():
 
     vg_init = 0 - epsilon_start*deltavx_start
 
-    fig, axs = plt.subplots(2,2,  figsize=(12,8),dpi=125)
+    fig, axs = plt.subplots(3,3,  figsize=(12,8),dpi=125)
 
     axs[0,0].plot(x,rhog,'.',label="rhog")
     axs[0,0].plot(x,rhod,'.',label="rhod")
-    axs[0,0].plot(x,vg,'.',label="vg")
-    axs[0,0].plot(x,vd,'.',label="vd")
-    axs[0,0].plot(x,Pg,'.',label="P")
 
-    axs[0,1].plot(x,rho,'.',label="rho")
-    axs[0,1].plot(x,vx,'.',label="v")
-    axs[0,1].plot(x,uint,'.',label="uint")
-    axs[0,1].plot(x,epsilon,'.',label="epsilon")
+    axs[0,1].plot(x,vg,'.',label="vg")
+    axs[0,1].plot(x,vd,'.',label="vd")
 
-    axs[1,0].plot(x,alpha,'.',label="alpha")
+    axs[0,2].plot(x,Pg,'.',label="P")
+
+    axs[1,0].plot(x,rho,'.',label="rho")
     axs[1,1].plot(x,deltavx,'.',label="deltavx")
+    axs[1,2].plot(x,epsilon,'.',label="epsilon")
+
+    axs[2,0].plot(x,vx,'.',label="v")
+
+    axs[2,1].plot(x,uint,'.',label="uint")
+
+    axs[2,2].plot(x,alpha,'.',label="alpha")
     #plt.plot(x,hpart,'.',label="hpart")
     #plt.plot(x,uint,'.',label="uint")
 
@@ -157,8 +161,8 @@ def analyse():
 
     x += 0.5
     axs[0,0].plot(x,rho,color = "black",label="analytic")
-    axs[0,0].plot(x,vx,color = "black")
-    axs[0,0].plot(x,P,color = "black")
+    axs[0,1].plot(x,vx,color = "black",label="analytic")
+    axs[0,2].plot(x,P,color = "black",label="analytic")
 
 
     #######
@@ -172,9 +176,14 @@ def analyse():
 
 
     axs[0,0].set_ylim(-0.2,1.1)
-    axs[0,1].set_ylim(0,1.1)
-    axs[1,0].set_ylim(0,1.1)
-    axs[1,1].set_ylim(-2,2)
+    axs[0,1].set_ylim(-0.2,1.1)
+    axs[0,2].set_ylim(-0.2,1.1)
+    axs[1,0].set_ylim(-0.2,1.1)
+    axs[1,1].set_ylim(-1.1,1.1)
+    axs[1,2].set_ylim(0,0.5)
+    axs[2,0].set_ylim(-0.2,1.1)
+    axs[2,1].set_ylim(1,3)
+    axs[2,2].set_ylim(-0.2,1.1)
 
 
     fig.suptitle("t="+str(model.get_time()))
@@ -186,9 +195,12 @@ def analyse():
     plt.close(fig)
 
 
-for i in range(500):
-    model.evolve_once()
+model.evolve_once()
+
+for i in range(400):
     analyse()
+    for i in range(10):
+        model.evolve_once()
 
 model.evolve_until(t_target)
 analyse()

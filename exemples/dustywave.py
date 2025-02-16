@@ -281,13 +281,13 @@ def analyse():
     #clear completely the plot
     plt.close(fig)
 
+
 model.evolve_once()
 
-for i in range(300):
+for i in range(400):
     analyse()
     for i in range(10):
         model.evolve_once()
-
 
 model.evolve_until(t_target)
 analyse()
