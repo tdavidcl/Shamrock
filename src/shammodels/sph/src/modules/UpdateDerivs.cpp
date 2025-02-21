@@ -1463,17 +1463,34 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     Tvec v_ab           = vxyz_a - vxyz_b;
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
+                    Tvec v_ab_gas       = get_v_gas(id_a) - get_v_gas(id_b);
 
-                    Tvec v_ab_gas = get_v_gas(id_a) - get_v_gas(id_b);
+                    Tscal qa_ab, qb_ab, vsig_u;
+                    if (true) {
+                        // correct the viscosity to use the gas and not the combined quantities
+                        Tscal rho_avg_gas       = (rho_gas_a + rho_gas_b) * 0.5;
+                        Tscal v_ab_gas_r_ab     = sycl::dot(v_ab_gas, r_ab_unit);
+                        Tscal abs_v_ab_gas_r_ab = sycl::fabs(v_ab_gas_r_ab);
 
-                    Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
-                    Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
+                        Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_gas_r_ab;
+                        Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_gas_r_ab;
 
-                    Tscal qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
+                        Tscal qa_ab = q_av(rho_gas_a, vsig_a, v_ab_gas_r_ab);
+                        Tscal qb_ab = q_av(rho_gas_b, vsig_b, v_ab_gas_r_ab);
 
-                    Tscal abs_dp = sham::abs(P_a - P_b);
-                    Tscal vsig_u = sycl::sqrt(abs_dp / rho_avg);
+                        Tscal abs_dp = sham::abs(P_a - P_b);
+                        Tscal vsig_u = sycl::sqrt(abs_dp / rho_avg_gas);
+                    } else {
+
+                        Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
+                        Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
+
+                        qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
+                        qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
+
+                        Tscal abs_dp = sham::abs(P_a - P_b);
+                        vsig_u       = sycl::sqrt(abs_dp / rho_avg);
+                    }
 
                     ////////////////////
 
@@ -1562,22 +1579,27 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         // we are in sum_b
                         Tvec delta_v_term1 = omega_a_rho_a_inv * pmass * v_ab
                                              * sham::dot(deltavja, r_ab_unit * Fab_a);
+
                         Tvec delta_v_term2
                             = Tscal{0.5} * omega_a_rho_a_inv * pmass
                               * (sham::dot(deltavja, deltavja - 2 * epsilon_a_deltav_a)
                                  - sham::dot(deltavjb, deltavjb - 2 * epsilon_b_deltav_b))
                               * r_ab_unit * Fab_a;
+
                         Tvec delta_v_term3 = omega_a_rho_a_inv * pmass
                                              * sham::dot(epsilon_a_deltav_a, deltavja - deltavjb)
                                              * r_ab_unit * Fab_a;
+
                         Tvec delta_v_term4
                             = -omega_a_rho_a_inv * pmass
                               * sham::dot(
                                   deltavja,
                                   (deltavja - epsilon_a_deltav_a) - (deltavjb - epsilon_b_deltav_b))
                               * r_ab_unit * Fab_a;
+
                         Tvec delta_v_term5 = -omega_a_rho_a_inv * pmass * (deltavja - deltavjb)
                                              * sham::dot(epsilon_a_deltav_a, r_ab_unit * Fab_a);
+
                         Tvec delta_v_term6
                             = omega_a_rho_a_inv * pmass
                               * ((deltavja - epsilon_a_deltav_a) - (deltavjb - epsilon_b_deltav_b))

@@ -83,7 +83,13 @@ cnt = 0
 def analyse():
     global cnt
 
-    sod = shamrock.phys.SodTube(gamma = gamma, rho_1 = 1 * (1-epsilon_start),P_1 = 1* (1-epsilon_start),rho_5 = 0.125* (1-epsilon_start),P_5 = 0.1* (1-epsilon_start))
+    sod = shamrock.phys.SodTube(
+        gamma = gamma,
+        rho_1 = 1 * (1-epsilon_start),
+        P_1 = 1* (1-epsilon_start),
+        rho_5 = 0.125* (1-epsilon_start),
+        P_5 = 0.1* (1-epsilon_start))
+
     sodanalysis = model.make_analysis_sodtube(sod, (1,0,0), model.get_time(), 0.0, -0.5,0.5)
     print(sodanalysis.compute_L2_dist())
 
