@@ -6,40 +6,28 @@ This example shows how to use Ray AABB intersection in matplotlib
 """
 
 # %%
-# This is a section header
-# ------------------------
-# This is the first section!
-# The `#%%` signifies to Sphinx-Gallery that this text should be rendered as
-# reST and if using one of the above IDE/plugin's, also signifies the start of a
-# 'code block'.
 
 import matplotlib.pyplot as plt
 import shamrock
-
-
-# draw cube
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
-'''
-points = [[-1, -1, -1], [-1, -1, 1], [-1, 1, -1], [-1, 1, 1], [1, -1, -1], [1, -1, 1], [1, 1, -1], [1, 1, 1]]
 
-faces = [[points[0], points[1], points[3], points[2]],
-         [points[4], points[5], points[7], points[6]],
-         [points[0], points[1], points[5], points[4]],
-         [points[2], points[3], points[7], points[6]],
-         [points[0], points[2], points[6], points[4]],
-         [points[1], points[3], points[7], points[5]]]
-
-edges = [[points[0], points[1]], [points[0], points[2]], [points[0], points[4]], [points[1], points[3]], [points[1], points[5]], [points[2], points[3]], [points[2], points[6]], [points[3], points[7]], [points[4], points[5]], [points[4], points[6]], [points[5], points[7]], [points[6], points[7]]]
-
-collection = Poly3DCollection(faces, alpha=0.5)
-ax.add_collection3d(collection)
-
-edge_collection = Line3DCollection(edges, color='k')
-ax.add_collection3d(edge_collection)
-'''
-
+# %%
 
 def draw_aabb(ax,aabb, color, alpha):
+    """
+    Draw a 3D AABB in matplotlib
+
+    Parameters
+    ----------
+    ax : matplotlib.Axes3D
+        The axis to draw the AABB on
+    aabb : shamrock.AABB_f64_3
+        The AABB to draw
+    color : str
+        The color of the AABB
+    alpha : float
+        The transparency of the AABB
+    """
     xmin, ymin, zmin = aabb.lower()
     xmax, ymax, zmax = aabb.upper()
 
@@ -60,7 +48,19 @@ def draw_aabb(ax,aabb, color, alpha):
             [points[0], points[2], points[6], points[4]],
             [points[1], points[3], points[7], points[5]]]
 
-    edges = [[points[0], points[1]], [points[0], points[2]], [points[0], points[4]], [points[1], points[3]], [points[1], points[5]], [points[2], points[3]], [points[2], points[6]], [points[3], points[7]], [points[4], points[5]], [points[4], points[6]], [points[5], points[7]], [points[6], points[7]]]
+    edges = [
+        [points[0], points[1]],
+        [points[0], points[2]],
+        [points[0], points[4]],
+        [points[1], points[3]],
+        [points[1], points[5]],
+        [points[2], points[3]],
+        [points[2], points[6]],
+        [points[3], points[7]],
+        [points[4], points[5]],
+        [points[4], points[6]],
+        [points[5], points[7]],
+        [points[6], points[7]]]
 
     collection = Poly3DCollection(faces, alpha=alpha, color=color)
     ax.add_collection3d(collection)
@@ -68,8 +68,21 @@ def draw_aabb(ax,aabb, color, alpha):
     edge_collection = Line3DCollection(edges, color='k', alpha=alpha)
     ax.add_collection3d(edge_collection)
 
-def draw_ray(ax,ray, color):
+# %%
 
+def draw_ray(ax,ray, color):
+    """
+    Draw a 3D Ray in matplotlib
+
+    Parameters
+    ----------
+    ax : matplotlib.Axes3D
+        The axis to draw the Ray on
+    ray : shamrock.Ray_f64_3
+        The Ray to draw
+    color : str
+        The color of the Ray
+    """
     xmin, ymin, zmin = ray.origin()
     nx, ny, nz = ray.direction()
     inx, iny, inz = ray.inv_direction()
@@ -78,28 +91,7 @@ def draw_ray(ax,ray, color):
 
     ax.plot3D([xmin, nx+xmin], [ymin, ny+ymin], [zmin, nz+zmin], c=color)
 
-
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-aabb1 = shamrock.AABB_f64_3((-1.,-1.,-1.),(2.,2.,2.))
-aabb2 = shamrock.AABB_f64_3((-2.,-2.,-2.),(1.,1.,1.))
-
-draw_aabb(ax,aabb1, 'b',0.1)
-draw_aabb(ax,aabb2, 'r',0.1)
-draw_aabb(ax,aabb1.get_intersect(aabb2), 'g',0.5)
-
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-
-ax.set_xlim(-2, 2)
-ax.set_ylim(-2, 2)
-ax.set_zlim(-2, 2)
-
-plt.show()
-
+# %%
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
@@ -136,6 +128,3 @@ ax.set_ylim(-2, 2)
 ax.set_zlim(-2, 2)
 
 plt.show()
-
-
-#draw_ray(0, 0.5, 0, 0.5, 0, 1, 'g')

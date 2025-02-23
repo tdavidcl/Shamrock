@@ -68,6 +68,7 @@ sphinx_gallery_conf = {
     'reference_url': {'shamrock': None},
     'prefer_full_module': {r'shamrock\.'},
     'remove_config_comments': True,
+    'filename_pattern': '/run_', # Run all exemples that start with run_
 }
 
 # -- Options for HTML output -------------------------------------------------
