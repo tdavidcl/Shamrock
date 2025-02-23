@@ -28,4 +28,12 @@ if [ -z "$(pip list | grep sphinx-gallery)" ]; then
     pip install sphinx-gallery
 fi
 
+if [ -z "$(pip list | grep memory-profiler)" ]; then
+    echo "You need to have memory-profiler installed to generate the sphinx doc"
+    echo "Running : pip install memory-profiler"
+    pip install memory-profiler
+fi
+
 make html
+
+rm -rf exemples/_to_trash

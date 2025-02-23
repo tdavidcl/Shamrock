@@ -175,15 +175,19 @@ model.change_htolerance(1.1)
 # ------------------------
 # Dump files (path relative to where you have started shamrock)
 
+dump_folder = "_to_trash"
+import os
+os.system("mkdir -p "+dump_folder)
+
 # VTK dump
-model.do_vtk_dump("init_disc.vtk", True)
+model.do_vtk_dump(dump_folder+"/init_disc.vtk", True)
 
 # Shamrock restart dump files
-model.dump("init_disc.sham")
+model.dump(dump_folder+"/init_disc.sham")
 
 # Phantom dump
 dump = model.make_phantom_dump()
-dump.save_dump("init_disc.phdump")
+dump.save_dump(dump_folder+"/init_disc.phdump")
 
 # %%
 # Single timestep
@@ -216,7 +220,7 @@ for i in range(10):
     model.evolve_until(i * dt_stop)
 
     # Dump name is "dump_xxxx.sham" where xxxx is the timestep
-    model.dump(f"dump_{i:04}.sham")
+    model.dump(dump_folder+f"/dump_{i:04}.sham")
 
 # %%
 # Plot column integrated density
