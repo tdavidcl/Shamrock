@@ -1,6 +1,6 @@
 """
 Testing AABB intersection routine
-=============================
+=================================
 
 This example shows how to use AABB intersection and plot it in matplotlib
 """

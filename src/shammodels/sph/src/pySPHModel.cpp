@@ -173,8 +173,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("eta"),
             py::arg("q"))
         .def("set_units", &TConfig::set_units)
+        .def(
+            "set_cfl_cour",
+            [](TConfig &self, Tscal cfl_cour) {
+                self.cfl_config.cfl_cour = cfl_cour;
+            })
+        .def(
+            "set_cfl_force",
+            [](TConfig &self, Tscal cfl_force) {
+                self.cfl_config.cfl_force = cfl_force;
+            })
         .def("set_cfl_multipler", &TConfig::set_cfl_multipler)
-        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness);
+        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness)
+        .def("set_particle_mass", [](TConfig &self, Tscal gpart_mass) {
+            self.gpart_mass = gpart_mass;
+        });
 
     std::string sod_tube_analysis_name = name_model + "_AnalysisSodTube";
     py::class_<TAnalysisSodTube>(m, sod_tube_analysis_name.c_str())

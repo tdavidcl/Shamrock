@@ -426,6 +426,14 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
 
         Tscal max_eps_h;
 
+        if (solver_config.gpart_mass == 0) {
+            shambase::throw_with_loc<std::runtime_error>(shambase::format(
+                "invalid gpart_mass {}, this configuration can not converge.\n"
+                "Please set it using either model.set_particle_mass(pmass) or "
+                "cfg.set_particle_mass(pmass)",
+                solver_config.gpart_mass));
+        }
+
         u32 iter_h = 0;
         for (; iter_h < solver_config.h_iter_per_subcycles; iter_h++) {
             NamedStackEntry stack_loc2{"iterate smoothing length"};
