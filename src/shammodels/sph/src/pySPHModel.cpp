@@ -173,8 +173,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("eta"),
             py::arg("q"))
         .def("set_units", &TConfig::set_units)
+        .def(
+            "set_cfl_cour",
+            [](TConfig &self, Tscal cfl_cour) {
+                self.cfl_config.cfl_cour = cfl_cour;
+            })
+        .def(
+            "set_cfl_force",
+            [](TConfig &self, Tscal cfl_force) {
+                self.cfl_config.cfl_force = cfl_force;
+            })
         .def("set_cfl_multipler", &TConfig::set_cfl_multipler)
-        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness);
+        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness)
+        .def("set_particle_mass", [](TConfig &self, Tscal gpart_mass) {
+            self.gpart_mass = gpart_mass;
+        });
 
     std::string sod_tube_analysis_name = name_model + "_AnalysisSodTube";
     py::class_<TAnalysisSodTube>(m, sod_tube_analysis_name.c_str())
@@ -236,14 +249,16 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                shammodels::sph::modules::SetupNodePtr parent,
                Tscal Rwarp,
                Tscal Hwarp,
-               Tscal inclination) {
-                return self.make_modifier_warp_disc(parent, Rwarp, Hwarp, inclination);
+               Tscal inclination,
+               Tscal posangle) {
+                return self.make_modifier_warp_disc(parent, Rwarp, Hwarp, inclination, posangle);
             },
             py::kw_only(),
             py::arg("setup2warp"),
             py::arg("Rwarp"),
             py::arg("Hwarp"),
-            py::arg("inclination"))
+            py::arg("inclination"),
+            py::arg("posangle") = 0.)
         .def(
             "apply_setup",
             [](TSPHSetup &self,
@@ -703,16 +718,17 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("load_from_dump", &T::load_from_dump)
         .def("dump", &T::dump)
         .def("get_setup", &T::get_setup);
-    ;
 }
 
 Register_pymod(pysphmodel) {
 
+    py::module msph = m.def_submodule("model_sph", "Shamrock sph solver");
+
     using namespace shammodels::sph;
 
-    add_instance<f64_3, shammath::M4>(m, "SPHModel_f64_3_M4_SolverConfig", "SPHModel_f64_3_M4");
-    add_instance<f64_3, shammath::M6>(m, "SPHModel_f64_3_M6_SolverConfig", "SPHModel_f64_3_M6");
-    add_instance<f64_3, shammath::M8>(m, "SPHModel_f64_3_M8_SolverConfig", "SPHModel_f64_3_M8");
+    add_instance<f64_3, shammath::M4>(msph, "SPHModel_f64_3_M4_SolverConfig", "SPHModel_f64_3_M4");
+    add_instance<f64_3, shammath::M6>(msph, "SPHModel_f64_3_M6_SolverConfig", "SPHModel_f64_3_M6");
+    add_instance<f64_3, shammath::M8>(msph, "SPHModel_f64_3_M8_SolverConfig", "SPHModel_f64_3_M8");
 
     using VariantSPHModelBind = std::variant<
         std::unique_ptr<Model<f64_3, shammath::M4>>,
@@ -720,7 +736,7 @@ Register_pymod(pysphmodel) {
         std::unique_ptr<Model<f64_3, shammath::M8>>>;
 
     m.def(
-        "get_SPHModel",
+        "get_Model_SPH",
         [](ShamrockCtx &ctx, std::string vector_type, std::string kernel) -> VariantSPHModelBind {
             VariantSPHModelBind ret;
 
@@ -744,12 +760,12 @@ Register_pymod(pysphmodel) {
 
     py::class_<
         shammodels::sph::modules::ISPHSetupNode,
-        std::shared_ptr<shammodels::sph::modules::ISPHSetupNode>>(m, "ISPHSetupNode")
+        std::shared_ptr<shammodels::sph::modules::ISPHSetupNode>>(msph, "ISPHSetupNode")
         .def("get_dot", [](std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> &self) {
             return self->get_dot();
         });
 
-    py::class_<shammodels::sph::TimestepLog>(m, "TimestepLog")
+    py::class_<shammodels::sph::TimestepLog>(msph, "TimestepLog")
         .def(py::init<>())
         .def_readwrite("rank", &shammodels::sph::TimestepLog::rank)
         .def_readwrite("rate", &shammodels::sph::TimestepLog::rate)

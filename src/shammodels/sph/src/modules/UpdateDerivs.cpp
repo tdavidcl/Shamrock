@@ -22,9 +22,10 @@
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
 #include "shammodels/sph/math/mhd.hpp"
+#include "shammodels/sph/math/q_ab.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
+#include "shamphys/mhd.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
-#include <shambackends/sycl.hpp>
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
@@ -225,9 +226,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cons
                     Tscal omega_b = omega[id_b];
                     Tscal cs_b    = cs[id_b];
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
                     const Tscal alpha_a = alpha_AV;
                     const Tscal alpha_b = alpha_AV;
 
@@ -242,19 +240,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cons
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
 
-                    // Tscal vsig_u = abs_v_ab_r_ab;
-                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
-                    Tscal abs_dp  = sham::abs(P_a - P_b);
-                    Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
+                    Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
 
-                    Tscal qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
+                    Tscal qa_ab = shamrock::sph::q_av(rho_a, vsig_a, v_ab_r_ab);
+                    Tscal qb_ab = shamrock::sph::q_av(rho_b, vsig_b, v_ab_r_ab);
 
                     add_to_derivs_sph_artif_visco_cond(
                         pmass,
@@ -452,19 +444,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_mm97
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
 
-                    // Tscal vsig_u = abs_v_ab_r_ab;
-                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
-                    Tscal abs_dp  = sham::abs(P_a - P_b);
-                    Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
+                    Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
 
-                    Tscal qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
+                    Tscal qa_ab = shamrock::sph::q_av(rho_a, vsig_a, v_ab_r_ab);
+                    Tscal qb_ab = shamrock::sph::q_av(rho_b, vsig_b, v_ab_r_ab);
 
                     add_to_derivs_sph_artif_visco_cond(
                         pmass,
@@ -486,6 +472,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_mm97
                         vsig_u,
                         qa_ab,
                         qb_ab,
+
                         force_pressure,
                         tmpdU_pressure);
                 });
@@ -662,19 +649,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
 
-                    // Tscal vsig_u = abs_v_ab_r_ab;
-                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
-                    Tscal abs_dp  = sham::abs(P_a - P_b);
-                    Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
+                    Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
 
-                    Tscal qa_ab = q_av(rho_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av(rho_b, vsig_b, v_ab_r_ab);
+                    Tscal qa_ab = shamrock::sph::q_av(rho_a, vsig_a, v_ab_r_ab);
+                    Tscal qb_ab = shamrock::sph::q_av(rho_b, vsig_b, v_ab_r_ab);
 
                     add_to_derivs_sph_artif_visco_cond(
                         pmass,
@@ -696,6 +677,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         vsig_u,
                         qa_ab,
                         qb_ab,
+
                         force_pressure,
                         tmpdU_pressure);
                 });
@@ -865,19 +847,15 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
                     Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
 
-                    /////////////////
-                    // internal energy update
-                    //  scalar : f32  | vector : f32_3
                     Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
                     Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
 
-                    // Tscal vsig_u = abs_v_ab_r_ab;
-                    Tscal rho_avg = (rho_a + rho_b) * 0.5;
-                    Tscal abs_dp  = sham::abs(P_a - P_b);
-                    Tscal vsig_u  = sycl::sqrt(abs_dp / rho_avg);
+                    Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
 
-                    Tscal qa_ab = q_av_disc(rho_a, h_a, rab, alpha_a, cs_a, vsig_a, v_ab_r_ab);
-                    Tscal qb_ab = q_av_disc(rho_b, h_b, rab, alpha_b, cs_b, vsig_b, v_ab_r_ab);
+                    Tscal qa_ab = shamrock::sph::q_av_disc(
+                        rho_a, h_a, rab, alpha_a, cs_a, vsig_a, v_ab_r_ab);
+                    Tscal qb_ab = shamrock::sph::q_av_disc(
+                        rho_b, h_b, rab, alpha_b, cs_b, vsig_b, v_ab_r_ab);
 
                     add_to_derivs_sph_artif_visco_cond(
                         pmass,
@@ -899,6 +877,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
                         vsig_u,
                         qa_ab,
                         qb_ab,
+
                         force_pressure,
                         tmpdU_pressure);
                 });
@@ -1022,36 +1001,36 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
 
         Tvec *mag_pressure
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tvec>(imag_pressure).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tvec>(imag_pressure).get_write_access(depends_list)
                   : nullptr;
         Tvec *mag_tension
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tvec>(imag_tension).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tvec>(imag_tension).get_write_access(depends_list)
                   : nullptr;
         Tvec *gas_pressure
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tvec>(igas_pressure).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tvec>(igas_pressure).get_write_access(depends_list)
                   : nullptr;
         Tvec *tensile_corr
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tvec>(itensile_corr).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tvec>(itensile_corr).get_write_access(depends_list)
                   : nullptr;
 
         Tscal *psi_propag
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tscal>(ipsi_propag).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tscal>(ipsi_propag).get_write_access(depends_list)
                   : nullptr;
         Tscal *psi_diff
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tscal>(ipsi_diff).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tscal>(ipsi_diff).get_write_access(depends_list)
                   : nullptr;
         Tscal *psi_cons
             = (do_MHD_debug)
-                  ? mpdat.get_field_buf_ref<Tscal>(ipsi_cons).get_write_access(depends_list)
+                  ? pdat.get_field_buf_ref<Tscal>(ipsi_cons).get_write_access(depends_list)
                   : nullptr;
 
         Tscal *u_mhd = (do_MHD_debug)
-                           ? mpdat.get_field_buf_ref<Tscal>(iu_mhd).get_write_access(depends_list)
+                           ? pdat.get_field_buf_ref<Tscal>(iu_mhd).get_write_access(depends_list)
                            : nullptr;
 
         auto ploop_ptrs = pcache.get_read_access(depends_list);
@@ -1074,7 +1053,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
                 u32 id_a = (u32) gid;
 
                 using namespace shamrock::sph;
-                using namespace shamrock::spmhd;
 
                 Tvec sum_axyz  = {0, 0, 0};
                 Tscal sum_du_a = 0;
@@ -1142,25 +1120,38 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
                     Tscal Fab_a = Kernel::dW_3d(rab, h_a);
                     Tscal Fab_b = Kernel::dW_3d(rab, h_b);
 
-                    // clang-format off
-                    //Tscal sigma_mhd = 0.3;
-                    add_to_derivs_spmhd<Tvec, Tscal, SPHKernel, shamrock::spmhd::Ideal>(
+                    // Tscal sigma_mhd = 0.3;
+                    shamrock::sph::mhd::add_to_derivs_spmhd<Kernel, Tvec, Tscal>(
                         pmass,
-                        dr, rab,
-                        rho_a, rho_a_sq, omega_a_rho_a_inv, rho_a_inv, rho_b,
-                        omega_a, omega_b,
-                        Fab_a, Fab_b,
-                        vxyz_a, vxyz_b,
-                        u_a, u_b,
-                        P_a, P_b,
-                        cs_a, cs_b,
-                        h_a, h_b,
+                        dr,
+                        rab,
+                        rho_a,
+                        rho_a_sq,
+                        omega_a_rho_a_inv,
+                        rho_a_inv,
+                        rho_b,
+                        omega_a,
+                        omega_b,
+                        Fab_a,
+                        Fab_b,
+                        vxyz_a,
+                        vxyz_b,
+                        u_a,
+                        u_b,
+                        P_a,
+                        P_b,
+                        cs_a,
+                        cs_b,
+                        h_a,
+                        h_b,
 
                         alpha_u,
 
-                        B_a, B_b,
+                        B_a,
+                        B_b,
 
-                        psi_a, psi_b,
+                        psi_a,
+                        psi_b,
 
                         mu_0,
                         sigma_mhd,
@@ -1178,7 +1169,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
                         psi_diff_term,
                         psi_cons_term,
                         u_mhd_term);
-                    // clang-format on
                 });
 
                 axyz[id_a]       = force_pressure;
@@ -1216,16 +1206,16 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
         buf_dpsi_on_ch.complete_event_state(e);
 
         if (do_MHD_debug) {
-            mpdat.get_field_buf_ref<Tvec>(imag_pressure).complete_event_state(e);
-            mpdat.get_field_buf_ref<Tvec>(imag_tension).complete_event_state(e);
-            mpdat.get_field_buf_ref<Tvec>(igas_pressure).complete_event_state(e);
-            mpdat.get_field_buf_ref<Tvec>(itensile_corr).complete_event_state(e);
+            pdat.get_field_buf_ref<Tvec>(imag_pressure).complete_event_state(e);
+            pdat.get_field_buf_ref<Tvec>(imag_tension).complete_event_state(e);
+            pdat.get_field_buf_ref<Tvec>(igas_pressure).complete_event_state(e);
+            pdat.get_field_buf_ref<Tvec>(itensile_corr).complete_event_state(e);
 
-            mpdat.get_field_buf_ref<Tscal>(ipsi_propag).complete_event_state(e);
-            mpdat.get_field_buf_ref<Tscal>(ipsi_diff).complete_event_state(e);
-            mpdat.get_field_buf_ref<Tscal>(ipsi_cons).complete_event_state(e);
+            pdat.get_field_buf_ref<Tscal>(ipsi_propag).complete_event_state(e);
+            pdat.get_field_buf_ref<Tscal>(ipsi_diff).complete_event_state(e);
+            pdat.get_field_buf_ref<Tscal>(ipsi_cons).complete_event_state(e);
 
-            mpdat.get_field_buf_ref<Tscal>(iu_mhd).complete_event_state(e);
+            pdat.get_field_buf_ref<Tscal>(iu_mhd).complete_event_state(e);
         }
 
         sham::EventList resulting_events;
