@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -17,6 +18,7 @@
  * current process.
  */
 
+#include <optional>
 #include <string>
 namespace shamcomm {
 
@@ -35,27 +37,47 @@ namespace shamcomm {
         /**
          * @brief The MPI implementation does not support the feature
          */
-        No
+        No,
+        /**
+         * @brief Feature forced on by the user
+         */
+        ForcedYes,
+        /**
+         * @brief Feature forced off by the user
+         */
+        ForcedNo
     };
 
     /**
-     * @brief State of the CUDA MPI awareness
+     * @brief Get the MPI CUDA aware capability
+     *
+     * This function returns the MPI CUDA aware capability of the current
+     * process. If the capability has not been fetched yet, it raises a
+     * std::runtime_error
+     *
+     * @return The MPI CUDA aware capability
      */
-    extern StateMPI_Aware mpi_cuda_aware;
+    StateMPI_Aware get_mpi_cuda_aware_status();
 
     /**
-     * @brief State of the ROCm MPI awareness
+     * @brief Get the MPI ROCM aware capability
+     *
+     * This function returns the MPI ROCM aware capability of the current
+     * process. If the capability has not been fetched yet, it raises a
+     * std::runtime_error
+     *
+     * @return The MPI ROCM aware capability
      */
-    extern StateMPI_Aware mpi_rocm_aware;
+    StateMPI_Aware get_mpi_rocm_aware_status();
 
     /**
      * @brief Fetch the MPI capabilities
      *
      * This function fetches the MPI capabilities of the current process.
      *
-     * @param force_aware Force the MPI CUDA & ROCM aware capability to be reported as @c Yes
+     * @param forced_state Force the MPI CUDA & ROCM aware capability to be reported as @c ForcedOn
      */
-    void fetch_mpi_capabilities(bool force_aware);
+    void fetch_mpi_capabilities(std::optional<StateMPI_Aware> forced_state);
 
     /**
      * @brief Print the MPI capabilities

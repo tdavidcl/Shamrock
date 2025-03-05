@@ -1,19 +1,20 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
 #include "shamalgs/random.hpp"
 #include "shammath/CoordRange.hpp"
-#include "shamrock/tree/TreeCellRanges.hpp"
-#include "shamrock/tree/TreeMortonCodes.hpp"
-#include "shamrock/tree/TreeReducedMortonCodes.hpp"
-#include "shamrock/tree/TreeStructure.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamtest/shamtest.hpp"
+#include "shamtree/TreeCellRanges.hpp"
+#include "shamtree/TreeMortonCodes.hpp"
+#include "shamtree/TreeReducedMortonCodes.hpp"
+#include "shamtree/TreeStructure.hpp"
 
 TestStart(Unittest, "shamrock/tree/TreeCellRanges::serialize", testcellrangesserialize, 1) {
 
@@ -65,6 +66,6 @@ TestStart(Unittest, "shamrock/tree/TreeCellRanges::serialize", testcellrangesser
 
         TreeRanges outser = TreeRanges::deserialize(ser2);
 
-        shamtest::asserts().assert_bool("input match out", outser == rnge);
+        REQUIRE_NAMED("input match out", outser == rnge);
     }
 }

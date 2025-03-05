@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -19,6 +20,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambackends/DeviceScheduler.hpp"
+#include "shamcomm/mpiInfo.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include <sycl/sycl.hpp>
 #include <vector>
@@ -64,7 +66,7 @@ namespace shamsys::instance {
     struct MPIInitInfo {
         int argc;
         char **argv;
-        bool force_aware;
+        std::optional<shamcomm::StateMPI_Aware> forced_state;
     };
 
     /**
@@ -85,30 +87,10 @@ namespace shamsys::instance {
      * ```
      */
     void init(int argc, char *argv[]);
-    void init_auto(std::string search_key, MPIInitInfo mpi_info);
 
-    /**
-     * @brief select & start the sycl queues
-     *
-     * @param alt_id
-     * @param compute_id
-     */
-    void start_sycl(u32 alt_id, u32 compute_id);
+    void start_mpi(MPIInitInfo mpi_info);
 
-    void start_sycl_auto(std::string search_key);
-
-    /**
-     * @brief initialize the NodeInstance from user inputs
-     * ```
-     * int main(int argc, char *argv[]){
-     *     shamsys::instance::init(SyclInitInfo{alt_id, comp_id}, MPIInitInfo{argc, argv});
-     *     ... do stuff ...
-     *     shamsys::instance::close();
-     * }
-     * ```
-     */
-    void init(SyclInitInfo sycl_info, MPIInitInfo mpi_info);
-    void init_auto(std::string search_key, MPIInitInfo mpi_info);
+    void init_sycl_mpi(std::string search_key, MPIInitInfo mpi_info);
 
     /**
      * @brief close the NodeInstance

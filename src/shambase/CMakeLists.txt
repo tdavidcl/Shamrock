@@ -7,6 +7,9 @@ set(Sources
     src/stacktrace.cpp
     src/SourceLocation.cpp
     src/print.cpp
+    src/popen.cpp
+    src/profiling/chrome.cpp
+    src/profiling/profiling.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
@@ -18,7 +21,6 @@ add_library(shambase OBJECT ${Sources})
 endif()
 
 add_library(shambase::shambase ALIAS shambase)
-
 
 target_include_directories(shambase PUBLIC
 "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"

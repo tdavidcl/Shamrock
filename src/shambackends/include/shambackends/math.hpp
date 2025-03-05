@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -721,6 +722,51 @@ namespace sham {
     template<class Acc>
     inline i32 karras_delta(i32 x, i32 y, u32 morton_length, Acc m) noexcept {
         return ((y > morton_length - 1 || y < 0) ? -1 : int(clz_xor(m[x], m[y])));
+    }
+
+    /**
+     * @brief inverse saturated (positive numbers only)
+     *
+     * Computes the inverse of v if v < minsat return satval
+     *
+     * @param v
+     * @param minvsat minimum value below which the inverse is not computed (default 1e-9)
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat_positive(T v, T minvsat = T{1e-9}, T satval = T{0.}) noexcept {
+        return (v >= minvsat) ? T{1.} / v : satval;
+    }
+
+    /**
+     * @brief inverse saturated
+     *
+     * Computes the inverse of v if |v| < minsat return satval
+     *
+     * @param v
+     * @param minvsat minimum value below which the inverse is not computed (default 1e-9)
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat(T v, T minvsat = T{1e-9}, T satval = T{0.}) noexcept {
+        return (std::abs(v) >= minvsat) ? T{1.} / v : satval;
+    }
+
+    /**
+     * @brief inverse saturated (zero version)
+     *
+     * Computes the inverse of v if v==0 return satval
+     *
+     * @param v
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat_zero(T v, T satval = T{0.}) noexcept {
+        // return div only if v != 0 and is not NaN
+        return (v != T{0} && v == v) ? T{1.} / v : satval;
     }
 
 } // namespace sham

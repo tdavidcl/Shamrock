@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -12,9 +13,11 @@
  * @brief
  */
 
-#include "shamcomm/worldInfo.hpp"
+#include "shambase/profiling/chrome.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
+#include "shamcomm/worldInfo.hpp"
 
 namespace shamcomm {
 
@@ -30,6 +33,17 @@ namespace shamcomm {
 
         MPICHECK(MPI_Comm_size(MPI_COMM_WORLD, &_world_size));
         MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &_world_rank));
+
+        MPICHECK(MPI_Barrier(MPI_COMM_WORLD));
+        shambase::profiling::chrome::set_time_offset(shambase::details::get_wtime());
+
+        shambase::profiling::chrome::set_chrome_pid(world_rank());
+    }
+
+    bool is_mpi_initialized() {
+        int flag = false;
+        MPICHECK(MPI_Initialized(&flag));
+        return flag;
     }
 
 } // namespace shamcomm

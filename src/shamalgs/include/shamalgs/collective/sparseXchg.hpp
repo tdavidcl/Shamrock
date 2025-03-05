@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -114,7 +115,7 @@ namespace shamalgs::collective {
                 MPICHECK(MPI_Probe(comm_ranks.x(), i, MPI_COMM_WORLD, &st));
                 MPICHECK(MPI_Get_count(&st, MPI_BYTE, &cnt));
 
-                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, *dev_sched);
+                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
 
                 MPICHECK(MPI_Irecv(
                     payload.payload->get_ptr(),

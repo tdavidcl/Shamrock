@@ -23,6 +23,12 @@ function updatecompiler {
     setupcompiler
 }
 
+if [ ! -f "${INTELLLVM_INSTALL_DIR}/bin/clang++" ]; then
+    echo " ----- intel llvm is not configured, compiling it ... -----"
+    setupcompiler
+    echo " ----- intel llvm configured ! -----"
+fi
+
 function shamconfigure {
     cmake \
         -S $SHAMROCK_DIR \
@@ -44,5 +50,5 @@ function shammake {
 export REF_FILES_PATH=$BUILD_DIR/reference-files
 
 function pull_reffiles {
-    git clone git@github.com:Shamrock-code/reference-files.git $REF_FILES_PATH
+    git clone https://github.com/Shamrock-code/reference-files.git $REF_FILES_PATH
 }

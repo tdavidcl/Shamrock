@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -40,22 +41,32 @@
  * provides a way to safely allocate, use, and deallocate memory in USM.
  */
 
+#include "shambackends/MemPerfInfos.hpp"
 #include "shambackends/USMPtrHolder.hpp"
 #include "shambackends/details/BufferEventHandler.hpp"
+#include "shambackends/details/internal_alloc.hpp"
 
 namespace sham::details {
 
     /**
-     * @brief Create a USM pointer with the given size in bytes.
+     * @brief Create a USM pointer with at least the given size in bytes.
+     *
+     * @note The USM pointer may have a larger allocation than the required size.
+     *
+     * @todo should be renamed to aquire_...
      *
      * @tparam target The target of the USM pointer.
      * @param size The size of the pointer in bytes.
      * @param dev_sched Pointer to the device scheduler.
+     * @param alignment The alignment of the USM pointer (optional).
      *
      * @return USMPtrHolder<target> The newly created USM pointer.
      */
     template<USMKindTarget target>
-    USMPtrHolder<target> create_usm_ptr(u32 size, std::shared_ptr<DeviceScheduler> dev_sched);
+    USMPtrHolder<target> create_usm_ptr(
+        u32 size,
+        std::shared_ptr<DeviceScheduler> dev_sched,
+        std::optional<size_t> alignment = std::nullopt);
 
     /**
      * @brief Release a USM pointer.

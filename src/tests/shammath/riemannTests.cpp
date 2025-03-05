@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -22,22 +23,25 @@ TestStart(Unittest, "shammath/flux_symmetry", flux_rotate, 1) {
     {
         Tcons f1 = shammath::rusanov_flux_x(state1, state2, 1.6666);
         Tcons f2 = shammath::rusanov_flux_mx(state2, state1, 1.6666);
-        _Assert(sham::equals(f1.rho, -f2.rho)) _Assert(sham::equals(f1.rhovel, -f2.rhovel))
-            _Assert(sham::equals(f1.rhoe, -f2.rhoe))
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
         Tcons f1 = shammath::rusanov_flux_y(state1, state2, 1.6666);
         Tcons f2 = shammath::rusanov_flux_my(state2, state1, 1.6666);
-        _Assert(sham::equals(f1.rho, -f2.rho)) _Assert(sham::equals(f1.rhovel, -f2.rhovel))
-            _Assert(sham::equals(f1.rhoe, -f2.rhoe))
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
         Tcons f1 = shammath::rusanov_flux_z(state1, state2, 1.6666);
         Tcons f2 = shammath::rusanov_flux_mz(state2, state1, 1.6666);
-        _Assert(sham::equals(f1.rho, -f2.rho)) _Assert(sham::equals(f1.rhovel, -f2.rhovel))
-            _Assert(sham::equals(f1.rhoe, -f2.rhoe))
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     Tcons state_xp = {1.1_f64, 0.8_f64, f64_3{1.1, 0, 0}};
@@ -62,6 +66,7 @@ TestStart(Unittest, "shammath/flux_symmetry", flux_rotate, 1) {
         logger::debug_ln("Riemman Solver", fmz.rho, fmz.rhovel, fmz.rhoe);
         Tcons sum = fx + fy + fz + fmx + fmy + fmz;
         logger::debug_ln("Riemman Solver", "sum=", sum.rho, sum.rhovel, sum.rhoe);
-        _Assert(sum.rhovel[1] == 0) _Assert(sum.rhovel[2] == 0)
+        REQUIRE(sum.rhovel[1] == 0);
+        REQUIRE(sum.rhovel[2] == 0);
     }
 }

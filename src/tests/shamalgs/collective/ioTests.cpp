@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -36,7 +37,8 @@ TestStart(Unittest, "shamalgs/collective/io/header_val", test_collective_io_head
         shamcomm::open_read_only_file(mfile, TEST_FILE_NAME);
         auto read_val1 = shamalgs::collective::read_header_val(mfile, head_ptr);
         auto read_val2 = shamalgs::collective::read_header_val(mfile, head_ptr);
-        _AssertEqual(read_val1, TEST_VAL1) _AssertEqual(read_val2, TEST_VAL2);
+        REQUIRE_EQUAL(read_val1, TEST_VAL1);
+        REQUIRE_EQUAL(read_val2, TEST_VAL2);
 
         MPI_File_close(&mfile);
     }

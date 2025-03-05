@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -63,12 +64,10 @@ TestStart(Unittest, "patchdata::", send_recv_patchdata, 2) {
     waitall_pdat_mpi_rq(rq_lst);
 
     if (shamcomm::world_rank() == 0) {
-        shamtest::asserts().assert_bool(
-            "recv_d == d2_check", patch_data_check_match(recv_d, d2_check));
+        REQUIRE_NAMED("recv_d == d2_check", patch_data_check_match(recv_d, d2_check));
     }
 
     if (shamcomm::world_rank() == 1) {
-        shamtest::asserts().assert_bool(
-            "recv_d == d1_check", patch_data_check_match(recv_d, d1_check));
+        REQUIRE_NAMED("recv_d == d1_check", patch_data_check_match(recv_d, d1_check));
     }
 }

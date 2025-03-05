@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -181,6 +182,11 @@ namespace shambase {
             T tmp = pow_constexpr<(power - 1) / 2>(a);
             return tmp * tmp * a;
         }
+    }
+
+    template<u32 flag>
+    inline constexpr bool is_flag_on(u32 val) {
+        return (val & (u32) flag) == (u32) flag;
     }
 
 } // namespace shambase

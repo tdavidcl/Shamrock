@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -40,8 +41,8 @@ std::vector<T> fetch_data(std::string key, shamrock::patch::PatchData &pdat) {
         if (field.get_name() == key) {
 
             {
-                sycl::host_accessor acc{shambase::get_check_ref(field.get_buf())};
-                u32 len = field.size();
+                auto acc = field.get_buf().copy_to_stdvec();
+                u32 len  = field.get_val_cnt();
 
                 for (u32 i = 0; i < len; i++) {
                     vec.push_back(acc[i]);
@@ -308,7 +309,10 @@ void compare_results(
     TEX_REPORT(R"==(\end{itemize})=="
                "\n")
 
-    _Assert(l2_r < 1e-9) _Assert(l2_vr < 28e-06) _Assert(l2_h < 4e-08) _Assert(l2_u < 2e-07)
+    REQUIRE(l2_r < 1e-9);
+    REQUIRE(l2_vr < 28e-06);
+    REQUIRE(l2_h < 4e-08);
+    REQUIRE(l2_u < 2e-07);
 }
 
 void do_test(bool long_version) {

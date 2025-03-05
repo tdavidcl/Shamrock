@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -37,6 +38,27 @@ namespace shambase {
     std::string exception_format(SourceLocation loc);
 
     /**
+     * @brief Set the exception generator callback
+     *
+     * This function sets a callback that is called whenever an exception is
+     * thrown. The callback is called with the formatted exception message
+     * as argument.
+     *
+     * @param callback The callback to set
+     */
+    void set_exception_gen_callback(void (*callback)(std::string msg));
+
+    /**
+     * @brief The callback called when an exception is thrown
+     *
+     * This callback is called with the formatted exception message as argument.
+     * It is settable with set_exception_gen_callback.
+     *
+     * @param msg The formatted exception message
+     */
+    void exception_gen_callback(std::string msg);
+
+    /**
      * @brief Create an exception with a message and a location
      *
      * This function creates an exception with a message that is richer,
@@ -51,7 +73,9 @@ namespace shambase {
     template<class ExcptTypes>
     inline ExcptTypes
     make_except_with_loc(std::string message, SourceLocation loc = SourceLocation{}) {
-        return ExcptTypes(message + exception_format(loc));
+        std::string msg = message + exception_format(loc);
+        exception_gen_callback(msg);
+        return ExcptTypes(msg);
     }
 
     /**

@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -51,8 +52,8 @@ void shamsys::microbench::p2p_bandwith(u32 wr_sender, u32 wr_receiv) {
     u32 wr = shamcomm::world_rank();
 
     u64 length = 1024UL * 1014UL * 8UL; // 8MB messages
-    shamcomm::CommunicationBuffer buf_recv{length, instance::get_compute_scheduler()};
-    shamcomm::CommunicationBuffer buf_send{length, instance::get_compute_scheduler()};
+    shamcomm::CommunicationBuffer buf_recv{length, instance::get_compute_scheduler_ptr()};
+    shamcomm::CommunicationBuffer buf_send{length, instance::get_compute_scheduler_ptr()};
 
     std::vector<MPI_Request> rqs;
 
@@ -112,8 +113,8 @@ void shamsys::microbench::p2p_latency(u32 wr1, u32 wr2) {
     u32 wr = shamcomm::world_rank();
 
     u64 length = 8ULL; // 8B messages
-    shamcomm::CommunicationBuffer buf_recv{length, instance::get_compute_scheduler()};
-    shamcomm::CommunicationBuffer buf_send{length, instance::get_compute_scheduler()};
+    shamcomm::CommunicationBuffer buf_recv{length, instance::get_compute_scheduler_ptr()};
+    shamcomm::CommunicationBuffer buf_send{length, instance::get_compute_scheduler_ptr()};
 
     f64 t        = 0;
     u64 loops    = 0;

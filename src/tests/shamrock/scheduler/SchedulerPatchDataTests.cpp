@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -105,11 +106,12 @@ TestStart(
     for (u32 i = 0; i < npatch; i++) {
         bool should_have_patch = (wrank == map_new_owner[i]);
         bool has_patch         = spdat.has_patch(i);
-        shamtest::asserts().assert_equal("correct patch location", should_have_patch, has_patch);
+
+        // test correct patch location
+        REQUIRE_EQUAL(should_have_patch, has_patch);
 
         if (has_patch && should_have_patch) {
-            shamtest::asserts().assert_bool(
-                "correct patch location", spdat.get_pdat(i) == ref_pdat[i]);
+            REQUIRE(spdat.get_pdat(i) == ref_pdat[i]);
         }
     }
 }

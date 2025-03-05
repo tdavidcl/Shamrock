@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -51,6 +52,20 @@ namespace sham {
         // #ifdef SYCL_COMP_ACPP
         //         logger::raw_ln("   - hipSYCL_hash_code() :", ctx.hipSYCL_hash_code());
         // #endif
+    }
+
+    bool DeviceContext::use_direct_comm() {
+
+        if (!bool(device)) {
+            shambase::throw_with_loc<std::runtime_error>("Why is device not allocated");
+        }
+
+        auto &dev = *device;
+        if (dev.mpi_prop.is_mpi_direct_capable) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
 } // namespace sham

@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -15,6 +16,7 @@
 
 #include "shamalgs/details/numeric/numericFallback.hpp"
 #include "shamalgs/memory.hpp"
+#include "shambackends/DeviceBuffer.hpp"
 
 namespace shamalgs::numeric::details {
 
@@ -37,6 +39,21 @@ namespace shamalgs::numeric::details {
         }
 
         return std::move(ret_buf);
+    }
+
+    template<class T>
+    sham::DeviceBuffer<T> exclusive_sum_fallback_usm(
+        const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<T> &buf1, u32 len) {
+
+        sham::DeviceBuffer<T> ret_buf(len, sched);
+
+        auto acc_src = buf1.copy_to_stdvec();
+
+        std::exclusive_scan(acc_src.begin(), acc_src.end(), acc_src.begin(), 0);
+
+        ret_buf.copy_from_stdvec(acc_src);
+
+        return ret_buf;
     }
 
     template<class T>
@@ -98,6 +115,9 @@ namespace shamalgs::numeric::details {
     template sycl::buffer<u32>
     inclusive_sum_fallback(sycl::queue &q, sycl::buffer<u32> &buf1, u32 len);
 
+    template sham::DeviceBuffer<u32> exclusive_sum_fallback_usm(
+        const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf1, u32 len);
+
     template sycl::buffer<u32>
     exclusive_sum_fallback(sycl::queue &q, sycl::buffer<u32> &buf1, u32 len);
 
@@ -128,4 +148,24 @@ namespace shamalgs::numeric::details {
         return {memory::vec_to_buf(idxs), idxs.size()};
     }
 
+    sham::DeviceBuffer<u32> stream_compact_fallback(
+        const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf_flags, u32 len) {
+
+        std::vector<u32> idxs;
+
+        {
+            auto acc_src = buf_flags.copy_to_stdvec();
+
+            for (u32 idx = 0; idx < len; idx++) {
+
+                if (acc_src[idx]) {
+                    idxs.push_back(idx);
+                }
+            }
+        }
+
+        sham::DeviceBuffer<u32> ret(idxs.size(), sched);
+        ret.copy_from_stdvec(idxs);
+        return ret;
+    }
 } // namespace shamalgs::numeric::details

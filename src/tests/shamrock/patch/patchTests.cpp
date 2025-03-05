@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -36,7 +37,7 @@ TestStart(Unittest, "shamrock/patch/Patch.cpp:MpiType", patch_mpi_type, 2) {
         MPI_Status st;
         mpi::recv(&rpatch, 1, get_patch_mpi_type<3>(), 0, 0, MPI_COMM_WORLD, &st);
 
-        shamtest::asserts().assert_bool("patch are equal", rpatch == check_patch);
+        REQUIRE_NAMED("patch are equal", rpatch == check_patch);
     }
 }
 
@@ -58,18 +59,18 @@ TestStart(Unittest, "shamrock/patch/Patch.cpp:SplitMerge", splitmergepatch, 1) {
 
     std::array<Patch, 8> splts = check_patch.get_split();
 
-    shamtest::asserts().assert_bool("", splts[0].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[1].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[2].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[3].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[4].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[5].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[6].load_value == 1);
-    shamtest::asserts().assert_bool("", splts[7].load_value == 1);
+    REQUIRE(splts[0].load_value == 1);
+    REQUIRE(splts[1].load_value == 1);
+    REQUIRE(splts[2].load_value == 1);
+    REQUIRE(splts[3].load_value == 1);
+    REQUIRE(splts[4].load_value == 1);
+    REQUIRE(splts[5].load_value == 1);
+    REQUIRE(splts[6].load_value == 1);
+    REQUIRE(splts[7].load_value == 1);
 
     Patch p = Patch::merge_patch(splts);
 
-    shamtest::asserts().assert_bool("patch are equal", p == check_patch);
+    REQUIRE_NAMED("patch are equal", p == check_patch);
 }
 
 TestStart(Unittest, "shamrock/patch/Patch.cpp:SplitCoord", splitcoord, 1) {
@@ -102,7 +103,7 @@ TestStart(Unittest, "shamrock/patch/Patch.cpp:SplitCoord", splitcoord, 1) {
 
     std::array<u64, 3> split_out = p0.get_split_coord();
 
-    shamtest::asserts().assert_bool("split 0", split_x == split_out[0]);
-    shamtest::asserts().assert_bool("split 1", split_y == split_out[1]);
-    shamtest::asserts().assert_bool("split 2", split_z == split_out[2]);
+    REQUIRE_NAMED("split 0", split_x == split_out[0]);
+    REQUIRE_NAMED("split 1", split_y == split_out[1]);
+    REQUIRE_NAMED("split 2", split_z == split_out[2]);
 }

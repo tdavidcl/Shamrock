@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -19,7 +20,7 @@
 #include <fmt/printf.h>
 #include <fmt/ranges.h>
 
-std::string SourceLocation::format_multiline() {
+std::string SourceLocation::format_multiline() const {
     return fmt::format(
         R"=(
 ---- Source Location ----
@@ -33,7 +34,7 @@ call = {}
         loc.function_name());
 }
 
-std::string SourceLocation::format_multiline(std::string stacktrace) {
+std::string SourceLocation::format_multiline(std::string stacktrace) const {
     return fmt::format(
         R"=(
 ---- Source Location ----
@@ -50,11 +51,11 @@ stacktrace :
         stacktrace);
 }
 
-std::string SourceLocation::format_one_line() {
+std::string SourceLocation::format_one_line() const {
     return fmt::format("{}:{}:{}", loc.file_name(), loc.line(), loc.column());
 }
 
-std::string SourceLocation::format_one_line_func() {
+std::string SourceLocation::format_one_line_func() const {
     return fmt::format(
         "{} ({}:{}:{})", loc.function_name(), loc.file_name(), loc.line(), loc.column());
 }

@@ -3,9 +3,11 @@ repos:
   rev: v4.4.0
   hooks:
   - id: trailing-whitespace
+    exclude: \.svg$|LICENSE
     log_file: log_precommit_trailing-whitespace
   - id: end-of-file-fixer  # add EOF "\n" if missing
     log_file: log_precommit_end-of-file-fixer
+    exclude: \.svg$|LICENSE
   - id: check-merge-conflict
     log_file: log_precommit_check-merge-conflict
 
@@ -69,6 +71,19 @@ repos:
     types_or: [c++, c, cuda]
     log_file: log_precommit_clang-format
 
+
+- repo: https://github.com/psf/black
+  rev: stable
+  hooks:
+  - id: black
+    args: [--line-length=100]
+    log_file: log_precommit_black
+
+- repo: https://github.com/pycqa/isort
+  rev: 5.13.2
+  hooks:
+    - id: isort
+      log_file: log_precommit_isort
 
 - repo: local
   hooks:

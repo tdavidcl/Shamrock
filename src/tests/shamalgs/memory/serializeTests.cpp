@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -19,7 +20,7 @@
 template<class T>
 inline void check_buf(std::string prefix, sycl::buffer<T> &b1, sycl::buffer<T> &b2) {
 
-    shamtest::asserts().assert_equal(prefix + std::string("same size"), b1.size(), b2.size());
+    REQUIRE_EQUAL_NAMED(prefix + std::string("same size"), b1.size(), b2.size());
 
     {
         sycl::host_accessor acc1{b1};
@@ -36,7 +37,7 @@ inline void check_buf(std::string prefix, sycl::buffer<T> &b1, sycl::buffer<T> &
         }
 
         if (eq) {
-            shamtest::asserts().assert_bool("same content", eq);
+            REQUIRE_NAMED("same content", eq);
         } else {
             shamtest::asserts().assert_add_comment("same content", eq, id_err_list);
         }
@@ -93,8 +94,8 @@ TestStart(Unittest, "shamalgs/memory/SerializeHelper", test_serialize_helper, 1)
         // shamalgs::memory::print_buf(buf_comp1, n1, 16, "{} ");
         // shamalgs::memory::print_buf(buf1, n1, 16, "{} ");
 
-        shamtest::asserts().assert_bool("same", sham::equals(val, test_val));
-        shamtest::asserts().assert_bool("same", test_str == recv_str);
+        REQUIRE_NAMED("same", sham::equals(val, test_val));
+        REQUIRE_NAMED("same", test_str == recv_str);
         check_buf("buf 1", buf_comp1, buf1);
         check_buf("buf 2", buf_comp2, buf2);
     }

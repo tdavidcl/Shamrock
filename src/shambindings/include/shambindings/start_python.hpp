@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -20,6 +21,13 @@
 namespace shambindings {
 
 #if defined(DOXYGEN) || defined(SHAMROCK_EXECUTABLE_BUILD)
+
+    /// set the value of sys.path before init
+    void setpypath(std::string path);
+
+    /// set the value of sys.path before init from the supplied binary
+    void setpypath_from_binary(std::string binary_path);
+
     /**
      * @brief Start shamrock embded ipython interpreter
      *
@@ -39,6 +47,9 @@ namespace shambindings {
      * @param file_path path to the runscript
      */
     void run_py_file(std::string file_path, bool do_print);
+
+    /// Modify Python sys.path to point to one detected during cmake invocation
+    void modify_py_sys_path();
 #endif
 
 } // namespace shambindings

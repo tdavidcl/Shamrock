@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -31,8 +32,6 @@ void shamalgs::BufferEventHandler::add_read_dependancies(std::vector<sycl::event
               + "you want to create a event depedancy, but the event state was not updated "
                 "after last event usage";
 
-        logger::err_ln("BufferEventHandler", err);
-
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
 
@@ -52,8 +51,6 @@ void shamalgs::BufferEventHandler::add_read_write_dependancies(
             = get_hash_log()
               + "you want to create a event depedancy, but the event state was not updated "
                 "after last event usage";
-
-        logger::err_ln("BufferEventHandler", err);
 
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
@@ -80,8 +77,6 @@ void shamalgs::BufferEventHandler::register_read_event(sycl::event e) {
             = (get_hash_log()
                + "you are trying to register an event without having fetched one previoulsy");
 
-        logger::err_ln("BufferEventHandler", err);
-
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
 
@@ -89,8 +84,6 @@ void shamalgs::BufferEventHandler::register_read_event(sycl::event e) {
         std::string err
             = (get_hash_log()
                + "you want to register a read event but the last dependcy was not in read mode");
-
-        logger::err_ln("BufferEventHandler", err);
 
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
@@ -108,8 +101,6 @@ void shamalgs::BufferEventHandler::register_read_write_event(sycl::event e) {
             = (get_hash_log()
                + "you are trying to register an event without having fetched one previoulsy");
 
-        logger::err_ln("BufferEventHandler", err);
-
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
 
@@ -117,8 +108,6 @@ void shamalgs::BufferEventHandler::register_read_write_event(sycl::event e) {
         std::string err
             = (get_hash_log()
                + "you want to register a read event but the last dependcy was not in read mode");
-
-        logger::err_ln("BufferEventHandler", err);
 
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }
@@ -133,8 +122,6 @@ void shamalgs::BufferEventHandler::synchronize() {
 
     if (!up_to_date_events) {
         std::string err = (get_hash_log() + "the events are not up to date");
-
-        logger::err_ln("BufferEventHandler", err);
 
         throw shambase::make_except_with_loc<std::runtime_error>(err);
     }

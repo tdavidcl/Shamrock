@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -42,6 +43,9 @@ namespace sham {
         }
         if (shambase::contain_substr(pname, "AMD")) {
             return Backend::ROCM;
+        }
+        if (shambase::contain_substr(pname, "HIP")) {
+            return Backend::ROCM; // AMD ROCm
         }
         if (shambase::contain_substr(pname, "OpenMP")) {
             return Backend::OPENMP; // OpenMP
@@ -170,12 +174,16 @@ namespace sham {
 
         // If CUDA-aware MPI is enabled, and the device is a CUDA device,
         // then we can use it
-        if ((shamcomm::mpi_cuda_aware == shamcomm::Yes) && (prop.backend == Backend::CUDA)) {
+        if ((shamcomm::get_mpi_cuda_aware_status() == shamcomm::Yes
+             || shamcomm::get_mpi_cuda_aware_status() == shamcomm::ForcedYes)
+            && (prop.backend == Backend::CUDA)) {
             dgpu_capable = true;
         }
 
         // Same for ROCm-aware MPI and ROCm devices
-        if ((shamcomm::mpi_rocm_aware == shamcomm::Yes) && (prop.backend == Backend::ROCM)) {
+        if ((shamcomm::get_mpi_rocm_aware_status() == shamcomm::Yes
+             || shamcomm::get_mpi_rocm_aware_status() == shamcomm::ForcedYes)
+            && (prop.backend == Backend::ROCM)) {
             dgpu_capable = true;
         }
 
@@ -218,7 +226,7 @@ namespace sham {
      */
     Device sycl_dev_to_sham_dev(usize i, const sycl::device &dev) {
         DeviceProperties prop       = fetch_properties(dev); // Get the properties of the device
-        DeviceMPIProperties propmpi = fetch_mpi_properties(dev, prop); // Get the MPI properties
+        DeviceMPIProperties propmpi = {false};               // Get the MPI properties
         return Device{
             i,      // The index of the device
             dev,    // The SYCL device

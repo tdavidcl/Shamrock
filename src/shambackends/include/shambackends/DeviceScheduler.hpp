@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -61,6 +62,19 @@ namespace sham {
          * @brief Function to test that all the queues are working properly
          */
         void test();
+
+        /**
+         * @brief Check if the context corresponding to the device scheduler should use direct
+         * communication
+         *
+         * This method returns true if the context should use direct
+         * communication, false otherwise.
+         *
+         * @return true if direct communication should be used
+         */
+        bool use_direct_comm();
     };
+
+    using DeviceScheduler_ptr = std::shared_ptr<DeviceScheduler>;
 
 } // namespace sham

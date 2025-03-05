@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -35,7 +36,7 @@ void test_range(i32 min, i32 max) {
         test_set.insert(tmp);
     }
 
-    _Assert(set_compare(ref_set, test_set))
+    REQUIRE(set_compare(ref_set, test_set));
 }
 
 TestStart(Unittest, "shammath/DiscontinuousIterator", iterator, 1) {

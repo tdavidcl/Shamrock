@@ -1,14 +1,15 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
 #include "shambase/print.hpp"
 #include "shamcomm/logs.hpp"
-#include "shammodels/EOSConfig.hpp"
+#include "shammodels/common/EOSConfig.hpp"
 #include "shamphys/eos_config.hpp"
 #include "shamtest/shamtest.hpp"
 
@@ -30,12 +31,12 @@ void test_serialize_adiabatic() {
 
     if (Config *out_eos_config = std::get_if<Config>(&out_config.config)) {
         if (Config *in_eos_config = std::get_if<Config>(&in_config.config)) {
-            REQUIRE(*in_eos_config == *out_eos_config)
+            REQUIRE(*in_eos_config == *out_eos_config);
         } else {
-            _Assert(false)
+            REQUIRE(false);
         }
     } else {
-        _Assert(false)
+        REQUIRE(false);
     }
 }
 
@@ -57,12 +58,12 @@ void test_serialize_locally_isothermal() {
 
     if (Config *out_eos_config = std::get_if<Config>(&out_config.config)) {
         if (Config *in_eos_config = std::get_if<Config>(&in_config.config)) {
-            _Assert(true)
+            REQUIRE(true);
         } else {
-            _Assert(false)
+            REQUIRE(false);
         }
     } else {
-        _Assert(false)
+        REQUIRE(false);
     }
 }
 
@@ -84,12 +85,12 @@ void test_serialize_locally_isothermallp07() {
 
     if (Config *out_eos_config = std::get_if<Config>(&out_config.config)) {
         if (Config *in_eos_config = std::get_if<Config>(&in_config.config)) {
-            REQUIRE(*in_eos_config == *out_eos_config)
+            REQUIRE(*in_eos_config == *out_eos_config);
         } else {
-            _Assert(false)
+            REQUIRE(false);
         }
     } else {
-        _Assert(false)
+        REQUIRE(false);
     }
 }
 

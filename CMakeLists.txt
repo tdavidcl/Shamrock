@@ -29,11 +29,71 @@ if(EXPORT_COMPILE_COMMANDS)
 endif()
 
 ################################
-# Shamrock configuration
+# Shamrock versioning
 ################################
-project(Shamrock VERSION 2024.0)
 
+# Based on the versionning in AdaptiveCPP
+# see : https://github.com/AdaptiveCpp/AdaptiveCpp/blob/develop/CMakeLists.txt#L554
 
+set(SHAMROCK_VERSION_MAJOR 2024)
+set(SHAMROCK_VERSION_MINOR 10)
+set(SHAMROCK_VERSION_PATCH 0)
+
+execute_process(
+    COMMAND git status
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_STATUS_OUT
+    RESULT_VARIABLE GIT_STATUS
+)
+
+# With a release tarball, "git status" will fail (return non zero)
+if(GIT_STATUS)
+    set(SHAMROCK_VERSION_SUFFIX "")
+else()
+    # Get the latest abbreviated commit hash of the working branch
+    execute_process(
+        COMMAND git log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE SHAMROCK_GIT_COMMIT_HASH
+        RESULT_VARIABLE GIT_HASH_RETURN_CODE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    # git branch
+    execute_process(
+        COMMAND git rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE SHAMROCK_GIT_BRANCH
+        RESULT_VARIABLE GIT_BRANCH_RETURN_CODE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    # check whether there are local changes
+    execute_process(COMMAND git diff-index --name-only HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE SHAMROCK_LOCAL_CHANGES
+        RESULT_VARIABLE GIT_LOCAL_CHANGES_RETURN_CODE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    if (GIT_HASH_RETURN_CODE EQUAL 0 AND GIT_BRANCH_RETURN_CODE EQUAL 0 AND
+         GIT_LOCAL_CHANGES_RETURN_CODE EQUAL 0)
+
+        if(NOT "${SHAMROCK_LOCAL_CHANGES}" STREQUAL "")
+        set(DIRTY_STR ".dirty")
+        else()
+        set(DIRTY_STR "")
+        endif()
+
+        set(SHAMROCK_VERSION_SUFFIX "+git.${SHAMROCK_GIT_COMMIT_HASH}.${SHAMROCK_GIT_BRANCH}${DIRTY_STR}")
+    endif()
+endif()
+
+set(SHAMROCK_VERSION_STRING ${SHAMROCK_VERSION_MAJOR}.${SHAMROCK_VERSION_MINOR}.${SHAMROCK_VERSION_PATCH}${SHAMROCK_VERSION_SUFFIX})
+project(Shamrock VERSION ${SHAMROCK_VERSION_MAJOR}.${SHAMROCK_VERSION_MINOR}.${SHAMROCK_VERSION_PATCH})
+message(STATUS "Shamrock version : ${SHAMROCK_VERSION_STRING}")
+
+################################
+# Shamrock Configuration
+################################
 
 option(SHAMROCK_WITH_MPI "use MPI libraries" On)
 option(SHAMROCK_USE_SHARED_LIB "use shared libraries" On)
@@ -114,8 +174,38 @@ if(SHAMROCK_WITH_MPI)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SHAM_CXX_MPI_FLAGS}")
 endif()
 
+if(NOT DEFINED Python_EXECUTABLE)
+  if(DEFINED ENV{VIRTUAL_ENV})
+    find_program(
+      Python_EXECUTABLE python
+      PATHS "$ENV{VIRTUAL_ENV}" "$ENV{VIRTUAL_ENV}/bin"
+      NO_DEFAULT_PATH)
+  elseif(DEFINED ENV{CONDA_PREFIX})
+    find_program(
+      Python_EXECUTABLE python
+      PATHS "$ENV{CONDA_PREFIX}" "$ENV{CONDA_PREFIX}/bin"
+      NO_DEFAULT_PATH)
+  elseif(DEFINED ENV{pythonLocation})
+    find_program(
+      Python_EXECUTABLE python
+      PATHS "$ENV{pythonLocation}" "$ENV{pythonLocation}/bin"
+      NO_DEFAULT_PATH)
+  endif()
+  if(NOT Python_EXECUTABLE)
+    unset(Python_EXECUTABLE)
+  endif()
+endif()
+
 find_package(Python 3.6 REQUIRED COMPONENTS Interpreter Development)
+
 add_subdirectory(external)
+
+
+if(USE_SYSTEM_FMTLIB)
+    message(STATUS "Using system fmtlib")
+    find_package(fmt REQUIRED)
+endif()
+
 
 if("${BUILD_PYLIB}")
     # We must force fPIC because for unknown reasons cmake doesn't on those shared lib

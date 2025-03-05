@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -18,6 +19,7 @@
  * and deallocate memory in USM.
  */
 
+#include "shambase/ptr.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include <memory>
 #include <utility>
@@ -76,10 +78,16 @@ namespace sham {
          *
          * @param sz The size of the USM buffer to be allocated
          * @param dev_sched The Device Scheduler used to allocate/free the USM buffer
+         * @param alignment The alignment of the USM buffer (optional)
          *
          * @return A USMPtrHolder instance wrapping the allocated USM buffer
          */
-        static USMPtrHolder create(size_t sz, std::shared_ptr<DeviceScheduler> dev_sched);
+        static USMPtrHolder create(
+            size_t sz,
+            std::shared_ptr<DeviceScheduler> dev_sched,
+            std::optional<size_t> alignment = std::nullopt);
+
+        static USMPtrHolder create_nullptr(std::shared_ptr<DeviceScheduler> dev_sched);
 
         /**
          * @brief USM pointer holder destructor
@@ -134,6 +142,10 @@ namespace sham {
          */
         template<class T>
         inline T *ptr_cast() const {
+            if (!shambase::is_aligned<T>(usm_ptr)) {
+                shambase::throw_with_loc<std::runtime_error>(
+                    "The USM pointer is not aligned with the given type");
+            }
             return reinterpret_cast<T *>(usm_ptr);
         }
 
@@ -160,6 +172,24 @@ namespace sham {
          * @return The SYCL context used for allocation/freeing the USM buffer
          */
         [[nodiscard]] inline DeviceScheduler &get_dev_scheduler() const { return *dev_sched; }
+
+        /**
+         * @brief Get the SYCL context used for allocation/freeing the USM buffer
+         *
+         * @return The SYCL context used for allocation/freeing the USM buffer
+         */
+        [[nodiscard]] inline std::shared_ptr<DeviceScheduler> &get_dev_scheduler_ptr() {
+            return dev_sched;
+        }
+
+        /**
+         * @brief Get the SYCL context used for allocation/freeing the USM buffer
+         *
+         * @return The SYCL context used for allocation/freeing the USM buffer
+         */
+        [[nodiscard]] inline const std::shared_ptr<DeviceScheduler> &get_dev_scheduler_ptr() const {
+            return dev_sched;
+        }
     };
 
 } // namespace sham

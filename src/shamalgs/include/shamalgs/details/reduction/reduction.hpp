@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -16,11 +17,35 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceQueue.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/vec.hpp"
 
 namespace shamalgs::reduction {
+
+    template<class T>
+    T sum(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
+
+    template<class T>
+    T min(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
+
+    template<class T>
+    T max(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
 
     template<class T>
     T sum(sycl::queue &q, sycl::buffer<T> &buf1, u32 start_id, u32 end_id);
@@ -59,6 +84,43 @@ namespace shamalgs::reduction {
                 out[item] = sham::equals(acc1[item], acc2[item]);
             });
         });
+
+        return shamalgs::reduction::is_all_true(res, cnt);
+    }
+
+    template<class T>
+    inline bool equals(
+        const sham::DeviceScheduler_ptr &q,
+        sham::DeviceBuffer<T> &buf1,
+        sham::DeviceBuffer<T> &buf2,
+        u32 cnt) {
+
+        if (buf1.get_size() < cnt) {
+            throw shambase::make_except_with_loc<std::invalid_argument>("buf 1 is larger than cnt");
+        }
+
+        if (buf2.get_size() < cnt) {
+            throw shambase::make_except_with_loc<std::invalid_argument>("buf 2 is larger than cnt");
+        }
+
+        bool is_same = (&buf1 == &buf2);
+
+        sham::EventList depends_list;
+        const T *acc1 = buf1.get_read_access(depends_list);
+        const T *acc2 = (is_same) ? acc1 : buf2.get_read_access(depends_list);
+
+        sycl::buffer<u8> res(cnt);
+        auto e = q->get_queue().submit(depends_list, [&](sycl::handler &cgh) {
+            sycl::accessor out{res, cgh, sycl::write_only, sycl::no_init};
+
+            cgh.parallel_for(sycl::range{cnt}, [=](sycl::item<1> item) {
+                out[item] = sham::equals(acc1[item], acc2[item]);
+            });
+        });
+
+        buf1.complete_event_state(e);
+        if (!is_same)
+            buf2.complete_event_state(e);
 
         return shamalgs::reduction::is_all_true(res, cnt);
     }

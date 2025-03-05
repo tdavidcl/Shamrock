@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -19,6 +20,7 @@
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "details/SerializeHelperMember.hpp"
+#include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/typeAliasVec.hpp"
@@ -301,6 +303,70 @@ namespace shamalgs {
                     accbuf[id] = Helper::load(&accbufbyte[head]);
                 });
             });
+
+            head_device += offset;
+        }
+
+        template<class T>
+        inline void write_buf(sham::DeviceBuffer<T> &buf, u64 len) {
+            StackEntry stack_loc{false};
+
+            using Helper     = details::SerializeHelperMember<T>;
+            u64 current_head = head_device;
+
+            u64 offset = align_repr(len * Helper::szrepr);
+            check_head_move_device(offset);
+
+            sham::EventList depends_list;
+            const T *accbuf = buf.get_read_access(depends_list);
+
+            auto e = dev_sched->get_queue().submit(
+                depends_list, [&, current_head](sycl::handler &cgh) {
+                    sycl::accessor accbufbyte{*storage, cgh, sycl::write_only};
+
+                    cgh.parallel_for(sycl::range<1>{len}, [=](sycl::item<1> id) {
+                        u64 head = current_head + id.get_linear_id() * Helper::szrepr;
+                        Helper::store(&accbufbyte[head], accbuf[id]);
+                    });
+                });
+
+            buf.complete_event_state(e);
+
+            head_device += offset;
+        }
+
+        template<class T>
+        inline void load_buf(sham::DeviceBuffer<T> &buf, u64 len) {
+            StackEntry stack_loc{false};
+
+            using Helper     = details::SerializeHelperMember<T>;
+            u64 current_head = head_device;
+
+            u64 offset = align_repr(len * Helper::szrepr);
+            check_head_move_device(offset);
+
+            if (buf.get_size() < len) {
+                shambase::throw_with_loc<std::invalid_argument>(shambase::format(
+                    "SerializeHelper::load_buf: (buf.get_size() < len)\n  buf.get_size()={}\n  "
+                    "len={}",
+                    buf.get_size(),
+                    len));
+            }
+
+            sham::EventList depends_list;
+            T *accbuf = buf.get_write_access(depends_list);
+
+            auto e = dev_sched->get_queue().submit(
+                depends_list, [&, current_head](sycl::handler &cgh) {
+                    sycl::accessor accbufbyte{*storage, cgh, sycl::read_only};
+
+                    cgh.parallel_for(sycl::range<1>{len}, [=](sycl::item<1> id) {
+                        u64 head   = current_head + id.get_linear_id() * Helper::szrepr;
+                        accbuf[id] = Helper::load(&accbufbyte[head]);
+                    });
+                });
+
+            buf.complete_event_state(e);
 
             head_device += offset;
         }

@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -208,7 +209,11 @@ namespace mpi_sycl_interop {
         : comm_mode(comm_mode), comm_op(comm_op), comm_sz(comm_sz), sycl_buf(sycl_buf) {
 
         logger::debug_mpi_ln(
-            "PatchDataField MPI Comm", "starting mpi sycl comm ", comm_sz, comm_op, comm_mode);
+            "PatchDataField MPI Comm",
+            "starting mpi sycl comm ",
+            comm_sz,
+            int(comm_op),
+            int(comm_mode));
 
         if (comm_mode == CopyToHost && comm_op == Send) {
 
@@ -230,8 +235,8 @@ namespace mpi_sycl_interop {
             logger::err_ln(
                 "PatchDataField MPI Comm",
                 "communication mode & op combination not implemented :",
-                comm_mode,
-                comm_op);
+                int(comm_mode),
+                int(comm_op));
         }
     }
 
@@ -239,7 +244,11 @@ namespace mpi_sycl_interop {
     void BufferMpiRequest<T>::finalize() {
 
         logger::debug_mpi_ln(
-            "PatchDataField MPI Comm", "finalizing mpi sycl comm ", comm_sz, comm_op, comm_mode);
+            "PatchDataField MPI Comm",
+            "finalizing mpi sycl comm ",
+            comm_sz,
+            int(comm_op),
+            int(comm_mode));
 
         sycl_buf = std::make_unique<sycl::buffer<T>>(comm_sz);
 
@@ -263,8 +272,8 @@ namespace mpi_sycl_interop {
             logger::err_ln(
                 "PatchDataField MPI Comm",
                 "communication mode & op combination not implemented :",
-                comm_mode,
-                comm_op);
+                int(comm_mode),
+                int(comm_op));
         }
     }
 

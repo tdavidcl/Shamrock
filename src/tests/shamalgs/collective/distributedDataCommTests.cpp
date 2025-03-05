@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -79,17 +80,17 @@ void distribdata_sparse_comm_test(std::string prefix) {
         }
     });
 
-    shamtest::asserts().assert_equal(
+    REQUIRE_EQUAL_NAMED(
         "expected number of recv",
         recv_data.get_element_count(),
         recv_data_ref.get_element_count());
 
     recv_data_ref.for_each([&](u64 sender, u64 receiver, std::unique_ptr<sycl::buffer<u8>> &buf) {
-        shamtest::asserts().assert_bool("has expected key", recv_data.has_key(sender, receiver));
+        REQUIRE_NAMED("has expected key", recv_data.has_key(sender, receiver));
 
         auto it = recv_data.get_native().find({sender, receiver});
 
-        shamtest::asserts().assert_bool(
+        REQUIRE_NAMED(
             "correct buffer",
             shamalgs::reduction::equals_ptr(get_compute_queue(), buf, it->second));
     });

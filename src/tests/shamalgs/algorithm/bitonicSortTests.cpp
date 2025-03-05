@@ -1,12 +1,14 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
 #include "shamalgs/details/algorithm/bitonicSort.hpp"
+#include "shamalgs/details/algorithm/bitonicSort_updated_usm.hpp"
 #include "shamalgs/details/algorithm/radixSortOnesweep.hpp"
 #include "shamtest/PyScriptHandle.hpp"
 #include "sortTests.hpp"
@@ -24,6 +26,18 @@ TestStart(
     TestSortByKey<u32, u32> test(
         (TestSortByKey<u32, u32>::vFunctionCall)
             shamalgs::algorithm::details::sort_by_key_bitonic_updated<u32, u32, 16>);
+    test.check();
+}
+
+TestStart(
+    Unittest,
+    "shamalgs/algorithm/details/bitonicSort_updated_usm",
+    test_bitonic_sort_updated_usm,
+    1) {
+
+    TestSortByKeyUSM<u32, u32> test(
+        (TestSortByKeyUSM<u32, u32>::vFunctionCall)
+            shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<u32, u32, 16>);
     test.check();
 }
 

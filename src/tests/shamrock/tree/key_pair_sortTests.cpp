@@ -1,17 +1,18 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
 #include "shambase/time.hpp"
-#include "shamrock/tree/kernels/key_morton_sort.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamtest/shamtest.hpp"
+#include "shamtree/key_morton_sort.hpp"
 #include <random>
 
 template<class u_morton, SortImplType impl>
@@ -45,8 +46,8 @@ void unit_test_key_pair() {
     std::sort(unsorted.begin(), unsorted.end());
 
     for (u32 i = 0; i < size_test; i++) {
-        shamtest::asserts().assert_bool(
-            "index [" + shambase::format_printf("%d", i) + "]", unsorted[i] == morton_list[i]);
+        REQUIRE_EQUAL_NAMED(
+            "index [" + shambase::format_printf("%d", i) + "]", unsorted[i], morton_list[i]);
     }
 }
 

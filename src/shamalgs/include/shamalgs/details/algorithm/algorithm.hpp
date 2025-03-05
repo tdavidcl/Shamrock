@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -15,6 +16,8 @@
  *
  */
 
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceQueue.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/typeAliasVec.hpp"
 
@@ -39,6 +42,13 @@ namespace shamalgs::algorithm {
     template<class Tkey, class Tval>
     void sort_by_key(
         sycl::queue &q, sycl::buffer<Tkey> &buf_key, sycl::buffer<Tval> &buf_values, u32 len);
+
+    template<class Tkey, class Tval>
+    void sort_by_key(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<Tkey> &buf_key,
+        sham::DeviceBuffer<Tval> &buf_values,
+        u32 len);
 
     /**
      * @brief generate a buffer from a lambda expression based on the indexes
@@ -105,6 +115,48 @@ namespace shamalgs::algorithm {
         u32 len,
         u32 nvar);
 
+    template<class T>
+    void index_remap(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> &source,
+        sham::DeviceBuffer<T> &dest,
+        sham::DeviceBuffer<u32> &index_map,
+        u32 len);
+
+    template<class T>
+    void index_remap_nvar(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> &source,
+        sham::DeviceBuffer<T> &dest,
+        sham::DeviceBuffer<u32> &index_map,
+        u32 len,
+        u32 nvar);
+
+    template<class T>
+    sham::DeviceBuffer<T> index_remap(
+        const sham::DeviceScheduler_ptr &sched_ptr,
+        sham::DeviceBuffer<T> &source,
+        sham::DeviceBuffer<u32> &index_map,
+        u32 len) {
+
+        sham::DeviceBuffer<T> dest(len, sched_ptr);
+        index_remap<T>(sched_ptr, source, dest, index_map, len);
+        return dest;
+    }
+
+    template<class T>
+    sham::DeviceBuffer<T> index_remap_nvar(
+        const sham::DeviceScheduler_ptr &sched_ptr,
+        sham::DeviceBuffer<T> &source,
+        sham::DeviceBuffer<u32> &index_map,
+        u32 len,
+        u32 nvar) {
+
+        sham::DeviceBuffer<T> dest(len * nvar, sched_ptr);
+        index_remap_nvar<T>(sched_ptr, source, dest, index_map, len, nvar);
+        return dest;
+    }
+
     /**
      * @brief generate a buffer such that for i in [0,len[, buf[i] = i
      *
@@ -113,5 +165,24 @@ namespace shamalgs::algorithm {
      * @return sycl::buffer<u32> the returned buffer
      */
     sycl::buffer<u32> gen_buffer_index(sycl::queue &q, u32 len);
+
+    /**
+     * @brief generate a buffer such that for i in [0,len[, buf[i] = i
+     *
+     * @param sched the scheduler to run on
+     * @param len length of the buffer to generate
+     * @return sham::DeviceBuffer<u32> the returned buffer
+     */
+    sham::DeviceBuffer<u32> gen_buffer_index_usm(sham::DeviceScheduler_ptr sched, u32 len);
+
+    /**
+     * @brief Fill a given buffer such that for i in [0,len[, buf[i] = i
+     *
+     * @param sched the scheduler to run on
+     * @param len length of the buffer to fill
+     * @param buf the buffer to fill
+     */
+    void
+    fill_buffer_index_usm(sham::DeviceScheduler_ptr sched, u32 len, sham::DeviceBuffer<u32> &buf);
 
 } // namespace shamalgs::algorithm

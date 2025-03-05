@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -23,6 +24,21 @@
 #include <type_traits>
 
 namespace shamrock::sfc {
+
+    template<class morton_t>
+    struct MortonInfo {
+        static constexpr morton_t err_code;
+    };
+
+    template<>
+    struct MortonInfo<u32> {
+        static constexpr u32 err_code = 4294967295U;
+    };
+
+    template<>
+    struct MortonInfo<u64> {
+        static constexpr u64 err_code = 18446744073709551615UL;
+    };
 
     template<class Umorton, u32 dim>
     class MortonCodes {};

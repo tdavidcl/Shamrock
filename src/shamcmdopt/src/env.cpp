@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -31,6 +32,14 @@ std::optional<std::string> shamcmdopt::getenv_str(const char *env_var) {
 std::vector<std::pair<std::string, std::string>> env_var_reg = {};
 
 void shamcmdopt::register_env_var_doc(std::string env_var, std::string desc) {
+
+    for (auto &[_env_var, _desc] : env_var_reg) {
+        if (_env_var == env_var) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                shambase::format("The env var {} is already registered", env_var));
+        }
+    }
+
     env_var_reg.push_back({env_var, desc});
 }
 

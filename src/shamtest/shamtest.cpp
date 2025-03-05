@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -18,8 +19,10 @@
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
 #include "shambindings/pybindaliases.hpp"
+#include "shambindings/start_python.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcmdopt/term_colors.hpp"
+#include "shamrock/version.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -27,7 +30,6 @@
 #include "shamtest.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/details/reporters/texTestReport.hpp"
-#include "version.hpp"
 #include <pybind11/embed.h>
 #include <unordered_map>
 #include <cmath>
@@ -546,6 +548,7 @@ namespace shamtest {
 
         logger::info_ln("Test", "start python interpreter");
         py::initialize_interpreter();
+        shambindings::modify_py_sys_path();
 
         std::filesystem::create_directories("tests/figures");
 

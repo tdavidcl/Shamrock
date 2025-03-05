@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -38,6 +39,6 @@ TestStart(Unittest, "shamalgs/container/ResizableBuffer", resizebuftestserialize
 
         ResizableBuffer<u32_3> buf2 = ResizableBuffer<u32_3>::deserialize_buf(ser2, len);
 
-        shamtest::asserts().assert_bool("input match out", buf.check_buf_match(buf2));
+        REQUIRE_NAMED("input match out", buf.check_buf_match(buf2));
     }
 }

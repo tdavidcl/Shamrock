@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -19,6 +20,7 @@
 #include "shambase/constants.hpp"
 #include "shambase/type_name_info.hpp"
 #include "shambackends/math.hpp"
+#include "shammath/integrator.hpp"
 
 namespace shammath::details {
 
@@ -757,6 +759,16 @@ namespace shammath {
 
         inline static Tscal dhW_3d(Tscal r, Tscal h) {
             return -(BaseKernel::norm_3d) * (3 * f(r / h) + (r / h) * df(r / h)) / (h * h * h * h);
+        }
+
+        inline static Tscal f3d_integ_z(Tscal x, int np = 32) {
+            return integ_riemann_sum<Tscal>(-Rkern, Rkern, Rkern / np, [&](Tscal z) {
+                return f(sqrt(x * x + z * z));
+            });
+        }
+
+        inline static Tscal Y_3d(Tscal r, Tscal h, int np = 32) {
+            return BaseKernel::norm_3d * f3d_integ_z(r / h, np) / (h * h);
         }
     };
 

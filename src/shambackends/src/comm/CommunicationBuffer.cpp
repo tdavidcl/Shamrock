@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -21,7 +22,7 @@
 
 namespace shamcomm {
 
-    bool validate_comm_internal(sham::DeviceScheduler &device_sched) {
+    bool validate_comm_internal(std::shared_ptr<sham::DeviceScheduler> &device_sched) {
 
         u32 nbytes = 1e5;
         sycl::buffer<u8> buf_comp(nbytes);
@@ -84,13 +85,13 @@ namespace shamcomm {
         return valid;
     }
 
-    void validate_comm(sham::DeviceScheduler &sched) {
+    void validate_comm(std::shared_ptr<sham::DeviceScheduler> &sched) {
         u32 nbytes = 1e5;
         sycl::buffer<u8> buf_comp(nbytes);
 
         bool call_abort = false;
 
-        bool dgpu_mode = sched.ctx->device->mpi_prop.is_mpi_direct_capable;
+        bool dgpu_mode = sched->ctx->device->mpi_prop.is_mpi_direct_capable;
 
         using namespace shambase::term_colors;
         if (dgpu_mode) {

@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -23,7 +24,7 @@
 #include <stdexcept>
 #include <vector>
 
-void sparse_comm_test(std::string prefix, sham::DeviceScheduler &qdet) {
+void sparse_comm_test(std::string prefix, std::shared_ptr<sham::DeviceScheduler> qdet) {
 
     using namespace shamalgs::collective;
     using namespace shamsys::instance;
@@ -121,11 +122,10 @@ void sparse_comm_test(std::string prefix, sham::DeviceScheduler &qdet) {
 
                 RefBuff &recv_buf = recv_data[ref_idx];
 
-                shamtest::asserts().assert_equal(
-                    prefix + "same sender", recv_buf.sender_rank, ref.sender_rank);
-                shamtest::asserts().assert_equal(
+                REQUIRE_EQUAL_NAMED(prefix + "same sender", recv_buf.sender_rank, ref.sender_rank);
+                REQUIRE_EQUAL_NAMED(
                     prefix + "same receiver", recv_buf.receiver_rank, ref.receiver_rank);
-                shamtest::asserts().assert_bool(
+                REQUIRE_NAMED(
                     prefix + "same buffer",
                     shamalgs::reduction::equals_ptr(
                         get_compute_queue(), ref.payload, recv_buf.payload));
@@ -142,5 +142,5 @@ void sparse_comm_test(std::string prefix, sham::DeviceScheduler &qdet) {
 
 TestStart(Unittest, "shamalgs/collective/sparseXchg", testsparsexchg, -1) {
 
-    sparse_comm_test("", shamsys::instance::get_compute_scheduler());
+    sparse_comm_test("", shamsys::instance::get_compute_scheduler_ptr());
 }

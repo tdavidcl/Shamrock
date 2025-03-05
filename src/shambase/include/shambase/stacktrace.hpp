@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -17,12 +18,9 @@
 #include "shambase/SourceLocation.hpp"
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
+#include "shambase/profiling/profiling.hpp"
 #include "shambase/string.hpp"
 #include <stack>
-
-#ifdef SHAMROCK_USE_NVTX
-    #include <nvtx3/nvtx3.hpp>
-#endif
 
 namespace shambase::details {
 
@@ -101,17 +99,14 @@ namespace shambase::details {
             : loc(loc), do_timer(do_timer) {
 #ifdef SHAMROCK_USE_PROFILING
             if (do_timer) {
-                // Start the timer if enabled
                 wtime_start = get_wtime();
-                register_profile_entry_start(loc.loc, wtime_start);
+                shambase::profiling::stack_entry_start(loc, wtime_start);
+            } else {
+                shambase::profiling::stack_entry_start_no_time(loc);
             }
 #endif
             // Push the source location to the call stack
             call_stack.emplace(loc);
-#ifdef SHAMROCK_USE_NVTX
-            // Push a NVTX range
-            nvtxRangePush(loc.loc.function_name());
-#endif
         }
 
         /**
@@ -122,17 +117,14 @@ namespace shambase::details {
         inline ~BasicStackEntry() {
 #ifdef SHAMROCK_USE_PROFILING
             if (do_timer) {
-                // Stop the timer if enabled
                 f64 wtime_end = get_wtime();
-                register_profile_entry(loc.loc, wtime_start, wtime_end);
+                shambase::profiling::stack_entry_end(loc, wtime_start, wtime_end);
+            } else {
+                shambase::profiling::stack_entry_end_no_time(loc);
             }
 #endif
             // Pop the source location from the call stack
             call_stack.pop();
-#ifdef SHAMROCK_USE_NVTX
-            // Pop the NVTX range
-            nvtxRangePop();
-#endif
         }
     };
 
@@ -157,15 +149,13 @@ namespace shambase::details {
             : name(name), loc(loc), do_timer(do_timer) {
 #ifdef SHAMROCK_USE_PROFILING
             if (do_timer) {
-                // Start the timer if enabled
                 wtime_start = get_wtime();
+                shambase::profiling::stack_entry_start(loc, wtime_start, name);
+            } else {
+                shambase::profiling::stack_entry_start_no_time(loc, name);
             }
 #endif
             call_stack.emplace(loc);
-#ifdef SHAMROCK_USE_NVTX
-            // Push a NVTX range
-            nvtxRangePush(name.c_str());
-#endif
         }
 
         /**
@@ -177,14 +167,12 @@ namespace shambase::details {
 #ifdef SHAMROCK_USE_PROFILING
             if (do_timer) {
                 f64 wtime_end = get_wtime();
-                register_profile_entry(loc.loc, wtime_start, wtime_end);
+                shambase::profiling::stack_entry_end(loc, wtime_start, wtime_end, name);
+            } else {
+                shambase::profiling::stack_entry_end_no_time(loc);
             }
 #endif
             call_stack.pop();
-#ifdef SHAMROCK_USE_NVTX
-            // Pop the NVTX range
-            nvtxRangePop();
-#endif
         }
     };
 

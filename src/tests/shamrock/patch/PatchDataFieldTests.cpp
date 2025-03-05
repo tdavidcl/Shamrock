@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -34,7 +35,7 @@ TestStart(
 
         PatchDataField<u32_3> buf2 = PatchDataField<u32_3>::deserialize_buf(ser2, name, nvar);
 
-        shamtest::asserts().assert_bool("input match out", field.check_field_match(buf2));
+        REQUIRE_NAMED("input match out", field.check_field_match(buf2));
     }
 }
 
@@ -59,7 +60,7 @@ TestStart(
 
         PatchDataField<u32_3> buf2 = PatchDataField<u32_3>::deserialize_full(ser2);
 
-        shamtest::asserts().assert_bool("input match out", field.check_field_match(buf2));
+        REQUIRE_NAMED("input match out", field.check_field_match(buf2));
     }
 }
 
@@ -98,13 +99,14 @@ inline void check_pdat_get_ids_where(u32 len, u32 nvar, std::string name, f64 vm
     logger::raw_ln("found : ", std::get<1>(idx_cd_sycl));
 
     // compare content
-    _Assert(bool(std::get<0>(idx_cd_sycl)) == (idx_cd.size() != 0))
+    REQUIRE(bool(std::get<0>(idx_cd_sycl)) == (idx_cd.size() != 0));
 
-        if (std::get<0>(idx_cd_sycl)) {
-        _Assert(idx_cd == shambase::set_from_vector(idx_cd_vec)) _Assert(
+    if (std::get<0>(idx_cd_sycl)) {
+        REQUIRE(idx_cd == shambase::set_from_vector(idx_cd_vec));
+        REQUIRE(
             idx_cd
             == shambase::set_from_vector(
-                shamalgs::memory::buf_to_vec(*std::get<0>(idx_cd_sycl), std::get<1>(idx_cd_sycl))))
+                shamalgs::memory::buf_to_vec(*std::get<0>(idx_cd_sycl), std::get<1>(idx_cd_sycl))));
     }
 }
 

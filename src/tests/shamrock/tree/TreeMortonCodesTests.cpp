@@ -1,17 +1,18 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
 #include "shamalgs/random.hpp"
 #include "shambackends/typeAliasVec.hpp"
-#include "shamrock/tree/TreeMortonCodes.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
+#include "shamtree/TreeMortonCodes.hpp"
 
 TestStart(
     Unittest, "shamrock/tree/TreeMortonCodes::serialize", test_tree_morton_code_serialize, 1) {
@@ -42,6 +43,6 @@ TestStart(
 
         TreeMorton outser = TreeMorton::deserialize(ser2);
 
-        shamtest::asserts().assert_bool("input match out", codes == outser);
+        REQUIRE_NAMED("input match out", codes == outser);
     }
 }

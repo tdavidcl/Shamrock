@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -39,7 +40,7 @@ struct SourceLocation {
      *
      * @return std::string the formated location
      */
-    std::string format_multiline();
+    std::string format_multiline() const;
 
     /**
      * @brief format the location in multiple lines with a given stacktrace
@@ -47,19 +48,19 @@ struct SourceLocation {
      * @param stacktrace the stacktrace to add to the location
      * @return std::string the formated location
      */
-    std::string format_multiline(std::string stacktrace);
+    std::string format_multiline(std::string stacktrace) const;
 
     /**
      * @brief format the location in a one liner
      *
      * @return std::string the formated location
      */
-    std::string format_one_line();
+    std::string format_one_line() const;
 
     /**
      * @brief format the location in a one liner with the function name displayed
      *
      * @return std::string the formated location
      */
-    std::string format_one_line_func();
+    std::string format_one_line_func() const;
 };

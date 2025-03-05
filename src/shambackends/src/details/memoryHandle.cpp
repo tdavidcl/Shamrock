@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -13,68 +14,55 @@
  *
  */
 
+#include "shambase/aliases_float.hpp"
+#include "shambase/profiling/chrome.hpp"
+#include "shambase/profiling/profiling.hpp"
+#include "shambase/stacktrace.hpp"
+#include "shambackends/MemPerfInfos.hpp"
 #include "shambackends/USMPtrHolder.hpp"
 #include "shamcomm/logs.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include <shambackends/details/memoryHandle.hpp>
 
 namespace sham::details {
 
     template<USMKindTarget target>
-    std::string get_mode_name();
+    USMPtrHolder<target> create_usm_ptr(
+        u32 size, std::shared_ptr<DeviceScheduler> dev_sched, std::optional<size_t> alignment) {
 
-    template<>
-    std::string get_mode_name<device>() {
-        return "device";
-    }
+        StackEntry __st{};
 
-    template<>
-    std::string get_mode_name<shared>() {
-        return "shared";
-    }
+        auto create = [&]() {
+            if (size > 0) {
+                return USMPtrHolder<target>::create(size, dev_sched, alignment);
+            } else {
 
-    template<>
-    std::string get_mode_name<host>() {
-        return "host";
-    }
+                return USMPtrHolder<target>::create_nullptr(dev_sched);
+            }
+        };
 
-    template<USMKindTarget target>
-    USMPtrHolder<target> create_usm_ptr(u32 size, std::shared_ptr<DeviceScheduler> dev_sched) {
-        shamcomm::logs::debug_alloc_ln(
-            "memoryHandle",
-            "create usm pointer size :",
-            size,
-            " | mode =",
-            get_mode_name<target>());
-        auto ret = USMPtrHolder<target>::create(size, dev_sched);
-        shamcomm::logs::debug_alloc_ln(
-            "memoryHandle", "pointer created : ptr =", ret.get_raw_ptr());
-        return ret;
+        return create();
     }
 
     template<USMKindTarget target>
     void
     release_usm_ptr(USMPtrHolder<target> &&usm_ptr_hold, details::BufferEventHandler &&events) {
 
-        shamcomm::logs::debug_alloc_ln(
-            "memoryHandle",
-            "release usm pointer size :",
-            usm_ptr_hold.get_bytesize(),
-            " | ptr =",
-            usm_ptr_hold.get_raw_ptr(),
-            " | mode =",
-            get_mode_name<target>());
+        StackEntry __st{};
+
         shamcomm::logs::debug_alloc_ln("memoryHandle", "waiting event completion ...");
         events.wait_all();
         shamcomm::logs::debug_alloc_ln("memoryHandle", "done, freeing memory");
         usm_ptr_hold.free_ptr();
     }
 
-    template USMPtrHolder<device>
-    create_usm_ptr<device>(u32 size, std::shared_ptr<DeviceScheduler> dev_sched);
-    template USMPtrHolder<shared>
-    create_usm_ptr<shared>(u32 size, std::shared_ptr<DeviceScheduler> dev_sched);
-    template USMPtrHolder<host>
-    create_usm_ptr<host>(u32 size, std::shared_ptr<DeviceScheduler> dev_sched);
+#ifndef DOXYGEN
+    template USMPtrHolder<device> create_usm_ptr<device>(
+        u32 size, std::shared_ptr<DeviceScheduler> dev_sched, std::optional<size_t> alignment);
+    template USMPtrHolder<shared> create_usm_ptr<shared>(
+        u32 size, std::shared_ptr<DeviceScheduler> dev_sched, std::optional<size_t> alignment);
+    template USMPtrHolder<host> create_usm_ptr<host>(
+        u32 size, std::shared_ptr<DeviceScheduler> dev_sched, std::optional<size_t> alignment);
 
     template void release_usm_ptr<device>(
         USMPtrHolder<device> &&usm_ptr_hold, details::BufferEventHandler &&events);
@@ -82,5 +70,7 @@ namespace sham::details {
         USMPtrHolder<shared> &&usm_ptr_hold, details::BufferEventHandler &&events);
     template void
     release_usm_ptr<host>(USMPtrHolder<host> &&usm_ptr_hold, details::BufferEventHandler &&events);
+
+#endif
 
 } // namespace sham::details

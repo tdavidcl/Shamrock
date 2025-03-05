@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -49,8 +50,8 @@ struct TestSortByKey {
             check_map = check_map && (sorted_keys[i] == key_before_sort[sorted_vals[i]]);
         }
 
-        shamtest::asserts().assert_bool("is sorted", sort_ok);
-        shamtest::asserts().assert_bool("values permutation ok", check_map);
+        REQUIRE_NAMED("is sorted", sort_ok);
+        REQUIRE_NAMED("values permutation ok", check_map);
     }
 
     f64 benchmark_one(u32 len) {
@@ -117,6 +118,48 @@ struct TestSortByKey {
         return ret;
     }
 };
+template<class Tkey, class Tval>
+struct TestSortByKeyUSM {
+
+    using vFunctionCall = void (*)(
+        const sham::DeviceScheduler_ptr &,
+        sham::DeviceBuffer<Tkey> &,
+        sham::DeviceBuffer<Tval> &,
+        u32);
+
+    vFunctionCall fct;
+
+    explicit TestSortByKeyUSM(vFunctionCall arg) : fct(arg) {};
+
+    void check() {
+
+        auto sched           = shamsys::instance::get_compute_scheduler_ptr();
+        sham::DeviceQueue &q = sched->get_queue();
+
+        u32 len = 1U << 8U;
+
+        sham::DeviceBuffer<u32> buf_key
+            = shamalgs::random::mock_buffer_usm<u32>(sched, 0x111, len, 0, 1U << 12U);
+        std::vector<u32> key_before_sort = buf_key.copy_to_stdvec();
+
+        sham::DeviceBuffer<u32> buf_vals = shamalgs::algorithm::gen_buffer_index_usm(sched, len);
+
+        fct(sched, buf_key, buf_vals, len);
+
+        std::vector<u32> sorted_keys = buf_key.copy_to_stdvec();
+        std::vector<u32> sorted_vals = buf_vals.copy_to_stdvec();
+
+        bool sort_ok = std::is_sorted(sorted_keys.begin(), sorted_keys.end());
+
+        bool check_map = true;
+        for (u32 i = 0; i < len; i++) {
+            check_map = check_map && (sorted_keys[i] == key_before_sort[sorted_vals[i]]);
+        }
+
+        REQUIRE_NAMED("is sorted", sort_ok);
+        REQUIRE_NAMED("values permutation ok", check_map);
+    }
+};
 
 struct TestStreamCompact {
 
@@ -148,10 +191,10 @@ struct TestStreamCompact {
             }
         }
 
-        shamtest::asserts().assert_equal("same length", res_len, u32(idxs.size()));
+        REQUIRE_EQUAL_NAMED("same length", res_len, u32(idxs.size()));
 
         for (u32 idx = 0; idx < res_len; idx++) {
-            shamtest::asserts().assert_equal("sid_check", res_check[idx], idxs[idx]);
+            REQUIRE_EQUAL_NAMED("sid_check", res_check[idx], idxs[idx]);
         }
     }
 };
@@ -190,6 +233,55 @@ struct TestIndexRemap {
             match = match && (sorted_keys[i] == remaped_keys[i]);
         }
 
-        shamtest::asserts().assert_bool("permutation is corect", match);
+        REQUIRE_NAMED("permutation is corect", match);
+    }
+};
+
+template<class T>
+struct TestIndexRemapUSM {
+    using vFunctionCall = void (*)(
+        const sham::DeviceScheduler_ptr &,
+        sham::DeviceBuffer<T> &,
+        sham::DeviceBuffer<T> &,
+        sham::DeviceBuffer<u32> &,
+        u32);
+
+    vFunctionCall fct;
+
+    explicit TestIndexRemapUSM(vFunctionCall arg) : fct(arg) {};
+
+    void check() {
+
+        auto sched = shamsys::instance::get_compute_scheduler_ptr();
+
+        u32 len = 1U << 5U;
+
+        std::vector<u32> vec_key = shamalgs::random::mock_vector<u32>(0x111, len, 0, 1U << 7U);
+
+        std::vector<u32> vec_key_dup = shamalgs::random::mock_vector<u32>(0x111, len, 0, 1U << 7U);
+
+        sham::DeviceBuffer<u32> buf_key(len, sched);
+        buf_key.copy_from_stdvec(vec_key);
+
+        sham::DeviceBuffer<u32> buf_key_dup(len, sched);
+        buf_key_dup.copy_from_stdvec(vec_key_dup);
+
+        sham::DeviceBuffer<u32> buf_index_map
+            = shamalgs::algorithm::gen_buffer_index_usm(sched, len);
+
+        shamalgs::algorithm::sort_by_key(sched, buf_key, buf_index_map, len);
+
+        sham::DeviceBuffer<u32> remaped_key(len, sched);
+        fct(sched, buf_key_dup, remaped_key, buf_index_map, len);
+
+        std::vector<u32> sorted_keys  = buf_key.copy_to_stdvec();
+        std::vector<u32> remaped_keys = remaped_key.copy_to_stdvec();
+
+        bool match = true;
+        for (u32 i = 0; i < len; i++) {
+            match = match && (sorted_keys[i] == remaped_keys[i]);
+        }
+
+        REQUIRE_NAMED("permutation is corect", match);
     }
 };

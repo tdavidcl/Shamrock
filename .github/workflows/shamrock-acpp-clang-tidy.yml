@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - clang: 17
+          - clang: 18
             cuda: 11.0.2
             rocm: 5.4.3
             container: ghcr.io/shamrock-code/ci-ubuntu20:main
@@ -78,12 +78,12 @@ jobs:
         # with this docker image, i never saw this behavior before
         run: |
           cd build
-          source activate && shamconfigure && shamconfigure
+          source ./activate && shamconfigure && shamconfigure
 
       - name: Generate version file
         run: |
           cd build
-          ninja src/CMakeFiles/shamrock_lib.dir/version.cpp.o
+          ninja src/shamrock/CMakeFiles/shamlib.dir/version.cpp.o
 
       - name: Copy DB
         run: |
@@ -97,3 +97,31 @@ jobs:
       - name: Run clang-tidy
         run: |
           run-clang-tidy-${{matrix.clang}} -p build/clang-tidy.mod -use-color -config-file .clang-tidy -export-fixes clang-tidy_results.yaml -extra-arg-before="-Wno-unused-command-line-argument"
+
+      - name: Run clang-tidy-diff
+        if: >
+          (github.event_name == 'pull_request_target' ||
+            github.event_name == 'pull_request')
+        run: git diff ${{ github.event.pull_request.base.sha }} HEAD |
+          clang-tidy-diff-${{matrix.clang}}.py -j $(nproc) -clang-tidy-binary clang-tidy-${{matrix.clang}} -path build/clang-tidy.mod -p1 -config-file .clang-tidy -extra-arg-before="-Wno-unused-command-line-argument" -fix 2>&1 | tee clang-tidy-output.txt
+
+      - name : Generate diff
+        if: >
+          (github.event_name == 'pull_request_target' ||
+            github.event_name == 'pull_request')
+        run: git diff > diff-clang-tidy && cat diff-clang-tidy
+
+      - name: Print clang-tidy output
+        if: >
+          (github.event_name == 'pull_request_target' ||
+            github.event_name == 'pull_request')
+        run: |
+          python3 buildbot/clang_tidy_diff_report.py -i clang-tidy-output.txt -f diff-clang-tidy -o report_clang_tidy.md
+
+      - uses: actions/upload-artifact@v4
+        if: >
+          (github.event_name == 'pull_request_target' ||
+            github.event_name == 'pull_request')
+        with:
+          name: report_clang_tidy
+          path: ./report_clang_tidy.md

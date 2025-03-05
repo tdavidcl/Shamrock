@@ -1,8 +1,9 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-// Licensed under CeCILL 2.1 License, see LICENSE for more information
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
 // -------------------------------------------------------//
 
@@ -16,6 +17,8 @@
  */
 
 #include "shambase/constants.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/vec.hpp"
@@ -50,6 +53,10 @@ namespace shamalgs::random {
     std::vector<T> mock_vector(u64 seed, u32 len, T min_bound, T max_bound);
     template<class T>
     sycl::buffer<T> mock_buffer(u64 seed, u32 len, T min_bound, T max_bound);
+
+    template<class T>
+    sham::DeviceBuffer<T> mock_buffer_usm(
+        const sham::DeviceScheduler_ptr &sched, u64 seed, u32 len, T min_bound, T max_bound);
 
     template<class T>
     inline std::vector<T> mock_vector(u64 seed, u32 len) {
