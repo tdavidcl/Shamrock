@@ -43,11 +43,20 @@ jobs:
         run: git diff ${{ github.event.pull_request.base.sha }} HEAD
       #### End Checkout part ####
 
+      - name: create venv
+        run: |
+          python3 -m venv .pyvenv
+          source venv/bin/activate
+
       - name: pip install packages (Jupyter book)
-        run: pip install -U jupyter-book sphinx_proof matplotlib numpy
+        run: |
+          source .pyvenv/bin/activate
+          pip install -U jupyter-book sphinx_proof matplotlib numpy
 
       - name: pip install packages (mkdocs)
-        run: pip install mkdocs-material mkdocs-git-committers-plugin-2 mkdocs-git-authors-plugin mkdocs-git-revision-date-plugin mkdocs-git-revision-date-localized-plugin
+        run: |
+          source .pyvenv/bin/activate
+          pip install mkdocs-material mkdocs-git-committers-plugin-2 mkdocs-git-authors-plugin mkdocs-git-revision-date-plugin mkdocs-git-revision-date-localized-plugin
 
       - name : Install pck (doxygen)
         run: |
@@ -55,6 +64,7 @@ jobs:
 
       - name: Gen doc
         run: |
+          source .pyvenv/bin/activate
           cd doc
           sh make_doc.sh
 
