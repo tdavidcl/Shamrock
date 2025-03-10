@@ -8,7 +8,7 @@ jobs:
 
   shamrock_acpp:
     name: run ${{ matrix.testfile }} wz=${{ matrix.worldsize }} AdaptiveCpp clang-${{ matrix.clang }} ${{ matrix.backend }}:${{matrix.arch}}
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ${{ matrix.container }}

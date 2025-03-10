@@ -12,7 +12,7 @@ jobs:
   #make shamrock documentation
   make_documentation:
     name: "Build : Documentation"
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu-latest:main

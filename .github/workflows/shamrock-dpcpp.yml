@@ -11,7 +11,7 @@ on:
 jobs:
   shamrock_dpcpp_nativecpu:
     name: DPCPP Native CPU
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu20cuda11dpcpp:main

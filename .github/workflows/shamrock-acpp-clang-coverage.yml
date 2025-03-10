@@ -9,7 +9,7 @@ jobs:
 
   shamrock_acpp_omp_debug_coverage:
     name: AdaptiveCpp coverage omp clang-${{ matrix.clang }}
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ${{ matrix.container }}
