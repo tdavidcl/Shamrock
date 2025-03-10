@@ -63,7 +63,7 @@ jobs:
   doxygen_warn_main:
     name: Doxygen Main branch
     needs: [make_documentation]
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu-latest:main
