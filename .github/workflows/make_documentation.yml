@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           python3 -m venv .pyvenv
-          source venv/bin/activate
+          source .pyvenv/bin/activate
 
       - name: pip install packages (Jupyter book)
         shell: bash
