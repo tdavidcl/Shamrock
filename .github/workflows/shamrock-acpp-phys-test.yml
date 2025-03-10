@@ -122,4 +122,4 @@ jobs:
       - name: run test
         run: |
           cd build
-          mpirun -report-bindings --allow-run-as-root --bind-to socket:overload-allowed -n ${{matrix.worldsize}} ./shamrock --sycl-cfg 0:0 --loglevel 1 --rscript ../exemples/ci_tests/${{ matrix.testfile }}
+          mpirun -report-bindings --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe -n ${{matrix.worldsize}} ./shamrock --sycl-cfg 0:0 --loglevel 1 --rscript ../exemples/ci_tests/${{ matrix.testfile }}
