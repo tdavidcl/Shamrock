@@ -44,16 +44,19 @@ jobs:
       #### End Checkout part ####
 
       - name: create venv
+        shell: bash
         run: |
           python3 -m venv .pyvenv
           source venv/bin/activate
 
       - name: pip install packages (Jupyter book)
+        shell: bash
         run: |
           source .pyvenv/bin/activate
           pip install -U jupyter-book sphinx_proof matplotlib numpy
 
       - name: pip install packages (mkdocs)
+        shell: bash
         run: |
           source .pyvenv/bin/activate
           pip install mkdocs-material mkdocs-git-committers-plugin-2 mkdocs-git-authors-plugin mkdocs-git-revision-date-plugin mkdocs-git-revision-date-localized-plugin
@@ -63,6 +66,7 @@ jobs:
           sudo apt-get install -y -qq doxygen graphviz
 
       - name: Gen doc
+        shell: bash
         run: |
           source .pyvenv/bin/activate
           cd doc
