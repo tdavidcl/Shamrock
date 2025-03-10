@@ -11,7 +11,7 @@ on:
 jobs:
   shamrock_dpcpp_nativecpu:
     name: DPCPP Native CPU
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted,  docker-runner]
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu20cuda11dpcpp:main
@@ -71,7 +71,7 @@ jobs:
 
   shamrock_dpcpp_cuda:
     name: DPCPP CUDA ${{ matrix.cuda }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted,  docker-runner]
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu20cuda11dpcpp:main
@@ -143,7 +143,7 @@ jobs:
 
   shamrock_dpcpp_hip:
     name: DPCPP HIP ROCM ${{ matrix.rocm }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted,  docker-runner]
 
     container:
       image: ghcr.io/shamrock-code/ci-ubuntu20rocm543dpcpp:main
