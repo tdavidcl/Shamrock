@@ -59,4 +59,4 @@ We can run some SPH, AMR, but not only that!
 
     The code is actively being developed, and this documentation is a work in progress!
     If you notice anything missing or areas that could be improved, feel free to raise an issue
-    [here](https://github.com/tdavidcl/Shamrock/issues/new?template=documentation-request.md).
+    [here](https://github.com/Shamrock-code/Shamrock/issues/new?template=documentation-request.md).
