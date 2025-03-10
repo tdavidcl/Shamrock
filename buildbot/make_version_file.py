@@ -15,11 +15,13 @@ try:
     git_hash = str_git.split()[1]
     git_head = str_git[str_git.find("HEAD -> ") + 8 : str_git.find(")")]
     git_diffindex = os.popen('git diff-index --name-only HEAD -- | sed "s/^/        /g"').read()
+    is_git = "true"
 except:
     git_hash = "unknown"
     git_head = "unknown"
-    git_diffindex = ""
-    
+    git_diffindex = "unknown"
+    is_git = "false"
+
 str_ = """
 #include "shamrock/version.hpp"
 
@@ -38,6 +40,7 @@ str_ += 'const std::string compile_arg = "' + sys.argv[2] + '";\n'
 
 str_ += 'const std::string version_string = "' + sys.argv[3] + '";\n'
 
+str_ += "const bool is_git = " + str(is_git) + ";\n"
 
 if not (strfile == str_):
     f = open(sys.argv[1], "w")
