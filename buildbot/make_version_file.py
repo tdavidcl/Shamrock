@@ -10,12 +10,16 @@ try:
 except:
     None
 
-
-str_git = os.popen("git log -n 1 --decorate=full").read()
-git_hash = str_git.split()[1]
-git_head = str_git[str_git.find("HEAD -> ") + 8 : str_git.find(")")]
-
-
+try:
+    str_git = os.popen("git log -n 1 --decorate=full").read()
+    git_hash = str_git.split()[1]
+    git_head = str_git[str_git.find("HEAD -> ") + 8 : str_git.find(")")]
+    git_diffindex = os.popen('git diff-index --name-only HEAD -- | sed "s/^/        /g"').read()
+except:
+    git_hash = "unknown"
+    git_head = "unknown"
+    git_diffindex = ""
+    
 str_ = """
 #include "shamrock/version.hpp"
 
@@ -24,7 +28,7 @@ const std::string git_info_str = R"%%("""
 str_ += "     commit : " + git_hash + "\n"
 str_ += "     HEAD   : " + git_head + "\n"
 str_ += "     modified files (since last commit):" + "\n"
-str_ += os.popen('git diff-index --name-only HEAD -- | sed "s/^/        /g"').read()
+str_ += git_diffindex
 str_ += r')%%";'
 str_ += "\n\n"
 
