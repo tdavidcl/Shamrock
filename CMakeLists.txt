@@ -35,8 +35,8 @@ endif()
 # Based on the versionning in AdaptiveCPP
 # see : https://github.com/AdaptiveCpp/AdaptiveCpp/blob/develop/CMakeLists.txt#L554
 
-set(SHAMROCK_VERSION_MAJOR 2024)
-set(SHAMROCK_VERSION_MINOR 10)
+set(SHAMROCK_VERSION_MAJOR 2025)
+set(SHAMROCK_VERSION_MINOR 03)
 set(SHAMROCK_VERSION_PATCH 0)
 
 execute_process(
