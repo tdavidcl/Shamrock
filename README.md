@@ -29,7 +29,7 @@ If you want to contribute please fork the code and submit your pull requests fro
 
 ## Citing the code
 
-Comming soon on the arXiv and MNRAS ...
+[![arXiv](https://img.shields.io/badge/arXiv-2503.09713-b31b1b.svg)](https://arxiv.org/abs/2503.09713)
 
 ## Compiler support
 
