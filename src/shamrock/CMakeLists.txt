@@ -7,7 +7,7 @@
 ##
 ## -------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.9...3.10)
 
 # TODO rename to shamrock_lib when the old one will be removed
 
