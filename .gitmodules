@@ -1,6 +1,6 @@
 [submodule "external/pybind11"]
 	path = external/pybind11
-	url = https://github.com/Shamrock-code/pybind11.git
+	url = https://github.com/pybind/pybind11.git
 	branch = stable
 [submodule "external/fmt"]
 	path = external/fmt
