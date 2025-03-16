@@ -232,14 +232,7 @@ set(PYTHON_EXECUTABLE "${PYTHON_EXECUTABLE}" CACHE INTERNAL "")
 # Add external libraries
 ######################
 
-add_subdirectory(external)
-
-if(USE_SYSTEM_FMTLIB)
-    message(STATUS "Using system fmtlib")
-    find_package(fmt REQUIRED)
-endif()
-
-include_directories(external/plf_nanotimer)
+include(ExternalProjects)
 
 message("-- Shamrock config : ")
 message("     SHAMROCK_USE_PROFILING : ${SHAMROCK_USE_PROFILING}")
