@@ -7,6 +7,8 @@
 ##
 ## -------------------------------------------------------
 
+message("   ---- SYCL config section ----")
+
 include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 

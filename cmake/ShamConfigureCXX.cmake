@@ -7,6 +7,8 @@
 ##
 ## -------------------------------------------------------
 
+message("   ---- c++ config section ----")
+
 include(CheckCXXCompilerFlag)
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ version selection")  # or 11, 14, 17, 20
@@ -16,7 +18,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # optional, keep compiler extensions off
 check_cxx_compiler_flag("-march=native" COMPILER_SUPPORT_MARCHNATIVE)
 check_cxx_compiler_flag("-pedantic-errors" COMPILER_SUPPORT_PEDANTIC)
 check_cxx_compiler_flag("-fcolor-diagnostics" COMPILER_SUPPORT_COLOR_DIAGNOSTIC)
-
 check_cxx_compiler_flag("-Werror=return-type" COMPILER_SUPPORT_ERROR_RETURN_TYPE)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -78,8 +79,6 @@ if(NOT CXX_VALARRAY_COMPILE)
 endif()
 
 
-message( " ---- Shamrock C++ config ---- ")
-message( "  CMAKE_CXX_FLAGS : ${CMAKE_CXX_FLAGS}")
-message( "  CMAKE_CXX_FLAGS_DEBUG : ${CMAKE_CXX_FLAGS_DEBUG}")
-message( "  CMAKE_CXX_FLAGS_RELEASE : ${CMAKE_CXX_FLAGS_RELEASE}")
-message( " ----------------------------- ")
+message( STATUS "CMAKE_CXX_FLAGS : ${CMAKE_CXX_FLAGS}")
+message( STATUS "CMAKE_CXX_FLAGS_DEBUG : ${CMAKE_CXX_FLAGS_DEBUG}")
+message( STATUS "CMAKE_CXX_FLAGS_RELEASE : ${CMAKE_CXX_FLAGS_RELEASE}")
