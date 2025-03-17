@@ -19,5 +19,5 @@ if(CMAKE_BUILD_TYPE STREQUAL "COVERAGE")
         "forcing SHAMROCK_USE_SHARED_LIB=Off with coverage enabled, "
         "without it llvm-cov will show only the main binary functions")
     endif()
-    set(SHAMROCK_USE_SHARED_LIB Off)
+    set(SHAMROCK_FORCE_SHARED_LIB Off)
 endif()

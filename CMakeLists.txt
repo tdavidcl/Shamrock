@@ -42,24 +42,14 @@ set(SHAMROCK_VERSION_PATCH 0)
 project(Shamrock VERSION ${SHAMROCK_VERSION_MAJOR}.${SHAMROCK_VERSION_MINOR}.${SHAMROCK_VERSION_PATCH})
 include(ShamVersioning)
 
-################################
-# Shamrock Configuration
-################################
-
-option(SHAMROCK_USE_PCH "use precompiled headers" Off)
-
-option(SHAMROCK_USE_SHARED_LIB "use shared libraries" On)
-
-if(APPLE)
-    if(SHAMROCK_USE_SHARED_LIB)
-        message(STATUS "forcing SHAMROCK_USE_SHARED_LIB=Off on Macos because of known issues")
-    endif()
-    set(SHAMROCK_USE_SHARED_LIB Off)
-endif()
-
 ######################
 #checking compiler flag support
 ######################
+
+if(APPLE)
+    message(WARNING "forcing SHAMROCK_USE_SHARED_LIB=Off on Macos because of known issues")
+    set(SHAMROCK_FORCE_SHARED_LIB Off)
+endif()
 
 include(ShamConfigureCXX)
 
@@ -109,9 +99,22 @@ include(ShamConfigureFmtlib)
 include(ShamConfigureNlohmannJson)
 include(ShamConfigurePlfNanotimer)
 
+################################
+# Shamrock Configuration
+################################
+
+option(SHAMROCK_USE_PCH "use precompiled headers" Off)
+
 ######################
+# Shamrock lib control
+######################
+option(SHAMROCK_USE_SHARED_LIB "use shared libraries" On)
+
+if(DEFINED SHAMROCK_FORCE_SHARED_LIB)
+    set(SHAMROCK_USE_SHARED_LIB ${SHAMROCK_FORCE_SHARED_LIB})
+endif()
+
 # Force -fPIC for object lib mode as the python lib require it
-######################
 if(NOT SHAMROCK_USE_SHARED_LIB)
     message(WARNING "using shamrock in object lib mode force the use of -fPIC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
