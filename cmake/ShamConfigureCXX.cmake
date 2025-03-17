@@ -82,3 +82,25 @@ endif()
 message( STATUS "CMAKE_CXX_FLAGS : ${CMAKE_CXX_FLAGS}")
 message( STATUS "CMAKE_CXX_FLAGS_DEBUG : ${CMAKE_CXX_FLAGS_DEBUG}")
 message( STATUS "CMAKE_CXX_FLAGS_RELEASE : ${CMAKE_CXX_FLAGS_RELEASE}")
+
+######################
+# add build types
+######################
+
+include(ShamBuildAsan)
+include(ShamBuildUBsan)
+include(ShamBuildCoverage)
+
+set(ValidShamBuildType "Debug" "Release" "ASAN" "UBSAN" "COVERAGE")
+if(NOT CMAKE_BUILD_TYPE)
+    #set default build to release
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Cmake build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${ValidShamBuildType})
+endif()
+if(NOT "${CMAKE_BUILD_TYPE}" IN_LIST ValidShamBuildType)
+    message(FATAL_ERROR
+        "The required build type in unknown -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}. "
+        "please use a build type in the following list (case-sensitive) "
+        "${ValidShamBuildType}")
+endif()
+message(STATUS "current build type : CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")

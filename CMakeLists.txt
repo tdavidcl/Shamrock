@@ -43,7 +43,7 @@ project(Shamrock VERSION ${SHAMROCK_VERSION_MAJOR}.${SHAMROCK_VERSION_MINOR}.${S
 include(ShamVersioning)
 
 ######################
-#checking compiler flag support
+# Platform specfics
 ######################
 
 if(APPLE)
@@ -51,25 +51,11 @@ if(APPLE)
     set(SHAMROCK_FORCE_SHARED_LIB Off)
 endif()
 
+######################
+# CXX specfics
+######################
+
 include(ShamConfigureCXX)
-
-include(ShamBuildAsan)
-include(ShamBuildUBsan)
-include(ShamBuildCoverage)
-
-set(ValidShamBuildType "Debug" "Release" "ASAN" "UBSAN" "COVERAGE")
-if(NOT CMAKE_BUILD_TYPE)
-    #set default build to release
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Cmake build type" FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${ValidShamBuildType})
-endif()
-if(NOT "${CMAKE_BUILD_TYPE}" IN_LIST ValidShamBuildType)
-    message(FATAL_ERROR
-        "The required build type in unknown -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}. "
-        "please use a build type in the following list (case-sensitive) "
-        "${ValidShamBuildType}")
-endif()
-message(STATUS "current build type : CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
 ######################
 # Compiler selection
@@ -99,54 +85,20 @@ include(ShamConfigureFmtlib)
 include(ShamConfigureNlohmannJson)
 include(ShamConfigurePlfNanotimer)
 
-################################
+####################################################################################################
 # Shamrock Configuration
-################################
+####################################################################################################
 
-option(SHAMROCK_USE_PCH "use precompiled headers" Off)
+include(ShamrockBuildOptions)
 
-######################
-# Shamrock lib control
-######################
-option(SHAMROCK_USE_SHARED_LIB "use shared libraries" On)
+####################################################################################################
+# target Configuration
+####################################################################################################
 
-if(DEFINED SHAMROCK_FORCE_SHARED_LIB)
-    set(SHAMROCK_USE_SHARED_LIB ${SHAMROCK_FORCE_SHARED_LIB})
-endif()
-
-# Force -fPIC for object lib mode as the python lib require it
-if(NOT SHAMROCK_USE_SHARED_LIB)
-    message(WARNING "using shamrock in object lib mode force the use of -fPIC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-endif()
-
-######################
-#shamrock impl control
-######################
-
-option(SHAMROCK_USE_PROFILING "use custom profiling tooling" On)
-if(SHAMROCK_USE_PROFILING)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSHAMROCK_USE_PROFILING")
-endif()
-
-message("   ---- SUMARRY ----")
-
-message("-- Shamrock config : ")
-message("     SHAMROCK_USE_PROFILING : ${SHAMROCK_USE_PROFILING}")
-message("     SHAMROCK_USE_NVTX : ${SHAMROCK_USE_NVTX}")
-message("     SHAMROCK_USE_PCH : ${SHAMROCK_USE_PCH}")
-message("     SHAMROCK_USE_SHARED_LIB : ${SHAMROCK_USE_SHARED_LIB}")
-message("     CMAKE_CXX_FLAGS : ${CMAKE_CXX_FLAGS}")
-message("     CMAKE_CXX_COMPILER : ${CMAKE_CXX_COMPILER}")
+message("   ---- targets section ----")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-
-########################################################################################
-# Targets ##############################################################################
-########################################################################################
-
-message("   ---- targets section ----")
 
 add_subdirectory(src)
