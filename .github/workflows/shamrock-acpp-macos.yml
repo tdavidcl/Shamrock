@@ -18,8 +18,12 @@ jobs:
 
 
   shamrock_acpp:
-    name: AdaptiveCpp macos
-    runs-on: macos-latest
+    name: AdaptiveCpp ${{ matrix.os }}
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-13, macos-14, macos-15]
 
     timeout-minutes: 60
     steps:
@@ -54,7 +58,7 @@ jobs:
         run: |
           set +e
           brew update
-          brew install cmake libomp boost open-mpi tdavidcl/adaptivecpp/adaptivecpp
+          brew install cmake libomp boost open-mpi adaptivecpp
           set -e
 
       - name: Setup env
