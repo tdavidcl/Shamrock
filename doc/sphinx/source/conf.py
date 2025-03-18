@@ -22,8 +22,7 @@ copyright = "2020 -- Timothee David--Cléris"
 author = "Timothee David--Cléris"
 
 # The full version, including alpha/beta/rc tags
-release = "2024.10.0"
-
+release = "2025.03.0"
 
 # -- General configuration ---------------------------------------------------
 
@@ -95,11 +94,25 @@ html_theme_options = {
     "footer_start": ["copyright"],
     "footer_center": ["sphinx-version"],
     "search_as_you_type": True,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/Shamrock-code/Shamrock",
+            "icon": "fa-brands fa-square-github",
+            "type": "fontawesome",
+        },
+        {
+            "name": "Website",
+            "url": "https://shamrock-code.github.io/",
+            "icon": "_static/large-figures/figures/logo.png",
+            "type": "local",
+        },
+    ],
 }
 
 html_context = {
     "github_url": "https://github.com",  # or your GitHub Enterprise site
-    "github_user": "tdavidcl",
+    "github_user": "Shamrock-code",
     "github_repo": "Shamrock",
     "github_version": "main",
     "doc_path": "doc/sphinx/source",

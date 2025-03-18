@@ -2,7 +2,7 @@
 # will be exported : ACPP_GIT_DIR, ACPP_BUILD_DIR, ACPP_INSTALL_DIR
 
 # List of required packages
-required_packages=("cmake" "libomp" "boost" "open-mpi" "tdavidcl/adaptivecpp/adaptivecpp")
+required_packages=("cmake" "libomp" "boost" "open-mpi" "adaptivecpp")
 
 echo " ---------- Activating sham environment ---------- "
 # Check if each package is installed

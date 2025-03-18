@@ -7,20 +7,10 @@
 ##
 ## -------------------------------------------------------
 
-set(SourcesTest
-    shamtest.cpp
-)
-set(HeadersTest
-    shamtest.hpp
-)
+message("   ---- plf_nanotimer section ----")
 
-if("${BUILD_TEST}")
-target_sources(shamrock_test
-PRIVATE
-    ${SourcesTest}
-PUBLIC
-    ${HeadersTest}
-)
-endif()
+###############################################################################
+### plf_nanotimer
+###############################################################################
 
-add_subdirectory(details)
+include_directories(external/plf_nanotimer)
