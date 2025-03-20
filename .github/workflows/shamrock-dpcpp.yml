@@ -14,7 +14,7 @@ jobs:
     runs-on: [self-hosted,  docker-runner]
 
     container:
-      image: ghcr.io/shamrock-code/shamrock-ci:ubuntu20cuda11dpcpp
+      image: ghcr.io/shamrock-code/shamrock-ci:ubuntu20cuda12dpcpp
 
 
     #for now this is quite buggy
@@ -74,7 +74,7 @@ jobs:
     runs-on: [self-hosted,  docker-runner]
 
     container:
-      image: ghcr.io/shamrock-code/shamrock-ci:ubuntu20cuda11dpcpp
+      image: ghcr.io/shamrock-code/shamrock-ci:ubuntu20cuda12dpcpp
 
 
     strategy:
