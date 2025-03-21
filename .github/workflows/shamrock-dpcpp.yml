@@ -20,10 +20,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - machine: ci.intel-llvm.cuda
+          - machine: cuda
             container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20cuda12dpcpp
             runtest: false
-          - machine: ci.intel-llvm.rocm
+          - machine: rocm
             container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20rocm543dpcpp
             runtest: false
 
@@ -54,7 +54,7 @@ jobs:
       #### End Checkout part ####
 
       - name: Setup env
-        run : ./env/new-env --machine ${{ matrix.machine }} --builddir build --
+        run : ./env/new-env --machine ci.intel-llvm.${{ matrix.machine }} --builddir build --
 
       - name: Configure
         shell: bash # In docker container github action default to sh
