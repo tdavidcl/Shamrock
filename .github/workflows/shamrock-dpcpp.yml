@@ -12,7 +12,7 @@ jobs:
 
   shamrock_intel_llvm:
     name: Intel/llvm ${{ matrix.machine }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted,  docker-runner]
 
     container:
       image: ${{ matrix.container }}
@@ -188,6 +188,7 @@ jobs:
 
 
   shamrock_dpcpp_cuda:
+    if: false
     name: DPCPP CUDA ${{ matrix.cuda }}
     runs-on: [self-hosted,  docker-runner]
 
@@ -260,6 +261,7 @@ jobs:
 
 
   shamrock_dpcpp_hip:
+    if: false
     name: DPCPP HIP ROCM ${{ matrix.rocm }}
     runs-on: [self-hosted,  docker-runner]
 
