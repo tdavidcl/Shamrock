@@ -37,6 +37,8 @@ def setup(arg: SetupArg):
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
 
+    run_cmd("mkdir -p " + builddir)
+    
     INTELLLVM_GIT_DIR = builddir + "/.env/intel-llvm-git"
     INTELLLVM_INSTALL_DIR = builddir + "/.env/intel-llvm-installdir"
 
