@@ -60,7 +60,10 @@ jobs:
           source ./activate
 
       - name: Show current conda env
-        run: conda env export
+        run: |
+          cd build
+          source ./activate
+          conda env export
 
       - name: Configure
         run: |
