@@ -59,6 +59,12 @@ jobs:
           cd build
           source ./activate
 
+      - name: Show current conda env
+        run: |
+          cd build
+          source ./activate
+          conda env export
+
       - name: Configure
         run: |
           cd build
