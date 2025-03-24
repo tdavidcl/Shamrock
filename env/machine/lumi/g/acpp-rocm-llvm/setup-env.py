@@ -1,15 +1,15 @@
 import argparse
 import os
 
-import utils.acpp
 import utils.amd_arch
-import utils.cuda_arch
 import utils.envscript
+import utils.intel_llvm
 import utils.sysinfo
+from utils.oscmd import *
 from utils.setuparg import *
 
-NAME = "CBP Nvidia DGX A100 AdaptiveCpp (CUDA Backend)"
-PATH = "machine/dgx-cbp/acpp-cuda"
+NAME = "Lumi-G Intel AdaptiveCpp ROCM/LLVM"
+PATH = "machine/lumi/standard-g/acpp-rocm-llvm"
 
 
 def setup(arg: SetupArg, envgen: EnvGen):
@@ -20,20 +20,25 @@ def setup(arg: SetupArg, envgen: EnvGen):
     pylib = arg.pylib
     lib_mode = arg.lib_mode
 
+    # Get current file path
+    cur_file = os.path.realpath(os.path.expanduser(__file__))
+
     if pylib:
         print("this env does not support --pylib")
         raise ""
 
     parser = argparse.ArgumentParser(prog=PATH, description=NAME + " env for Shamrock")
 
-    parser.add_argument("--gen", action="store", help="generator to use (ninja or make)")
-
     args = parser.parse_args(argv)
+    args.gen = "ninja"
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
 
-    cmake_extra_args = ""
+    ##############################
+    # Generate env script header
+    ##############################
 
+    cmake_extra_args = ""
     envgen.export_list = {
         "SHAMROCK_DIR": shamrockdir,
         "BUILD_DIR": builddir,
@@ -49,4 +54,5 @@ def setup(arg: SetupArg, envgen: EnvGen):
         shamrockdir + "/env/helpers/pull_reffiles.sh",
     ]
 
+    envgen.copy_env_file("exemple_batch.sh", "exemple_batch.sh")
     envgen.gen_env_file("env_built_acpp.sh")

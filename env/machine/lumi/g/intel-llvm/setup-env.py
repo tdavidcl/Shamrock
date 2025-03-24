@@ -1,15 +1,15 @@
 import argparse
 import os
 
-import utils.acpp
 import utils.amd_arch
-import utils.cuda_arch
 import utils.envscript
+import utils.intel_llvm
 import utils.sysinfo
+from utils.oscmd import *
 from utils.setuparg import *
 
-NAME = "CBP Nvidia DGX A100 AdaptiveCpp (CUDA Backend)"
-PATH = "machine/dgx-cbp/acpp-cuda"
+NAME = "Lumi-G Intel LLVM ROCM"
+PATH = "machine/lumi/standard-g/intel-llvm"
 
 
 def setup(arg: SetupArg, envgen: EnvGen):
@@ -26,9 +26,8 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     parser = argparse.ArgumentParser(prog=PATH, description=NAME + " env for Shamrock")
 
-    parser.add_argument("--gen", action="store", help="generator to use (ninja or make)")
-
     args = parser.parse_args(argv)
+    args.gen = "ninja"
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
 
@@ -45,8 +44,9 @@ def setup(arg: SetupArg, envgen: EnvGen):
     }
 
     envgen.ext_script_list = [
-        shamrockdir + "/env/helpers/clone-acpp.sh",
+        shamrockdir + "/env/helpers/clone-intel-llvm.sh",
         shamrockdir + "/env/helpers/pull_reffiles.sh",
     ]
 
-    envgen.gen_env_file("env_built_acpp.sh")
+    envgen.copy_env_file("exemple_batch.sh", "exemple_batch.sh")
+    envgen.gen_env_file("env_built_intel-llvm.sh")
