@@ -73,6 +73,34 @@ if(NOT DEFINED SYCL_feature_reduc2020)
   endif()
 endif()
 
+if(SYCL_feature_reduc2020)
+  set(SYCL2020_FEATURE_REDUCTION ON)
+else()
+  set(SYCL2020_FEATURE_REDUCTION Off)
+endif()
+
+
+if(NOT DEFINED SYCL_feature_group_reduc2020)
+  message(STATUS "Performing Test " SYCL_feature_group_reduc2020)
+  try_compile(
+    SYCL_feature_group_reduc2020 ${CMAKE_BINARY_DIR}/compile_tests
+    ${CMAKE_SOURCE_DIR}/cmake/feature_test/sycl2020_reduc.cpp)
+  if(SYCL_feature_group_reduc2020)
+    message(STATUS "Performing Test " SYCL_feature_group_reduc2020 " - Success")
+    set(SYCL2020_FEATURE_GROUP_REDUCTION ON)
+  else()
+    message(STATUS "Performing Test " SYCL_feature_group_reduc2020 " - Failed")
+    set(SYCL2020_FEATURE_GROUP_REDUCTION Off)
+  endif()
+endif()
+
+if(SYCL_feature_group_reduc2020)
+  set(SYCL2020_FEATURE_GROUP_REDUCTION ON)
+else()
+  set(SYCL2020_FEATURE_GROUP_REDUCTION Off)
+endif()
+
+
 set(SYCL_COMPILER "ACPP")
 
 if(DEFINED ACPP_PATH)
