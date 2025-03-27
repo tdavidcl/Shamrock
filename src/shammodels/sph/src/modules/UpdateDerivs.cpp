@@ -1653,7 +1653,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                 du[id_a]   = dtuinta;
 
                 for (u32 idust = 0; idust < ndust; idust++) {
-                    dtdeltav_accum(idust) -= gas_axyz_a;
+                    dtdeltav_accum(idust) -= gas_axyz_a / (1-epsilon_a);
                 }
 
                 for (u32 idust = 0; idust < ndust; idust++) {
