@@ -4,19 +4,19 @@ import shamrock
 
 gamma = 1.4
 
-rho_g = 1
-rho_d = 0.125
+rho_gas_g = 1
+rho_gas_d = 0.125
 
 epsilon_start = 0.3
 deltavx_start = 0.0
 
-fact = (rho_g / rho_d) ** (1.0 / 3.0)
+fact = (rho_gas_g / rho_gas_d) ** (1.0 / 3.0)
 
 P_g = 1
 P_d = 0.1
 
-u_g = P_g / ((gamma - 1) * rho_g)
-u_d = P_d / ((gamma - 1) * rho_d)
+u_g = P_g / ((gamma - 1) * rho_gas_g)
+u_d = P_d / ((gamma - 1) * rho_gas_d)
 
 resol = 128
 
@@ -64,7 +64,7 @@ model.set_value_in_a_box(
 
 vol_b = xs * ys * zs
 
-totmass = (rho_d * vol_b) + (rho_g * vol_b)
+totmass = (rho_gas_d * vol_b) + (rho_gas_g * vol_b)
 
 print("Total mass :", totmass)
 
@@ -158,24 +158,52 @@ def analyse():
     #### add analytical soluce
     x = np.linspace(-0.5, 0.5, 1000)
 
-    rho = []
+    rho_g = []
+    rho_d = []
     P = []
-    vx = []
+    vx_g = []
+    vx_d = []
 
     for i in range(len(x)):
         x_ = x[i]
 
-        # offset = deltavx_start
+        # offset = deltavx_g_start
 
-        _rho, _vx, _P = sod.get_value(model.get_time(), x_ - vg_init * model.get_time())
-        rho.append(_rho)
-        vx.append(_vx + vg_init)
+        _rho_d = 0
+        _vx_d = 0
+        if x_ < 0:
+            _rho_d = rho_gas_g * (epsilon_start)
+        else:
+            _rho_d = rho_gas_d * (epsilon_start)
+
+        _rho_g, _vx_g, _P = sod.get_value(model.get_time(), x_ - vg_init * model.get_time())
+        rho_g.append(_rho_g)
+        rho_d.append(_rho_d)
+        vx_g.append(_vx_g + vg_init)
+        vx_d.append(_vx_d)
         P.append(_P)
 
     x += 0.5
-    axs[0, 0].plot(x, rho, color="black", label="analytic")
-    axs[0, 1].plot(x, vx, color="black", label="analytic")
+    axs[0, 0].plot(x, rho_g, color="black", label="analytic")
+    axs[0, 0].plot(x, rho_d, color="black", label="analytic")
+    axs[0, 1].plot(x, vx_g, color="black", label="analytic")
     axs[0, 2].plot(x, P, color="black", label="analytic")
+
+    axs[1, 0].plot(x, np.array(rho_g) + np.array(rho_d), color="black", label="analytic")
+    axs[1, 1].plot(x, np.array(vx_d) - np.array(vx_g), color="black", label="analytic")
+    axs[1, 2].plot(
+        x, np.array(rho_d) / (np.array(rho_g) + np.array(rho_d)), color="black", label="analytic"
+    )
+    axs[2, 1].plot(
+        x, np.array(P) / (np.array(rho_g) * (gamma - 1)), color="black", label="analytic"
+    )
+    axs[2, 0].plot(
+        x,
+        (np.array(vx_g) * np.array(rho_g) + np.array(vx_d) * np.array(rho_d))
+        / (np.array(rho_g) + np.array(rho_d)),
+        color="black",
+        label="analytic",
+    )
 
     #######
 

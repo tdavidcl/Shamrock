@@ -1373,16 +1373,6 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                 using namespace shamrock::sph;
 
-                class SmoothingLenght{
-                public:
-
-                Tscal operator()(u32 ipart) const {
-                    return hpart[ipart];
-                }
-
-                const Tscal* hpart;
-                }
-
                 Tscal h_a                     = hpart[id_a];
                 Tvec xyz_a                    = xyz[id_a];
                 Tvec vxyz_a                   = vxyz[id_a];
@@ -1400,17 +1390,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                 Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
 
-                Tvec gas_axyz_a{0, 0, 0};
-                Tvec eps_a_dust_axyz_a{0, 0, 0};
-                Tscal dtuinta = 0;
-                Tscal dtrho   = 0;
+                u32 test_part = 173727;
 
-                u32 test_part = 73727;
-
-                // if(xyz_a[0] < 0.01 && xyz_a[0] > -0.01) {
-                //     std::cout << id_a << std::endl;
-                // }
-                //
                 if (id_a == test_part) {
                     std::cout << "xyz_a = " << xyz_a[0] << " " << xyz_a[1] << " " << xyz_a[2]
                               << std::endl;
@@ -1422,6 +1403,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     std::cout << "cs_a = " << cs_a << std::endl;
                     std::cout << "omega_a = " << omega_a << std::endl;
                 }
+
+                // accumulators
+                Tvec gas_axyz_a{0, 0, 0};
+                Tvec eps_a_dust_axyz_a{0, 0, 0};
+                Tscal dtuinta = 0;
+                Tscal dtrho   = 0;
 
                 particle_looper.for_each_object(id_a, [&](u32 id_b) {
                     // compute only omega_a
@@ -1463,8 +1450,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
                     Tvec v_ab_gas       = get_v_gas(id_a) - get_v_gas(id_b);
 
+                    /////////////////////////////////////////////////////////////////////
+                    // artificial visco section
+                    /////////////////////////////////////////////////////////////////////
                     Tscal qa_ab, qb_ab, vsig_u;
-                    if (true) {
+
+                    constexpr bool use_gas_velocity = true;
+                    if (use_gas_velocity) {
                         // correct the viscosity to use the gas and not the combined quantities
                         Tscal rho_avg_gas       = (rho_gas_a + rho_gas_b) * 0.5;
                         Tscal v_ab_gas_r_ab     = sycl::dot(v_ab_gas, r_ab_unit);
@@ -1490,11 +1482,23 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         vsig_u       = sycl::sqrt(abs_dp / rho_avg);
                     }
 
-                    ////////////////////
-
                     Tscal AV_P_a = P_a + qa_ab;
                     Tscal AV_P_b = P_b + qb_ab;
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
 
+                    /////////////////////////////////////////////////////////////////////
+                    // dtrho section
+                    /////////////////////////////////////////////////////////////////////
+                    dtrho += (1 / omega_a) * pmass * sham::dot(v_ab, r_ab_unit * Fab_b);
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
+
+                    /////////////////////////////////////////////////////////////////////
+                    // gas pressure section
+                    /////////////////////////////////////////////////////////////////////
                     gas_axyz_a += sph_pressure_symetric(
                         pmass,
                         rho_a_sq,
@@ -1521,6 +1525,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         std::cout << "Fab_a = " << Fab_a << std::endl;
                         std::cout << "Fab_b = " << Fab_b << std::endl;
                     }
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
 
                     // compared to Phantom_2018 eq.35 we move lambda shock artificial viscosity
                     // pressure part as just a modified SPH pressure (which is the case already in
@@ -1528,23 +1535,30 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     dtuinta += duint_dt_pressure(
                         pmass, AV_P_a, omega_a_rho_a_inv / rho_gas_a, v_ab_gas, r_ab_unit * Fab_a);
 
+                    Tscal u_ab = u_a - u_b;
+
+                    dtuinta -= omega_a_rho_a_inv * pmass * u_ab
+                               * sham::dot(epsilon_a_deltav_a, r_ab_unit * Fab_a);
+
+                    Tscal Q_ac_u_a = (1 / 2) * alpha_u * rho_a * vsig_u * (u_ab);
+                    Tscal Q_ac_u_b = (1 / 2) * alpha_u * rho_b * vsig_u * (-u_ab);
+
                     dtuinta += lambda_shock_conductivity(
                         pmass,
                         alpha_u,
                         vsig_u,
                         u_a - u_b,
-                        Fab_a * omega_a_rho_a_inv,
-                        Fab_b / (rho_b * omega_b));
+                        (rho_a / rho_gas_a) * Fab_a * omega_a_rho_a_inv,
+                        (rho_b / rho_gas_b) * Fab_b / (rho_b * omega_b));
+
                     ////////////////////
 
-                    dtrho += (1 / omega_a) * pmass * sham::dot(v_ab, r_ab_unit * Fab_b);
-
                     // dt epsilon and dust term in barycenter velocity
-                    for (u32 idust = 0; idust < ndust; idust++) {
-                        Tvec deltavja   = deltav(id_a, idust);
-                        Tvec deltavjb   = deltav(id_b, idust);
-                        Tscal epsilonja = epsilon(id_a, idust);
-                        Tscal epsilonjb = epsilon(id_b, idust);
+                    for (u32 jdust = 0; jdust < ndust; jdust++) {
+                        Tvec deltavja   = deltav(id_a, jdust);
+                        Tvec deltavjb   = deltav(id_b, jdust);
+                        Tscal epsilonja = epsilon(id_a, jdust);
+                        Tscal epsilonjb = epsilon(id_b, jdust);
 
                         Tvec deltavjamepsdelta = deltavja - epsilon_a_deltav_a;
                         Tvec deltavjamepsdeltb = deltavjb - epsilon_b_deltav_b;
@@ -1567,22 +1581,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                         eps_a_dust_axyz_a += daxyz_a_loc;
 
-                        dtepsilon_accum(idust) += dtepsilon_loc;
-                        // if (id_a == test_part) {
-                        //
-                        //     logger::raw_ln(shambase::format(
-                        //         "id_a: {}, id_b: {}, idust: {}, dtepsilon_loc: {}, "
-                        //         "dtepsilon_accum: {}",
-                        //         id_a,
-                        //         id_b,
-                        //         idust,
-                        //         dtepsilon_loc,
-                        //         dtepsilon_accum(idust)));
-                        //     logger::raw_ln(shambase::format(
-                        //         "daxyz_a_loc: {}, eps_a_dust_axyz_a: {}",
-                        //         daxyz_a_loc,
-                        //         eps_a_dust_axyz_a));
-                        // }
+                        dtepsilon_accum(jdust) += dtepsilon_loc;
                     }
 
                     // dt deltav terms
@@ -1650,7 +1649,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     std::cout << "dtuinta: " << dtuinta << std::endl;
                 }
 
-                axyz[id_a] = (1 - epsilon_a) * gas_axyz_a + eps_a_dust_axyz_a;
+                axyz[id_a] = gas_axyz_a + eps_a_dust_axyz_a;
                 du[id_a]   = dtuinta;
 
                 for (u32 idust = 0; idust < ndust; idust++) {
