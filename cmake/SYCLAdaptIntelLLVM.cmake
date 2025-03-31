@@ -1,8 +1,9 @@
 ## -------------------------------------------------------
 ##
 ## SHAMROCK code for hydrodynamics
-## Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-## Licensed under CeCILL 2.1 License, see LICENSE for more information
+## Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+## SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+## Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 ##
 ## -------------------------------------------------------
 
@@ -27,6 +28,7 @@ set(SYCL_COMPILER "INTEL_LLVM")
 set(SYCL2020_FEATURE_REDUCTION ON)
 set(SYCL2020_FEATURE_ISINF ON)
 set(SYCL2020_FEATURE_CLZ ON)
+set(SYCL2020_FEATURE_GROUP_REDUCTION ON)
 
 if(DEFINED INTEL_LLVM_PATH)
     set(SHAM_CXX_SYCL_FLAGS "${SHAM_CXX_SYCL_FLAGS} -DSYCL_COMP_INTEL_LLVM -Wno-unknown-cuda-version")

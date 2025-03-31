@@ -1,4 +1,13 @@
-cmake_minimum_required(VERSION 3.9)
+## -------------------------------------------------------
+##
+## SHAMROCK code for hydrodynamics
+## Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+## SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+## Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
+##
+## -------------------------------------------------------
+
+cmake_minimum_required(VERSION 3.9...3.10)
 
 project(Shamtree CXX C)
 
@@ -11,6 +20,9 @@ set(Sources
     src/kernels/convert_ranges.cpp
     src/kernels/karras_alg.cpp
     src/kernels/reduction_alg.cpp
+    src/MortonCodeSet.cpp
+    src/MortonCodeSortedSet.cpp
+    src/MortonReducedSet.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)

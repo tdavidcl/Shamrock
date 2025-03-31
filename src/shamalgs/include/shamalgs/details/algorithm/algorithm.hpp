@@ -45,7 +45,7 @@ namespace shamalgs::algorithm {
 
     template<class Tkey, class Tval>
     void sort_by_key(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<Tkey> &buf_key,
         sham::DeviceBuffer<Tval> &buf_values,
         u32 len);
@@ -117,7 +117,7 @@ namespace shamalgs::algorithm {
 
     template<class T>
     void index_remap(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<T> &source,
         sham::DeviceBuffer<T> &dest,
         sham::DeviceBuffer<u32> &index_map,
@@ -125,7 +125,7 @@ namespace shamalgs::algorithm {
 
     template<class T>
     void index_remap_nvar(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<T> &source,
         sham::DeviceBuffer<T> &dest,
         sham::DeviceBuffer<u32> &index_map,
@@ -134,7 +134,7 @@ namespace shamalgs::algorithm {
 
     template<class T>
     sham::DeviceBuffer<T> index_remap(
-        sham::DeviceScheduler_ptr &sched_ptr,
+        const sham::DeviceScheduler_ptr &sched_ptr,
         sham::DeviceBuffer<T> &source,
         sham::DeviceBuffer<u32> &index_map,
         u32 len) {
@@ -146,7 +146,7 @@ namespace shamalgs::algorithm {
 
     template<class T>
     sham::DeviceBuffer<T> index_remap_nvar(
-        sham::DeviceScheduler_ptr &sched_ptr,
+        const sham::DeviceScheduler_ptr &sched_ptr,
         sham::DeviceBuffer<T> &source,
         sham::DeviceBuffer<u32> &index_map,
         u32 len,
@@ -174,5 +174,15 @@ namespace shamalgs::algorithm {
      * @return sham::DeviceBuffer<u32> the returned buffer
      */
     sham::DeviceBuffer<u32> gen_buffer_index_usm(sham::DeviceScheduler_ptr sched, u32 len);
+
+    /**
+     * @brief Fill a given buffer such that for i in [0,len[, buf[i] = i
+     *
+     * @param sched the scheduler to run on
+     * @param len length of the buffer to fill
+     * @param buf the buffer to fill
+     */
+    void
+    fill_buffer_index_usm(sham::DeviceScheduler_ptr sched, u32 len, sham::DeviceBuffer<u32> &buf);
 
 } // namespace shamalgs::algorithm

@@ -8,11 +8,11 @@ In order for this to work you need to have a build directory in the root folder 
 In summary we assume the following commands
 
 ```bash
-git clone --recurse-submodules git@github.com:tdavidcl/Shamrock.git
+git clone --recurse-submodules git@github.com:Shamrock-code/Shamrock.git
 cd Shamrock
 ./env/new-env --builddir build --machine debian-generic.acpp -- --backend omp
 cd build
-source activate
+source ./activate
 shamconfigure
 ```
 

@@ -724,4 +724,49 @@ namespace sham {
         return ((y > morton_length - 1 || y < 0) ? -1 : int(clz_xor(m[x], m[y])));
     }
 
+    /**
+     * @brief inverse saturated (positive numbers only)
+     *
+     * Computes the inverse of v if v < minsat return satval
+     *
+     * @param v
+     * @param minvsat minimum value below which the inverse is not computed (default 1e-9)
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat_positive(T v, T minvsat = T{1e-9}, T satval = T{0.}) noexcept {
+        return (v >= minvsat) ? T{1.} / v : satval;
+    }
+
+    /**
+     * @brief inverse saturated
+     *
+     * Computes the inverse of v if |v| < minsat return satval
+     *
+     * @param v
+     * @param minvsat minimum value below which the inverse is not computed (default 1e-9)
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat(T v, T minvsat = T{1e-9}, T satval = T{0.}) noexcept {
+        return (std::abs(v) >= minvsat) ? T{1.} / v : satval;
+    }
+
+    /**
+     * @brief inverse saturated (zero version)
+     *
+     * Computes the inverse of v if v==0 return satval
+     *
+     * @param v
+     * @param satval saturation value (default 0)
+     * @return T
+     */
+    template<class T>
+    inline T inv_sat_zero(T v, T satval = T{0.}) noexcept {
+        // return div only if v != 0 and is not NaN
+        return (v != T{0} && v == v) ? T{1.} / v : satval;
+    }
+
 } // namespace sham

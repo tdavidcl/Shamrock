@@ -23,34 +23,27 @@
 #include "shambackends/sycl_utils.hpp"
 #include "shambackends/vec.hpp"
 
-#define SHAMALGS_GROUP_REDUCTION_SUPPORT
-
-// so far Acpp does not support group reduction with generic backend
-#ifdef __HIPSYCL_ENABLE_LLVM_SSCP_TARGET__
-    #undef SHAMALGS_GROUP_REDUCTION_SUPPORT
-#endif
-
-#ifdef SHAMALGS_GROUP_REDUCTION_SUPPORT
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
 
 namespace shamalgs::reduction::details {
 
     template<class T>
     T sum_usm_group(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<T> &buf1,
         u32 start_id,
         u32 end_id,
         u32 work_group_size);
     template<class T>
     T min_usm_group(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<T> &buf1,
         u32 start_id,
         u32 end_id,
         u32 work_group_size);
     template<class T>
     T max_usm_group(
-        sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<T> &buf1,
         u32 start_id,
         u32 end_id,

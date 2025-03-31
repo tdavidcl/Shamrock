@@ -1,8 +1,9 @@
 ## -------------------------------------------------------
 ##
 ## SHAMROCK code for hydrodynamics
-## Copyright(C) 2021-2023 Timothée David--Cléris <timothee.david--cleris@ens-lyon.fr>
-## Licensed under CeCILL 2.1 License, see LICENSE for more information
+## Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+## SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+## Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 ##
 ## -------------------------------------------------------
 
@@ -58,19 +59,28 @@ check_cxx_source_compiles(
       "
       SYCL2020_FEATURE_CLZ)
 
-if(NOT DEFINED SYCL_feature_reduc2020)
-  message(STATUS "Performing Test " SYCL_feature_reduc2020)
+if(NOT DEFINED SYCL2020_FEATURE_REDUCTION)
   try_compile(
     SYCL_feature_reduc2020 ${CMAKE_BINARY_DIR}/compile_tests
     ${CMAKE_SOURCE_DIR}/cmake/feature_test/sycl2020_reduc.cpp)
   if(SYCL_feature_reduc2020)
-    message(STATUS "Performing Test " SYCL_feature_reduc2020 " - Success")
-    set(SYCL2020_FEATURE_REDUCTION ON)
+    set(SYCL2020_FEATURE_REDUCTION ON CACHE INTERNAL "" FORCE)
   else()
-    message(STATUS "Performing Test " SYCL_feature_reduc2020 " - Failed")
-    set(SYCL2020_FEATURE_REDUCTION Off)
+    set(SYCL2020_FEATURE_REDUCTION Off CACHE INTERNAL "" FORCE)
   endif()
 endif()
+
+if(NOT DEFINED SYCL2020_FEATURE_GROUP_REDUCTION)
+  try_compile(
+    SYCL_feature_group_reduc2020 ${CMAKE_BINARY_DIR}/compile_tests
+    ${CMAKE_SOURCE_DIR}/cmake/feature_test/sycl2020_group_reduc.cpp)
+  if(SYCL_feature_group_reduc2020)
+    set(SYCL2020_FEATURE_GROUP_REDUCTION ON CACHE INTERNAL "" FORCE)
+  else()
+    set(SYCL2020_FEATURE_GROUP_REDUCTION Off CACHE INTERNAL "" FORCE)
+  endif()
+endif()
+
 
 set(SYCL_COMPILER "ACPP")
 

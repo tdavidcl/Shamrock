@@ -24,6 +24,7 @@
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/sycl_utils.hpp"
 #include "shamrock/legacy/patch/base/enabled_fields.hpp"
+#include "shamrock/patch/PatchDataFieldSpan.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include <array>
@@ -32,6 +33,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 template<class T>
 class PatchDataField {
@@ -212,6 +214,39 @@ class PatchDataField {
     void override(const T val);
 
     inline void synchronize_buf() { buf.synchronize(); }
+
+    inline std::vector<T> copy_to_stdvec() {
+        auto tmp = buf.copy_to_stdvec();
+        tmp.resize(get_val_cnt());
+        return tmp;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Span utilities
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * @brief Returns a shamrock::PatchDataFieldSpan pointing to the current PatchDataField.
+     *
+     * @tparam nvar The number of variables in the span.
+     * @return A shamrock::PatchDataFieldSpan pointing to this PatchDataField.
+     */
+    template<u32 nvar>
+    inline shamrock::PatchDataFieldSpan<T, nvar> get_span() {
+        StackEntry stack_loc{};
+        return shamrock::PatchDataFieldSpan<T, nvar>(*this, 0, get_obj_cnt());
+    }
+
+    /**
+     * @brief Returns a shamrock::PatchDataFieldSpan pointing to the current PatchDataField.
+     *
+     * @return A shamrock::PatchDataFieldSpan pointing to this PatchDataField with dynamic number
+     * of variables.
+     */
+    inline shamrock::PatchDataFieldSpan<T, shamrock::dynamic_nvar> get_span_nvar_dynamic() {
+        StackEntry stack_loc{};
+        return get_span<shamrock::dynamic_nvar>();
+    }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // get_subsets utilities

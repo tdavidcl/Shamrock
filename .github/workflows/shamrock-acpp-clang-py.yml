@@ -12,7 +12,7 @@ jobs:
 
   shamrock_acpp:
     name: AdaptiveCpp clang-${{ matrix.clang }} ${{ matrix.backend }}:${{matrix.arch}} (pylib)
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ${{ matrix.container }}
@@ -27,9 +27,9 @@ jobs:
             backend: omp
             arch: none
             runtest: yes
-            container: ghcr.io/shamrock-code/ci-ubuntu20:main
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20
 
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       #### Checkout part ####
       # Checkout merge commit if PR otherwise default
@@ -82,4 +82,20 @@ jobs:
         run: |
           ACPP_VISIBILITY_MASK=omp \
           ACPP_DEBUG_LEVEL=3 \
-          python3 -c "import shamrock;shamrock.change_loglevel(125);shamrock.sys.init(0,0)"
+          python3 -c "import shamrock;shamrock.change_loglevel(125);shamrock.sys.init('0:0')"
+
+      - name: Pip install package for doc
+        run : |
+          cd build
+          pip install matplotlib numpy scipy
+
+      - name: Build sphinx documentation
+        run: |
+          cd doc/sphinx
+          bash gen_sphinx_doc.sh #generate the doc in doc/sphinx/build/html
+
+      - name: Upload doc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sphinx_doc
+          path: doc/sphinx/build/html

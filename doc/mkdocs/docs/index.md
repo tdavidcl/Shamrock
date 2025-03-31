@@ -8,7 +8,7 @@ title: Shamrock documentation
   }
 </style>
 
-![The Rust Logo](assets/no_background_nocolor.png)
+![Shamrock logo](assets/no_background_nocolor.png)
 
 Welcome to the documentation of the Shamrock code!
 
@@ -28,9 +28,9 @@ We can run some SPH, AMR, but not only that!
 
     ---
 
-    You don't need to know about GPUs, c++ whatever, the frontend just require the use of python
+    You don't need to know about GPUs, C++ whatever, the frontend just require the use of python
 
-    [:octicons-arrow-right-24: Reference](#)
+    [:octicons-arrow-right-24: Python frontend documentation](../sphinx/index.html)
 
 -   :fontawesome-solid-gears:{ .lg .middle } __Can run on any hardware__
 
@@ -57,4 +57,6 @@ We can run some SPH, AMR, but not only that!
 
 !!! note
 
-    The code is in active development and not released yet don't expect the most polished thing
+    The code is actively being developed, and this documentation is a work in progress!
+    If you notice anything missing or areas that could be improved, feel free to raise an issue
+    [here](https://github.com/Shamrock-code/Shamrock/issues/new?template=documentation-request.md).
