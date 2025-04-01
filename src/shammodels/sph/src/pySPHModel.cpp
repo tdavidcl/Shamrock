@@ -173,8 +173,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("eta"),
             py::arg("q"))
         .def("set_units", &TConfig::set_units)
+        .def(
+            "set_cfl_cour",
+            [](TConfig &self, Tscal cfl_cour) {
+                self.cfl_config.cfl_cour = cfl_cour;
+            })
+        .def(
+            "set_cfl_force",
+            [](TConfig &self, Tscal cfl_force) {
+                self.cfl_config.cfl_force = cfl_force;
+            })
         .def("set_cfl_multipler", &TConfig::set_cfl_multipler)
-        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness);
+        .def("set_cfl_mult_stiffness", &TConfig::set_cfl_mult_stiffness)
+        .def("set_particle_mass", [](TConfig &self, Tscal gpart_mass) {
+            self.gpart_mass = gpart_mass;
+        });
 
     std::string sod_tube_analysis_name = name_model + "_AnalysisSodTube";
     py::class_<TAnalysisSodTube>(m, sod_tube_analysis_name.c_str())
@@ -201,7 +214,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                std::function<Tscal(Tscal)> H_profile,
                std::function<Tscal(Tscal)> rot_profile,
                std::function<Tscal(Tscal)> cs_profile,
-               u64 random_seed) {
+               u64 random_seed,
+               Tscal init_h_factor) {
                 return self.make_generator_disc_mc(
                     part_mass,
                     disc_mass,
@@ -211,7 +225,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     H_profile,
                     rot_profile,
                     cs_profile,
-                    std::mt19937(random_seed));
+                    std::mt19937(random_seed),
+                    init_h_factor);
             },
             py::kw_only(),
             py::arg("part_mass"),
@@ -222,7 +237,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("H_profile"),
             py::arg("rot_profile"),
             py::arg("cs_profile"),
-            py::arg("random_seed"))
+            py::arg("random_seed"),
+            py::arg("init_h_factor") = 0.8)
         .def(
             "make_combiner_add",
             [](TSPHSetup &self,
@@ -705,16 +721,17 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("load_from_dump", &T::load_from_dump)
         .def("dump", &T::dump)
         .def("get_setup", &T::get_setup);
-    ;
 }
 
 Register_pymod(pysphmodel) {
 
+    py::module msph = m.def_submodule("model_sph", "Shamrock sph solver");
+
     using namespace shammodels::sph;
 
-    add_instance<f64_3, shammath::M4>(m, "SPHModel_f64_3_M4_SolverConfig", "SPHModel_f64_3_M4");
-    add_instance<f64_3, shammath::M6>(m, "SPHModel_f64_3_M6_SolverConfig", "SPHModel_f64_3_M6");
-    add_instance<f64_3, shammath::M8>(m, "SPHModel_f64_3_M8_SolverConfig", "SPHModel_f64_3_M8");
+    add_instance<f64_3, shammath::M4>(msph, "SPHModel_f64_3_M4_SolverConfig", "SPHModel_f64_3_M4");
+    add_instance<f64_3, shammath::M6>(msph, "SPHModel_f64_3_M6_SolverConfig", "SPHModel_f64_3_M6");
+    add_instance<f64_3, shammath::M8>(msph, "SPHModel_f64_3_M8_SolverConfig", "SPHModel_f64_3_M8");
 
     using VariantSPHModelBind = std::variant<
         std::unique_ptr<Model<f64_3, shammath::M4>>,
@@ -722,7 +739,7 @@ Register_pymod(pysphmodel) {
         std::unique_ptr<Model<f64_3, shammath::M8>>>;
 
     m.def(
-        "get_SPHModel",
+        "get_Model_SPH",
         [](ShamrockCtx &ctx, std::string vector_type, std::string kernel) -> VariantSPHModelBind {
             VariantSPHModelBind ret;
 
@@ -746,12 +763,12 @@ Register_pymod(pysphmodel) {
 
     py::class_<
         shammodels::sph::modules::ISPHSetupNode,
-        std::shared_ptr<shammodels::sph::modules::ISPHSetupNode>>(m, "ISPHSetupNode")
+        std::shared_ptr<shammodels::sph::modules::ISPHSetupNode>>(msph, "ISPHSetupNode")
         .def("get_dot", [](std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> &self) {
             return self->get_dot();
         });
 
-    py::class_<shammodels::sph::TimestepLog>(m, "TimestepLog")
+    py::class_<shammodels::sph::TimestepLog>(msph, "TimestepLog")
         .def(py::init<>())
         .def_readwrite("rank", &shammodels::sph::TimestepLog::rank)
         .def_readwrite("rate", &shammodels::sph::TimestepLog::rate)
