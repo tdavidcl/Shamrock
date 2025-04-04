@@ -16,10 +16,12 @@
 
 #include "shammodels/sph/modules/ExternalForces.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shambackends/math.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamunits/Constants.hpp"
+#include <shambackends/sycl.hpp>
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::compute_ext_forces_indep_v() {
@@ -127,6 +129,7 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces()
 
     PatchDataLayout &pdl = scheduler().pdl;
 
+    const u32 ihpart    = pdl.get_field_idx<Tscal>("hpart");
     const u32 iaxyz     = pdl.get_field_idx<Tvec>("axyz");
     const u32 ivxyz     = pdl.get_field_idx<Tvec>("vxyz");
     const u32 iaxyz_ext = pdl.get_field_idx<Tvec>("axyz_ext");
@@ -230,6 +233,42 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces()
             shambase::throw_unimplemented("this force is not handled, yet ...");
         }
     }
+
+    scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchData &pdat) {
+        sham::DeviceBuffer<Tvec> &buf_xyz  = pdat.get_field_buf_ref<Tvec>(0);
+        sham::DeviceBuffer<Tvec> &buf_vxyz = pdat.get_field_buf_ref<Tvec>(ivxyz);
+        sham::DeviceBuffer<Tvec> &buf_axyz = pdat.get_field_buf_ref<Tvec>(iaxyz);
+
+        sham::DeviceBuffer<Tscal> &cs_buf = storage.soundspeed.get().get_buf_check(cur_p.id_patch);
+        sham::DeviceBuffer<Tscal> &buf_hpart = pdat.get_field_buf_ref<Tscal>(ihpart);
+
+        sham::kernel_call(
+            q,
+            sham::MultiRef{buf_xyz, buf_vxyz, buf_hpart, cs_buf},
+            sham::MultiRef{buf_axyz},
+            pdat.get_obj_cnt(),
+            [](u32 gid,
+               const Tvec *xyz,
+               const Tvec *vxyz,
+               const Tscal *hpart,
+               const Tscal *cs,
+               Tvec *axyz) {
+                Tvec r_a = xyz[gid];
+                Tvec v_a = vxyz[gid];
+
+                Tscal h_a       = hpart[gid];
+                Tscal cs_a      = cs[gid];
+                Tscal freq_damp = cs_a / h_a;
+
+                Tscal boundary_fact
+                    = sham::dot(r_a, r_a + Tvec{0.1 * sycl::sin(30 * r_a.y()), 0, 0}) - 0.3 * 0.3;
+                Tscal gamma = (1 + sycl::tanh(boundary_fact * 100)) / 2;
+
+                axyz[gid] -= gamma * v_a * (freq_damp);
+
+                // axyz[gid] += 9 * Tvec{0, 1, 0} * (1-gamma);
+            });
+    });
 }
 
 template<class Tvec, template<class> class SPHKernel>
