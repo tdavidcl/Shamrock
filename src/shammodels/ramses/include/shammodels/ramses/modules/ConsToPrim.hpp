@@ -46,6 +46,15 @@ namespace shammodels::basegodunov::modules {
         ConsToPrim(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
+        void cons_to_prim_gas_spans(
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho,
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov,
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rhoe,
+
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel,
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_P,
+            shambase::DistributedData<u32> &sizes);
+
         void cons_to_prim_gas();
         void cons_to_prim_dust();
 

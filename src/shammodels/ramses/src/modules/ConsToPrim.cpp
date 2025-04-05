@@ -15,10 +15,47 @@
  */
 
 #include "shammodels/ramses/modules/ConsToPrim.hpp"
+#include "shambackends/kernel_call_distrib.hpp"
 #include "shammath/riemann.hpp"
 #include "shammath/riemann_dust.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include <utility>
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_gas_spans(
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho,
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov,
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rhoe,
+
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel,
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_P,
+    shambase::DistributedData<u32> &sizes) {
+
+    shambase::DistributedData<u32> cell_counts = sizes.map<u32>([&](u64 id, u32 block_count) {
+        u32 cell_count = block_count * AMRBlock::block_size;
+        return cell_count;
+    });
+
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{spans_rho, spans_rhov, spans_rhoe},
+        sham::DDMultiRef{spans_vel, spans_P},
+        cell_counts,
+        [gamma = solver_config.eos_gamma](
+            u32 i,
+            const Tscal *__restrict rho,
+            const Tvec *__restrict rhov,
+            const Tscal *__restrict rhoe,
+            Tvec *__restrict vel,
+            Tscal *__restrict P) {
+            auto conststate = shammath::ConsState<Tvec>{rho[i], rhoe[i], rhov[i]};
+
+            auto prim_state = shammath::cons_to_prim(conststate, gamma);
+
+            vel[i] = prim_state.vel;
+            P[i]   = prim_state.press;
+        });
+}
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_gas() {
@@ -44,49 +81,43 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
     u32 irhoe_ghost                                = ghost_layout.get_field_idx<Tscal>("rhoetot");
 
-    storage.merged_patchdata_ghost.get().for_each([&](u64 id, MergedPDat &mpdat) {
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+    auto spans_rho = storage.merged_patchdata_ghost.get()
+                         .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                             [&](u64 id, MergedPDat &mpdat) {
+                                 return mpdat.pdat.get_field_pointer_span<Tscal>(irho_ghost);
+                             });
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+    auto spans_rhov = storage.merged_patchdata_ghost.get()
+                          .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                              [&](u64 id, MergedPDat &mpdat) {
+                                  return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_ghost);
+                              });
 
-        sham::DeviceBuffer<Tscal> &buf_rho  = mpdat.pdat.get_field_buf_ref<Tscal>(irho_ghost);
-        sham::DeviceBuffer<Tvec> &buf_rhov  = mpdat.pdat.get_field_buf_ref<Tvec>(irhov_ghost);
-        sham::DeviceBuffer<Tscal> &buf_rhoe = mpdat.pdat.get_field_buf_ref<Tscal>(irhoe_ghost);
+    auto spans_rhoe = storage.merged_patchdata_ghost.get()
+                          .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                              [&](u64 id, MergedPDat &mpdat) {
+                                  return mpdat.pdat.get_field_pointer_span<Tscal>(irhoe_ghost);
+                              });
 
-        sham::DeviceBuffer<Tvec> &buf_vel = v_ghost.get_buf(id);
-        sham::DeviceBuffer<Tscal> &buf_P  = P_ghost.get_buf(id);
+    auto spans_vel = storage.merged_patchdata_ghost.get()
+                         .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                             [&](u64 id, MergedPDat &mpdat) {
+                                 return v_ghost.get_field(id).get_pointer_span();
+                             });
 
-        sham::EventList depends_list;
+    auto spans_P = storage.merged_patchdata_ghost.get()
+                       .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                           [&](u64 id, MergedPDat &mpdat) {
+                               return P_ghost.get_field(id).get_pointer_span();
+                           });
 
-        auto rho    = buf_rho.get_read_access(depends_list);
-        auto rhovel = buf_rhov.get_read_access(depends_list);
-        auto rhoe   = buf_rhoe.get_read_access(depends_list);
+    shambase::DistributedData<u32> sizes
+        = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
+              u32 cell_count = (mpdat.total_elements);
+              return cell_count;
+          });
 
-        auto vel = buf_vel.get_write_access(depends_list);
-        auto P   = buf_P.get_write_access(depends_list);
-
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            Tscal gamma = solver_config.eos_gamma;
-
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
-
-            shambase::parralel_for(cgh, cell_count, "cons_to_prim", [=](u64 gid) {
-                auto conststate = shammath::ConsState<Tvec>{rho[gid], rhoe[gid], rhovel[gid]};
-
-                auto prim_state = shammath::cons_to_prim(conststate, gamma);
-
-                vel[gid] = prim_state.vel;
-                P[gid]   = prim_state.press;
-            });
-        });
-
-        buf_rho.complete_event_state(e);
-        buf_rhov.complete_event_state(e);
-        buf_rhoe.complete_event_state(e);
-        buf_vel.complete_event_state(e);
-        buf_P.complete_event_state(e);
-    });
+    cons_to_prim_gas_spans(spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P, sizes);
 
     storage.vel.set(std::move(v_ghost));
     storage.press.set(std::move(P_ghost));
