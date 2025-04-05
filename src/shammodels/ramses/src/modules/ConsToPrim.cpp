@@ -144,13 +144,12 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
                                return P_ghost.get_field(id).get_pointer_span();
                            });
 
-    shambase::DistributedData<u32> sizes
+    shambase::DistributedData<u32> block_sizes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
-              u32 cell_count = (mpdat.total_elements);
-              return cell_count;
+              return mpdat.total_elements;
           });
 
-    cons_to_prim_gas_spans(spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P, sizes);
+    cons_to_prim_gas_spans(spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P, block_sizes);
 
     storage.vel.set(std::move(v_ghost));
     storage.press.set(std::move(P_ghost));
@@ -194,13 +193,12 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
                                       return v_dust_ghost.get_field(id).get_pointer_span();
                                   });
 
-    shambase::DistributedData<u32> sizes
+    shambase::DistributedData<u32> block_sizes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
-              u32 cell_count = (mpdat.total_elements);
-              return cell_count;
+              return mpdat.total_elements;
           });
 
-    cons_to_prim_dust_spans(spans_rho_dust, spans_rhov_dust, spans_vel_dust, sizes);
+    cons_to_prim_dust_spans(spans_rho_dust, spans_rhov_dust, spans_vel_dust, block_sizes);
 
     storage.vel_dust.set(std::move(v_dust_ghost));
 }
