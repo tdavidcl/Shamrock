@@ -46,7 +46,11 @@ namespace shammodels::basegodunov::modules {
         ConsToPrim(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
-        void cons_to_prim();
+        void cons_to_prim_gas();
+        void cons_to_prim_dust();
+
+        void reset_gas();
+        void reset_dust();
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
