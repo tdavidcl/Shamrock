@@ -300,7 +300,7 @@ namespace shamrock {
         }
 
         template<typename Dummy = void, typename = std::enable_if_t<is_pointer_access(), Dummy>>
-        inline auto get_write_access(sham::EventList &depends_list) -> T *const {
+        inline auto get_write_access(sham::EventList &depends_list) -> T * {
             StackEntry stack_loc{};
             return {get_buf().get_write_access(depends_list) + start * field_ref.get_nvar()};
         }
