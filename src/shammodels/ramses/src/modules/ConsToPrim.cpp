@@ -58,6 +58,39 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 }
 
 template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_dust_spans(
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho_dust,
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov_dust,
+
+    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel_dust,
+    shambase::DistributedData<u32> &sizes) {
+
+    u32 ndust = solver_config.dust_config.ndust;
+
+    shambase::DistributedData<u32> cell_counts = sizes.map<u32>([&](u64 id, u32 block_count) {
+        u32 cell_count = block_count * AMRBlock::block_size * ndust;
+        return cell_count;
+    });
+
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{spans_rho_dust, spans_rhov_dust},
+        sham::DDMultiRef{spans_vel_dust},
+        cell_counts,
+        [gamma = solver_config.eos_gamma](
+            u32 i,
+            const Tscal *__restrict rho_dust,
+            const Tvec *__restrict rhov_dust,
+            Tvec *__restrict vel_dust) {
+            auto d_conststate = shammath::DustConsState<Tvec>{rho_dust[i], rhov_dust[i]};
+
+            auto d_prim_state = shammath::d_cons_to_prim(d_conststate);
+
+            vel_dust[i] = d_prim_state.vel;
+        });
+}
+
+template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_gas() {
 
     StackEntry stack_loc{};
@@ -141,43 +174,34 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irho_dust_ghost  = ghost_layout.get_field_idx<Tscal>("rho_dust");
     u32 irhov_dust_ghost = ghost_layout.get_field_idx<Tvec>("rhovel_dust");
 
-    storage.merged_patchdata_ghost.get().for_each([&](u64 id, MergedPDat &mpdat) {
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+    auto spans_rho_dust
+        = storage.merged_patchdata_ghost.get()
+              .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                  [&](u64 id, MergedPDat &mpdat) {
+                      return mpdat.pdat.get_field_pointer_span<Tscal>(irho_dust_ghost);
+                  });
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+    auto spans_rhov_dust
+        = storage.merged_patchdata_ghost.get()
+              .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                  [&](u64 id, MergedPDat &mpdat) {
+                      return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_dust_ghost);
+                  });
 
-        sham::DeviceBuffer<Tscal> &buf_rho_dust
-            = mpdat.pdat.get_field_buf_ref<Tscal>(irho_dust_ghost);
-        sham::DeviceBuffer<Tvec> &buf_rhov_dust
-            = mpdat.pdat.get_field_buf_ref<Tvec>(irhov_dust_ghost);
+    auto spans_vel_dust = storage.merged_patchdata_ghost.get()
+                              .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                                  [&](u64 id, MergedPDat &mpdat) {
+                                      return v_dust_ghost.get_field(id).get_pointer_span();
+                                  });
 
-        sham::DeviceBuffer<Tvec> &buf_vel_dust = v_dust_ghost.get_buf(id);
+    shambase::DistributedData<u32> sizes
+        = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
+              u32 cell_count = (mpdat.total_elements);
+              return cell_count;
+          });
 
-        sham::EventList depends_list;
+    cons_to_prim_dust_spans(spans_rho_dust, spans_rhov_dust, spans_vel_dust, sizes);
 
-        auto rho_dust    = buf_rho_dust.get_read_access(depends_list);
-        auto rhovel_dust = buf_rhov_dust.get_read_access(depends_list);
-
-        auto vel_dust = buf_vel_dust.get_write_access(depends_list);
-
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
-
-            u32 nvar_dust = ndust;
-            shambase::parralel_for(cgh, nvar_dust * cell_count, "cons_to_prim_dust", [=](u64 gid) {
-                auto d_conststate = shammath::DustConsState<Tvec>{rho_dust[gid], rhovel_dust[gid]};
-
-                auto d_prim_state = shammath::d_cons_to_prim(d_conststate);
-
-                vel_dust[gid] = d_prim_state.vel;
-            });
-        });
-
-        buf_rho_dust.complete_event_state(e);
-        buf_rhov_dust.complete_event_state(e);
-        buf_vel_dust.complete_event_state(e);
-    });
     storage.vel_dust.set(std::move(v_dust_ghost));
 }
 
