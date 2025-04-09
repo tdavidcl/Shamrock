@@ -80,6 +80,8 @@ namespace shamtree {
      * @param dev_sched The device scheduler to use for the reduction
      * @param morton_codes_set The set of Morton codes to reduce
      * @param reduction_level The amount of reduction to apply
+     * @param cache_buf_reduc_index_map A device buffer to be reused for the reduction index map
+     * @param cache_reduced_morton_codes A device buffer to be reused for the reduced Morton codes
      * @return The reduced set of Morton codes
      */
     template<class Tmorton, class Tvec, u32 dim>
