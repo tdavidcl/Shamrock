@@ -12,7 +12,7 @@ function shamconfigure {
         -DSYCL_IMPLEMENTATION=IntelLLVM \
         -DINTEL_LLVM_PATH=$(dirname $(which icpx))/.. \
         -DCMAKE_CXX_COMPILER=$(which icpx) \
-        -DCMAKE_CXX_FLAGS="-fsycl" \
+        -DCMAKE_CXX_FLAGS="-fsycl -fp-model=precise" \
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DBUILD_TEST=Yes \
         "${CMAKE_OPT[@]}"
