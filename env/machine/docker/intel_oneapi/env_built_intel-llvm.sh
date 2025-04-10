@@ -1,8 +1,13 @@
 # Exports will be provided by the new env script above this line
 # will be exported : ACPP_GIT_DIR, ACPP_BUILD_DIR, ACPP_INSTALL_DIR
 
-apt update
-apt install -y python3-dev
+# test if python3-dev installed
+# dpkg -l python3-dev
+if ! dpkg -l python3-dev &> /dev/null; then
+    echo "python3-dev is not installed. Installing it."
+    apt update
+    apt install -y python3-dev
+fi
 
 function shamconfigure {
     cmake \

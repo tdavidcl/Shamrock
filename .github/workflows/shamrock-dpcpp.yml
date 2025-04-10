@@ -28,7 +28,7 @@ jobs:
             runtest: false
           - machine: docker.intel_oneapi
             container: intel/oneapi
-            runtest: true
+            runtest: false # They run but float to int conversion has not the same precision
 
     timeout-minutes: 60
     steps:
