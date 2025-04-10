@@ -28,7 +28,7 @@ jobs:
             runtest: false
           - machine: docker.intel_oneapi
             container: intel/oneapi
-            runtest: false
+            runtest: true
 
     timeout-minutes: 60
     steps:
