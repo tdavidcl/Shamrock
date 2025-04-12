@@ -28,8 +28,11 @@ namespace shambase {
 
 class INode;
 
-template<class Func>
-void multi_evaluate(std::vector<std::shared_ptr<INode>> endpoints, Func &&f);
+template<class Func,class Func2>
+void multi_evaluate(std::vector<std::shared_ptr<INode>> endpoints, Func &&f, Func2&& condition);
+
+template<class Func,class Func2>
+inline void multi_evaluate_up(std::vector<std::shared_ptr<INode>> endpoints, Func &&f, Func2&& condition);
 
 class IDataEdge {
     public:
@@ -122,6 +125,16 @@ class INode : public std::enable_shared_from_this<INode> {
         }
     }
 
+    template<class Func>
+    inline void on_parents(Func &&f) {
+        for (auto &in : outputs) {
+            in->on_parent([&](auto &child) {
+                f(child);
+                std::cout << "on parent : " << this << " -> " << &child << std::endl;
+            });
+        }
+    }
+
     virtual ~INode() {
         __internal_set_inputs({});
         __internal_set_outputs({});
@@ -131,6 +144,28 @@ class INode : public std::enable_shared_from_this<INode> {
         multi_evaluate({getptr_shared()}, [&](auto &current) {
             std::cout << "evaluating " << current.get_label() << std::endl;
             current._impl_evaluate_internal();
+            current.evaluated = true;
+        }, [&](auto & n){
+            return !n.evaluated;
+        });
+    }
+
+    inline void reset_up(){
+        multi_evaluate_up({getptr_shared()}, [&](auto &current) {
+            std::cout << "resetting " << current.get_label() << std::endl;
+            current._impl_reset_internal();
+            current.evaluated = false;
+        }, [&](auto & n){
+            return n.evaluated;
+        });
+    }
+    inline void reset_down(){
+        multi_evaluate({getptr_shared()}, [&](auto &current) {
+            std::cout << "resetting " << current.get_label() << std::endl;
+            current._impl_reset_internal();
+            current.evaluated = false;
+        }, [&](auto & n){
+            return n.evaluated;
         });
     }
 
@@ -149,6 +184,7 @@ class INode : public std::enable_shared_from_this<INode> {
 
     protected:
     virtual void _impl_evaluate_internal()   = 0;
+    virtual void _impl_reset_internal()   = 0;
     virtual std::string _impl_get_label()    = 0;
     virtual std::string _impl_get_node_tex() = 0;
 };
@@ -157,12 +193,15 @@ class INode : public std::enable_shared_from_this<INode> {
 // traversal
 ////////////////////////////////////:
 
-template<class Func>
-inline void multi_evaluate(std::vector<std::shared_ptr<INode>> endpoints, Func &&f) {
+template<class Func,class Func2>
+void multi_evaluate(std::vector<std::shared_ptr<INode>> endpoints, Func &&f, Func2&& condition){
 
     std::stack<INode *> stack;
     for (auto &n : endpoints) {
-        stack.push(&shambase::get_check_ref(n));
+        auto & ref = shambase::get_check_ref(n);
+        if(condition(ref)){
+        stack.push(&ref);
+        }
     }
 
     auto print_stack = [&]() {
@@ -178,12 +217,60 @@ inline void multi_evaluate(std::vector<std::shared_ptr<INode>> endpoints, Func &
     std::unordered_map<INode *, bool> evaluated_map = {};
 
     while (!stack.empty()) {
-        // print_stack();
+        //print_stack();
         auto current = stack.top();
 
         if (!unrolled_map[current]) {
             current->on_childrens([&](auto &nchild) {
-                stack.push(&nchild);
+                if(condition(nchild)){
+                    std::cout << "push " << &nchild<< " eval = " << nchild.evaluated << " cd = " << condition(nchild) <<std::endl;
+                    stack.push(&nchild);
+                }
+            });
+            unrolled_map[current] = true;
+        } else if (!evaluated_map[current]) {
+
+            // std::cout << "eval " << current << std::endl;
+            f(*current);
+            evaluated_map[current] = true;
+        } else {
+            stack.pop();
+        }
+    }
+}
+
+template<class Func,class Func2>
+inline void multi_evaluate_up(std::vector<std::shared_ptr<INode>> endpoints, Func &&f, Func2&& condition){
+
+    std::stack<INode *> stack;
+    for (auto &n : endpoints) {
+        auto & ref = shambase::get_check_ref(n);
+        if(condition(ref)){
+        stack.push(&ref);
+        }
+    }
+
+    auto print_stack = [&]() {
+        std::cout << "-----------------" << std::endl;
+        std::stack<INode *> stack2 = stack;
+        while (!stack2.empty()) {
+            std::cout << "Node " << stack2.top() << std::endl;
+            stack2.pop();
+        }
+    };
+
+    std::unordered_map<INode *, bool> unrolled_map  = {};
+    std::unordered_map<INode *, bool> evaluated_map = {};
+
+    while (!stack.empty()) {
+        //print_stack();
+        auto current = stack.top();
+
+        if (!unrolled_map[current]) {
+            current->on_parents([&](auto &nchild) {
+                if(condition(nchild)){
+                    stack.push(&nchild);
+                }
             });
             unrolled_map[current] = true;
         } else if (!evaluated_map[current]) {
@@ -204,6 +291,8 @@ inline std::string get_node_graph_tex(std::vector<std::shared_ptr<INode>> endpoi
     output << "\\begin{document}\n";
     multi_evaluate(endpoints, [&](auto &current) {
         output << current.get_node_tex() << "\n";
+    }, [](auto & n){
+        return true;
     });
     output << "\\end{document}\n";
 
@@ -226,6 +315,8 @@ inline std::string get_node_dot_graph(std::vector<std::shared_ptr<INode>> endpoi
     std::unordered_map<INode *, Node> node_map;
     multi_evaluate(endpoints, [&](auto &current) {
         node_map[&current] = {.id = std::to_string(i++), .label = current.get_label()};
+    }, [](auto & n){
+        return true;
     });
 
     std::unordered_map<IDataEdge *, Edge> edge_map;
@@ -292,6 +383,10 @@ class RhoOp : public INode {
         }
     }
 
+    void _impl_reset_internal(){
+         get_output<Field>(0).field_data = {};
+    }
+
     inline void set_inputs(std::shared_ptr<Field> h, std::shared_ptr<Field> mass) {
         __internal_set_inputs({h, mass});
     }
@@ -314,9 +409,14 @@ class FieldLoader : public INode {
     FieldLoader(float val, int n) : mirror(n, val) {}
 
     void _impl_evaluate_internal() {
-
         auto &field      = get_output<Field>(0);
         field.field_data = mirror;
+    }
+
+    void _impl_reset_internal(){
+        mirror.resize(0);
+        auto &field      = get_output<Field>(0);
+        field.field_data = {};
     }
 
     inline void set_inputs() { __internal_set_inputs({}); }
@@ -339,6 +439,11 @@ class FieldWriter : public INode {
     void _impl_evaluate_internal() {
         auto &field = get_input<Field>(0);
         write_back  = field.field_data;
+    }
+
+
+    void _impl_reset_internal(){
+        write_back = {};
     }
 
     inline void set_inputs(std::shared_ptr<Field> field) { __internal_set_inputs({field}); }
@@ -384,4 +489,67 @@ TestStart(Unittest, "dag_stuff_testing", dag_stuff_testing, 1) {
     for (int i = 0; i < n; i++) {
         std::cout << i << " " << rho_result[i] << std::endl;
     }
+}
+
+TestStart(Unittest, "dag_stuff_testing_reset", dag_stuff_testingreset, 1) {
+
+    int n                         = 3;
+    float m_source                = 3;
+    std::vector<float> h_source   = {1., 1. / 2., 1. / 4.};
+    std::vector<float> rho_result = {};
+    std::vector<float> P_result = {};
+    std::vector<float> dt_result = {};
+
+    std::shared_ptr<FieldLoader> h_load    = std::make_shared<FieldLoader>(h_source);
+    std::shared_ptr<FieldLoader> mass_load = std::make_shared<FieldLoader>(m_source, n);
+    std::shared_ptr<FieldWriter> rho_write = std::make_shared<FieldWriter>(rho_result);
+
+    std::shared_ptr<Field> h    = std::make_shared<Field>("h", "h");
+    std::shared_ptr<Field> mass = std::make_shared<Field>("m", "m");
+    std::shared_ptr<Field> rho  = std::make_shared<Field>("rho", "\\rho");
+
+    std::shared_ptr<RhoOp> rho_op = std::make_shared<RhoOp>();
+
+    h_load->set_outputs(h);
+    mass_load->set_outputs(mass);
+    rho_op->set_inputs(h, mass);
+    rho_op->set_outputs(rho);
+    rho_write->set_inputs(rho);
+
+    std::cout << get_node_graph_tex({rho_write}) << std::endl;
+    std::cout << get_node_dot_graph({rho_write}) << std::endl;
+
+    auto print_node_states = [&](){
+        std::cout << "- h_load    eval=" << h_load->evaluated << std::endl;
+        std::cout << "- mass_load eval=" << mass_load->evaluated << std::endl;
+        std::cout << "- rho_op    eval=" << rho_op->evaluated << std::endl;
+        std::cout << "- rho_write eval=" << rho_write->evaluated << std::endl;
+    };
+
+
+    print_node_states();
+    rho_write->evaluate();
+    std::cout << "Rho result" << std::endl;
+    std::cout << "size " << rho_result.size() << std::endl;
+    for (int i = 0; i < n; i++) {
+        std::cout << i << " " << rho_result[i] << std::endl;
+    }
+
+    print_node_states();
+
+    std::cout << " -- retry evaluate :" << std::endl;
+    rho_write->evaluate();
+    print_node_states();
+    std::cout << " -- reset write :" << std::endl;
+    rho_write->reset_up();
+    print_node_states();
+    std::cout << " -- retry evaluate :" << std::endl;
+    rho_write->evaluate();
+    print_node_states();
+    std::cout << " -- reset only rhoop and up :" << std::endl;
+    rho_op->reset_up();
+    print_node_states();
+    std::cout << " -- retry evaluate :" << std::endl;
+    rho_write->evaluate();
+    print_node_states();
 }
