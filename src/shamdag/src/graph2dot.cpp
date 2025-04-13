@@ -50,12 +50,8 @@ std::string get_node_dot_graph(std::vector<std::shared_ptr<INode>> endpoints) {
     };
 
     for (auto &[ptr, n] : node_map) {
-        for (auto &in : ptr->inputs) {
-            register_edge(shambase::get_check_ref(in));
-        }
-        for (auto &out : ptr->outputs) {
-            register_edge(shambase::get_check_ref(out));
-        }
+        ptr->on_edge_inputs(register_edge);
+        ptr->on_edge_outputs(register_edge);
     }
 
     std::stringstream output;

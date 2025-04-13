@@ -178,10 +178,10 @@ TestStart(Unittest, "dag_stuff_testing_reset", dag_stuff_testingreset, 1) {
     std::cout << get_node_dot_graph({rho_write}) << std::endl;
 
     auto print_node_states = [&]() {
-        std::cout << "- h_load    eval=" << h_load->evaluated << std::endl;
-        std::cout << "- mass_load eval=" << mass_load->evaluated << std::endl;
-        std::cout << "- rho_op    eval=" << rho_op->evaluated << std::endl;
-        std::cout << "- rho_write eval=" << rho_write->evaluated << std::endl;
+        std::cout << "- h_load    eval=" << h_load->is_evaluated() << std::endl;
+        std::cout << "- mass_load eval=" << mass_load->is_evaluated() << std::endl;
+        std::cout << "- rho_op    eval=" << rho_op->is_evaluated() << std::endl;
+        std::cout << "- rho_write eval=" << rho_write->is_evaluated() << std::endl;
     };
 
     print_node_states();

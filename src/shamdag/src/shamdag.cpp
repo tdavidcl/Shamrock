@@ -50,7 +50,7 @@ void multi_evaluate(
         if (!unrolled_map[current]) {
             current->on_childrens([&](auto &nchild) {
                 if (condition(nchild)) {
-                    std::cout << "push " << &nchild << " eval = " << nchild.evaluated
+                    std::cout << "push " << &nchild << " eval = " << nchild.is_evaluated()
                               << " cd = " << condition(nchild) << std::endl;
                     stack.push(&nchild);
                 }

@@ -24,10 +24,12 @@
 // Inode is node between data edges, takes multiple inputs, multiple outputs
 class INode : public std::enable_shared_from_this<INode> {
 
-    public:
+    bool evaluated = false;
     std::vector<std::shared_ptr<IDataEdge>> inputs;
     std::vector<std::shared_ptr<IDataEdge>> outputs;
-    bool evaluated = false;
+
+    public:
+    inline bool is_evaluated() { return evaluated; }
 
     inline std::shared_ptr<INode> getptr_shared() { return shared_from_this(); }
     inline std::weak_ptr<INode> getptr_weak() { return weak_from_this(); }
@@ -61,6 +63,20 @@ class INode : public std::enable_shared_from_this<INode> {
             in->on_child([&](auto &child) {
                 f(child);
             });
+        }
+    }
+
+    template<class Func>
+    inline void on_edge_inputs(Func &&f) {
+        for (auto &in : inputs) {
+            f(shambase::get_check_ref(in));
+        }
+    }
+
+    template<class Func>
+    inline void on_edge_outputs(Func &&f) {
+        for (auto &out : outputs) {
+            f(shambase::get_check_ref(out));
         }
     }
 
