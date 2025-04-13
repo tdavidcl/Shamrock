@@ -20,6 +20,8 @@
 #include "shamdag/IDataEdge.hpp"
 #include "shamdag/shamdag.hpp"
 #include <iostream>
+#include <memory>
+#include <vector>
 
 // Inode is node between data edges, takes multiple inputs, multiple outputs
 class INode : public std::enable_shared_from_this<INode> {
@@ -120,9 +122,26 @@ class INode : public std::enable_shared_from_this<INode> {
                 return n.evaluated;
             });
     }
-    inline void reset_down() {
+
+    inline std::vector<std::shared_ptr<INode>> get_entrypoints() {
+        std::vector<std::shared_ptr<INode>> entrypoints;
         multi_evaluate(
             {getptr_shared()},
+            [&](auto &current) {
+                if (current.inputs.size() == 0) {
+                    entrypoints.push_back(current.getptr_shared());
+                }
+            },
+            [&](auto &n) {
+                return true;
+            });
+        return entrypoints;
+    }
+
+    inline void reset_connected() {
+        std::vector<std::shared_ptr<INode>> entrypoints = get_entrypoints();
+        multi_evaluate_up(
+            entrypoints,
             [&](auto &current) {
                 std::cout << "resetting " << current.get_label() << std::endl;
                 current._impl_reset_internal();

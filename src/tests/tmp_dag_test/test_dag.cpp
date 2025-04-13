@@ -209,4 +209,71 @@ TestStart(Unittest, "dag_stuff_testing_reset", dag_stuff_testingreset, 1) {
     std::cout << " -- retry evaluate :" << std::endl;
     rho_write->evaluate();
     print_node_states();
+
+    std::cout << " -- reset connected :" << std::endl;
+    rho_op->reset_connected();
+    print_node_states();
 }
+
+class Value : public IDataEdge {
+    std::string name;
+    std::string texsymbol;
+
+    public:
+    float value = {};
+    Value(std::string name, std::string texsymbol) : name(name), texsymbol(texsymbol), value(0) {}
+
+    inline std::string _impl_get_label() { return name; };
+    inline std::string _impl_get_tex_symbol() { return texsymbol; };
+};
+
+class Setter : public INode {
+    public:
+    float &write_back;
+
+    Setter(float &write_back) : write_back(write_back) {}
+
+    void _impl_evaluate_internal() {
+        auto &field = get_input<Value>(0);
+        write_back  = field.value;
+    }
+
+    void _impl_reset_internal() { write_back = {}; }
+
+    inline void set_inputs(std::shared_ptr<Value> value) { __internal_set_inputs({value}); }
+    inline void set_outputs() { __internal_set_outputs({}); }
+
+    inline std::string _impl_get_label() { return "Setter"; }
+    inline std::string _impl_get_node_tex() {
+        std::string field = get_input<Field>(0).get_tex_symbol() + "_a";
+
+        return "\\[" + field + " \\rightarrow field\\]";
+    }
+};
+
+class Getter : public INode {
+    public:
+    float &input;
+
+    Getter(float &input) : input(input) {}
+
+    void _impl_evaluate_internal() {
+        auto &field = get_output<Value>(0);
+        field.value = input;
+    }
+
+    void _impl_reset_internal() {
+        auto &field = get_output<Value>(0);
+        field.value = {};
+    }
+
+    inline void set_inputs() { __internal_set_inputs({}); }
+    inline void set_outputs(std::shared_ptr<Field> field) { __internal_set_outputs({field}); }
+
+    inline std::string _impl_get_label() { return "Getter"; }
+    inline std::string _impl_get_node_tex() {
+        std::string field = get_output<Field>(0).get_tex_symbol() + "_a";
+
+        return "\\[" + field + " \\leftarrow field\\]";
+    }
+};
