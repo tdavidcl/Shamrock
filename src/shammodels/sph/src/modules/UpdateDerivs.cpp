@@ -1551,9 +1551,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         (rho_a / rho_gas_a) * Fab_a * omega_a_rho_a_inv,
                         (rho_b / rho_gas_b) * Fab_b / (rho_b * omega_b));
 
-                    ////////////////////
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////
 
+                    ////////////////////
                     // dt epsilon and dust term in barycenter velocity
+                    ////////////////////
                     for (u32 jdust = 0; jdust < ndust; jdust++) {
                         Tvec deltavja   = deltav(id_a, jdust);
                         Tvec deltavjb   = deltav(id_b, jdust);
@@ -1582,12 +1586,10 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         eps_a_dust_axyz_a += daxyz_a_loc;
 
                         dtepsilon_accum(jdust) += dtepsilon_loc;
-                    }
 
-                    // dt deltav terms
-                    for (u32 idust = 0; idust < ndust; idust++) {
-                        Tvec deltavja = deltav(id_a, idust);
-                        Tvec deltavjb = deltav(id_b, idust);
+                        ////////////////////
+                        // dt deltav terms
+                        ////////////////////
 
                         // we are in sum_b
                         Tvec delta_v_term1 = omega_a_rho_a_inv * pmass * v_ab
@@ -1620,9 +1622,51 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                         Tvec delta_v_term_viscq = {};
 
-                        dtdeltav_accum(idust) += delta_v_term1 + delta_v_term2 + delta_v_term3
+                        dtdeltav_accum(jdust) += delta_v_term1 + delta_v_term2 + delta_v_term3
                                                  + delta_v_term4 + delta_v_term5 + delta_v_term6
                                                  + delta_v_term_viscq;
+
+                        ////////////////////
+                        // Delta v artif visco
+                        ////////////////////
+
+                        Tscal alpha_delta_v = 1;
+
+                        Tscal vsig_delta_v_a = alpha_delta_v * cs_a;
+                        Tscal vsig_delta_v_b = alpha_delta_v * cs_b;
+
+                        Tvec dv_gas_ab = epsilonja * (deltavja - epsilon_a_deltav_a)
+                                         - epsilonjb * (deltavjb - epsilon_b_deltav_b);
+
+                        Tscal q_av_deltav_j_a
+                            = (1. / 2.) * rho_a * vsig_delta_v_a * sham::dot(dv_gas_ab, r_ab_unit);
+
+                        // ask mark about the formula of this one
+                        Tscal q_av_deltav_j_b
+                            = (1. / 2.) * rho_b * vsig_delta_v_b * sham::dot(dv_gas_ab, r_ab_unit);
+
+                        Tvec delta_v_term_av_delta_v = sph_pressure_symetric(
+                            pmass,
+                            rho_a_sq,
+                            rho_b * rho_b,
+                            q_av_deltav_j_a,
+                            q_av_deltav_j_b,
+                            omega_a,
+                            omega_b,
+                            r_ab_unit * Fab_a,
+                            r_ab_unit * Fab_b);
+
+                        dtdeltav_accum(jdust) += delta_v_term_av_delta_v;
+
+                        // how is the sumation over j really performed here ? should the first
+                        // factor be something epsilonja or is epsilon a correct
+                        dtuinta += (1 / (1 - epsilon_a))
+                                   * duint_dt_pressure(
+                                       pmass,
+                                       q_av_deltav_j_a,
+                                       omega_a_rho_a_inv / rho_gas_a,
+                                       dv_gas_ab,
+                                       r_ab_unit * Fab_a);
 
                         // if (id_a == test_part) {
                         //     logger::raw_ln(shambase::format(
@@ -1653,7 +1697,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                 du[id_a]   = dtuinta;
 
                 for (u32 idust = 0; idust < ndust; idust++) {
-                    dtdeltav_accum(idust) -= gas_axyz_a / (1-epsilon_a);
+                    dtdeltav_accum(idust) -= gas_axyz_a / (1 - epsilon_a);
                 }
 
                 for (u32 idust = 0; idust < ndust; idust++) {
