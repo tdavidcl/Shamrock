@@ -14,11 +14,16 @@
  *
  */
 
+#include "shamdag/shamdag.hpp"
 #include <shamdag/INode.hpp>
 #include <shamdag/graph2dot.hpp>
 #include <sstream>
 
-std::string get_node_dot_graph(std::vector<std::shared_ptr<INode>> endpoints) {
+std::string get_node_dot_graph(std::vector<std::shared_ptr<INode>> arg) {
+
+    // this function will return the dot graph will every connected node (aka in eval chain) to the
+    // one supplied in arguments
+    auto endpoints = get_endpoints(arg);
 
     struct Node {
         std::string id;

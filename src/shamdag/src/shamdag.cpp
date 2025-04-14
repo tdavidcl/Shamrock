@@ -16,6 +16,8 @@
 
 #include "shamdag/shamdag.hpp"
 #include "shamdag/INode.hpp"
+#include <unordered_map>
+#include <unordered_set>
 #include <stack>
 
 void multi_evaluate(
@@ -50,8 +52,8 @@ void multi_evaluate(
         if (!unrolled_map[current]) {
             current->on_childrens([&](auto &nchild) {
                 if (condition(nchild)) {
-                    std::cout << "push " << &nchild << " eval = " << nchild.is_evaluated()
-                              << " cd = " << condition(nchild) << std::endl;
+                    // std::cout << "push " << &nchild << " eval = " << nchild.is_evaluated()
+                    //           << " cd = " << condition(nchild) << std::endl;
                     stack.push(&nchild);
                 }
             });
@@ -112,4 +114,43 @@ void multi_evaluate_up(
             stack.pop();
         }
     }
+}
+
+std::vector<std::shared_ptr<INode>> filter_duplicate(std::vector<std::shared_ptr<INode>> nodes) {
+
+    std::unordered_map<INode *, bool> added_map  = {};
+    std::vector<std::shared_ptr<INode>> filtered = {};
+
+    for (auto &n : nodes) {
+        if (bool(n)) {
+            if (!added_map[n.get()]) {
+                added_map[n.get()] = true;
+                filtered.push_back(n);
+            }
+        }
+    }
+
+    return filtered;
+}
+
+std::vector<std::shared_ptr<INode>> get_endpoints(std::vector<std::shared_ptr<INode>> nodes) {
+
+    std::vector<std::shared_ptr<INode>> endpoints = {};
+    for (auto &n : nodes) {
+        auto etmp = n->get_endpoints();
+        endpoints.insert(endpoints.end(), etmp.begin(), etmp.end());
+    }
+
+    return filter_duplicate(endpoints);
+}
+
+std::vector<std::shared_ptr<INode>> get_entrypoints(std::vector<std::shared_ptr<INode>> nodes) {
+
+    std::vector<std::shared_ptr<INode>> entrypoints = {};
+    for (auto &n : nodes) {
+        auto etmp = n->get_entrypoints();
+        entrypoints.insert(entrypoints.end(), etmp.begin(), etmp.end());
+    }
+
+    return filter_duplicate(entrypoints);
 }

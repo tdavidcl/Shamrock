@@ -7,10 +7,13 @@
 //
 // -------------------------------------------------------//
 
+#include "shambase/time.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamdag/INode.hpp"
 #include "shamdag/graph2dot.hpp"
 #include "shamdag/graph2tex.hpp"
 #include "shamdag/shamdag.hpp"
+#include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 #include <unordered_map>
 #include <iostream>
@@ -245,9 +248,8 @@ class Setter : public INode {
 
     inline std::string _impl_get_label() { return "Setter"; }
     inline std::string _impl_get_node_tex() {
-        std::string field = get_input<Field>(0).get_tex_symbol() + "_a";
-
-        return "\\[" + field + " \\rightarrow field\\]";
+        std::string field = get_input<Value>(0).get_tex_symbol();
+        return "\\[" + field + " \\rightarrow value\\]";
     }
 };
 
@@ -268,12 +270,155 @@ class Getter : public INode {
     }
 
     inline void set_inputs() { __internal_set_inputs({}); }
-    inline void set_outputs(std::shared_ptr<Field> field) { __internal_set_outputs({field}); }
+    inline void set_outputs(std::shared_ptr<Value> field) { __internal_set_outputs({field}); }
 
     inline std::string _impl_get_label() { return "Getter"; }
     inline std::string _impl_get_node_tex() {
-        std::string field = get_output<Field>(0).get_tex_symbol() + "_a";
+        std::string field = get_output<Value>(0).get_tex_symbol();
 
-        return "\\[" + field + " \\leftarrow field\\]";
+        return "\\[" + field + " \\leftarrow value\\]";
     }
 };
+
+class Adder : public INode {
+    public:
+    void _impl_evaluate_internal() {
+        auto &a = get_input<Value>(0).value;
+        auto &b = get_input<Value>(1).value;
+        auto &c = get_output<Value>(0).value;
+
+        c = a + b;
+    }
+
+    void _impl_reset_internal() { get_output<Value>(0).value = {}; }
+
+    inline void set_inputs(std::shared_ptr<Value> a, std::shared_ptr<Value> b) {
+        __internal_set_inputs({a, b});
+    }
+    inline void set_outputs(std::shared_ptr<Value> c) { __internal_set_outputs({c}); }
+
+    inline std::string _impl_get_label() { return "Adder"; }
+    inline std::string _impl_get_node_tex() {
+        std::string a = get_input<Value>(0).get_tex_symbol();
+        std::string b = get_input<Value>(1).get_tex_symbol();
+        std::string c = get_output<Value>(0).get_tex_symbol();
+
+        return "\\[" + c + " = " + a + " + " + b + "\\]";
+    }
+};
+
+class Divider : public INode {
+    public:
+    void _impl_evaluate_internal() {
+        auto &a = get_input<Value>(0).value;
+        auto &b = get_input<Value>(1).value;
+        auto &c = get_output<Value>(0).value;
+
+        c = a / b;
+    }
+
+    void _impl_reset_internal() { get_output<Value>(0).value = {}; }
+
+    inline void set_inputs(std::shared_ptr<Value> a, std::shared_ptr<Value> b) {
+        __internal_set_inputs({a, b});
+    }
+    inline void set_outputs(std::shared_ptr<Value> c) { __internal_set_outputs({c}); }
+
+    inline std::string _impl_get_label() { return "Divider"; }
+    inline std::string _impl_get_node_tex() {
+        std::string a = get_input<Value>(0).get_tex_symbol();
+        std::string b = get_input<Value>(1).get_tex_symbol();
+        std::string c = get_output<Value>(0).get_tex_symbol();
+
+        return "\\[" + c + " = \\frac{" + a + "}{" + b + "}\\]";
+    }
+};
+
+TestStart(Unittest, "dag_test1", dag_test1, 1) {
+
+    float a_in   = 1;
+    float b_in   = 2;
+    float d_in   = 3;
+    float result = 0;
+
+    std::shared_ptr<Getter> a_getter = std::make_shared<Getter>(a_in);
+    std::shared_ptr<Getter> b_getter = std::make_shared<Getter>(b_in);
+
+    std::shared_ptr<Value> a = std::make_shared<Value>("a", "a");
+    std::shared_ptr<Value> b = std::make_shared<Value>("b", "b");
+    a_getter->set_outputs(a);
+    b_getter->set_outputs(b);
+
+    std::shared_ptr<Adder> adder = std::make_shared<Adder>();
+
+    std::shared_ptr<Value> c = std::make_shared<Value>("c", "c");
+    adder->set_inputs(a, b);
+    adder->set_outputs(c);
+
+    std::shared_ptr<Getter> d_getter = std::make_shared<Getter>(d_in);
+    std::shared_ptr<Value> d         = std::make_shared<Value>("d", "d");
+    d_getter->set_outputs(d);
+
+    std::shared_ptr<Divider> divider = std::make_shared<Divider>();
+    std::shared_ptr<Value> e         = std::make_shared<Value>("e", "e");
+
+    divider->set_inputs(c, d);
+    divider->set_outputs(e);
+
+    std::shared_ptr<Setter> setter = std::make_shared<Setter>(result);
+    setter->set_inputs(e);
+
+    std::cout << get_node_graph_tex({setter}) << std::endl;
+    std::cout << get_node_dot_graph({setter}) << std::endl;
+
+    setter->evaluate();
+
+    REQUIRE_EQUAL(result, 1);
+}
+
+TestStart(Benchmark, "dag_test1_bench", dag_test1_bench, 1) {
+
+    float a_in   = 1;
+    float b_in   = 2;
+    float d_in   = 3;
+    float result = 0;
+
+    std::shared_ptr<Getter> a_getter = std::make_shared<Getter>(a_in);
+    std::shared_ptr<Getter> b_getter = std::make_shared<Getter>(b_in);
+
+    std::shared_ptr<Value> a = std::make_shared<Value>("a", "a");
+    std::shared_ptr<Value> b = std::make_shared<Value>("b", "b");
+    a_getter->set_outputs(a);
+    b_getter->set_outputs(b);
+
+    std::shared_ptr<Adder> adder = std::make_shared<Adder>();
+
+    std::shared_ptr<Value> c = std::make_shared<Value>("c", "c");
+    adder->set_inputs(a, b);
+    adder->set_outputs(c);
+
+    std::shared_ptr<Getter> d_getter = std::make_shared<Getter>(d_in);
+    std::shared_ptr<Value> d         = std::make_shared<Value>("d", "d");
+    d_getter->set_outputs(d);
+
+    std::shared_ptr<Divider> divider = std::make_shared<Divider>();
+    std::shared_ptr<Value> e         = std::make_shared<Value>("e", "e");
+
+    divider->set_inputs(c, d);
+    divider->set_outputs(e);
+
+    std::shared_ptr<Setter> setter = std::make_shared<Setter>(result);
+    setter->set_inputs(e);
+
+    std::cout << get_node_graph_tex({divider}) << std::endl;
+    std::cout << get_node_dot_graph({divider}) << std::endl;
+
+    shambase::Timer timer;
+    timer.start();
+    setter->evaluate();
+    timer.end();
+
+    shamcomm::logs::raw_ln("time :", timer.get_time_str());
+
+    REQUIRE_EQUAL(result, 1);
+}

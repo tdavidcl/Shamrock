@@ -101,7 +101,7 @@ class INode : public std::enable_shared_from_this<INode> {
         multi_evaluate(
             {getptr_shared()},
             [&](auto &current) {
-                std::cout << "evaluating " << current.get_label() << std::endl;
+                // std::cout << "evaluating " << current.get_label() << std::endl;
                 current._impl_evaluate_internal();
                 current.evaluated = true;
             },
@@ -114,7 +114,7 @@ class INode : public std::enable_shared_from_this<INode> {
         multi_evaluate_up(
             {getptr_shared()},
             [&](auto &current) {
-                std::cout << "resetting " << current.get_label() << std::endl;
+                // std::cout << "resetting " << current.get_label() << std::endl;
                 current._impl_reset_internal();
                 current.evaluated = false;
             },
@@ -136,6 +136,20 @@ class INode : public std::enable_shared_from_this<INode> {
                 return true;
             });
         return entrypoints;
+    }
+    inline std::vector<std::shared_ptr<INode>> get_endpoints() {
+        std::vector<std::shared_ptr<INode>> endpoints;
+        multi_evaluate_up(
+            {getptr_shared()},
+            [&](auto &current) {
+                if (current.outputs.size() == 0) {
+                    endpoints.push_back(current.getptr_shared());
+                }
+            },
+            [&](auto &n) {
+                return true;
+            });
+        return endpoints;
     }
 
     inline void reset_connected() {

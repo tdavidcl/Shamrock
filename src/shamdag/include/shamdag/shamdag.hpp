@@ -32,3 +32,8 @@ void multi_evaluate_up(
     std::vector<std::shared_ptr<INode>> endpoints,
     std::function<void(INode &)> f,
     std::function<bool(INode &)> condition);
+
+std::vector<std::shared_ptr<INode>> filter_duplicate(std::vector<std::shared_ptr<INode>> nodes);
+
+std::vector<std::shared_ptr<INode>> get_endpoints(std::vector<std::shared_ptr<INode>> nodes);
+std::vector<std::shared_ptr<INode>> get_entrypoints(std::vector<std::shared_ptr<INode>> nodes);

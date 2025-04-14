@@ -18,7 +18,12 @@
 #include <shamdag/graph2tex.hpp>
 #include <sstream>
 
-std::string get_node_graph_tex(std::vector<std::shared_ptr<INode>> endpoints) {
+std::string get_node_graph_tex(std::vector<std::shared_ptr<INode>> arg) {
+
+    // this function will return the tex will every connected node (aka in eval chain) to the one
+    // supplied in arguments
+    auto endpoints = get_endpoints(arg);
+
     std::stringstream output;
 
     output << "\\documentclass{article}\n";
