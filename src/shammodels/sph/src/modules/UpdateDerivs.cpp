@@ -1392,17 +1392,17 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
                 u32 test_part = 173727;
 
-                if (id_a == test_part) {
-                    std::cout << "xyz_a = " << xyz_a[0] << " " << xyz_a[1] << " " << xyz_a[2]
-                              << std::endl;
-                    std::cout << "vxyz_a = " << vxyz_a[0] << " " << vxyz_a[1] << " " << vxyz_a[2]
-                              << std::endl;
-                    std::cout << "h_a = " << h_a << std::endl;
-                    std::cout << "u_a = " << u_a << std::endl;
-                    std::cout << "P_a = " << P_a << std::endl;
-                    std::cout << "cs_a = " << cs_a << std::endl;
-                    std::cout << "omega_a = " << omega_a << std::endl;
-                }
+                // if (id_a == test_part) {
+                //     std::cout << "xyz_a = " << xyz_a[0] << " " << xyz_a[1] << " " << xyz_a[2]
+                //               << std::endl;
+                //     std::cout << "vxyz_a = " << vxyz_a[0] << " " << vxyz_a[1] << " " << vxyz_a[2]
+                //               << std::endl;
+                //     std::cout << "h_a = " << h_a << std::endl;
+                //     std::cout << "u_a = " << u_a << std::endl;
+                //     std::cout << "P_a = " << P_a << std::endl;
+                //     std::cout << "cs_a = " << cs_a << std::endl;
+                //     std::cout << "omega_a = " << omega_a << std::endl;
+                // }
 
                 // accumulators
                 Tvec gas_axyz_a{0, 0, 0};
@@ -1510,21 +1510,21 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         r_ab_unit * Fab_a,
                         r_ab_unit * Fab_b);
 
-                    if (id_a == test_part) {
-                        std::cout << "pmass = " << pmass << std::endl;
-                        std::cout << "rho_a_sq = " << rho_a_sq << std::endl;
-                        std::cout << "rho_b = " << rho_b << std::endl;
-                        std::cout << "AV_P_a = " << AV_P_a << std::endl;
-                        std::cout << "AV_P_b = " << AV_P_b << std::endl;
-                        std::cout << "qa_ab = " << qa_ab << std::endl;
-                        std::cout << "qb_ab = " << qb_ab << std::endl;
-                        std::cout << "omega_a = " << omega_a << std::endl;
-                        std::cout << "omega_b = " << omega_b << std::endl;
-                        std::cout << "r_ab_unit = " << r_ab_unit[0] << " " << r_ab_unit[1] << " "
-                                  << r_ab_unit[2] << std::endl;
-                        std::cout << "Fab_a = " << Fab_a << std::endl;
-                        std::cout << "Fab_b = " << Fab_b << std::endl;
-                    }
+                    // if (id_a == test_part) {
+                    //     std::cout << "pmass = " << pmass << std::endl;
+                    //     std::cout << "rho_a_sq = " << rho_a_sq << std::endl;
+                    //     std::cout << "rho_b = " << rho_b << std::endl;
+                    //     std::cout << "AV_P_a = " << AV_P_a << std::endl;
+                    //     std::cout << "AV_P_b = " << AV_P_b << std::endl;
+                    //     std::cout << "qa_ab = " << qa_ab << std::endl;
+                    //     std::cout << "qb_ab = " << qb_ab << std::endl;
+                    //     std::cout << "omega_a = " << omega_a << std::endl;
+                    //     std::cout << "omega_b = " << omega_b << std::endl;
+                    //     std::cout << "r_ab_unit = " << r_ab_unit[0] << " " << r_ab_unit[1] << " "
+                    //               << r_ab_unit[2] << std::endl;
+                    //     std::cout << "Fab_a = " << Fab_a << std::endl;
+                    //     std::cout << "Fab_b = " << Fab_b << std::endl;
+                    // }
                     /////////////////////////////////////////////////////////////////////
                     /////////////////////////////////////////////////////////////////////
                     /////////////////////////////////////////////////////////////////////
@@ -1620,17 +1620,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                               * ((deltavja - epsilon_a_deltav_a) - (deltavjb - epsilon_b_deltav_b))
                               * sham::dot(deltavja, r_ab_unit * Fab_a);
 
-                        Tvec delta_v_term_viscq = {};
-
-                        dtdeltav_accum(jdust) += delta_v_term1 + delta_v_term2 + delta_v_term3
-                                                 + delta_v_term4 + delta_v_term5 + delta_v_term6
-                                                 + delta_v_term_viscq;
-
-                        ////////////////////
-                        // Delta v artif visco
-                        ////////////////////
-
-                        Tscal alpha_delta_v = 1;
+                        Tscal alpha_delta_v     = 1;
 
                         Tscal vsig_delta_v_a = alpha_delta_v * cs_a;
                         Tscal vsig_delta_v_b = alpha_delta_v * cs_b;
@@ -1645,28 +1635,31 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                         Tscal q_av_deltav_j_b
                             = (1. / 2.) * rho_b * vsig_delta_v_b * sham::dot(dv_gas_ab, r_ab_unit);
 
-                        Tvec delta_v_term_av_delta_v = sph_pressure_symetric(
-                            pmass,
-                            rho_a_sq,
-                            rho_b * rho_b,
-                            q_av_deltav_j_a,
-                            q_av_deltav_j_b,
-                            omega_a,
-                            omega_b,
-                            r_ab_unit * Fab_a,
-                            r_ab_unit * Fab_b);
+                        Tvec delta_v_term_viscq = {};
+                        //delta_v_term_viscq = sph_pressure_symetric(
+                        //    pmass,
+                        //    rho_a_sq,
+                        //    rho_b * rho_b,
+                        //    q_av_deltav_j_a,
+                        //    q_av_deltav_j_b,
+                        //    omega_a,
+                        //    omega_b,
+                        //    r_ab_unit * Fab_a,
+                        //    r_ab_unit * Fab_b);
 
-                        dtdeltav_accum(jdust) += delta_v_term_av_delta_v;
+                        dtdeltav_accum(jdust) += delta_v_term1 + delta_v_term2 + delta_v_term3
+                                                 + delta_v_term4 + delta_v_term5 + delta_v_term6
+                                                 + delta_v_term_viscq;
 
                         // how is the sumation over j really performed here ? should the first
                         // factor be something epsilonja or is epsilon a correct
-                        dtuinta += (1 / (1 - epsilon_a))
-                                   * duint_dt_pressure(
-                                       pmass,
-                                       q_av_deltav_j_a,
-                                       omega_a_rho_a_inv / rho_gas_a,
-                                       dv_gas_ab,
-                                       r_ab_unit * Fab_a);
+                        //dtuinta += (1 / (1 - epsilon_a))
+                        //           * duint_dt_pressure(
+                        //               pmass,
+                        //               q_av_deltav_j_a,
+                        //               omega_a_rho_a_inv / rho_gas_a,
+                        //               dv_gas_ab,
+                        //               r_ab_unit * Fab_a);
 
                         // if (id_a == test_part) {
                         //     logger::raw_ln(shambase::format(
@@ -1684,14 +1677,15 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                     }
                 });
 
-                if (id_a == test_part) {
-                    std::cout << "epsilon_a: " << epsilon_a << std::endl;
-                    std::cout << "eps_a_dust_axyz_a: " << eps_a_dust_axyz_a[0] << " "
-                              << eps_a_dust_axyz_a[1] << " " << eps_a_dust_axyz_a[2] << std::endl;
-                    std::cout << "gas_axyz_a: " << gas_axyz_a[0] << " " << gas_axyz_a[1] << " "
-                              << gas_axyz_a[2] << std::endl;
-                    std::cout << "dtuinta: " << dtuinta << std::endl;
-                }
+                // if (id_a == test_part) {
+                //     std::cout << "epsilon_a: " << epsilon_a << std::endl;
+                //     std::cout << "eps_a_dust_axyz_a: " << eps_a_dust_axyz_a[0] << " "
+                //               << eps_a_dust_axyz_a[1] << " " << eps_a_dust_axyz_a[2] <<
+                //               std::endl;
+                //     std::cout << "gas_axyz_a: " << gas_axyz_a[0] << " " << gas_axyz_a[1] << " "
+                //               << gas_axyz_a[2] << std::endl;
+                //     std::cout << "dtuinta: " << dtuinta << std::endl;
+                // }
 
                 axyz[id_a] = gas_axyz_a + eps_a_dust_axyz_a;
                 du[id_a]   = dtuinta;
@@ -1723,9 +1717,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                                      + epsilon(id_a, jdust) * dtdeltav_accum(jdust);
                         }
 
-                        std::cout << "id_a: " << id_a << ", idust: " << idust
-                                  << ", dtrhoj: " << dtrhoj << ", dtvdj: " << dtvdj[0] << ", "
-                                  << dtvdj[1] << ", " << dtvdj[2] << std::endl;
+                        // std::cout << "id_a: " << id_a << ", idust: " << idust
+                        //           << ", dtrhoj: " << dtrhoj << ", dtvdj: " << dtvdj[0] << ", "
+                        //           << dtvdj[1] << ", " << dtvdj[2] << std::endl;
                     }
                 }
             });
