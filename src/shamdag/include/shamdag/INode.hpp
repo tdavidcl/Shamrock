@@ -166,6 +166,8 @@ class INode : public std::enable_shared_from_this<INode> {
             });
     }
 
+    inline void report_data_stealing() { evaluated = false; }
+
     template<class T>
     T &get_input(int slot) {
         return shambase::get_check_ref(std::dynamic_pointer_cast<T>(inputs.at(slot)));

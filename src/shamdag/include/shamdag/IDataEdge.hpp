@@ -57,6 +57,8 @@ class IDataEdge {
         f(*spt_c, *spt_p);
     }
 
+    void report_data_stealing();
+
     inline std::string get_label() { return _impl_get_label(); }
 
     inline std::string get_tex_symbol() { return _impl_get_tex_symbol(); }
