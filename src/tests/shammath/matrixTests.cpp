@@ -13,31 +13,19 @@
 TestStart(Unittest, "shammath/matrix::mat_inv_33", test_inv_33, 1) {
 
     shammath::mat<f32, 3, 3> mat{
-        //clang-format off
-        0,
-        -3,
-        -2,
-        1,
-        -4,
-        -2,
-        -3,
-        4,
-        1
-        //clang-format on
+        // clang-format off
+         0, -3, -2,
+         1, -4, -2,
+        -3,  4,  1
+        // clang-format on
     };
 
     shammath::mat<f32, 3, 3> expected_inverse{
-        //clang-format off
-        4,
-        -5,
-        -2,
-        5,
-        -6,
-        -2,
-        -8,
-        9,
-        3
-        //clang-format on
+        // clang-format off
+         4, -5, -2,
+         5, -6, -2,
+        -8,  9,  3
+        // clang-format on
     };
 
     shammath::mat<f32, 3, 3> result;
@@ -49,31 +37,19 @@ TestStart(Unittest, "shammath/matrix::mat_inv_33", test_inv_33, 1) {
 TestStart(Unittest, "shammath/matrix::mat_prod", test_mat_prod, 1) {
 
     shammath::mat<f32, 3, 3> mat{
-        //clang-format off
-        0,
-        -3,
-        -2,
-        1,
-        -4,
-        -2,
-        -3,
-        4,
-        1
-        //clang-format on
+        // clang-format off
+         0, -3, -2,
+         1, -4, -2,
+        -3,  4,  1
+        // clang-format on
     };
 
     shammath::mat<f32, 3, 3> inverse{
-        //clang-format off
-        4,
-        -5,
-        -2,
-        5,
-        -6,
-        -2,
-        -8,
-        9,
-        3
-        //clang-format on
+        // clang-format off
+         4, -5, -2,
+         5, -6, -2,
+        -8,  9,  3
+        // clang-format on
     };
 
     shammath::mat<f32, 3, 3> id = shammath::mat_identity<f32, 3>();
