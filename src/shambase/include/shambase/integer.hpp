@@ -50,6 +50,11 @@ namespace shambase {
         return v && !(v & (v - 1));
     }
 
+    template<class T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+    inline constexpr T round_up_multiple(T value, T multiple) {
+        return ((value + multiple - 1) / multiple) * multiple;
+    }
+
     /**
      * @brief check if the sign of the two integers differs
      * Source : https://graphics.stanford.edu/~seander/bithacks.html
