@@ -17,9 +17,83 @@
  */
 
 #include "shambackends/sycl.hpp"
+#include <experimental/mdspan>
 #include <array>
 
 namespace shammath {
+
+    template<class T, int m, int n>
+    class mat {
+        public:
+        std::array<T, m * n> data;
+        inline constexpr auto get_mdspan() {
+            return std::mdspan<T, std::extents<size_t, m, n>>(data.data());
+        }
+
+        inline constexpr T &operator()(int i, int j) { return get_mdspan()(i, j); }
+
+        bool operator==(const mat<T, m, n> &other) { return data == other.data; }
+    };
+
+    template<class T, int n>
+    inline constexpr mat<T, n, n> mat_identity() {
+        mat<T, n, n> res{0};
+        for (int i = 0; i < n; i++) {
+            res(i, i) = 1;
+        }
+        return res;
+    }
+
+    template<class T, class SizeType, class Layout, class Accessor>
+    inline void mat_inv_33(
+        const std::mdspan<T, std::extents<SizeType, 3, 3>, Layout, Accessor> &input,
+        const std::mdspan<T, std::extents<SizeType, 3, 3>, Layout, Accessor> &output) {
+
+        T &a00 = input(0, 0);
+        T &a10 = input(1, 0);
+        T &a20 = input(2, 0);
+
+        T &a01 = input(0, 1);
+        T &a11 = input(1, 1);
+        T &a21 = input(2, 1);
+
+        T &a02 = input(0, 2);
+        T &a12 = input(1, 2);
+        T &a22 = input(2, 2);
+
+        T det
+            = (-a02 * a11 * a20 + a01 * a12 * a20 + a02 * a10 * a21 - a00 * a12 * a21
+               - a01 * a10 * a22 + a00 * a11 * a22);
+
+        output(0, 0) = (-a12 * a21 + a11 * a22) / det;
+        output(1, 0) = (a12 * a20 - a10 * a22) / det;
+        output(2, 0) = (-a11 * a20 + a10 * a21) / det;
+
+        output(0, 1) = (a02 * a21 - a01 * a22) / det;
+        output(1, 1) = (-a02 * a20 + a00 * a22) / det;
+        output(2, 1) = (a01 * a20 - a00 * a21) / det;
+
+        output(0, 2) = (-a02 * a11 + a01 * a12) / det;
+        output(1, 2) = (a02 * a10 - a00 * a12) / det;
+        output(2, 2) = (-a01 * a10 + a00 * a11) / det;
+    }
+
+    template<class T, class Extents, class Layout, class Accessor>
+    inline void mat_prod(
+        const std::mdspan<T, Extents, Layout, Accessor> &input1,
+        const std::mdspan<T, Extents, Layout, Accessor> &input2,
+        const std::mdspan<T, Extents, Layout, Accessor> &output) {
+
+        for (int i = 0; i < input1.extent(0); i++) {
+            for (int j = 0; j < input2.extent(1); j++) {
+                T sum = 0;
+                for (int k = 0; k < input1.extent(1); k++) {
+                    sum += input1(i, k) * input2(k, j);
+                }
+                output(i, j) = sum;
+            }
+        }
+    }
 
     template<class T>
     inline auto
