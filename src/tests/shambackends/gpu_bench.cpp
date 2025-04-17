@@ -51,6 +51,58 @@ namespace sham {
         public:
         alignas(align) T _st[effective_size];
     };
+
+    template<class T, class accessor>
+    class bind_vec {
+        public:
+        accessor acc;
+        int & size;
+        
+        T& operator()(int i) { return acc[i]; }
+        const T& operator()(int i) const { return acc[i]; }
+
+    };
+
+    template<class T, class accessor>
+    class bind_mat {
+        public:
+        accessor acc;
+        int & cols;
+        int & rows;
+        
+        T& operator()(int i, int j) { return acc[i*cols+j]; }
+        const T& operator()(int i, int j) const { return acc[i*cols+j]; }
+
+    };
+
+    // To be replaced by mdspan asap
+    namespace mdspan {
+        template<typename T>
+        class owning_pointer {
+            public:
+            T* acc;
+            T& operator[](int i) { return acc[i]; }
+            const T& operator[](int i) const { return acc[i]; }
+        };
+
+        template<typename T>
+        class ref_pointer {
+            public:
+            T*  & acc;
+            T& operator[](int i) { return acc[i]; }
+            const T& operator[](int i) const { return acc[i]; }
+        };
+
+        template<typename T, class accessor>
+        class ref_custom_accessor {
+            public:
+            accessor & acc;
+            T& operator[](int i) { return acc[i]; }
+            const T& operator[](int i) const { return acc[i]; }
+        };
+
+        
+    }
 } // namespace sham
 
 template<class T>
