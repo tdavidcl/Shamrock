@@ -28,7 +28,7 @@
 namespace shammath {
 
     template<class T, class Extents, class Layout, class Accessor>
-    inline void set_identity(const std::mdspan<T, Extents, Layout, Accessor> &input1) {
+    inline void mat_set_identity(const std::mdspan<T, Extents, Layout, Accessor> &input1) {
 
         SHAM_ASSERT(input1.extent(0) == input1.extent(1));
 
@@ -155,7 +155,7 @@ namespace shammath {
     template<class T, int n>
     inline constexpr mat<T, n, n> mat_identity() {
         mat<T, n, n> res{};
-        set_identity(res.get_mdspan());
+        mat_set_identity(res.get_mdspan());
         return res;
     }
 
