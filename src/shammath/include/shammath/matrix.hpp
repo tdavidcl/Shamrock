@@ -20,7 +20,124 @@
 #include <experimental/mdspan>
 #include <array>
 
+// the legendary trick to force a compilation error for missing ;
+#define SHAM_ASSERT(x)                                                                             \
+    do {                                                                                           \
+    } while (false)
+
 namespace shammath {
+
+    template<class T, class Extents, class Layout, class Accessor>
+    inline void set_identity(const std::mdspan<T, Extents, Layout, Accessor> &input1) {
+
+        SHAM_ASSERT(input1.extent(0) == input1.extent(1));
+
+        for (int i = 0; i < input1.extent(0); i++) {
+            for (int j = 0; j < input1.extent(1); j++) {
+                input1(i, j) = (i == j) ? 1 : 0;
+            }
+        }
+    }
+
+    template<class T, class Extents, class Layout, class Accessor>
+    inline void mat_copy(
+        const std::mdspan<T, Extents, Layout, Accessor> &input,
+        const std::mdspan<T, Extents, Layout, Accessor> &output) {
+
+        for (int i = 0; i < input.extent(0); i++) {
+            for (int j = 0; j < input.extent(1); j++) {
+                output(i, j) = input(i, j);
+            }
+        }
+    }
+
+    template<
+        class T,
+        class Extents1,
+        class Extents2,
+        class Extents3,
+        class Layout1,
+        class Layout2,
+        class Layout3,
+        class Accessor1,
+        class Accessor2,
+        class Accessor3>
+    inline void mat_add(
+        const std::mdspan<T, Extents1, Layout1, Accessor1> &input1,
+        const std::mdspan<T, Extents2, Layout2, Accessor2> &input2,
+        const std::mdspan<T, Extents3, Layout3, Accessor3> &output) {
+
+        SHAM_ASSERT(input1.extent(0) == output.extent(0));
+        SHAM_ASSERT(input1.extent(1) == output.extent(1));
+        SHAM_ASSERT(input1.extent(0) == input2.extent(0));
+        SHAM_ASSERT(input1.extent(1) == input2.extent(1));
+
+        for (int i = 0; i < input1.extent(0); i++) {
+            for (int j = 0; j < input1.extent(1); j++) {
+                output(i, j) = input1(i, j) + input2(i, j);
+            }
+        }
+    }
+
+    template<
+        class T,
+        class Extents1,
+        class Extents2,
+        class Extents3,
+        class Layout1,
+        class Layout2,
+        class Layout3,
+        class Accessor1,
+        class Accessor2,
+        class Accessor3>
+    inline void mat_sub(
+        const std::mdspan<T, Extents1, Layout1, Accessor1> &input1,
+        const std::mdspan<T, Extents2, Layout2, Accessor2> &input2,
+        const std::mdspan<T, Extents3, Layout3, Accessor3> &output) {
+
+        SHAM_ASSERT(input1.extent(0) == output.extent(0));
+        SHAM_ASSERT(input1.extent(1) == output.extent(1));
+        SHAM_ASSERT(input1.extent(0) == input2.extent(0));
+        SHAM_ASSERT(input1.extent(1) == input2.extent(1));
+
+        for (int i = 0; i < input1.extent(0); i++) {
+            for (int j = 0; j < input1.extent(1); j++) {
+                output(i, j) = input1(i, j) - input2(i, j);
+            }
+        }
+    }
+
+    template<
+        class T,
+        class Extents1,
+        class Extents2,
+        class Extents3,
+        class Layout1,
+        class Layout2,
+        class Layout3,
+        class Accessor1,
+        class Accessor2,
+        class Accessor3>
+    inline void mat_prod(
+        const std::mdspan<T, Extents1, Layout1, Accessor1> &input1,
+        const std::mdspan<T, Extents2, Layout2, Accessor2> &input2,
+        const std::mdspan<T, Extents3, Layout3, Accessor3> &output) {
+
+        SHAM_ASSERT(input1.extent(0) == output.extent(0));
+        SHAM_ASSERT(input1.extent(1) == input2.extent(0));
+        SHAM_ASSERT(input2.extent(1) == output.extent(1));
+
+        // output_ij = mat1_ik mat2_jk
+        for (int i = 0; i < input1.extent(0); i++) {
+            for (int j = 0; j < input2.extent(1); j++) {
+                T sum = 0;
+                for (int k = 0; k < input1.extent(1); k++) {
+                    sum += input1(i, k) * input2(k, j);
+                }
+                output(i, j) = sum;
+            }
+        }
+    }
 
     template<class T, int m, int n>
     class mat {
@@ -37,10 +154,8 @@ namespace shammath {
 
     template<class T, int n>
     inline constexpr mat<T, n, n> mat_identity() {
-        mat<T, n, n> res{0};
-        for (int i = 0; i < n; i++) {
-            res(i, i) = 1;
-        }
+        mat<T, n, n> res{};
+        set_identity(res.get_mdspan());
         return res;
     }
 
@@ -76,23 +191,6 @@ namespace shammath {
         output(0, 2) = (-a02 * a11 + a01 * a12) / det;
         output(1, 2) = (a02 * a10 - a00 * a12) / det;
         output(2, 2) = (-a01 * a10 + a00 * a11) / det;
-    }
-
-    template<class T, class Extents, class Layout, class Accessor>
-    inline void mat_prod(
-        const std::mdspan<T, Extents, Layout, Accessor> &input1,
-        const std::mdspan<T, Extents, Layout, Accessor> &input2,
-        const std::mdspan<T, Extents, Layout, Accessor> &output) {
-
-        for (int i = 0; i < input1.extent(0); i++) {
-            for (int j = 0; j < input2.extent(1); j++) {
-                T sum = 0;
-                for (int k = 0; k < input1.extent(1); k++) {
-                    sum += input1(i, k) * input2(k, j);
-                }
-                output(i, j) = sum;
-            }
-        }
     }
 
     template<class T>
