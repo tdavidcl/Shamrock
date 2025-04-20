@@ -8,6 +8,7 @@
 // -------------------------------------------------------//
 
 #include "shammath/matrix.hpp"
+#include "shammath/matrix_op.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 
