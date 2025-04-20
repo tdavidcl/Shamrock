@@ -159,7 +159,7 @@ namespace shammath {
         class Accessor1,
         class Accessor2,
         class Accessor3>
-    inline void mat_add(
+    inline void mat_plus(
         const std::mdspan<T, Extents1, Layout1, Accessor1> &input1,
         const std::mdspan<T, Extents2, Layout2, Accessor2> &input2,
         const std::mdspan<T, Extents3, Layout3, Accessor3> &output) {
@@ -177,15 +177,47 @@ namespace shammath {
     }
 
     /**
+     * @brief Add a matrix to another matrix element-wise and store the result in the first matrix.
+     *
+     * @param inout The matrix to be updated with the element-wise addition result.
+     * @param matb The matrix to add to the first matrix.
+     *
+     * @details This function performs element-wise addition of the second matrix
+     * to the first matrix, modifying the first matrix with the result. The matrices
+     * must have the same dimensions.
+     */
+    template<
+        class T,
+        class Extents1,
+        class Extents2,
+        class Layout1,
+        class Layout2,
+        class Accessor1,
+        class Accessor2>
+    inline void mat_plus_equal(
+        const std::mdspan<T, Extents1, Layout1, Accessor1> &inout,
+        const std::mdspan<T, Extents2, Layout2, Accessor2> &matb) {
+
+        SHAM_ASSERT(inout.extent(0) == inout.extent(0));
+        SHAM_ASSERT(inout.extent(1) == inout.extent(1));
+
+        for (int i = 0; i < inout.extent(0); i++) {
+            for (int j = 0; j < inout.extent(1); j++) {
+                inout(i, j) += matb(i, j);
+            }
+        }
+    }
+
+    /**
      * @brief Subtract two matrices element-wise.
      *
      * @param input1 The first input matrix.
      * @param input2 The second input matrix.
      * @param output The output matrix to store the result.
      *
-     * @details This function performs element-wise subtraction of two matrices
-     * and stores the result in the output matrix. The dimensions of both
-     * input matrices and the output matrix must be the same.
+     * @details This function performs element-wise subtraction of the second matrix
+     * from the first matrix and stores the result in the output matrix. The dimensions
+     * of both input matrices and the output matrix must be the same.
      */
     template<
         class T,
@@ -211,6 +243,39 @@ namespace shammath {
         for (int i = 0; i < input1.extent(0); i++) {
             for (int j = 0; j < input1.extent(1); j++) {
                 output(i, j) = input1(i, j) - input2(i, j);
+            }
+        }
+    }
+
+    /**
+     * @brief Subtract a matrix from another matrix element-wise and store the result in the first
+     * matrix.
+     *
+     * @param inout The matrix to be updated with the element-wise subtraction result.
+     * @param matb The matrix to subtract from the first matrix.
+     *
+     * @details This function performs element-wise subtraction of the second matrix
+     * from the first matrix, modifying the first matrix with the result. The matrices
+     * must have the same dimensions.
+     */
+    template<
+        class T,
+        class Extents1,
+        class Extents2,
+        class Layout1,
+        class Layout2,
+        class Accessor1,
+        class Accessor2>
+    inline void mat_sub_equal(
+        const std::mdspan<T, Extents1, Layout1, Accessor1> &inout,
+        const std::mdspan<T, Extents2, Layout2, Accessor2> &matb) {
+
+        SHAM_ASSERT(inout.extent(0) == inout.extent(0));
+        SHAM_ASSERT(inout.extent(1) == inout.extent(1));
+
+        for (int i = 0; i < inout.extent(0); i++) {
+            for (int j = 0; j < inout.extent(1); j++) {
+                inout(i, j) -= matb(i, j);
             }
         }
     }
