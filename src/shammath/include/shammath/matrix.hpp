@@ -44,4 +44,24 @@ namespace shammath {
         return res;
     }
 
+    template<class T, int n>
+    class vec {
+        public:
+        std::array<T, n> data;
+        inline constexpr auto get_mdspan() {
+            return std::mdspan<T, std::extents<size_t, n>>(data.data());
+        }
+
+        inline constexpr auto get_mdspan_mat_col() {
+            return std::mdspan<T, std::extents<size_t, n, 1>>(data.data());
+        }
+        inline constexpr auto get_mdspan_mat_row() {
+            return std::mdspan<T, std::extents<size_t, 1, n>>(data.data());
+        }
+
+        inline constexpr T &operator[](int i) { return get_mdspan()(i); }
+
+        bool operator==(const vec<T, n> &other) { return data == other.data; }
+    };
+
 } // namespace shammath

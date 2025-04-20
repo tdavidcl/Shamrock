@@ -62,6 +62,38 @@ TestStart(Unittest, "shammath/matrix::mat_prod", test_mat_prod, 1) {
     REQUIRE_EQUAL(result.data, id.data);
 }
 
+TestStart(Unittest, "shammath/matrix::mat_prod_vec", test_mat_prod_vec, 1) {
+
+    shammath::mat<f32, 3, 3> mat{
+        // clang-format off
+         4, -5, -2,
+         5, -6, -2,
+        -8,  9,  3
+        // clang-format on
+    };
+
+    shammath::vec<f32, 3> vec{
+        // clang-format off
+          0,
+         -3,
+         -2
+        // clang-format on
+    };
+
+    shammath::vec<f32, 3> result;
+    shammath::mat_prod(mat.get_mdspan(), vec.get_mdspan_mat_col(), result.get_mdspan_mat_col());
+
+    shammath::vec<f32, 3> expected_result{
+        // clang-format off
+         19,
+         22,
+        -33
+        // clang-format on
+    };
+
+    REQUIRE_EQUAL(result.data, expected_result.data);
+}
+
 TestStart(Unittest, "shammath/matrix::mat_add", test_mat_add, 1) {
 
     shammath::mat<f32, 3, 3> mat1{
