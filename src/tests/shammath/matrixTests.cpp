@@ -189,6 +189,37 @@ TestStart(Unittest, "shammath/matrix::mat_sub", test_mat_sub, 1) {
     REQUIRE_EQUAL(result.data, expected_result.data);
 }
 
+TestStart(Unittest, "shammath/matrix::mat_sub_equal", test_mat_sub_equal, 1) {
+
+    shammath::mat<f32, 3, 3> mat1{
+        // clang-format off
+         0, -3, -2,
+         1, -4, -2,
+        -3,  4,  1
+        // clang-format on
+    };
+
+    shammath::mat<f32, 3, 3> mat2{
+        // clang-format off
+         4, -5, -2,
+         5, -6, -2,
+        -8,  9,  3
+        // clang-format on
+    };
+
+    shammath::mat_sub_equal(mat1.get_mdspan(), mat2.get_mdspan());
+
+    shammath::mat<f32, 3, 3> expected_result{
+        // clang-format off
+        -4,  2,  0,
+        -4,  2,  0,
+         5, -5, -2
+        // clang-format on
+    };
+
+    REQUIRE_EQUAL(mat1.data, expected_result.data);
+}
+
 TestStart(Unittest, "shammath/matrix::mat_set_identity", test_mat_set_identity, 1) {
 
     shammath::mat<f32, 3, 3> mat{
