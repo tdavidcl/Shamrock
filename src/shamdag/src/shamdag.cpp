@@ -70,12 +70,12 @@ void multi_evaluate(
 }
 
 void multi_evaluate_up(
-    std::vector<std::shared_ptr<INode>> endpoints,
+    std::vector<std::shared_ptr<INode>> entrypoint,
     std::function<void(INode &)> f,
     std::function<bool(INode &)> condition) {
 
     std::stack<INode *> stack;
-    for (auto &n : endpoints) {
+    for (auto &n : entrypoint) {
         auto &ref = shambase::get_check_ref(n);
         if (condition(ref)) {
             stack.push(&ref);
