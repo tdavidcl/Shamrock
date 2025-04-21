@@ -33,7 +33,7 @@ TestStart(Unittest, "shammath/matrix::mat_inv_33", test_inv_33, 1) {
     shammath::mat<f32, 3, 3> result;
     shammath::mat_inv_33(mat.get_mdspan(), result.get_mdspan());
 
-    REQUIRE(result == expected_inverse);
+    REQUIRE_EQUAL(result.data, expected_inverse.data);
 }
 
 TestStart(Unittest, "shammath/matrix::mat_prod", test_mat_prod, 1) {
@@ -94,7 +94,7 @@ TestStart(Unittest, "shammath/matrix::mat_prod_vec", test_mat_prod_vec, 1) {
     REQUIRE_EQUAL(result.data, expected_result.data);
 }
 
-TestStart(Unittest, "shammath/matrix::mat_add", test_mat_add, 1) {
+TestStart(Unittest, "shammath/matrix::mat_plus", test_mat_plus, 1) {
 
     shammath::mat<f32, 3, 3> mat1{
         // clang-format off
@@ -113,7 +113,7 @@ TestStart(Unittest, "shammath/matrix::mat_add", test_mat_add, 1) {
     };
 
     shammath::mat<f32, 3, 3> result;
-    shammath::mat_add(mat1.get_mdspan(), mat2.get_mdspan(), result.get_mdspan());
+    shammath::mat_plus(mat1.get_mdspan(), mat2.get_mdspan(), result.get_mdspan());
 
     shammath::mat<f32, 3, 3> expected_result{
         // clang-format off
@@ -123,7 +123,38 @@ TestStart(Unittest, "shammath/matrix::mat_add", test_mat_add, 1) {
         // clang-format on
     };
 
-    REQUIRE(result == expected_result);
+    REQUIRE_EQUAL(result.data, expected_result.data);
+}
+
+TestStart(Unittest, "shammath/matrix::mat_plus_equal", test_mat_plus_equal, 1) {
+
+    shammath::mat<f32, 3, 3> mat1{
+        // clang-format off
+         0, -3, -2,
+         1, -4, -2,
+        -3,  4,  1
+        // clang-format on
+    };
+
+    shammath::mat<f32, 3, 3> mat2{
+        // clang-format off
+         4, -5, -2,
+         5, -6, -2,
+        -8,  9,  3
+        // clang-format on
+    };
+
+    shammath::mat_plus_equal(mat1.get_mdspan(), mat2.get_mdspan());
+
+    shammath::mat<f32, 3, 3> expected_result{
+        // clang-format off
+          4,  -8, -4,
+          6, -10, -4,
+        -11,  13,  4
+        // clang-format on
+    };
+
+    REQUIRE(mat1 == expected_result);
 }
 
 TestStart(Unittest, "shammath/matrix::mat_sub", test_mat_sub, 1) {
@@ -155,7 +186,7 @@ TestStart(Unittest, "shammath/matrix::mat_sub", test_mat_sub, 1) {
         // clang-format on
     };
 
-    REQUIRE(result == expected_result);
+    REQUIRE_EQUAL(result.data, expected_result.data);
 }
 
 TestStart(Unittest, "shammath/matrix::mat_set_identity", test_mat_set_identity, 1) {
@@ -179,5 +210,5 @@ TestStart(Unittest, "shammath/matrix::mat_set_identity", test_mat_set_identity, 
         // clang-format on
     };
 
-    REQUIRE(result == expected_result);
+    REQUIRE_EQUAL(result.data, expected_result.data);
 }

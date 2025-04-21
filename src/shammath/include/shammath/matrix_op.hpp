@@ -40,7 +40,7 @@ namespace shammath {
     template<class T, class Extents, class Layout, class Accessor, class Func>
     inline void mat_set_vals(const std::mdspan<T, Extents, Layout, Accessor> &input, Func &&func) {
 
-        shambase::check_functor_signature<T(int, int)>(func);
+        shambase::check_functor_signature<T, int, int>(func);
 
         for (int i = 0; i < input.extent(0); i++) {
             for (int j = 0; j < input.extent(1); j++) {
@@ -66,7 +66,7 @@ namespace shammath {
     inline void
     mat_update_vals(const std::mdspan<T, Extents, Layout, Accessor> &input, Func &&func) {
 
-        shambase::check_functor_signature<void(T &, int, int)>(func);
+        shambase::check_functor_signature<void, T &, int, int>(func);
 
         for (int i = 0; i < input.extent(0); i++) {
             for (int j = 0; j < input.extent(1); j++) {
@@ -91,8 +91,8 @@ namespace shammath {
 
         SHAM_ASSERT(input1.extent(0) == input1.extent(1));
 
-        mat_set_vals(input1, [](auto i, auto j) {
-            return (i == j) ? T(1) : T(0);
+        mat_set_vals(input1, [](auto i, auto j) -> T {
+            return (i == j) ? 1 : 0;
         });
     }
 
