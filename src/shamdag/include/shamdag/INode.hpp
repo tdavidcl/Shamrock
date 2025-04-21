@@ -97,6 +97,9 @@ class INode : public std::enable_shared_from_this<INode> {
         __internal_set_outputs({});
     }
 
+    /**
+     * @brief Evaluate this node and all unevaluated nodes below it in a depth-first manner.
+     */
     inline void evaluate() {
         multi_evaluate(
             {getptr_shared()},
@@ -110,6 +113,11 @@ class INode : public std::enable_shared_from_this<INode> {
             });
     }
 
+    /**
+     * @brief Resets this node and all evaluated nodes above it in the graph.
+     *
+     * @note This function will reset the nodes in the reverse order of evaluation.
+     */
     inline void reset_up() {
         multi_evaluate_up(
             {getptr_shared()},
@@ -123,6 +131,14 @@ class INode : public std::enable_shared_from_this<INode> {
             });
     }
 
+    /**
+     * @brief Retrieves all entrypoint nodes in the subgraph given by the current node.
+     *
+     * @return A vector of entrypoint nodes, with duplicates filtered out.
+     *
+     * Entrypoints are nodes that have no inputs, indicating the starting points
+     * in a directed acyclic graph (DAG).
+     */
     inline std::vector<std::shared_ptr<INode>> get_entrypoints() {
         std::vector<std::shared_ptr<INode>> entrypoints;
         multi_evaluate(
@@ -137,6 +153,15 @@ class INode : public std::enable_shared_from_this<INode> {
             });
         return entrypoints;
     }
+
+    /**
+     * @brief Retrieves all endpoint nodes in the subgraph given by the current node.
+     *
+     * @return A vector of endpoint nodes, with duplicates filtered out.
+     *
+     * Endpoints are nodes that have no outputs, indicating termination points
+     * in a directed acyclic graph (DAG).
+     */
     inline std::vector<std::shared_ptr<INode>> get_endpoints() {
         std::vector<std::shared_ptr<INode>> endpoints;
         multi_evaluate_up(
@@ -152,6 +177,15 @@ class INode : public std::enable_shared_from_this<INode> {
         return endpoints;
     }
 
+    /**
+     * @brief Resets all connected nodes in the subgraph given by the current node.
+     *
+     * @details This function is similar to `reset_up`, but it every nodes
+     * that are reachable from the current node. It finds all entrypoint nodes
+     * (nodes with no inputs) and reset_up from them.
+     *
+     * @note This function will reset the nodes in the reverse order of evaluation.
+     */
     inline void reset_connected() {
         std::vector<std::shared_ptr<INode>> entrypoints = get_entrypoints();
         multi_evaluate_up(
@@ -166,6 +200,13 @@ class INode : public std::enable_shared_from_this<INode> {
             });
     }
 
+    /**
+     * @brief Marks the node as unevaluated due to data stealing.
+     *
+     * @details This function is called when data from this node has been
+     * stolen by another node (e.g. std::move a container), indicating that the current node's
+     * evaluation state is invalidated.
+     */
     inline void report_data_stealing() { evaluated = false; }
 
     template<class T>
