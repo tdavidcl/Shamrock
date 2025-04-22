@@ -8,6 +8,7 @@ export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
 
 if which ccache &> /dev/null; then
     export CCACHE_CMAKE_ARG="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+    echo " ----- ccache found, using it ----- "
 else
     export CCACHE_CMAKE_ARG=""
 fi
