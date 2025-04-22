@@ -46,7 +46,7 @@ namespace shamrock::dag {
             report_data_stealing();
             field_refs.reset();
             is_data_owning = false;
-            return std::move(data_ownership);
+            return std::exchange(data_ownership,{});
         }
     };
 
