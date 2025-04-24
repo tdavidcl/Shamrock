@@ -23,31 +23,48 @@
 #include "shamrock/scheduler/ComputeField.hpp"
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace shamrock::dag {
 
-    template<class T>
-    class Field : public IDataEdge {
+    // Like here the idea is that we will attach edges to fields buffers, they will never own it.
+    // I should add the possibility to resize PatchDataField from edges and also a way to regen the
+    // fields_refs then ...
 
-        std::string name;
-        std::string texsymbol;
+    template<class T, u32 nvar = dynamic_nvar, bool pointer_access = access_t_span>
+    class FieldRef : public IDataEdge {
 
         public:
-        bool is_data_owning                                                             = false;
-        shambase::DistributedData<PatchDataField<T>> data_ownership                     = {};
-        shambase::DistributedData<std::reference_wrapper<PatchDataField<T>>> field_refs = {};
+        using FieldRef_t = shambase::DistributedData<PatchDataFieldSpan<T, nvar, pointer_access>>;
 
-        Field(std::string name, std::string texsymbol) : name(name), texsymbol(texsymbol) {}
+        FieldRef(
+            std::string name,
+            std::string texsymbol,
+            std::optional<std::function<FieldRef_t()>> _get_field_refs,
+            std::optional<std::function<void(shambase::DistributedData<u32>)>> _require_field_sizes)
+            : name(name), texsymbol(texsymbol), _get_field_refs(_get_field_refs),
+              _require_field_sizes(_require_field_sizes) {}
 
         inline std::string _impl_get_label() { return name; };
         inline std::string _impl_get_tex_symbol() { return texsymbol; };
 
-        inline shambase::DistributedData<PatchDataField<T>> steal_data() {
-            report_data_stealing();
-            field_refs.reset();
-            is_data_owning = false;
-            return std::exchange(data_ownership,{});
+        static auto
+        attach_to_compute_field(std::string name, std::string texsymbol, ComputeField<T> &field) {
+            auto field_ref = std::make_shared<FieldRef<T, nvar, pointer_access>>(name, texsymbol);
+
+            // TODO: implement lambdas
+
+            return field_ref;
         }
+
+        FieldRef_t &get_field_refs() { return _get_field_refs(); }
+
+        private:
+        std::string name;
+        std::string texsymbol;
+
+        std::optional<std::function<FieldRef_t()>> _get_field_refs;
+        std::optional<std::function<void(shambase::DistributedData<u32>)>> _require_field_sizes;
     };
 
 } // namespace shamrock::dag
