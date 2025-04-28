@@ -20,6 +20,7 @@
 #include "shammodels/sph/modules/setup/CombinerAdd.hpp"
 #include "shammodels/sph/modules/setup/GeneratorLatticeHCP.hpp"
 #include "shammodels/sph/modules/setup/GeneratorMCDisc.hpp"
+#include "shammodels/sph/modules/setup/ModifierApplyDiscWarp.hpp"
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 
 template<class Tvec, template<class> class SPHKernel>
@@ -40,7 +41,8 @@ shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::make_generator_disc_mc(
     std::function<Tscal(Tscal)> H_profile,
     std::function<Tscal(Tscal)> rot_profile,
     std::function<Tscal(Tscal)> cs_profile,
-    std::mt19937 eng) {
+    std::mt19937 eng,
+    Tscal init_h_factor) {
     return std::shared_ptr<ISPHSetupNode>(new GeneratorMCDisc<Tvec, SPHKernel>(
         context,
         solver_config,
@@ -52,7 +54,8 @@ shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::make_generator_disc_mc(
         H_profile,
         rot_profile,
         cs_profile,
-        eng));
+        eng,
+        init_h_factor));
 }
 
 template<class Tvec, template<class> class SPHKernel>
@@ -101,6 +104,14 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup(
     if (shamcomm::world_rank() == 0) {
         logger::info_ln("SPH setup", "the setup took :", time_setup.elasped_sec(), "s");
     }
+}
+
+template<class Tvec, template<class> class SPHKernel>
+inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode>
+shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::make_modifier_warp_disc(
+    SetupNodePtr parent, Tscal Rwarp, Tscal Hwarp, Tscal inclination, Tscal posangle) {
+    return std::shared_ptr<ISPHSetupNode>(new ModifierApplyDiscWarp<Tvec, SPHKernel>(
+        context, solver_config, parent, Rwarp, Hwarp, inclination, posangle));
 }
 
 using namespace shammath;

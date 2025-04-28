@@ -21,7 +21,9 @@ namespace shamtree {
 
     template<class Tmorton, class Tvec, u32 dim>
     MortonCodeSortedSet<Tmorton, Tvec, dim> sort_morton_set(
-        sham::DeviceScheduler_ptr dev_sched, MortonCodeSet<Tmorton, Tvec, dim> &&morton_codes_set) {
+        const sham::DeviceScheduler_ptr &dev_sched,
+        MortonCodeSet<Tmorton, Tvec, dim> &&morton_codes_set,
+        sham::DeviceBuffer<u32> &&cached_map_morton_id_to_obj_id) {
 
         shammath::AABB<Tvec> bounding_box                = std::move(morton_codes_set.bounding_box);
         u32 cnt_obj                                      = std::move(morton_codes_set.cnt_obj);
@@ -29,7 +31,10 @@ namespace shamtree {
         sham::DeviceBuffer<Tmorton> morton_codes_to_sort = std::move(morton_codes_set.morton_codes);
 
         auto map_morton_id_to_obj_id
-            = shamalgs::algorithm::gen_buffer_index_usm(dev_sched, morton_count);
+            = std::forward<sham::DeviceBuffer<u32>>(cached_map_morton_id_to_obj_id);
+
+        shamalgs::algorithm::fill_buffer_index_usm(
+            dev_sched, morton_count, map_morton_id_to_obj_id);
 
         shamalgs::algorithm::sort_by_key(
             dev_sched, morton_codes_to_sort, map_morton_id_to_obj_id, morton_count);
@@ -42,12 +47,28 @@ namespace shamtree {
             std::move(map_morton_id_to_obj_id));
     }
 
+    template<class Tmorton, class Tvec, u32 dim>
+    MortonCodeSortedSet<Tmorton, Tvec, dim> sort_morton_set(
+        const sham::DeviceScheduler_ptr &dev_sched,
+        MortonCodeSet<Tmorton, Tvec, dim> &&morton_codes_set) {
+
+        auto map_morton_id_to_obj_id
+            = sham::DeviceBuffer<u32>(morton_codes_set.morton_count, dev_sched);
+
+        return sort_morton_set<Tmorton, Tvec, dim>(
+            dev_sched,
+            std::forward<MortonCodeSet<Tmorton, Tvec, dim>>(morton_codes_set),
+            std::move(map_morton_id_to_obj_id));
+    }
+
 } // namespace shamtree
 
 template class shamtree::MortonCodeSortedSet<u32, f64_3, 3>;
 template class shamtree::MortonCodeSortedSet<u64, f64_3, 3>;
 
 template shamtree::MortonCodeSortedSet<u32, f64_3, 3> shamtree::sort_morton_set<u32, f64_3, 3>(
-    sham::DeviceScheduler_ptr dev_sched, shamtree::MortonCodeSet<u32, f64_3, 3> &&morton_codes_set);
+    const sham::DeviceScheduler_ptr &dev_sched,
+    shamtree::MortonCodeSet<u32, f64_3, 3> &&morton_codes_set);
 template shamtree::MortonCodeSortedSet<u64, f64_3, 3> shamtree::sort_morton_set<u64, f64_3, 3>(
-    sham::DeviceScheduler_ptr dev_sched, shamtree::MortonCodeSet<u64, f64_3, 3> &&morton_codes_set);
+    const sham::DeviceScheduler_ptr &dev_sched,
+    shamtree::MortonCodeSet<u64, f64_3, 3> &&morton_codes_set);

@@ -28,11 +28,10 @@ namespace shamalgs::numeric {
 #ifdef __MACH__ // decoupled lookback perf on mac os is awfull
         return details::exclusive_sum_fallback(q, buf1, len);
 #else
-    #ifdef __HIPSYCL_ENABLE_LLVM_SSCP_TARGET__
-        // SSCP does not compile decoupled lookback scan
-        return details::exclusive_sum_fallback(q, buf1, len);
-    #else
+    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
         return details::exclusive_sum_atomic_decoupled_v5<T, 512>(q, buf1, len);
+    #else
+        return details::exclusive_sum_fallback(q, buf1, len);
     #endif
 #endif
     }
@@ -43,11 +42,10 @@ namespace shamalgs::numeric {
 #ifdef __MACH__ // decoupled lookback perf on mac os is awfull
         return details::exclusive_sum_fallback_usm(sched, buf1, len);
 #else
-    #ifdef __HIPSYCL_ENABLE_LLVM_SSCP_TARGET__
-        // SSCP does not compile decoupled lookback scan
-        return details::exclusive_sum_fallback_usm(sched, buf1, len);
-    #else
+    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
         return details::exclusive_sum_atomic_decoupled_v5_usm<T, 512>(sched, buf1, len);
+    #else
+        return details::exclusive_sum_fallback_usm(sched, buf1, len);
     #endif
 #endif
     }
@@ -79,5 +77,10 @@ namespace shamalgs::numeric {
     stream_compact(sycl::queue &q, sycl::buffer<u32> &buf_flags, u32 len) {
         return details::stream_compact_excl_scan(q, buf_flags, len);
     };
+
+    sham::DeviceBuffer<u32> stream_compact(
+        const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf_flags, u32 len) {
+        return details::stream_compact_excl_scan(sched, buf_flags, len);
+    }
 
 } // namespace shamalgs::numeric

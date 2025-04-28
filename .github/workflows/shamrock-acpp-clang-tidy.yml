@@ -12,7 +12,7 @@ jobs:
 
   shamrock_acpp_omp_tidy:
     name: AdaptiveCpp omp tidy clang-${{ matrix.clang }}
-    runs-on: [self-hosted,  docker-runner]
+    runs-on: ubuntu-latest
 
     container:
       image: ${{ matrix.container }}
@@ -24,7 +24,7 @@ jobs:
           - clang: 18
             cuda: 11.0.2
             rocm: 5.4.3
-            container: ghcr.io/shamrock-code/ci-ubuntu20:main
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20
     #if: false
 
     timeout-minutes: 60

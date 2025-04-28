@@ -59,10 +59,14 @@ namespace shammodels::sph::modules {
             std::function<Tscal(Tscal)> H_profile,
             std::function<Tscal(Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
-            std::mt19937 eng);
+            std::mt19937 eng,
+            Tscal init_h_factor);
 
         std::shared_ptr<ISPHSetupNode>
         make_combiner_add(SetupNodePtr parent1, SetupNodePtr parent2);
+
+        std::shared_ptr<ISPHSetupNode> make_modifier_warp_disc(
+            SetupNodePtr parent, Tscal Rwarp, Tscal Hwarp, Tscal inclination, Tscal posangle);
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
