@@ -15,12 +15,17 @@
  */
 
 #include "shambase/SourceLocation.hpp"
+#include "shambase/WithUUID.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/string.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 #include <memory>
+#include <sstream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 class AccessState {
     public:
@@ -52,25 +57,24 @@ class AccessState {
 
 class INode;
 
-class IDataEdge : public AccessState {
+class IDataEdge : public AccessState, public shambase::WithUUID<IDataEdge, u64> {
     public:
     // std::weak_ptr<INode> child;
     // std::weak_ptr<INode> parent;
 
     // std::vector<std::weak_ptr<INode>> read_access_log;
 
-    inline std::string get_label() { return _impl_get_node_dot(); }
-
+    inline std::string get_label() { return _impl_get_label(); }
     inline std::string get_tex_symbol() { return _impl_get_tex_symbol(); }
 
-    virtual std::string _impl_get_node_dot()   = 0;
+    virtual std::string _impl_get_label()      = 0;
     virtual std::string _impl_get_tex_symbol() = 0;
 
     virtual ~IDataEdge() {}
 };
 
 // Inode is node between data edges, takes multiple inputs, multiple outputs
-class INode : public std::enable_shared_from_this<INode> {
+class INode : public std::enable_shared_from_this<INode>, public shambase::WithUUID<INode, u64> {
 
     std::vector<std::shared_ptr<IDataEdge>> ro_edges;
     std::vector<std::shared_ptr<IDataEdge>> rw_edges;
@@ -131,8 +135,13 @@ class INode : public std::enable_shared_from_this<INode> {
         return shambase::get_check_ref(std::dynamic_pointer_cast<T>(rw_edges.at(slot)));
     }
 
-    inline std::string get_label() { return _impl_get_node_dot(); };
-    inline std::string get_node_tex() { return _impl_get_node_tex(); };
+    inline std::string get_dot_graph() { return get_partial_dot_graph(); };
+    inline std::string get_node_tex() { return get_partial_node_tex(); };
+
+    inline std::string get_partial_dot_graph() { return _impl_get_dot_subgraph(); };
+    inline std::string get_dot_graph_node_start() { return _impl_get_node_dot_start(); };
+    inline std::string get_dot_graph_node_end() { return _impl_get_node_dot_end(); };
+    inline std::string get_partial_node_tex() { return _impl_get_node_tex(); };
 
     inline void evaluate() {
         on_edge_ro_edges([](auto &e) {
@@ -167,9 +176,42 @@ class INode : public std::enable_shared_from_this<INode> {
     }
 
     protected:
-    virtual void _impl_evaluate_internal()   = 0;
-    virtual void _impl_reset_internal()      = 0;
-    virtual std::string _impl_get_node_dot() = 0;
+    virtual void _impl_evaluate_internal() = 0;
+    virtual void _impl_reset_internal()    = 0;
+    virtual std::string _impl_get_label()  = 0;
+
+    inline virtual std::string _impl_get_dot_subgraph() {
+        std::string node_str
+            = shambase::format("n_{} [label=\"{}\"];\n", this->get_uuid(), _impl_get_label());
+
+        std::string edge_str = "";
+        for (auto &in : ro_edges) {
+            edge_str += shambase::format(
+                "e_{} -> n_{} [style=\"dashed\", color=green];\n",
+                in->get_uuid(),
+                this->get_uuid());
+            edge_str += shambase::format(
+                "e_{} [label=\"{}\",shape=rect, style=filled];\n", in->get_uuid(), in->get_label());
+        }
+        for (auto &out : rw_edges) {
+            edge_str += shambase::format(
+                "n_{} -> e_{} [style=\"dashed\", color=red];\n", this->get_uuid(), out->get_uuid());
+            edge_str += shambase::format(
+                "e_{} [label=\"{}\",shape=rect, style=filled];\n",
+                out->get_uuid(),
+                out->get_label());
+        }
+
+        return shambase::format("{}{}", node_str, edge_str);
+    };
+
+    inline virtual std::string _impl_get_node_dot_start() {
+        return shambase::format("n_{}", this->get_uuid());
+    }
+    inline virtual std::string _impl_get_node_dot_end() {
+        return shambase::format("n_{}", this->get_uuid());
+    }
+
     virtual std::string _impl_get_node_tex() = 0;
 };
 
@@ -186,7 +228,7 @@ class Field : public IDataEdge {
     Field(std::string name, std::string texsymbol)
         : name(name), texsymbol(texsymbol), field_data() {}
 
-    inline std::string _impl_get_node_dot() { return name; };
+    inline std::string _impl_get_label() { return name; };
     inline std::string _impl_get_tex_symbol() { return texsymbol; };
 };
 
@@ -210,7 +252,8 @@ class RhoOp : public INode {
     }
     inline void set_outputs(std::shared_ptr<Field> rho) { __internal_set_rw_edges({rho}); }
 
-    inline std::string _impl_get_node_dot() { return "Compute rho"; }
+    inline std::string _impl_get_label() { return "Compute rho"; }
+
     inline std::string _impl_get_node_tex() {
         std::string h    = get_ro_edge<Field>(0).get_tex_symbol() + "_a";
         std::string mass = get_ro_edge<Field>(1).get_tex_symbol() + "_a";
@@ -240,7 +283,8 @@ class FieldLoader : public INode {
     inline void set_inputs() { __internal_set_ro_edges({}); }
     inline void set_outputs(std::shared_ptr<Field> field) { __internal_set_rw_edges({field}); }
 
-    inline std::string _impl_get_node_dot() { return "Loader"; }
+    inline std::string _impl_get_label() { return "Loader"; }
+
     inline std::string _impl_get_node_tex() {
         std::string field = get_rw_edge<Field>(0).get_tex_symbol() + "_a";
 
@@ -264,7 +308,8 @@ class FieldWriter : public INode {
     inline void set_inputs(std::shared_ptr<Field> field) { __internal_set_ro_edges({field}); }
     inline void set_outputs() { __internal_set_rw_edges({}); }
 
-    inline std::string _impl_get_node_dot() { return "Writer"; }
+    inline std::string _impl_get_label() { return "Writer"; }
+
     inline std::string _impl_get_node_tex() {
         std::string field = get_ro_edge<Field>(0).get_tex_symbol() + "_a";
 
@@ -276,7 +321,12 @@ class OperationSequence : public INode {
     std::vector<std::shared_ptr<INode>> nodes;
 
     public:
-    OperationSequence(std::vector<std::shared_ptr<INode>> nodes) : nodes(nodes) {}
+    OperationSequence(std::vector<std::shared_ptr<INode>> nodes) : nodes(nodes) {
+        if (nodes.size() == 0) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "OperationSequence must have at least one node");
+        }
+    }
     void _impl_evaluate_internal() {
         for (auto &node : nodes) {
             node->evaluate();
@@ -289,8 +339,41 @@ class OperationSequence : public INode {
         }
     }
 
-    std::string _impl_get_node_dot() { return ""; };
-    std::string _impl_get_node_tex() { return ""; };
+    std::string _impl_get_label() { return "Sequence"; }
+
+    std::string _impl_get_dot_subgraph() {
+        std::stringstream ss;
+
+        ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
+        for (auto &node : nodes) {
+            ss << node->get_partial_dot_graph();
+        }
+
+        for (int i = 0; i < nodes.size() - 1; i++) {
+            ss << nodes[i]->get_dot_graph_node_end() << " -> "
+               << nodes[i + 1]->get_dot_graph_node_start() << " [weight=3];\n";
+        }
+
+        ss << shambase::format("label = \"{}\";\n", _impl_get_label());
+        ss << "}\n";
+
+        return ss.str();
+    };
+
+    inline virtual std::string _impl_get_node_dot_start() {
+        return shambase::format("n_{}", nodes[0]->get_uuid());
+    }
+    inline virtual std::string _impl_get_node_dot_end() {
+        return shambase::format("n_{}", nodes[nodes.size() - 1]->get_uuid());
+    }
+
+    std::string _impl_get_node_tex() {
+        std::stringstream ss;
+        for (auto &node : nodes) {
+            ss << node->get_partial_node_tex() << "\n";
+        }
+        return ss.str();
+    }
 };
 
 TestStart(Unittest, "tmp_graph_test", tmp_graph_test, 1) {
@@ -316,11 +399,15 @@ TestStart(Unittest, "tmp_graph_test", tmp_graph_test, 1) {
     rho_op->set_inputs(h, mass);
     rho_op->set_outputs(rho);
 
-    OperationSequence seq{{h_load, mass_load, rho_op, rho_write}};
+    std::shared_ptr<OperationSequence> load_seq
+        = std::make_shared<OperationSequence>(OperationSequence{{h_load, mass_load}});
 
-    seq.evaluate();
-    // std::cout << get_node_graph_tex({rho_write}) << std::endl;
-    // std::cout << get_node_dot_graph({rho_write}) << std::endl;
+    std::shared_ptr<OperationSequence> seq
+        = std::make_shared<OperationSequence>(OperationSequence{{load_seq, rho_op, rho_write}});
+
+    seq->evaluate();
+    std::cout << seq->get_dot_graph() << std::endl;
+    std::cout << seq->get_node_tex() << std::endl;
 
     std::cout << "Rho result" << std::endl;
     std::cout << "size " << rho_result.size() << std::endl;
