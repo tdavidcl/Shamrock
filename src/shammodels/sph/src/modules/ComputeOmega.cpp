@@ -31,8 +31,8 @@ auto shammodels::sph::modules::ComputeOmega<Tvec, SPHKernel>::compute_omega()
     using namespace shamrock;
     using namespace shamrock::patch;
 
-    PatchDataLayout &pdl = scheduler().pdl;
-    const u32 ihpart     = pdl.get_field_idx<Tscal>("hpart");
+    PatchDataLayerLayout &pdl = scheduler().pdl;
+    const u32 ihpart          = pdl.get_field_idx<Tscal>("hpart");
 
     ComputeField<Tscal> omega = utility.make_compute_field<Tscal>("omega", 1);
 

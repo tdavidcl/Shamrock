@@ -23,7 +23,8 @@
 
 namespace shamrock::patch {
 
-    PatchDataLayer PatchDataLayer::mock_patchdata(u64 seed, u32 obj_cnt, PatchDataLayout &pdl) {
+    PatchDataLayer
+    PatchDataLayer::mock_patchdata(u64 seed, u32 obj_cnt, PatchDataLayerLayout &pdl) {
         PatchDataLayer pdat{pdl};
 
         pdat.fields.clear();
@@ -229,8 +230,8 @@ namespace shamrock::patch {
         return sum;
     }
 
-    PatchDataLayer
-    PatchDataLayer::deserialize_buf(shamalgs::SerializeHelper &serializer, PatchDataLayout &pdl) {
+    PatchDataLayer PatchDataLayer::deserialize_buf(
+        shamalgs::SerializeHelper &serializer, PatchDataLayerLayout &pdl) {
         StackEntry stack_loc{};
 
         return PatchDataLayer{

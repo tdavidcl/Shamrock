@@ -24,7 +24,7 @@
 #include "shamrock/legacy/patch/base/enabled_fields.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
-#include "shamrock/patch/PatchDataLayout.hpp"
+#include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamsys/legacy/sycl_mpi_interop.hpp"
 #include <random>
 #include <variant>
@@ -192,7 +192,7 @@ u64 patchdata_irecv_probe(
  * @return PatchData the generated PatchData
  */
 shamrock::patch::PatchDataLayer
-patchdata_gen_dummy_data(shamrock::patch::PatchDataLayout &pdl, std::mt19937 &eng);
+patchdata_gen_dummy_data(shamrock::patch::PatchDataLayerLayout &pdl, std::mt19937 &eng);
 
 /**
  * @brief check if two PatchData content match

@@ -203,7 +203,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
 template<class Tvec, class TgridVec>
 shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
 shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::communicate_pdat(
-    shamrock::patch::PatchDataLayout &pdl,
+    shamrock::patch::PatchDataLayerLayout &pdl,
     shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> &&interf) {
     StackEntry stack_loc{};
 
@@ -314,8 +314,8 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     using AMRBlock = typename Config::AMRBlock;
 
     // setup ghost layout
-    storage.ghost_layout.set(shamrock::patch::PatchDataLayout{});
-    shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
+    storage.ghost_layout.set(shamrock::patch::PatchDataLayerLayout{});
+    shamrock::patch::PatchDataLayerLayout &ghost_layout = storage.ghost_layout.get();
 
     ghost_layout.add_field<TgridVec>("cell_min", 1);
     ghost_layout.add_field<TgridVec>("cell_max", 1);
@@ -342,7 +342,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     }
 
     // load layout info
-    PatchDataLayout &pdl = scheduler().pdl;
+    PatchDataLayerLayout &pdl = scheduler().pdl;
 
     const u32 icell_min = pdl.get_field_idx<TgridVec>("cell_min");
     const u32 icell_max = pdl.get_field_idx<TgridVec>("cell_max");
