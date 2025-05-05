@@ -361,10 +361,10 @@ class OperationSequence : public INode {
     };
 
     inline virtual std::string _impl_get_node_dot_start() {
-        return shambase::format("n_{}", nodes[0]->get_uuid());
+        return nodes[0]->get_dot_graph_node_start();
     }
     inline virtual std::string _impl_get_node_dot_end() {
-        return shambase::format("n_{}", nodes[nodes.size() - 1]->get_uuid());
+        return nodes[nodes.size() - 1]->get_dot_graph_node_end();
     }
 
     std::string _impl_get_node_tex() {
@@ -372,6 +372,60 @@ class OperationSequence : public INode {
         for (auto &node : nodes) {
             ss << node->get_partial_node_tex() << "\n";
         }
+        return ss.str();
+    }
+};
+
+class Looper : public INode {
+    std::shared_ptr<INode> to_loop;
+    int n;
+
+    public:
+    Looper(std::shared_ptr<INode> to_loop, int n) : to_loop(to_loop), n(n) {}
+
+    void _impl_evaluate_internal() {
+        for (int i = 0; i < n; i++) {
+            to_loop->evaluate();
+        }
+    }
+
+    void _impl_reset_internal() { to_loop->reset(); }
+
+    std::string _impl_get_label() { return "Looper"; }
+
+    std::string _impl_get_dot_subgraph() {
+        std::stringstream ss;
+
+        ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
+
+        std::string loop_node = _impl_get_node_dot_start();
+        ss << loop_node + " [label=\"\", shape=point];\n";
+
+        ss << to_loop->get_partial_dot_graph();
+
+        ss << to_loop->get_dot_graph_node_end() << " -> " << loop_node
+           << shambase::format(" [label=\"loop {} times\",weight=0];\n", n);
+        ss << loop_node << " -> " << to_loop->get_dot_graph_node_start()
+           << shambase::format(" [weight=1];\n", n);
+
+        ss << shambase::format("label = \"{}\";\n", _impl_get_label());
+        ss << "}\n";
+
+        return ss.str();
+    };
+
+    inline virtual std::string _impl_get_node_dot_start() {
+        return shambase::format("loop_{}", to_loop->get_uuid());
+    }
+    inline virtual std::string _impl_get_node_dot_end() {
+        return to_loop->get_dot_graph_node_end();
+    }
+
+    std::string _impl_get_node_tex() {
+        std::stringstream ss;
+        ss << "Loop " << n << " times: {\n";
+        ss << to_loop->get_partial_node_tex() << "\n";
+        ss << "}\n";
         return ss.str();
     }
 };
@@ -402,8 +456,10 @@ TestStart(Unittest, "tmp_graph_test", tmp_graph_test, 1) {
     std::shared_ptr<OperationSequence> load_seq
         = std::make_shared<OperationSequence>(OperationSequence{{h_load, mass_load}});
 
+    std::shared_ptr<Looper> looper = std::make_shared<Looper>(rho_op, 2);
+
     std::shared_ptr<OperationSequence> seq
-        = std::make_shared<OperationSequence>(OperationSequence{{load_seq, rho_op, rho_write}});
+        = std::make_shared<OperationSequence>(OperationSequence{{load_seq, looper, rho_write}});
 
     seq->evaluate();
     std::cout << seq->get_dot_graph() << std::endl;
