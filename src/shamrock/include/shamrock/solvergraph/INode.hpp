@@ -53,13 +53,21 @@ namespace shamrock::solvergraph {
         }
 
         template<class T>
-        T &get_ro_edge(int slot) {
+        inline T &get_ro_edge(int slot) {
             return shambase::get_check_ref(std::dynamic_pointer_cast<T>(ro_edges.at(slot)));
         }
 
         template<class T>
-        T &get_rw_edge(int slot) {
+        inline T &get_rw_edge(int slot) {
             return shambase::get_check_ref(std::dynamic_pointer_cast<T>(rw_edges.at(slot)));
+        }
+
+        inline IDataEdge &get_ro_edge_base(int slot) {
+            return shambase::get_check_ref(ro_edges.at(slot));
+        }
+
+        inline IDataEdge &get_rw_edge_base(int slot) {
+            return shambase::get_check_ref(rw_edges.at(slot));
         }
 
         inline void evaluate() { _impl_evaluate_internal(); }
