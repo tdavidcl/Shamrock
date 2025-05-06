@@ -17,10 +17,16 @@
  */
 
 #include "shambase/DistributedData.hpp"
+#include "shambase/exception.hpp"
+#include "shambase/sets.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include <unordered_set>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace shamrock::solvergraph {
 
@@ -36,11 +42,64 @@ namespace shamrock::solvergraph {
         virtual std::string _impl_get_tex_symbol() { return texsymbol; }
     };
 
+    template<class T1, class T2, class FuncMatch, class FuncMissing, class FuncExtra>
+    inline void ensure_matching(
+        shambase::DistributedData<T1> &dd,
+        const shambase::DistributedData<T2> &reference,
+        FuncMatch &&func_missing,
+        FuncMissing &&func_match,
+        FuncExtra &&func_extra) {
+
+        std::vector<u64> dd_ids;
+        std::vector<u64> ref_ids;
+
+        dd.for_each([&](u32 id, T1 &data) {
+            dd_ids.push_back(id);
+        });
+
+        reference.for_each([&](u32 id, const T2 &data) {
+            ref_ids.push_back(id);
+        });
+
+        std::vector<u64> missing;
+        std::vector<u64> matching;
+        std::vector<u64> extra;
+
+        shambase::set_diff(dd_ids, ref_ids, missing, matching, extra);
+
+        for (auto id : missing) {
+            func_missing(id);
+        }
+
+        for (auto id : matching) {
+            func_match(id);
+        }
+
+        for (auto id : extra) {
+            func_extra(id);
+        }
+    }
+
     template<class T>
     class FieldSpan : public IDataEdgeNamed {
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
         shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<T>> spans;
+
+        inline void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+            ensure_matching(
+                spans,
+                sizes,
+                [](u64 id) {
+                    shambase::throw_with_loc<std::runtime_error>(
+                        "Missing field span in distributed data at id " + std::to_string(id));
+                },
+                [](u64 id) {},
+                [](u64 id) {
+                    shambase::throw_with_loc<std::runtime_error>(
+                        "Extra field span in distributed data at id " + std::to_string(id));
+                });
+        }
     };
 
     template<class Tint>

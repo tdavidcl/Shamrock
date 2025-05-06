@@ -111,6 +111,13 @@ class NodeConsToPrimGas : public shamrock::solvergraph::INode {
 
     void _impl_evaluate_internal() {
         auto edges = get_edges();
+
+        edges.spans_rho.ensure_sizes(edges.sizes.indexes);
+        edges.spans_rhov.ensure_sizes(edges.sizes.indexes);
+        edges.spans_rhoe.ensure_sizes(edges.sizes.indexes);
+        edges.spans_vel.ensure_sizes(edges.sizes.indexes);
+        edges.spans_P.ensure_sizes(edges.sizes.indexes);
+
         cons_to_prim_gas_spans(
             edges.spans_rho.spans,
             edges.spans_rhov.spans,
