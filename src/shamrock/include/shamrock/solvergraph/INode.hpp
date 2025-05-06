@@ -71,8 +71,8 @@ namespace shamrock::solvergraph {
         inline std::string get_dot_graph_node_start() { return _impl_get_dot_graph_node_start(); };
         inline std::string get_dot_graph_node_end() { return _impl_get_dot_graph_node_end(); };
 
-        inline std::string get_node_tex() { return get_partial_node_tex(); };
-        inline std::string get_partial_node_tex() { return _impl_get_node_tex(); };
+        inline std::string get_tex() { return _impl_get_tex(); };
+        inline std::string get_tex_partial() { return _impl_get_tex(); };
 
         protected:
         virtual void _impl_evaluate_internal() = 0;
@@ -83,7 +83,7 @@ namespace shamrock::solvergraph {
         virtual std::string _impl_get_dot_graph_node_start();
         virtual std::string _impl_get_dot_graph_node_end();
 
-        virtual std::string _impl_get_node_tex() = 0;
+        virtual std::string _impl_get_tex() = 0;
     };
 
     inline void

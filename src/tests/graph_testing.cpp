@@ -43,7 +43,7 @@ class Field : public IDataEdge {
     Field(std::string name, std::string texsymbol)
         : name(name), texsymbol(texsymbol), field_data() {}
 
-    inline std::string _impl_get_label() { return name; };
+    inline std::string _impl_get_dot_label() { return name; };
     inline std::string _impl_get_tex_symbol() { return texsymbol; };
 };
 
@@ -69,7 +69,7 @@ class RhoOp : public INode {
 
     inline std::string _impl_get_label() { return "Compute rho"; }
 
-    inline std::string _impl_get_node_tex() {
+    inline std::string _impl_get_tex() {
         std::string h    = get_ro_edge<Field>(0).get_tex_symbol() + "_a";
         std::string mass = get_ro_edge<Field>(1).get_tex_symbol() + "_a";
         std::string rho  = get_rw_edge<Field>(0).get_tex_symbol() + "_a";
@@ -100,7 +100,7 @@ class FieldLoader : public INode {
 
     inline std::string _impl_get_label() { return "Loader"; }
 
-    inline std::string _impl_get_node_tex() {
+    inline std::string _impl_get_tex() {
         std::string field = get_rw_edge<Field>(0).get_tex_symbol() + "_a";
 
         return "\\[" + field + " \\leftarrow field\\]";
@@ -125,7 +125,7 @@ class FieldWriter : public INode {
 
     inline std::string _impl_get_label() { return "Writer"; }
 
-    inline std::string _impl_get_node_tex() {
+    inline std::string _impl_get_tex() {
         std::string field = get_ro_edge<Field>(0).get_tex_symbol() + "_a";
 
         return "\\[" + field + " \\rightarrow field\\]";
@@ -182,10 +182,10 @@ class OperationSequence : public INode {
         return nodes[nodes.size() - 1]->get_dot_graph_node_end();
     }
 
-    std::string _impl_get_node_tex() {
+    std::string _impl_get_tex() {
         std::stringstream ss;
         for (auto &node : nodes) {
-            ss << node->get_partial_node_tex() << "\n";
+            ss << node->get_tex_partial() << "\n";
         }
         return ss.str();
     }
@@ -236,10 +236,10 @@ class Looper : public INode {
         return to_loop->get_dot_graph_node_end();
     }
 
-    std::string _impl_get_node_tex() {
+    std::string _impl_get_tex() {
         std::stringstream ss;
         ss << "Loop " << n << " times: {\n";
-        ss << to_loop->get_partial_node_tex() << "\n";
+        ss << to_loop->get_tex_partial() << "\n";
         ss << "}\n";
         return ss.str();
     }
@@ -278,7 +278,7 @@ TestStart(Unittest, "tmp_graph_test", tmp_graph_test, 1) {
 
     seq->evaluate();
     std::cout << seq->get_dot_graph() << std::endl;
-    std::cout << seq->get_node_tex() << std::endl;
+    std::cout << seq->get_tex() << std::endl;
 
     std::cout << "Rho result" << std::endl;
     std::cout << "size " << rho_result.size() << std::endl;
