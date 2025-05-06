@@ -26,11 +26,6 @@ namespace shamrock::solvergraph {
 
     class IDataEdge : public shambase::WithUUID<IDataEdge, u64> {
         public:
-        // std::weak_ptr<INode> child;
-        // std::weak_ptr<INode> parent;
-
-        // std::vector<std::weak_ptr<INode>> read_access_log;
-
         inline std::string get_label() { return _impl_get_label(); }
         inline std::string get_tex_symbol() { return _impl_get_tex_symbol(); }
 

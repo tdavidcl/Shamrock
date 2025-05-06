@@ -156,12 +156,12 @@ class OperationSequence : public INode {
 
     std::string _impl_get_label() { return "Sequence"; }
 
-    std::string _impl_get_dot_subgraph() {
+    std::string _impl_get_dot_graph_partial() {
         std::stringstream ss;
 
         ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
         for (auto &node : nodes) {
-            ss << node->get_partial_dot_graph();
+            ss << node->get_dot_graph_partial();
         }
 
         for (int i = 0; i < nodes.size() - 1; i++) {
@@ -175,10 +175,10 @@ class OperationSequence : public INode {
         return ss.str();
     };
 
-    inline virtual std::string _impl_get_node_dot_start() {
+    inline virtual std::string _impl_get_dot_graph_node_start() {
         return nodes[0]->get_dot_graph_node_start();
     }
-    inline virtual std::string _impl_get_node_dot_end() {
+    inline virtual std::string _impl_get_dot_graph_node_end() {
         return nodes[nodes.size() - 1]->get_dot_graph_node_end();
     }
 
@@ -208,15 +208,15 @@ class Looper : public INode {
 
     std::string _impl_get_label() { return "Looper"; }
 
-    std::string _impl_get_dot_subgraph() {
+    std::string _impl_get_dot_graph_partial() {
         std::stringstream ss;
 
         ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
 
-        std::string loop_node = _impl_get_node_dot_start();
+        std::string loop_node = _impl_get_dot_graph_node_start();
         ss << loop_node + " [label=\"\", shape=point];\n";
 
-        ss << to_loop->get_partial_dot_graph();
+        ss << to_loop->get_dot_graph_partial();
 
         ss << to_loop->get_dot_graph_node_end() << " -> " << loop_node
            << shambase::format(" [label=\"loop {} times\",weight=0];\n", n);
@@ -229,10 +229,10 @@ class Looper : public INode {
         return ss.str();
     };
 
-    inline virtual std::string _impl_get_node_dot_start() {
+    inline virtual std::string _impl_get_dot_graph_node_start() {
         return shambase::format("loop_{}", to_loop->get_uuid());
     }
-    inline virtual std::string _impl_get_node_dot_end() {
+    inline virtual std::string _impl_get_dot_graph_node_end() {
         return to_loop->get_dot_graph_node_end();
     }
 
