@@ -1,0 +1,43 @@
+// -------------------------------------------------------//
+//
+// SHAMROCK code for hydrodynamics
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
+//
+// -------------------------------------------------------//
+
+#pragma once
+
+/**
+ * @file IDataEdge.hpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief
+ *
+ */
+
+#include "shambase/WithUUID.hpp"
+#include "shambase/aliases_int.hpp"
+#include <string>
+
+namespace shamrock::solvergraph {
+
+    class INode;
+
+    class IDataEdge : public shambase::WithUUID<IDataEdge, u64> {
+        public:
+        // std::weak_ptr<INode> child;
+        // std::weak_ptr<INode> parent;
+
+        // std::vector<std::weak_ptr<INode>> read_access_log;
+
+        inline std::string get_label() { return _impl_get_label(); }
+        inline std::string get_tex_symbol() { return _impl_get_tex_symbol(); }
+
+        virtual std::string _impl_get_label()      = 0;
+        virtual std::string _impl_get_tex_symbol() = 0;
+
+        virtual ~IDataEdge() {}
+    };
+
+} // namespace shamrock::solvergraph
