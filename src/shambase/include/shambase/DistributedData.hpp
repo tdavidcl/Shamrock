@@ -79,12 +79,21 @@ namespace shambase {
          */
         inline void erase(u64 id) { data.erase(id); }
 
+        /**
+         * @brief Applies a function to each object in the collection.
+         *
+         * @param f A function taking two arguments: the id of the patch the object belongs to,
+         * and a non-const reference to the object itself.
+         *
+         * @remark The function is applied to each object in the order of insertion.
+         */
         inline void for_each(std::function<void(u64, T &)> &&f) {
             for (auto &[id, obj] : data) {
                 f(id, obj);
             }
         }
 
+        /// Same as for_each but for const objects
         inline void for_each(std::function<void(u64, const T &)> &&f) const {
             for (auto &[id, obj] : data) {
                 f(id, obj);
@@ -214,6 +223,7 @@ namespace shambase {
             return ret;
         }
 
+        /// Same as map but for const objects
         template<class Tmap>
         inline DistributedData<Tmap> map(std::function<Tmap(u64, const T &)> map_func) const {
             DistributedData<Tmap> ret;
@@ -298,6 +308,23 @@ namespace shambase {
         inline bool is_empty() { return data.empty(); }
     };
 
+    /**
+     * @brief Compare two distributed data and apply callbacks based on the difference
+     *
+     * This function compares the two given distributed data and applies callbacks
+     * based on the difference.
+     *
+     * The callbacks are:
+     *   - `func_missing`: called for each id present in the reference but not in `dd`
+     *   - `func_match`: called for each id present in both `dd` and the reference
+     *   - `func_extra`: called for each id present in `dd` but not in the reference
+     *
+     * @param dd the distributed data to compare
+     * @param reference the reference distributed data
+     * @param func_missing the callback for missing ids
+     * @param func_match the callback for matching ids
+     * @param func_extra the callback for extra ids
+     */
     template<class T1, class T2, class FuncMatch, class FuncMissing, class FuncExtra>
     inline void on_distributeddata_diff(
         shambase::DistributedData<T1> &dd,
