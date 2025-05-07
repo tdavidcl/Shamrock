@@ -146,8 +146,9 @@ class NodeConsToPrimGas : public shamrock::solvergraph::INode {
             \begin{align}
             {vel}_i &= \frac{ {rhov}_i }{ {rho}_i } \\
             {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right) \\
-            i \in [0,{block_count}) \\
-            \\gamma &= {gamma}
+            i &\in [0,{block_count} * N_{\rm cell/block}) \\
+            \gamma &= {gamma} \\
+            N_{\rm cell/block} & = {block_size}
             \end{align}
         )tex";
 
@@ -158,6 +159,7 @@ class NodeConsToPrimGas : public shamrock::solvergraph::INode {
         shambase::replace_all(tex, "{rhoe}", rhoe);
         shambase::replace_all(tex, "{block_count}", block_count);
         shambase::replace_all(tex, "{gamma}", shambase::format("{}", gamma));
+        shambase::replace_all(tex, "{block_size}", shambase::format("{}", block_size));
 
         return tex;
     };
@@ -220,8 +222,8 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
     u32 irhoe_ghost                                = ghost_layout.get_field_idx<Tscal>("rhoetot");
 
-    auto sizes = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
-        "block_count", "block_{\\rm count}");
+    auto sizes
+        = std::make_shared<shamrock::solvergraph::Indexes<u32>>("block_count", "N_{\\rm block}");
     sizes->indexes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
               return mpdat.total_elements;
@@ -235,7 +237,7 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
                                });
 
     auto spans_rhov
-        = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>("rhovel", "(\\rho \\vec{v})");
+        = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
     spans_rhov->spans = storage.merged_patchdata_ghost.get()
                             .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
                                 [&](u64 id, MergedPDat &mpdat) {
