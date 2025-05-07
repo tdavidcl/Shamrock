@@ -32,6 +32,7 @@ set(Sources
     src/modules/AMRSortBlocks.cpp
     src/modules/ComputeCFL.cpp
     src/modules/ConsToPrim.cpp
+    src/modules/ConsToPrimGas.cpp
     src/modules/StencilGenerator.cpp
 )
 

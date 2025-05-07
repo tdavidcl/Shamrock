@@ -20,150 +20,12 @@
 #include "shammath/riemann.hpp"
 #include "shammath/riemann_dust.hpp"
 #include "shammodels/ramses/modules/ConsToPrim.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamrock/solvergraph/ComputeFieldEdge.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include <memory>
 #include <utility>
-
-template<class Tvec>
-void cons_to_prim_gas_spans(
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<shambase::VecComponent<Tvec>>>
-        &spans_rho,
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov,
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<shambase::VecComponent<Tvec>>>
-        &spans_rhoe,
-
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel,
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<shambase::VecComponent<Tvec>>>
-        &spans_P,
-    shambase::DistributedData<u32> &sizes,
-    u32 block_size,
-    shambase::VecComponent<Tvec> gamma) {
-
-    using Tscal = shambase::VecComponent<Tvec>;
-
-    shambase::DistributedData<u32> cell_counts = sizes.map<u32>([&](u64 id, u32 block_count) {
-        u32 cell_count = block_count * block_size;
-        return cell_count;
-    });
-
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{spans_rho, spans_rhov, spans_rhoe},
-        sham::DDMultiRef{spans_vel, spans_P},
-        cell_counts,
-        [gamma](
-            u32 i,
-            const Tscal *__restrict rho,
-            const Tvec *__restrict rhov,
-            const Tscal *__restrict rhoe,
-            Tvec *__restrict vel,
-            Tscal *__restrict P) {
-            auto conststate = shammath::ConsState<Tvec>{rho[i], rhoe[i], rhov[i]};
-
-            auto prim_state = shammath::cons_to_prim(conststate, gamma);
-
-            vel[i] = prim_state.vel;
-            P[i]   = prim_state.press;
-        });
-}
-
-template<class Tvec>
-class NodeConsToPrimGas : public shamrock::solvergraph::INode {
-    using Tscal = shambase::VecComponent<Tvec>;
-    u32 block_size;
-    Tscal gamma;
-
-    public:
-    NodeConsToPrimGas(u32 block_size, Tscal gamma) : block_size(block_size), gamma(gamma) {}
-
-    struct Edges {
-        shamrock::solvergraph::Indexes<u32> &sizes;
-        shamrock::solvergraph::FieldSpan<Tscal> &spans_rho;
-        shamrock::solvergraph::FieldSpan<Tvec> &spans_rhov;
-        shamrock::solvergraph::FieldSpan<Tscal> &spans_rhoe;
-        shamrock::solvergraph::FieldSpan<Tvec> &spans_vel;
-        shamrock::solvergraph::FieldSpan<Tscal> &spans_P;
-    };
-
-    inline void set_edges(
-        std::shared_ptr<shamrock::solvergraph::Indexes<u32>> sizes,
-        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rho,
-        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_rhov,
-        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rhoe,
-        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_vel,
-        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_P) {
-        __internal_set_ro_edges({sizes, spans_rho, spans_rhov, spans_rhoe});
-        __internal_set_rw_edges({spans_vel, spans_P});
-    }
-
-    inline Edges get_edges() {
-        return Edges{
-            get_ro_edge<shamrock::solvergraph::Indexes<u32>>(0),
-            get_ro_edge<shamrock::solvergraph::FieldSpan<Tscal>>(1),
-            get_ro_edge<shamrock::solvergraph::FieldSpan<Tvec>>(2),
-            get_ro_edge<shamrock::solvergraph::FieldSpan<Tscal>>(3),
-            get_rw_edge<shamrock::solvergraph::FieldSpan<Tvec>>(0),
-            get_rw_edge<shamrock::solvergraph::FieldSpan<Tscal>>(1),
-        };
-    }
-
-    void _impl_evaluate_internal() {
-        auto edges = get_edges();
-
-        edges.spans_rho.ensure_sizes(edges.sizes.indexes);
-        edges.spans_rhov.ensure_sizes(edges.sizes.indexes);
-        edges.spans_rhoe.ensure_sizes(edges.sizes.indexes);
-        edges.spans_vel.ensure_sizes(edges.sizes.indexes);
-        edges.spans_P.ensure_sizes(edges.sizes.indexes);
-
-        cons_to_prim_gas_spans(
-            edges.spans_rho.spans,
-            edges.spans_rhov.spans,
-            edges.spans_rhoe.spans,
-            edges.spans_vel.spans,
-            edges.spans_P.spans,
-            edges.sizes.indexes,
-            block_size,
-            gamma);
-    }
-
-    void _impl_reset_internal() {}
-
-    virtual std::string _impl_get_label() { return "ConsToPrimGas"; };
-
-    virtual std::string _impl_get_tex() {
-
-        auto block_count = get_ro_edge_base(0).get_tex_symbol();
-        auto rho         = get_ro_edge_base(1).get_tex_symbol();
-        auto rhov        = get_ro_edge_base(2).get_tex_symbol();
-        auto rhoe        = get_ro_edge_base(3).get_tex_symbol();
-        auto vel         = get_rw_edge_base(0).get_tex_symbol();
-        auto P           = get_rw_edge_base(1).get_tex_symbol();
-
-        std::string tex = R"tex(
-            \begin{align}
-            {vel}_i &= \frac{ {rhov}_i }{ {rho}_i } \\
-            {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right) \\
-            i &\in [0,{block_count} * N_{\rm cell/block}) \\
-            \gamma &= {gamma} \\
-            N_{\rm cell/block} & = {block_size}
-            \end{align}
-        )tex";
-
-        shambase::replace_all(tex, "{vel}", vel);
-        shambase::replace_all(tex, "{P}", P);
-        shambase::replace_all(tex, "{rho}", rho);
-        shambase::replace_all(tex, "{rhov}", rhov);
-        shambase::replace_all(tex, "{rhoe}", rhoe);
-        shambase::replace_all(tex, "{block_count}", block_count);
-        shambase::replace_all(tex, "{gamma}", shambase::format("{}", gamma));
-        shambase::replace_all(tex, "{block_size}", shambase::format("{}", block_size));
-
-        return tex;
-    };
-};
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_dust_spans(
@@ -222,9 +84,9 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
     u32 irhoe_ghost                                = ghost_layout.get_field_idx<Tscal>("rhoetot");
 
-    auto sizes
+    auto block_counts
         = std::make_shared<shamrock::solvergraph::Indexes<u32>>("block_count", "N_{\\rm block}");
-    sizes->indexes
+    block_counts->indexes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
               return mpdat.total_elements;
           });
@@ -268,7 +130,7 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
 
-    node.set_edges(sizes, spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P);
+    node.set_edges(block_counts, spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P);
     node.evaluate();
 
     logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
