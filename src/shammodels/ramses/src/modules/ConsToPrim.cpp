@@ -69,24 +69,15 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     shamrock::SchedulerUtility utility(scheduler());
 
-    shamrock::ComputeField<Tvec> v_ghost
-        = utility.make_compute_field<Tvec>("vel", AMRBlock::block_size, [&](u64 id) {
-              return storage.merged_patchdata_ghost.get().get(id).total_elements;
-          });
-
-    shamrock::ComputeField<Tscal> P_ghost
-        = utility.make_compute_field<Tscal>("P", AMRBlock::block_size, [&](u64 id) {
-              return storage.merged_patchdata_ghost.get().get(id).total_elements;
-          });
-
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
     u32 irho_ghost                                 = ghost_layout.get_field_idx<Tscal>("rho");
     u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
     u32 irhoe_ghost                                = ghost_layout.get_field_idx<Tscal>("rhoetot");
 
-    auto block_counts
-        = std::make_shared<shamrock::solvergraph::Indexes<u32>>("block_count", "N_{\\rm block}");
-    block_counts->indexes
+    auto block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
+        "block_count_with_ghost", "N_{\\rm block, with ghost}");
+
+    block_counts_with_ghost->indexes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
               return mpdat.total_elements;
           });
@@ -114,27 +105,32 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
                                     return mpdat.pdat.get_field_pointer_span<Tscal>(irhoe_ghost);
                                 });
 
-    auto spans_vel = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>("vel", "\\mathbf{v}");
-    spans_vel->spans = storage.merged_patchdata_ghost.get()
-                           .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
-                               [&](u64 id, MergedPDat &mpdat) {
-                                   return v_ghost.get_field(id).get_pointer_span();
-                               });
-
-    auto spans_P   = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>("P", "P");
-    spans_P->spans = storage.merged_patchdata_ghost.get()
-                         .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
-                             [&](u64 id, MergedPDat &mpdat) {
-                                 return P_ghost.get_field(id).get_pointer_span();
-                             });
+    // will be filled by NodeConsToPrimGas
+    auto spans_vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+        AMRBlock::block_size, "vel", "\\mathbf{v}");
+    auto spans_P
+        = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
 
     NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
 
-    node.set_edges(block_counts, spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P);
+    node.set_edges(block_counts_with_ghost, spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P);
     node.evaluate();
 
     logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
     logger::raw_ln(" --- tex:\n" + node.get_tex());
+
+    auto print_comp_field_state = [](std::string name, auto &cfield) {
+        logger::raw_ln("Comp field state :", name);
+        cfield.field_data.for_each([&](u64 id, auto &f) {
+            logger::raw_ln(id, f.get_obj_cnt());
+        });
+    };
+
+    shamrock::ComputeField<Tvec> v_ghost  = std::move(spans_vel->extract());
+    shamrock::ComputeField<Tscal> P_ghost = std::move(spans_P->extract());
+
+    print_comp_field_state("v_ghost", v_ghost);
+    print_comp_field_state("P_ghost", P_ghost);
 
     storage.vel.set(std::move(v_ghost));
     storage.press.set(std::move(P_ghost));

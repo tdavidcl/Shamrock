@@ -86,7 +86,7 @@ namespace shamrock::solvergraph {
         using IDataEdgeNamed::IDataEdgeNamed;
         shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<T>> spans;
 
-        inline void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
             ensure_matching(
                 spans,
                 sizes,
@@ -100,6 +100,53 @@ namespace shamrock::solvergraph {
                         "Extra field span in distributed data at id " + std::to_string(id));
                 });
         }
+    };
+
+    template<class T>
+    class Field : public FieldSpan<T> {
+
+        u32 nvar;
+        std::string name;
+        ComputeField<T> field;
+
+        public:
+        Field(u32 nvar, std::string name, std::string texsymbol)
+            : nvar(nvar), name(name), FieldSpan<T>(name, texsymbol) {}
+
+        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+
+            auto new_patchdatafield = [&](u32 size) {
+                auto ret = PatchDataField<T>(name, nvar);
+                ret.resize(size);
+                return ret;
+            };
+
+            auto ensure_patchdatafield_sizes = [&](u32 size, auto &pdatfield) {
+                if (pdatfield.get_obj_cnt() != size) {
+                    pdatfield.resize(size);
+                }
+            };
+
+            ensure_matching(
+                this->spans,
+                sizes,
+                [&](u64 id) {
+                    field.field_data.add_obj(id, new_patchdatafield(sizes.get(id)));
+                },
+                [&](u64 id) {
+                    ensure_patchdatafield_sizes(sizes.get(id), field.field_data.get(id));
+                },
+                [&](u64 id) {
+                    field.field_data.erase(id);
+                });
+
+            this->spans = field.field_data.template map<shamrock::PatchDataFieldSpanPointer<T>>(
+                [&](u64 id, PatchDataField<T> &pdf) {
+                    return pdf.get_pointer_span();
+                });
+        }
+
+        inline ComputeField<T> extract() { return std::move(field); }
     };
 
     template<class Tint>
