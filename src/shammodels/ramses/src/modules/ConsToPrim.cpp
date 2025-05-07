@@ -145,16 +145,19 @@ class NodeConsToPrimGas : public shamrock::solvergraph::INode {
         std::string tex = R"tex(
             \begin{align}
             {vel}_i &= \frac{ {rhov}_i }{ {rho}_i } \\
-            {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right)
+            {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right) \\
+            i \in [0,{block_count}) \\
+            \\gamma &= {gamma}
             \end{align}
         )tex";
 
         shambase::replace_all(tex, "{vel}", vel);
         shambase::replace_all(tex, "{P}", P);
-        shambase::replace_all(tex, "{block_count}", block_count);
         shambase::replace_all(tex, "{rho}", rho);
         shambase::replace_all(tex, "{rhov}", rhov);
         shambase::replace_all(tex, "{rhoe}", rhoe);
+        shambase::replace_all(tex, "{block_count}", block_count);
+        shambase::replace_all(tex, "{gamma}", shambase::format("{}", gamma));
 
         return tex;
     };
