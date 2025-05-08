@@ -37,7 +37,7 @@ namespace shamrock::solvergraph {
         using IDataEdgeNamed::IDataEdgeNamed;
         shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<T>> spans;
 
-        inline virtual void check_sizes(shambase::DistributedData<u32> &sizes) {
+        inline virtual void check_sizes(const shambase::DistributedData<u32> &sizes) const {
             on_distributeddata_diff(
                 spans,
                 sizes,
@@ -52,7 +52,7 @@ namespace shamrock::solvergraph {
                 });
         }
 
-        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+        inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
             check_sizes(sizes);
         }
     };
@@ -69,7 +69,7 @@ namespace shamrock::solvergraph {
             : nvar(nvar), name(name), FieldSpan<T>(name, texsymbol) {}
 
         // overload only the non
-        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+        inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
 
             auto new_patchdatafield = [&](u32 size) {
                 auto ret = PatchDataField<T>(name, nvar);

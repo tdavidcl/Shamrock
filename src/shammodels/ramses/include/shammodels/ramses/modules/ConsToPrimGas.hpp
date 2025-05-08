@@ -31,10 +31,10 @@ namespace shammodels::basegodunov::modules {
         NodeConsToPrimGas(u32 block_size, Tscal gamma) : block_size(block_size), gamma(gamma) {}
 
         struct Edges {
-            shamrock::solvergraph::Indexes<u32> &sizes;
-            shamrock::solvergraph::FieldSpan<Tscal> &spans_rho;
-            shamrock::solvergraph::FieldSpan<Tvec> &spans_rhov;
-            shamrock::solvergraph::FieldSpan<Tscal> &spans_rhoe;
+            const shamrock::solvergraph::Indexes<u32> &sizes;
+            const shamrock::solvergraph::FieldSpan<Tscal> &spans_rho;
+            const shamrock::solvergraph::FieldSpan<Tvec> &spans_rhov;
+            const shamrock::solvergraph::FieldSpan<Tscal> &spans_rhoe;
             shamrock::solvergraph::FieldSpan<Tvec> &spans_vel;
             shamrock::solvergraph::FieldSpan<Tscal> &spans_P;
         };
