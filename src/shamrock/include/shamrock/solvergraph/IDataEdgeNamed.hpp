@@ -28,8 +28,8 @@ namespace shamrock::solvergraph {
         IDataEdgeNamed(std::string name, std::string texsymbol)
             : name(name), texsymbol(texsymbol) {}
 
-        virtual std::string _impl_get_dot_label() { return name; }
-        virtual std::string _impl_get_tex_symbol() { return texsymbol; }
+        virtual std::string _impl_get_dot_label() const { return name; }
+        virtual std::string _impl_get_tex_symbol() const { return texsymbol; }
     };
 
 } // namespace shamrock::solvergraph

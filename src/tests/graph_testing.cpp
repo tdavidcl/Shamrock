@@ -43,8 +43,8 @@ class Field : public IDataEdge {
     Field(std::string name, std::string texsymbol)
         : name(name), texsymbol(texsymbol), field_data() {}
 
-    inline std::string _impl_get_dot_label() { return name; };
-    inline std::string _impl_get_tex_symbol() { return texsymbol; };
+    inline std::string _impl_get_dot_label() const { return name; };
+    inline std::string _impl_get_tex_symbol() const { return texsymbol; };
 };
 
 class RhoOp : public INode {
@@ -60,7 +60,7 @@ class RhoOp : public INode {
         }
     }
 
-    void _impl_reset_internal() { get_ro_edge<Field>(0).field_data = {}; }
+    void _impl_reset_internal() {}
 
     inline void set_inputs(std::shared_ptr<Field> h, std::shared_ptr<Field> mass) {
         __internal_set_ro_edges({h, mass});

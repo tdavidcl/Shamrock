@@ -26,11 +26,11 @@ namespace shamrock::solvergraph {
 
     class IDataEdge : public shambase::WithUUID<IDataEdge, u64> {
         public:
-        inline std::string get_label() { return _impl_get_dot_label(); }
-        inline std::string get_tex_symbol() { return _impl_get_tex_symbol(); }
+        inline std::string get_label() const { return _impl_get_dot_label(); }
+        inline std::string get_tex_symbol() const { return _impl_get_tex_symbol(); }
 
-        virtual std::string _impl_get_dot_label()  = 0;
-        virtual std::string _impl_get_tex_symbol() = 0;
+        virtual std::string _impl_get_dot_label() const  = 0;
+        virtual std::string _impl_get_tex_symbol() const = 0;
 
         virtual ~IDataEdge() {}
     };
