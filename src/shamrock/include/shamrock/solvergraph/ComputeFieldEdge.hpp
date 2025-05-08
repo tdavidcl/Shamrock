@@ -37,7 +37,7 @@ namespace shamrock::solvergraph {
         using IDataEdgeNamed::IDataEdgeNamed;
         shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<T>> spans;
 
-        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+        inline virtual void check_sizes(shambase::DistributedData<u32> &sizes) {
             on_distributeddata_diff(
                 spans,
                 sizes,
@@ -50,6 +50,10 @@ namespace shamrock::solvergraph {
                     shambase::throw_with_loc<std::runtime_error>(
                         "Extra field span in distributed data at id " + std::to_string(id));
                 });
+        }
+
+        inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
+            check_sizes(sizes);
         }
     };
 
@@ -64,6 +68,7 @@ namespace shamrock::solvergraph {
         Field(u32 nvar, std::string name, std::string texsymbol)
             : nvar(nvar), name(name), FieldSpan<T>(name, texsymbol) {}
 
+        // overload only the non
         inline virtual void ensure_sizes(shambase::DistributedData<u32> &sizes) {
 
             auto new_patchdatafield = [&](u32 size) {

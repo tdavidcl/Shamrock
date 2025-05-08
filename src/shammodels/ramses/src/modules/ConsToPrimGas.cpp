@@ -25,13 +25,13 @@ namespace {
         using Tscal = shambase::VecComponent<Tvec>;
 
         inline static void kernel(
-            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho,
-            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov,
-            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rhoe,
+            const shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho,
+            const shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov,
+            const shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rhoe,
 
             shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel,
             shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_P,
-            shambase::DistributedData<u32> &sizes,
+            const shambase::DistributedData<u32> &sizes,
             u32 block_size,
             Tscal gamma) {
 
@@ -71,9 +71,10 @@ namespace shammodels::basegodunov::modules {
     void NodeConsToPrimGas<Tvec>::_impl_evaluate_internal() {
         auto edges = get_edges();
 
-        edges.spans_rho.ensure_sizes(edges.sizes.indexes);
-        edges.spans_rhov.ensure_sizes(edges.sizes.indexes);
-        edges.spans_rhoe.ensure_sizes(edges.sizes.indexes);
+        edges.spans_rho.check_sizes(edges.sizes.indexes);
+        edges.spans_rhov.check_sizes(edges.sizes.indexes);
+        edges.spans_rhoe.check_sizes(edges.sizes.indexes);
+
         edges.spans_vel.ensure_sizes(edges.sizes.indexes);
         edges.spans_P.ensure_sizes(edges.sizes.indexes);
 
