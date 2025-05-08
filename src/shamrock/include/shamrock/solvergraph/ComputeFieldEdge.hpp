@@ -22,6 +22,7 @@
 #include "shamcomm/logs.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
+#include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include <unordered_set>
 #include <stdexcept>
@@ -29,18 +30,6 @@
 #include <vector>
 
 namespace shamrock::solvergraph {
-
-    class IDataEdgeNamed : public IDataEdge {
-        std::string name;
-        std::string texsymbol;
-
-        public:
-        IDataEdgeNamed(std::string name, std::string texsymbol)
-            : name(name), texsymbol(texsymbol) {}
-
-        virtual std::string _impl_get_dot_label() { return name; }
-        virtual std::string _impl_get_tex_symbol() { return texsymbol; }
-    };
 
     template<class T>
     class FieldSpan : public IDataEdgeNamed {
