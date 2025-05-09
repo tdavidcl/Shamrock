@@ -29,7 +29,9 @@
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
+#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
+#include "shamrock/solvergraph/OperationSequence.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/RadixTree.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
@@ -58,6 +60,8 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel_dust;
+
+        std::shared_ptr<shamrock::solvergraph::OperationSequence> node_cons_to_prim;
 
         Component<SerialPatchTree<TgridVec>> serial_patch_tree;
 
