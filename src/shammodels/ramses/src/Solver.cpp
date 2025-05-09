@@ -26,7 +26,6 @@
 #include "shammodels/ramses/modules/ComputeFlux.hpp"
 #include "shammodels/ramses/modules/ComputeGradient.hpp"
 #include "shammodels/ramses/modules/ComputeTimeDerivative.hpp"
-#include "shammodels/ramses/modules/ConsToPrim.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
