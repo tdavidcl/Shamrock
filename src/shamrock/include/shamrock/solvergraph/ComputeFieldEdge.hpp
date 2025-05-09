@@ -22,90 +22,17 @@
 #include "shamcomm/logs.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
+#include "shamrock/solvergraph/Field.hpp"
+#include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/OperationSequence.hpp"
 #include <unordered_set>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace shamrock::solvergraph {
-
-    template<class T>
-    class FieldSpan : public IDataEdgeNamed {
-        public:
-        using IDataEdgeNamed::IDataEdgeNamed;
-        shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<T>> spans;
-
-        inline virtual void check_sizes(const shambase::DistributedData<u32> &sizes) const {
-            on_distributeddata_diff(
-                spans,
-                sizes,
-                [](u64 id) {
-                    shambase::throw_with_loc<std::runtime_error>(
-                        "Missing field span in distributed data at id " + std::to_string(id));
-                },
-                [](u64 id) {},
-                [](u64 id) {
-                    shambase::throw_with_loc<std::runtime_error>(
-                        "Extra field span in distributed data at id " + std::to_string(id));
-                });
-        }
-
-        inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
-            check_sizes(sizes);
-        }
-    };
-
-    template<class T>
-    class Field : public FieldSpan<T> {
-
-        u32 nvar;
-        std::string name;
-        ComputeField<T> field;
-
-        public:
-        Field(u32 nvar, std::string name, std::string texsymbol)
-            : nvar(nvar), name(name), FieldSpan<T>(name, texsymbol) {}
-
-        // overload only the non
-        inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
-
-            auto new_patchdatafield = [&](u32 size) {
-                auto ret = PatchDataField<T>(name, nvar);
-                ret.resize(size);
-                return ret;
-            };
-
-            auto ensure_patchdatafield_sizes = [&](u32 size, auto &pdatfield) {
-                if (pdatfield.get_obj_cnt() != size) {
-                    pdatfield.resize(size);
-                }
-            };
-
-            on_distributeddata_diff(
-                this->spans,
-                sizes,
-                [&](u64 id) {
-                    field.field_data.add_obj(id, new_patchdatafield(sizes.get(id)));
-                },
-                [&](u64 id) {
-                    ensure_patchdatafield_sizes(sizes.get(id), field.field_data.get(id));
-                },
-                [&](u64 id) {
-                    field.field_data.erase(id);
-                });
-
-            this->spans = field.field_data.template map<shamrock::PatchDataFieldSpanPointer<T>>(
-                [&](u64 id, PatchDataField<T> &pdf) {
-                    return pdf.get_pointer_span();
-                });
-        }
-
-        inline ComputeField<T> extract() { return std::move(field); }
-
-        inline ComputeField<T> &internal_ref() { return field; }
-    };
 
     template<class Tint>
     class Indexes : public IDataEdgeNamed {
@@ -127,67 +54,6 @@ namespace shamrock::solvergraph {
         EntryPointNode(Func &&f) : functor(std::forward<Func>(f)) {}
 
         inline void _impl_evaluate_internal() { functor(get_rw_edge<T>(0)); }
-    };
-
-    class OperationSequence : public INode {
-        std::vector<std::shared_ptr<INode>> nodes;
-        std::string name;
-
-        public:
-        OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> nodes)
-            : nodes(nodes), name(name) {
-            if (nodes.size() == 0) {
-                shambase::throw_with_loc<std::invalid_argument>(
-                    "OperationSequence must have at least one node");
-            }
-        }
-        void _impl_evaluate_internal() {
-            for (auto &node : nodes) {
-                node->evaluate();
-            }
-        }
-
-        void _impl_reset_internal() {
-            for (int i = nodes.size() - 1; i >= 0; i--) {
-                nodes[i]->reset();
-            }
-        }
-
-        std::string _impl_get_label() { return name; }
-
-        std::string _impl_get_dot_graph_partial() {
-            std::stringstream ss;
-
-            ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
-            for (auto &node : nodes) {
-                ss << node->get_dot_graph_partial();
-            }
-
-            for (int i = 0; i < nodes.size() - 1; i++) {
-                ss << nodes[i]->get_dot_graph_node_end() << " -> "
-                   << nodes[i + 1]->get_dot_graph_node_start() << " [weight=3];\n";
-            }
-
-            ss << shambase::format("label = \"{}\";\n", _impl_get_label());
-            ss << "}\n";
-
-            return ss.str();
-        };
-
-        inline virtual std::string _impl_get_dot_graph_node_start() {
-            return nodes[0]->get_dot_graph_node_start();
-        }
-        inline virtual std::string _impl_get_dot_graph_node_end() {
-            return nodes[nodes.size() - 1]->get_dot_graph_node_end();
-        }
-
-        std::string _impl_get_tex() {
-            std::stringstream ss;
-            for (auto &node : nodes) {
-                ss << node->get_tex_partial() << "\n";
-            }
-            return ss.str();
-        }
     };
 
 } // namespace shamrock::solvergraph

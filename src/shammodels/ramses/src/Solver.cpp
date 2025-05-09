@@ -105,7 +105,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     }
 
     shamrock::solvergraph::OperationSequence seq("Cons to Prim", std::move(const_to_prim_sequence));
-    storage.const_to_prim = std::make_shared<decltype(seq)>(std::move(seq));
+    storage.node_cons_to_prim = std::make_shared<decltype(seq)>(std::move(seq));
 }
 
 template<class Tvec, class TgridVec>
@@ -230,7 +230,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
     // compute prim variable
     {
-        auto &seq = shambase::get_check_ref(storage.const_to_prim);
+        auto &seq = shambase::get_check_ref(storage.node_cons_to_prim);
 
         seq.evaluate();
         logger::raw_ln(" --- dot:\n" + seq.get_dot_graph());

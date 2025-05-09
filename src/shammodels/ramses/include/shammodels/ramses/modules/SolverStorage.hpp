@@ -59,7 +59,7 @@ namespace shammodels::basegodunov {
 
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> spans_vel_dust;
 
-        std::shared_ptr<shamrock::solvergraph::OperationSequence> const_to_prim;
+        std::shared_ptr<shamrock::solvergraph::OperationSequence> node_cons_to_prim;
 
         Component<SerialPatchTree<TgridVec>> serial_patch_tree;
 
