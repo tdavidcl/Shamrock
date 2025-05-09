@@ -33,6 +33,7 @@ set(Sources
     src/modules/ComputeCFL.cpp
     src/modules/ConsToPrim.cpp
     src/modules/ConsToPrimGas.cpp
+    src/modules/ConsToPrimDust.cpp
     src/modules/StencilGenerator.cpp
 )
 
