@@ -29,6 +29,7 @@
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
+#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/OperationSequence.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -56,14 +57,12 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rho;
         std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_rhov;
         std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rhoe;
-
-        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> spans_vel;
-        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> spans_P;
-
         std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rho_dust;
         std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_rhov_dust;
 
-        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> spans_vel_dust;
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel_dust;
 
         std::shared_ptr<shamrock::solvergraph::OperationSequence> node_cons_to_prim;
 

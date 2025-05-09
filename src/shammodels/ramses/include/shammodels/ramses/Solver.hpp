@@ -117,8 +117,6 @@ namespace shammodels::basegodunov {
         }
 
         void init_solver_graph();
-
-        private:
     };
 
 } // namespace shammodels::basegodunov
