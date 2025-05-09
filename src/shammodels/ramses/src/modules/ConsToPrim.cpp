@@ -37,12 +37,6 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     shamrock::SchedulerUtility utility(scheduler());
 
-    // will be filled by NodeConsToPrimGas
-    auto spans_vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
-        AMRBlock::block_size, "vel", "\\mathbf{v}");
-    auto spans_P
-        = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
-
     NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
 
     node.set_edges(
@@ -50,8 +44,8 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
         storage.spans_rho,
         storage.spans_rhov,
         storage.spans_rhoe,
-        spans_vel,
-        spans_P);
+        storage.vel,
+        storage.press);
     node.evaluate();
 
     // logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
@@ -63,15 +57,6 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
             logger::raw_ln(id, f.get_obj_cnt());
         });
     };
-
-    shamrock::ComputeField<Tvec> v_ghost  = std::move(spans_vel->extract());
-    shamrock::ComputeField<Tscal> P_ghost = std::move(spans_P->extract());
-
-    // print_comp_field_state("v_ghost", v_ghost);
-    // print_comp_field_state("P_ghost", P_ghost);
-
-    storage.vel.set(std::move(v_ghost));
-    storage.press.set(std::move(P_ghost));
 }
 
 template<class Tvec, class TgridVec>
@@ -85,10 +70,6 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     u32 ndust                                      = solver_config.dust_config.ndust;
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
-
-    // will be filled by NodeConsToPrimDust
-    auto spans_vel_dust = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
-        AMRBlock::block_size * ndust, "vel_dust", "\\mathbf{v}_{\\rm dust}");
 
     auto print_block_sizes = [](std::string name, auto &cfield) {
         logger::raw_ln("Comp field state :", name);
@@ -105,7 +86,7 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
         storage.block_counts_with_ghost,
         storage.spans_rho_dust,
         storage.spans_rhov_dust,
-        spans_vel_dust);
+        storage.vel_dust);
     node.evaluate();
 
     // logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
@@ -117,23 +98,12 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
             logger::raw_ln(id, f.get_obj_cnt());
         });
     };
-
-    shamrock::ComputeField<Tvec> v_dust_ghost = std::move(spans_vel_dust->extract());
-
-    // print_comp_field_state("v_ghost", v_dust_ghost);
-
-    storage.vel_dust.set(std::move(v_dust_ghost));
 }
 
 template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::reset_gas() {
-    storage.vel.reset();
-    storage.press.reset();
-}
+void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::reset_gas() {}
 
 template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::reset_dust() {
-    storage.vel_dust.reset();
-}
+void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::reset_dust() {}
 
 template class shammodels::basegodunov::modules::ConsToPrim<f64_3, i64_3>;
