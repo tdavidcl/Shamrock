@@ -27,6 +27,8 @@
 #include "shamrock/scheduler/InterfacesUtility.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
+#include "shamrock/solvergraph/FieldSpan.hpp"
+#include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/RadixTree.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
@@ -44,6 +46,13 @@ namespace shammodels::basegodunov {
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
         using RTree = RadixTree<Tmorton, TgridVec>;
+
+        std::shared_ptr<shamrock::solvergraph::Indexes<u32>> block_counts_with_ghost;
+        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rho;
+        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_rhov;
+        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rhoe;
+        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tscal>> spans_rho_dust;
+        std::shared_ptr<shamrock::solvergraph::FieldSpan<Tvec>> spans_rhov_dust;
 
         Component<SerialPatchTree<TgridVec>> serial_patch_tree;
 

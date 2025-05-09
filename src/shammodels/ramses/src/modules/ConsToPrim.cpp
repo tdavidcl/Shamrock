@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/memory.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shamcomm/logs.hpp"
@@ -41,36 +42,31 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
     u32 irhoe_ghost                                = ghost_layout.get_field_idx<Tscal>("rhoetot");
 
-    auto block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
-        "block_count_with_ghost", "N_{\\rm block, with ghost}");
-
-    block_counts_with_ghost->indexes
+    shambase::get_check_ref(storage.block_counts_with_ghost).indexes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
               return mpdat.total_elements;
           });
 
-    auto spans_rho   = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>("rho", "\\rho");
-    spans_rho->spans = storage.merged_patchdata_ghost.get()
-                           .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
-                               [&](u64 id, MergedPDat &mpdat) {
-                                   return mpdat.pdat.get_field_pointer_span<Tscal>(irho_ghost);
-                               });
+    shambase::get_check_ref(storage.spans_rho).spans
+        = storage.merged_patchdata_ghost.get()
+              .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                  [&](u64 id, MergedPDat &mpdat) {
+                      return mpdat.pdat.get_field_pointer_span<Tscal>(irho_ghost);
+                  });
 
-    auto spans_rhov
-        = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
-    spans_rhov->spans = storage.merged_patchdata_ghost.get()
-                            .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
-                                [&](u64 id, MergedPDat &mpdat) {
-                                    return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_ghost);
-                                });
+    shambase::get_check_ref(storage.spans_rhov).spans
+        = storage.merged_patchdata_ghost.get()
+              .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                  [&](u64 id, MergedPDat &mpdat) {
+                      return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_ghost);
+                  });
 
-    auto spans_rhoe
-        = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>("rhoetot", "(\\rho E)");
-    spans_rhoe->spans = storage.merged_patchdata_ghost.get()
-                            .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
-                                [&](u64 id, MergedPDat &mpdat) {
-                                    return mpdat.pdat.get_field_pointer_span<Tscal>(irhoe_ghost);
-                                });
+    shambase::get_check_ref(storage.spans_rhoe).spans
+        = storage.merged_patchdata_ghost.get()
+              .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                  [&](u64 id, MergedPDat &mpdat) {
+                      return mpdat.pdat.get_field_pointer_span<Tscal>(irhoe_ghost);
+                  });
 
     // will be filled by NodeConsToPrimGas
     auto spans_vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
@@ -80,7 +76,13 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
 
-    node.set_edges(block_counts_with_ghost, spans_rho, spans_rhov, spans_rhoe, spans_vel, spans_P);
+    node.set_edges(
+        storage.block_counts_with_ghost,
+        storage.spans_rho,
+        storage.spans_rhov,
+        storage.spans_rhoe,
+        spans_vel,
+        spans_P);
     node.evaluate();
 
     // logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
@@ -118,26 +120,19 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
     u32 irho_dust_ghost  = ghost_layout.get_field_idx<Tscal>("rho_dust");
     u32 irhov_dust_ghost = ghost_layout.get_field_idx<Tvec>("rhovel_dust");
 
-    auto block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
-        "block_count_with_ghost", "N_{\\rm block, with ghost}");
-
-    block_counts_with_ghost->indexes
+    shambase::get_check_ref(storage.block_counts_with_ghost).indexes
         = storage.merged_patchdata_ghost.get().template map<u32>([&](u64 id, MergedPDat &mpdat) {
               return mpdat.total_elements;
           });
 
-    auto spans_rho_dust = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>(
-        "rho_dust", "\\rho_{\\rm dust}");
-    spans_rho_dust->spans
+    shambase::get_check_ref(storage.spans_rho_dust).spans
         = storage.merged_patchdata_ghost.get()
               .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
                   [&](u64 id, MergedPDat &mpdat) {
                       return mpdat.pdat.get_field_pointer_span<Tscal>(irho_dust_ghost);
                   });
 
-    auto spans_rhov_dust = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>(
-        "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
-    spans_rhov_dust->spans
+    shambase::get_check_ref(storage.spans_rhov_dust).spans
         = storage.merged_patchdata_ghost.get()
               .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
                   [&](u64 id, MergedPDat &mpdat) {
@@ -155,11 +150,15 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
         });
     };
 
-    print_block_sizes("block_counts_with_ghost", block_counts_with_ghost->indexes);
+    print_block_sizes("block_counts_with_ghost", storage.block_counts_with_ghost->indexes);
 
     NodeConsToPrimDust<Tvec> node{AMRBlock::block_size, ndust};
 
-    node.set_edges(block_counts_with_ghost, spans_rho_dust, spans_rhov_dust, spans_vel_dust);
+    node.set_edges(
+        storage.block_counts_with_ghost,
+        storage.spans_rho_dust,
+        storage.spans_rhov_dust,
+        spans_vel_dust);
     node.evaluate();
 
     // logger::raw_ln(" --- dot:\n" + node.get_dot_graph());
