@@ -150,7 +150,7 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
         });
     };
 
-    print_block_sizes("block_counts_with_ghost", storage.block_counts_with_ghost->indexes);
+    // print_block_sizes("block_counts_with_ghost", storage.block_counts_with_ghost->indexes);
 
     NodeConsToPrimDust<Tvec> node{AMRBlock::block_size, ndust};
 
