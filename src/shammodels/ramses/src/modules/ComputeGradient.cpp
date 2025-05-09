@@ -311,7 +311,8 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::_compute
         sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
         sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tvec> &buf_vel = storage.vel.get().get_buf(id);
+        auto &cfield_vel                  = storage.spans_vel->internal_ref();
+        sham::DeviceBuffer<Tvec> &buf_vel = cfield_vel.get_buf(id);
 
         AMRGraph &graph_neigh_xp
             = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
@@ -414,7 +415,8 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::_compute
         sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
         sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tscal> &buf_press = storage.press.get().get_buf(id);
+        auto &cfield_press                   = storage.spans_P->internal_ref();
+        sham::DeviceBuffer<Tscal> &buf_press = cfield_press.get_buf(id);
 
         AMRGraph &graph_neigh_xp
             = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
@@ -674,7 +676,8 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::
         sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
         sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tvec> &buf_vel_dust = storage.vel_dust.get().get_buf(id);
+        auto &cfield_vel_dust                  = storage.spans_vel_dust->internal_ref();
+        sham::DeviceBuffer<Tvec> &buf_vel_dust = cfield_vel_dust.get_buf(id);
 
         AMRGraph &graph_neigh_xp
             = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);

@@ -103,6 +103,8 @@ namespace shamrock::solvergraph {
         }
 
         inline ComputeField<T> extract() { return std::move(field); }
+
+        inline ComputeField<T> &internal_ref() { return field; }
     };
 
     template<class Tint>
@@ -125,6 +127,67 @@ namespace shamrock::solvergraph {
         EntryPointNode(Func &&f) : functor(std::forward<Func>(f)) {}
 
         inline void _impl_evaluate_internal() { functor(get_rw_edge<T>(0)); }
+    };
+
+    class OperationSequence : public INode {
+        std::vector<std::shared_ptr<INode>> nodes;
+        std::string name;
+
+        public:
+        OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> nodes)
+            : nodes(nodes), name(name) {
+            if (nodes.size() == 0) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "OperationSequence must have at least one node");
+            }
+        }
+        void _impl_evaluate_internal() {
+            for (auto &node : nodes) {
+                node->evaluate();
+            }
+        }
+
+        void _impl_reset_internal() {
+            for (int i = nodes.size() - 1; i >= 0; i--) {
+                nodes[i]->reset();
+            }
+        }
+
+        std::string _impl_get_label() { return name; }
+
+        std::string _impl_get_dot_graph_partial() {
+            std::stringstream ss;
+
+            ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
+            for (auto &node : nodes) {
+                ss << node->get_dot_graph_partial();
+            }
+
+            for (int i = 0; i < nodes.size() - 1; i++) {
+                ss << nodes[i]->get_dot_graph_node_end() << " -> "
+                   << nodes[i + 1]->get_dot_graph_node_start() << " [weight=3];\n";
+            }
+
+            ss << shambase::format("label = \"{}\";\n", _impl_get_label());
+            ss << "}\n";
+
+            return ss.str();
+        };
+
+        inline virtual std::string _impl_get_dot_graph_node_start() {
+            return nodes[0]->get_dot_graph_node_start();
+        }
+        inline virtual std::string _impl_get_dot_graph_node_end() {
+            return nodes[nodes.size() - 1]->get_dot_graph_node_end();
+        }
+
+        std::string _impl_get_tex() {
+            std::stringstream ss;
+            for (auto &node : nodes) {
+                ss << node->get_tex_partial() << "\n";
+            }
+            return ss.str();
+        }
     };
 
 } // namespace shamrock::solvergraph

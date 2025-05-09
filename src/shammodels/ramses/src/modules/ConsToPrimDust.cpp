@@ -92,7 +92,8 @@ namespace shammodels::basegodunov::modules {
             \begin{align}
             {vel}_{i,j} &= \frac{ {rhov}_{i,j} }{ {rho}_{i,j} } \\
             i &\in [0,{block_count} * N_{\rm cell/block}) \\
-            j &\in [0,{ndust}) \\
+            j &\in [0,n_{\rm dust}) \\
+            n_{\rm dust} & = {ndust} \\
             N_{\rm cell/block} & = {block_size}
             \end{align}
         )tex";

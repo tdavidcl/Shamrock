@@ -14,9 +14,10 @@
  *
  */
 
-#include "shammodels/ramses/Solver.hpp"
+#include "shambase/memory.hpp"
 #include "shamcomm/collectives.hpp"
 #include "shammodels/common/timestep_report.hpp"
+#include "shammodels/ramses/Solver.hpp"
 #include "shammodels/ramses/modules/AMRGraphGen.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
 #include "shammodels/ramses/modules/AMRTree.hpp"
@@ -26,12 +27,86 @@
 #include "shammodels/ramses/modules/ComputeGradient.hpp"
 #include "shammodels/ramses/modules/ComputeTimeDerivative.hpp"
 #include "shammodels/ramses/modules/ConsToPrim.hpp"
+#include "shammodels/ramses/modules/ConsToPrimDust.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
 #include "shammodels/ramses/modules/FaceInterpolate.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
 #include "shammodels/ramses/modules/StencilGenerator.hpp"
 #include "shammodels/ramses/modules/TimeIntegrator.hpp"
 #include "shamrock/io/LegacyVtkWritter.hpp"
+#include "shamrock/solvergraph/ComputeFieldEdge.hpp"
+#include "shamrock/solvergraph/INode.hpp"
+#include <memory>
+#include <vector>
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
+
+    using namespace shamrock::solvergraph;
+
+    storage.block_counts_with_ghost
+        = std::make_shared<Indexes<u32>>("block_count_with_ghost", "N_{\\rm block, with ghost}");
+
+    // merged ghost spans
+    { // gas spans
+        storage.spans_rho  = std::make_shared<FieldSpan<Tscal>>("rho", "\\rho");
+        storage.spans_rhov = std::make_shared<FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
+        storage.spans_rhoe = std::make_shared<FieldSpan<Tscal>>("rhoetot", "(\\rho E)");
+    }
+
+    if (solver_config.is_dust_on()) {
+        storage.spans_rho_dust
+            = std::make_shared<FieldSpan<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
+        storage.spans_rhov_dust = std::make_shared<FieldSpan<Tvec>>(
+            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
+    }
+
+    // cons to prim results
+    { // gas spans
+        storage.spans_vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "vel", "\\mathbf{v}");
+        storage.spans_P
+            = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
+    }
+
+    if (solver_config.is_dust_on()) {
+        u32 ndust = solver_config.dust_config.ndust;
+
+        storage.spans_vel_dust = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size * ndust, "vel_dust", "\\mathbf{v}_{\\rm dust}");
+    }
+
+    std::vector<std::shared_ptr<shamrock::solvergraph::INode>> const_to_prim_sequence;
+
+    {
+        modules::NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
+        node.set_edges(
+            storage.block_counts_with_ghost,
+            storage.spans_rho,
+            storage.spans_rhov,
+            storage.spans_rhoe,
+            storage.spans_vel,
+            storage.spans_P);
+
+        const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    if (solver_config.is_dust_on()) {
+        u32 ndust = solver_config.dust_config.ndust;
+        modules::NodeConsToPrimDust<Tvec> node{AMRBlock::block_size, ndust};
+        node.set_edges(
+            storage.block_counts_with_ghost,
+            storage.spans_rho_dust,
+            storage.spans_rhov_dust,
+            storage.spans_vel_dust);
+
+        const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    shamrock::solvergraph::OperationSequence seq("Cons to Prim", std::move(const_to_prim_sequence));
+    storage.const_to_prim = std::make_shared<decltype(seq)>(std::move(seq));
+}
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
@@ -72,6 +147,68 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
     gz.exchange_ghost();
 
+    { // set element counts
+        using MergedPDat = shamrock::MergedPatchData;
+
+        shambase::get_check_ref(storage.block_counts_with_ghost).indexes
+            = storage.merged_patchdata_ghost.get().template map<u32>(
+                [&](u64 id, MergedPDat &mpdat) {
+                    return mpdat.total_elements;
+                });
+    }
+
+    { // attach spans to gas field with ghosts
+        using MergedPDat                               = shamrock::MergedPatchData;
+        shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
+        u32 irho_ghost                                 = ghost_layout.get_field_idx<Tscal>("rho");
+        u32 irhov_ghost                                = ghost_layout.get_field_idx<Tvec>("rhovel");
+        u32 irhoe_ghost = ghost_layout.get_field_idx<Tscal>("rhoetot");
+
+        storage.spans_rho->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<Tscal>(irho_ghost);
+                      });
+
+        storage.spans_rhov->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_ghost);
+                      });
+
+        storage.spans_rhoe->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<Tscal>(irhoe_ghost);
+                      });
+    }
+
+    if (solver_config.is_dust_on()) { // attach spans to dust field with ghosts
+        using MergedPDat                               = shamrock::MergedPatchData;
+        u32 ndust                                      = solver_config.dust_config.ndust;
+        shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
+
+        u32 irho_dust_ghost  = ghost_layout.get_field_idx<Tscal>("rho_dust");
+        u32 irhov_dust_ghost = ghost_layout.get_field_idx<Tvec>("rhovel_dust");
+
+        storage.spans_rho_dust->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<Tscal>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<Tscal>(irho_dust_ghost);
+                      });
+
+        storage.spans_rhov_dust->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<Tvec>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<Tvec>(irhov_dust_ghost);
+                      });
+    }
+
     modules::ComputeCellInfos comp_cell_infos(context, solver_config, storage);
     comp_cell_infos.compute_aabb();
 
@@ -92,11 +229,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     graph_gen.lower_AMR_block_graph_to_cell_common_face_graph(block_oriented_graph);
 
     // compute prim variable
-    modules::ConsToPrim ctop(context, solver_config, storage);
+    {
+        auto &seq = shambase::get_check_ref(storage.const_to_prim);
 
-    ctop.cons_to_prim_gas();
-    if (solver_config.is_dust_on()) {
-        ctop.cons_to_prim_dust();
+        seq.evaluate();
+        logger::raw_ln(" --- dot:\n" + seq.get_dot_graph());
+        logger::raw_ln(" --- tex:\n" + seq.get_tex());
     }
 
     // compute & limit gradients
@@ -212,8 +350,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     storage.dz_v.reset();
     storage.grad_P.reset();
 
-    ctop.reset_gas();
-
     if (solver_config.is_dust_on()) {
         storage.dtrho_dust.reset();
         storage.dtrhov_dust.reset();
@@ -249,8 +385,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         storage.dx_v_dust.reset();
         storage.dy_v_dust.reset();
         storage.dz_v_dust.reset();
-
-        ctop.reset_dust();
     }
 
     if (solver_config.drag_config.drag_solver_config != DragSolverMode::NoDrag) {
