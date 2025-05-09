@@ -55,7 +55,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         storage.spans_rho_dust
             = std::make_shared<FieldSpan<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
         storage.spans_rhov_dust = std::make_shared<FieldSpan<Tvec>>(
-            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
+            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     }
 
     // will be filled by NodeConsToPrimGas

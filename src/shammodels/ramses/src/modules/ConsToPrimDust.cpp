@@ -91,6 +91,8 @@ namespace shammodels::basegodunov::modules {
         auto vel         = get_rw_edge_base(0).get_tex_symbol();
 
         std::string tex = R"tex(
+            Conservative to primitive variable (dust)
+
             \begin{align}
             {vel}_{i,j} &= \frac{ {rhov}_{i,j} }{ {rho}_{i,j} } \\
             i &\in [0,{block_count} * N_{\rm cell/block}) \\
