@@ -29,39 +29,6 @@
 #include <utility>
 
 template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_dust_spans(
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho_dust,
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_rhov_dust,
-
-    shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel_dust,
-    shambase::DistributedData<u32> &sizes) {
-
-    u32 ndust = solver_config.dust_config.ndust;
-
-    shambase::DistributedData<u32> cell_counts = sizes.map<u32>([&](u64 id, u32 block_count) {
-        u32 cell_count = block_count * AMRBlock::block_size * ndust;
-        return cell_count;
-    });
-
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{spans_rho_dust, spans_rhov_dust},
-        sham::DDMultiRef{spans_vel_dust},
-        cell_counts,
-        [gamma = solver_config.eos_gamma](
-            u32 i,
-            const Tscal *__restrict rho_dust,
-            const Tvec *__restrict rhov_dust,
-            Tvec *__restrict vel_dust) {
-            auto d_conststate = shammath::DustConsState<Tvec>{rho_dust[i], rhov_dust[i]};
-
-            auto d_prim_state = shammath::d_cons_to_prim(d_conststate);
-
-            vel_dust[i] = d_prim_state.vel;
-        });
-}
-
-template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_gas() {
 
     StackEntry stack_loc{};
