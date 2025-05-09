@@ -32,19 +32,11 @@ namespace shamrock::solvergraph {
                     "OperationSequence must have at least one node");
             }
         }
-        void _impl_evaluate_internal() {
-            for (auto &node : nodes) {
-                node->evaluate();
-            }
-        }
+        void _impl_evaluate_internal();
 
-        void _impl_reset_internal() {
-            for (int i = nodes.size() - 1; i >= 0; i--) {
-                nodes[i]->reset();
-            }
-        }
+        void _impl_reset_internal();
 
-        std::string _impl_get_label() { return name; }
+        inline std::string _impl_get_label() { return name; }
 
         std::string _impl_get_dot_graph_partial();
 

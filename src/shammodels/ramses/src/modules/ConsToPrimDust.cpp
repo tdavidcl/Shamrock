@@ -17,6 +17,8 @@
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammath/riemann_dust.hpp"
+#include "shamrock/patch/PatchDataField.hpp"
+#include "shamsys/NodeInstance.hpp"
 
 namespace {
 

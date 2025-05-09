@@ -34,8 +34,10 @@
 #include "shammodels/ramses/modules/StencilGenerator.hpp"
 #include "shammodels/ramses/modules/TimeIntegrator.hpp"
 #include "shamrock/io/LegacyVtkWritter.hpp"
-#include "shamrock/solvergraph/ComputeFieldEdge.hpp"
+#include "shamrock/solvergraph/Field.hpp"
+#include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/Indexes.hpp"
 #include <memory>
 #include <vector>
 

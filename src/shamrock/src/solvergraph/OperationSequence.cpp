@@ -18,6 +18,19 @@
 #include <sstream>
 
 namespace shamrock::solvergraph {
+
+    void OperationSequence::_impl_evaluate_internal() {
+        for (auto &node : nodes) {
+            node->evaluate();
+        }
+    }
+
+    void OperationSequence::_impl_reset_internal() {
+        for (int i = nodes.size() - 1; i >= 0; i--) {
+            nodes[i]->reset();
+        }
+    }
+
     std::string OperationSequence::_impl_get_dot_graph_partial() {
 
         std::stringstream ss;
