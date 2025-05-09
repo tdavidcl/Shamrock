@@ -50,6 +50,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         = std::make_shared<Indexes<u32>>("block_count_with_ghost", "N_{\\rm block, with ghost}");
 
     // merged ghost spans
+
+    storage.spans_block_min
+        = std::make_shared<FieldSpan<TgridVec>>("block_min", "\\block_{\\rm min}");
+    storage.spans_block_max
+        = std::make_shared<FieldSpan<TgridVec>>("block_max", "\\block_{\\rm max}");
+
     { // gas spans
         storage.spans_rho  = std::make_shared<FieldSpan<Tscal>>("rho", "\\rho");
         storage.spans_rhov = std::make_shared<FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
