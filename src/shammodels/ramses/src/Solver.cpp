@@ -50,20 +50,20 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     // merged ghost spans
 
     storage.spans_block_min
-        = std::make_shared<FieldSpan<TgridVec>>("block_min", "\\block_{\\rm min}");
+        = std::make_shared<FieldRefs<TgridVec>>("block_min", "\\block_{\\rm min}");
     storage.spans_block_max
-        = std::make_shared<FieldSpan<TgridVec>>("block_max", "\\block_{\\rm max}");
+        = std::make_shared<FieldRefs<TgridVec>>("block_max", "\\block_{\\rm max}");
 
     { // gas spans
-        storage.spans_rho  = std::make_shared<FieldSpan<Tscal>>("rho", "\\rho");
-        storage.spans_rhov = std::make_shared<FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
-        storage.spans_rhoe = std::make_shared<FieldSpan<Tscal>>("rhoetot", "(\\rho E)");
+        storage.spans_rho  = std::make_shared<FieldRefs<Tscal>>("rho", "\\rho");
+        storage.spans_rhov = std::make_shared<FieldRefs<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
+        storage.spans_rhoe = std::make_shared<FieldRefs<Tscal>>("rhoetot", "(\\rho E)");
     }
 
     if (solver_config.is_dust_on()) {
         storage.spans_rho_dust
-            = std::make_shared<FieldSpan<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
-        storage.spans_rhov_dust = std::make_shared<FieldSpan<Tvec>>(
+            = std::make_shared<FieldRefs<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
+        storage.spans_rhov_dust = std::make_shared<FieldRefs<Tvec>>(
             "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
     }
 
