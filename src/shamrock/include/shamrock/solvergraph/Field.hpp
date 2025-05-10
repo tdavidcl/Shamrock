@@ -35,7 +35,16 @@ namespace shamrock::solvergraph {
         Field(u32 nvar, std::string name, std::string texsymbol)
             : nvar(nvar), name(name), FieldRefs<T>(name, texsymbol) {}
 
-        // overload only the non
+        void sync_refs() {
+            this->field_refs
+                = field.field_data.template map<std::reference_wrapper<PatchDataField<T>>>(
+                    [&](u64 id, PatchDataField<T> &pdf) {
+                        return std::ref(pdf);
+                    });
+            this->sync_spans();
+        }
+
+        // overload only the non const case
         inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
 
             auto new_patchdatafield = [&](u32 size) {
@@ -63,14 +72,11 @@ namespace shamrock::solvergraph {
                     field.field_data.erase(id);
                 });
 
-            this->set_refs(field.field_data.template map<std::reference_wrapper<PatchDataField<T>>>(
-                [&](u64 id, PatchDataField<T> &pdf) {
-                    return std::ref(pdf);
-                }));
+            sync_refs();
         }
 
         inline ComputeField<T> extract() {
-            this->set_refs({});
+            this->set_ref_sync_spans({});
             return std::move(field);
         }
 

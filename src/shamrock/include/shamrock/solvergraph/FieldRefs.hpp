@@ -27,24 +27,17 @@ namespace shamrock::solvergraph {
     template<class T>
     class FieldRefs : public FieldSpan<T> {
 
+        public:
+        using FieldSpan<T>::FieldSpan;
+
         shambase::DistributedData<std::reference_wrapper<PatchDataField<T>>> field_refs;
 
-        public:
-        void
-        set_refs(shambase::DistributedData<std::reference_wrapper<PatchDataField<T>>> field_refs) {
-            this->field_refs = field_refs;
-            this->spans      = field_refs.template map<shamrock::PatchDataFieldSpanPointer<T>>(
+        void sync_spans() {
+            this->spans = field_refs.template map<shamrock::PatchDataFieldSpanPointer<T>>(
                 [&](u64 id, std::reference_wrapper<PatchDataField<T>> &pdf) {
                     return pdf.get().get_pointer_span();
                 });
         }
-
-        auto extract_refs() {
-            this->spans = {};
-            return std::move(this->field_refs);
-        }
-
-        using FieldSpan<T>::FieldSpan;
 
         inline virtual void check_sizes(const shambase::DistributedData<u32> &sizes) const {
             on_distributeddata_diff(
@@ -61,8 +54,11 @@ namespace shamrock::solvergraph {
                 });
         }
 
-        inline virtual void ensure_sizes(const shambase::DistributedData<u32> &sizes) {
-            check_sizes(sizes);
+        void set_ref_sync_spans(
+            const shambase::DistributedData<std::reference_wrapper<PatchDataField<T>>>
+                &field_refs) {
+            this->field_refs = field_refs;
+            this->sync_spans();
         }
     };
 } // namespace shamrock::solvergraph
