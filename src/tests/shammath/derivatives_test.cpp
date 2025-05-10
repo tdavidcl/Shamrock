@@ -93,7 +93,7 @@ TestStart(
         return f(x);
     });
 
-    REQUIRE_FLOAT_EQUAL(df(x) + 1, val, 1.4e-08);
+    REQUIRE_FLOAT_EQUAL(df(x), val, 1.4e-08);
 }
 
 TestStart(
