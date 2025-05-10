@@ -113,6 +113,10 @@ namespace shamtest {
         printf("%-15s", s_assert.c_str());
         std::cout << " (" << timer.get_time_str() << ")" << std::endl;
 
+        if (succes_cnt != res.asserts.asserts.size()) {
+            std::cout << shambase::format("##[error]Test {} failed", res.name) << std::endl;
+        }
+
         std::cout << std::endl;
     }
 
