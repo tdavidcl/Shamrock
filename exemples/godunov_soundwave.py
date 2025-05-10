@@ -25,7 +25,7 @@ scale_fact = 1 / (sz * base * multx)
 cfg.set_scale_factor(scale_fact)
 
 cfg.set_eos_gamma(5.0 / 3.0)
-model.set_config(cfg)
+model.set_solver_config(cfg)
 
 
 gamma = 5.0 / 3.0

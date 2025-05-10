@@ -34,7 +34,7 @@ cfg.set_riemann_solver_hll()
 # cfg.set_slope_lim_vanleer_std()
 # cfg.set_slope_lim_vanleer_sym()
 cfg.set_slope_lim_minmod()
-model.set_config(cfg)
+model.set_solver_config(cfg)
 
 
 kx, ky, kz = 2 * np.pi, 0, 0
@@ -81,7 +81,7 @@ dt = 0.0000
 t = 0
 tend = 0.245
 
-for i in range(701):
+for i in range(1):
 
     if i % freq == 0:
         model.dump_vtk("test" + str(i // freq) + ".vtk")

@@ -28,7 +28,7 @@ gamma = 1.4
 cfg.set_eos_gamma(gamma)
 cfg.set_consistent_transport(True)
 cfg.set_van_leer(True)
-model.set_config(cfg)
+model.set_solver_config(cfg)
 
 
 kx, ky, kz = 2 * np.pi, 0, 0

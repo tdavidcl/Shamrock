@@ -211,7 +211,7 @@ namespace shammodels::basegodunov {
                     return TConfig();
                 })
             .def(
-                "set_config",
+                "set_solver_config",
                 [](T &self, TConfig cfg) {
                     self.solver.solver_config = cfg;
                 })

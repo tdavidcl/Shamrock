@@ -28,7 +28,7 @@ def run_sim(vanleer=True, label="none"):
     scale_fact = 1 / (sz * base * multx)
     cfg.set_scale_factor(scale_fact)
     cfg.set_eos_gamma(1.0)
-    model.set_config(cfg)
+    model.set_solver_config(cfg)
 
     kx, ky, kz = 2 * np.pi, 0, 0
     delta_rho = 0

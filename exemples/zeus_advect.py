@@ -30,7 +30,7 @@ def run_sim(ctp=False, vanleer=False, label="none"):
     cfg.set_eos_gamma(1.0)
     cfg.set_consistent_transport(ctp)
     cfg.set_van_leer(vanleer)
-    model.set_config(cfg)
+    model.set_solver_config(cfg)
 
     kx, ky, kz = 2 * np.pi, 0, 0
     delta_rho = 0

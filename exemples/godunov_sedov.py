@@ -105,7 +105,7 @@ else:
     cfg.set_slope_lim_vanleer_sym()
     cfg.set_face_time_interpolation(True)
     cfg.set_Csafe(C_cour)
-    model.set_config(cfg)
+    model.set_solver_config(cfg)
     model.set_field_value_lambda_f64("rho", rho_map)
     model.set_field_value_lambda_f64("rhoetot", rhoe_map)
     model.set_field_value_lambda_f64_3("rhovel", rhovel_map)
