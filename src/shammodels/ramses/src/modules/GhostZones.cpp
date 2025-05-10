@@ -458,6 +458,23 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                 });
     }
 
+    { // Attach spans to block coords
+        using MergedPDat = shamrock::MergedPatchData;
+        storage.spans_block_min->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<TgridVec>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<TgridVec>(0);
+                      });
+
+        storage.spans_block_max->spans
+            = storage.merged_patchdata_ghost.get()
+                  .template map<shamrock::PatchDataFieldSpanPointer<TgridVec>>(
+                      [&](u64 id, MergedPDat &mpdat) {
+                          return mpdat.pdat.get_field_pointer_span<TgridVec>(1);
+                      });
+    }
+
     { // attach spans to gas field with ghosts
         using MergedPDat                               = shamrock::MergedPatchData;
         shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
