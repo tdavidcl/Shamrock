@@ -127,8 +127,8 @@ namespace shamtest {
         std::cout << " (" << timer.get_time_str() << ")" << std::endl;
 
         if (shamcmdopt::is_ci_github_actions()) {
-            if (succes_cnt != res.asserts.asserts.size()) {
-                logger::raw_ln(shambase::format("##[error]Test {} failed", res.name));
+            if (succes_cnt == assert_count) {
+                logger::raw_ln(shambase::format("##[error]Test {} failed", rank_results[0].name));
             }
         }
 
