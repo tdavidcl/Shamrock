@@ -23,6 +23,7 @@
 #include "shamcmdopt/ci_env.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcmdopt/term_colors.hpp"
+#include "shamcomm/collectives.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamrock/version.hpp"
@@ -234,61 +235,6 @@ namespace shamtest {
         logger::print_faint_row();
     }
 
-    /// Gather a string from all MPI ranks
-    std::basic_string<byte> gather_basic_string(std::basic_string<byte> in) {
-        using namespace shamsys;
-
-        std::basic_string<byte> out_res_string;
-
-        if (shamcomm::world_size() == 1) {
-            out_res_string = in;
-        } else {
-            std::basic_string<byte> loc_string = in;
-
-            int *counts   = new int[shamcomm::world_size()];
-            int nelements = (int) loc_string.size();
-            // Each process tells the root how many elements it holds
-            mpi::gather(&nelements, 1, MPI_INT, counts, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-            // Displacements in the receive buffer for MPI_GATHERV
-            int *disps = new int[shamcomm::world_size()];
-            // Displacement for the first chunk of data - 0
-            for (int i = 0; i < shamcomm::world_size(); i++)
-                disps[i] = (i > 0) ? (disps[i - 1] + counts[i - 1]) : 0;
-
-            // Place to hold the gathered data
-            // Allocate at root only
-            byte *gather_data = NULL;
-            if (shamcomm::world_rank() == 0)
-                // disps[size-1]+counts[size-1] == total number of elements
-                gather_data = new byte
-                    [disps[shamcomm::world_size() - 1] + counts[shamcomm::world_size() - 1]];
-
-            // Collect everything into the root
-            mpi::gatherv(
-                loc_string.c_str(),
-                nelements,
-                MPI_CHAR,
-                gather_data,
-                counts,
-                disps,
-                MPI_CHAR,
-                0,
-                MPI_COMM_WORLD);
-
-            if (shamcomm::world_rank() == 0) {
-                out_res_string = std::basic_string<byte>(
-                    gather_data,
-                    disps[shamcomm::world_size() - 1] + counts[shamcomm::world_size() - 1]);
-            }
-
-            delete[] counts;
-            delete[] disps;
-        }
-
-        return out_res_string;
-    }
-
     /// Gather test results from all MPI ranks
     std::vector<details::TestResult>
     gather_tests(std::vector<details::TestResult> rank_result, usize &gather_bytecount) {
@@ -301,7 +247,8 @@ namespace shamtest {
 
         shambase::stream_write_vector(outrank, rank_result);
 
-        std::basic_string<byte> gathered = gather_basic_string(outrank.str());
+        std::basic_string<byte> gathered;
+        shamcomm::gather_basic_str(outrank.str(), gathered);
 
         if (shamcomm::world_rank() != 0) {
             return {};
