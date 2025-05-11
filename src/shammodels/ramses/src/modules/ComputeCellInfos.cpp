@@ -82,6 +82,7 @@ void shammodels::basegodunov::modules::ComputeCellInfos<Tvec, TgridVec>::compute
             cell0block_aabb_lower.get_buf(id).complete_event_state(e);
         });
 
+        /*
         logger::raw_ln("block_cell_sizes", ":");
         block_cell_sizes.field_data.for_each([&](u64 id, PatchDataField<Tscal> &pdf) {
             logger::raw_ln(pdf.get_buf().copy_to_stdvec());
@@ -91,6 +92,7 @@ void shammodels::basegodunov::modules::ComputeCellInfos<Tvec, TgridVec>::compute
         cell0block_aabb_lower.field_data.for_each([&](u64 id, PatchDataField<Tvec> &pdf) {
             logger::raw_ln(pdf.get_buf().copy_to_stdvec());
         });
+*/
 
         storage.cell_infos.set(CellInfos<Tvec, TgridVec>{
             std::move(block_cell_sizes), std::move(cell0block_aabb_lower)});
@@ -120,6 +122,7 @@ void shammodels::basegodunov::modules::ComputeCellInfos<Tvec, TgridVec>::compute
         shamrock::ComputeField<Tscal> block_cell_sizes     = spans_block_cell_sizes->extract();
         shamrock::ComputeField<Tvec> cell0block_aabb_lower = spans_cell0block_aabb_lower->extract();
 
+        /*
         logger::raw_ln("block_cell_sizes", ":");
         block_cell_sizes.field_data.for_each([&](u64 id, PatchDataField<Tscal> &pdf) {
             logger::raw_ln(pdf.get_buf().copy_to_stdvec());
@@ -129,6 +132,7 @@ void shammodels::basegodunov::modules::ComputeCellInfos<Tvec, TgridVec>::compute
         cell0block_aabb_lower.field_data.for_each([&](u64 id, PatchDataField<Tvec> &pdf) {
             logger::raw_ln(pdf.get_buf().copy_to_stdvec());
         });
+*/
 
         storage.cell_infos.set(CellInfos<Tvec, TgridVec>{
             std::move(block_cell_sizes), std::move(cell0block_aabb_lower)});

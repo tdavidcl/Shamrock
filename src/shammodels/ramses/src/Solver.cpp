@@ -344,7 +344,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     storage.cell_link_graph.reset();
 
     storage.trees.reset();
-    storage.merge_patch_bounds.reset();
 
     storage.merged_patchdata_ghost.reset();
     storage.ghost_layout.reset();

@@ -14,77 +14,235 @@
  *
  */
 
+#include "shambase/DistributedData.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/time.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/ramses/modules/AMRTree.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 #include "shamtree/RadixTree.hpp"
 
-template<class Umorton, class Tvec>
-class Trees : public shamrock::solvergraph::IDataEdgeNamed {
-    shambase::DistributedData<RadixTree<Umorton, Tvec>> trees;
-};
+namespace shammodels::basegodunov::modules {
 
+    template<class Umorton, class Tvec>
+    class Trees : public shamrock::solvergraph::IDataEdgeNamed {
+        public:
+        using IDataEdgeNamed::IDataEdgeNamed;
+        shambase::DistributedData<RadixTree<Umorton, Tvec>> trees;
+
+        inline auto extract_trees() { return std::move(trees); }
+    };
+
+    template<class Umorton, class TgridVec>
+    class NodeBuildTrees : public shamrock::solvergraph::INode {
+
+        u32 reduction_level = 0;
+
+        using RTree = RadixTree<Umorton, TgridVec>;
+
+        public:
+        NodeBuildTrees() {}
+
+        struct Edges {
+            const shamrock::solvergraph::Indexes<u32> &sizes;
+            const shamrock::solvergraph::FieldRefs<TgridVec> &block_min;
+            const shamrock::solvergraph::FieldRefs<TgridVec> &block_max;
+            Trees<Umorton, TgridVec> &trees;
+        };
+
+        inline void set_edges(
+            std::shared_ptr<shamrock::solvergraph::Indexes<u32>> sizes,
+            std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> block_min,
+            std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> block_max,
+            std::shared_ptr<Trees<Umorton, TgridVec>> trees) {
+            __internal_set_ro_edges({sizes, block_min, block_max});
+            __internal_set_rw_edges({trees});
+        }
+
+        inline Edges get_edges() {
+            return Edges{
+                get_ro_edge<shamrock::solvergraph::Indexes<u32>>(0),
+                get_ro_edge<shamrock::solvergraph::FieldRefs<TgridVec>>(1),
+                get_ro_edge<shamrock::solvergraph::FieldRefs<TgridVec>>(2),
+                get_rw_edge<Trees<Umorton, TgridVec>>(0)};
+        }
+
+        void _impl_evaluate_internal();
+
+        void _impl_reset_internal() {};
+
+        inline virtual std::string _impl_get_label() { return "BuildTrees"; };
+
+        virtual std::string _impl_get_tex();
+    };
+} // namespace shammodels::basegodunov::modules
+
+namespace shammodels::basegodunov::modules {
+
+    template<class Umorton, class TgridVec>
+    void NodeBuildTrees<Umorton, TgridVec>::_impl_evaluate_internal() {
+        auto edges = get_edges();
+
+        auto &block_min = edges.block_min;
+        auto &block_max = edges.block_max;
+
+        const shambase::DistributedData<u32> &indexes_dd = edges.sizes.indexes;
+
+        // TODO move the bounding box computation to another node.
+
+        shambase::DistributedData<shammath::AABB<TgridVec>> bounds = {};
+
+        shambase::Timer t1;
+        t1.start();
+        bounds = indexes_dd.template map<shammath::AABB<TgridVec>>([&](u64 id, auto &merged) {
+            TgridVec min_bound = block_min.get_field(id).compute_min();
+            TgridVec max_bound = block_max.get_field(id).compute_max();
+
+            return shammath::AABB<TgridVec>{min_bound, max_bound};
+        });
+        t1.end();
+        logger::raw_ln("BB", t1.get_time_str());
+
+        shambase::Timer t2;
+        t2.start();
+        shambase::DistributedData<RTree> trees
+            = indexes_dd.template map<RTree>([&](u64 id, auto &merged) {
+                  logger::debug_ln("AMR", "compute tree for merged patch", id);
+
+                  auto aabb = bounds.get(id);
+
+                  TgridVec bmin = aabb.lower;
+                  TgridVec bmax = aabb.upper;
+
+                  TgridVec diff = bmax - bmin;
+                  diff.x()      = shambase::roundup_pow2(diff.x());
+                  diff.y()      = shambase::roundup_pow2(diff.y());
+                  diff.z()      = shambase::roundup_pow2(diff.z());
+                  bmax          = bmin + diff;
+
+                  auto &field_pos = block_min.get_field(id);
+
+                  RTree tree(
+                      shamsys::instance::get_compute_scheduler_ptr(),
+                      {bmin, bmax},
+                      field_pos.get_buf(),
+                      field_pos.get_obj_cnt(),
+                      reduction_level);
+
+                  return tree;
+              });
+        t2.end();
+        logger::raw_ln("tree", t2.get_time_str());
+
+        shambase::Timer t3;
+        t3.start();
+        trees.for_each([](u64 id, RTree &tree) {
+            tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
+            tree.convert_bounding_box(shamsys::instance::get_compute_queue());
+        });
+        t3.end();
+        logger::raw_ln("tree BB", t3.get_time_str());
+
+        edges.trees.trees = std::move(trees);
+    }
+
+    template<class Umorton, class TgridVec>
+    std::string NodeBuildTrees<Umorton, TgridVec>::_impl_get_tex() {
+        return "TODO";
+    }
+
+} // namespace shammodels::basegodunov::modules
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::AMRTree<Tvec, TgridVec>::build_trees() {
 
     StackEntry stack_loc{};
+    if (false) {
 
-    using MergedPDat = shambase::DistributedData<shamrock::MergedPatchData>;
-    using RTree      = typename Storage::RTree;
+        using Umorton = typename Storage::morton_t;
 
-    MergedPDat &mpdat = storage.merged_patchdata_ghost.get();
+        std::shared_ptr<Trees<Umorton, TgridVec>> trees
+            = std::make_shared<Trees<Umorton, TgridVec>>("trees", "trees");
 
-    shamrock::patch::PatchDataLayout &mpdl = storage.ghost_layout.get();
+        NodeBuildTrees<Umorton, TgridVec> build_trees;
+        build_trees.set_edges(
+            storage.block_counts_with_ghost,
+            storage.spans_block_min,
+            storage.spans_block_max,
+            trees);
 
-    u32 reduc_level = 0;
+        build_trees.evaluate();
 
-    storage.merge_patch_bounds.set(
-        mpdat.map<shammath::AABB<TgridVec>>([&](u64 id, shamrock::MergedPatchData &merged) {
-            logger::debug_ln("AMR", "compute bound merged patch", id);
+        storage.trees.set(trees->extract_trees());
 
-            TgridVec min_bound
-                = shambase::get_check_ref(storage.spans_block_min).get_field(0).compute_min();
-            TgridVec max_bound
-                = shambase::get_check_ref(storage.spans_block_min).get_field(1).compute_max();
+    } else {
 
-            return shammath::AABB<TgridVec>{min_bound, max_bound};
-        }));
+        using MergedPDat = shambase::DistributedData<shamrock::MergedPatchData>;
+        using RTree      = typename Storage::RTree;
 
-    shambase::DistributedData<shammath::AABB<TgridVec>> &bounds = storage.merge_patch_bounds.get();
+        MergedPDat &mpdat = storage.merged_patchdata_ghost.get();
 
-    shambase::DistributedData<RTree> trees
-        = mpdat.map<RTree>([&](u64 id, shamrock::MergedPatchData &merged) {
-              logger::debug_ln("AMR", "compute tree for merged patch", id);
+        shamrock::patch::PatchDataLayout &mpdl = storage.ghost_layout.get();
 
-              auto aabb = bounds.get(id);
+        u32 reduc_level = 0;
 
-              TgridVec bmin = aabb.lower;
-              TgridVec bmax = aabb.upper;
+        // TODO split the
 
-              TgridVec diff = bmax - bmin;
-              diff.x()      = shambase::roundup_pow2(diff.x());
-              diff.y()      = shambase::roundup_pow2(diff.y());
-              diff.z()      = shambase::roundup_pow2(diff.z());
-              bmax          = bmin + diff;
+        shambase::Timer t1;
+        t1.start();
+        shambase::DistributedData<shammath::AABB<TgridVec>> bounds
+            = mpdat.map<shammath::AABB<TgridVec>>([&](u64 id, shamrock::MergedPatchData &merged) {
+                  logger::debug_ln("AMR", "compute bound merged patch", id);
 
-              auto &field_pos = merged.pdat.get_field<TgridVec>(0);
+                  TgridVec min_bound = merged.pdat.get_field<TgridVec>(0).compute_min();
+                  TgridVec max_bound = merged.pdat.get_field<TgridVec>(1).compute_max();
 
-              RTree tree(
-                  shamsys::instance::get_compute_scheduler_ptr(),
-                  {bmin, bmax},
-                  field_pos.get_buf(),
-                  field_pos.get_obj_cnt(),
-                  reduc_level);
+                  return shammath::AABB<TgridVec>{min_bound, max_bound};
+              });
+        t1.end();
+        logger::raw_ln("BB", t1.get_time_str());
 
-              return tree;
-          });
+        shambase::Timer t2;
+        t2.start();
+        shambase::DistributedData<RTree> trees
+            = mpdat.map<RTree>([&](u64 id, shamrock::MergedPatchData &merged) {
+                  logger::debug_ln("AMR", "compute tree for merged patch", id);
 
-    trees.for_each([](u64 id, RTree &tree) {
-        tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
-        tree.convert_bounding_box(shamsys::instance::get_compute_queue());
-    });
+                  auto aabb = bounds.get(id);
 
-    storage.trees.set(std::move(trees));
+                  TgridVec bmin = aabb.lower;
+                  TgridVec bmax = aabb.upper;
+
+                  TgridVec diff = bmax - bmin;
+                  diff.x()      = shambase::roundup_pow2(diff.x());
+                  diff.y()      = shambase::roundup_pow2(diff.y());
+                  diff.z()      = shambase::roundup_pow2(diff.z());
+                  bmax          = bmin + diff;
+
+                  auto &field_pos = merged.pdat.get_field<TgridVec>(0);
+
+                  RTree tree(
+                      shamsys::instance::get_compute_scheduler_ptr(),
+                      {bmin, bmax},
+                      field_pos.get_buf(),
+                      field_pos.get_obj_cnt(),
+                      reduc_level);
+
+                  return tree;
+              });
+        t2.end();
+        logger::raw_ln("tree", t2.get_time_str());
+
+        shambase::Timer t3;
+        t3.start();
+        trees.for_each([](u64 id, RTree &tree) {
+            tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
+            tree.convert_bounding_box(shamsys::instance::get_compute_queue());
+        });
+        t3.end();
+        logger::raw_ln("tree BB", t3.get_time_str());
+
+        storage.trees.set(std::move(trees));
+    }
 }
 
 template<class Tvec, class TgridVec>

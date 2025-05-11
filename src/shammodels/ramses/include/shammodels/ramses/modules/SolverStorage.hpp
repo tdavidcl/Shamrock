@@ -48,6 +48,8 @@ namespace shammodels::basegodunov {
         using Tgridscal          = shambase::VecComponent<TgridVec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
+        using morton_t = Tmorton;
+
         using RTree = RadixTree<Tmorton, TgridVec>;
 
         std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> spans_block_min;
@@ -76,7 +78,6 @@ namespace shammodels::basegodunov {
 
         Component<shammodels::basegodunov::modules::CellInfos<Tvec, TgridVec>> cell_infos;
 
-        Component<shambase::DistributedData<shammath::AABB<TgridVec>>> merge_patch_bounds;
         Component<shambase::DistributedData<RTree>> trees;
 
         Component<shambase::DistributedData<
