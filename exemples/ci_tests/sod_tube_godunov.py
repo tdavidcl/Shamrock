@@ -52,13 +52,6 @@ model.init_scheduler(int(1e7), 1)
 model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
 
-# %%
-# Init scheduler and grid
-
-model.init_scheduler(int(1e7), 1)
-model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
-
-
 # without face time interpolation
 # 0.07979993131348424 (0.17970690984930585, 0.0, 0.0) 0.12628776652228088
 
@@ -119,7 +112,7 @@ sodanalysis = model.make_analysis_sodtube(sod, (1, 0, 0), t_target, xref, -xrang
 ### Plot
 #################
 # do plot or not
-if False:
+if True:
 
     def convert_to_cell_coords(dic):
 
