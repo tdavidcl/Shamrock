@@ -16,112 +16,82 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shamcomm/collectives.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include <unordered_map>
+#include <vector>
 
-void shamcomm::gather_str(const std::string &send_vec, std::string &recv_vec) {
-    StackEntry stack_loc{};
+namespace {
 
-    u32 local_count = send_vec.size();
+    /**
+     * @brief Gather a vector of characters from all MPI ranks into a single string at root rank
+     *
+     * @param send_vec The string to send from each rank
+     * @param recv_vec The resulting string at root rank
+     *
+     * @details This function is only available if `MPI_COMM_WORLD` is defined.
+     * If `MPI_COMM_WORLD` is not defined, the function will not be available.
+     *
+     * @warning This function is not thread-safe.
+     */
+    template<class Tchar>
+    inline void _internal_gather_str(
+        const std::basic_string<Tchar> &send_vec, std::basic_string<Tchar> &recv_vec) {
+        StackEntry stack_loc{};
 
-    // querry global size and resize the receiving vector
-    u32 global_len;
-    MPICHECK(MPI_Allreduce(&local_count, &global_len, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD));
-    recv_vec.resize(global_len);
+        if (shamcomm::world_size() == 1) {
+            recv_vec = send_vec;
+            return;
+        }
 
-    // int *table_data_count = new int[shamcomm::world_size()];
-    std::vector<int> table_data_count{shamcomm::world_size()};
+        u32 wsize = shamcomm::world_size();
 
-    MPICHECK(
-        MPI_Allgather(&local_count, 1, MPI_INT, &table_data_count[0], 1, MPI_INT, MPI_COMM_WORLD));
+        std::vector<int> counts(wsize);
+        std::vector<int> disps(wsize);
 
-    // printf("table_data_count =
-    // [%d,%d,%d,%d]\n",table_data_count[0],table_data_count[1],table_data_count[2],table_data_count[3]);
+        u32 local_count = send_vec.size();
 
-    // int *node_displacments_data_table = new int[shamcomm::world_size()];
-    std::vector<int> node_displacments_data_table{shamcomm::world_size()};
+        MPICHECK(MPI_Gather(&local_count, 1, MPI_INT, &counts[0], 1, MPI_INT, 0, MPI_COMM_WORLD));
 
-    node_displacments_data_table[0] = 0;
-
-    for (u32 i = 1; i < shamcomm::world_size(); i++) {
-        node_displacments_data_table[i]
-            = node_displacments_data_table[i - 1] + table_data_count[i - 1];
-    }
-
-    // printf("node_displacments_data_table =
-    // [%d,%d,%d,%d]\n",node_displacments_data_table[0],node_displacments_data_table[1],node_displacments_data_table[2],node_displacments_data_table[3]);
-
-    MPICHECK(MPI_Allgatherv(
-        send_vec.data(),
-        send_vec.size(),
-        MPI_CHAR,
-        recv_vec.data(),
-        table_data_count.data(),
-        node_displacments_data_table.data(),
-        MPI_CHAR,
-        MPI_COMM_WORLD));
-
-    // delete[] table_data_count;
-    // delete[] node_displacments_data_table;
-}
-
-void shamcomm::gather_basic_str(
-    const std::basic_string<byte> &send_vec, std::basic_string<byte> &recv_vec) {
-
-    std::basic_string<byte> out_res_string;
-
-    if (shamcomm::world_size() == 1) {
-        out_res_string = send_vec;
-    } else {
-        std::basic_string<byte> loc_string = send_vec;
-
-        // int *counts   = new int[shamcomm::world_size()];
-        std::vector<int> counts{shamcomm::world_size()};
-        int nelements = (int) loc_string.size();
-        // Each process tells the root how many elements it holds
-        MPICHECK(MPI_Gather(&nelements, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD));
-
-        // Displacements in the receive buffer for MPI_GATHERV
-        // int *disps = new int[shamcomm::world_size()];
-        std::vector<int> disps{shamcomm::world_size()};
-
-        // Displacement for the first chunk of data - 0
-        for (int i = 0; i < shamcomm::world_size(); i++)
+        for (int i = 0; i < wsize; i++) {
             disps[i] = (i > 0) ? (disps[i - 1] + counts[i - 1]) : 0;
+        }
 
-        // Place to hold the gathered data
-        // Allocate at root only
-        byte *gather_data = NULL;
-        if (shamcomm::world_rank() == 0)
-            // disps[size-1]+counts[size-1] == total number of elements
-            gather_data
-                = new byte[disps[shamcomm::world_size() - 1] + counts[shamcomm::world_size() - 1]];
+        std::string result = "";
 
-        // Collect everything into the root
+        if (shamcomm::world_rank() == 0) {
+            u32 global_len = disps[wsize - 1] + counts[wsize - 1];
+            result.resize(global_len);
+        }
+
         MPICHECK(MPI_Gatherv(
-            loc_string.c_str(),
-            nelements,
+            send_vec.data(),
+            send_vec.size(),
             MPI_CHAR,
-            gather_data,
+            result.data(),
             counts.data(),
             disps.data(),
             MPI_CHAR,
             0,
             MPI_COMM_WORLD));
 
-        if (shamcomm::world_rank() == 0) {
-            out_res_string = std::basic_string<byte>(
-                gather_data,
-                disps[shamcomm::world_size() - 1] + counts[shamcomm::world_size() - 1]);
-        }
-
-        // delete[] counts;
-        // delete[] disps;
+        recv_vec = result;
     }
 
-    recv_vec = out_res_string;
+} // namespace
+
+void shamcomm::gather_str(const std::string &send_vec, std::string &recv_vec) {
+    StackEntry stack_loc{};
+    _internal_gather_str(send_vec, recv_vec);
+    logger::raw_ln(send_vec, recv_vec);
+}
+
+void shamcomm::gather_basic_str(
+    const std::basic_string<byte> &send_vec, std::basic_string<byte> &recv_vec) {
+    StackEntry stack_loc{};
+    _internal_gather_str(send_vec, recv_vec);
 }
 
 std::unordered_map<std::string, int>
