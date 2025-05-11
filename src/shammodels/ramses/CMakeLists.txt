@@ -34,6 +34,7 @@ set(Sources
     src/modules/ConsToPrimGas.cpp
     src/modules/ConsToPrimDust.cpp
     src/modules/ComputeCellAABB.cpp
+    src/modules/NodeBuildTrees.cpp
     src/modules/StencilGenerator.cpp
 )
 
