@@ -20,6 +20,7 @@
 #include "shambase/time.hpp"
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/start_python.hpp"
+#include "shamcmdopt/ci_env.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcmdopt/term_colors.hpp"
 #include "shamcomm/logs.hpp"
@@ -124,6 +125,12 @@ namespace shamtest {
         std::string s_assert = shambase::format(" [{}/{}] ", succes_cnt, assert_count);
         printf("%-15s", s_assert.c_str());
         std::cout << " (" << timer.get_time_str() << ")" << std::endl;
+
+        if (shamcmdopt::is_ci_github_actions()) {
+            if (succes_cnt != res.asserts.asserts.size()) {
+                logger::raw_ln(shambase::format("##[error]Test {} failed", res.name));
+            }
+        }
 
         std::cout << std::endl;
     }
