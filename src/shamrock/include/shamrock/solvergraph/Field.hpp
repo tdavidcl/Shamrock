@@ -36,12 +36,11 @@ namespace shamrock::solvergraph {
             : nvar(nvar), name(name), FieldRefs<T>(name, texsymbol) {}
 
         void sync_refs() {
-            this->field_refs
-                = field.field_data.template map<std::reference_wrapper<PatchDataField<T>>>(
+            this->set_ref_sync_spans(
+                field.field_data.template map<std::reference_wrapper<PatchDataField<T>>>(
                     [&](u64 id, PatchDataField<T> &pdf) {
                         return std::ref(pdf);
-                    });
-            this->sync_spans();
+                    }));
         }
 
         // overload only the non const case

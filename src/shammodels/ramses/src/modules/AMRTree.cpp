@@ -14,7 +14,15 @@
  *
  */
 
+#include "shambase/memory.hpp"
 #include "shammodels/ramses/modules/AMRTree.hpp"
+#include "shamrock/solvergraph/IDataEdgeNamed.hpp"
+#include "shamtree/RadixTree.hpp"
+
+template<class Umorton, class Tvec>
+class Trees : public shamrock::solvergraph::IDataEdgeNamed {
+    shambase::DistributedData<RadixTree<Umorton, Tvec>> trees;
+};
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::AMRTree<Tvec, TgridVec>::build_trees() {
@@ -34,8 +42,10 @@ void shammodels::basegodunov::modules::AMRTree<Tvec, TgridVec>::build_trees() {
         mpdat.map<shammath::AABB<TgridVec>>([&](u64 id, shamrock::MergedPatchData &merged) {
             logger::debug_ln("AMR", "compute bound merged patch", id);
 
-            TgridVec min_bound = merged.pdat.get_field<TgridVec>(0).compute_min();
-            TgridVec max_bound = merged.pdat.get_field<TgridVec>(1).compute_max();
+            TgridVec min_bound
+                = shambase::get_check_ref(storage.spans_block_min).get_field(0).compute_min();
+            TgridVec max_bound
+                = shambase::get_check_ref(storage.spans_block_min).get_field(1).compute_max();
 
             return shammath::AABB<TgridVec>{min_bound, max_bound};
         }));

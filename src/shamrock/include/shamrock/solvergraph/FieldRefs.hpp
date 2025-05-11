@@ -60,5 +60,9 @@ namespace shamrock::solvergraph {
             this->field_refs = field_refs;
             this->sync_spans();
         }
+
+        inline virtual PatchDataField<T> &get_field(u64 id_patch) {
+            return field_refs.get(id_patch);
+        }
     };
 } // namespace shamrock::solvergraph
