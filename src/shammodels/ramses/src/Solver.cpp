@@ -50,33 +50,36 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     // merged ghost spans
 
     storage.spans_block_min
-        = std::make_shared<FieldSpan<TgridVec>>("block_min", "\\mathbf{r}_{\\rm block, min}");
+        = std::make_shared<FieldRefs<TgridVec>>("block_min", "\\block_{\\rm min}");
     storage.spans_block_max
-        = std::make_shared<FieldSpan<TgridVec>>("block_max", "\\mathbf{r}_{\\rm block, max}");
+        = std::make_shared<FieldRefs<TgridVec>>("block_max", "\\block_{\\rm max}");
 
     { // gas spans
-        storage.spans_rho  = std::make_shared<FieldSpan<Tscal>>("rho", "\\rho");
-        storage.spans_rhov = std::make_shared<FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
-        storage.spans_rhoe = std::make_shared<FieldSpan<Tscal>>("rhoetot", "(\\rho E)");
+        storage.spans_rho  = std::make_shared<FieldRefs<Tscal>>("rho", "\\rho");
+        storage.spans_rhov = std::make_shared<FieldRefs<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
+        storage.spans_rhoe = std::make_shared<FieldRefs<Tscal>>("rhoetot", "(\\rho E)");
     }
 
     if (solver_config.is_dust_on()) {
         storage.spans_rho_dust
-            = std::make_shared<FieldSpan<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
-        storage.spans_rhov_dust = std::make_shared<FieldSpan<Tvec>>(
-            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
+            = std::make_shared<FieldRefs<Tscal>>("rho_dust", "\\rho_{\\rm dust}");
+        storage.spans_rhov_dust = std::make_shared<FieldRefs<Tvec>>(
+            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
     }
 
-    // will be filled by NodeConsToPrimGas
-    storage.vel   = std::make_shared<Field<Tvec>>(AMRBlock::block_size, "vel", "\\mathbf{v}");
-    storage.press = std::make_shared<Field<Tscal>>(AMRBlock::block_size, "P", "P");
+    // cons to prim results
+    { // gas spans
+        // will be filled by NodeConsToPrimGas
+        storage.vel   = std::make_shared<Field<Tvec>>(AMRBlock::block_size, "vel", "\\mathbf{v}");
+        storage.press = std::make_shared<Field<Tscal>>(AMRBlock::block_size, "P", "P");
+    }
 
     if (solver_config.is_dust_on()) {
         u32 ndust = solver_config.dust_config.ndust;
 
         // will be filled by NodeConsToPrimDust
         storage.vel_dust = std::make_shared<Field<Tvec>>(
-            AMRBlock::block_size * ndust, "vel_dust", "\\mathbf{v}_{\\rm dust}");
+            AMRBlock::block_size * ndust, "vel_dust", "{\\mathbf{v}_{\\rm dust}}");
     }
 
     { // Build ConsToPrim node
@@ -160,7 +163,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     modules::AMRTree amrtree(context, solver_config, storage);
     amrtree.build_trees();
 
-    amrtree.correct_bounding_box();
+    // amrtree.correct_bounding_box();
 
     // modules::StencilGenerator stencil_gen(context,solver_config,storage);
     // stencil_gen.make_stencil();
@@ -341,7 +344,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     storage.cell_link_graph.reset();
 
     storage.trees.reset();
-    storage.merge_patch_bounds.reset();
 
     storage.merged_patchdata_ghost.reset();
     storage.ghost_layout.reset();
