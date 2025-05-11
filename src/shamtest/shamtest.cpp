@@ -22,6 +22,8 @@
 #include "shambindings/start_python.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcmdopt/term_colors.hpp"
+#include "shamcomm/logs.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include "shamrock/version.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
@@ -53,20 +55,22 @@ namespace shamtest {
      */
     void _start_test_print(details::Test &test, u32 test_num, u32 test_count) {
 
+        std::string output;
         if (is_run_only) {
-            printf("- : ");
+            output += ("- : ");
         } else {
-            printf("- [%d/%d] :", test_num + 1, test_count);
+            output += shambase::format("- [{}/{}] :", test_num + 1, test_count);
         }
 
         bool any_node_cnt = test.node_count == -1;
         if (any_node_cnt) {
-            printf(" [any] ");
+            output += (" [any] ");
         } else {
-            printf(" [%03d] ", test.node_count);
+            output += shambase::format(" [{:03}] ", test.node_count);
         }
 
-        std::cout << "\033[;34m" << test.name << "\033[0m " << std::endl;
+        output += "\033[;34m" + test.name + "\033[0m\n";
+        ON_RANK_0(printf("%s", output.c_str()));
     }
 
     /**
@@ -75,41 +79,49 @@ namespace shamtest {
      * @param res
      * @param timer
      */
-    void _end_test_print(details::TestResult &res, shambase::Timer &timer) {
+    void _end_test_print(std::vector<details::TestResult> &rank_results, shambase::Timer &timer) {
 
-        for (unsigned int j = 0; j < res.asserts.asserts.size(); j++) {
+        for (int rank = 0; rank < rank_results.size(); rank++) {
+            auto &res = rank_results[rank];
 
-            if (is_full_output_mode || (!res.asserts.asserts[j].value)) {
-                printf("        [%d/%zu] : ", j + 1, res.asserts.asserts.size());
-                printf("%-20s", res.asserts.asserts[j].name.c_str());
+            for (unsigned int j = 0; j < res.asserts.asserts.size(); j++) {
 
-                if (res.asserts.asserts[j].value) {
-                    std::cout << "  (\033[;32mSucces\033[0m)\n";
-                } else {
-                    std::cout << "  (\033[1;31m Fail \033[0m)\n";
-                    if (!res.asserts.asserts[j].comment.empty()) {
-                        std::cout << "----- logs : \n"
-                                  << res.asserts.asserts[j].comment << "\n-----" << std::endl;
+                if (is_full_output_mode || (!res.asserts.asserts[j].value)) {
+                    printf("       Rank %3d [%d/%zu] : ", rank, j + 1, res.asserts.asserts.size());
+                    printf("%-20s", res.asserts.asserts[j].name.c_str());
+
+                    if (res.asserts.asserts[j].value) {
+                        std::cout << "  (\033[;32mSucces\033[0m)\n";
+                    } else {
+                        std::cout << "  (\033[1;31m Fail \033[0m)\n";
+                        if (!res.asserts.asserts[j].comment.empty()) {
+                            std::cout << "----- logs : \n"
+                                      << res.asserts.asserts[j].comment << "\n-----" << std::endl;
+                        }
                     }
                 }
             }
         }
 
-        u32 succes_cnt = 0;
-        for (unsigned int j = 0; j < res.asserts.asserts.size(); j++) {
-            if (res.asserts.asserts[j].value) {
-                succes_cnt++;
+        u32 assert_count = 0;
+        u32 succes_cnt   = 0;
+        for (int rank = 0; rank < rank_results.size(); rank++) {
+            auto &res = rank_results[rank];
+            for (unsigned int j = 0; j < res.asserts.asserts.size(); j++) {
+                if (res.asserts.asserts[j].value) {
+                    succes_cnt++;
+                }
+                assert_count++;
             }
         }
 
-        if (succes_cnt == res.asserts.asserts.size()) {
+        if (succes_cnt == assert_count) {
             std::cout << "   -> Result : \033[;32mSucces\033[0m";
         } else {
             std::cout << "   -> Result : \033[1;31m Fail \033[0m";
         }
 
-        std::string s_assert
-            = shambase::format(" [{}/{}] ", succes_cnt, res.asserts.asserts.size());
+        std::string s_assert = shambase::format(" [{}/{}] ", succes_cnt, assert_count);
         printf("%-15s", s_assert.c_str());
         std::cout << " (" << timer.get_time_str() << ")" << std::endl;
 
@@ -271,7 +283,8 @@ namespace shamtest {
     }
 
     /// Gather test results from all MPI ranks
-    std::vector<details::TestResult> gather_tests(std::vector<details::TestResult> rank_result) {
+    std::vector<details::TestResult>
+    gather_tests(std::vector<details::TestResult> rank_result, usize &gather_bytecount) {
         if (shamcomm::world_size() == 1) {
             return rank_result;
         }
@@ -287,9 +300,7 @@ namespace shamtest {
             return {};
         }
 
-        logger::print_faint_row();
-
-        logger::raw_ln("Test result gathered :", gathered.size(), "bytes");
+        gather_bytecount = gathered.size();
 
         std::basic_stringstream<byte> reader(gathered);
 
@@ -410,37 +421,13 @@ namespace shamtest {
         logger::raw_ln("Done (tests/report.tex)");
     }
 
-    int run_all_tests(int argc, char *argv[], TestConfig cfg) {
-        StackEntry stack{};
-
-        using namespace shamtest::details;
-
-        if (cfg.print_test_list_exit) {
-            print_test_list();
-            return 0;
-        }
-
-        std::string run_only_name = "";
-        if (cfg.run_only) {
-            run_only_name = *cfg.run_only;
-            is_run_only   = true;
-        }
-
-        is_full_output_mode = cfg.full_output;
+    std::vector<u32> select_print_tests(TestConfig cfg) {
 
         bool run_unit_test           = cfg.run_unittest;
         bool run_validation_test     = cfg.run_validation;
         bool run_longvalidation_test = cfg.run_validation && cfg.run_long_tests;
         bool run_benchmark_test      = cfg.run_benchmark;
         bool run_longbenchmark_test  = cfg.run_benchmark && cfg.run_long_tests;
-
-        using namespace shamsys;
-
-        if (!is_run_only) {
-            printf("\n------------ Tests list --------------\n");
-        }
-
-        std::vector<u32> selected_tests = {};
 
         auto can_run = [&](shamtest::details::Test &t) -> bool {
             bool any_node_cnt  = (t.node_count == -1);
@@ -463,84 +450,95 @@ namespace shamtest {
         auto print_test = [&](shamtest::details::Test &t, bool enabled) {
             bool any_node_cnt = (t.node_count == -1);
 
+            std::string output = "";
+
             if (enabled) {
 
                 if (any_node_cnt) {
-                    printf(" - [\033[;32many\033[0m] ");
+                    output += (" - [\033[;32many\033[0m] ");
                 } else {
-                    printf(" - [\033[;32m%03d\033[0m] ", t.node_count);
+                    output += shambase::format(" - [\033[;32m{:03}\033[0m] ", t.node_count);
                 }
-                std::cout << "\033[;32m" << t.name << "\033[0m " << std::endl;
+                output += "\033[;32m" + t.name + "\033[0m\n";
 
             } else {
                 if (any_node_cnt) {
-                    printf(" - [\033[;31many\033[0m] ");
+                    output += (" - [\033[;31many\033[0m] ");
                 } else {
-                    printf(" - [\033[;31m%03d\033[0m] ", t.node_count);
+                    output += shambase::format(" - [\033[;31m{:03}\033[0m] ", t.node_count);
                 }
-                std::cout << "\033[;31m" << t.name << "\033[0m " << std::endl;
+                output += "\033[;31m" + t.name + "\033[0m\n";
+            }
+
+            printf("%s", output.c_str());
+        };
+
+        using namespace shamtest::details;
+
+        std::vector<u32> selected_tests;
+
+        auto run_only_check = [&](std::string test_name) -> bool {
+            if (cfg.run_only) {
+                return *cfg.run_only == test_name;
+            } else {
+                return true;
             }
         };
 
-        if (is_run_only) {
-
+        auto test_loop = [&](TestType t) {
             for (u32 i = 0; i < static_init_vec_tests.size(); i++) {
+                if (static_init_vec_tests[i].type == t) {
 
-                bool run_test = can_run(static_init_vec_tests[i]);
-                if (run_only_name.compare(static_init_vec_tests[i].name) == 0) {
+                    bool run_test = can_run(static_init_vec_tests[i])
+                                    && run_only_check(static_init_vec_tests[i].name);
+
+                    ON_RANK_0(print_test(static_init_vec_tests[i], run_test));
+
                     if (run_test) {
                         selected_tests.push_back(i);
-                    } else {
-                        logger::err_ln(
-                            "TEST", "test can not run under the following configuration");
                     }
                 }
             }
+        };
 
-        } else {
-
-            auto test_loop = [&](TestType t) {
-                for (u32 i = 0; i < static_init_vec_tests.size(); i++) {
-
-                    if (static_init_vec_tests[i].type == t) {
-                        bool run_test = can_run(static_init_vec_tests[i]);
-                        print_test(static_init_vec_tests[i], run_test);
-                        if (run_test) {
-                            selected_tests.push_back(i);
-                        }
-                    }
-                }
-            };
-
-            if (run_benchmark_test) {
-                printf("--- Benchmark ---\n");
-                test_loop(Benchmark);
-            }
-
-            if (run_benchmark_test) {
-                printf("--- LongBenchmark ---\n");
-                test_loop(LongBenchmark);
-            }
-
-            if (run_validation_test) {
-                printf("--- ValidationTest ---\n");
-                test_loop(ValidationTest);
-            }
-
-            if (run_longvalidation_test) {
-                printf("--- LongValidationTest ---\n");
-                test_loop(LongValidationTest);
-            }
-
-            if (run_unit_test) {
-                printf("--- Unittest  ---\n");
-                test_loop(Unittest);
-            }
+        ON_RANK_0(printf("\n------------ Tests list --------------\n"));
+        if (run_benchmark_test) {
+            ON_RANK_0(printf("--- Benchmark ---\n"));
+            test_loop(Benchmark);
         }
 
-        if (!is_run_only) {
-            printf("--------------------------------------\n\n");
+        if (run_benchmark_test) {
+            ON_RANK_0(printf("--- LongBenchmark ---\n"));
+            test_loop(LongBenchmark);
         }
+
+        if (run_validation_test) {
+            ON_RANK_0(printf("--- ValidationTest ---\n"));
+            test_loop(ValidationTest);
+        }
+
+        if (run_longvalidation_test) {
+            ON_RANK_0(printf("--- LongValidationTest ---\n"));
+            test_loop(LongValidationTest);
+        }
+
+        if (run_unit_test) {
+            ON_RANK_0(printf("--- Unittest  ---\n"));
+            test_loop(Unittest);
+        }
+        ON_RANK_0(printf("--------------------------------------\n\n"));
+
+        return selected_tests;
+    }
+
+    int run_all_tests(int argc, char *argv[], TestConfig cfg) {
+        StackEntry stack{};
+
+        is_full_output_mode = cfg.full_output;
+
+        mpi::barrier(MPI_COMM_WORLD);
+        std::vector<u32> selected_tests = select_print_tests(cfg);
+        mpi::barrier(MPI_COMM_WORLD);
 
         u32 test_loc_cnt = 0;
 
@@ -548,9 +546,17 @@ namespace shamtest {
 
         logger::info_ln("Test", "start python interpreter");
         py::initialize_interpreter();
-        shambindings::modify_py_sys_path();
+
+        ON_RANK_0(shamcomm::logs::print_faint_row());
+        shambindings::modify_py_sys_path(shamcomm::world_rank() == 0);
+        ON_RANK_0(shamcomm::logs::print_faint_row());
 
         std::filesystem::create_directories("tests/figures");
+
+        using namespace shamtest::details;
+
+        ON_RANK_0(logger::raw_ln("Running tests : "));
+        ON_RANK_0(shamcomm::logs::print_faint_row());
 
         std::vector<TestResult> results;
         for (u32 i : selected_tests) {
@@ -566,7 +572,12 @@ namespace shamtest {
             timer.end();
             mpi::barrier(MPI_COMM_WORLD);
 
-            _end_test_print(res, timer);
+            usize gather_bytecount           = 0;
+            std::vector<TestResult> gathered = gather_tests({res}, gather_bytecount);
+            if (shamcomm::world_rank() == 0) {
+                logger::raw_ln("Test result gathered :", gather_bytecount, "bytes");
+                _end_test_print(gathered, timer);
+            }
 
             results.push_back(std::move(res));
 
@@ -576,7 +587,13 @@ namespace shamtest {
         logger::info_ln("Test", "close python interpreter");
         py::finalize_interpreter();
 
-        results = gather_tests(std::move(results));
+        usize gather_bytecount = 0;
+        results                = gather_tests(std::move(results), gather_bytecount);
+
+        if (shamcomm::world_rank() == 0) {
+            logger::print_faint_row();
+            logger::raw_ln("Test result gathered :", gather_bytecount, "bytes");
+        }
 
         for (TestResult &res : results) {
             has_error = has_error || is_test_failed(res);
@@ -603,7 +620,7 @@ namespace shamtest {
             logger::raw_ln("Tests done exiting ... exitcode =", errcode);
         }
         mpi::barrier(MPI_COMM_WORLD);
-        instance::close();
+        shamsys::instance::close();
 
         return errcode;
     }
