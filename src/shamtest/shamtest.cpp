@@ -390,13 +390,11 @@ namespace shamtest {
             bool can_run_type = false;
 
             auto test_type = t.type;
-            can_run_type   = can_run_type || (run_unit_test && (Unittest == test_type));
-            can_run_type   = can_run_type || (run_validation_test && (ValidationTest == test_type));
-            can_run_type
-                = can_run_type || (run_longvalidation_test && (LongValidationTest == test_type));
-            can_run_type = can_run_type || (run_benchmark_test && (Benchmark == test_type));
-            can_run_type
-                = can_run_type || (run_longvalidation_test && (LongBenchmark == test_type));
+            can_run_type |= (run_unit_test && (Unittest == test_type));
+            can_run_type |= (run_validation_test && (ValidationTest == test_type));
+            can_run_type |= (run_longvalidation_test && (LongValidationTest == test_type));
+            can_run_type |= (run_benchmark_test && (Benchmark == test_type));
+            can_run_type |= (run_longbenchmark_test && (LongBenchmark == test_type));
 
             return can_run_type && (any_node_cnt || world_size_ok);
         };
