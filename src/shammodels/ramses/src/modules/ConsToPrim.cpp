@@ -137,7 +137,7 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
                                          }));
 
     auto rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
-        "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
+        "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     rhov_dust->set_ref_sync_spans(storage.merged_patchdata_ghost.get()
                                       .template map<std::reference_wrapper<PatchDataField<Tvec>>>(
                                           [&](u64 id, MergedPDat &mpdat) {
