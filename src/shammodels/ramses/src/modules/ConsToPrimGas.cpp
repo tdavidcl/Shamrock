@@ -102,6 +102,8 @@ namespace shammodels::basegodunov::modules {
         auto P           = get_rw_edge_base(1).get_tex_symbol();
 
         std::string tex = R"tex(
+            Conservative to primitive variable (gas)
+
             \begin{align}
             {vel}_i &= \frac{ {rhov}_i }{ {rho}_i } \\
             {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right) \\
