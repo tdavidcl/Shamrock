@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file IFreeableDataEdge.hpp
+ * @file IFreeable.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief
  *

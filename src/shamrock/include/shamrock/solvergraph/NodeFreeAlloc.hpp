@@ -16,7 +16,7 @@
  * @date 2023-07-31
  */
 
-#include "shamrock/solvergraph/IFreeableDataEdge.hpp"
+#include "shamrock/solvergraph/IDataEdge.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 
 namespace shammodels::basegodunov::modules {

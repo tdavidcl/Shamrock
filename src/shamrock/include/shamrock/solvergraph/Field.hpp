@@ -19,7 +19,6 @@
 #include "shamrock/scheduler/ComputeField.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
-#include "shamrock/solvergraph/IFreeableDataEdge.hpp"
 
 namespace shamrock::solvergraph {
 

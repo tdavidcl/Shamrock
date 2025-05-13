@@ -18,7 +18,7 @@
 
 #include "shambase/WithUUID.hpp"
 #include "shambase/aliases_int.hpp"
-#include "shamrock/solvergraph/IFreeableDataEdge.hpp"
+#include "shamrock/solvergraph/IFreeable.hpp"
 #include <string>
 
 namespace shamrock::solvergraph {
