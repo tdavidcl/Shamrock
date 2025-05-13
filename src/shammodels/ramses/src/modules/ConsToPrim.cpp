@@ -43,9 +43,9 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     node.set_edges(
         storage.block_counts_with_ghost,
-        storage.spans_rho,
-        storage.spans_rhov,
-        storage.spans_rhoe,
+        storage.refs_rho,
+        storage.refs_rhov,
+        storage.refs_rhoe,
         storage.vel,
         storage.press);
     node.evaluate();
@@ -86,8 +86,8 @@ void shammodels::basegodunov::modules::ConsToPrim<Tvec, TgridVec>::cons_to_prim_
 
     node.set_edges(
         storage.block_counts_with_ghost,
-        storage.spans_rho_dust,
-        storage.spans_rhov_dust,
+        storage.refs_rho_dust,
+        storage.refs_rhov_dust,
         storage.vel_dust);
     node.evaluate();
 

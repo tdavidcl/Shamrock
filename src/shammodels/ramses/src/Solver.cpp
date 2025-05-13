@@ -41,17 +41,17 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
         "block_count_with_ghost", "N_{\\rm block, with ghost}");
 
-    storage.spans_rho = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>("rho", "\\rho");
-    storage.spans_rhov
-        = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
-    storage.spans_rhoe
-        = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>("rhoetot", "(\\rho E)");
+    storage.refs_rho = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho", "\\rho");
+    storage.refs_rhov
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("rhovel", "(\\rho \\mathbf{v})");
+    storage.refs_rhoe
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rhoetot", "(\\rho E)");
 
     if (solver_config.is_dust_on()) {
-        storage.spans_rho_dust = std::make_shared<shamrock::solvergraph::FieldSpan<Tscal>>(
+        storage.refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
             "rho_dust", "\\rho_{\\rm dust}");
-        storage.spans_rhov_dust = std::make_shared<shamrock::solvergraph::FieldSpan<Tvec>>(
-            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v})_{\\rm dust}");
+        storage.refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+            "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     }
 
     // will be filled by NodeConsToPrimGas
