@@ -32,7 +32,7 @@ namespace {
             const shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>>
                 &spans_rhov_dust,
 
-            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel_dust,
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> spans_vel_dust,
             const shambase::DistributedData<u32> &sizes,
             u32 block_size,
             u32 ndust) {
@@ -74,9 +74,9 @@ namespace shammodels::basegodunov::modules {
         edges.spans_vel_dust.ensure_sizes(edges.sizes.indexes);
 
         KernelConsToPrimDust<Tvec>::kernel(
-            edges.spans_rho_dust.spans,
-            edges.spans_rhov_dust.spans,
-            edges.spans_vel_dust.spans,
+            edges.spans_rho_dust.get_spans(),
+            edges.spans_rhov_dust.get_spans(),
+            edges.spans_vel_dust.get_spans(),
             edges.sizes.indexes,
             block_size,
             ndust);
@@ -91,6 +91,8 @@ namespace shammodels::basegodunov::modules {
         auto vel         = get_rw_edge_base(0).get_tex_symbol();
 
         std::string tex = R"tex(
+            Conservative to primitive variable (dust)
+
             \begin{align}
             {vel}_{i,j} &= \frac{ {rhov}_{i,j} }{ {rho}_{i,j} } \\
             i &\in [0,{block_count} * N_{\rm cell/block}) \\

@@ -14,7 +14,6 @@
  *
  */
 
-#include "shambase/memory.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shamcomm/logs.hpp"
@@ -23,8 +22,11 @@
 #include "shammodels/ramses/modules/ConsToPrim.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
+#include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamrock/solvergraph/Field.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
+#include <functional>
 #include <memory>
 #include <utility>
 
