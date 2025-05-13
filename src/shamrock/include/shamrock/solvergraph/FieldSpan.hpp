@@ -60,5 +60,7 @@ namespace shamrock::solvergraph {
             DDPatchDataFieldSpanPointer<T> spans = std::exchange(this->spans, {});
             return spans;
         }
+
+        inline virtual void free_alloc() { spans = {}; }
     };
 } // namespace shamrock::solvergraph

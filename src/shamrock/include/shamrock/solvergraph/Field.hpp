@@ -24,7 +24,7 @@
 namespace shamrock::solvergraph {
 
     template<class T>
-    class Field : public IFieldRefs<T>, public IFreeable {
+    class Field : public IFieldRefs<T> {
 
         // TODO In the long run this class should become what was compute field
 

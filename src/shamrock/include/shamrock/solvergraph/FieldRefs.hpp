@@ -83,5 +83,7 @@ namespace shamrock::solvergraph {
         inline virtual PatchDataField<T> &get(u64 id_patch) const {
             return field_refs.get(id_patch);
         }
+
+        inline virtual void free_alloc() { set_refs({}); }
     };
 } // namespace shamrock::solvergraph

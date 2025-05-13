@@ -64,8 +64,6 @@ namespace shammodels::basegodunov::modules {
 
         void _impl_evaluate_internal();
 
-        inline void _impl_reset_internal() {}
-
         inline virtual std::string _impl_get_label() { return "ConsToPrimGas"; };
 
         virtual std::string _impl_get_tex();

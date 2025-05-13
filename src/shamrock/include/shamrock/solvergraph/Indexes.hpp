@@ -26,6 +26,8 @@ namespace shamrock::solvergraph {
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
         shambase::DistributedData<Tint> indexes;
+
+        inline virtual void free_alloc() { indexes = {}; }
     };
 
 } // namespace shamrock::solvergraph
