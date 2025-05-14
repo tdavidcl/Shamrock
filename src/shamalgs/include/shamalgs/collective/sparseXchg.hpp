@@ -192,12 +192,12 @@ namespace shamalgs::collective {
 
                 int send_sz = check_payload_size_is_int(payload->get_bytesize());
 
-                logger::raw_ln(shambase::format(
-                    "[{}] send {} bytes to rank {}, tag {}",
-                    shamcomm::world_rank(),
-                    payload->get_bytesize(),
-                    comm_ranks.y(),
-                    i));
+                // logger::raw_ln(shambase::format(
+                //     "[{}] send {} bytes to rank {}, tag {}",
+                //     shamcomm::world_rank(),
+                //     payload->get_bytesize(),
+                //     comm_ranks.y(),
+                //     i));
 
                 MPICHECK(MPI_Isend(
                     payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq));
@@ -226,12 +226,12 @@ namespace shamalgs::collective {
 
                 payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
 
-                logger::raw_ln(shambase::format(
-                    "[{}] recv {} bytes from rank {}, tag {}",
-                    shamcomm::world_rank(),
-                    cnt,
-                    comm_ranks.x(),
-                    i));
+                // logger::raw_ln(shambase::format(
+                //     "[{}] recv {} bytes from rank {}, tag {}",
+                //     shamcomm::world_rank(),
+                //     cnt,
+                //     comm_ranks.x(),
+                //     i));
 
                 MPICHECK(MPI_Irecv(
                     payload.payload->get_ptr(),
@@ -316,12 +316,12 @@ namespace shamalgs::collective {
 
                 SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
 
-                logger::raw_ln(shambase::format(
-                    "[{}] send {} bytes to rank {}, tag {}",
-                    shamcomm::world_rank(),
-                    payload->get_bytesize(),
-                    comm_ranks.y(),
-                    i));
+                // logger::raw_ln(shambase::format(
+                //     "[{}] send {} bytes to rank {}, tag {}",
+                //     shamcomm::world_rank(),
+                //     payload->get_bytesize(),
+                //     comm_ranks.y(),
+                //     i));
 
                 MPICHECK(MPI_Isend(
                     payload->get_ptr(),
@@ -353,12 +353,12 @@ namespace shamalgs::collective {
 
                 payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
 
-                logger::raw_ln(shambase::format(
-                    "[{}] recv {} bytes from rank {}, tag {}",
-                    shamcomm::world_rank(),
-                    cnt,
-                    comm_ranks.x(),
-                    i));
+                // logger::raw_ln(shambase::format(
+                //     "[{}] recv {} bytes from rank {}, tag {}",
+                //     shamcomm::world_rank(),
+                //     cnt,
+                //     comm_ranks.x(),
+                //     i));
 
                 MPICHECK(MPI_Irecv(
                     payload.payload->get_ptr(),
@@ -382,8 +382,8 @@ namespace shamalgs::collective {
         const std::vector<SendPayload> &message_send,
         std::vector<RecvPayload> &message_recv,
         const SparseCommTable &comm_table) {
-        sparse_comm_debug_infos(dev_sched, message_send, message_recv, comm_table);
-        // sparse_comm_isend_probe_count_irecv(dev_sched, message_send, message_recv, comm_table);
+        // sparse_comm_debug_infos(dev_sched, message_send, message_recv, comm_table);
+        //  sparse_comm_isend_probe_count_irecv(dev_sched, message_send, message_recv, comm_table);
         sparse_comm_allgather_isend_irecv(dev_sched, message_send, message_recv, comm_table);
     }
 
