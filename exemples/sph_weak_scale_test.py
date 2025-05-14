@@ -1,3 +1,5 @@
+import numpy as np
+
 import shamrock
 
 gamma = 5.0 / 3.0
@@ -54,7 +56,7 @@ model.resize_simulation_box(bmin, bmax)
 
 setup = model.get_setup()
 gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
-setup.apply_setup(gen)
+setup.apply_setup(gen, insert_step=scheduler_split_val * 4)
 
 
 xc, yc, zc = model.get_closest_part_to((0, 0, 0))
@@ -105,14 +107,35 @@ model.set_cfl_mult_stiffness(1e6)
 # shamrock.dump_profiling("sedov_scale_test_init_" + str(compute_multiplier) + "_")
 # shamrock.clear_profiling_data()
 
+res_rates = []
+res_cnts = []
+
 for i in range(5):
     model.timestep()
+
+    if i > 0:  # First step make no sense performance wise
+        tmp_res_rate, tmp_res_cnt = (
+            model.solver_logs_last_rate(),
+            model.solver_logs_last_obj_count(),
+        )
+        res_rates.append(tmp_res_rate)
+        res_cnts.append(tmp_res_cnt)
 
 # shamrock.dump_profiling("sedov_scale_test_" + str(compute_multiplier) + "_")
 # shamrock.dump_profiling_chrome("sedov_scale_test_chrome_" + str(compute_multiplier) + "_")
 
-res_rate, res_cnt = model.solver_logs_last_rate(), model.solver_logs_last_obj_count()
+res_rate, res_cnt = np.max(res_rates), res_cnts[0]
 
 if shamrock.sys.world_rank() == 0:
+    print(f"res_rates = {res_rates}")
+    print(f"res_cnts = {res_cnts}")
+
+    print("--- final score ---")
+
+    print("world size  :", shamrock.sys.world_size())
     print("result rate :", res_rate)
-    print("result cnt :", res_cnt)
+    print("result cnt  :", res_cnt)
+
+    print(
+        f"rates infos : max={np.max(res_rates)}, min={np.min(res_rates)}, mean={np.mean(res_rates)}, stddev={np.std(res_rates)}"
+    )
