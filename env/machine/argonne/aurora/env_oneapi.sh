@@ -6,6 +6,9 @@ module load cmake
 module load python
 module load ninja
 
+# Enable to debug MPI comms
+module load mpich/dbg
+
 function shamconfigure {
     cmake \
         -S $SHAMROCK_DIR \
