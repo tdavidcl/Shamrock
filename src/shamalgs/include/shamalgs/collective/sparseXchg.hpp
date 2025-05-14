@@ -18,12 +18,14 @@
 
 #include "shambase/integer.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shambase/string.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
+#include <vector>
 
 namespace shamalgs::collective {
 
@@ -67,6 +69,32 @@ namespace shamalgs::collective {
         const std::vector<u64> &send_vec_comm_ranks = comm_table.local_send_vec_comm_ranks;
         const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
 
+        // Utility lambda for error reporting
+        auto check_payload_size_is_int = [&](u64 bytesz) {
+            u64 payload_sz = bytesz;
+
+            if (payload_sz > std::numeric_limits<i32>::max()) {
+
+                std::vector<u64> send_sizes;
+                for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+                    u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+
+                    if (comm_ranks.x() == shamcomm::world_rank()) {
+                        send_sizes.push_back(payload_sz);
+                    }
+                }
+
+                shambase::throw_with_loc<std::runtime_error>(shambase::format(
+                    "payload size {} is too large for MPI (max i32 is {})\n"
+                    "message sizes to send: {}",
+                    payload_sz,
+                    std::numeric_limits<i32>::max(),
+                    send_sizes));
+            }
+
+            return (i32) payload_sz;
+        };
+
         // note the tag cannot be bigger than max_i32 because of the allgatherv
 
         std::vector<MPI_Request> rqs;
@@ -84,14 +112,10 @@ namespace shamalgs::collective {
                 u32 rq_index = rqs.size() - 1;
                 auto &rq     = rqs[rq_index];
 
+                int send_sz = check_payload_size_is_int(payload->get_bytesize());
+
                 MPICHECK(MPI_Isend(
-                    payload->get_ptr(),
-                    payload->get_bytesize(),
-                    MPI_BYTE,
-                    comm_ranks.y(),
-                    i,
-                    MPI_COMM_WORLD,
-                    &rq));
+                    payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq));
 
                 send_idx++;
             }
