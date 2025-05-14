@@ -20,7 +20,6 @@ xm, ym, zm = bmin
 xM, yM, zM = bmax
 vol_b = (xM - xm) * (yM - ym) * (zM - zm)
 
-
 if shamrock.sys.world_rank() == 0:
     print("N_target_base", N_target_base)
     print("compute_multiplier", compute_multiplier)
@@ -65,7 +64,7 @@ model.resize_simulation_box(bmin, bmax)
 
 setup = model.get_setup()
 gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
-setup.apply_setup(gen, insert_step=scheduler_split_val * 4)
+setup.apply_setup(gen, insert_step=scheduler_split_val // 2)
 
 
 xc, yc, zc = model.get_closest_part_to((0, 0, 0))
