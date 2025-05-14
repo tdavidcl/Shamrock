@@ -27,6 +27,9 @@
 #include "shamcomm/collectives.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
+#include "shamcomm/worldInfo.hpp"
+#include <mpi.h>
+#include <string>
 #include <vector>
 
 namespace shamalgs::collective {
@@ -73,6 +76,9 @@ namespace shamalgs::collective {
 
         // Utility lambda for printing comm matrix
         auto print_comm_mat = [&]() {
+            StackEntry stack_loc{};
+
+            MPI_Barrier(MPI_COMM_WORLD);
             std::string accum = "";
 
             u32 send_idx = 0;
@@ -98,10 +104,35 @@ namespace shamalgs::collective {
             if (shamcomm::world_rank() == 0) {
                 logger::raw_ln("comm matrix:", matrix);
             }
+            MPI_Barrier(MPI_COMM_WORLD);
         };
 
         // Enable this only to do debug
         print_comm_mat();
+
+        auto show_alloc_state = [&]() {
+            StackEntry stack_loc{};
+            sham::MemPerfInfos mem_perf_infos_end = sham::details::get_mem_perf_info();
+
+            std::string accum = shambase::format(
+                "rank = {} maxmem = {}\n",
+                shamcomm::world_rank(),
+                shambase::readable_sizeof(mem_perf_infos_end.max_allocated_byte_device));
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            std::string log;
+            shamcomm::gather_str(accum, log);
+
+            log = "\n" + log;
+
+            if (shamcomm::world_rank() == 0) {
+                logger::raw_ln("alloc state:", log);
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        };
+
+        // Enable this only to do debug
+        show_alloc_state();
 
         // Utility lambda for error reporting
         auto check_payload_size_is_int = [&](u64 bytesz) {
