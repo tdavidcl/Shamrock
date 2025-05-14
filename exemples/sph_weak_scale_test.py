@@ -1,4 +1,4 @@
-import numpy as np
+from statistics import mean, stdev
 
 import shamrock
 
@@ -124,7 +124,7 @@ for i in range(5):
 # shamrock.dump_profiling("sedov_scale_test_" + str(compute_multiplier) + "_")
 # shamrock.dump_profiling_chrome("sedov_scale_test_chrome_" + str(compute_multiplier) + "_")
 
-res_rate, res_cnt = np.max(res_rates), res_cnts[0]
+res_rate, res_cnt = max(res_rates), res_cnts[0]
 
 if shamrock.sys.world_rank() == 0:
     print(f"res_rates = {res_rates}")
@@ -137,5 +137,5 @@ if shamrock.sys.world_rank() == 0:
     print("result cnt  :", res_cnt)
 
     print(
-        f"rates infos : max={np.max(res_rates)}, min={np.min(res_rates)}, mean={np.mean(res_rates)}, stddev={np.std(res_rates)}"
+        f"rates infos : max={max(res_rates)}, min={min(res_rates)}, mean={mean(res_rates)}, stddev={stdev(res_rates)}"
     )
