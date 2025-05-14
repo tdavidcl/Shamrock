@@ -16,6 +16,7 @@
  *
  */
 
+#include "shambase/assert.hpp"
 #include "shambase/integer.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
@@ -63,7 +64,7 @@ namespace shamalgs::collective {
         }
     };
 
-    inline void sparse_comm_c(
+    inline void sparse_comm_debug_infos(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
         const std::vector<SendPayload> &message_send,
         std::vector<RecvPayload> &message_recv,
@@ -133,6 +134,18 @@ namespace shamalgs::collective {
 
         // Enable this only to do debug
         show_alloc_state();
+    }
+
+    inline void sparse_comm_isend_probe_count_irecv(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        const std::vector<SendPayload> &message_send,
+        std::vector<RecvPayload> &message_recv,
+        const SparseCommTable &comm_table) {
+        StackEntry stack_loc{};
+
+        // share comm list accros nodes
+        const std::vector<u64> &send_vec_comm_ranks = comm_table.local_send_vec_comm_ranks;
+        const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
 
         // Utility lambda for error reporting
         auto check_payload_size_is_int = [&](u64 bytesz) {
@@ -179,6 +192,13 @@ namespace shamalgs::collective {
 
                 int send_sz = check_payload_size_is_int(payload->get_bytesize());
 
+                logger::raw_ln(shambase::format(
+                    "[{}] send {} bytes to rank {}, tag {}",
+                    shamcomm::world_rank(),
+                    payload->get_bytesize(),
+                    comm_ranks.y(),
+                    i));
+
                 MPICHECK(MPI_Isend(
                     payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq));
 
@@ -206,6 +226,13 @@ namespace shamalgs::collective {
 
                 payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
 
+                logger::raw_ln(shambase::format(
+                    "[{}] recv {} bytes from rank {}, tag {}",
+                    shamcomm::world_rank(),
+                    cnt,
+                    comm_ranks.x(),
+                    i));
+
                 MPICHECK(MPI_Irecv(
                     payload.payload->get_ptr(),
                     cnt,
@@ -221,6 +248,143 @@ namespace shamalgs::collective {
 
         std::vector<MPI_Status> st_lst(rqs.size());
         MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+    }
+
+    inline void sparse_comm_allgather_isend_irecv(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        const std::vector<SendPayload> &message_send,
+        std::vector<RecvPayload> &message_recv,
+        const SparseCommTable &comm_table) {
+        StackEntry stack_loc{};
+
+        // share comm list accros nodes
+        const std::vector<u64> &send_vec_comm_ranks = comm_table.local_send_vec_comm_ranks;
+        const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
+
+        // Utility lambda for error reporting
+        auto check_payload_size_is_int = [&](u64 bytesz) {
+            u64 payload_sz = bytesz;
+
+            if (payload_sz > std::numeric_limits<i32>::max()) {
+
+                std::vector<u64> send_sizes;
+                for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+                    u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+
+                    if (comm_ranks.x() == shamcomm::world_rank()) {
+                        send_sizes.push_back(payload_sz);
+                    }
+                }
+
+                shambase::throw_with_loc<std::runtime_error>(shambase::format(
+                    "payload size {} is too large for MPI (max i32 is {})\n"
+                    "message sizes to send: {}",
+                    payload_sz,
+                    std::numeric_limits<i32>::max(),
+                    send_sizes));
+            }
+
+            return (i32) payload_sz;
+        };
+
+        // Build global comm size table
+        std::vector<int> comm_sizes_loc = {};
+        comm_sizes_loc.resize(message_send.size());
+        for (u64 i = 0; i < message_send.size(); i++) {
+            comm_sizes_loc[i] = check_payload_size_is_int(message_send[i].payload->get_bytesize());
+        }
+
+        std::vector<int> comm_sizes = {};
+        vector_allgatherv(comm_sizes_loc, comm_sizes, MPI_COMM_WORLD);
+
+        // note the tag cannot be bigger than max_i32 because of the allgatherv
+
+        std::vector<MPI_Request> rqs;
+
+        // send step
+        u32 send_idx = 0;
+        for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+            u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+
+            if (comm_ranks.x() == shamcomm::world_rank()) {
+
+                auto &payload = message_send[send_idx].payload;
+
+                rqs.push_back(MPI_Request{});
+                u32 rq_index = rqs.size() - 1;
+                auto &rq     = rqs[rq_index];
+
+                SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
+
+                logger::raw_ln(shambase::format(
+                    "[{}] send {} bytes to rank {}, tag {}",
+                    shamcomm::world_rank(),
+                    payload->get_bytesize(),
+                    comm_ranks.y(),
+                    i));
+
+                MPICHECK(MPI_Isend(
+                    payload->get_ptr(),
+                    comm_sizes_loc[send_idx],
+                    MPI_BYTE,
+                    comm_ranks.y(),
+                    i,
+                    MPI_COMM_WORLD,
+                    &rq));
+
+                send_idx++;
+            }
+        }
+
+        // recv step
+        for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+            u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+
+            if (comm_ranks.y() == shamcomm::world_rank()) {
+
+                RecvPayload payload;
+                payload.sender_ranks = comm_ranks.x();
+
+                rqs.push_back(MPI_Request{});
+                u32 rq_index = rqs.size() - 1;
+                auto &rq     = rqs[rq_index];
+
+                i32 cnt = comm_sizes[i];
+
+                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
+
+                logger::raw_ln(shambase::format(
+                    "[{}] recv {} bytes from rank {}, tag {}",
+                    shamcomm::world_rank(),
+                    cnt,
+                    comm_ranks.x(),
+                    i));
+
+                MPICHECK(MPI_Irecv(
+                    payload.payload->get_ptr(),
+                    cnt,
+                    MPI_BYTE,
+                    comm_ranks.x(),
+                    i,
+                    MPI_COMM_WORLD,
+                    &rq));
+
+                message_recv.push_back(std::move(payload));
+            }
+        }
+
+        std::vector<MPI_Status> st_lst(rqs.size());
+        MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+    }
+
+    inline void sparse_comm_c(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        const std::vector<SendPayload> &message_send,
+        std::vector<RecvPayload> &message_recv,
+        const SparseCommTable &comm_table) {
+        sparse_comm_debug_infos(dev_sched, message_send, message_recv, comm_table);
+        // sparse_comm_isend_probe_count_irecv(dev_sched, message_send, message_recv, comm_table);
+        sparse_comm_allgather_isend_irecv(dev_sched, message_send, message_recv, comm_table);
     }
 
     inline void base_sparse_comm(
