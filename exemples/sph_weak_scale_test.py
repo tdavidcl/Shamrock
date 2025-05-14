@@ -20,6 +20,15 @@ xm, ym, zm = bmin
 xM, yM, zM = bmax
 vol_b = (xM - xm) * (yM - ym) * (zM - zm)
 
+
+if shamrock.sys.world_rank() == 0:
+    print("N_target_base", N_target_base)
+    print("compute_multiplier", compute_multiplier)
+    print("scheduler_split_val", scheduler_split_val)
+    print("scheduler_merge_val", scheduler_merge_val)
+    print("N_target", N_target)
+    print("vol_b", vol_b)
+
 part_vol = vol_b / N_target
 
 # lattice volume
