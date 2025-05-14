@@ -24,6 +24,8 @@
 #include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
+#include "shamcomm/collectives.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 #include <vector>
 
@@ -68,6 +70,38 @@ namespace shamalgs::collective {
         // share comm list accros nodes
         const std::vector<u64> &send_vec_comm_ranks = comm_table.local_send_vec_comm_ranks;
         const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
+
+        // Utility lambda for printing comm matrix
+        auto print_comm_mat = [&]() {
+            std::string accum = "";
+
+            u32 send_idx = 0;
+            for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+                u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+
+                if (comm_ranks.x() == shamcomm::world_rank()) {
+                    accum += shambase::format(
+                        "{} # {} # {}\n",
+                        comm_ranks.x(),
+                        comm_ranks.y(),
+                        message_send[send_idx].payload->get_bytesize());
+
+                    send_idx++;
+                }
+            }
+
+            std::string matrix;
+            shamcomm::gather_str(accum, matrix);
+
+            matrix = "\n" + matrix;
+
+            if (shamcomm::world_rank() == 0) {
+                logger::raw_ln("comm matrix:", matrix);
+            }
+        };
+
+        // Enable this only to do debug
+        print_comm_mat();
 
         // Utility lambda for error reporting
         auto check_payload_size_is_int = [&](u64 bytesz) {
