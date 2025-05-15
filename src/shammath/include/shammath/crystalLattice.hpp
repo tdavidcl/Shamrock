@@ -351,7 +351,7 @@ namespace shammath {
                     if (done) {
                         break;
                     }
-                    next();
+                    update_next();
                 }
                 logger::debug_ln("Discontinuous iterator", "skip final idx", idx);
             }
