@@ -485,7 +485,15 @@ TestStart(Benchmark, "shammath/crystalLattice/LatticeHCP/Iterator", lattice_iter
 
     trap(parts);
 
-    logger::raw_ln(t.elasped_sec());
+    logger::raw_ln("perf : ", t.elasped_sec());
+
+    gen = shammath::LatticeHCP<f64_3>::Iterator{1., coord_min, coord_max};
+    shambase::Timer t2;
+    t2.start();
+    gen.skip(1e9);
+    t2.end();
+    trap(gen.next());
+    logger::raw_ln("skip_perf : ", t2.elasped_sec());
 }
 
 TestStart(
@@ -506,5 +514,13 @@ TestStart(
 
     trap(parts);
 
-    logger::raw_ln(t.elasped_sec());
+    logger::raw_ln("perf : ", t.elasped_sec());
+
+    gen = shammath::LatticeHCP<f64_3>::IteratorDiscontinuous{1., coord_min, coord_max};
+    shambase::Timer t2;
+    t2.start();
+    gen.skip(1e9);
+    t2.end();
+    trap(gen.next());
+    logger::raw_ln("skip_perf : ", t2.elasped_sec());
 }
