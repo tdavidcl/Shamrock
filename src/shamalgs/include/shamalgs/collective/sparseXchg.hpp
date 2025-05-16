@@ -382,7 +382,7 @@ namespace shamalgs::collective {
         const std::vector<SendPayload> &message_send,
         std::vector<RecvPayload> &message_recv,
         const SparseCommTable &comm_table) {
-        // sparse_comm_debug_infos(dev_sched, message_send, message_recv, comm_table);
+        sparse_comm_debug_infos(dev_sched, message_send, message_recv, comm_table);
         //  sparse_comm_isend_probe_count_irecv(dev_sched, message_send, message_recv, comm_table);
         sparse_comm_allgather_isend_irecv(dev_sched, message_send, message_recv, comm_table);
     }
