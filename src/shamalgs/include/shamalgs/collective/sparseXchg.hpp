@@ -297,11 +297,11 @@ namespace shamalgs::collective {
         std::vector<int> comm_sizes = {};
         vector_allgatherv(comm_sizes_loc, comm_sizes, MPI_COMM_WORLD);
 
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (shamcomm::world_rank() == 0) {
-            logger::raw_ln(shambase::format("sparse comm start"));
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // if (shamcomm::world_rank() == 0) {
+        //     logger::raw_ln(shambase::format("sparse comm start"));
+        // }
+        // MPI_Barrier(MPI_COMM_WORLD);
 
         // note the tag cannot be bigger than max_i32 because of the allgatherv
 
@@ -382,11 +382,11 @@ namespace shamalgs::collective {
         std::vector<MPI_Status> st_lst(rqs.size());
         MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
 
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (shamcomm::world_rank() == 0) {
-            logger::raw_ln(shambase::format("sparse comm done"));
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // if (shamcomm::world_rank() == 0) {
+        //     logger::raw_ln(shambase::format("sparse comm done"));
+        // }
+        // MPI_Barrier(MPI_COMM_WORLD);
     }
 
     inline void sparse_comm_c(
