@@ -72,16 +72,13 @@ namespace shammodels::sph::modules {
             if (!is_done()) {
                 u64 loc_gen_count = (has_pdat()) ? nmax : 0;
 
-                logger::info_ln(
-                    "GeneratorLatticeHCP", "want to gen ", loc_gen_count, generator.current_idx);
-
                 auto gen_info = shamalgs::collective::fetch_view(loc_gen_count);
 
                 u64 skip_start = gen_info.head_offset;
                 u64 gen_cnt    = loc_gen_count;
                 u64 skip_end   = gen_info.total_byte_count - loc_gen_count - gen_info.head_offset;
 
-                logger::info_ln(
+                logger::debug_ln(
                     "GeneratorLatticeHCP",
                     "generate : ",
                     skip_start,
@@ -90,19 +87,9 @@ namespace shammodels::sph::modules {
                     "total",
                     skip_start + gen_cnt + skip_end);
 
-                shambase::Timer t;
-                t.start();
                 generator.skip(skip_start);
                 auto tmp = generator.next_n(gen_cnt);
                 generator.skip(skip_end);
-                t.end();
-
-                logger::info_ln(
-                    "GeneratorLatticeHCP",
-                    "generate time",
-                    t.get_time_str(),
-                    generator.is_done(),
-                    generator.current_idx);
 
                 for (Tvec r : tmp) {
                     if (Patch::is_in_patch_converted(r, box.lower, box.upper)) {
