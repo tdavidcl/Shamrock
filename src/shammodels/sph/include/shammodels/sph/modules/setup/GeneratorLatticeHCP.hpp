@@ -17,6 +17,7 @@
  */
 
 #include "shambase/stacktrace.hpp"
+#include "shambase/time.hpp"
 #include "shamalgs/collective/indexing.hpp"
 #include "shammath/AABB.hpp"
 #include "shammath/crystalLattice.hpp"
@@ -77,7 +78,7 @@ namespace shammodels::sph::modules {
                 u64 gen_cnt    = loc_gen_count;
                 u64 skip_end   = gen_info.total_byte_count - loc_gen_count - gen_info.head_offset;
 
-                logger::debug_ln(
+                logger::info_ln(
                     "GeneratorLatticeHCP",
                     "generate : ",
                     skip_start,
@@ -86,9 +87,14 @@ namespace shammodels::sph::modules {
                     "total",
                     skip_start + gen_cnt + skip_end);
 
+                shambase::Timer t;
+                t.start();
                 generator.skip(skip_start);
                 auto tmp = generator.next_n(gen_cnt);
                 generator.skip(skip_end);
+                t.end();
+
+                logger::info_ln("GeneratorLatticeHCP", "generate time", t.get_time_str());
 
                 for (Tvec r : tmp) {
                     if (Patch::is_in_patch_converted(r, box.lower, box.upper)) {
