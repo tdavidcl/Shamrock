@@ -320,6 +320,16 @@ TestStart(Unittest, "shammath/crystalLattice/LatticeHCP/Iterator", lattice_itera
     std::vector<f64_3> parts = gen.next_n(100000);
 
     REQUIRE_EQUAL_CUSTOM_COMP(parts, reference_set, compare_ref_set);
+
+    gen = shammath::LatticeHCP<f64_3>::Iterator{1., coord_min, coord_max};
+    gen.skip(100);
+
+    auto comp = [](f64_3 a, f64_3 b) {
+        return sham::lenght2(a - b) < 1e-18;
+    };
+
+    f64_3 ref = {2, 10.392304845413264, 16.32993161855452};
+    REQUIRE_EQUAL_CUSTOM_COMP(gen.next(), ref, comp);
 }
 
 std::vector<f64_3> reference_set_discontinuous
@@ -466,6 +476,16 @@ TestStart(
     std::vector<f64_3> parts = gen.next_n(100000);
 
     REQUIRE_EQUAL_CUSTOM_COMP(parts, reference_set_discontinuous, compare_ref_set);
+
+    gen = shammath::LatticeHCP<f64_3>::IteratorDiscontinuous{1., coord_min, coord_max};
+    gen.skip(100);
+
+    auto comp = [](f64_3 a, f64_3 b) {
+        return sham::lenght2(a - b) < 1e-18;
+    };
+
+    f64_3 ref = {-3, 10.969655114602888, 21.228911104120876};
+    REQUIRE_EQUAL_CUSTOM_COMP(gen.next(), ref, comp);
 }
 
 template<class T>
