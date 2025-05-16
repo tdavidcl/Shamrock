@@ -260,9 +260,9 @@ namespace shammath {
                 return ret;
             }
 
-            inline std::vector<Tvec> next_n(u32 nmax) {
+            inline std::vector<Tvec> next_n(u64 nmax) {
                 std::vector<Tvec> ret{};
-                for (u32 i = 0; i < nmax; i++) {
+                for (u64 i = 0; i < nmax; i++) {
                     if (done) {
                         break;
                     }
@@ -273,7 +273,7 @@ namespace shammath {
                 return ret;
             }
 
-            inline void skip(u32 n) {
+            inline void skip(u64 n) {
                 if (!done) {
                     current_idx += n;
                 }
@@ -359,9 +359,9 @@ namespace shammath {
                 return ret;
             }
 
-            inline std::vector<Tvec> next_n(u32 nmax) {
+            inline std::vector<Tvec> next_n(u64 nmax) {
                 std::vector<Tvec> ret{};
-                for (u32 i = 0; i < nmax; i++) {
+                for (u64 i = 0; i < nmax; i++) {
                     if (done) {
                         break;
                     }
@@ -372,7 +372,7 @@ namespace shammath {
                 return ret;
             }
 
-            inline void skip(u32 n) {
+            inline void skip(u64 n) {
                 if (!done) {
                     current_idx += n;
                 }
