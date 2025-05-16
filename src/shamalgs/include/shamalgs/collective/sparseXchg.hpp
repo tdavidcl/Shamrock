@@ -423,17 +423,23 @@ namespace shamalgs::collective {
         int send_max_count;
         MPI_Allreduce(&send_loc, &send_max_count, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-        logger::raw_ln(send_loc, send_max_count);
+        // logger::raw_ln(send_loc, send_max_count);
 
         StackEntry stack_loc{};
 
         int i = 0;
         while (i < send_max_count) {
+
+            if (i > 0) {
+                ON_RANK_0(
+                    logger::warn_ln("SparseComm", "Splitted sparse comm", i, "/", send_max_count));
+            }
+
             std::vector<SendPayload> message_send_tmp;
             std::vector<RecvPayload> message_recv_tmp;
 
             for (int j = i; (j < (i + max_simultaneous_send)) && (j < message_send.size()); j++) {
-                logger::raw_ln("emplace message", j);
+                // logger::raw_ln("emplace message", j);
                 message_send_tmp.emplace_back(std::move(message_send[j]));
             }
 
