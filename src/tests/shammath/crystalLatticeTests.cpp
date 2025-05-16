@@ -92,6 +92,8 @@ bool check_periodicity(std::array<i32, 3> coord_min, std::array<i32, 3> coord_ma
 
         std::vector<f64_3> parts = gen.next_n(100000);
 
+        // logger::raw_ln(coord_min, coord_max, parts.size());
+
         return all_sum_are_equals(box, parts);
 
     } catch (shammath::LatticeError exp) {

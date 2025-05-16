@@ -221,8 +221,11 @@ namespace shammath {
                       size_t(coord_max[2] - coord_min[2]),
                   }) {
 
-                if (coord_min == coord_max) {
-                    done = true;
+                // must check for all axis otherwise we loop forever
+                for (int ax = 0; ax < dim; ax++) {
+                    if (coord_min[ax] == coord_max[ax]) {
+                        done = true;
+                    }
                 }
 
                 max_coord = coord_delta[0] * coord_delta[1] * coord_delta[2];
@@ -305,8 +308,11 @@ namespace shammath {
                                               size_t(coord_max[2] - coord_min[2]),
                                           }) {
 
-                if (coord_min == coord_max) {
-                    done = true;
+                // must check for all axis otherwise we loop forever
+                for (int ax = 0; ax < dim; ax++) {
+                    if (coord_min[ax] == coord_max[ax]) {
+                        done = true;
+                    }
                 }
 
                 max_coord = coord_delta[0] * coord_delta[1] * coord_delta[2];
