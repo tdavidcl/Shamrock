@@ -271,11 +271,10 @@ namespace shammath {
             }
 
             inline void skip(u32 n) {
-                for (u32 i = 0; i < n; i++) {
-                    if (done) {
-                        break;
-                    }
-                    next();
+                if (current_idx >= max_coord - 1) {
+                    done = true;
+                } else if (!done) {
+                    current_idx += n;
                 }
                 logger::debug_ln("Discontinuous iterator", "skip final idx", idx);
             }
@@ -367,11 +366,10 @@ namespace shammath {
             }
 
             inline void skip(u32 n) {
-                for (u32 i = 0; i < n; i++) {
-                    if (done) {
-                        break;
-                    }
-                    next();
+                if (current_idx >= max_coord - 1) {
+                    done = true;
+                } else if (!done) {
+                    current_idx += n;
                 }
                 logger::debug_ln("Discontinuous iterator", "skip final idx", idx);
             }
