@@ -294,12 +294,12 @@ namespace shammath {
             std::array<std::vector<size_t>, dim> remapped_indices;
 
             std::array<size_t, dim> coord_delta;
-            size_t current_idx;
             size_t max_coord;
 
             bool done = false;
 
             public:
+            size_t current_idx;
             IteratorDiscontinuous(
                 Tscal dr, std::array<i32, dim> coord_min, std::array<i32, dim> coord_max)
                 : dr(dr), current_idx(0), coord_delta({
