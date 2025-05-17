@@ -17,7 +17,6 @@
  */
 
 #include "shambase/stacktrace.hpp"
-#include "shambase/time.hpp"
 #include "shamalgs/collective/indexing.hpp"
 #include "shammath/AABB.hpp"
 #include "shammath/crystalLattice.hpp"
