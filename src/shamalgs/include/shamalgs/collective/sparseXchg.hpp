@@ -17,10 +17,13 @@
  */
 
 #include "shambase/assert.hpp"
+#include "shambase/exception.hpp"
 #include "shambase/integer.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
+#include "shambase/time.hpp"
 #include "shamalgs/collective/exchanges.hpp"
+#include "shamalgs/collective/reduction.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shambackends/math.hpp"
@@ -29,7 +32,10 @@
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include <string_view>
+#include <functional>
 #include <mpi.h>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -261,6 +267,32 @@ namespace shamalgs::collective {
         const std::vector<u64> &send_vec_comm_ranks = comm_table.local_send_vec_comm_ranks;
         const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
 
+        auto get_hash_comm_map = [](const std::vector<u64> &vec) {
+            std::string s = "";
+            s.resize(vec.size() * sizeof(u64));
+            std::memcpy(s.data(), vec.data(), vec.size() * sizeof(u64));
+            auto ret = std::hash<std::string>{}(s);
+            return ret;
+        };
+
+        auto check_comm_hash = [&]() {
+            auto hash = get_hash_comm_map(global_comm_ranks);
+            // logger::raw_ln("global_comm_ranks hash", hash);
+
+            auto max_hash = allreduce_max(hash);
+            auto min_hash = allreduce_min(hash);
+
+            if (max_hash != min_hash) {
+                std::string msg = shambase::format(
+                    "hash mismatch {} != {}, local hash = {}", max_hash, min_hash, hash);
+                logger::err_ln("Sparse comm", msg);
+                MPI_Barrier(MPI_COMM_WORLD);
+                shambase::throw_with_loc<std::runtime_error>(msg);
+            }
+        };
+
+        check_comm_hash();
+
         // Utility lambda for error reporting
         auto check_payload_size_is_int = [&](u64 bytesz) {
             u64 payload_sz = bytesz;
@@ -305,7 +337,22 @@ namespace shamalgs::collective {
 
         // note the tag cannot be bigger than max_i32 because of the allgatherv
 
+        // if(message_send.size() > 1 && shamcomm::world_rank() == 11){
+        //     //sleep
+        //     std::this_thread::sleep_for(std::chrono::seconds(30));
+        // }
+
+        struct rq_info {
+            u32 sender;
+            u32 receiver;
+            u64 size;
+            u32 tag;
+            bool is_send;
+            bool is_recv;
+        };
+
         std::vector<MPI_Request> rqs;
+        std::vector<rq_info> rqs_infos;
 
         // send step
         u32 send_idx = 0;
@@ -319,6 +366,9 @@ namespace shamalgs::collective {
                 rqs.push_back(MPI_Request{});
                 u32 rq_index = rqs.size() - 1;
                 auto &rq     = rqs[rq_index];
+
+                rqs_infos.push_back(
+                    {comm_ranks.x(), comm_ranks.y(), payload->get_bytesize(), i, true, false});
 
                 SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
 
@@ -340,6 +390,7 @@ namespace shamalgs::collective {
 
                 send_idx++;
             }
+
             //  }
             //
             //     // recv step
@@ -354,6 +405,9 @@ namespace shamalgs::collective {
                 rqs.push_back(MPI_Request{});
                 u32 rq_index = rqs.size() - 1;
                 auto &rq     = rqs[rq_index];
+
+                rqs_infos.push_back(
+                    {comm_ranks.x(), comm_ranks.y(), u64(comm_sizes[i]), i, false, true});
 
                 i32 cnt = comm_sizes[i];
 
@@ -378,6 +432,85 @@ namespace shamalgs::collective {
                 message_recv.push_back(std::move(payload));
             }
         }
+
+        auto test_event_completions = [&]() {
+            shambase::Timer twait;
+            twait.start();
+            f64 timeout_t = 20;
+
+            std::vector<bool> done_map = {};
+            done_map.resize(rqs.size());
+            for (u32 i = 0; i < rqs.size(); i++) {
+                done_map[i] = false;
+            }
+
+            bool done = false;
+            while (!done) {
+                bool loc_done = true;
+                for (u32 i = 0; i < rqs.size(); i++) {
+                    if (done_map[i]) {
+                        continue;
+                    }
+
+                    auto &rq = rqs[i];
+
+                    MPI_Status st;
+                    int ready;
+                    MPICHECK(MPI_Test(&rq, &ready, MPI_STATUS_IGNORE));
+                    if (!ready) {
+                        loc_done = false;
+                        // logger::raw_ln(shambase::format(
+                        //     "communication pending : send {} -> {} tag {} size {}",
+                        //     rqs_infos[i].sender,
+                        //     rqs_infos[i].receiver,
+                        //     rqs_infos[i].tag,
+                        //     rqs_infos[i].size));
+                    } else {
+                        done_map[i] = true;
+                        // logger::raw_ln(shambase::format(
+                        //     "communication done : send {} -> {} tag {} size {}",
+                        //     rqs_infos[i].sender,
+                        //     rqs_infos[i].receiver,
+                        //     rqs_infos[i].tag,
+                        //     rqs_infos[i].size));
+                    }
+                }
+                if (loc_done) {
+                    done = true;
+                }
+
+                twait.end();
+                if (twait.elasped_sec() > timeout_t) {
+                    std::string err_msg = "";
+                    for (u32 i = 0; i < rqs.size(); i++) {
+                        if (!done_map[i]) {
+
+                            if (rqs_infos[i].is_send) {
+                                err_msg += shambase::format(
+                                    "communication timeout : send {} -> {} tag {} size {}\n",
+                                    rqs_infos[i].sender,
+                                    rqs_infos[i].receiver,
+                                    rqs_infos[i].tag,
+                                    rqs_infos[i].size);
+                            } else {
+                                err_msg += shambase::format(
+                                    "communication timeout : recv {} -> {} tag {} size {}\n",
+                                    rqs_infos[i].sender,
+                                    rqs_infos[i].receiver,
+                                    rqs_infos[i].tag,
+                                    rqs_infos[i].size);
+                            }
+                        }
+                    }
+                    std::string msg = shambase::format("communication timeout : \n{}", err_msg);
+                    logger::err_ln("Sparse comm", msg);
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    shambase::throw_with_loc<std::runtime_error>(msg);
+                }
+            }
+        };
+
+        test_event_completions();
 
         std::vector<MPI_Status> st_lst(rqs.size());
         MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
