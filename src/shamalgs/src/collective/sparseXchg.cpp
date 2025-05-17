@@ -72,7 +72,7 @@ namespace {
         u32 sender;
         u32 receiver;
         u64 size;
-        u32 tag;
+        i32 tag;
         bool is_send;
         bool is_recv;
     };
@@ -81,7 +81,7 @@ namespace {
         = [](std::vector<MPI_Request> &rqs, std::vector<rq_info> &rqs_infos) {
               shambase::Timer twait;
               twait.start();
-              f64 timeout_t = 20;
+              f64 timeout_t = 60;
 
               std::vector<bool> done_map = {};
               done_map.resize(rqs.size());
@@ -380,7 +380,7 @@ namespace shamalgs::collective {
                 auto &rq     = rqs[rq_index];
 
                 rqs_infos.push_back(
-                    {comm_ranks.x(), comm_ranks.y(), payload->get_bytesize(), i, true, false});
+                    {comm_ranks.x(), comm_ranks.y(), payload->get_bytesize(), tag, true, false});
 
                 SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
 
@@ -419,7 +419,7 @@ namespace shamalgs::collective {
                 auto &rq     = rqs[rq_index];
 
                 rqs_infos.push_back(
-                    {comm_ranks.x(), comm_ranks.y(), u64(comm_sizes[i]), i, false, true});
+                    {comm_ranks.x(), comm_ranks.y(), u64(comm_sizes[i]), tag, false, true});
 
                 i32 cnt = comm_sizes[i];
 
