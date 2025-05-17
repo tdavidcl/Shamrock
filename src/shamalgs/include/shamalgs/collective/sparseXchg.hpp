@@ -37,6 +37,7 @@
 #include <mpi.h>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace shamalgs::collective {
