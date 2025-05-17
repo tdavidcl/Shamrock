@@ -19,6 +19,7 @@
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamrock/scheduler/ReattributeDataUtility.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
+#include <mpi.h>
 
 namespace shamrock {
 
@@ -106,6 +107,8 @@ namespace shamrock {
                 logger::info_ln(
                     "DataInserterUtility", "reattributing data done in ", treatrib.get_time_str());
             }
+
+            MPICHECK(MPI_Barrier(MPI_COMM_WORLD));
 
             if (shamcomm::world_rank() == 0) {
                 logger::info_ln("DataInserterUtility", "run scheduler step ...");
