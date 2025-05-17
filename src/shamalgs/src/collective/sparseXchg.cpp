@@ -545,9 +545,6 @@ namespace shamalgs::collective {
                         report_unfinished_requests(rqs, rqs_infos);
                     }
 
-                    logger::raw_ln(
-                        shamcomm::world_rank(), twait.elasped_sec() - last_print_time, print_freq);
-
                     if (twait.elasped_sec() - last_print_time > print_freq) {
                         logger::warn_ln(
                             "SparseComm",
