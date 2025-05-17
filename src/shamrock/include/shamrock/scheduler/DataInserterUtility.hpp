@@ -65,10 +65,10 @@ namespace shamrock {
             std::function<void(void)> load_balance_update) {
             using namespace shamrock::patch;
 
-            u32 pdat_ob_cnt = pdat_ins.get_obj_cnt();
+            u64 pdat_ob_cnt = pdat_ins.get_obj_cnt();
 
             {
-                u32 sum_push = shamalgs::collective::allreduce_sum(pdat_ob_cnt);
+                u64 sum_push = shamalgs::collective::allreduce_sum(pdat_ob_cnt);
                 if (shamcomm::world_rank() == 0) {
                     logger::info_ln(
                         "DataInserterUtility", "pushing data in scheduler, N =", sum_push);

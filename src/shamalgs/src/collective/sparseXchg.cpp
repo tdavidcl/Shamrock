@@ -15,8 +15,13 @@
  */
 
 #include "shamalgs/collective/sparseXchg.hpp"
+#include "shambase/exception.hpp"
+#include "shambase/time.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -71,12 +76,82 @@ namespace {
     };
 
     struct rq_info {
-        u32 sender;
-        u32 receiver;
+        i32 sender;
+        i32 receiver;
         u64 size;
         i32 tag;
         bool is_send;
         bool is_recv;
+    };
+
+    struct RequestList {
+
+        std::vector<MPI_Request> rqs;
+        std::vector<bool> is_ready;
+
+        u32 ready_count = 0;
+
+        MPI_Request &new_request() {
+            rqs.push_back(MPI_Request{});
+            u32 rq_index = rqs.size() - 1;
+            auto &rq     = rqs[rq_index];
+            is_ready.push_back(false);
+            return rq;
+        }
+
+        void test_ready() {
+            for (u32 i = 0; i < rqs.size(); i++) {
+                if (!is_ready[i]) {
+                    MPI_Status st;
+                    int ready;
+                    MPICHECK(MPI_Test(&rqs[i], &ready, MPI_STATUS_IGNORE));
+                    if (ready) {
+                        is_ready[i] = true;
+                        ready_count++;
+                    }
+                }
+            }
+        }
+
+        bool all_ready() { return ready_count == rqs.size(); }
+
+        void wait_all() {
+            std::vector<MPI_Status> st_lst(rqs.size());
+            MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+        }
+
+        u32 remain_count() {
+            test_ready();
+            return rqs.size() - ready_count;
+        }
+    };
+
+    auto report_unfinished_requests = [](RequestList &rqs, std::vector<rq_info> &rqs_infos) {
+        std::string err_msg = "";
+        for (u32 i = 0; i < rqs.rqs.size(); i++) {
+            if (!rqs.is_ready[i]) {
+
+                if (rqs_infos[i].is_send) {
+                    err_msg += shambase::format(
+                        "communication timeout : send {} -> {} tag {} size {}\n",
+                        rqs_infos[i].sender,
+                        rqs_infos[i].receiver,
+                        rqs_infos[i].tag,
+                        rqs_infos[i].size);
+                } else {
+                    err_msg += shambase::format(
+                        "communication timeout : recv {} -> {} tag {} size {}\n",
+                        rqs_infos[i].sender,
+                        rqs_infos[i].receiver,
+                        rqs_infos[i].tag,
+                        rqs_infos[i].size);
+                }
+            }
+        }
+        std::string msg = shambase::format("communication timeout : \n{}", err_msg);
+        logger::err_ln("Sparse comm", msg);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        shambase::throw_with_loc<std::runtime_error>(msg);
     };
 
     auto test_event_completions
@@ -347,7 +422,7 @@ namespace shamalgs::collective {
         const std::vector<u64> &global_comm_ranks   = comm_table.global_comm_ranks;
 
         // check hash
-        check_comm_hash(global_comm_ranks);
+        // check_comm_hash(global_comm_ranks);
 
         // Build global comm size table
         std::vector<int> comm_sizes_loc = {};
@@ -357,30 +432,39 @@ namespace shamalgs::collective {
                 message_send[i].payload->get_bytesize(), global_comm_ranks);
         }
 
+        // gather sizes
         std::vector<int> comm_sizes = {};
         vector_allgatherv(comm_sizes_loc, comm_sizes, MPI_COMM_WORLD);
 
-        // MPI_Barrier(MPI_COMM_WORLD);
-        // if (shamcomm::world_rank() == 0) {
-        //     logger::raw_ln(shambase::format("sparse comm start"));
-        // }
-        // MPI_Barrier(MPI_COMM_WORLD);
+        // Init the receiving buffers
+        for (u32 i = 0; i < global_comm_ranks.size(); i++) {
+            u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
 
-        // note the tag cannot be bigger than max_i32 because of the allgatherv
+            i32 sender   = comm_ranks.x();
+            i32 receiver = comm_ranks.y();
 
-        // if(message_send.size() > 1 && shamcomm::world_rank() == 11){
-        //     //sleep
-        //     std::this_thread::sleep_for(std::chrono::seconds(30));
-        // }
+            if (receiver == shamcomm::world_rank()) {
+                RecvPayload payload;
+                payload.sender_ranks = sender;
+                i32 cnt              = comm_sizes[i];
 
-        std::vector<MPI_Request> rqs;
+                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
+
+                message_recv.push_back(std::move(payload));
+            }
+        }
+
+        RequestList rqs;
         std::vector<rq_info> rqs_infos;
 
         std::vector<i32> tag_map(shamcomm::world_size(), 0);
 
-        // send step (to trigger error add  - (shamcomm::world_rank() == 1 && message_send.size() >
-        // 1) ? 1 : 0)
+        // send step
         u32 send_idx = 0;
+        u32 recv_idx = 0;
+
+        u32 in_flight = 0;
+
         for (u32 i = 0; i < global_comm_ranks.size(); i++) {
             u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
 
@@ -390,16 +474,15 @@ namespace shamalgs::collective {
             i32 tag = tag_map[sender];
             tag_map[sender]++;
 
-            if (comm_ranks.x() == shamcomm::world_rank()) {
+            bool trigger_check = false;
 
-                auto &payload = message_send[send_idx].payload;
+            if (sender == shamcomm::world_rank()) {
 
-                rqs.push_back(MPI_Request{});
-                u32 rq_index = rqs.size() - 1;
-                auto &rq     = rqs[rq_index];
+                auto &payload = message_send.at(send_idx).payload;
 
-                rqs_infos.push_back(
-                    {comm_ranks.x(), comm_ranks.y(), payload->get_bytesize(), tag, true, false});
+                auto &rq = rqs.new_request();
+
+                rqs_infos.push_back({sender, receiver, payload->get_bytesize(), tag, true, false});
 
                 SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
 
@@ -407,8 +490,8 @@ namespace shamalgs::collective {
                 //     "[{}] send {} bytes to rank {}, tag {}",
                 //     shamcomm::world_rank(),
                 //     payload->get_bytesize(),
-                //     receiver,
-                //     tag));
+                //     comm_ranks.y(),
+                //     i));
 
                 MPICHECK(shamcomm::mpi::Isend(
                     payload->get_ptr(),
@@ -420,48 +503,68 @@ namespace shamalgs::collective {
                     &rq));
 
                 send_idx++;
+                in_flight++;
             }
 
-            //  }
-            //
-            //     // recv step
-            //    for (u32 i = 0; i < global_comm_ranks.size(); i++) {
-            //      u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
+            if (receiver == shamcomm::world_rank()) {
 
-            if (comm_ranks.y() == shamcomm::world_rank()) {
+                auto &payload = message_recv.at(recv_idx).payload;
 
-                RecvPayload payload;
-                payload.sender_ranks = comm_ranks.x();
+                auto &rq = rqs.new_request();
 
-                rqs.push_back(MPI_Request{});
-                u32 rq_index = rqs.size() - 1;
-                auto &rq     = rqs[rq_index];
-
-                rqs_infos.push_back(
-                    {comm_ranks.x(), comm_ranks.y(), u64(comm_sizes[i]), tag, false, true});
-
-                i32 cnt = comm_sizes[i];
-
-                payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
+                rqs_infos.push_back({sender, receiver, u64(comm_sizes[i]), tag, false, true});
 
                 // logger::raw_ln(shambase::format(
                 //     "[{}] recv {} bytes from rank {}, tag {}",
                 //     shamcomm::world_rank(),
                 //     cnt,
-                //     sender,
-                //     tag));
+                //     comm_ranks.x(),
+                //     i));
 
                 MPICHECK(shamcomm::mpi::Irecv(
-                    payload.payload->get_ptr(), cnt, MPI_BYTE, sender, tag, MPI_COMM_WORLD, &rq));
+                    payload->get_ptr(), comm_sizes[i], MPI_BYTE, sender, tag, MPI_COMM_WORLD, &rq));
 
-                message_recv.push_back(std::move(payload));
+                recv_idx++;
+                in_flight++;
+            }
+
+            // routine to limit the number of in-flight messages
+            u64 in_flight_lim = 32;
+            if (in_flight > in_flight_lim) {
+
+                f64 timeout    = 120; // seconds
+                f64 print_freq = 10;  // seconds
+
+                f64 last_print_time = 0;
+
+                shambase::Timer twait;
+                twait.start();
+                do {
+                    twait.end();
+                    if (twait.elasped_sec() > timeout) {
+                        report_unfinished_requests(rqs, rqs_infos);
+                    }
+
+                    logger::raw_ln(
+                        shamcomm::world_rank(), twait.elasped_sec() - last_print_time, print_freq);
+
+                    if (twait.elasped_sec() - last_print_time > print_freq) {
+                        logger::warn_ln(
+                            "SparseComm",
+                            "too many messages in flight :",
+                            in_flight,
+                            "/",
+                            in_flight_lim);
+                        last_print_time = twait.elasped_sec();
+                    }
+                    in_flight = rqs.remain_count();
+                } while (in_flight > in_flight_lim);
             }
         }
 
-        test_event_completions(rqs, rqs_infos);
+        test_event_completions(rqs.rqs, rqs_infos);
 
-        std::vector<MPI_Status> st_lst(rqs.size());
-        MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+        rqs.wait_all();
 
         // logger::raw_ln(tag_map);
 
