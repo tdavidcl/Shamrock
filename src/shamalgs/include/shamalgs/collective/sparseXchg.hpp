@@ -40,6 +40,19 @@
 #include <thread>
 #include <vector>
 
+namespace shamcomm {
+    inline int Isend(
+        const void *buf,
+        int count,
+        MPI_Datatype datatype,
+        int dest,
+        int tag,
+        MPI_Comm comm,
+        MPI_Request *request) {
+        return MPI_Isend(buf, count, datatype, dest, tag, comm, request);
+    }
+} // namespace shamcomm
+
 namespace shamalgs::collective {
 
     struct SendPayload {
