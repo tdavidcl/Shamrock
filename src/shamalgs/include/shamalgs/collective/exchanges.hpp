@@ -98,9 +98,9 @@ namespace shamalgs::collective {
         const MPI_Comm comm) {
         StackEntry stack_loc{};
 
-        if (shamcomm::world_rank() == 0) {
-            shamcomm::logs::info_ln("vector_allgatherv", "vector_allgatherv");
-        }
+        // if (shamcomm::world_rank() == 0) {
+        //     shamcomm::logs::info_ln("vector_allgatherv", "vector_allgatherv");
+        // }
 
         u32 local_count = send_vec.size();
 
@@ -109,10 +109,10 @@ namespace shamalgs::collective {
         MPICHECK(MPI_Allreduce(&local_count, &global_len, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD));
         recv_vec.resize(global_len);
 
-        if (shamcomm::world_rank() == 0) {
-            shamcomm::logs::info_ln(
-                "vector_allgatherv", "vector_allgatherv global_len", global_len);
-        }
+        // if (shamcomm::world_rank() == 0) {
+        //     shamcomm::logs::info_ln(
+        //         "vector_allgatherv", "vector_allgatherv global_len", global_len);
+        // }
 
         std::vector<int> table_data_count(shamcomm::world_size());
 
@@ -130,14 +130,14 @@ namespace shamalgs::collective {
                 = node_displacments_data_table[i - 1] + table_data_count[i - 1];
         }
 
-        if (shamcomm::world_rank() == 0) {
-            shamcomm::logs::info_ln(
-                "vector_allgatherv", "vector_allgatherv table_data_count", table_data_count);
-            shamcomm::logs::info_ln(
-                "vector_allgatherv",
-                "vector_allgatherv node_displacments_data_table",
-                node_displacments_data_table);
-        }
+        // if (shamcomm::world_rank() == 0) {
+        //     shamcomm::logs::info_ln(
+        //         "vector_allgatherv", "vector_allgatherv table_data_count", table_data_count);
+        //     shamcomm::logs::info_ln(
+        //         "vector_allgatherv",
+        //         "vector_allgatherv node_displacments_data_table",
+        //         node_displacments_data_table);
+        // }
 
         // printf("node_displacments_data_table =
         // [%d,%d,%d,%d]\n",node_displacments_data_table[0],node_displacments_data_table[1],node_displacments_data_table[2],node_displacments_data_table[3]);
