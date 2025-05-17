@@ -107,14 +107,19 @@ namespace shamrock {
                 logger::info_ln(
                     "DataInserterUtility", "reattributing data done in ", treatrib.get_time_str());
             }
+            MPICHECK(MPI_Barrier(MPI_COMM_WORLD));
+
+            if (shamcomm::world_rank() == 0) {
+                logger::info_ln("DataInserterUtility", "Compute load ...");
+            }
+
+            load_balance_update();
 
             MPICHECK(MPI_Barrier(MPI_COMM_WORLD));
 
             if (shamcomm::world_rank() == 0) {
                 logger::info_ln("DataInserterUtility", "run scheduler step ...");
             }
-
-            load_balance_update();
 
             sched.scheduler_step(false, false);
             sched.scheduler_step(true, true);
