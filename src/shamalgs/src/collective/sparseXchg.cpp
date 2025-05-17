@@ -15,6 +15,8 @@
  */
 
 #include "shamalgs/collective/sparseXchg.hpp"
+#include "shamcomm/logs.hpp"
+#include "shamcomm/worldInfo.hpp"
 
 namespace {
 
@@ -81,13 +83,17 @@ namespace {
         = [](std::vector<MPI_Request> &rqs, std::vector<rq_info> &rqs_infos) {
               shambase::Timer twait;
               twait.start();
-              f64 timeout_t = 60;
+              f64 timeout_t  = 120;
+              f64 freq_print = 10;
 
               std::vector<bool> done_map = {};
               done_map.resize(rqs.size());
               for (u32 i = 0; i < rqs.size(); i++) {
                   done_map[i] = false;
               }
+
+              f64 t_last_print = 0;
+              u64 done_count   = 0;
 
               bool done = false;
               while (!done) {
@@ -112,6 +118,7 @@ namespace {
                           //     rqs_infos[i].size));
                       } else {
                           done_map[i] = true;
+                          done_count++;
                           // logger::raw_ln(shambase::format(
                           //     "communication done : send {} -> {} tag {} size {}",
                           //     rqs_infos[i].sender,
@@ -120,11 +127,22 @@ namespace {
                           //     rqs_infos[i].size));
                       }
                   }
+
                   if (loc_done) {
                       done = true;
                   }
 
                   twait.end();
+
+                  if (twait.elasped_sec() > t_last_print + 10) {
+
+                      std::string msg
+                          = shambase::format("Sparse comm : {} / {} done", done_count, rqs.size());
+                      logger::warn_ln("Sparse comm", msg);
+
+                      t_last_print = twait.elasped_sec();
+                  }
+
                   if (twait.elasped_sec() > timeout_t) {
                       std::string err_msg = "";
                       for (u32 i = 0; i < rqs.size(); i++) {
@@ -360,7 +378,8 @@ namespace shamalgs::collective {
 
         std::vector<i32> tag_map(shamcomm::world_size(), 0);
 
-        // send step
+        // send step (to trigger error add  - (shamcomm::world_rank() == 1 && message_send.size() >
+        // 1) ? 1 : 0)
         u32 send_idx = 0;
         for (u32 i = 0; i < global_comm_ranks.size(); i++) {
             u32_2 comm_ranks = sham::unpack32(global_comm_ranks[i]);
