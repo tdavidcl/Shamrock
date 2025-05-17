@@ -40,7 +40,15 @@
 #include <thread>
 #include <vector>
 
-namespace shamcomm {
+namespace shamcomm::mpi {
+
+    inline void check_tag_value(i32 tag) {
+        if (tag > mpi_max_tag_value()) {
+            shambase::throw_with_loc<std::invalid_argument>(shambase::format(
+                "mpi_max_tag_value ({}) exceeded with tag {}", mpi_max_tag_value(), tag));
+        }
+    }
+
     inline int Isend(
         const void *buf,
         int count,
@@ -49,9 +57,27 @@ namespace shamcomm {
         int tag,
         MPI_Comm comm,
         MPI_Request *request) {
+
+        check_tag_value(tag);
+
         return MPI_Isend(buf, count, datatype, dest, tag, comm, request);
     }
-} // namespace shamcomm
+
+    inline int Irecv(
+        void *buf,
+        int count,
+        MPI_Datatype datatype,
+        int source,
+        int tag,
+        MPI_Comm comm,
+        MPI_Request *request) {
+
+        check_tag_value(tag);
+
+        return MPI_Irecv(buf, count, datatype, source, tag, comm, request);
+    }
+
+} // namespace shamcomm::mpi
 
 namespace shamalgs::collective {
 
@@ -219,7 +245,7 @@ namespace shamalgs::collective {
                 //     comm_ranks.y(),
                 //     i));
 
-                MPICHECK(MPI_Isend(
+                MPICHECK(shamcomm::mpi::Isend(
                     payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq));
 
                 send_idx++;
@@ -253,7 +279,7 @@ namespace shamalgs::collective {
                 //     comm_ranks.x(),
                 //     i));
 
-                MPICHECK(MPI_Irecv(
+                MPICHECK(shamcomm::mpi::Irecv(
                     payload.payload->get_ptr(),
                     cnt,
                     MPI_BYTE,
@@ -393,7 +419,7 @@ namespace shamalgs::collective {
                 //     comm_ranks.y(),
                 //     i));
 
-                MPICHECK(MPI_Isend(
+                MPICHECK(shamcomm::mpi::Isend(
                     payload->get_ptr(),
                     comm_sizes_loc[send_idx],
                     MPI_BYTE,
@@ -434,7 +460,7 @@ namespace shamalgs::collective {
                 //     comm_ranks.x(),
                 //     i));
 
-                MPICHECK(MPI_Irecv(
+                MPICHECK(shamcomm::mpi::Irecv(
                     payload.payload->get_ptr(),
                     cnt,
                     MPI_BYTE,
