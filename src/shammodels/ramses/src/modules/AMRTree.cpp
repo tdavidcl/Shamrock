@@ -30,17 +30,14 @@ void shammodels::basegodunov::modules::AMRTree<Tvec, TgridVec>::build_trees() {
     StackEntry stack_loc{};
     if (true) {
 
-        using Umorton = typename Storage::morton_t;
+        using Umorton = typename Storage::Tmorton;
 
         std::shared_ptr<solvergraph::TreeEdge<Umorton, TgridVec>> trees
             = std::make_shared<solvergraph::TreeEdge<Umorton, TgridVec>>("trees", "trees");
 
         NodeBuildTrees<Umorton, TgridVec> build_trees;
         build_trees.set_edges(
-            storage.block_counts_with_ghost,
-            storage.spans_block_min,
-            storage.spans_block_max,
-            trees);
+            storage.block_counts_with_ghost, storage.refs_block_min, storage.refs_block_max, trees);
 
         build_trees.evaluate();
 

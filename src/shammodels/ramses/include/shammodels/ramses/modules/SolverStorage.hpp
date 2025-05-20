@@ -40,14 +40,18 @@ namespace shammodels::basegodunov {
     template<class T>
     using Component = shambase::StorageComponent<T>;
 
-    template<class Tvec, class TgridVec, class Tmorton>
+    template<class Tvec, class TgridVec, class Tmorton_>
     class SolverStorage {
         public:
+        using Tmorton            = Tmorton_;
         using Tscal              = shambase::VecComponent<Tvec>;
         using Tgridscal          = shambase::VecComponent<TgridVec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
         using RTree = RadixTree<Tmorton, TgridVec>;
+
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> spans_block_min;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> spans_block_max;
 
         std::shared_ptr<shamrock::solvergraph::Indexes<u32>> block_counts_with_ghost;
         std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> refs_rho;
