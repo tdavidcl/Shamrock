@@ -29,7 +29,6 @@
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
-#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/OperationSequence.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -48,19 +47,14 @@ namespace shammodels::basegodunov {
         using Tgridscal          = shambase::VecComponent<TgridVec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
-        using morton_t = Tmorton;
-
         using RTree = RadixTree<Tmorton, TgridVec>;
 
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> spans_block_min;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> spans_block_max;
-
         std::shared_ptr<shamrock::solvergraph::Indexes<u32>> block_counts_with_ghost;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> spans_rho;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> spans_rhov;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> spans_rhoe;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> spans_rho_dust;
-        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> spans_rhov_dust;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> refs_rho;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> refs_rhov;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> refs_rhoe;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> refs_rho_dust;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> refs_rhov_dust;
 
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
@@ -78,6 +72,7 @@ namespace shammodels::basegodunov {
 
         Component<shammodels::basegodunov::modules::CellInfos<Tvec, TgridVec>> cell_infos;
 
+        Component<shambase::DistributedData<shammath::AABB<TgridVec>>> merge_patch_bounds;
         Component<shambase::DistributedData<RTree>> trees;
 
         Component<shambase::DistributedData<
