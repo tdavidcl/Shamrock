@@ -45,9 +45,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         "block_count_with_ghost", "N_{\\rm block, with ghost}");
 
     // merged ghost spans
-    storage.spans_block_min = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
+    storage.refs_block_min = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
         "block_min", "\\mathbf{r}_{\\rm block, min}");
-    storage.spans_block_max = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
+    storage.refs_block_max = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
         "block_max", "\\mathbf{r}_{\\rm block, max}");
 
     storage.refs_rho = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho", "\\rho");
