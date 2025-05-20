@@ -36,8 +36,8 @@ void shammodels::basegodunov::modules::ComputeCellInfos<Tvec, TgridVec>::compute
 
     node.set_edges(
         storage.block_counts_with_ghost,
-        storage.spans_block_min,
-        storage.spans_block_max,
+        storage.refs_block_min,
+        storage.refs_block_max,
         spans_block_cell_sizes,
         spans_cell0block_aabb_lower);
     node.evaluate();
