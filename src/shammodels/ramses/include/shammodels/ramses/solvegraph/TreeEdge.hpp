@@ -28,6 +28,8 @@ namespace shammodels::basegodunov::solvergraph {
         shambase::DistributedData<RadixTree<Umorton, Tvec>> trees;
 
         inline auto extract_trees() { return std::move(trees); }
+
+        inline virtual void free_alloc() { trees = {}; }
     };
 
 } // namespace shammodels::basegodunov::solvergraph
