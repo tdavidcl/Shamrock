@@ -42,15 +42,14 @@
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
-    // merged ghost spans
-
-    storage.spans_block_min
-        = std::make_shared<FieldSpan<TgridVec>>("block_min", "\\mathbf{r}_{\\rm block, min}");
-    storage.spans_block_max
-        = std::make_shared<FieldSpan<TgridVec>>("block_max", "\\mathbf{r}_{\\rm block, max}");
-
     storage.block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
         "block_count_with_ghost", "N_{\\rm block, with ghost}");
+
+    // merged ghost spans
+    storage.spans_block_min
+        = std::make_shared<FieldRefs<TgridVec>>("block_min", "\\mathbf{r}_{\\rm block, min}");
+    storage.spans_block_max
+        = std::make_shared<FieldRefs<TgridVec>>("block_max", "\\mathbf{r}_{\\rm block, max}");
 
     storage.refs_rho = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho", "\\rho");
     storage.refs_rhov
@@ -62,23 +61,19 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         storage.refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
             "rho_dust", "\\rho_{\\rm dust}");
         storage.refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
-
             "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     }
 
     // will be filled by NodeConsToPrimGas
-
     storage.vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "vel", "\\mathbf{v}");
     storage.press
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
 
-
     if (solver_config.is_dust_on()) {
         u32 ndust = solver_config.dust_config.ndust;
 
         // will be filled by NodeConsToPrimDust
-
         storage.vel_dust = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
             AMRBlock::block_size * ndust, "vel_dust", "{\\mathbf{v}_{\\rm dust}}");
     }
@@ -90,7 +85,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             modules::NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
             node.set_edges(
                 storage.block_counts_with_ghost,
-
                 storage.refs_rho,
                 storage.refs_rhov,
                 storage.refs_rhoe,
@@ -105,14 +99,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             modules::NodeConsToPrimDust<Tvec> node{AMRBlock::block_size, ndust};
             node.set_edges(
                 storage.block_counts_with_ghost,
-
                 storage.refs_rho_dust,
                 storage.refs_rhov_dust,
                 storage.vel_dust);
 
             const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
-
 
         shamrock::solvergraph::OperationSequence seq(
             "Cons to Prim", std::move(const_to_prim_sequence));

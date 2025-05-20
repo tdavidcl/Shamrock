@@ -502,7 +502,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                     [&](u64 id, MergedPDat &mpdat) {
                         return std::ref(mpdat.pdat.get_field<Tscal>(irhoe_ghost));
                     }));
-
     }
 
     if (solver_config.is_dust_on()) { // attach spans to dust field with ghosts
@@ -512,7 +511,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
         u32 irho_dust_ghost  = ghost_layout.get_field_idx<Tscal>("rho_dust");
         u32 irhov_dust_ghost = ghost_layout.get_field_idx<Tvec>("rhovel_dust");
-
 
         storage.refs_rho_dust->set_refs(
             storage.merged_patchdata_ghost.get()
@@ -527,7 +525,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                     [&](u64 id, MergedPDat &mpdat) {
                         return std::ref(mpdat.pdat.get_field<Tvec>(irhov_dust_ghost));
                     }));
-
     }
 }
 
