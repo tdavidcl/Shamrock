@@ -86,10 +86,10 @@ namespace shammodels::basegodunov::modules {
         edges.spans_cell0block_aabb_lower.ensure_sizes(edges.sizes.indexes);
 
         KernelComputeCellAABB<Tvec, TgridVec>::kernel(
-            edges.spans_block_min.spans,
-            edges.spans_block_max.spans,
-            edges.spans_block_cell_sizes.spans,
-            edges.spans_cell0block_aabb_lower.spans,
+            edges.spans_block_min.get_spans(),
+            edges.spans_block_max.get_spans(),
+            edges.spans_block_cell_sizes.get_spans(),
+            edges.spans_cell0block_aabb_lower.get_spans(),
             edges.sizes.indexes,
             block_nside,
             grid_coord_to_pos_fact);
