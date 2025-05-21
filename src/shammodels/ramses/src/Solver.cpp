@@ -37,6 +37,7 @@
 #include "shamrock/io/LegacyVtkWritter.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
+#include "shamrock/solvergraph/OperationSequence.hpp"
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
