@@ -84,6 +84,7 @@ namespace shammath {
     inline std::array<f64_3, 2> random_gaussian_2vec(std::mt19937 &eng, f64 var) {
         return {random_gaussian_vec(eng, var), random_gaussian_vec(eng, var)};
     }
+
     /**
      * @brief Convert a random vector to an Orstein Uhlenbeck mode
      *
