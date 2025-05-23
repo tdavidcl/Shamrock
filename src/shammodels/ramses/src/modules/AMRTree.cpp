@@ -101,9 +101,9 @@ void shammodels::basegodunov::modules::AMRTree<Tvec, TgridVec>::build_trees() {
         });
 
         storage.trees.set(std::move(trees));
-
-        correct_bounding_box();
     }
+
+    correct_bounding_box();
 }
 
 template<class Tvec, class TgridVec>
