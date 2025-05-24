@@ -173,7 +173,7 @@ namespace shammodels::basegodunov::modules {
             TgridVec min_bound = block_min.get_field(id).compute_min();
             TgridVec max_bound = block_max.get_field(id).compute_max();
 
-            logger::raw_ln("AABB", id, min_bound, max_bound);
+            // logger::raw_ln("AABB", id, min_bound, max_bound);
 
             return shammath::AABB<TgridVec>{min_bound, max_bound};
         });
