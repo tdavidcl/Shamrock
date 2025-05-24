@@ -207,6 +207,9 @@ namespace shammodels::basegodunov::modules {
 
         trees.for_each([](u64 id, RTree &tree) {
             tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
+        });
+
+        trees.for_each([](u64 id, RTree &tree) {
             tree.convert_bounding_box(shamsys::instance::get_compute_queue());
         });
 
