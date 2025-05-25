@@ -26,7 +26,6 @@ namespace shammodels::basegodunov::modules {
     template<class Tvec, class TgridVec>
     class AMRGraphGen {
 
-        class AMRBlockFinder;
         class AMRLowering;
 
         public:

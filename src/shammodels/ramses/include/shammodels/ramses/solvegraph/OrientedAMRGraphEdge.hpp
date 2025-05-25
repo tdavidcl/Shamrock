@@ -10,28 +10,27 @@
 #pragma once
 
 /**
- * @file TreeEdge.hpp
+ * @file OrientedAMRGraphEdge.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief
  *
  */
 
 #include "shambase/DistributedData.hpp"
+#include "shammodels/common/amr/NeighGraph.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
-#include "shamtree/RadixTree.hpp"
 
 namespace shammodels::basegodunov::solvergraph {
-    template<class Umorton, class Tvec>
-    class TreeEdge : public shamrock::solvergraph::IDataEdgeNamed {
+
+    template<class Tvec, class TgridVec>
+    class OrientedAMRGraphEdge : public shamrock::solvergraph::IDataEdgeNamed {
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
-        using RTree = RadixTree<Umorton, Tvec>;
+        using OrientedAMRGraph = modules::OrientedAMRGraph<Tvec, TgridVec>;
 
-        shambase::DistributedData<RTree> trees;
+        shambase::DistributedData<OrientedAMRGraph> graph;
 
-        inline auto extract_trees() { return std::move(trees); }
-
-        inline virtual void free_alloc() { trees = {}; }
+        inline virtual void free_alloc() { graph = {}; }
     };
 
 } // namespace shammodels::basegodunov::solvergraph

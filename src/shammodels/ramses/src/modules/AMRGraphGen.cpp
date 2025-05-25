@@ -16,6 +16,8 @@
 
 #include "shambase/memory.hpp"
 #include "shammodels/ramses/modules/AMRGraphGen.hpp"
+#include "shammodels/ramses/modules/FindBlockNeigh.hpp"
+#include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include <utility>
 
 /**
@@ -92,55 +94,6 @@ compute_neigh_graph(sycl::queue &q, u32 graph_nodes, Args &&...args) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<class Tvec, class TgridVec>
-class shammodels::basegodunov::modules::AMRGraphGen<Tvec, TgridVec>::AMRBlockFinder {
-    public:
-    using RTree = typename Storage::RTree;
-    shamrock::tree::ObjectIterator<u_morton, TgridVec> block_looper;
-
-    sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_min;
-    sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_max;
-
-    TgridVec dir_offset;
-
-    AMRBlockFinder(
-        sycl::handler &cgh,
-        RTree &tree,
-        sycl::buffer<TgridVec> &buf_block_min,
-        sycl::buffer<TgridVec> &buf_block_max,
-        TgridVec dir_offset)
-        : block_looper(tree, cgh), acc_block_min{buf_block_min, cgh, sycl::read_only},
-          acc_block_max{buf_block_max, cgh, sycl::read_only}, dir_offset(std::move(dir_offset)) {}
-
-    template<class IndexFunctor>
-    void for_each_other_index(u32 id_a, IndexFunctor &&fct) const {
-
-        // current block AABB
-        shammath::AABB<TgridVec> block_aabb{acc_block_min[id_a], acc_block_max[id_a]};
-
-        // The wanted AABB (the block we look for)
-        shammath::AABB<TgridVec> check_aabb{
-            block_aabb.lower + dir_offset, block_aabb.upper + dir_offset};
-
-        block_looper.rtree_for(
-            [&](u32 node_id, TgridVec bmin, TgridVec bmax) -> bool {
-                return shammath::AABB<TgridVec>{bmin, bmax}
-                    .get_intersect(check_aabb)
-                    .is_volume_not_null();
-            },
-            [&](u32 id_b) {
-                bool interact = shammath::AABB<TgridVec>{acc_block_min[id_b], acc_block_max[id_b]}
-                                    .get_intersect(check_aabb)
-                                    .is_volume_not_null()
-                                && id_b != id_a;
-
-                if (interact) {
-                    fct(id_b);
-                }
-            });
-    }
-};
-
-template<class Tvec, class TgridVec>
 shambase::DistributedData<shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>>
 shammodels::basegodunov::modules::AMRGraphGen<Tvec, TgridVec>::
     find_AMR_block_graph_links_common_face() {
@@ -150,66 +103,21 @@ shammodels::basegodunov::modules::AMRGraphGen<Tvec, TgridVec>::
 
     StackEntry stack_loc{};
 
-    shambase::DistributedData<OrientedAMRGraph> block_graph_links;
+    std::shared_ptr<shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>
+        block_graph_edge = std::make_shared<
+            shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>(
+            "block_graph_edge", "block graph edge");
 
-    shambase::get_check_ref(storage.trees).trees.for_each([&](u64 id, RTree &tree) {
-        u32 leaf_count          = tree.tree_reduced_morton_codes.tree_leaf_count;
-        u32 internal_cell_count = tree.tree_struct.internal_cell_count;
-        u32 tot_count           = leaf_count + internal_cell_count;
+    FindBlockNeigh<Tvec, TgridVec, u_morton> node;
+    node.set_edges(
+        storage.block_counts_with_ghost,
+        storage.refs_block_min,
+        storage.refs_block_max,
+        storage.trees,
+        block_graph_edge);
+    node.evaluate();
 
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
-
-        OrientedAMRGraph result;
-
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-        sycl::buffer<TgridVec> &tree_bmin
-            = shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_min_cell_flt);
-        sycl::buffer<TgridVec> &tree_bmax
-            = shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_max_cell_flt);
-
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
-
-        sycl::buffer<TgridVec> buf_block_min_sycl = buf_block_min.copy_to_sycl_buffer();
-        sycl::buffer<TgridVec> buf_block_max_sycl = buf_block_max.copy_to_sycl_buffer();
-
-        for (u32 dir = 0; dir < 6; dir++) {
-
-            TgridVec dir_offset = result.offset_check[dir];
-
-            AMRGraph rslt = compute_neigh_graph<AMRBlockFinder>(
-                q.q,
-                mpdat.total_elements,
-                tree,
-                buf_block_min_sycl,
-                buf_block_max_sycl,
-                dir_offset);
-
-            logger::debug_ln(
-                "AMR Block Graph", "Patch", id, "direction", dir, "link cnt", rslt.link_count);
-
-            std::unique_ptr<AMRGraph> tmp_graph = std::make_unique<AMRGraph>(std::move(rslt));
-
-            result.graph_links[dir] = std::move(tmp_graph);
-        }
-
-        block_graph_links.add_obj(id, std::move(result));
-    });
-
-    return block_graph_links;
-
-    // possible unittest
-    /*
-    one patch with :
-    sz = 1 << 4
-    base = 4
-    model.make_base_grid((0,0,0),(sz,sz,sz),(base*multx,base*multy,base*multz))
-
-    make a grid of 4^3 blocks, which when merge with interface make 6^3 blocks.
-    In each direction one slab will have no links, hence the number of links should always be
-    6^3 - 6^2 = 180 which we get here on all directions
-    */
+    return std::move(block_graph_edge->graph);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
