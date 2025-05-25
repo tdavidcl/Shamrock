@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/memory.hpp"
 #include "shammodels/ramses/modules/AMRGraphGen.hpp"
 #include <utility>
 
@@ -151,7 +152,7 @@ shammodels::basegodunov::modules::AMRGraphGen<Tvec, TgridVec>::
 
     shambase::DistributedData<OrientedAMRGraph> block_graph_links;
 
-    storage.trees.get().for_each([&](u64 id, RTree &tree) {
+    shambase::get_check_ref(storage.trees).trees.for_each([&](u64 id, RTree &tree) {
         u32 leaf_count          = tree.tree_reduced_morton_codes.tree_leaf_count;
         u32 internal_cell_count = tree.tree_struct.internal_cell_count;
         u32 tot_count           = leaf_count + internal_cell_count;

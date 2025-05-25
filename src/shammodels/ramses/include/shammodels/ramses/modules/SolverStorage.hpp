@@ -23,6 +23,8 @@
 #include "shammodels/common/amr/NeighGraph.hpp"
 #include "shammodels/common/amr/NeighGraphLinkField.hpp"
 #include "shammodels/ramses/GhostZoneData.hpp"
+#include "shammodels/ramses/modules/NodeBuildTrees.hpp"
+#include "shammodels/ramses/solvegraph/TreeEdge.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
 #include "shamrock/scheduler/InterfacesUtility.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
@@ -64,7 +66,12 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel_dust;
 
+        Component<shambase::DistributedData<shammath::AABB<TgridVec>>> merge_patch_bounds;
+
+        std::shared_ptr<solvergraph::TreeEdge<Tmorton, TgridVec>> trees;
+
         std::shared_ptr<shamrock::solvergraph::OperationSequence> node_cons_to_prim;
+        std::shared_ptr<modules::NodeBuildTrees<Tmorton, TgridVec>> build_trees;
 
         Component<SerialPatchTree<TgridVec>> serial_patch_tree;
 
@@ -75,9 +82,6 @@ namespace shammodels::basegodunov {
         Component<shambase::DistributedData<shamrock::MergedPatchData>> merged_patchdata_ghost;
 
         Component<shammodels::basegodunov::modules::CellInfos<Tvec, TgridVec>> cell_infos;
-
-        Component<shambase::DistributedData<shammath::AABB<TgridVec>>> merge_patch_bounds;
-        Component<shambase::DistributedData<RTree>> trees;
 
         Component<shambase::DistributedData<
             shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>>>

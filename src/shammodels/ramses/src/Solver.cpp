@@ -21,7 +21,6 @@
 #include "shammodels/ramses/Solver.hpp"
 #include "shammodels/ramses/modules/AMRGraphGen.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
-#include "shammodels/ramses/modules/AMRTree.hpp"
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
 #include "shammodels/ramses/modules/ComputeCellInfos.hpp"
 #include "shammodels/ramses/modules/ComputeFlux.hpp"
@@ -77,6 +76,15 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         storage.vel_dust = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
             AMRBlock::block_size * ndust, "vel_dust", "{\\mathbf{v}_{\\rm dust}}");
     }
+
+    storage.trees = std::make_shared<solvergraph::TreeEdge<u_morton, TgridVec>>("trees", "trees");
+    storage.build_trees = std::make_shared<modules::NodeBuildTrees<u_morton, TgridVec>>();
+    shambase::get_check_ref(storage.build_trees)
+        .set_edges(
+            storage.block_counts_with_ghost,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.trees);
 
     { // Build ConsToPrim node
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> const_to_prim_sequence;
@@ -157,8 +165,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     // compute bound received
     // round to next pow of 2
     // build radix trees
-    modules::AMRTree amrtree(context, solver_config, storage);
-    amrtree.build_trees();
+    shambase::get_check_ref(storage.build_trees).evaluate();
 
     // modules::StencilGenerator stencil_gen(context,solver_config,storage);
     // stencil_gen.make_stencil();
@@ -338,7 +345,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     storage.cell_infos.reset();
     storage.cell_link_graph.reset();
 
-    storage.trees.reset();
     storage.merge_patch_bounds.reset();
 
     storage.merged_patchdata_ghost.reset();

@@ -17,7 +17,6 @@ set(Sources
     src/Solver.cpp
 
     src/modules/AMRGraphGen.cpp
-    src/modules/AMRTree.cpp
     src/modules/ComputeFlux.cpp
     src/modules/DragIntegrator.cpp
     src/modules/TimeIntegrator.cpp
