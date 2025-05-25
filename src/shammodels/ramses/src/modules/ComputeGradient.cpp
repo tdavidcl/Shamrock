@@ -202,81 +202,82 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
     u32 irho_ghost                                 = ghost_layout.get_field_idx<Tscal>("rho");
 
-    storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
 
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+            sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
+            sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tscal> &buf_rho = mpdat.pdat.get_field_buf_ref<Tscal>(irho_ghost);
+            sham::DeviceBuffer<Tscal> &buf_rho = mpdat.pdat.get_field_buf_ref<Tscal>(irho_ghost);
 
-        AMRGraph &graph_neigh_xp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
-        AMRGraph &graph_neigh_xm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
-        AMRGraph &graph_neigh_yp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
-        AMRGraph &graph_neigh_ym
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
-        AMRGraph &graph_neigh_zp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
-        AMRGraph &graph_neigh_zm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
+            AMRGraph &graph_neigh_xp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
+            AMRGraph &graph_neigh_xm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
+            AMRGraph &graph_neigh_yp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
+            AMRGraph &graph_neigh_ym
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
+            AMRGraph &graph_neigh_zp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
+            AMRGraph &graph_neigh_zm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
 
-        sham::DeviceBuffer<Tscal> &block_cell_sizes
-            = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
-        sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
-            = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
 
-        sham::EventList depends_list;
+            sham::EventList depends_list;
 
-        auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
-        auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
-        auto rho                  = buf_rho.get_read_access(depends_list);
-        auto grad_rho             = result.get_buf(id).get_write_access(depends_list);
+            auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
+            auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
+            auto rho                  = buf_rho.get_read_access(depends_list);
+            auto grad_rho             = result.get_buf(id).get_write_access(depends_list);
 
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
-            AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
-            AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
-            AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
-            AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
-            AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
+                AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
+                AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
+                AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
+                AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
+                AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
 
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
+                u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
 
-            shambase::parralel_for(cgh, cell_count, "compute_grad_rho", [=](u64 gid) {
-                const u32 cell_global_id = (u32) gid;
+                shambase::parralel_for(cgh, cell_count, "compute_grad_rho", [=](u64 gid) {
+                    const u32 cell_global_id = (u32) gid;
 
-                const u32 block_id    = cell_global_id / AMRBlock::block_size;
-                const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
+                    const u32 block_id    = cell_global_id / AMRBlock::block_size;
+                    const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
 
-                Tscal delta_cell = acc_aabb_cell_size[block_id];
+                    Tscal delta_cell = acc_aabb_cell_size[block_id];
 
-                auto result = get_3d_grad<Tscal, Tvec, mode>(
-                    cell_global_id,
-                    delta_cell,
-                    graph_iter_xp,
-                    graph_iter_xm,
-                    graph_iter_yp,
-                    graph_iter_ym,
-                    graph_iter_zp,
-                    graph_iter_zm,
-                    [=](u32 id) {
-                        return rho[id];
-                    });
+                    auto result = get_3d_grad<Tscal, Tvec, mode>(
+                        cell_global_id,
+                        delta_cell,
+                        graph_iter_xp,
+                        graph_iter_xm,
+                        graph_iter_yp,
+                        graph_iter_ym,
+                        graph_iter_zp,
+                        graph_iter_zm,
+                        [=](u32 id) {
+                            return rho[id];
+                        });
 
-                grad_rho[cell_global_id] = {result[0], result[1], result[2]};
+                    grad_rho[cell_global_id] = {result[0], result[1], result[2]};
+                });
             });
-        });
 
-        cell0block_aabb_lower.complete_event_state(e);
-        block_cell_sizes.complete_event_state(e);
-        buf_rho.complete_event_state(e);
-        result.get_buf(id).complete_event_state(e);
-    });
+            cell0block_aabb_lower.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            buf_rho.complete_event_state(e);
+            result.get_buf(id).complete_event_state(e);
+        });
 
     storage.grad_rho.set(std::move(result));
 }
@@ -303,89 +304,90 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::_compute
               return storage.merged_patchdata_ghost.get().get(id).total_elements;
           });
 
-    storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
 
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+            sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
+            sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tvec> &buf_vel = shambase::get_check_ref(storage.vel).get_buf(id);
+            sham::DeviceBuffer<Tvec> &buf_vel = shambase::get_check_ref(storage.vel).get_buf(id);
 
-        AMRGraph &graph_neigh_xp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
-        AMRGraph &graph_neigh_xm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
-        AMRGraph &graph_neigh_yp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
-        AMRGraph &graph_neigh_ym
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
-        AMRGraph &graph_neigh_zp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
-        AMRGraph &graph_neigh_zm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
+            AMRGraph &graph_neigh_xp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
+            AMRGraph &graph_neigh_xm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
+            AMRGraph &graph_neigh_yp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
+            AMRGraph &graph_neigh_ym
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
+            AMRGraph &graph_neigh_zp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
+            AMRGraph &graph_neigh_zm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
 
-        sham::DeviceBuffer<Tscal> &block_cell_sizes
-            = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
-        sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
-            = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
 
-        sham::EventList depends_list;
+            sham::EventList depends_list;
 
-        auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
-        auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
-        auto vel                  = buf_vel.get_read_access(depends_list);
-        auto dx_vel               = resultx.get_buf(id).get_write_access(depends_list);
-        auto dy_vel               = resulty.get_buf(id).get_write_access(depends_list);
-        auto dz_vel               = resultz.get_buf(id).get_write_access(depends_list);
+            auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
+            auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
+            auto vel                  = buf_vel.get_read_access(depends_list);
+            auto dx_vel               = resultx.get_buf(id).get_write_access(depends_list);
+            auto dy_vel               = resulty.get_buf(id).get_write_access(depends_list);
+            auto dz_vel               = resultz.get_buf(id).get_write_access(depends_list);
 
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
-            AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
-            AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
-            AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
-            AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
-            AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
+                AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
+                AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
+                AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
+                AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
+                AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
 
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
+                u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
 
-            Tscal dxfact = solver_config.grid_coord_to_pos_fact;
+                Tscal dxfact = solver_config.grid_coord_to_pos_fact;
 
-            shambase::parralel_for(cgh, cell_count, "compute_grad_v", [=](u64 gid) {
-                const u32 cell_global_id = (u32) gid;
+                shambase::parralel_for(cgh, cell_count, "compute_grad_v", [=](u64 gid) {
+                    const u32 cell_global_id = (u32) gid;
 
-                const u32 block_id    = cell_global_id / AMRBlock::block_size;
-                const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
+                    const u32 block_id    = cell_global_id / AMRBlock::block_size;
+                    const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
 
-                Tscal delta_cell = acc_aabb_cell_size[block_id];
+                    Tscal delta_cell = acc_aabb_cell_size[block_id];
 
-                auto result = get_3d_grad<Tvec, Tvec, mode>(
-                    cell_global_id,
-                    delta_cell,
-                    graph_iter_xp,
-                    graph_iter_xm,
-                    graph_iter_yp,
-                    graph_iter_ym,
-                    graph_iter_zp,
-                    graph_iter_zm,
-                    [=](u32 id) {
-                        return vel[id];
-                    });
+                    auto result = get_3d_grad<Tvec, Tvec, mode>(
+                        cell_global_id,
+                        delta_cell,
+                        graph_iter_xp,
+                        graph_iter_xm,
+                        graph_iter_yp,
+                        graph_iter_ym,
+                        graph_iter_zp,
+                        graph_iter_zm,
+                        [=](u32 id) {
+                            return vel[id];
+                        });
 
-                dx_vel[cell_global_id] = result[0];
-                dy_vel[cell_global_id] = result[1];
-                dz_vel[cell_global_id] = result[2];
+                    dx_vel[cell_global_id] = result[0];
+                    dy_vel[cell_global_id] = result[1];
+                    dz_vel[cell_global_id] = result[2];
+                });
             });
-        });
 
-        cell0block_aabb_lower.complete_event_state(e);
-        block_cell_sizes.complete_event_state(e);
-        buf_vel.complete_event_state(e);
-        resultx.get_buf(id).complete_event_state(e);
-        resulty.get_buf(id).complete_event_state(e);
-        resultz.get_buf(id).complete_event_state(e);
-    });
+            cell0block_aabb_lower.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            buf_vel.complete_event_state(e);
+            resultx.get_buf(id).complete_event_state(e);
+            resulty.get_buf(id).complete_event_state(e);
+            resultz.get_buf(id).complete_event_state(e);
+        });
 
     storage.dx_v.set(std::move(resultx));
     storage.dy_v.set(std::move(resulty));
@@ -406,84 +408,86 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::_compute
             return storage.merged_patchdata_ghost.get().get(id).total_elements;
         });
 
-    storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
 
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+            sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
+            sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tscal> &buf_press = shambase::get_check_ref(storage.press).get_buf(id);
+            sham::DeviceBuffer<Tscal> &buf_press
+                = shambase::get_check_ref(storage.press).get_buf(id);
 
-        AMRGraph &graph_neigh_xp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
-        AMRGraph &graph_neigh_xm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
-        AMRGraph &graph_neigh_yp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
-        AMRGraph &graph_neigh_ym
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
-        AMRGraph &graph_neigh_zp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
-        AMRGraph &graph_neigh_zm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
+            AMRGraph &graph_neigh_xp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
+            AMRGraph &graph_neigh_xm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
+            AMRGraph &graph_neigh_yp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
+            AMRGraph &graph_neigh_ym
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
+            AMRGraph &graph_neigh_zp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
+            AMRGraph &graph_neigh_zm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
 
-        sham::DeviceBuffer<Tscal> &block_cell_sizes
-            = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
-        sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
-            = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
 
-        sham::EventList depends_list;
+            sham::EventList depends_list;
 
-        auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
-        auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
-        auto press                = buf_press.get_read_access(depends_list);
-        auto grad_P               = result.get_buf(id).get_write_access(depends_list);
+            auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
+            auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
+            auto press                = buf_press.get_read_access(depends_list);
+            auto grad_P               = result.get_buf(id).get_write_access(depends_list);
 
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
-            AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
-            AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
-            AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
-            AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
-            AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
+                AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
+                AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
+                AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
+                AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
+                AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
 
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
+                u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
 
-            Tscal dxfact = solver_config.grid_coord_to_pos_fact;
-            Tscal gamma  = solver_config.eos_gamma;
+                Tscal dxfact = solver_config.grid_coord_to_pos_fact;
+                Tscal gamma  = solver_config.eos_gamma;
 
-            shambase::parralel_for(cgh, cell_count, "compute_grad_rho", [=](u64 gid) {
-                const u32 cell_global_id = (u32) gid;
+                shambase::parralel_for(cgh, cell_count, "compute_grad_rho", [=](u64 gid) {
+                    const u32 cell_global_id = (u32) gid;
 
-                const u32 block_id    = cell_global_id / AMRBlock::block_size;
-                const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
+                    const u32 block_id    = cell_global_id / AMRBlock::block_size;
+                    const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
 
-                Tscal delta_cell = acc_aabb_cell_size[block_id];
+                    Tscal delta_cell = acc_aabb_cell_size[block_id];
 
-                auto result = get_3d_grad<Tscal, Tvec, mode>(
-                    cell_global_id,
-                    delta_cell,
-                    graph_iter_xp,
-                    graph_iter_xm,
-                    graph_iter_yp,
-                    graph_iter_ym,
-                    graph_iter_zp,
-                    graph_iter_zm,
-                    [=](u32 id) {
-                        return press[id];
-                    });
+                    auto result = get_3d_grad<Tscal, Tvec, mode>(
+                        cell_global_id,
+                        delta_cell,
+                        graph_iter_xp,
+                        graph_iter_xm,
+                        graph_iter_yp,
+                        graph_iter_ym,
+                        graph_iter_zp,
+                        graph_iter_zm,
+                        [=](u32 id) {
+                            return press[id];
+                        });
 
-                grad_P[cell_global_id] = {result[0], result[1], result[2]};
+                    grad_P[cell_global_id] = {result[0], result[1], result[2]};
+                });
             });
-        });
 
-        cell0block_aabb_lower.complete_event_state(e);
-        block_cell_sizes.complete_event_state(e);
-        buf_press.complete_event_state(e);
-        result.get_buf(id).complete_event_state(e);
-    });
+            cell0block_aabb_lower.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            buf_press.complete_event_state(e);
+            result.get_buf(id).complete_event_state(e);
+        });
 
     storage.grad_P.set(std::move(result));
 }
@@ -558,86 +562,87 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
     u32 irho_dust_ghost                            = ghost_layout.get_field_idx<Tscal>("rho_dust");
 
-    storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
 
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+            sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
+            sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tscal> &buf_rho_dust
-            = mpdat.pdat.get_field_buf_ref<Tscal>(irho_dust_ghost);
+            sham::DeviceBuffer<Tscal> &buf_rho_dust
+                = mpdat.pdat.get_field_buf_ref<Tscal>(irho_dust_ghost);
 
-        AMRGraph &graph_neigh_xp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
-        AMRGraph &graph_neigh_xm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
-        AMRGraph &graph_neigh_yp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
-        AMRGraph &graph_neigh_ym
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
-        AMRGraph &graph_neigh_zp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
-        AMRGraph &graph_neigh_zm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
+            AMRGraph &graph_neigh_xp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
+            AMRGraph &graph_neigh_xm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
+            AMRGraph &graph_neigh_yp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
+            AMRGraph &graph_neigh_ym
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
+            AMRGraph &graph_neigh_zp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
+            AMRGraph &graph_neigh_zm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
 
-        sham::DeviceBuffer<Tscal> &block_cell_sizes
-            = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
-        sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
-            = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
 
-        sham::EventList depends_list;
+            sham::EventList depends_list;
 
-        auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
-        auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
-        auto rho_dust             = buf_rho_dust.get_read_access(depends_list);
-        auto grad_rho_dust        = result.get_buf(id).get_write_access(depends_list);
+            auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
+            auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
+            auto rho_dust             = buf_rho_dust.get_read_access(depends_list);
+            auto grad_rho_dust        = result.get_buf(id).get_write_access(depends_list);
 
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
-            AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
-            AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
-            AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
-            AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
-            AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
+                AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
+                AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
+                AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
+                AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
+                AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
 
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
-            u32 nvar_dust  = ndust;
+                u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
+                u32 nvar_dust  = ndust;
 
-            shambase::parralel_for(
-                cgh, cell_count * nvar_dust, "compute_grad_rho_dust", [=](u64 gid) {
-                    const u32 tmp_gid        = (u32) gid;
-                    const u32 cell_global_id = tmp_gid / nvar_dust;
-                    const u32 ndust_off_loc  = tmp_gid % nvar_dust;
+                shambase::parralel_for(
+                    cgh, cell_count * nvar_dust, "compute_grad_rho_dust", [=](u64 gid) {
+                        const u32 tmp_gid        = (u32) gid;
+                        const u32 cell_global_id = tmp_gid / nvar_dust;
+                        const u32 ndust_off_loc  = tmp_gid % nvar_dust;
 
-                    const u32 block_id    = cell_global_id / AMRBlock::block_size;
-                    const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
+                        const u32 block_id    = cell_global_id / AMRBlock::block_size;
+                        const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
 
-                    Tscal delta_cell = acc_aabb_cell_size[block_id];
+                        Tscal delta_cell = acc_aabb_cell_size[block_id];
 
-                    auto result = get_3d_grad<Tscal, Tvec, mode>(
-                        cell_global_id,
-                        delta_cell,
-                        graph_iter_xp,
-                        graph_iter_xm,
-                        graph_iter_yp,
-                        graph_iter_ym,
-                        graph_iter_zp,
-                        graph_iter_zm,
-                        [=](u32 id) {
-                            return rho_dust[nvar_dust * id + ndust_off_loc];
-                        });
-                    grad_rho_dust[nvar_dust * cell_global_id + ndust_off_loc]
-                        = {result[0], result[1], result[2]};
-                });
+                        auto result = get_3d_grad<Tscal, Tvec, mode>(
+                            cell_global_id,
+                            delta_cell,
+                            graph_iter_xp,
+                            graph_iter_xm,
+                            graph_iter_yp,
+                            graph_iter_ym,
+                            graph_iter_zp,
+                            graph_iter_zm,
+                            [=](u32 id) {
+                                return rho_dust[nvar_dust * id + ndust_off_loc];
+                            });
+                        grad_rho_dust[nvar_dust * cell_global_id + ndust_off_loc]
+                            = {result[0], result[1], result[2]};
+                    });
+            });
+
+            cell0block_aabb_lower.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            buf_rho_dust.complete_event_state(e);
+            result.get_buf(id).complete_event_state(e);
         });
-
-        cell0block_aabb_lower.complete_event_state(e);
-        block_cell_sizes.complete_event_state(e);
-        buf_rho_dust.complete_event_state(e);
-        result.get_buf(id).complete_event_state(e);
-    });
 
     storage.grad_rho_dust.set(std::move(result));
 }
@@ -666,92 +671,93 @@ void shammodels::basegodunov::modules::ComputeGradient<Tvec, TgridVec>::
             return storage.merged_patchdata_ghost.get().get(id).total_elements;
         });
 
-    storage.cell_link_graph.get().for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(id);
 
-        sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-        sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
-        sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
+            sham::DeviceBuffer<TgridVec> &buf_block_min = mpdat.pdat.get_field_buf_ref<TgridVec>(0);
+            sham::DeviceBuffer<TgridVec> &buf_block_max = mpdat.pdat.get_field_buf_ref<TgridVec>(1);
 
-        sham::DeviceBuffer<Tvec> &buf_vel_dust
-            = shambase::get_check_ref(storage.vel_dust).get_buf(id);
+            sham::DeviceBuffer<Tvec> &buf_vel_dust
+                = shambase::get_check_ref(storage.vel_dust).get_buf(id);
 
-        AMRGraph &graph_neigh_xp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
-        AMRGraph &graph_neigh_xm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
-        AMRGraph &graph_neigh_yp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
-        AMRGraph &graph_neigh_ym
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
-        AMRGraph &graph_neigh_zp
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
-        AMRGraph &graph_neigh_zm
-            = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
+            AMRGraph &graph_neigh_xp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xp]);
+            AMRGraph &graph_neigh_xm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.xm]);
+            AMRGraph &graph_neigh_yp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.yp]);
+            AMRGraph &graph_neigh_ym
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.ym]);
+            AMRGraph &graph_neigh_zp
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zp]);
+            AMRGraph &graph_neigh_zm
+                = shambase::get_check_ref(oriented_cell_graph.graph_links[oriented_cell_graph.zm]);
 
-        sham::DeviceBuffer<Tscal> &block_cell_sizes
-            = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
-        sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
-            = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = storage.cell_infos.get().block_cell_sizes.get_buf_check(id);
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = storage.cell_infos.get().cell0block_aabb_lower.get_buf_check(id);
 
-        sham::EventList depends_list;
+            sham::EventList depends_list;
 
-        auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
-        auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
-        auto vel_dust             = buf_vel_dust.get_read_access(depends_list);
-        auto dx_vel_dust          = resultx.get_buf(id).get_write_access(depends_list);
-        auto dy_vel_dust          = resulty.get_buf(id).get_write_access(depends_list);
-        auto dz_vel_dust          = resultz.get_buf(id).get_write_access(depends_list);
+            auto acc_aabb_block_lower = cell0block_aabb_lower.get_read_access(depends_list);
+            auto acc_aabb_cell_size   = block_cell_sizes.get_read_access(depends_list);
+            auto vel_dust             = buf_vel_dust.get_read_access(depends_list);
+            auto dx_vel_dust          = resultx.get_buf(id).get_write_access(depends_list);
+            auto dy_vel_dust          = resulty.get_buf(id).get_write_access(depends_list);
+            auto dz_vel_dust          = resultz.get_buf(id).get_write_access(depends_list);
 
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
-            AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
-            AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
-            AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
-            AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
-            AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                AMRGraphLinkiterator graph_iter_xp{graph_neigh_xp, cgh};
+                AMRGraphLinkiterator graph_iter_xm{graph_neigh_xm, cgh};
+                AMRGraphLinkiterator graph_iter_yp{graph_neigh_yp, cgh};
+                AMRGraphLinkiterator graph_iter_ym{graph_neigh_ym, cgh};
+                AMRGraphLinkiterator graph_iter_zp{graph_neigh_zp, cgh};
+                AMRGraphLinkiterator graph_iter_zm{graph_neigh_zm, cgh};
 
-            u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
+                u32 cell_count = (mpdat.total_elements) * AMRBlock::block_size;
 
-            u32 nvar_dust = ndust;
-            shambase::parralel_for(
-                cgh, cell_count * nvar_dust, "compute_grad_v_dust", [=](u64 gid) {
-                    const u32 tmp_gid        = (u32) gid;
-                    const u32 cell_global_id = tmp_gid / nvar_dust;
-                    const u32 ndust_off_loc  = tmp_gid % nvar_dust;
+                u32 nvar_dust = ndust;
+                shambase::parralel_for(
+                    cgh, cell_count * nvar_dust, "compute_grad_v_dust", [=](u64 gid) {
+                        const u32 tmp_gid        = (u32) gid;
+                        const u32 cell_global_id = tmp_gid / nvar_dust;
+                        const u32 ndust_off_loc  = tmp_gid % nvar_dust;
 
-                    const u32 block_id    = cell_global_id / AMRBlock::block_size;
-                    const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
+                        const u32 block_id    = cell_global_id / AMRBlock::block_size;
+                        const u32 cell_loc_id = cell_global_id % AMRBlock::block_size;
 
-                    Tscal delta_cell = acc_aabb_cell_size[block_id];
+                        Tscal delta_cell = acc_aabb_cell_size[block_id];
 
-                    auto result = get_3d_grad<Tvec, Tvec, mode>(
-                        cell_global_id,
-                        delta_cell,
-                        graph_iter_xp,
-                        graph_iter_xm,
-                        graph_iter_yp,
-                        graph_iter_ym,
-                        graph_iter_zp,
-                        graph_iter_zm,
-                        [=](u32 id) {
-                            return vel_dust[id * nvar_dust + ndust_off_loc];
-                        });
+                        auto result = get_3d_grad<Tvec, Tvec, mode>(
+                            cell_global_id,
+                            delta_cell,
+                            graph_iter_xp,
+                            graph_iter_xm,
+                            graph_iter_yp,
+                            graph_iter_ym,
+                            graph_iter_zp,
+                            graph_iter_zm,
+                            [=](u32 id) {
+                                return vel_dust[id * nvar_dust + ndust_off_loc];
+                            });
 
-                    dx_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[0];
-                    dy_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[1];
-                    dz_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[2];
-                });
+                        dx_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[0];
+                        dy_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[1];
+                        dz_vel_dust[cell_global_id * nvar_dust + ndust_off_loc] = result[2];
+                    });
+            });
+
+            cell0block_aabb_lower.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            buf_vel_dust.complete_event_state(e);
+            resultx.get_buf(id).complete_event_state(e);
+            resulty.get_buf(id).complete_event_state(e);
+            resultz.get_buf(id).complete_event_state(e);
         });
-
-        cell0block_aabb_lower.complete_event_state(e);
-        block_cell_sizes.complete_event_state(e);
-        buf_vel_dust.complete_event_state(e);
-        resultx.get_buf(id).complete_event_state(e);
-        resulty.get_buf(id).complete_event_state(e);
-        resultz.get_buf(id).complete_event_state(e);
-    });
 
     storage.dx_v_dust.set(std::move(resultx));
     storage.dy_v_dust.set(std::move(resulty));

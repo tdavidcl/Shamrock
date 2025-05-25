@@ -19,8 +19,8 @@
 #include "shamcomm/logs.hpp"
 #include "shammodels/common/timestep_report.hpp"
 #include "shammodels/ramses/Solver.hpp"
-#include "shammodels/ramses/modules/AMRGraphGen.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
+#include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
 #include "shammodels/ramses/modules/ComputeCellInfos.hpp"
 #include "shammodels/ramses/modules/ComputeFlux.hpp"
@@ -30,9 +30,11 @@
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
 #include "shammodels/ramses/modules/FaceInterpolate.hpp"
+#include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
 #include "shammodels/ramses/modules/StencilGenerator.hpp"
 #include "shammodels/ramses/modules/TimeIntegrator.hpp"
+#include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include "shamrock/io/LegacyVtkWritter.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
@@ -40,6 +42,10 @@
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Edges
+    ////////////////////////////////////////////////////////////////////////////////
 
     storage.block_counts_with_ghost = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
         "block_count_with_ghost", "N_{\\rm block, with ghost}");
@@ -78,13 +84,60 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     }
 
     storage.trees = std::make_shared<solvergraph::TreeEdge<u_morton, TgridVec>>("trees", "trees");
-    storage.build_trees = std::make_shared<modules::NodeBuildTrees<u_morton, TgridVec>>();
-    shambase::get_check_ref(storage.build_trees)
-        .set_edges(
+
+    storage.block_graph_edge = std::make_shared<
+        shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>(
+        "block_graph_edge", "block graph edge");
+
+    storage.cell_graph_edge = std::make_shared<
+        shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>(
+        "cell_graph_edge", "cell graph edge");
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Nodes
+    ////////////////////////////////////////////////////////////////////////////////
+    std::vector<std::shared_ptr<shamrock::solvergraph::INode>> solver_sequence;
+
+    { // build trees
+
+        modules::NodeBuildTrees<u_morton, TgridVec> node{};
+        node.set_edges(
             storage.block_counts_with_ghost,
             storage.refs_block_min,
             storage.refs_block_max,
             storage.trees);
+
+        solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    { // build neigh tables
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> neigh_table_sequence;
+
+        modules::FindBlockNeigh<Tvec, TgridVec, u_morton> node1;
+        node1.set_edges(
+            storage.block_counts_with_ghost,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.trees,
+            storage.block_graph_edge);
+        node1.evaluate();
+
+        modules::BlockNeighToCellNeigh<Tvec, TgridVec, u_morton> node2(Config::NsideBlockPow);
+        node2.set_edges(
+            storage.block_counts_with_ghost,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.block_graph_edge,
+            storage.cell_graph_edge);
+        node2.evaluate();
+
+        neigh_table_sequence.push_back(std::make_shared<decltype(node1)>(std::move(node1)));
+        neigh_table_sequence.push_back(std::make_shared<decltype(node2)>(std::move(node2)));
+
+        shamrock::solvergraph::OperationSequence seq(
+            "Compute neigh table", std::move(neigh_table_sequence));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
+    }
 
     { // Build ConsToPrim node
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> const_to_prim_sequence;
@@ -116,8 +169,11 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         shamrock::solvergraph::OperationSequence seq(
             "Cons to Prim", std::move(const_to_prim_sequence));
-        storage.node_cons_to_prim = std::make_shared<decltype(seq)>(std::move(seq));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
+
+    shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
+    storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 }
 
 template<class Tvec, class TgridVec>
@@ -162,25 +218,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     modules::ComputeCellInfos comp_cell_infos(context, solver_config, storage);
     comp_cell_infos.compute_aabb();
 
-    // compute bound received
-    // round to next pow of 2
-    // build radix trees
-    shambase::get_check_ref(storage.build_trees).evaluate();
-
-    // modules::StencilGenerator stencil_gen(context,solver_config,storage);
-    // stencil_gen.make_stencil();
-
-    modules::AMRGraphGen graph_gen(context, solver_config, storage);
-    auto block_oriented_graph = graph_gen.find_AMR_block_graph_links_common_face();
-
-    graph_gen.lower_AMR_block_graph_to_cell_common_face_graph(block_oriented_graph);
-
     // compute prim variable
     {
         // logger::raw_ln(" -- tex:\n" +
-        // shambase::get_check_ref(storage.node_cons_to_prim).get_tex()); logger::raw_ln(
-        //     " -- dot:\n" + shambase::get_check_ref(storage.node_cons_to_prim).get_dot_graph());
-        shambase::get_check_ref(storage.node_cons_to_prim).evaluate();
+        // shambase::get_check_ref(storage.solver_sequence).get_tex()); logger::raw_ln(
+        //     " -- dot:\n" + shambase::get_check_ref(storage.solver_sequence).get_dot_graph());
+        shambase::get_check_ref(storage.solver_sequence).evaluate();
     }
 
     // compute & limit gradients
@@ -343,7 +386,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     }
 
     storage.cell_infos.reset();
-    storage.cell_link_graph.reset();
 
     storage.merge_patch_bounds.reset();
 
