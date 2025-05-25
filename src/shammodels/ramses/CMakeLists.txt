@@ -36,6 +36,7 @@ set(Sources
     src/modules/StencilGenerator.cpp
     src/modules/NodeBuildTrees.cpp
     src/modules/FindBlockNeigh.cpp
+    src/modules/BlockNeighToCellNeigh.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
