@@ -38,10 +38,21 @@
 #include "shamrock/io/LegacyVtkWritter.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
+#include "shamrock/solvergraph/NodeFreeAlloc.hpp"
 #include "shamrock/solvergraph/OperationSequence.hpp"
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
+
+    bool enable_mem_free = false;
+
+    auto get_optional_free_mem = [&](auto &bind_to, auto &add_to) {
+        if (enable_mem_free) {
+            shamrock::solvergraph::NodeFreeAlloc node;
+            node.set_edges(bind_to);
+            add_to.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+    };
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Edges
@@ -83,15 +94,16 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             AMRBlock::block_size * ndust, "vel_dust", "{\\mathbf{v}_{\\rm dust}}");
     }
 
-    storage.trees = std::make_shared<solvergraph::TreeEdge<u_morton, TgridVec>>("trees", "trees");
+    storage.trees
+        = std::make_shared<solvergraph::TreeEdge<u_morton, TgridVec>>("trees", "\\text{trees}");
 
     storage.block_graph_edge = std::make_shared<
         shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>(
-        "block_graph_edge", "block graph edge");
+        "block_graph_edge", "\\text{block graph edge}");
 
     storage.cell_graph_edge = std::make_shared<
         shammodels::basegodunov::solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>>(
-        "cell_graph_edge", "cell graph edge");
+        "cell_graph_edge", "\\text{cell graph edge}");
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Nodes
@@ -132,7 +144,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         node2.evaluate();
 
         neigh_table_sequence.push_back(std::make_shared<decltype(node1)>(std::move(node1)));
+        get_optional_free_mem(storage.trees, neigh_table_sequence);
         neigh_table_sequence.push_back(std::make_shared<decltype(node2)>(std::move(node2)));
+        get_optional_free_mem(storage.block_graph_edge, neigh_table_sequence);
 
         shamrock::solvergraph::OperationSequence seq(
             "Compute neigh table", std::move(neigh_table_sequence));
