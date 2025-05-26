@@ -16,7 +16,10 @@
 
 #include "shambase/memory.hpp"
 #include "shammodels/common/amr/NeighGraphLinkField.hpp"
+#include "shammodels/ramses/modules/ComputeFlux.hpp"
 #include "shammodels/ramses/modules/FaceInterpolate.hpp"
+#include "shammodels/ramses/solvegraph/NeighGrapkLinkFieldEdge.hpp"
+#include <type_traits>
 #include <array>
 
 namespace {
@@ -69,6 +72,27 @@ namespace {
             return {shift_a, shift_b};
         }
     };
+
+    template<class T, class RefIn, class RefOut>
+    void update_link_edge_from(
+        shammodels::basegodunov::solvergraph::NeighGrapkLinkFieldEdge<T> &edge,
+        const shambase::DistributedData<
+            std::reference_wrapper<shammodels::basegodunov::modules::AMRGraph>> &graph,
+        RefIn in,
+        RefOut in_out) {
+
+        auto mrefs_in
+            = edge.link_fields.template map<decltype(in.get(0))>([&](u64 id, const auto &n) {
+                  logger::debug_ln("kern call", "build multi ref in for patch", id);
+                  return in.get(id);
+              });
+
+        auto mrefs_in_out
+            = edge.link_fields.template map<decltype(in_out.get(0))>([&](u64 id, const auto &n) {
+                  logger::debug_ln("kern call", "build multi ref in_out for patch", id);
+                  return in_out.get(id);
+              });
+    }
 
 } // namespace
 
@@ -322,6 +346,197 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
 }
 
 template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpolate_v_to_face_dir(
+    Tscal dt_interp, Direction dir) {
+
+    class VelInterpolate {
+
+        public:
+        GetShift<Tvec, TgridVec, AMRBlock> shift_get;
+
+        const Tvec *acc_vel_cell;
+        const Tvec *acc_dx_v_cell;
+        const Tvec *acc_dy_v_cell;
+        const Tvec *acc_dz_v_cell;
+
+        // For time interpolation
+        const Tscal *acc_rho_cell;
+        const Tvec *acc_grad_P_cell;
+
+        Tscal dt_interp;
+
+        VelInterpolate(
+            sycl::handler &cgh,
+            const Tvec *aabb_block_lower,
+            const Tscal *aabb_cell_size,
+            const Tvec *vel_cell,
+            const Tvec *dx_v_cell,
+            const Tvec *dy_v_cell,
+            const Tvec *dz_v_cell,
+            // For time interpolation
+            Tscal dt_interp,
+            const Tscal *rho_cell,
+            const Tvec *grad_P_cell)
+            : shift_get(aabb_block_lower, aabb_cell_size), acc_vel_cell{vel_cell},
+              acc_dx_v_cell{dx_v_cell}, acc_dy_v_cell{dy_v_cell}, acc_dz_v_cell{dz_v_cell},
+              dt_interp(dt_interp), acc_rho_cell{rho_cell}, acc_grad_P_cell{grad_P_cell} {}
+
+        Tvec get_dt_v(Tvec v, Tvec dx_v, Tvec dy_v, Tvec dz_v, Tscal rho, Tvec grad_P) const {
+            return -(v[0] * dx_v + v[1] * dy_v + v[2] * dz_v + grad_P / rho);
+        }
+
+        std::array<Tvec, 2> get_link_field_val(u32 id_a, u32 id_b) const {
+
+            auto [shift_a, shift_b] = shift_get.get_shifts(id_a, id_b);
+
+            Tvec v_a      = acc_vel_cell[id_a];
+            Tvec dx_vel_a = acc_dx_v_cell[id_a];
+            Tvec dy_vel_a = acc_dy_v_cell[id_a];
+            Tvec dz_vel_a = acc_dz_v_cell[id_a];
+
+            Tvec v_b      = acc_vel_cell[id_b];
+            Tvec dx_vel_b = acc_dx_v_cell[id_b];
+            Tvec dy_vel_b = acc_dy_v_cell[id_b];
+            Tvec dz_vel_b = acc_dz_v_cell[id_b];
+
+            Tscal rho_a   = acc_rho_cell[id_a];
+            Tvec grad_P_a = acc_grad_P_cell[id_a];
+            Tscal rho_b   = acc_rho_cell[id_b];
+            Tvec grad_P_b = acc_grad_P_cell[id_b];
+
+            Tvec dx_v_a_dot_shift
+                = shift_a.x() * dx_vel_a + shift_a.y() * dy_vel_a + shift_a.z() * dz_vel_a;
+            Tvec dx_v_b_dot_shift
+                = shift_b.x() * dx_vel_b + shift_b.y() * dy_vel_b + shift_b.z() * dz_vel_b;
+
+            Tvec dt_v_a = get_dt_v(v_a, dx_vel_a, dy_vel_a, dz_vel_a, rho_a, grad_P_a);
+            Tvec dt_v_b = get_dt_v(v_b, dx_vel_b, dy_vel_b, dz_vel_b, rho_b, grad_P_b);
+
+            Tvec vel_face_a = v_a + dx_v_a_dot_shift + dt_v_a * dt_interp;
+            Tvec vel_face_b = v_b + dx_v_b_dot_shift + dt_v_b * dt_interp;
+
+            return {vel_face_a, vel_face_b};
+        }
+    };
+
+    StackEntry stack_loc{};
+
+    // To be removed
+    shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
+    u32 irho_ghost                                 = ghost_layout.get_field_idx<Tscal>("rho");
+
+    using MergedPDat       = shamrock::MergedPatchData;
+    using OrientedAMRGraph = modules::OrientedAMRGraph<Tvec, TgridVec>;
+    using Direction        = typename OrientedAMRGraph::Direction;
+
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face("", "");
+
+    vel_face.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(dir));
+
+    shambase::get_check_ref(storage.cell_graph_edge)
+        .graph.for_each([&](u64 id, OrientedAMRGraph &oriented_cell_graph) {
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            MergedPDat &mpdat    = storage.merged_patchdata_ghost.get().get(id);
+
+            sham::DeviceBuffer<Tscal> &block_cell_sizes
+                = shambase::get_check_ref(storage.block_cell_sizes)
+                      .get_refs()
+                      .get(id)
+                      .get()
+                      .get_buf();
+            sham::DeviceBuffer<Tvec> &cell0block_aabb_lower
+                = shambase::get_check_ref(storage.cell0block_aabb_lower)
+                      .get_refs()
+                      .get(id)
+                      .get()
+                      .get_buf();
+
+            sham::DeviceBuffer<Tvec> &buf_vel = shambase::get_check_ref(storage.vel).get_buf(id);
+            sham::DeviceBuffer<Tvec> &buf_dx_vel
+                = shambase::get_check_ref(storage.dx_v).get_buf(id);
+            sham::DeviceBuffer<Tvec> &buf_dy_vel
+                = shambase::get_check_ref(storage.dy_v).get_buf(id);
+            sham::DeviceBuffer<Tvec> &buf_dz_vel
+                = shambase::get_check_ref(storage.dz_v).get_buf(id);
+
+            sham::DeviceBuffer<Tscal> &buf_rho = mpdat.pdat.get_field_buf_ref<Tscal>(irho_ghost);
+            sham::DeviceBuffer<Tvec> &buf_grad_P
+                = shambase::get_check_ref(storage.grad_P).get_buf(id);
+
+            // TODO : restore asynchroneousness
+            sham::EventList depends_list;
+            auto ptr_block_cell_sizes      = block_cell_sizes.get_read_access(depends_list);
+            auto ptr_cell0block_aabb_lower = cell0block_aabb_lower.get_read_access(depends_list);
+
+            auto ptr_vel    = buf_vel.get_read_access(depends_list);
+            auto ptr_dx_vel = buf_dx_vel.get_read_access(depends_list);
+            auto ptr_dy_vel = buf_dy_vel.get_read_access(depends_list);
+            auto ptr_dz_vel = buf_dz_vel.get_read_access(depends_list);
+
+            auto ptr_rho    = buf_rho.get_read_access(depends_list);
+            auto ptr_grad_P = buf_grad_P.get_read_access(depends_list);
+
+            logger::debug_ln("Face Interpolate", "patch", id, "intepolate vel");
+
+            auto &result = vel_face.link_fields.get(id);
+            auto &graph  = shambase::get_check_ref(oriented_cell_graph.graph_links[dir]);
+
+            auto acc_link_field = result.link_graph_field.get_write_access(depends_list);
+
+            auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                NeighGraphLinkiterator link_iter{graph, cgh};
+                VelInterpolate compute(
+                    cgh,
+                    ptr_cell0block_aabb_lower,
+                    ptr_block_cell_sizes,
+                    ptr_vel,
+                    ptr_dx_vel,
+                    ptr_dy_vel,
+                    ptr_dz_vel,
+                    dt_interp,
+                    ptr_rho,
+                    ptr_grad_P);
+
+                shambase::parralel_for(cgh, graph.obj_cnt, "compute link field", [=](u32 id_a) {
+                    link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
+                        acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
+                    });
+                });
+            });
+
+            result.link_graph_field.complete_event_state(e);
+            block_cell_sizes.complete_event_state(e);
+            cell0block_aabb_lower.complete_event_state(e);
+            buf_vel.complete_event_state(e);
+            buf_dx_vel.complete_event_state(e);
+            buf_dy_vel.complete_event_state(e);
+            buf_dz_vel.complete_event_state(e);
+            buf_rho.complete_event_state(e);
+            buf_grad_P.complete_event_state(e);
+        });
+
+    if (dir == Direction::xp) {
+        storage.vel_face_xp.set(std::move(vel_face.link_fields));
+    }
+    if (dir == Direction::xm) {
+        storage.vel_face_xm.set(std::move(vel_face.link_fields));
+    }
+    if (dir == Direction::yp) {
+        storage.vel_face_yp.set(std::move(vel_face.link_fields));
+    }
+    if (dir == Direction::ym) {
+        storage.vel_face_ym.set(std::move(vel_face.link_fields));
+    }
+    if (dir == Direction::zp) {
+        storage.vel_face_zp.set(std::move(vel_face.link_fields));
+    }
+    if (dir == Direction::zm) {
+        storage.vel_face_zm.set(std::move(vel_face.link_fields));
+    }
+}
+
+template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpolate_v_to_face(
     Tscal dt_interp) {
 
@@ -399,12 +614,28 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
 
     using MergedPDat = shamrock::MergedPatchData;
 
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_xp;
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_xm;
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_yp;
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_ym;
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_zp;
-    shambase::DistributedData<NeighGraphLinkField<std::array<Tvec, 2>>> vel_face_zm;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_xp("", "");
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_xm("", "");
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_yp("", "");
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_ym("", "");
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_zp("", "");
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> vel_face_zm("", "");
+
+    using OrientedAMRGraph = modules::OrientedAMRGraph<Tvec, TgridVec>;
+    using Direction        = typename OrientedAMRGraph::Direction;
+
+    vel_face_xm.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::xm));
+    vel_face_xp.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::xp));
+    vel_face_ym.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::ym));
+    vel_face_yp.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::yp));
+    vel_face_zm.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::zm));
+    vel_face_zp.resize_according_to(
+        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(Direction::zp));
 
     shamrock::patch::PatchDataLayout &ghost_layout = storage.ghost_layout.get();
     u32 irho_ghost                                 = ghost_layout.get_field_idx<Tscal>("rho");
@@ -569,12 +800,12 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
             buf_grad_P.complete_event_state(resulting_event_list);
         });
 
-    storage.vel_face_xp.set(std::move(vel_face_xp));
-    storage.vel_face_xm.set(std::move(vel_face_xm));
-    storage.vel_face_yp.set(std::move(vel_face_yp));
-    storage.vel_face_ym.set(std::move(vel_face_ym));
-    storage.vel_face_zp.set(std::move(vel_face_zp));
-    storage.vel_face_zm.set(std::move(vel_face_zm));
+    storage.vel_face_xp.set(std::move(vel_face_xp.link_fields));
+    storage.vel_face_xm.set(std::move(vel_face_xm.link_fields));
+    storage.vel_face_yp.set(std::move(vel_face_yp.link_fields));
+    storage.vel_face_ym.set(std::move(vel_face_ym.link_fields));
+    storage.vel_face_zp.set(std::move(vel_face_zp.link_fields));
+    storage.vel_face_zm.set(std::move(vel_face_zm.link_fields));
 }
 
 template<class Tvec, class TgridVec>

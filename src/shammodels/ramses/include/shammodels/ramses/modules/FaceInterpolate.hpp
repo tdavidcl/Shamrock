@@ -19,6 +19,7 @@
 #include "shambackends/vec.hpp"
 #include "shammodels/common/amr/NeighGraph.hpp"
 #include "shammodels/ramses/Solver.hpp"
+#include "shammodels/ramses/modules/ComputeFluxUtilities.hpp"
 #include "shammodels/ramses/modules/SolverStorage.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
 
@@ -54,6 +55,8 @@ namespace shammodels::basegodunov::modules {
         void interpolate_v_dust_to_face(Tscal dt_interp);
 
         private:
+        using Direction = typename OrientedAMRGraph::Direction;
+        void interpolate_v_to_face_dir(Tscal dt_interp, Direction dir);
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 

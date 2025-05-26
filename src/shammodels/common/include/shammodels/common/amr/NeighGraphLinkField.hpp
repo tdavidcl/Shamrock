@@ -31,6 +31,17 @@ namespace shammodels::basegodunov::modules {
         u32 link_count;
         u32 nvar;
 
+        void resize(NeighGraph &graph) {
+            if (link_count != graph.link_count) {
+                link_count = graph.link_count;
+                link_graph_field.resize(link_count * nvar);
+            }
+        }
+
+        NeighGraphLinkField(u32 nvar)
+            : link_graph_field(0, shamsys::instance::get_alt_scheduler_ptr()), nvar(nvar),
+              link_count(0) {}
+
         NeighGraphLinkField(NeighGraph &graph)
             : link_graph_field(graph.link_count, shamsys::instance::get_alt_scheduler_ptr()),
               link_count(graph.link_count), nvar(1) {}
@@ -69,6 +80,7 @@ namespace shammodels::basegodunov::modules {
 
         return result;
     }
+
     template<class LinkFieldCompute, class T, class... Args>
     NeighGraphLinkField<T> compute_link_field_indep_nvar(
         sham::DeviceQueue &q,

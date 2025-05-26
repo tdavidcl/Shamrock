@@ -27,10 +27,19 @@ namespace shammodels::basegodunov::solvergraph {
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
         using OrientedAMRGraph = modules::OrientedAMRGraph<Tvec, TgridVec>;
+        using Direction        = typename OrientedAMRGraph::Direction;
 
         shambase::DistributedData<OrientedAMRGraph> graph;
 
         inline virtual void free_alloc() { graph = {}; }
+
+        inline shambase::DistributedData<std::reference_wrapper<modules::AMRGraph>>
+        get_refs_dir(Direction dir) {
+            return graph.template map<std::reference_wrapper<modules::AMRGraph>>(
+                [&](u64 id, auto &neigh_graph) {
+                    return neigh_graph.graph_links[dir];
+                });
+        }
     };
 
 } // namespace shammodels::basegodunov::solvergraph
