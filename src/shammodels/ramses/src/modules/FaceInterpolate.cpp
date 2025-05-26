@@ -464,7 +464,7 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
             sham::DeviceBuffer<Tvec> &buf_grad_P
                 = shambase::get_check_ref(storage.grad_P).get_buf(id);
 
-            // TODO : restore asynchroneousness
+                
             sham::EventList depends_list;
             auto ptr_block_cell_sizes      = block_cell_sizes.get_read_access(depends_list);
             auto ptr_cell0block_aabb_lower = cell0block_aabb_lower.get_read_access(depends_list);
@@ -477,12 +477,12 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
             auto ptr_rho    = buf_rho.get_read_access(depends_list);
             auto ptr_grad_P = buf_grad_P.get_read_access(depends_list);
 
-            logger::debug_ln("Face Interpolate", "patch", id, "intepolate vel");
-
             auto &result = vel_face.link_fields.get(id);
             auto &graph  = shambase::get_check_ref(oriented_cell_graph.graph_links[dir]);
 
             auto acc_link_field = result.link_graph_field.get_write_access(depends_list);
+
+            logger::debug_ln("Face Interpolate", "patch", id, "intepolate vel");
 
             auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
                 NeighGraphLinkiterator link_iter{graph, cgh};
