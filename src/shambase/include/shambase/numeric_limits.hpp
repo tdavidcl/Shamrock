@@ -61,7 +61,6 @@ namespace shambase {
 } // namespace shambase
 
 #ifndef INT_ALIAS_LIM_DEFINED
-
 constexpr i64 i64_max = shambase::get_max<i64>(); ///< i64 max value
 constexpr i32 i32_max = shambase::get_max<i32>(); ///< i32 max value
 constexpr i16 i16_max = shambase::get_max<i16>(); ///< i16 max value
@@ -81,5 +80,4 @@ constexpr u64 u64_min = shambase::get_min<u64>(); ///< u64 min value
 constexpr u32 u32_min = shambase::get_min<u32>(); ///< u32 min value
 constexpr u16 u16_min = shambase::get_min<u16>(); ///< u16 min value
 constexpr u8 u8_min   = shambase::get_min<u8>();  ///< u8 min value
-
 #endif
