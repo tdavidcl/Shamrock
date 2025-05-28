@@ -39,8 +39,8 @@ namespace shamphys {
      */
     inline auto get_binary_pair(double m1, double m2, double a, double e, double nu, double G) {
 
-        double M  = m1 + m2;
-        double mu = m1 * m2 / M;
+        double M = m1 + m2;
+        // double mu = m1 * m2 / M;
 
         double r = a * (1 - e * e) / (1 + e * sycl::cos(nu));
 
