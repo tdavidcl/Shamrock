@@ -18,6 +18,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shammodels/common/EOSConfig.hpp"
@@ -30,6 +31,7 @@
 template<class T>
 shammodels::sph::PhantomDumpBlockArray<T> shammodels::sph::PhantomDumpBlockArray<T>::from_file(
     shambase::FortranIOFile &phfile, i64 tot_count) {
+    StackEntry stack_loc{};
     PhantomDumpBlockArray tmp;
     phfile.read_fixed_string(tmp.tag, 16);
     phfile.read_val_array(tmp.vals, tot_count);
@@ -39,6 +41,7 @@ shammodels::sph::PhantomDumpBlockArray<T> shammodels::sph::PhantomDumpBlockArray
 template<class T>
 void shammodels::sph::PhantomDumpBlockArray<T>::write(
     shambase::FortranIOFile &phfile, i64 tot_count) {
+    StackEntry stack_loc{};
     phfile.write_fixed_string(tag, 16);
     phfile.write_val_array(vals, tot_count);
 }
@@ -51,6 +54,8 @@ void shammodels::sph::PhantomDumpBlockArray<T>::print_state() {
 template<class T>
 shammodels::sph::PhantomDumpTableHeader<T>
 shammodels::sph::PhantomDumpTableHeader<T>::from_file(shambase::FortranIOFile &phfile) {
+    StackEntry stack_loc{};
+
     shammodels::sph::PhantomDumpTableHeader<T> tmp;
 
     int nvars;
@@ -76,6 +81,8 @@ shammodels::sph::PhantomDumpTableHeader<T>::from_file(shambase::FortranIOFile &p
 
 template<class T>
 void shammodels::sph::PhantomDumpTableHeader<T>::write(shambase::FortranIOFile &phfile) {
+    StackEntry stack_loc{};
+
     int nvars = entries.size();
     phfile.write(nvars);
 
@@ -177,6 +184,7 @@ shammodels::sph::PhantomDumpBlock shammodels::sph::PhantomDumpBlock::from_file(
 
 void shammodels::sph::PhantomDumpBlock::write(
     shambase::FortranIOFile &phfile, i64 tot_count, std::array<i32, 8> numarray) {
+    StackEntry stack_loc{};
 
     for (u32 j = 0; j < numarray[0]; j++) {
         blocks_fort_int[j].write(phfile, tot_count);
@@ -254,6 +262,8 @@ u64 shammodels::sph::PhantomDumpBlock::get_ref_f32(std::string s) {
 }
 
 shambase::FortranIOFile shammodels::sph::PhantomDump::gen_file() {
+    StackEntry stack_loc{};
+
     shambase::FortranIOFile phfile;
     phfile.write(i1, r1, i2, iversion, i3);
 

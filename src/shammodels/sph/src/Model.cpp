@@ -23,6 +23,7 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/common/setup/generators.hpp"
 #include "shammodels/sph/Model.hpp"
+#include "shammodels/sph/SinkPartStruct.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shamrock/patch/PatchData.hpp"
@@ -1375,6 +1376,14 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     PhantomDump dump;
 
+    auto get_sink_count = [&]() -> int {
+        if (solver.storage.sinks.is_empty()) {
+            return 0;
+        } else {
+            return int(solver.storage.sinks.get().size());
+        }
+    };
+
     dump.override_magic_number();
     dump.iversion = 1;
     dump.fileid   = shambase::format("{:100s}", "FT:Phantom Shamrock writter");
@@ -1403,7 +1412,7 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     dump.table_header_i64.add("npartoftype", 0);
 
     dump.table_header_fort_int.add("nblocks", 1);
-    dump.table_header_fort_int.add("nptmass", 0);
+    dump.table_header_fort_int.add("nptmass", get_sink_count());
     dump.table_header_fort_int.add("ndustlarge", 0);
     dump.table_header_fort_int.add("ndustsmall", 0);
     dump.table_header_fort_int.add("idust", 7);
@@ -1503,6 +1512,37 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     }
 
     dump.blocks.push_back(std::move(block_part));
+
+    if (!solver.storage.sinks.is_empty()) {
+
+        auto &sinks = solver.storage.sinks.get();
+        // add sinks to block 1
+        PhantomDumpBlock sink_block;
+
+        u64 xid  = sink_block.get_ref_fort_real("x");
+        u64 yid  = sink_block.get_ref_fort_real("y");
+        u64 zid  = sink_block.get_ref_fort_real("z");
+        u64 mid  = sink_block.get_ref_fort_real("m");
+        u64 hid  = sink_block.get_ref_fort_real("h");
+        u64 vxid = sink_block.get_ref_fort_real("vx");
+        u64 vyid = sink_block.get_ref_fort_real("vy");
+        u64 vzid = sink_block.get_ref_fort_real("vz");
+
+        for (SinkParticle<Tvec> s : sinks) {
+            sink_block.blocks_fort_real[xid].vals.push_back(s.pos.x());
+            sink_block.blocks_fort_real[yid].vals.push_back(s.pos.y());
+            sink_block.blocks_fort_real[zid].vals.push_back(s.pos.z());
+            sink_block.blocks_fort_real[mid].vals.push_back(s.mass);
+            sink_block.blocks_fort_real[hid].vals.push_back(s.accretion_radius);
+            sink_block.blocks_fort_real[vxid].vals.push_back(s.velocity.x());
+            sink_block.blocks_fort_real[vyid].vals.push_back(s.velocity.y());
+            sink_block.blocks_fort_real[vzid].vals.push_back(s.velocity.z());
+        }
+
+        sink_block.tot_count = sinks.size();
+
+        dump.blocks.push_back(std::move(sink_block));
+    }
 
     return dump;
 }
