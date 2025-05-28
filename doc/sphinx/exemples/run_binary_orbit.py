@@ -36,7 +36,13 @@ def plot_orbits(m1, m2, a, e, roll, pitch, yaw):
 
     vx1, vx2, vy1, vy2, vz1, vz2 = [], [], [], [], [], []
 
-    for nu in np.linspace(0, 2 * np.pi, 200, endpoint=False):
+    max_nu = np.pi
+    min_nu = -np.pi
+    if e >= 1:  # if parabolic do not exceed pi
+        max_nu = 0.75 * np.pi
+        min_nu = -0.75 * np.pi
+
+    for nu in np.linspace(min_nu, max_nu, 200, endpoint=False):
 
         # To see the orbit start
         if nu > 1.8 * np.pi:
@@ -65,10 +71,10 @@ def plot_orbits(m1, m2, a, e, roll, pitch, yaw):
     ax.plot(x2, y2, z2, "-o", markevery=[0, 50, 100, 150])
 
     for i in range(0, len(x1), 50):
-        vnorm = np.sqrt(vx1[i] ** 2 + vy1[i] ** 2 + vz1[i] ** 2) * 1e3
+        vnorm = np.sqrt(vx1[i] ** 2 + vy1[i] ** 2 + vz1[i] ** 2) * 0.03
         ax.quiver(x1[i], y1[i], z1[i], vx1[i], vy1[i], vz1[i], color="r", length=vnorm)
     for i in range(0, len(x2), 50):
-        vnorm = np.sqrt(vx1[i] ** 2 + vy1[i] ** 2 + vz1[i] ** 2) * 1e3
+        vnorm = np.sqrt(vx1[i] ** 2 + vy1[i] ** 2 + vz1[i] ** 2) * 0.03
         ax.quiver(x2[i], y2[i], z2[i], vx2[i], vy2[i], vz2[i], color="b", length=vnorm)
 
     ax.set_aspect("equal")
@@ -92,3 +98,7 @@ plot_orbits(0.5, 0.5, 1.0, 0.0, 1.0, 0.0, 0.0)
 # %%
 # Orbit 4
 plot_orbits(0.9, 0.1, 1.0, 0.0, 0.0, 1.0, 0.0)
+
+# %%
+# Orbit 5 (hyperbolic)
+plot_orbits(0.9, 0.1, 1.0, 1.2, 0.0, 1.0, 0.0)
