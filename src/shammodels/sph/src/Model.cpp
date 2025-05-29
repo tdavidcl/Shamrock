@@ -15,6 +15,7 @@
  *
  */
 
+#include "shambase/aliases_float.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
@@ -1178,6 +1179,10 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init_from_phantom_dump(PhantomDump
             vxyz.push_back({vx[i], vy[i], vz[i]});
         }
     }
+
+    // Load time infos
+    f64 time_phdump = phdump.read_header_float<f64>("time");
+    solver.solver_config.set_time(time_phdump);
 
     using namespace shamrock::patch;
 
