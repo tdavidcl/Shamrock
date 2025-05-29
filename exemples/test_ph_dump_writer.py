@@ -35,6 +35,7 @@ model.init_scheduler(int(1e8), 1)
 model.init_from_phantom_dump(dump_ref)
 
 dump_2 = model.make_phantom_dump()
+dump_2.print_state()
 
 print("-----------------------------------------------------------")
 print("-----------------   Comparing the dumps   -----------------")

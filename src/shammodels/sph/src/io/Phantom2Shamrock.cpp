@@ -1,0 +1,136 @@
+// -------------------------------------------------------//
+//
+// SHAMROCK code for hydrodynamics
+// Copyright (c) 2021-2024 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
+//
+// -------------------------------------------------------//
+
+/**
+ * @file Phantom2Shamrock.cpp
+ * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @brief
+ *
+ */
+
+#include "shammodels/sph/io/Phantom2Shamrock.hpp"
+#include "shammodels/sph/io/PhantomDump.hpp"
+#include "shammodels/sph/io/PhantomDumpUtils.hpp"
+
+namespace shammodels::sph {
+
+    template<class Tvec>
+    EOSConfig<Tvec> get_shamrock_eosconfig(PhantomDump &phdump, bool bypass_error) {
+
+        EOSConfig<Tvec> cfg{};
+
+        i64 ieos = phdump.read_header_int<i64>("ieos");
+
+        logger::debug_ln("PhantomDump", "read ieos :", ieos);
+
+        if (ieos == 1) {
+            f64 cs;
+            phdump::eos1_load(phdump, cs);
+            cfg.set_isothermal(cs);
+        } else if (ieos == 2) {
+            f64 gamma;
+            phdump::eos2_load(phdump, gamma);
+            cfg.set_adiabatic(gamma);
+        } else if (ieos == 3) {
+            f64 cs0, q, r0;
+            phdump::eos3_load(phdump, cs0, q, r0);
+            cfg.set_locally_isothermalLP07(cs0, q, r0);
+        } else {
+            const std::string msg = "loading phantom ieos=" + std::to_string(ieos)
+                                    + " is not implemented in shamrock";
+            if (bypass_error) {
+                logger::warn_ln("SPH", msg);
+            } else {
+                shambase::throw_unimplemented(msg);
+            }
+        }
+
+        return cfg;
+    }
+
+    template<class Tvec>
+    void
+    write_shamrock_eos_in_phantom_dump(EOSConfig<Tvec> &cfg, PhantomDump &dump, bool bypass_error) {
+
+        using EOS_Isothermal              = typename EOSConfig<Tvec>::Isothermal;
+        using EOS_Adiabatic               = typename EOSConfig<Tvec>::Adiabatic;
+        using EOS_LocallyIsothermal       = typename EOSConfig<Tvec>::LocallyIsothermal;
+        using EOS_LocallyIsothermalLP07   = typename EOSConfig<Tvec>::LocallyIsothermalLP07;
+        using EOS_LocallyIsothermalFA2014 = typename EOSConfig<Tvec>::LocallyIsothermalFA2014;
+
+        if (EOS_Isothermal *eos_config = std::get_if<EOS_Isothermal>(&cfg.config)) {
+            phdump::eos1_write(dump, eos_config->cs);
+        } else if (EOS_Adiabatic *eos_config = std::get_if<EOS_Adiabatic>(&cfg.config)) {
+            phdump::eos2_write(dump, eos_config->gamma);
+        } else if (
+            EOS_LocallyIsothermalLP07 *eos_config
+            = std::get_if<EOS_LocallyIsothermalLP07>(&cfg.config)) {
+            phdump::eos3_write(dump, eos_config->cs0, eos_config->q, eos_config->r0);
+        } else {
+            const std::string msg
+                = "The current shamrock EOS is not implemented in phantom dump conversion";
+            if (bypass_error) {
+                logger::warn_ln("SPH", msg);
+            } else {
+                shambase::throw_unimplemented(msg);
+            }
+        }
+    }
+
+    /// explicit instanciation for f32_3
+    template EOSConfig<f32_3> get_shamrock_eosconfig<f32_3>(PhantomDump &phdump, bool bypass_error);
+    /// explicit instanciation for f64_3
+    template EOSConfig<f64_3> get_shamrock_eosconfig<f64_3>(PhantomDump &phdump, bool bypass_error);
+
+    /// explicit instanciation for f32_3
+    template void write_shamrock_eos_in_phantom_dump<f32_3>(
+        EOSConfig<f32_3> &cfg, PhantomDump &dump, bool bypass_error);
+    /// explicit instanciation for f64_3
+    template void write_shamrock_eos_in_phantom_dump<f64_3>(
+        EOSConfig<f64_3> &cfg, PhantomDump &dump, bool bypass_error);
+
+} // namespace shammodels::sph
+
+namespace shammodels::sph {
+    template<class Tvec>
+    AVConfig<Tvec> get_shamrock_avconfig(PhantomDump &phdump) {
+        AVConfig<Tvec> cfg{};
+
+        cfg.set_varying_cd10(0, 1, 0.1, phdump.read_header_float<f64>("alphau"), 2);
+
+        return cfg;
+    }
+
+    /// explicit instanciation for f32_3
+    template AVConfig<f32_3> get_shamrock_avconfig<f32_3>(PhantomDump &phdump);
+    /// explicit instanciation for f64_3
+    template AVConfig<f64_3> get_shamrock_avconfig<f64_3>(PhantomDump &phdump);
+
+    template<class Tscal>
+    shamunits::UnitSystem<Tscal> get_shamrock_units(PhantomDump &phdump) {
+
+        f64 udist  = phdump.read_header_float<f64>("udist");
+        f64 umass  = phdump.read_header_float<f64>("umass");
+        f64 utime  = phdump.read_header_float<f64>("utime");
+        f64 umagfd = phdump.read_header_float<f64>("umagfd");
+
+        return shamunits::UnitSystem<Tscal>(
+            utime, udist, umass
+            // unit_current = 1 ,
+            // unit_temperature = 1 ,
+            // unit_qte = 1 ,
+            // unit_lumint = 1
+        );
+    }
+
+    /// explicit instanciation for f32_3
+    template shamunits::UnitSystem<f32> get_shamrock_units<f32>(PhantomDump &phdump);
+    /// explicit instanciation for f64_3
+    template shamunits::UnitSystem<f64> get_shamrock_units<f64>(PhantomDump &phdump);
+} // namespace shammodels::sph

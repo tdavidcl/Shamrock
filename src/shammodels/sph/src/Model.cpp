@@ -25,6 +25,7 @@
 #include "shammodels/common/setup/generators.hpp"
 #include "shammodels/sph/Model.hpp"
 #include "shammodels/sph/SinkPartStruct.hpp"
+#include "shammodels/sph/io/Phantom2Shamrock.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shamrock/patch/PatchData.hpp"
@@ -1430,12 +1431,8 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     dump.table_header_fort_int.add("isink", 0);
 
     dump.table_header_i32.add("iexternalforce", 0);
-    dump.table_header_i32.add("ieos", 2);
-    dump.table_header_fort_real.add("gamma", 1.66667);
-    dump.table_header_fort_real.add("RK2", 0);
-    dump.table_header_fort_real.add("polyk2", 0);
-    dump.table_header_fort_real.add("qfacdisc", 0.75);
-    dump.table_header_fort_real.add("qfacdisc2", 0.75);
+
+    write_shamrock_eos_in_phantom_dump(solver.solver_config.eos_config, dump, false);
 
     dump.table_header_fort_real.add("time", solver.solver_config.get_time());
     dump.table_header_fort_real.add("dtmax", solver.solver_config.get_dt_sph());
