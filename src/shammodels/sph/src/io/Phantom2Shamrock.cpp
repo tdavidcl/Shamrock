@@ -16,7 +16,7 @@
 
 #include "shammodels/sph/io/Phantom2Shamrock.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
-#include "shammodels/sph/io/PhantomDumpUtils.hpp"
+#include "shammodels/sph/io/PhantomDumpEOSUtils.hpp"
 
 namespace shammodels::sph {
 

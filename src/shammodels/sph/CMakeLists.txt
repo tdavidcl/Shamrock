@@ -20,7 +20,7 @@ set(Sources
     src/SolverLog.cpp
     src/io/PhantomDump.cpp
     src/io/Phantom2Shamrock.cpp
-    src/io/PhantomDumpUtils.cpp
+    src/io/PhantomDumpEOSUtils.cpp
     src/SolverConfig.cpp
     src/pySPHModel.cpp
     src/pyPhantomDump.cpp

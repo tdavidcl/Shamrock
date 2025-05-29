@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file PhantomDumpUtils.hpp
+ * @file PhantomDumpEOSUtils.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief
  *
