@@ -18,15 +18,19 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/sets.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/typeAliasVec.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/common/EOSConfig.hpp"
 #include "shammodels/sph/config/AVConfig.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamunits/UnitSystem.hpp"
+#include <unordered_map>
 #include <string>
+#include <vector>
 
 template<class T>
 shammodels::sph::PhantomDumpBlockArray<T> shammodels::sph::PhantomDumpBlockArray<T>::from_file(
@@ -427,6 +431,22 @@ namespace shammodels::sph {
         if (ieos == 1) {
             f64 cs = phdump.read_header_float<f64>("cs");
             cfg.set_isothermal(cs);
+        } else if (ieos == 3) {
+            /*
+            !  :math:`P = c_s^2 (r) \rho`
+            !  :math:`c_s = c_{s,0} r^{-q}` where :math:`r = \sqrt{x^2 + y^2 + z^2}`
+                ponrhoi  = polyk*(xi**2 + yi**2 + zi**2)**(-qfacdisc) ! polyk is cs^2, so this is
+            (R^2)^(-q) spsoundi = sqrt(ponrhoi) tempi    = temperature_coef*mui*ponrhoi
+            */
+            f64 RK2      = phdump.read_header_float<f64>("RK2");
+            f64 polyk    = 2. / 3. * RK2;
+            f64 qfacdisc = phdump.read_header_float<f64>("qfacdisc");
+
+            f64 cs0 = sycl::sqrt(polyk);
+            f64 q   = qfacdisc;
+            f64 r0  = 1; // the polyk in phantom include the 1/r0^2 ?
+
+            cfg.set_locally_isothermalLP07(cs0, q, r0);
         } else if (ieos == 2) {
             f64 gamma = phdump.read_header_float<f64>("gamma");
             cfg.set_adiabatic(gamma);
@@ -441,6 +461,42 @@ namespace shammodels::sph {
         }
 
         return cfg;
+    }
+
+    template<class Tvec>
+    void write_shamrock_eos_config_to_phantom_dump(
+        EOSConfig<Tvec> &cfg, PhantomDump &dump, bool bypass_error) {
+
+        using EOS_Isothermal              = typename EOSConfig<Tvec>::Isothermal;
+        using EOS_Adiabatic               = typename EOSConfig<Tvec>::Adiabatic;
+        using EOS_LocallyIsothermal       = typename EOSConfig<Tvec>::LocallyIsothermal;
+        using EOS_LocallyIsothermalLP07   = typename EOSConfig<Tvec>::LocallyIsothermalLP07;
+        using EOS_LocallyIsothermalFA2014 = typename EOSConfig<Tvec>::LocallyIsothermalFA2014;
+
+        if (EOS_Isothermal *eos_config = std::get_if<EOS_Isothermal>(&cfg.eos_config.config)) {
+            dump.table_header_i32.add("ieos", 1);
+            dump.table_header_fort_real.add("cs", eos_config->cs);
+        } else if (EOS_Adiabatic *eos_config = std::get_if<EOS_Adiabatic>(&cfg.eos_config.config)) {
+            dump.table_header_i32.add("ieos", 2);
+            dump.table_header_fort_real.add("gamma", eos_config->gamma);
+        } else if (
+            EOS_LocallyIsothermalLP07 *eos_config
+            = std::get_if<EOS_LocallyIsothermalLP07>(&cfg.eos_config.config)) {
+            dump.table_header_i32.add("ieos", 3);
+            f64 polyk    = eos_config->cs0 * eos_config->cs0 / (eos_config->r0 * eos_config->r0);
+            f64 RK2      = 1.5 * polyk;
+            f64 qfacdisc = eos_config->q;
+            dump.table_header_fort_real.add("RK2", RK2);
+            dump.table_header_fort_real.add("qfacdisc", qfacdisc);
+        } else {
+            const std::string msg
+                = "The current shamrock EOS is not implemented in phantom dump conversion";
+            if (bypass_error) {
+                logger::warn_ln("SPH", msg);
+            } else {
+                shambase::throw_unimplemented(msg);
+            }
+        }
     }
 
     /// explicit instanciation for f32_3
@@ -487,3 +543,75 @@ namespace shammodels::sph {
     /// explicit instanciation for f64_3
     template shamunits::UnitSystem<f64> get_shamrock_units<f64>(PhantomDump &phdump);
 } // namespace shammodels::sph
+
+bool shammodels::sph::compare_phantom_dumps(PhantomDump &dump_ref, PhantomDump &dump_comp) {
+
+    u64 offenses = 0;
+
+    auto load_header = [](PhantomDump &dump) {
+        std::unordered_map<std::string, f64> header;
+
+        dump.table_header_fort_int.add_to_map(header);
+        dump.table_header_i8.add_to_map(header);
+        dump.table_header_i16.add_to_map(header);
+        dump.table_header_i32.add_to_map(header);
+        dump.table_header_i64.add_to_map(header);
+        dump.table_header_fort_real.add_to_map(header);
+        dump.table_header_f32.add_to_map(header);
+        dump.table_header_f64.add_to_map(header);
+        return header;
+    };
+
+    std::unordered_map<std::string, f64> header_ref  = load_header(dump_ref);
+    std::unordered_map<std::string, f64> header_comp = load_header(dump_comp);
+
+    auto get_keys = [](std::unordered_map<std::string, f64> &map) {
+        std::set<std::string> ret;
+        for (auto [key, val] : map) {
+            ret.insert(key);
+        }
+        return ret;
+    };
+
+    std::set<std::string> header_key_ref  = get_keys(header_ref);
+    std::set<std::string> header_key_comp = get_keys(header_comp);
+
+    std::vector<std::string> missing  = {};
+    std::vector<std::string> matching = {};
+    std::vector<std::string> extra    = {};
+
+    shambase::set_diff(header_key_comp, header_key_ref, missing, matching, extra);
+
+    for (std::string &missing_key : missing) {
+        logger::warn_ln(
+            "PhantomDump",
+            "The dump we are comparing against is missing the key",
+            missing_key,
+            "in the header");
+        offenses++;
+    }
+    for (std::string &matching_key : matching) {
+        if (header_ref[matching_key] != header_comp[matching_key]) {
+            logger::warn_ln(
+                "PhantomDump",
+                shambase::format(
+                    "Mismatch in the header key {}, ref={}, comp={}",
+                    matching_key,
+                    header_ref[matching_key],
+                    header_comp[matching_key]));
+            offenses++;
+        }
+    }
+    for (std::string &extra_key : extra) {
+        logger::warn_ln(
+            "PhantomDump",
+            "The dump we are comparing against has the extra key",
+            extra_key,
+            "in the header");
+        offenses++;
+    }
+
+    logger::info_ln("PhantomDump", "This comparison reported", offenses, "offenses");
+
+    return offenses == 0;
+}

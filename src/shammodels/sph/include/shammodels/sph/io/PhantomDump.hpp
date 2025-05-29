@@ -25,6 +25,7 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamunits/UnitSystem.hpp"
 #include <type_traits>
+#include <unordered_map>
 #include <array>
 #include <cstdlib>
 #include <fstream>
@@ -116,6 +117,13 @@ namespace shammodels::sph {
          * @brief Prints the state of the header.
          */
         void print_state();
+
+        template<class Tconv>
+        inline void add_to_map(std::unordered_map<std::string, Tconv> &map) {
+            for (auto [key, val] : entries) {
+                map[key] = val;
+            }
+        }
     };
 
     /**
@@ -609,5 +617,8 @@ namespace shammodels::sph {
      */
     template<class Tscal>
     shamunits::UnitSystem<Tscal> get_shamrock_units(PhantomDump &phdump);
+
+    /// Compare two phantom dumps and report offenses
+    bool compare_phantom_dumps(PhantomDump &dump1, PhantomDump &dump2);
 
 } // namespace shammodels::sph
