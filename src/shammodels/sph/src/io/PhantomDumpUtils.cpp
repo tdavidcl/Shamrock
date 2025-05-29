@@ -31,8 +31,8 @@ namespace {
         f64 gamma;
         f64 polyk;
         f64 polyk2;
-        f64 qfacdisc;
-        f64 qfacdisc2;
+        f64 qfacdisc  = 0.75;
+        f64 qfacdisc2 = 0.75;
 
         // if (ieos == 7) {
         int istrat;
@@ -136,6 +136,7 @@ namespace {
 
 namespace shammodels::sph::phdump {
 
+    /// Check that the eos in the dump is the expected one
     inline void assert_ieos_val(const PhantomDump &dump, int ieos) {
         i64 ieos_dump = dump.read_header_int<i64>("ieos");
         if (ieos_dump != ieos) {
