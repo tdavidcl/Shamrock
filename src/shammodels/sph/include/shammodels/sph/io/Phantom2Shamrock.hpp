@@ -39,6 +39,7 @@ namespace shammodels::sph {
     template<class Tvec>
     EOSConfig<Tvec> get_shamrock_eosconfig(PhantomDump &phdump, bool bypass_error);
 
+    /// Write the eos config to th phantom dump header
     template<class Tvec>
     void
     write_shamrock_eos_in_phantom_dump(EOSConfig<Tvec> &cfg, PhantomDump &dump, bool bypass_error);
@@ -63,6 +64,7 @@ namespace shammodels::sph {
     template<class Tscal>
     shamunits::UnitSystem<Tscal> get_shamrock_units(PhantomDump &phdump);
 
+    /// Write shamrock units config into the phantom dump
     template<class Tscal>
     void write_shamrock_units_in_phantom_dump(
         std::optional<shamunits::UnitSystem<Tscal>> &units, PhantomDump &dump, bool bypass_error);
