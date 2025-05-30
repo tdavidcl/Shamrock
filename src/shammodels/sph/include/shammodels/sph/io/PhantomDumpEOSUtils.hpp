@@ -42,6 +42,10 @@
 //
 
 namespace shammodels::sph::phdump {
+
+    /// check if alphau is set in the header, which is the case for (maxvxyzu >= 4)
+    bool is_maxvxyzu_at_least_4(const PhantomDump &dump);
+
     /**
      * @brief Load the EOS1 from the phantom dump
      *

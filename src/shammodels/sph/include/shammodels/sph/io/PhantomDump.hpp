@@ -433,7 +433,7 @@ namespace shammodels::sph {
          *
          * @return true if the string is found in any of the table headers, false otherwise
          */
-        inline bool has_header_entry(std::string s) {
+        inline bool has_header_entry(std::string s) const {
 
             s = shambase::format("{:16s}", s);
 

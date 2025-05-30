@@ -20,6 +20,7 @@
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammath/crystalLattice.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/common/setup/generators.hpp"
@@ -1105,6 +1106,10 @@ auto shammodels::sph::Model<Tvec, SPHKernel>::gen_config_from_phantom_dump(
 
     // xmin, xmax, y... z... are in the header only in periodic mode in phantom
     if (phdump.has_header_entry("xmin")) {
+        logger::raw_ln("Setting periodic boundaries from phantmdump");
+        conf.set_boundary_periodic();
+    } else {
+        logger::raw_ln("Setting free boundaries from phantmdump");
         conf.set_boundary_free();
     }
 
@@ -1382,6 +1387,8 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     PhantomDump dump;
 
+    bool bypass_error_check = false;
+
     auto get_sink_count = [&]() -> int {
         if (solver.storage.sinks.is_empty()) {
             return 0;
@@ -1432,7 +1439,7 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     dump.table_header_i32.add("iexternalforce", 0);
 
-    write_shamrock_eos_in_phantom_dump(solver.solver_config.eos_config, dump, false);
+    write_shamrock_eos_in_phantom_dump(solver.solver_config.eos_config, dump, bypass_error_check);
 
     dump.table_header_fort_real.add("time", solver.solver_config.get_time());
     dump.table_header_fort_real.add("dtmax", solver.solver_config.get_dt_sph());
@@ -1464,12 +1471,36 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     auto [bmin, bmax] = sched.get_box_volume<Tvec>();
 
-    dump.table_header_fort_real.add("xmin", bmin.x());
-    dump.table_header_fort_real.add("xmax", bmax.x());
-    dump.table_header_fort_real.add("ymin", bmin.y());
-    dump.table_header_fort_real.add("ymax", bmax.x());
-    dump.table_header_fort_real.add("zmin", bmin.z());
-    dump.table_header_fort_real.add("zmax", bmax.x());
+    using SolverConfigBC           = typename SolverConfig::BCConfig;
+    using SolverBCFree             = typename SolverConfigBC::Free;
+    using SolverBCPeriodic         = typename SolverConfigBC::Periodic;
+    using SolverBCShearingPeriodic = typename SolverConfigBC::ShearingPeriodic;
+
+    // boundary condition selections
+    if (SolverBCFree *c = std::get_if<SolverBCFree>(&solver.solver_config.boundary_config.config)) {
+        // do nothing
+    } else if (
+        SolverBCPeriodic *c
+        = std::get_if<SolverBCPeriodic>(&solver.solver_config.boundary_config.config)) {
+        dump.table_header_fort_real.add("xmin", bmin.x());
+        dump.table_header_fort_real.add("xmax", bmax.x());
+        dump.table_header_fort_real.add("ymin", bmin.y());
+        dump.table_header_fort_real.add("ymax", bmax.x());
+        dump.table_header_fort_real.add("zmin", bmin.z());
+        dump.table_header_fort_real.add("zmax", bmax.x());
+    } else if (
+        SolverBCShearingPeriodic *c
+        = std::get_if<SolverBCShearingPeriodic>(&solver.solver_config.boundary_config.config)) {
+        std::string err_msg
+            = "Phantom does not support shearing periodic boundaries but your are "
+              "making a phantom dump with them, set bypass_error_check=True to ignore";
+
+        if (!bypass_error_check) {
+            throw std::runtime_error(err_msg);
+        } else {
+            logger::warn_ln("PhantomDump", err_msg);
+        }
+    }
 
     dump.table_header_fort_real.add("get_conserv", -1);
     dump.table_header_fort_real.add("etot_in", 0.59762);

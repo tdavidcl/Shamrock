@@ -28,7 +28,7 @@ namespace {
     /// The EOS config of phantom
     struct EOSPhConfig {
         i32 isink;
-        f64 gamma;
+        f64 gamma = 1;
         f64 polyk;
         f64 polyk2;
         f64 qfacdisc  = 0.75;
@@ -135,6 +135,8 @@ namespace {
 } // namespace
 
 namespace shammodels::sph::phdump {
+
+    bool is_maxvxyzu_at_least_4(const PhantomDump &dump) { return dump.has_header_entry("alphau"); }
 
     /// Check that the eos in the dump is the expected one
     inline void assert_ieos_val(const PhantomDump &dump, int ieos) {
