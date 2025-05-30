@@ -14,8 +14,9 @@
  *
  */
 
-#include "shammodels/sph/io/Phantom2Shamrock.hpp"
+#include "shambase/constants.hpp"
 #include "shammodels/sph/config/BCConfig.hpp"
+#include "shammodels/sph/io/Phantom2Shamrock.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/io/PhantomDumpEOSUtils.hpp"
 
@@ -130,10 +131,43 @@ namespace shammodels::sph {
         );
     }
 
+    template<class Tscal>
+    void write_shamrock_units_in_phantom_dump(
+        std::optional<shamunits::UnitSystem<Tscal>> &units, PhantomDump &dump, bool bypass_error) {
+
+        if (units) {
+            dump.table_header_f64.add("udist", units->m_inv);
+            dump.table_header_f64.add("umass", units->kg_inv);
+            dump.table_header_f64.add("utime", units->s_inv);
+
+            f64 umass = units->template to<shamunits::units::kg>();
+            f64 utime = units->template to<shamunits::units::s>();
+            f64 udist = units->template to<shamunits::units::m>();
+
+            shamunits::Constants<Tscal> ctes{*units};
+            f64 ccst    = ctes.c();
+            f64 ucharge = sqrt(umass * udist / (4. * shambase::constants::pi<f64> /*mu_0 in cgs*/));
+
+            f64 umagfd = umass / (utime * ucharge);
+
+            dump.table_header_f64.add("umagfd", umagfd);
+        } else {
+            logger::warn_ln("SPH", "no units are set, defaulting to SI");
+
+            dump.table_header_f64.add("udist", 1);
+            dump.table_header_f64.add("umass", 1);
+            dump.table_header_f64.add("utime", 1);
+            dump.table_header_f64.add("umagfd", 3.54491);
+        }
+    }
+
     /// explicit instanciation for f32_3
     template shamunits::UnitSystem<f32> get_shamrock_units<f32>(PhantomDump &phdump);
     /// explicit instanciation for f64_3
     template shamunits::UnitSystem<f64> get_shamrock_units<f64>(PhantomDump &phdump);
+
+    template void write_shamrock_units_in_phantom_dump<f64>(
+        std::optional<shamunits::UnitSystem<f64>> &units, PhantomDump &dump, bool bypass_error);
 } // namespace shammodels::sph
 
 namespace shammodels::sph {

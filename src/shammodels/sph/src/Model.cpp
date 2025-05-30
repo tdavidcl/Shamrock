@@ -1472,31 +1472,7 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     dump.table_header_fort_real.add("angtot_in", 0.0189694);
     dump.table_header_fort_real.add("totmom_in", 0.0306284);
 
-    auto units = solver.solver_config.unit_sys;
-    if (units) {
-        dump.table_header_f64.add("udist", units->m_inv);
-        dump.table_header_f64.add("umass", units->kg_inv);
-        dump.table_header_f64.add("utime", units->s_inv);
-
-        f64 umass = units->template to<shamunits::units::kg>();
-        f64 utime = units->template to<shamunits::units::s>();
-        f64 udist = units->template to<shamunits::units::m>();
-
-        shamunits::Constants<double> ctes{*units};
-        f64 ccst    = ctes.c();
-        f64 ucharge = sqrt(umass * udist / (4. * shambase::constants::pi<f64> /*mu_0 in cgs*/));
-
-        f64 umagfd = umass / (utime * ucharge);
-
-        dump.table_header_f64.add("umagfd", umagfd);
-    } else {
-        logger::warn_ln("SPH", "no units are set, defaulting to SI");
-
-        dump.table_header_f64.add("udist", 1);
-        dump.table_header_f64.add("umass", 1);
-        dump.table_header_f64.add("utime", 1);
-        dump.table_header_f64.add("umagfd", 3.54491);
-    }
+    write_shamrock_units_in_phantom_dump(solver.solver_config.unit_sys, dump, bypass_error_check);
 
     PhantomDumpBlock block_part;
 

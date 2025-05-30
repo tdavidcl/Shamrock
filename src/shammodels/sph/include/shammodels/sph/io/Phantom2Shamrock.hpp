@@ -22,6 +22,7 @@
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shamunits/UnitSystem.hpp"
 #include <cstdlib>
+#include <optional>
 
 namespace shammodels::sph {
 
@@ -61,6 +62,10 @@ namespace shammodels::sph {
      */
     template<class Tscal>
     shamunits::UnitSystem<Tscal> get_shamrock_units(PhantomDump &phdump);
+
+    template<class Tscal>
+    void write_shamrock_units_in_phantom_dump(
+        std::optional<shamunits::UnitSystem<Tscal>> &units, PhantomDump &dump, bool bypass_error);
 
     /**
      * @brief Generate an Shamrock boundary configuration from a PhantomDump object.
