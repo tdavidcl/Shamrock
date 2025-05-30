@@ -1104,14 +1104,7 @@ auto shammodels::sph::Model<Tvec, SPHKernel>::gen_config_from_phantom_dump(
 
     conf.set_units(get_shamrock_units<Tscal>(phdump));
 
-    // xmin, xmax, y... z... are in the header only in periodic mode in phantom
-    if (phdump.has_header_entry("xmin")) {
-        logger::raw_ln("Setting periodic boundaries from phantmdump");
-        conf.set_boundary_periodic();
-    } else {
-        logger::raw_ln("Setting free boundaries from phantmdump");
-        conf.set_boundary_free();
-    }
+    conf.boundary_config = get_shamrock_boundary_config<Tvec>(phdump);
 
     return conf;
 }
@@ -1469,38 +1462,10 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     PatchScheduler &sched = shambase::get_check_ref(solver.context.sched);
 
-    auto [bmin, bmax] = sched.get_box_volume<Tvec>();
+    auto box_size = sched.get_box_volume<Tvec>();
 
-    using SolverConfigBC           = typename SolverConfig::BCConfig;
-    using SolverBCFree             = typename SolverConfigBC::Free;
-    using SolverBCPeriodic         = typename SolverConfigBC::Periodic;
-    using SolverBCShearingPeriodic = typename SolverConfigBC::ShearingPeriodic;
-
-    // boundary condition selections
-    if (SolverBCFree *c = std::get_if<SolverBCFree>(&solver.solver_config.boundary_config.config)) {
-        // do nothing
-    } else if (
-        SolverBCPeriodic *c
-        = std::get_if<SolverBCPeriodic>(&solver.solver_config.boundary_config.config)) {
-        dump.table_header_fort_real.add("xmin", bmin.x());
-        dump.table_header_fort_real.add("xmax", bmax.x());
-        dump.table_header_fort_real.add("ymin", bmin.y());
-        dump.table_header_fort_real.add("ymax", bmax.x());
-        dump.table_header_fort_real.add("zmin", bmin.z());
-        dump.table_header_fort_real.add("zmax", bmax.x());
-    } else if (
-        SolverBCShearingPeriodic *c
-        = std::get_if<SolverBCShearingPeriodic>(&solver.solver_config.boundary_config.config)) {
-        std::string err_msg
-            = "Phantom does not support shearing periodic boundaries but your are "
-              "making a phantom dump with them, set bypass_error_check=True to ignore";
-
-        if (!bypass_error_check) {
-            throw std::runtime_error(err_msg);
-        } else {
-            logger::warn_ln("PhantomDump", err_msg);
-        }
-    }
+    write_shamrock_boundaries_in_phantom_dump(
+        solver.solver_config.boundary_config, box_size, dump, bypass_error_check);
 
     dump.table_header_fort_real.add("get_conserv", -1);
     dump.table_header_fort_real.add("etot_in", 0.59762);

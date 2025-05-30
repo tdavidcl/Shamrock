@@ -18,6 +18,7 @@
 
 #include "shammodels/common/EOSConfig.hpp"
 #include "shammodels/sph/config/AVConfig.hpp"
+#include "shammodels/sph/config/BCConfig.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shamunits/UnitSystem.hpp"
 #include <cstdlib>
@@ -60,5 +61,19 @@ namespace shammodels::sph {
      */
     template<class Tscal>
     shamunits::UnitSystem<Tscal> get_shamrock_units(PhantomDump &phdump);
+
+    /**
+     * @brief Generate an Shamrock boundary configuration from a PhantomDump object.
+     *
+     * @param phdump Reference to the PhantomDump object.
+     *
+     * @return The boundary configuration corresponding to the given PhantomDump object.
+     */
+    template<class Tvec>
+    BCConfig<Tvec> get_shamrock_boundary_config(PhantomDump &phdump);
+
+    template<class Tvec>
+    void write_shamrock_boundaries_in_phantom_dump(
+        BCConfig<Tvec> &cfg, std::tuple<Tvec, Tvec> box_size, PhantomDump &dump, bool bypass_error);
 
 } // namespace shammodels::sph

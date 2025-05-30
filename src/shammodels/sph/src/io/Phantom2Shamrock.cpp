@@ -15,6 +15,7 @@
  */
 
 #include "shammodels/sph/io/Phantom2Shamrock.hpp"
+#include "shammodels/sph/config/BCConfig.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/io/PhantomDumpEOSUtils.hpp"
 
@@ -133,4 +134,75 @@ namespace shammodels::sph {
     template shamunits::UnitSystem<f32> get_shamrock_units<f32>(PhantomDump &phdump);
     /// explicit instanciation for f64_3
     template shamunits::UnitSystem<f64> get_shamrock_units<f64>(PhantomDump &phdump);
+} // namespace shammodels::sph
+
+namespace shammodels::sph {
+    template<class Tvec>
+    BCConfig<Tvec> get_shamrock_boundary_config(PhantomDump &phdump) {
+        BCConfig<Tvec> cfg;
+        // xmin, xmax, y... z... are in the header only in periodic mode in phantom
+        if (phdump.has_header_entry("xmin")) {
+            logger::raw_ln("Setting periodic boundaries from phantmdump");
+            cfg.set_periodic();
+        } else {
+            logger::raw_ln("Setting free boundaries from phantmdump");
+            cfg.set_free();
+        }
+        return cfg;
+    }
+
+    template<class Tvec>
+    void write_shamrock_boundaries_in_phantom_dump(
+        BCConfig<Tvec> &cfg,
+        std::tuple<Tvec, Tvec> box_size,
+        PhantomDump &dump,
+        bool bypass_error) {
+
+        auto [bmin, bmax]              = box_size;
+        using SolverConfigBC           = BCConfig<Tvec>;
+        using SolverBCFree             = typename SolverConfigBC::Free;
+        using SolverBCPeriodic         = typename SolverConfigBC::Periodic;
+        using SolverBCShearingPeriodic = typename SolverConfigBC::ShearingPeriodic;
+
+        // boundary condition selections
+        if (SolverBCFree *c = std::get_if<SolverBCFree>(&cfg.config)) {
+            // do nothing
+        } else if (SolverBCPeriodic *c = std::get_if<SolverBCPeriodic>(&cfg.config)) {
+            dump.table_header_fort_real.add("xmin", bmin.x());
+            dump.table_header_fort_real.add("xmax", bmax.x());
+            dump.table_header_fort_real.add("ymin", bmin.y());
+            dump.table_header_fort_real.add("ymax", bmax.x());
+            dump.table_header_fort_real.add("zmin", bmin.z());
+            dump.table_header_fort_real.add("zmax", bmax.x());
+        } else if (
+            SolverBCShearingPeriodic *c = std::get_if<SolverBCShearingPeriodic>(&cfg.config)) {
+            std::string err_msg
+                = "Phantom does not support shearing periodic boundaries but your are "
+                  "making a phantom dump with them, set bypass_error_check=True to ignore";
+
+            if (!bypass_error) {
+                throw std::runtime_error(err_msg);
+            } else {
+                logger::warn_ln("PhantomDump", err_msg);
+            }
+        }
+    }
+
+    /// explicit instanciation for f32_3
+    template BCConfig<f32_3> get_shamrock_boundary_config<f32_3>(PhantomDump &phdump);
+    /// explicit instanciation for f64_3
+    template BCConfig<f64_3> get_shamrock_boundary_config<f64_3>(PhantomDump &phdump);
+
+    /// explicit instanciation for f32_3
+    template void write_shamrock_boundaries_in_phantom_dump<f32_3>(
+        BCConfig<f32_3> &cfg,
+        std::tuple<f32_3, f32_3> box_size,
+        PhantomDump &dump,
+        bool bypass_error);
+    /// explicit instanciation for f64_3
+    template void write_shamrock_boundaries_in_phantom_dump<f64_3>(
+        BCConfig<f64_3> &cfg,
+        std::tuple<f64_3, f64_3> box_size,
+        PhantomDump &dump,
+        bool bypass_error);
 } // namespace shammodels::sph
