@@ -1096,8 +1096,8 @@ auto shammodels::sph::Model<Tvec, SPHKernel>::gen_config_from_phantom_dump(
     auto massoftype = phdump.read_header_floats<Tscal>("massoftype");
 
     conf.gpart_mass           = massoftype[0];
-    conf.cfl_config.cfl_cour  = phdump.read_header_float<Tscal>("C_force");
-    conf.cfl_config.cfl_force = phdump.read_header_float<Tscal>("C_cour");
+    conf.cfl_config.cfl_cour  = phdump.read_header_float<Tscal>("C_cour");
+    conf.cfl_config.cfl_force = phdump.read_header_float<Tscal>("C_force");
 
     conf.eos_config      = get_shamrock_eosconfig<Tvec>(phdump, bypass_error);
     conf.artif_viscosity = get_shamrock_avconfig<Tvec>(phdump);
