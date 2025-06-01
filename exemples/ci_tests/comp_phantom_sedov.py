@@ -181,6 +181,7 @@ ctx.pdata_layout_new()
 model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M4")
 
 cfg = model.gen_config_from_phantom_dump(dump)
+cfg.set_boundary_free() # try to force some h iterations
 # Set the solver config to be the one stored in cfg
 model.set_solver_config(cfg)
 # Print the solver config
