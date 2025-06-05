@@ -17,10 +17,21 @@
 #include "shammodels/sph/modules/ParticleInjection.hpp"
 #include "shamalgs/random.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shamrock/patch/PatchData.hpp"
+#include "shamrock/patch/PatchDataField.hpp"
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::ParticleInjection<Tvec, SPHKernel>::inject_particles() {
+
+    Tscal inject_mass_rate = 1e-4;
+    Tscal part_mass        = solver_config.gpart_mass;
+    Tscal part_inject_rate = inject_mass_rate / part_mass;
+
+    Tscal part_to_inject = part_inject_rate * solver_config.get_dt_sph();
+
+    Tvec pos_inject = {1.0, 0.3, 0.0};
+    Tscal r_inject  = 0.4;
 
     using namespace shamrock::patch;
     PatchScheduler &sched = shambase::get_check_ref(context.sched);
@@ -35,38 +46,42 @@ void shammodels::sph::modules::ParticleInjection<Tvec, SPHKernel>::inject_partic
 
     std::vector<Tvec> pos_gen;
     std::vector<Tvec> vel_gen;
-    std::vector<Tscal> h_gen;
 
     static std::mt19937 eng(0);
 
-    Tvec pos_inject = {1.0, 0.0, 0.0};
-    Tscal r_inject  = 0.1;
-
-    for (u32 i = 0; i < 5; i++) {
-        auto r = shamalgs::random::mock_value<Tvec>(
-            eng, {-r_inject, -r_inject, -r_inject}, {r_inject, r_inject, r_inject});
-        auto v = shamalgs::random::mock_value<Tvec>(eng, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0});
+    for (u32 i = 0; i < part_to_inject; i++) {
+        Tvec bound_inject_low  = Tvec{-r_inject, -r_inject, -r_inject} + pos_inject;
+        Tvec bound_inject_high = Tvec{r_inject, r_inject, r_inject} + pos_inject;
+        auto r = shamalgs::random::mock_value<Tvec>(eng, bound_inject_low, bound_inject_high);
+        auto v = shamalgs::random::mock_value<Tvec>(eng, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
 
         pos_gen.push_back(r);
         vel_gen.push_back(v);
-        h_gen.push_back(1e-2);
     }
 
     PatchCoordTransform<Tvec> ptransf = sched.get_sim_box().get_patch_transform<Tvec>();
+
+    auto correct_smoothing_lengths = [&](PatchData &pdat, PatchData &to_insert) {
+        auto h_field_idx = sched.pdl.get_field_idx<Tscal>("hpart");
+
+        PatchDataField<Tscal> &h_field        = pdat.get_field<Tscal>(h_field_idx);
+        PatchDataField<Tscal> &h_field_insert = to_insert.get_field<Tscal>(h_field_idx);
+
+        auto h_min = h_field.compute_min();
+        h_field_insert.override(h_min);
+    };
 
     sched.for_each_local_patchdata([&](const Patch p, PatchData &pdat) {
         shammath::CoordRange<Tvec> patch_coord = ptransf.to_obj_coord(p);
 
         std::vector<Tvec> pos;
         std::vector<Tvec> vel;
-        std::vector<Tscal> h;
 
         for (u64 i = 0; i < pos_gen.size(); i++) {
             Tvec r = pos_gen[i];
             if (patch_coord.contain_pos(r)) {
                 pos.push_back(pos_gen[i]);
                 vel.push_back(vel_gen[i]);
-                h.push_back(h_gen[i]);
             }
         }
 
@@ -90,13 +105,8 @@ void shammodels::sph::modules::ParticleInjection<Tvec, SPHKernel>::inject_partic
                 sycl::buffer<Tvec> buf(vel.data(), len);
                 f.override(buf, len);
             }
-            {
-                u32 len = pos.size();
-                PatchDataField<Tscal> &f
-                    = tmp.get_field<Tscal>(sched.pdl.get_field_idx<Tscal>("hpart"));
-                sycl::buffer<Tscal> buf(h.data(), len);
-                f.override(buf, len);
-            }
+
+            correct_smoothing_lengths(pdat, tmp);
 
             pdat.insert_elements(tmp);
         }
