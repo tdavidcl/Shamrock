@@ -491,7 +491,7 @@ namespace sham {
     }
 
     template<class T>
-    inline shambase::VecComponent<T> lenght2(T a) {
+    inline shambase::VecComponent<T> length2(T a) {
         return dot(a, a);
     }
 
@@ -528,6 +528,11 @@ namespace sham {
     inline auto pack32(u32 a, u32 b) -> u64 { return (u64(a) << 32U) + b; };
 
     inline auto unpack32(u64 v) -> sycl::vec<u32, 2> { return {u32(v >> 32U), u32(v)}; };
+
+    template<class T>
+    inline T m1pown(u32 n) {
+        return (n % 2 == 0) ? T(1) : -T(1);
+    }
 
     template<class T>
     inline bool has_nan(T v) {
