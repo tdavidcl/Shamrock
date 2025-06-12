@@ -138,15 +138,6 @@ namespace mpi {
     inline int alloc_mem(MPI_Aint size, MPI_Info info, void *baseptr) {
         CALL_LOG_RETURN(MPI_Alloc_mem, (size, info, baseptr));
     }
-    inline int allreduce(
-        const void *sendbuf,
-        void *recvbuf,
-        int count,
-        MPI_Datatype datatype,
-        MPI_Op op,
-        MPI_Comm comm) {
-        CALL_LOG_RETURN(MPI_Allreduce, (sendbuf, recvbuf, count, datatype, op, comm));
-    }
     inline int iallreduce(
         const void *sendbuf,
         void *recvbuf,

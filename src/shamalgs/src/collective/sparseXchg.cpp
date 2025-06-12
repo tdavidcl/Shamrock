@@ -359,8 +359,8 @@ namespace shamalgs::collective {
                 //     comm_ranks.y(),
                 //     i));
 
-                MPICHECK(shamcomm::mpi::Isend(
-                    payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq));
+                shamcomm::mpi::Isend(
+                    payload->get_ptr(), send_sz, MPI_BYTE, comm_ranks.y(), i, MPI_COMM_WORLD, &rq);
 
                 send_idx++;
             }
@@ -393,14 +393,14 @@ namespace shamalgs::collective {
                 //     comm_ranks.x(),
                 //     i));
 
-                MPICHECK(shamcomm::mpi::Irecv(
+                shamcomm::mpi::Irecv(
                     payload.payload->get_ptr(),
                     cnt,
                     MPI_BYTE,
                     comm_ranks.x(),
                     i,
                     MPI_COMM_WORLD,
-                    &rq));
+                    &rq);
 
                 message_recv.push_back(std::move(payload));
             }
@@ -428,8 +428,8 @@ namespace shamalgs::collective {
         std::vector<int> comm_sizes_loc = {};
         comm_sizes_loc.resize(message_send.size());
         for (u64 i = 0; i < message_send.size(); i++) {
-            comm_sizes_loc[i] = check_payload_size_is_int(
-                message_send[i].payload->get_size(), global_comm_ranks);
+            comm_sizes_loc[i]
+                = check_payload_size_is_int(message_send[i].payload->get_size(), global_comm_ranks);
         }
 
         // gather sizes
@@ -493,14 +493,14 @@ namespace shamalgs::collective {
                 //     comm_ranks.y(),
                 //     i));
 
-                MPICHECK(shamcomm::mpi::Isend(
+                shamcomm::mpi::Isend(
                     payload->get_ptr(),
                     comm_sizes_loc[send_idx],
                     MPI_BYTE,
                     receiver,
                     tag,
                     MPI_COMM_WORLD,
-                    &rq));
+                    &rq);
 
                 send_idx++;
                 in_flight++;
@@ -521,8 +521,8 @@ namespace shamalgs::collective {
                 //     comm_ranks.x(),
                 //     i));
 
-                MPICHECK(shamcomm::mpi::Irecv(
-                    payload->get_ptr(), comm_sizes[i], MPI_BYTE, sender, tag, MPI_COMM_WORLD, &rq));
+                shamcomm::mpi::Irecv(
+                    payload->get_ptr(), comm_sizes[i], MPI_BYTE, sender, tag, MPI_COMM_WORLD, &rq);
 
                 recv_idx++;
                 in_flight++;

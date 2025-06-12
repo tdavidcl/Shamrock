@@ -32,6 +32,7 @@
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include "shamcomm/wrapper.hpp"
 #include <string_view>
 #include <functional>
 #include <mpi.h>
@@ -39,45 +40,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-namespace shamcomm::mpi {
-
-    inline void check_tag_value(i32 tag) {
-        if (tag > mpi_max_tag_value()) {
-            shambase::throw_with_loc<std::invalid_argument>(shambase::format(
-                "mpi_max_tag_value ({}) exceeded with tag {}", mpi_max_tag_value(), tag));
-        }
-    }
-
-    inline int Isend(
-        const void *buf,
-        int count,
-        MPI_Datatype datatype,
-        int dest,
-        int tag,
-        MPI_Comm comm,
-        MPI_Request *request) {
-
-        check_tag_value(tag);
-
-        return MPI_Isend(buf, count, datatype, dest, tag, comm, request);
-    }
-
-    inline int Irecv(
-        void *buf,
-        int count,
-        MPI_Datatype datatype,
-        int source,
-        int tag,
-        MPI_Comm comm,
-        MPI_Request *request) {
-
-        check_tag_value(tag);
-
-        return MPI_Irecv(buf, count, datatype, source, tag, comm, request);
-    }
-
-} // namespace shamcomm::mpi
 
 namespace shamalgs::collective {
 
@@ -160,7 +122,7 @@ namespace shamalgs::collective {
 
         int send_loc = message_send.size();
         int send_max_count;
-        MPI_Allreduce(&send_loc, &send_max_count, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+        shamcomm::mpi::Allreduce(&send_loc, &send_max_count, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
         // logger::raw_ln(send_loc, send_max_count);
 

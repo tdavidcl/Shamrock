@@ -23,6 +23,7 @@
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include "shamcomm/wrapper.hpp"
 #include <vector>
 
 namespace shamalgs::collective {
@@ -106,7 +107,7 @@ namespace shamalgs::collective {
 
         // querry global size and resize the receiving vector
         u32 global_len;
-        MPICHECK(MPI_Allreduce(&local_count, &global_len, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD));
+        shamcomm::mpi::Allreduce(&local_count, &global_len, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
         recv_vec.resize(global_len);
 
         // if (shamcomm::world_rank() == 0) {
@@ -116,7 +117,7 @@ namespace shamalgs::collective {
 
         std::vector<int> table_data_count(shamcomm::world_size());
 
-        MPICHECK(MPI_Allgather(&local_count, 1, MPI_INT, &table_data_count[0], 1, MPI_INT, comm));
+        shamcomm::mpi::Allgather(&local_count, 1, MPI_INT, &table_data_count[0], 1, MPI_INT, comm);
 
         // printf("table_data_count =
         // [%d,%d,%d,%d]\n",table_data_count[0],table_data_count[1],table_data_count[2],table_data_count[3]);
