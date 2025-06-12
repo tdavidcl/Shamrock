@@ -484,7 +484,7 @@ namespace shamalgs::collective {
 
                 rqs_infos.push_back({sender, receiver, payload->get_size(), tag, true, false});
 
-                SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
+                SHAM_ASSERT(payload->get_size() == comm_sizes_loc[send_idx]);
 
                 // logger::raw_ln(shambase::format(
                 //     "[{}] send {} bytes to rank {}, tag {}",
