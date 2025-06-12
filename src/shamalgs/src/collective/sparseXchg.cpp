@@ -277,7 +277,7 @@ namespace shamalgs::collective {
                         "{} # {} # {}\n",
                         comm_ranks.x(),
                         comm_ranks.y(),
-                        message_send[send_idx].payload->get_bytesize());
+                        message_send[send_idx].payload->get_size());
 
                     send_idx++;
                 }
@@ -350,7 +350,7 @@ namespace shamalgs::collective {
                 u32 rq_index = rqs.size() - 1;
                 auto &rq     = rqs[rq_index];
 
-                int send_sz = check_payload_size_is_int(payload->get_bytesize(), global_comm_ranks);
+                int send_sz = check_payload_size_is_int(payload->get_size(), global_comm_ranks);
 
                 // logger::raw_ln(shambase::format(
                 //     "[{}] send {} bytes to rank {}, tag {}",
@@ -429,7 +429,7 @@ namespace shamalgs::collective {
         comm_sizes_loc.resize(message_send.size());
         for (u64 i = 0; i < message_send.size(); i++) {
             comm_sizes_loc[i] = check_payload_size_is_int(
-                message_send[i].payload->get_bytesize(), global_comm_ranks);
+                message_send[i].payload->get_size(), global_comm_ranks);
         }
 
         // gather sizes
@@ -482,7 +482,7 @@ namespace shamalgs::collective {
 
                 auto &rq = rqs.new_request();
 
-                rqs_infos.push_back({sender, receiver, payload->get_bytesize(), tag, true, false});
+                rqs_infos.push_back({sender, receiver, payload->get_size(), tag, true, false});
 
                 SHAM_ASSERT(payload->get_bytesize() == comm_sizes_loc[send_idx]);
 
