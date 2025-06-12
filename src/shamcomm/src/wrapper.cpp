@@ -310,4 +310,37 @@ namespace shamcomm::mpi {
         });
     }
 
+    void Gather(
+        const void *sendbuf,
+        int sendcount,
+        MPI_Datatype sendtype,
+        void *recvbuf,
+        int recvcount,
+        MPI_Datatype recvtype,
+        int root,
+        MPI_Comm comm) {
+        StackEntry stack_loc{};
+        wrap_profiling("MPI_Gather", [&]() {
+            MPICHECK(
+                MPI_Gather(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm));
+        });
+    }
+
+    void Gatherv(
+        const void *sendbuf,
+        int sendcount,
+        MPI_Datatype sendtype,
+        void *recvbuf,
+        const int recvcounts[],
+        const int displs[],
+        MPI_Datatype recvtype,
+        int root,
+        MPI_Comm comm) {
+        StackEntry stack_loc{};
+        wrap_profiling("MPI_Gatherv", [&]() {
+            MPICHECK(MPI_Gatherv(
+                sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs, recvtype, root, comm));
+        });
+    }
+
 } // namespace shamcomm::mpi

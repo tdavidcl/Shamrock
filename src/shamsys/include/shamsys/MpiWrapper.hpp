@@ -736,18 +736,6 @@ namespace mpi {
     inline int finalize(void) { CALL_LOG_RETURN(MPI_Finalize, ()); }
     inline int finalized(int *flag) { CALL_LOG_RETURN(MPI_Finalized, (flag)); }
     inline int free_mem(void *base) { CALL_LOG_RETURN(MPI_Free_mem, (base)); }
-    inline int gather(
-        const void *sendbuf,
-        int sendcount,
-        MPI_Datatype sendtype,
-        void *recvbuf,
-        int recvcount,
-        MPI_Datatype recvtype,
-        int root,
-        MPI_Comm comm) {
-        CALL_LOG_RETURN(
-            MPI_Gather, (sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm));
-    }
     inline int igather(
         const void *sendbuf,
         int sendcount,
@@ -761,20 +749,6 @@ namespace mpi {
         CALL_LOG_RETURN(
             MPI_Igather,
             (sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm, request));
-    }
-    inline int gatherv(
-        const void *sendbuf,
-        int sendcount,
-        MPI_Datatype sendtype,
-        void *recvbuf,
-        const int recvcounts[],
-        const int displs[],
-        MPI_Datatype recvtype,
-        int root,
-        MPI_Comm comm) {
-        CALL_LOG_RETURN(
-            MPI_Gatherv,
-            (sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs, recvtype, root, comm));
     }
     inline int igatherv(
         const void *sendbuf,

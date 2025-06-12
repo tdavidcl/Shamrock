@@ -40,11 +40,11 @@ namespace shamcomm {
 
         MPI_Request rq1, rq2;
         if (shamcomm::world_rank() == shamcomm::world_size() - 1) {
-            MPI_Isend(cbuf.get_ptr(), nbytes, MPI_BYTE, 0, 0, MPI_COMM_WORLD, &rq1);
+            shamcomm::mpi::Isend(cbuf.get_ptr(), nbytes, MPI_BYTE, 0, 0, MPI_COMM_WORLD, &rq1);
         }
 
         if (shamcomm::world_rank() == 0) {
-            MPI_Irecv(
+            shamcomm::mpi::Irecv(
                 cbuf_recv.get_ptr(),
                 nbytes,
                 MPI_BYTE,
@@ -55,11 +55,11 @@ namespace shamcomm {
         }
 
         if (shamcomm::world_rank() == shamcomm::world_size() - 1) {
-            MPI_Wait(&rq1, MPI_STATUS_IGNORE);
+            shamcomm::mpi::Wait(&rq1, MPI_STATUS_IGNORE);
         }
 
         if (shamcomm::world_rank() == 0) {
-            MPI_Wait(&rq2, MPI_STATUS_IGNORE);
+            shamcomm::mpi::Wait(&rq2, MPI_STATUS_IGNORE);
         }
 
         sycl::buffer<u8> recv = shamcomm::CommunicationBuffer::convert(std::move(cbuf_recv));
