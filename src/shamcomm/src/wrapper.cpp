@@ -34,10 +34,12 @@ namespace shamcomm::mpi {
         mpi_timers[timername] += time;
         mpi_timers["total"] += time;
 
-        shambase::profiling::register_counter_val(
-            timername, shambase::details::get_wtime(), mpi_timers[timername]);
-        shambase::profiling::register_counter_val(
-            "total MPi time", shambase::details::get_wtime(), mpi_timers["total"]);
+        if (shambase::profiling::is_profiling_enabled()) {
+            shambase::profiling::register_counter_val(
+                timername, shambase::details::get_wtime(), mpi_timers[timername]);
+            shambase::profiling::register_counter_val(
+                "total MPi time", shambase::details::get_wtime(), mpi_timers["total"]);
+        }
     }
 
     f64 get_timer(std::string timername) { return mpi_timers[timername]; }
@@ -49,13 +51,9 @@ namespace {
     template<class Func>
     inline void wrap_profiling(std::string timername, Func &&f) {
         f64 tstart;
-        if (shambase::profiling::is_profiling_enabled()) {
-            tstart = shambase::details::get_wtime();
-        }
+        tstart = shambase::details::get_wtime();
         f();
-        if (shambase::profiling::is_profiling_enabled()) {
-            shamcomm::mpi::register_time(timername, shambase::details::get_wtime() - tstart);
-        }
+        shamcomm::mpi::register_time(timername, shambase::details::get_wtime() - tstart);
     }
 
 } // namespace
