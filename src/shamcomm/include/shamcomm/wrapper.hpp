@@ -16,92 +16,120 @@
  *
  */
 
-#include "shambase/stacktrace.hpp"
-#include "shambase/time.hpp"
+#include "shambase/aliases_int.hpp"
 #include "shamcomm/mpi.hpp"
-#include "shamcomm/mpiErrorCheck.hpp"
-#include "shamcomm/worldInfo.hpp"
-#include <array>
 
 namespace shamcomm::mpi {
 
-    namespace timers {
-        enum TimersType { Isend = 0, Irecv = 1, Wait = 2, Allreduce = 3, Allgather = 4 };
-
-        inline f64 total_time            = 0;
-        inline std::array<f64, 6> timers = {};
-
-        void register_time_entry(TimersType type, f64 time) {
-            total_time += time;
-            timers[type] += time;
-        }
-    } // namespace timers
-
-    inline void check_tag_value(i32 tag) {
-        if (tag > mpi_max_tag_value()) {
-            shambase::throw_with_loc<std::invalid_argument>(shambase::format(
-                "mpi_max_tag_value ({}) exceeded with tag {}", mpi_max_tag_value(), tag));
-        }
-    }
-
-    inline void Isend(
-        const void *buf,
-        int count,
-        MPI_Datatype datatype,
-        int dest,
-        int tag,
-        MPI_Comm comm,
-        MPI_Request *request) {
-        StackEntry stack_loc{};
-
-        check_tag_value(tag);
-
-        f64 tstart = shambase::details::get_wtime();
-        MPICHECK(MPI_Isend(buf, count, datatype, dest, tag, comm, request));
-        timers::register_time_entry(timers::Isend, shambase::details::get_wtime() - tstart);
-    }
-
-    inline void Irecv(
-        void *buf,
-        int count,
-        MPI_Datatype datatype,
-        int source,
-        int tag,
-        MPI_Comm comm,
-        MPI_Request *request) {
-
-        check_tag_value(tag);
-
-        f64 tstart = shambase::details::get_wtime();
-        MPICHECK(MPI_Irecv(buf, count, datatype, source, tag, comm, request));
-        timers::register_time_entry(timers::Irecv, shambase::details::get_wtime() - tstart);
-    }
-
-    inline void Allreduce(
+    void Allreduce(
         const void *sendbuf,
         void *recvbuf,
         int count,
         MPI_Datatype datatype,
         MPI_Op op,
-        MPI_Comm comm) {
+        MPI_Comm comm);
 
-        f64 tstart = shambase::details::get_wtime();
-        MPICHECK(MPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm));
-        timers::register_time_entry(timers::Allreduce, shambase::details::get_wtime() - tstart);
-    }
-
-    inline void Allgather(
+    void Allgather(
         const void *sendbuf,
         int sendcount,
         MPI_Datatype sendtype,
         void *recvbuf,
         int recvcount,
         MPI_Datatype recvtype,
-        MPI_Comm comm) {
+        MPI_Comm comm);
 
-        f64 tstart = shambase::details::get_wtime();
-        int ret = MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm);
-        timers::register_time_entry(timers::Allgather, shambase::details::get_wtime() - tstart);
-    }
+    void Allgatherv(
+        const void *sendbuf,
+        int sendcount,
+        MPI_Datatype sendtype,
+        void *recvbuf,
+        const int recvcounts[],
+        const int displs[],
+        MPI_Datatype recvtype,
+        MPI_Comm comm);
+
+    void Isend(
+        const void *buf,
+        int count,
+        MPI_Datatype datatype,
+        int dest,
+        int tag,
+        MPI_Comm comm,
+        MPI_Request *request);
+
+    void Irecv(
+        void *buf,
+        int count,
+        MPI_Datatype datatype,
+        int source,
+        int tag,
+        MPI_Comm comm,
+        MPI_Request *request);
+
+    void Exscan(
+        const void *sendbuf,
+        void *recvbuf,
+        int count,
+        MPI_Datatype datatype,
+        MPI_Op op,
+        MPI_Comm comm);
+
+    void Wait(MPI_Request *request, MPI_Status *status);
+
+    void Waitall(int count, MPI_Request array_of_requests[], MPI_Status *array_of_statuses);
+
+    void Barrier(MPI_Comm comm);
+
+    void Probe(int source, int tag, MPI_Comm comm, MPI_Status *status);
+
+    void Recv(
+        void *buf,
+        int count,
+        MPI_Datatype datatype,
+        int source,
+        int tag,
+        MPI_Comm comm,
+        MPI_Status *status);
+
+    void Get_count(const MPI_Status *status, MPI_Datatype datatype, int *count);
+
+    void Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm);
+
+    void File_set_view(
+        MPI_File fh,
+        MPI_Offset disp,
+        MPI_Datatype etype,
+        MPI_Datatype filetype,
+        const char *datarep,
+        MPI_Info info);
+
+    void Type_size(MPI_Datatype type, int *size);
+
+    void File_write_all(
+        MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+
+    void
+    File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+
+    void File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+
+    void File_write_at(
+        MPI_File fh,
+        MPI_Offset offset,
+        const void *buf,
+        int count,
+        MPI_Datatype datatype,
+        MPI_Status *status);
+
+    void File_read_at(
+        MPI_File fh,
+        MPI_Offset offset,
+        void *buf,
+        int count,
+        MPI_Datatype datatype,
+        MPI_Status *status);
+
+    void File_close(MPI_File *fh);
+    void File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
 
 } // namespace shamcomm::mpi

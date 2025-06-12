@@ -19,6 +19,7 @@
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include "shamcomm/wrapper.hpp"
 
 namespace shamcomm {
 
@@ -117,7 +118,7 @@ namespace shamcomm {
             }
         }
 
-        MPI_Barrier(MPI_COMM_WORLD);
+        shamcomm::mpi::Barrier(MPI_COMM_WORLD);
 
         if (call_abort) {
             MPI_Abort(MPI_COMM_WORLD, 26);

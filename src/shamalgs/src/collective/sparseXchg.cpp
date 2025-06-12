@@ -44,7 +44,7 @@ namespace {
             std::string msg = shambase::format(
                 "hash mismatch {} != {}, local hash = {}", max_hash, min_hash, hash);
             logger::err_ln("Sparse comm", msg);
-            MPI_Barrier(MPI_COMM_WORLD);
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
             shambase::throw_with_loc<std::runtime_error>(msg);
         }
     };
@@ -265,7 +265,7 @@ namespace shamalgs::collective {
         auto print_comm_mat = [&]() {
             StackEntry stack_loc{};
 
-            MPI_Barrier(MPI_COMM_WORLD);
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
             std::string accum = "";
 
             u32 send_idx = 0;
@@ -291,7 +291,7 @@ namespace shamalgs::collective {
             if (shamcomm::world_rank() == 0) {
                 logger::raw_ln("comm matrix:", matrix);
             }
-            MPI_Barrier(MPI_COMM_WORLD);
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         };
 
         // Enable this only to do debug
@@ -306,7 +306,7 @@ namespace shamalgs::collective {
                 shamcomm::world_rank(),
                 shambase::readable_sizeof(mem_perf_infos_end.max_allocated_byte_device));
 
-            MPI_Barrier(MPI_COMM_WORLD);
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
             std::string log;
             shamcomm::gather_str(accum, log);
 
@@ -315,7 +315,7 @@ namespace shamalgs::collective {
             if (shamcomm::world_rank() == 0) {
                 logger::raw_ln("alloc state:", log);
             }
-            MPI_Barrier(MPI_COMM_WORLD);
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         };
 
         // Enable this only to do debug
@@ -565,10 +565,10 @@ namespace shamalgs::collective {
 
         // logger::raw_ln(tag_map);
 
-        // MPI_Barrier(MPI_COMM_WORLD);
+        // shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         // if (shamcomm::world_rank() == 0) {
         //     logger::raw_ln(shambase::format("sparse comm done"));
         // }
-        // MPI_Barrier(MPI_COMM_WORLD);
+        // shamcomm::mpi::Barrier(MPI_COMM_WORLD);
     }
 } // namespace shamalgs::collective

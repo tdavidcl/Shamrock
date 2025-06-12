@@ -50,7 +50,7 @@ namespace shamalgs::collective {
         int *table_data_count = new int[shamcomm::world_size()];
 
         // crash
-        MPICHECK(MPI_Allgather(&local_count, 1, MPI_INT, &table_data_count[0], 1, MPI_INT, comm));
+        shamcomm::mpi::Allgather(&local_count, 1, MPI_INT, &table_data_count[0], 1, MPI_INT, comm);
 
         // printf("table_data_count =
         // [%d,%d,%d,%d]\n",table_data_count[0],table_data_count[1],table_data_count[2],table_data_count[3]);
@@ -67,7 +67,7 @@ namespace shamalgs::collective {
         // printf("node_displacments_data_table =
         // [%d,%d,%d,%d]\n",node_displacments_data_table[0],node_displacments_data_table[1],node_displacments_data_table[2],node_displacments_data_table[3]);
 
-        MPICHECK(MPI_Allgatherv(
+        shamcomm::mpi::Allgatherv(
             &send_vec[0],
             send_vec.size(),
             send_type,
@@ -75,7 +75,7 @@ namespace shamalgs::collective {
             table_data_count,
             node_displacments_data_table,
             recv_type,
-            comm));
+            comm);
 
         delete[] table_data_count;
         delete[] node_displacments_data_table;
@@ -143,7 +143,7 @@ namespace shamalgs::collective {
         // printf("node_displacments_data_table =
         // [%d,%d,%d,%d]\n",node_displacments_data_table[0],node_displacments_data_table[1],node_displacments_data_table[2],node_displacments_data_table[3]);
 
-        MPICHECK(MPI_Allgatherv(
+        shamcomm::mpi::Allgatherv(
             &send_vec[0],
             send_vec.size(),
             send_type,
@@ -151,7 +151,7 @@ namespace shamalgs::collective {
             &table_data_count[0],
             &node_displacments_data_table[0],
             recv_type,
-            comm));
+            comm);
     }
 
     template<class T>
