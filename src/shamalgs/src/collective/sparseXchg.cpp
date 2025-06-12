@@ -104,7 +104,7 @@ namespace {
                 if (!is_ready[i]) {
                     MPI_Status st;
                     int ready;
-                    MPICHECK(MPI_Test(&rqs[i], &ready, MPI_STATUS_IGNORE));
+                    shamcomm::mpi::Test(&rqs[i], &ready, MPI_STATUS_IGNORE);
                     if (ready) {
                         is_ready[i] = true;
                         ready_count++;
@@ -117,7 +117,7 @@ namespace {
 
         void wait_all() {
             std::vector<MPI_Status> st_lst(rqs.size());
-            MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+            shamcomm::mpi::Waitall(rqs.size(), rqs.data(), st_lst.data());
         }
 
         u32 remain_count() {
@@ -182,7 +182,7 @@ namespace {
 
                       MPI_Status st;
                       int ready;
-                      MPICHECK(MPI_Test(&rq, &ready, MPI_STATUS_IGNORE));
+                      shamcomm::mpi::Test(&rq, &ready, MPI_STATUS_IGNORE);
                       if (!ready) {
                           loc_done = false;
                           // logger::raw_ln(shambase::format(
@@ -381,8 +381,8 @@ namespace shamalgs::collective {
 
                 MPI_Status st;
                 i32 cnt;
-                MPICHECK(MPI_Probe(comm_ranks.x(), i, MPI_COMM_WORLD, &st));
-                MPICHECK(MPI_Get_count(&st, MPI_BYTE, &cnt));
+                shamcomm::mpi::Probe(comm_ranks.x(), i, MPI_COMM_WORLD, &st);
+                shamcomm::mpi::Get_count(&st, MPI_BYTE, &cnt);
 
                 payload.payload = std::make_unique<shamcomm::CommunicationBuffer>(cnt, dev_sched);
 
@@ -407,7 +407,7 @@ namespace shamalgs::collective {
         }
 
         std::vector<MPI_Status> st_lst(rqs.size());
-        MPICHECK(MPI_Waitall(rqs.size(), rqs.data(), st_lst.data()));
+        shamcomm::mpi::Waitall(rqs.size(), rqs.data(), st_lst.data());
     }
 
     void sparse_comm_allgather_isend_irecv(

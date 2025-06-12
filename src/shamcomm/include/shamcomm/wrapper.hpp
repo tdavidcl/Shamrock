@@ -138,4 +138,5 @@ namespace shamcomm::mpi {
     void File_close(MPI_File *fh);
     void File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
 
+    void Test(MPI_Request *request, int *flag, MPI_Status *status);
 } // namespace shamcomm::mpi

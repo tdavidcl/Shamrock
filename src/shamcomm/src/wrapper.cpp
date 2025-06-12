@@ -303,4 +303,11 @@ namespace shamcomm::mpi {
         });
     }
 
+    void Test(MPI_Request *request, int *flag, MPI_Status *status) {
+        StackEntry stack_loc{};
+        wrap_profiling("MPI_Test", [&]() {
+            MPICHECK(MPI_Test(request, flag, status));
+        });
+    }
+
 } // namespace shamcomm::mpi
