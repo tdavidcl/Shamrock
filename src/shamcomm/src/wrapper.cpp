@@ -27,7 +27,10 @@ namespace {
 
     std::unordered_map<std::string, f64> mpi_timers;
 
-    inline void register_time(std::string timername, f64 time) {
+} // namespace
+
+namespace shamcomm::mpi {
+    void register_time(std::string timername, f64 time) {
         mpi_timers[timername] += time;
         mpi_timers["total"] += time;
 
@@ -37,6 +40,12 @@ namespace {
             "total MPi time", shambase::details::get_wtime(), mpi_timers["total"]);
     }
 
+    f64 get_timer(std::string timername) { return mpi_timers[timername]; }
+
+} // namespace shamcomm::mpi
+
+namespace {
+
     template<class Func>
     inline void wrap_profiling(std::string timername, Func &&f) {
         f64 tstart;
@@ -45,7 +54,7 @@ namespace {
         }
         f();
         if (shambase::profiling::is_profiling_enabled()) {
-            register_time(timername, shambase::details::get_wtime() - tstart);
+            shamcomm::mpi::register_time(timername, shambase::details::get_wtime() - tstart);
         }
     }
 

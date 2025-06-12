@@ -16,10 +16,16 @@
  *
  */
 
+#include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
 #include "shamcomm/mpi.hpp"
+#include <string>
 
 namespace shamcomm::mpi {
+
+    void register_time(std::string timername, f64 time);
+
+    f64 get_timer(std::string timername);
 
     void Allreduce(
         const void *sendbuf,
