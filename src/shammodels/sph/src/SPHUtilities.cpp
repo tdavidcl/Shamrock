@@ -56,7 +56,7 @@ namespace shammodels::sph {
             // sycl::accessor omega {omega_h, cgh, sycl::write_only, sycl::no_init};
 
             const flt part_mass          = gpart_mass;
-            const flt h_max_tot_max_evol = h_evol_max;
+            const flt h_max_tot_max_evol = 1.1;
             const flt h_max_evol_p       = h_evol_iter_max;
             const flt h_max_evol_m       = 1 / h_evol_iter_max;
 
@@ -74,6 +74,8 @@ namespace shammodels::sph {
                     flt rho_sum = 0;
                     flt sumdWdh = 0;
 
+                    u32 neigh_cnt = 0;
+
                     // particle_looper.rtree_for([&](u32, vec bmin,vec bmax) -> bool {
                     //     return
                     //     shammath::domain_are_connected(bmin,bmax,inter_box_a_min,inter_box_a_max);
@@ -90,6 +92,7 @@ namespace shammodels::sph {
 
                         rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
                         sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
+                        neigh_cnt++;
                     });
 
                     using namespace shamrock::sph;
@@ -104,6 +107,12 @@ namespace shammodels::sph {
 
                     flt ha_0 = h_old[id_a];
 
+#if false
+                    if(new_h > h_a && neigh_cnt>250){
+                        h_new[id_a] = h_a;
+                        eps[id_a]   = 0;
+                    }else
+#endif
                     if (new_h < ha_0 * h_max_tot_max_evol) {
                         h_new[id_a] = new_h;
                         eps[id_a]   = sycl::fabs(new_h - h_a) / ha_0;

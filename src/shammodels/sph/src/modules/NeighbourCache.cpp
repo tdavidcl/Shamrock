@@ -580,6 +580,16 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 pcache.scanned_cnt.complete_event_state(resulting_events);
                 pcache.index_neigh_map.complete_event_state(resulting_events);
             }
+
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto min_cnt   = shamalgs::reduction::min(
+                dev_sched, pcache.cnt_neigh, 0, pcache.cnt_neigh.get_size());
+
+            auto max_cnt = shamalgs::reduction::max(
+                dev_sched, pcache.cnt_neigh, 0, pcache.cnt_neigh.get_size());
+
+            logger::raw_ln("min/max neigh cnt:", min_cnt, max_cnt);
+
             return pcache;
         }));
 
