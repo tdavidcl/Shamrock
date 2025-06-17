@@ -107,7 +107,7 @@ namespace shammodels::sph {
 
                     flt ha_0 = h_old[id_a];
 
-#if false
+#if true
                     if(new_h > h_a && neigh_cnt>500){
                         h_new[id_a] = h_a;
                         eps[id_a]   = 0;
