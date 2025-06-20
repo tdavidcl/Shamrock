@@ -393,14 +393,14 @@ void shammodels::basegodunov::modules::DragIntegrator<Tvec, TgridVec>::enable_ex
 
         auto acc_alphas = alphas_buf.get_read_access(depend_list);
 
-        const size_t group_size       = 32;
-        const size_t mat_size         = ndust + 1;
-        const size_t mat_size_squared = mat_size * mat_size;
-        const size_t loc_acc_size     = mat_size_squared * group_size;
+        size_t group_size       = 32;
+        size_t mat_size         = ndust + 1;
+        size_t mat_size_squared = mat_size * mat_size;
+        size_t loc_acc_size     = mat_size_squared * group_size;
 
         size_t loc_mem_size = 5 * sizeof(f64) * loc_acc_size;
 
-        if (loc_mem_size > q.get_device_prop().local_mem_size && false) {
+        if (loc_mem_size > q.get_device_prop().local_mem_size) {
             shambase::throw_with_loc<std::runtime_error>(shambase::format(
                 "not enough local memory for expo drag integrator:\n"
                 "loc_mem_size: {} > max_local_mem: {}\n"
