@@ -17,120 +17,15 @@
  */
 
 #include "shambase/aliases_int.hpp"
+#include "shambase/logs.hpp"
 #include "shambase/print.hpp"
 #include "shambase/string.hpp"
 #include "shamcmdopt/term_colors.hpp"
 #include <string>
 
-/**
- * @brief Namespace containing logs utils
- */
-namespace shamcomm::logs {
-    /**
-     * @namespace details
-     * @brief Namespace for internal details of the logs module
-     */
-    namespace details {
-        /**
-         * @brief Internal variable to store the global log level
-         */
-        inline i8 loglevel = 0;
-    } // namespace details
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // Log level manip
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-
-    /**
-     * @brief Set the global log level
-     *
-     * @param val The new log level
-     */
-    inline void set_loglevel(i8 val) { details::loglevel = val; }
-
-    /**
-     * @brief Get the current global log level
-     *
-     * @return The current log level
-     */
-    inline i8 get_loglevel() { return details::loglevel; }
-} // namespace shamcomm::logs
-
 namespace shamcomm::logs {
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // Log message formatting
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-
-    /**
-     * @brief Formats an empty log message
-     *
-     * This function is used to format log messages when there are no additional
-     * arguments to be passed.
-     *
-     * @return An empty string
-     */
-    inline std::string format_message() { return ""; }
-
-    /**
-     * Formats a log message with multiple arguments.
-     *
-     * @param var1 The first argument to be formatted in the log message.
-     * @param var2 The remaining arguments to be formatted in the log message.
-     *
-     * @return The formatted log message.
-     *
-     */
-    template<typename T, typename... Types>
-    std::string format_message(T var1, Types... var2);
-
-    /**
-     * Formats a log message by concatenating a string with additional arguments.
-     *
-     * @param s The initial string to be formatted
-     * @param var2 Additional arguments to be formatted and appended to the string
-     *
-     * @return The formatted log message
-     */
-    template<typename... Types>
-    inline std::string format_message(std::string s, Types... var2) {
-        return s + " " + format_message(var2...);
-    }
-
-    /**
-     * @brief Formats a log message with multiple arguments.
-     *
-     * This function is a variadic template that recursively formats a log message
-     * by concatenating the string representation of each argument passed to it.
-     *
-     * @tparam T The type of the first argument
-     * @tparam Types The types of the remaining arguments
-     *
-     * @return The formatted log message.
-     *
-     */
-    template<typename T, typename... Types>
-    inline std::string format_message(T var1, Types... var2) {
-        // Special case for string literals
-        if constexpr (std::is_same_v<T, const char *>) {
-            // Convert the string literal to a std::string and concatenate it with the formatted
-            // string from the remaining arguments
-            return std::string(var1) + " " + format_message(var2...);
-        }
-        // Special case for pointer types
-        else if constexpr (std::is_pointer_v<T>) {
-            // Convert the pointer to a void pointer, format it as a hexadecimal string, and
-            // concatenate it with the formatted string from the remaining arguments
-            return shambase::format("{} ", static_cast<void *>(var1)) + format_message(var2...);
-        }
-
-        else {
-            // General case for other types
-            // Format the argument as a string and concatenate it with the formatted string from the
-            // remaining arguments
-            return shambase::format("{} ", var1) + format_message(var2...);
-        }
-    }
+    using namespace shambase::logs;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // log message printing
