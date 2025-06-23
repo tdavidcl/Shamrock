@@ -1,3 +1,5 @@
+set -e
+
 cd doxygen
 doxygen dox.conf
 
@@ -8,11 +10,9 @@ cd ../../..
 mkdocs build
 cd ..
 
-
 rm -rf _build
 mkdir _build
 cd _build
-
 
 mkdir doxygen
 mkdir mkdocs
