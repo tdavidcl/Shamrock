@@ -458,7 +458,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
     // Scheduler step
     auto update_load_val = [&]() {
-        logger::debug_ln("ComputeLoadBalanceValue", "update load balancing");
+        shamlog_debug_ln("ComputeLoadBalanceValue", "update load balancing");
         scheduler().update_local_load_value([&](shamrock::patch::Patch p) {
             return scheduler().patch_data.owned_data.get(p.id_patch).get_obj_cnt();
         });

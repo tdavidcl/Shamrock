@@ -451,7 +451,7 @@ namespace shamrock::patch {
             auto appender = [&](auto &field) {
                 if (field.get_name() == key) {
 
-                    logger::debug_ln("PyShamrockCTX", "appending field", key);
+                    shamlog_debug_ln("PyShamrockCTX", "appending field", key);
 
                     if (!field.is_empty()) {
                         auto acc = field.get_buf().copy_to_stdvec();
@@ -501,7 +501,7 @@ namespace shamrock::patch {
 
         std::vector<u32> idx_lst = get_vec_idx(bmin, bmax);
 
-        logger::debug_sycl_ln("PatchData", "inserting element cnt =", idx_lst.size());
+        shamlog_debug_sycl_ln("PatchData", "inserting element cnt =", idx_lst.size());
 
         pdat.append_subset_to(idx_lst, *this);
     }

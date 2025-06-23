@@ -126,7 +126,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
 
             if (solver_config.riemman_config == Rusanov) {
                 constexpr RiemmanSolverMode mode = Rusanov;
-                logger::debug_ln("[AMR Flux]", "compute rusanov xp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov xp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xp>(
                     q,
                     rho_face_xp.link_count,
@@ -137,7 +137,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xp.link_graph_field,
                     buf_flux_rhoe_face_xp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute rusanov yp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov yp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::yp>(
                     q,
                     rho_face_yp.link_count,
@@ -148,7 +148,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_yp.link_graph_field,
                     buf_flux_rhoe_face_yp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute rusanov zp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov zp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zp>(
                     q,
                     rho_face_zp.link_count,
@@ -159,7 +159,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_zp.link_graph_field,
                     buf_flux_rhoe_face_zp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute rusanov xm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov xm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xm>(
                     q,
                     rho_face_xm.link_count,
@@ -170,7 +170,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xm.link_graph_field,
                     buf_flux_rhoe_face_xm.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute rusanov ym patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov ym patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::ym>(
                     q,
                     rho_face_ym.link_count,
@@ -181,7 +181,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_ym.link_graph_field,
                     buf_flux_rhoe_face_ym.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute rusanov zm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute rusanov zm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zm>(
                     q,
                     rho_face_zm.link_count,
@@ -194,7 +194,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     gamma);
             } else if (solver_config.riemman_config == HLL) {
                 constexpr RiemmanSolverMode mode = HLL;
-                logger::debug_ln("[AMR Flux]", "compute HLL xp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL xp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xp>(
                     q,
                     rho_face_xp.link_count,
@@ -205,7 +205,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xp.link_graph_field,
                     buf_flux_rhoe_face_xp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLL yp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL yp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::yp>(
                     q,
                     rho_face_yp.link_count,
@@ -216,7 +216,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_yp.link_graph_field,
                     buf_flux_rhoe_face_yp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLL zp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL zp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zp>(
                     q,
                     rho_face_zp.link_count,
@@ -227,7 +227,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_zp.link_graph_field,
                     buf_flux_rhoe_face_zp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLL xm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL xm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xm>(
                     q,
                     rho_face_xm.link_count,
@@ -238,7 +238,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xm.link_graph_field,
                     buf_flux_rhoe_face_xm.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLL ym patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL ym patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::ym>(
                     q,
                     rho_face_ym.link_count,
@@ -249,7 +249,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_ym.link_graph_field,
                     buf_flux_rhoe_face_ym.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLL zm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLL zm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zm>(
                     q,
                     rho_face_zm.link_count,
@@ -262,7 +262,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     gamma);
             } else if (solver_config.riemman_config == HLLC) {
                 constexpr RiemmanSolverMode mode = HLLC;
-                logger::debug_ln("[AMR Flux]", "compute HLLC xp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC xp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xp>(
                     q,
                     rho_face_xp.link_count,
@@ -273,7 +273,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xp.link_graph_field,
                     buf_flux_rhoe_face_xp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLLC yp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC yp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::yp>(
                     q,
                     rho_face_yp.link_count,
@@ -284,7 +284,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_yp.link_graph_field,
                     buf_flux_rhoe_face_yp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLLC zp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC zp patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zp>(
                     q,
                     rho_face_zp.link_count,
@@ -295,7 +295,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_zp.link_graph_field,
                     buf_flux_rhoe_face_zp.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLLC xm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC xm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::xm>(
                     q,
                     rho_face_xm.link_count,
@@ -306,7 +306,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_xm.link_graph_field,
                     buf_flux_rhoe_face_xm.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLLC ym patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC ym patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::ym>(
                     q,
                     rho_face_ym.link_count,
@@ -317,7 +317,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_face_ym.link_graph_field,
                     buf_flux_rhoe_face_ym.link_graph_field,
                     gamma);
-                logger::debug_ln("[AMR Flux]", "compute HLLC zm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute HLLC zm patch", id);
                 compute_fluxes_dir<mode, Tvec, Tscal, Direction::zm>(
                     q,
                     rho_face_zm.link_count,
@@ -447,7 +447,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             u32 _ndust = solver_config.dust_config.ndust;
             if (solver_config.dust_config.dust_riemann_config == DHLL) {
                 constexpr DustRiemannSolverMode mode = DHLL;
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll xp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll xp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::xp>(
                     q,
                     rho_dust_face_xp.link_count,
@@ -457,7 +457,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_xp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll yp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll yp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::yp>(
                     q,
                     rho_dust_face_yp.link_count,
@@ -467,7 +467,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_yp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll zp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll zp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::zp>(
                     q,
                     rho_dust_face_zp.link_count,
@@ -477,7 +477,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_zp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll xm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll xm patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::xm>(
                     q,
                     rho_dust_face_xm.link_count,
@@ -487,7 +487,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_xm.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll ym patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll ym patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::ym>(
                     q,
                     rho_dust_face_ym.link_count,
@@ -497,7 +497,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_ym.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust rusanov/hll zm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust rusanov/hll zm patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::zm>(
                     q,
                     rho_dust_face_zm.link_count,
@@ -509,7 +509,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
             } else if (solver_config.dust_config.dust_riemann_config == HB) {
 
                 constexpr DustRiemannSolverMode mode = HB;
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai xp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai xp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::xp>(
                     q,
                     rho_dust_face_xp.link_count,
@@ -519,7 +519,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_xp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai yp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai yp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::yp>(
                     q,
                     rho_dust_face_yp.link_count,
@@ -529,7 +529,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_yp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai zp patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai zp patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::zp>(
                     q,
                     rho_dust_face_zp.link_count,
@@ -539,7 +539,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_zp.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai xm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai xm patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::xm>(
                     q,
                     rho_dust_face_xm.link_count,
@@ -549,7 +549,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_xm.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai ym patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai ym patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::ym>(
                     q,
                     rho_dust_face_ym.link_count,
@@ -559,7 +559,7 @@ void shammodels::basegodunov::modules::ComputeFlux<Tvec, TgridVec>::compute_flux
                     buf_flux_rhov_dust_face_ym.link_graph_field,
                     _ndust);
 
-                logger::debug_ln("[AMR Flux]", "compute dust huang-bai zm patch", id);
+                shamlog_debug_ln("[AMR Flux]", "compute dust huang-bai zm patch", id);
                 dust_compute_fluxes_dir<mode, Tvec, Tscal, Direction::zm>(
                     q,
                     rho_dust_face_zm.link_count,

@@ -56,7 +56,7 @@ void shammodels::basegodunov::modules::ComputeTimeDerivative<Tvec, TgridVec>::co
 
     scheduler().for_each_patchdata_nonempty([&](const shamrock::patch::Patch p,
                                                 shamrock::patch::PatchData &pdat) {
-        logger::debug_ln("[AMR Flux]", "accumulate fluxes patch", p.id_patch);
+        shamlog_debug_ln("[AMR Flux]", "accumulate fluxes patch", p.id_patch);
 
         sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
         u32 id               = p.id_patch;
@@ -347,7 +347,7 @@ void shammodels::basegodunov::modules::ComputeTimeDerivative<Tvec, TgridVec>::
 
     scheduler().for_each_patchdata_nonempty([&](const shamrock::patch::Patch p,
                                                 shamrock::patch::PatchData &pdat) {
-        logger::debug_ln("[AMR Flux]", "accumulate fluxes patch", p.id_patch);
+        shamlog_debug_ln("[AMR Flux]", "accumulate fluxes patch", p.id_patch);
 
         sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
         u32 id               = p.id_patch;
