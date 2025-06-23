@@ -17,4 +17,7 @@
  */
 
 #include "shambase/logs/loglevel.hpp"
+#include "shambase/logs/loglevels.hpp"
 #include "shambase/logs/msgformat.hpp"
+#include "shambase/logs/printer_base.hpp"
+#include "shambase/logs/reformat_message.hpp"
