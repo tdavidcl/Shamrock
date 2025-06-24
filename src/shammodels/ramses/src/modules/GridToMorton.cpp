@@ -14,10 +14,13 @@
  *
  */
 
+#include "shambase/integer.hpp"
 #include "shambase/time.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shammath/AABB.hpp"
 #include "shammodels/ramses/modules/GridToMorton.hpp"
+#include "shamsys/NodeInstance.hpp"
+#include "shamtree/MortonCodeSet.hpp"
 #include "shamtree/TreeTraversal.hpp"
 
 namespace {
@@ -161,12 +164,19 @@ namespace shammodels::basegodunov::modules {
         auto edges = get_edges();
 
         auto &block_min = edges.block_min;
-        auto &block_max = edges.block_max;
 
         const shambase::DistributedData<shammath::AABB<TgridVec>> &bounds
             = edges.block_bounds.values;
 
         const shambase::DistributedData<u32> &indexes_dd = edges.sizes.indexes;
+
+        u32 ipatch = 0;
+        shamtree::morton_code_set_from_positions<Umorton, TgridVec, 3>(
+            shamsys::instance::get_compute_scheduler_ptr(),
+            bounds.get(ipatch),
+            block_min.get(ipatch).get_buf(),
+            indexes_dd.get(ipatch),
+            shambase::roundup_pow2(indexes_dd.get(ipatch)));
     }
 
     template<class Umorton, class TgridVec>

@@ -39,19 +39,17 @@ namespace shammodels::basegodunov::modules {
         struct Edges {
             const shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>> &block_bounds;
             const shamrock::solvergraph::Indexes<u32> &sizes;
-            const shamrock::solvergraph::FieldSpan<TgridVec> &block_min;
-            const shamrock::solvergraph::FieldSpan<TgridVec> &block_max;
-            shamrock::solvergraph::FieldSpan<Umorton> &morton_codes;
+            const shamrock::solvergraph::FieldRefs<TgridVec> &block_min;
+            shamrock::solvergraph::FieldRefs<Umorton> &morton_codes;
         };
 
         inline void set_edges(
             std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
                 block_bounds,
             std::shared_ptr<shamrock::solvergraph::Indexes<u32>> sizes,
-            std::shared_ptr<shamrock::solvergraph::FieldSpan<TgridVec>> block_min,
-            std::shared_ptr<shamrock::solvergraph::FieldSpan<TgridVec>> block_max,
-            std::shared_ptr<shamrock::solvergraph::FieldSpan<Umorton>> morton_codes) {
-            __internal_set_ro_edges({block_bounds, sizes, block_min, block_max});
+            std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> block_min,
+            std::shared_ptr<shamrock::solvergraph::FieldRefs<Umorton>> morton_codes) {
+            __internal_set_ro_edges({block_bounds, sizes, block_min});
             __internal_set_rw_edges({morton_codes});
         }
 
@@ -59,9 +57,8 @@ namespace shammodels::basegodunov::modules {
             return Edges{
                 get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(0),
                 get_ro_edge<shamrock::solvergraph::Indexes<u32>>(1),
-                get_ro_edge<shamrock::solvergraph::FieldSpan<TgridVec>>(2),
-                get_ro_edge<shamrock::solvergraph::FieldSpan<TgridVec>>(3),
-                get_rw_edge<shamrock::solvergraph::FieldSpan<Umorton>>(0)};
+                get_ro_edge<shamrock::solvergraph::FieldRefs<TgridVec>>(2),
+                get_rw_edge<shamrock::solvergraph::FieldRefs<Umorton>>(0)};
         }
 
         void _impl_evaluate_internal();
