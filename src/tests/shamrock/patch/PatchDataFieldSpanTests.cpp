@@ -297,5 +297,10 @@ TestStart(Unittest, "shamrock/patch/PatchDataFieldSpan", testpatchdatafieldspan,
 
         REQUIRE_EQUAL_NAMED(
             "static nvar 2| write + offset", test_vals_with_offset, field.copy_to_stdvec());
+
+        auto to_buf = span.to_buf();
+
+        REQUIRE_EQUAL_NAMED(
+            "static nvar 2| write + offset (to_buf)", test_vals, to_buf.copy_to_stdvec());
     }
 }
