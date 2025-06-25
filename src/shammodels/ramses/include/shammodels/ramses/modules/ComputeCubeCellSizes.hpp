@@ -20,12 +20,13 @@
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
+#include <type_traits>
 
 namespace shammodels::basegodunov::modules {
 
     template<class TgridVec>
     class NodeComputeCubeCellSizes : public shamrock::solvergraph::INode {
-        using TgridScal = shambase::VecComponent<TgridVec>;
+        using TgridScal = typename std::make_unsigned<shambase::VecComponent<TgridVec>>::type;
 
         public:
         NodeComputeCubeCellSizes() {}

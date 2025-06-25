@@ -23,7 +23,7 @@ namespace {
 
     template<class TgridVec>
     struct KernelComputeCubeCellSizes {
-        using TgridScal = shambase::VecComponent<TgridVec>;
+        using TgridScal = typename std::make_unsigned<shambase::VecComponent<TgridVec>>::type;
 
         inline static void kernel(
             const shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<TgridVec>>
@@ -50,7 +50,7 @@ namespace {
 
                     TgridVec block_cell_size = (upper - lower);
 
-                    TgridScal res = block_cell_size.x();
+                    TgridScal res = TgridScal(block_cell_size.x());
 
                     bsize[i] = res;
                 });
