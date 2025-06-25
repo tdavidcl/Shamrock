@@ -17,6 +17,7 @@
  */
 
 #include "shammath/AABB.hpp"
+#include "shammodels/ramses/solvegraph/MultiGrid.hpp"
 #include "shammodels/ramses/solvegraph/TreeEdge.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/INode.hpp"
@@ -27,20 +28,7 @@
 namespace shammodels::basegodunov::modules {
 
     template<class TgridVec>
-    class Multigrid {};
-
-    template<class TgridVec>
-    using DDMultigrid = Multigrid<TgridVec>;
-
-    template<class TgridVec>
-    class MultiGridsEdge : public shamrock::solvergraph::IDataEdgeNamed {
-        public:
-        using IDataEdgeNamed::IDataEdgeNamed;
-
-        shambase::DistributedData<DDMultigrid<TgridVec>> multigrids;
-
-        inline void free_alloc() { multigrids = {}; };
-    };
+    using MultiGridsEdge = shammodels::basegodunov::solvergraph::MultiGridsEdge<TgridVec>;
 
     /**
      *
