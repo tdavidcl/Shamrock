@@ -14,11 +14,15 @@
  *
  */
 
+#include "shambase/DistributedData.hpp"
+#include "shambackends/DeviceBuffer.hpp"
 #include "shammodels/ramses/modules/MultiGridBuilder.hpp"
 
 namespace shammodels::basegodunov::modules {
     template<class TgridVec>
     void BuildMultigrid<TgridVec>::_impl_evaluate_internal() {
+
+        auto edges = get_edges();
 
         // get histogram of cell sizes
         // aka: counts = [count for i in local_levels]

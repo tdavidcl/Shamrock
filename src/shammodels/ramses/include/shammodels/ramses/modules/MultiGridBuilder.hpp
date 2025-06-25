@@ -42,6 +42,11 @@ namespace shammodels::basegodunov::modules {
         inline void free_alloc() { multigrids = {}; };
     };
 
+    /**
+     *
+     * @note Input must be a complete cartesian grid
+     *
+     */
     template<class TgridVec>
     class BuildMultigrid : public shamrock::solvergraph::INode {
 
