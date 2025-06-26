@@ -38,6 +38,7 @@ set(Sources
     src/modules/ComputeMass.cpp
     src/modules/ComputeSumOverV.cpp
     src/modules/InterpolateToFace.cpp
+    src/modules/CGInit.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
