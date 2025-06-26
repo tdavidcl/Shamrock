@@ -481,7 +481,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         logger::normal_ln("amr::Godunov", shambase::format("t = {}, dt = {}", t_current, dt_input));
     }
 
-    shambase::get_check_ref(storage.dt_over2).value = 0.5 * dt_input;
+    if (solver_config.face_half_time_interpolation) {
+        shambase::get_check_ref(storage.dt_over2).value = dt_input / 2.0;
+    }
 
     shambase::Timer tstep;
     tstep.start();
