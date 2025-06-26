@@ -33,6 +33,7 @@
 #include "shammodels/ramses/modules/FaceInterpolate.hpp"
 #include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
+#include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/StencilGenerator.hpp"
 #include "shammodels/ramses/modules/TimeIntegrator.hpp"
@@ -42,6 +43,8 @@
 #include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/NodeFreeAlloc.hpp"
 #include "shamrock/solvergraph/OperationSequence.hpp"
+#include "shamrock/solvergraph/ScalarEdge.hpp"
+#include <memory>
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
@@ -143,60 +146,60 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         storage.rho_face_xp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_xp", "rho_face_xp", 1);
         storage.rho_face_xm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_xm", "rho_face_xm", 1);
         storage.rho_face_yp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_yp", "rho_face_yp", 1);
         storage.rho_face_ym
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_ym", "rho_face_ym", 1);
         storage.rho_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_zp", "rho_face_zp", 1);
         storage.rho_face_zm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "rho_face_zm", "rho_face_zm", 1);
 
         storage.vel_face_xp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_xp", "vel_face_xp", 1);
         storage.vel_face_xm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_xm", "vel_face_xm", 1);
         storage.vel_face_yp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_yp", "vel_face_yp", 1);
         storage.vel_face_ym
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_ym", "vel_face_ym", 1);
         storage.vel_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_zp", "vel_face_zp", 1);
         storage.vel_face_zm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", 1);
+                "vel_face_zm", "vel_face_zm", 1);
 
         storage.press_face_xp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_xp", "press_face_xp", 1);
         storage.press_face_xm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_xm", "press_face_xm", 1);
         storage.press_face_yp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_yp", "press_face_yp", 1);
         storage.press_face_ym
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_ym", "press_face_ym", 1);
         storage.press_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_zp", "press_face_zp", 1);
         storage.press_face_zm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", 1);
+                "press_face_zm", "press_face_zm", 1);
     }
 
     if (solver_config.is_dust_on()) {
@@ -204,41 +207,41 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         storage.rho_dust_face_xp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_xp", "rho_dust_face_xp", ndust);
         storage.rho_dust_face_xm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_xm", "rho_dust_face_xm", ndust);
         storage.rho_dust_face_yp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_yp", "rho_dust_face_yp", ndust);
         storage.rho_dust_face_ym
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_ym", "rho_dust_face_ym", ndust);
         storage.rho_dust_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_zp", "rho_dust_face_zp", ndust);
         storage.rho_dust_face_zm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>>(
-                "", "", ndust);
+                "rho_dust_face_zm", "rho_dust_face_zm", ndust);
 
         storage.vel_dust_face_xp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_xp", "vel_dust_face_xp", ndust);
         storage.vel_dust_face_xm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_xm", "vel_dust_face_xm", ndust);
         storage.vel_dust_face_yp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_yp", "vel_dust_face_yp", ndust);
         storage.vel_dust_face_ym
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_ym", "vel_dust_face_ym", ndust);
         storage.vel_dust_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_zp", "vel_dust_face_zp", ndust);
         storage.vel_dust_face_zm
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>>>(
-                "", "", ndust);
+                "vel_dust_face_zm", "vel_dust_face_zm", ndust);
     }
 
     if (solver_config.should_compute_rho_mean()) {
@@ -249,6 +252,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         storage.simulation_volume = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>(
             "simulation_volume", "V_{\\rm sim}");
     }
+
+    storage.dt_over2
+        = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_over2", "\\Delta t / 2");
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Nodes
@@ -428,6 +434,28 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
 
+    { // interpolate to face
+        modules::InterpolateToFaceRho<Tvec, TgridVec> node{AMRBlock::block_size};
+        node.set_edges(
+            storage.dt_over2,
+            storage.cell_graph_edge,
+            storage.block_cell_sizes,
+            storage.cell0block_aabb_lower,
+            storage.refs_rho,
+            storage.grad_rho,
+            storage.vel,
+            storage.dx_v,
+            storage.dy_v,
+            storage.dz_v,
+            storage.rho_face_xp,
+            storage.rho_face_xm,
+            storage.rho_face_yp,
+            storage.rho_face_ym,
+            storage.rho_face_zp,
+            storage.rho_face_zm);
+        solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
@@ -451,6 +479,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (shamcomm::world_rank() == 0) {
         logger::normal_ln("amr::Godunov", shambase::format("t = {}, dt = {}", t_current, dt_input));
     }
+
+    shambase::get_check_ref(storage.dt_over2).value = 0.5 * dt_input;
 
     shambase::Timer tstep;
     tstep.start();
@@ -512,7 +542,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (solver_config.face_half_time_interpolation) {
         dt_face_interp = dt_input / 2.0;
     }
-    face_interpolator.interpolate_rho_to_face(dt_face_interp);
+    // face_interpolator.interpolate_rho_to_face(dt_face_interp);
     face_interpolator.interpolate_v_to_face(dt_face_interp);
     face_interpolator.interpolate_P_to_face(dt_face_interp);
 

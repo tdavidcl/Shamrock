@@ -689,6 +689,8 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
 
     using MergedPDat = shamrock::MergedPatchData;
 
+    /// get edges
+
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xp
         = shambase::get_check_ref(storage.vel_face_xp);
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xm
@@ -702,19 +704,6 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_zm
         = shambase::get_check_ref(storage.vel_face_zm);
 
-    vel_face_xp.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::xp));
-    vel_face_xm.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::xm));
-    vel_face_yp.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::yp));
-    vel_face_ym.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::ym));
-    vel_face_zp.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::zp));
-    vel_face_zm.resize_according_to(
-        shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::zm));
-
     auto spans_block_cell_sizes = shambase::get_check_ref(storage.block_cell_sizes).get_spans();
     auto spans_cell0block_aabb_lower
         = shambase::get_check_ref(storage.cell0block_aabb_lower).get_spans();
@@ -724,6 +713,24 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
     auto spans_dz_vel = shambase::get_check_ref(storage.dz_v).get_spans();
     auto spans_rhos   = shambase::get_check_ref(storage.refs_rho).get_spans();
     auto spans_grad_P = shambase::get_check_ref(storage.grad_P).get_spans();
+
+    auto &cell_graph_edge = shambase::get_check_ref(storage.cell_graph_edge);
+
+    // ensure sizes
+
+    auto graphs_xp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::xp);
+    auto graphs_xm = cell_graph_edge.get_refs_dir(OrientedAMRGraph::xm);
+    auto graphs_yp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::yp);
+    auto graphs_ym = cell_graph_edge.get_refs_dir(OrientedAMRGraph::ym);
+    auto graphs_zp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::zp);
+    auto graphs_zm = cell_graph_edge.get_refs_dir(OrientedAMRGraph::zm);
+
+    vel_face_xp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::xp));
+    vel_face_xm.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::xm));
+    vel_face_yp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::yp));
+    vel_face_ym.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::ym));
+    vel_face_zp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::zp));
+    vel_face_zm.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::zm));
 
     using Interp = VelInterpolate<Tvec, TgridVec, AMRBlock>;
     auto interpolators
@@ -740,19 +747,6 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
                   spans_rhos.get(id),
                   spans_grad_P.get(id)};
           });
-
-    auto graphs_xp
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm
-        = shambase::get_check_ref(storage.cell_graph_edge).get_refs_dir(OrientedAMRGraph::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
