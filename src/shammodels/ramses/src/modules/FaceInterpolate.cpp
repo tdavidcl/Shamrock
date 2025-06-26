@@ -687,152 +687,32 @@ void shammodels::basegodunov::modules::FaceInterpolate<Tvec, TgridVec>::interpol
 
     StackEntry stack_loc{};
 
-    using MergedPDat = shamrock::MergedPatchData;
+    auto dt_interp_edge
+        = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_half", "dt_{half}");
 
-    /// get edges
+    dt_interp_edge->value = dt_interp;
 
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xp
-        = shambase::get_check_ref(storage.vel_face_xp);
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xm
-        = shambase::get_check_ref(storage.vel_face_xm);
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_yp
-        = shambase::get_check_ref(storage.vel_face_yp);
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_ym
-        = shambase::get_check_ref(storage.vel_face_ym);
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_zp
-        = shambase::get_check_ref(storage.vel_face_zp);
-    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_zm
-        = shambase::get_check_ref(storage.vel_face_zm);
+    auto node = std::make_shared<InterpolateToFaceVel<Tvec, TgridVec>>(AMRBlock::block_size);
 
-    auto spans_block_cell_sizes = shambase::get_check_ref(storage.block_cell_sizes).get_spans();
-    auto spans_cell0block_aabb_lower
-        = shambase::get_check_ref(storage.cell0block_aabb_lower).get_spans();
-    auto spans_vel    = shambase::get_check_ref(storage.vel).get_spans();
-    auto spans_dx_vel = shambase::get_check_ref(storage.dx_v).get_spans();
-    auto spans_dy_vel = shambase::get_check_ref(storage.dy_v).get_spans();
-    auto spans_dz_vel = shambase::get_check_ref(storage.dz_v).get_spans();
-    auto spans_rhos   = shambase::get_check_ref(storage.refs_rho).get_spans();
-    auto spans_grad_P = shambase::get_check_ref(storage.grad_P).get_spans();
+    node->set_edges(
+        dt_interp_edge,
+        storage.cell_graph_edge,
+        storage.block_cell_sizes,
+        storage.cell0block_aabb_lower,
+        storage.refs_rho,
+        storage.grad_P,
+        storage.vel,
+        storage.dx_v,
+        storage.dy_v,
+        storage.dz_v,
+        storage.vel_face_xp,
+        storage.vel_face_xm,
+        storage.vel_face_yp,
+        storage.vel_face_ym,
+        storage.vel_face_zp,
+        storage.vel_face_zm);
 
-    auto &cell_graph_edge = shambase::get_check_ref(storage.cell_graph_edge);
-
-    // ensure sizes
-
-    auto graphs_xp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = cell_graph_edge.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = cell_graph_edge.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = cell_graph_edge.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = cell_graph_edge.get_refs_dir(OrientedAMRGraph::zm);
-
-    vel_face_xp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::xp));
-    vel_face_xm.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::xm));
-    vel_face_yp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::yp));
-    vel_face_ym.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::ym));
-    vel_face_zp.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::zp));
-    vel_face_zm.resize_according_to(cell_graph_edge.get_refs_dir(OrientedAMRGraph::zm));
-
-    using Interp = VelInterpolate<Tvec, TgridVec, AMRBlock>;
-    auto interpolators
-        = spans_block_cell_sizes.template map<Interp>([&](u64 id, auto &csize) -> Interp {
-              return {
-                  spans_cell0block_aabb_lower.get(id),
-                  spans_block_cell_sizes.get(id),
-                  spans_vel.get(id),
-                  spans_dx_vel.get(id),
-                  spans_dy_vel.get(id),
-                  spans_dz_vel.get(id),
-                  // For time interpolation
-                  dt_interp,
-                  spans_rhos.get(id),
-                  spans_grad_P.get(id)};
-          });
-
-    shambase::DistributedData<u32> counts_xp
-        = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-    shambase::DistributedData<u32> counts_xm
-        = graphs_xm.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-    shambase::DistributedData<u32> counts_yp
-        = graphs_yp.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-    shambase::DistributedData<u32> counts_ym
-        = graphs_ym.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-    shambase::DistributedData<u32> counts_zp
-        = graphs_zp.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-    shambase::DistributedData<u32> counts_zm
-        = graphs_zm.template map<u32>([&](u64 id, auto &graph) {
-              return graph.get().obj_cnt;
-          });
-
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_xp, interpolators},
-        sham::DDMultiRef{vel_face_xp.link_fields},
-        counts_xp,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_xm, interpolators},
-        sham::DDMultiRef{vel_face_xm.link_fields},
-        counts_xm,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_yp, interpolators},
-        sham::DDMultiRef{vel_face_yp.link_fields},
-        counts_yp,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_ym, interpolators},
-        sham::DDMultiRef{vel_face_ym.link_fields},
-        counts_ym,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_zp, interpolators},
-        sham::DDMultiRef{vel_face_zp.link_fields},
-        counts_zp,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{graphs_zm, interpolators},
-        sham::DDMultiRef{vel_face_zm.link_fields},
-        counts_zm,
-        [](u32 id_a, auto link_iter, auto compute, auto acc_link_field) {
-            link_iter.for_each_object_link_id(id_a, [&](u32 id_b, u32 link_id) {
-                acc_link_field[link_id] = compute.get_link_field_val(id_a, id_b);
-            });
-        });
+    node->evaluate();
 }
 
 template<class Tvec, class TgridVec>

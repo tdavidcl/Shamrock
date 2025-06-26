@@ -254,7 +254,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     }
 
     storage.dt_over2
-        = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_over2", "\\Delta t / 2");
+        = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_half", "dt_{half}");
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Nodes
@@ -435,25 +435,77 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     }
 
     { // interpolate to face
-        modules::InterpolateToFaceRho<Tvec, TgridVec> node{AMRBlock::block_size};
-        node.set_edges(
-            storage.dt_over2,
-            storage.cell_graph_edge,
-            storage.block_cell_sizes,
-            storage.cell0block_aabb_lower,
-            storage.refs_rho,
-            storage.grad_rho,
-            storage.vel,
-            storage.dx_v,
-            storage.dy_v,
-            storage.dz_v,
-            storage.rho_face_xp,
-            storage.rho_face_xm,
-            storage.rho_face_yp,
-            storage.rho_face_ym,
-            storage.rho_face_zp,
-            storage.rho_face_zm);
-        solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> interp_sequence;
+        {
+            modules::InterpolateToFaceRho<Tvec, TgridVec> node{AMRBlock::block_size};
+            node.set_edges(
+                storage.dt_over2,
+                storage.cell_graph_edge,
+                storage.block_cell_sizes,
+                storage.cell0block_aabb_lower,
+                storage.refs_rho,
+                storage.grad_rho,
+                storage.vel,
+                storage.dx_v,
+                storage.dy_v,
+                storage.dz_v,
+                storage.rho_face_xp,
+                storage.rho_face_xm,
+                storage.rho_face_yp,
+                storage.rho_face_ym,
+                storage.rho_face_zp,
+                storage.rho_face_zm);
+            interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        {
+            modules::InterpolateToFaceVel<Tvec, TgridVec> node{AMRBlock::block_size};
+            node.set_edges(
+                storage.dt_over2,
+                storage.cell_graph_edge,
+                storage.block_cell_sizes,
+                storage.cell0block_aabb_lower,
+                storage.refs_rho,
+                storage.grad_P,
+                storage.vel,
+                storage.dx_v,
+                storage.dy_v,
+                storage.dz_v,
+                storage.vel_face_xp,
+                storage.vel_face_xm,
+                storage.vel_face_yp,
+                storage.vel_face_ym,
+                storage.vel_face_zp,
+                storage.vel_face_zm);
+            interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        {
+            modules::InterpolateToFacePress<Tvec, TgridVec> node{
+                AMRBlock::block_size, solver_config.eos_gamma};
+            node.set_edges(
+                storage.dt_over2,
+                storage.cell_graph_edge,
+                storage.block_cell_sizes,
+                storage.cell0block_aabb_lower,
+                storage.press,
+                storage.grad_P,
+                storage.vel,
+                storage.dx_v,
+                storage.dy_v,
+                storage.dz_v,
+                storage.press_face_xp,
+                storage.press_face_xm,
+                storage.press_face_yp,
+                storage.press_face_ym,
+                storage.press_face_zp,
+                storage.press_face_zm);
+            interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        shamrock::solvergraph::OperationSequence seq(
+            "Interpolate to face", std::move(interp_sequence));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
 
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
@@ -546,8 +598,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         dt_face_interp = dt_input / 2.0;
     }
     // face_interpolator.interpolate_rho_to_face(dt_face_interp);
-    face_interpolator.interpolate_v_to_face(dt_face_interp);
-    face_interpolator.interpolate_P_to_face(dt_face_interp);
+    // face_interpolator.interpolate_v_to_face(dt_face_interp);
+    // face_interpolator.interpolate_P_to_face(dt_face_interp);
 
     if (solver_config.is_dust_on()) {
         face_interpolator.interpolate_rho_dust_to_face(dt_face_interp);
