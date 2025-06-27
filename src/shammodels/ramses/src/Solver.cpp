@@ -503,6 +503,51 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
 
+        if (solver_config.is_dust_on()) {
+            u32 ndust = solver_config.dust_config.ndust;
+            modules::InterpolateToFaceRhoDust<Tvec, TgridVec> node{AMRBlock::block_size, ndust};
+            node.set_edges(
+                storage.dt_over2,
+                storage.cell_graph_edge,
+                storage.block_cell_sizes,
+                storage.cell0block_aabb_lower,
+                storage.refs_rho_dust,
+                storage.grad_rho_dust,
+                storage.vel_dust,
+                storage.dx_v_dust,
+                storage.dy_v_dust,
+                storage.dz_v_dust,
+                storage.rho_dust_face_xp,
+                storage.rho_dust_face_xm,
+                storage.rho_dust_face_yp,
+                storage.rho_dust_face_ym,
+                storage.rho_dust_face_zp,
+                storage.rho_dust_face_zm);
+            interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        if (solver_config.is_dust_on()) {
+            u32 ndust = solver_config.dust_config.ndust;
+            modules::InterpolateToFaceVelDust<Tvec, TgridVec> node{AMRBlock::block_size, ndust};
+            node.set_edges(
+                storage.dt_over2,
+                storage.cell_graph_edge,
+                storage.block_cell_sizes,
+                storage.cell0block_aabb_lower,
+                storage.refs_rho_dust,
+                storage.vel_dust,
+                storage.dx_v_dust,
+                storage.dy_v_dust,
+                storage.dz_v_dust,
+                storage.vel_dust_face_xp,
+                storage.vel_dust_face_xm,
+                storage.vel_dust_face_yp,
+                storage.vel_dust_face_ym,
+                storage.vel_dust_face_zp,
+                storage.vel_dust_face_zm);
+            interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
         shamrock::solvergraph::OperationSequence seq(
             "Interpolate to face", std::move(interp_sequence));
         solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
@@ -511,7 +556,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
-    if (false) {
+    if (true) {
         logger::raw_ln(" -- tex:\n" + shambase::get_check_ref(storage.solver_sequence).get_tex());
         logger::raw_ln(
             " -- dot:\n" + shambase::get_check_ref(storage.solver_sequence).get_dot_graph());
@@ -577,33 +622,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         // logger::raw_ln(
         //   " -- dot:\n" + shambase::get_check_ref(storage.solver_sequence).get_dot_graph());
         shambase::get_check_ref(storage.solver_sequence).evaluate();
-    }
-
-    /*
-    // compute & limit gradients
-    modules::ComputeGradient grad_compute(context, solver_config, storage);
-    grad_compute.compute_grad_rho_van_leer();
-    grad_compute.compute_grad_v_van_leer();
-    grad_compute.compute_grad_P_van_leer();
-    if (solver_config.is_dust_on()) {
-        grad_compute.compute_grad_rho_dust_van_leer();
-        grad_compute.compute_grad_v_dust_van_leer();
-    }
-        */
-
-    // shift values
-    modules::FaceInterpolate face_interpolator(context, solver_config, storage);
-    Tscal dt_face_interp = 0;
-    if (solver_config.face_half_time_interpolation) {
-        dt_face_interp = dt_input / 2.0;
-    }
-    // face_interpolator.interpolate_rho_to_face(dt_face_interp);
-    // face_interpolator.interpolate_v_to_face(dt_face_interp);
-    // face_interpolator.interpolate_P_to_face(dt_face_interp);
-
-    if (solver_config.is_dust_on()) {
-        face_interpolator.interpolate_rho_dust_to_face(dt_face_interp);
-        face_interpolator.interpolate_v_dust_to_face(dt_face_interp);
     }
 
     // flux

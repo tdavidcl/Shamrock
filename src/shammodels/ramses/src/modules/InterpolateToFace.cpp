@@ -645,6 +645,7 @@ namespace {
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::InterpolateToFaceRho<Tvec, TgridVec>::
     _impl_evaluate_internal() {
+    StackEntry stack_loc{};
 
     using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
 
@@ -656,8 +657,6 @@ void shammodels::basegodunov::modules::InterpolateToFaceRho<Tvec, TgridVec>::
     auto edges = get_edges();
 
     auto dt_interp = edges.dt_interp.value;
-
-    StackEntry stack_loc{};
 
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_face_xp = edges.rho_face_xp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_face_xm = edges.rho_face_xm;
@@ -802,6 +801,7 @@ template class shammodels::basegodunov::modules::InterpolateToFaceRho<f64_3, i64
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::InterpolateToFaceVel<Tvec, TgridVec>::
     _impl_evaluate_internal() {
+    StackEntry stack_loc{};
 
     using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
 
@@ -813,8 +813,6 @@ void shammodels::basegodunov::modules::InterpolateToFaceVel<Tvec, TgridVec>::
     auto edges = get_edges();
 
     auto dt_interp = edges.dt_interp.value;
-
-    StackEntry stack_loc{};
 
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xp = edges.vel_face_xp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_xm = edges.vel_face_xm;
@@ -959,6 +957,7 @@ template class shammodels::basegodunov::modules::InterpolateToFaceVel<f64_3, i64
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::InterpolateToFacePress<Tvec, TgridVec>::
     _impl_evaluate_internal() {
+    StackEntry stack_loc{};
 
     using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
 
@@ -970,8 +969,6 @@ void shammodels::basegodunov::modules::InterpolateToFacePress<Tvec, TgridVec>::
     auto edges = get_edges();
 
     auto dt_interp = edges.dt_interp.value;
-
-    StackEntry stack_loc{};
 
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &press_face_xp = edges.press_face_xp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &press_face_xm = edges.press_face_xm;
@@ -1113,3 +1110,365 @@ shammodels::basegodunov::modules::InterpolateToFacePress<Tvec, TgridVec>::_impl_
 }
 
 template class shammodels::basegodunov::modules::InterpolateToFacePress<f64_3, i64_3>;
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::InterpolateToFaceRhoDust<Tvec, TgridVec>::
+    _impl_evaluate_internal() {
+    StackEntry stack_loc{};
+
+    using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+
+    static constexpr u32 NsideBlockPow = 1;
+    using AMRBlock                     = amr::AMRBlock<Tvec, TgridVec, NsideBlockPow>;
+
+    SHAM_ASSERT(AMRBlock::block_size == block_size);
+
+    auto edges = get_edges();
+
+    auto dt_interp = edges.dt_interp.value;
+    auto ndust     = this->ndust;
+
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_xp
+        = edges.rho_dust_face_xp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_xm
+        = edges.rho_dust_face_xm;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_yp
+        = edges.rho_dust_face_yp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_ym
+        = edges.rho_dust_face_ym;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_zp
+        = edges.rho_dust_face_zp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_zm
+        = edges.rho_dust_face_zm;
+
+    rho_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
+    rho_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
+    rho_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
+    rho_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
+    rho_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
+    rho_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+
+    auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
+    auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
+    auto spans_rhos_dust             = edges.spans_rhos_dust.get_spans();
+    auto spans_grad_rho_dust         = edges.spans_grad_rho_dust.get_spans();
+    auto spans_vel_dust              = edges.spans_vel_dust.get_spans();
+    auto spans_dx_vel_dust           = edges.spans_dx_vel_dust.get_spans();
+    auto spans_dy_vel_dust           = edges.spans_dy_vel_dust.get_spans();
+    auto spans_dz_vel_dust           = edges.spans_dz_vel_dust.get_spans();
+
+    using Interp = RhoDustInterpolate<Tvec, TgridVec, AMRBlock>;
+    auto interpolators
+        = spans_block_cell_sizes.template map<Interp>([&](u64 id, auto &csize) -> Interp {
+              return {
+                  ndust,
+                  spans_cell0block_aabb_lower.get(id),
+                  spans_block_cell_sizes.get(id),
+                  spans_rhos_dust.get(id),
+                  spans_grad_rho_dust.get(id),
+                  dt_interp,
+                  spans_vel_dust.get(id),
+                  spans_dx_vel_dust.get(id),
+                  spans_dy_vel_dust.get(id),
+                  spans_dz_vel_dust.get(id)};
+          });
+
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+
+    shambase::DistributedData<u32> counts_xp
+        = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_xm
+        = graphs_xm.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_yp
+        = graphs_yp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_ym
+        = graphs_ym.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_zp
+        = graphs_zp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_zm
+        = graphs_zm.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_xp, interpolators},
+        sham::DDMultiRef{rho_dust_face_xp.link_fields},
+        counts_xp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_xm, interpolators},
+        sham::DDMultiRef{rho_dust_face_xm.link_fields},
+        counts_xm,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_yp, interpolators},
+        sham::DDMultiRef{rho_dust_face_yp.link_fields},
+        counts_yp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_ym, interpolators},
+        sham::DDMultiRef{rho_dust_face_ym.link_fields},
+        counts_ym,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_zp, interpolators},
+        sham::DDMultiRef{rho_dust_face_zp.link_fields},
+        counts_zp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_zm, interpolators},
+        sham::DDMultiRef{rho_dust_face_zm.link_fields},
+        counts_zm,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+}
+
+template<class Tvec, class TgridVec>
+std::string
+shammodels::basegodunov::modules::InterpolateToFaceRhoDust<Tvec, TgridVec>::_impl_get_tex() {
+    return "TODO";
+}
+
+template class shammodels::basegodunov::modules::InterpolateToFaceRhoDust<f64_3, i64_3>;
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::InterpolateToFaceVelDust<Tvec, TgridVec>::
+    _impl_evaluate_internal() {
+    StackEntry stack_loc{};
+
+    using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+
+    static constexpr u32 NsideBlockPow = 1;
+    using AMRBlock                     = amr::AMRBlock<Tvec, TgridVec, NsideBlockPow>;
+
+    SHAM_ASSERT(AMRBlock::block_size == block_size);
+
+    auto edges = get_edges();
+
+    auto dt_interp = edges.dt_interp.value;
+    auto ndust     = this->ndust;
+
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_xp
+        = edges.vel_dust_face_xp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_xm
+        = edges.vel_dust_face_xm;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_yp
+        = edges.vel_dust_face_yp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_ym
+        = edges.vel_dust_face_ym;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_zp
+        = edges.vel_dust_face_zp;
+    solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_zm
+        = edges.vel_dust_face_zm;
+
+    vel_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
+    vel_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
+    vel_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
+    vel_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
+    vel_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
+    vel_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+
+    auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
+    auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
+    auto spans_rhos_dust             = edges.spans_rhos_dust.get_spans();
+    auto spans_vel_dust              = edges.spans_vel_dust.get_spans();
+    auto spans_dx_vel_dust           = edges.spans_dx_vel_dust.get_spans();
+    auto spans_dy_vel_dust           = edges.spans_dy_vel_dust.get_spans();
+    auto spans_dz_vel_dust           = edges.spans_dz_vel_dust.get_spans();
+
+    using Interp = VelDustInterpolate<Tvec, TgridVec, AMRBlock>;
+    auto interpolators
+        = spans_block_cell_sizes.template map<Interp>([&](u64 id, auto &csize) -> Interp {
+              return {
+                  ndust,
+                  spans_cell0block_aabb_lower.get(id),
+                  spans_block_cell_sizes.get(id),
+                  spans_vel_dust.get(id),
+                  spans_dx_vel_dust.get(id),
+                  spans_dy_vel_dust.get(id),
+                  spans_dz_vel_dust.get(id),
+                  dt_interp,
+                  spans_rhos_dust.get(id)};
+          });
+
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+
+    shambase::DistributedData<u32> counts_xp
+        = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_xm
+        = graphs_xm.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_yp
+        = graphs_yp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_ym
+        = graphs_ym.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_zp
+        = graphs_zp.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+    shambase::DistributedData<u32> counts_zm
+        = graphs_zm.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().obj_cnt * ndust;
+          });
+
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_xp, interpolators},
+        sham::DDMultiRef{vel_dust_face_xp.link_fields},
+        counts_xp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_xm, interpolators},
+        sham::DDMultiRef{vel_dust_face_xm.link_fields},
+        counts_xm,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_yp, interpolators},
+        sham::DDMultiRef{vel_dust_face_yp.link_fields},
+        counts_yp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_ym, interpolators},
+        sham::DDMultiRef{vel_dust_face_ym.link_fields},
+        counts_ym,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_zp, interpolators},
+        sham::DDMultiRef{vel_dust_face_zp.link_fields},
+        counts_zp,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{graphs_zm, interpolators},
+        sham::DDMultiRef{vel_dust_face_zm.link_fields},
+        counts_zm,
+        [ndust](u32 idvar_a, auto link_iter, auto compute, auto acc_link_field) {
+            const u32 id_cell_a = idvar_a / ndust;
+            const u32 nvar_loc  = idvar_a % ndust;
+            link_iter.for_each_object_link_id(id_cell_a, [&](u32 id_cell_b, u32 link_id) {
+                acc_link_field[link_id * ndust + nvar_loc] = compute.get_link_field_val(
+                    id_cell_a * ndust + nvar_loc, id_cell_b * ndust + nvar_loc);
+            });
+        });
+}
+
+template<class Tvec, class TgridVec>
+std::string
+shammodels::basegodunov::modules::InterpolateToFaceVelDust<Tvec, TgridVec>::_impl_get_tex() {
+    return "TODO";
+}
+
+template class shammodels::basegodunov::modules::InterpolateToFaceVelDust<f64_3, i64_3>;
