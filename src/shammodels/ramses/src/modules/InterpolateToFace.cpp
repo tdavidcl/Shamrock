@@ -665,12 +665,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceRho<Tvec, TgridVec>::
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_face_zp = edges.rho_face_zp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_face_zm = edges.rho_face_zm;
 
-    rho_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
-    rho_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
-    rho_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
-    rho_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
-    rho_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
-    rho_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+    rho_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xp));
+    rho_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xm));
+    rho_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::yp));
+    rho_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::ym));
+    rho_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zp));
+    rho_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zm));
 
     auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
     auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
@@ -696,12 +696,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceRho<Tvec, TgridVec>::
                   spans_dz_vel.get(id)};
           });
 
-    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(Direction::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(Direction::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(Direction::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(Direction::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(Direction::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(Direction::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
@@ -821,12 +821,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceVel<Tvec, TgridVec>::
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_zp = edges.vel_face_zp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_face_zm = edges.vel_face_zm;
 
-    vel_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
-    vel_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
-    vel_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
-    vel_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
-    vel_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
-    vel_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+    vel_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xp));
+    vel_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xm));
+    vel_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::yp));
+    vel_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::ym));
+    vel_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zp));
+    vel_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zm));
 
     auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
     auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
@@ -852,12 +852,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceVel<Tvec, TgridVec>::
                   spans_grad_P.get(id)};
           });
 
-    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(Direction::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(Direction::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(Direction::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(Direction::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(Direction::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(Direction::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
@@ -977,12 +977,12 @@ void shammodels::basegodunov::modules::InterpolateToFacePress<Tvec, TgridVec>::
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &press_face_zp = edges.press_face_zp;
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &press_face_zm = edges.press_face_zm;
 
-    press_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
-    press_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
-    press_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
-    press_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
-    press_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
-    press_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+    press_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xp));
+    press_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xm));
+    press_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::yp));
+    press_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::ym));
+    press_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zp));
+    press_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zm));
 
     auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
     auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
@@ -1009,12 +1009,12 @@ void shammodels::basegodunov::modules::InterpolateToFacePress<Tvec, TgridVec>::
                   spans_dz_vel.get(id)};
           });
 
-    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(Direction::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(Direction::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(Direction::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(Direction::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(Direction::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(Direction::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
@@ -1141,12 +1141,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceRhoDust<Tvec, TgridVec>:
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>> &rho_dust_face_zm
         = edges.rho_dust_face_zm;
 
-    rho_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
-    rho_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
-    rho_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
-    rho_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
-    rho_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
-    rho_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+    rho_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xp));
+    rho_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xm));
+    rho_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::yp));
+    rho_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::ym));
+    rho_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zp));
+    rho_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zm));
 
     auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
     auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
@@ -1173,12 +1173,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceRhoDust<Tvec, TgridVec>:
                   spans_dz_vel_dust.get(id)};
           });
 
-    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(Direction::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(Direction::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(Direction::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(Direction::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(Direction::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(Direction::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {
@@ -1323,12 +1323,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceVelDust<Tvec, TgridVec>:
     solvergraph::NeighGrapkLinkFieldEdge<std::array<Tvec, 2>> &vel_dust_face_zm
         = edges.vel_dust_face_zm;
 
-    vel_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp));
-    vel_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm));
-    vel_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp));
-    vel_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym));
-    vel_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp));
-    vel_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm));
+    vel_dust_face_xp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xp));
+    vel_dust_face_xm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::xm));
+    vel_dust_face_yp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::yp));
+    vel_dust_face_ym.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::ym));
+    vel_dust_face_zp.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zp));
+    vel_dust_face_zm.resize_according_to(edges.cell_neigh_graph.get_refs_dir(Direction::zm));
 
     auto spans_block_cell_sizes      = edges.spans_block_cell_sizes.get_spans();
     auto spans_cell0block_aabb_lower = edges.spans_cell0block_aabb_lower.get_spans();
@@ -1353,12 +1353,12 @@ void shammodels::basegodunov::modules::InterpolateToFaceVelDust<Tvec, TgridVec>:
                   spans_rhos_dust.get(id)};
           });
 
-    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xp);
-    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::xm);
-    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::yp);
-    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::ym);
-    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zp);
-    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(OrientedAMRGraph::zm);
+    auto graphs_xp = edges.cell_neigh_graph.get_refs_dir(Direction::xp);
+    auto graphs_xm = edges.cell_neigh_graph.get_refs_dir(Direction::xm);
+    auto graphs_yp = edges.cell_neigh_graph.get_refs_dir(Direction::yp);
+    auto graphs_ym = edges.cell_neigh_graph.get_refs_dir(Direction::ym);
+    auto graphs_zp = edges.cell_neigh_graph.get_refs_dir(Direction::zp);
+    auto graphs_zm = edges.cell_neigh_graph.get_refs_dir(Direction::zm);
 
     shambase::DistributedData<u32> counts_xp
         = graphs_xp.template map<u32>([&](u64 id, auto &graph) {

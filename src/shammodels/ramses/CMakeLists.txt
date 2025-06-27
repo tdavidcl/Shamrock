@@ -16,7 +16,7 @@ set(Sources
     src/pyRamsesModel.cpp
     src/Solver.cpp
 
-    src/modules/ComputeFlux.cpp
+    src/modules/NodeComputeFlux.cpp
     src/modules/DragIntegrator.cpp
     src/modules/TimeIntegrator.cpp
     src/modules/AMRGridRefinementHandler.cpp
