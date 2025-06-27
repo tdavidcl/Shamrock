@@ -30,7 +30,6 @@
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
-#include "shammodels/ramses/modules/FaceInterpolate.hpp"
 #include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
@@ -556,7 +555,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
-    if (true) {
+    if (false) {
         logger::raw_ln(" -- tex:\n" + shambase::get_check_ref(storage.solver_sequence).get_tex());
         logger::raw_ln(
             " -- dot:\n" + shambase::get_check_ref(storage.solver_sequence).get_dot_graph());
