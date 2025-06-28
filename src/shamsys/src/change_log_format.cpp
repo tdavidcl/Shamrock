@@ -13,8 +13,8 @@
  * @brief
  */
 
+#include "shambase/term_colors.hpp"
 #include "shamcmdopt/env.hpp"
-#include "shamcmdopt/term_colors.hpp"
 #include "shamcmdopt/tty.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"

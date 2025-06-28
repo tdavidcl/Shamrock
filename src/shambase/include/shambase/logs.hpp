@@ -10,16 +10,14 @@
 #pragma once
 
 /**
- * @file log.hpp
+ * @file logs.hpp
  * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
  * @brief
+ *
  */
 
-#include "shambase/term_colors.hpp"
-#include "shambackends/typeAliasVec.hpp"
-#include "shamcomm/logs.hpp"
-#include "shamsys/Log.hpp"
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <string>
+#include "shambase/logs/loglevel.hpp"
+#include "shambase/logs/loglevels.hpp"
+#include "shambase/logs/msgformat.hpp"
+#include "shambase/logs/printer_base.hpp"
+#include "shambase/logs/reformat_message.hpp"
