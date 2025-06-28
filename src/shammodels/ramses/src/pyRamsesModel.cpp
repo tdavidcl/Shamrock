@@ -267,7 +267,15 @@ namespace shammodels::basegodunov {
                         x_ref,
                         x_min,
                         x_max);
-                });
+                })
+            .def(
+                "get_solver_tex",
+                [](T &self) {
+                    return shambase::get_check_ref(self.solver.storage.solver_sequence).get_tex();
+                })
+            .def("get_solver_dot_graph", [](T &self) {
+                return shambase::get_check_ref(self.solver.storage.solver_sequence).get_dot_graph();
+            });
     }
 } // namespace shammodels::basegodunov
 
