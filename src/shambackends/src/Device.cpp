@@ -232,7 +232,7 @@ namespace sham {
                     "mem_base_addr_align for device {} is {}\n   I will assume that this is an "
                     "issue and default to 8 instead",
                     name,
-                    mem_base_addr_align));
+                    *mem_base_addr_align));
             mem_base_addr_align = 8;
         }
 
