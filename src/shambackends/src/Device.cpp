@@ -15,7 +15,9 @@
  */
 
 #include "shambackends/Device.hpp"
+#include "shambase/logs/loglevels.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/numeric_limits.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/sysinfo.hpp"
 #include "shamcomm/logs.hpp"
@@ -217,7 +219,34 @@ namespace sham {
         }
 #endif
 
-        u32 default_work_group_size = shambase::get_check_ref(sub_group_sizes)[0];
+        // with oneapi there can be some issues with this
+        // see:https://github.com/intel/llvm/blob/sycl/sycl/ReleaseNotes.md#sycl-library-50
+        // > Fixed sycl::device::get_info<sycl::info::device::mem_base_addr_align> query
+        // > which was returning incorrect result for CUDA plugin [a6d03f3]
+        //
+        // So easy fix since this is cuda and cuda default ot 8 i just default to 8 also
+        if (*mem_base_addr_align && mem_base_addr_align > 4096) {
+            shamlog_warn_ln(
+                "Backends",
+                shambase::format(
+                    "mem_base_addr_align for device {} is {}\n   I will assume that this is an "
+                    "issue and default to 8 instead",
+                    name,
+                    mem_base_addr_align));
+            mem_base_addr_align = 8;
+        }
+
+        u32 default_work_group_size = 1;
+        if (sub_group_sizes) {
+            default_work_group_size = shambase::get_check_ref(sub_group_sizes)[0];
+        } else {
+            shamlog_warn_ln(
+                "Backends",
+                shambase::format(
+                    "cannot fetch sub_group_sizes for device {}, defaulting to {}",
+                    name,
+                    default_work_group_size));
+        }
 
         return DeviceProperties{
             Vendor::UNKNOWN,         // We cannot determine the vendor
