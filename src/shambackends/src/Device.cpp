@@ -225,6 +225,11 @@ namespace sham {
         // > which was returning incorrect result for CUDA plugin [a6d03f3]
         //
         // So easy fix since this is cuda and cuda default ot 8 i just default to 8 also
+        shamlog_warn_ln(
+            "Backends",
+            shambase::format(
+                "mem_base_addr_align for device {} is {}", name, *mem_base_addr_align));
+
         if (*mem_base_addr_align && mem_base_addr_align > 2048) {
             shamlog_warn_ln(
                 "Backends",
