@@ -150,6 +150,7 @@ class PatchDataField {
     }
 
     inline sham::DeviceBuffer<T> &get_buf() { return buf; }
+    inline const sham::DeviceBuffer<T> &get_buf() const { return buf; }
 
     [[nodiscard]] inline bool is_empty() const { return get_obj_cnt() == 0; }
 
@@ -368,7 +369,7 @@ class PatchDataField {
     bool check_field_match(PatchDataField<T> &f2);
 
     inline void field_raz() {
-        logger::debug_ln("PatchDataField", "raz : ", field_name);
+        shamlog_debug_ln("PatchDataField", "raz : ", field_name);
         override(shambase::VectorProperties<T>::get_zero());
     }
 
@@ -413,6 +414,14 @@ class PatchDataField {
      * @param len the length of the map
      */
     void index_remap_resize(sham::DeviceBuffer<u32> &index_map, u32 len);
+
+    /**
+     * @brief remove the ids from the field
+     *
+     * @param indexes
+     * @param len
+     */
+    void remove_ids(sham::DeviceBuffer<u32> &indexes, u32 len);
 
     /**
      * @brief minimal serialization
