@@ -37,4 +37,4 @@ make html
 
 set +e
 
-rm -rf exemples/_to_trash
+rm -rf examples/_to_trash
