@@ -31,6 +31,8 @@ done
 
 set -e
 
+cd "$(dirname "$0")"
+
 make html
 
 set +e
