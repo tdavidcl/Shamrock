@@ -207,6 +207,16 @@ namespace shammath {
          * has a non-zero volume by comparing its upper and lower bounds.
          *
          * @return true if the AABB has a non-zero volume, false otherwise.
+         * 
+         * @example
+         * ```cpp
+         * // Test AABB volume checks
+         * shammath::AABB<f32_3> aabb1{f32_3{0, 0, 0}, f32_3{1, 1, 1}};
+         * REQUIRE(aabb1.is_volume_not_null()); // Has non-zero volume
+         * 
+         * shammath::AABB<f32_3> aabb2{f32_3{0, 0, 0}, f32_3{0, 0, 0}};
+         * REQUIRE(!aabb2.is_volume_not_null()); // Zero volume
+         * ```
          */
         [[nodiscard]] inline bool is_volume_not_null() const noexcept {
             return sham::vec_compare_g(upper, lower);
@@ -220,6 +230,16 @@ namespace shammath {
          * have a non-zero size.
          *
          * @return true if the AABB is a surface, false otherwise.
+         * 
+         * @example
+         * ```cpp
+         * // Test surface detection
+         * shammath::AABB<f32_3> surface_aabb{f32_3{0, 0, 0}, f32_3{1, 0, 1}};
+         * REQUIRE(surface_aabb.is_surface()); // Only y dimension is zero
+         * 
+         * shammath::AABB<f32_3> volume_aabb{f32_3{0, 0, 0}, f32_3{1, 1, 1}};
+         * REQUIRE(!volume_aabb.is_surface()); // All dimensions non-zero
+         * ```
          */
         [[nodiscard]] inline bool is_surface() const noexcept {
             return sham::component_have_only_one_zero(delt()) && (is_not_empty());
@@ -234,6 +254,19 @@ namespace shammath {
          * dimensions have a non-zero size.
          *
          * @return true if the AABB is a surface or a volume, false otherwise.
+         * 
+         * @example
+         * ```cpp
+         * // Test surface or volume detection
+         * shammath::AABB<f32_3> surface_aabb{f32_3{0, 0, 0}, f32_3{1, 0, 1}};
+         * REQUIRE(surface_aabb.is_surface_or_volume()); // Surface
+         * 
+         * shammath::AABB<f32_3> volume_aabb{f32_3{0, 0, 0}, f32_3{1, 1, 1}};
+         * REQUIRE(volume_aabb.is_surface_or_volume()); // Volume
+         * 
+         * shammath::AABB<f32_3> line_aabb{f32_3{0, 0, 0}, f32_3{1, 0, 0}};
+         * REQUIRE(!line_aabb.is_surface_or_volume()); // Line (2 zero dimensions)
+         * ```
          */
         [[nodiscard]] inline bool is_surface_or_volume() const noexcept {
             return sham::component_have_at_most_one_zero(delt()) && (is_not_empty());
@@ -247,6 +280,19 @@ namespace shammath {
          *
          * @param[in] coord The coordinate to clamp
          * @return the clamped value
+         * 
+         * @example
+         * ```cpp
+         * shammath::AABB<f32_3> aabb{f32_3{0, 0, 0}, f32_3{1, 1, 1}};
+         * 
+         * f32_3 inside_coord{0.5, 0.5, 0.5};
+         * f32_3 clamped_inside = aabb.clamp(inside_coord);
+         * REQUIRE(clamped_inside == inside_coord); // No change
+         * 
+         * f32_3 outside_coord{2.0, -1.0, 0.5};
+         * f32_3 clamped_outside = aabb.clamp(outside_coord);
+         * REQUIRE(clamped_outside == f32_3{1.0, 0.0, 0.5}); // Clamped to bounds
+         * ```
          */
         [[nodiscard]] inline T clamp_coord(T coord) const noexcept {
             return sycl::clamp(coord, lower, upper);
