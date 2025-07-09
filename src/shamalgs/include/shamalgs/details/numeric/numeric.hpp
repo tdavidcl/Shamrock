@@ -151,9 +151,9 @@ namespace shamalgs::numeric {
     template<class T>
     histogram_result<T> device_histogram_full(
         const sham::DeviceScheduler_ptr &sched,
-        sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> bin_edges,
         u64 nbins,
-        sham::DeviceBuffer<T> values,
+        const sham::DeviceBuffer<T> values,
         u32 len) {
 
         SHAM_ASSERT(nbins > 1); // at least a sup and a inf
@@ -181,5 +181,14 @@ namespace shamalgs::numeric {
 
         return {std::move(counts), std::move(bins_center), std::move(bins_width)};
     }
+
+    template<class T>
+    sham::DeviceBuffer<T> binned_average(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<T> bin_edges,
+        u64 nbins,
+        sham::DeviceBuffer<T> values, // ie f(r)
+        sham::DeviceBuffer<T> keys,   // ie r
+        u32 len);                     // ie return <f(r)>_r
 
 } // namespace shamalgs::numeric
