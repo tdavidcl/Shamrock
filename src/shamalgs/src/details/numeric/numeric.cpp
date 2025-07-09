@@ -26,6 +26,7 @@
 #include "shamalgs/details/numeric/streamCompactExclScan.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
+#include <utility>
 
 namespace shamalgs::numeric {
 
@@ -166,13 +167,13 @@ namespace shamalgs::numeric {
         u32 len);
 
     template<class T>
-    sham::DeviceBuffer<T> binned_average(
+    BinnedCompute<T> binned_init_compute(
         const sham::DeviceScheduler_ptr &sched,
-        sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> bin_edges,
         u64 nbins,
-        sham::DeviceBuffer<T> values, // ie f(r)
-        sham::DeviceBuffer<T> keys,   // ie r
-        u32 len) {                    // ie return <f(r)>_r
+        const sham::DeviceBuffer<T> values, // ie f(r)
+        const sham::DeviceBuffer<T> keys,   // ie r
+        u32 len) {                          // ie return <f(r)>_r
 
         // filter values
         sham::DeviceBuffer<u32> key_filter(keys.get_size(), sched);
@@ -258,42 +259,22 @@ namespace shamalgs::numeric {
 
         shamalgs::algorithm::sort_by_key(sched, valid_keys, valid_values, valid_key_count);
 
-        sham::DeviceBuffer<T> bin_averages(nbins, sched);
-
-        sham::kernel_call(
-            q,
-            sham::MultiRef{valid_values, offsets_bins},
-            sham::MultiRef{bin_averages},
-            nbins,
-            [](u32 i,
-               const T *__restrict valid_values,
-               const u64 *__restrict offsets_bins,
-               T *__restrict bin_averages) {
-                u32 bin_start = offsets_bins[i];
-                u32 bin_end   = offsets_bins[i + 1];
-                T bin_sum     = 0;
-                for (u32 j = bin_start; j < bin_end; j++) {
-                    bin_sum += valid_values[j];
-                }
-                bin_averages[i] = bin_sum / (bin_end - bin_start);
-            });
-
-        return bin_averages;
+        return {std::move(valid_values), std::move(offsets_bins)};
     }
 
-    template sham::DeviceBuffer<f64> binned_average(
+    template BinnedCompute<f64> binned_init_compute(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<f64> bin_edges,
         u64 nbins,
         const sham::DeviceBuffer<f64> values,
         const sham::DeviceBuffer<f64> keys,
         u32 len);
-    template sham::DeviceBuffer<f32> binned_average(
+    template BinnedCompute<f32> binned_init_compute(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<f32> bin_edges,
         u64 nbins,
         const sham::DeviceBuffer<f32> values,
-        const sham::DeviceBuffer<f64> keys,
+        const sham::DeviceBuffer<f32> keys,
         u32 len);
 
 } // namespace shamalgs::numeric
