@@ -22,11 +22,14 @@
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/SinkPartStruct.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
+#include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
+#include "shamrock/solvergraph/Field.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/RadixTree.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
+#include <memory>
 
 namespace shammodels::sph {
 
@@ -45,6 +48,8 @@ namespace shammodels::sph {
 
         using RTree = RadixTree<Tmorton, Tvec>;
 
+        std::shared_ptr<shammodels::sph::solvergraph::NeighCache> neigh_cache;
+
         Component<SerialPatchTree<Tvec>> serial_patch_tree;
 
         Component<GhostHandle> ghost_handler;
@@ -57,9 +62,7 @@ namespace shammodels::sph {
 
         Component<shambase::DistributedData<RadixTreeField<Tscal>>> rtree_rint_field;
 
-        Component<shamrock::tree::ObjectCacheHandler> neighbors_cache;
-
-        Component<shamrock::ComputeField<Tscal>> omega;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> omega;
 
         Component<shamrock::patch::PatchDataLayout> ghost_layout;
 
