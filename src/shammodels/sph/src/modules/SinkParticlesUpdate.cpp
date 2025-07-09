@@ -260,7 +260,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph
 
             // result_acc_sinks.push_back(
             //     shamalgs::reduction::sum(q.q, buf_sync_axyz, 0, pdat.get_obj_cnt()));
-
             sph_acc_sink += shamalgs::reduction::sum(q.q, buf_sync_axyz, 0, pdat.get_obj_cnt());
         });
 
