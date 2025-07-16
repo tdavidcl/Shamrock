@@ -264,7 +264,7 @@ namespace shamalgs::numeric {
     template<class T>
     sham::DeviceBuffer<T> binned_sum(
         const sham::DeviceScheduler_ptr &sched,
-        const sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> bin_edges, // r bins
         u64 nbins,
         const sham::DeviceBuffer<T> values, // ie f(r)
         const sham::DeviceBuffer<T> keys,   // ie r
