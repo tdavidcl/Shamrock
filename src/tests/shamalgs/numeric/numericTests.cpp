@@ -43,7 +43,7 @@ TestStart(Unittest, "shamalgs/numeric/device_histogram", devicehistogram, 1) {
         sham::DeviceBuffer<double> d_values(values.size(), dev_sched);
         d_values.copy_from_stdvec(values);
 
-        sham::DeviceBuffer<u64> d_counts = shamalgs::numeric::device_histogram(
+        sham::DeviceBuffer<u64> d_counts = shamalgs::numeric::device_histogram_u64(
             dev_sched, d_bin_edges, nbins, d_values, values.size());
 
         REQUIRE_EQUAL(d_counts.copy_to_stdvec(), expected);
@@ -57,8 +57,8 @@ TestStart(Unittest, "shamalgs/numeric/device_histogram", devicehistogram, 1) {
         sham::DeviceBuffer<double> d_empty_values(empty_values.size(), dev_sched);
         d_empty_values.copy_from_stdvec(empty_values);
 
-        sham::DeviceBuffer<u64> d_counts_empty
-            = shamalgs::numeric::device_histogram(dev_sched, d_bin_edges, nbins, d_empty_values, 0);
+        sham::DeviceBuffer<u64> d_counts_empty = shamalgs::numeric::device_histogram_u64(
+            dev_sched, d_bin_edges, nbins, d_empty_values, 0);
 
         REQUIRE_EQUAL(d_counts_empty.copy_to_stdvec(), expected_empty);
     }
@@ -72,7 +72,7 @@ TestStart(Unittest, "shamalgs/numeric/device_histogram", devicehistogram, 1) {
         sham::DeviceBuffer<double> d_out_values(out_values.size(), dev_sched);
         d_out_values.copy_from_stdvec(out_values);
 
-        sham::DeviceBuffer<u64> d_counts_out = shamalgs::numeric::device_histogram(
+        sham::DeviceBuffer<u64> d_counts_out = shamalgs::numeric::device_histogram_u64(
             dev_sched, d_bin_edges, nbins, d_out_values, out_values.size());
 
         REQUIRE_EQUAL(d_counts_out.copy_to_stdvec(), expected_out);

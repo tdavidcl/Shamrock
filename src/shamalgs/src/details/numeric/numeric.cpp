@@ -90,8 +90,8 @@ namespace shamalgs::numeric {
         return details::stream_compact_excl_scan(sched, buf_flags, len);
     }
 
-    template<class T>
-    sham::DeviceBuffer<u64> device_histogram(
+    template<class Tret, class T>
+    sham::DeviceBuffer<Tret> device_histogram(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<T> &bin_edges,
         u64 nbins,
@@ -101,7 +101,7 @@ namespace shamalgs::numeric {
         SHAM_ASSERT(nbins > 1); // at least a sup and a inf
         SHAM_ASSERT(bin_edges.get_size() == nbins + 1);
 
-        sham::DeviceBuffer<u64> counts = sham::DeviceBuffer<u64>(nbins, sched);
+        sham::DeviceBuffer<Tret> counts = sham::DeviceBuffer<Tret>(nbins, sched);
         counts.fill(0);
 
         if (len == 0) {
@@ -119,7 +119,7 @@ namespace shamalgs::numeric {
                 u32 i,
                 const T *__restrict values,
                 const T *__restrict bin_edges,
-                u64 *__restrict counts) {
+                Tret *__restrict counts) {
                 // Only count values within [bin_edges[0], bin_edges[nbins])
                 if (values[i] < bin_edges[0] || values[i] >= bin_edges[nbins]) {
                     return;
@@ -141,7 +141,7 @@ namespace shamalgs::numeric {
                 SHAM_ASSERT(end_range == start_range + 1);
 
                 sycl::atomic_ref<
-                    u64,
+                    Tret,
                     sycl::memory_order_relaxed,
                     sycl::memory_scope_device,
                     sycl::access::address_space::global_space>
@@ -153,13 +153,25 @@ namespace shamalgs::numeric {
         return counts;
     }
 
-    template sham::DeviceBuffer<u64> device_histogram<f64>(
+    template sham::DeviceBuffer<u64> device_histogram<u64, f64>(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<f64> &bin_edges,
         u64 nbins,
         const sham::DeviceBuffer<f64> &values,
         u32 len);
-    template sham::DeviceBuffer<u64> device_histogram<f32>(
+    template sham::DeviceBuffer<u64> device_histogram<u64, f32>(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<f32> &bin_edges,
+        u64 nbins,
+        const sham::DeviceBuffer<f32> &values,
+        u32 len);
+    template sham::DeviceBuffer<u32> device_histogram<u32, f64>(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<f64> &bin_edges,
+        u64 nbins,
+        const sham::DeviceBuffer<f64> &values,
+        u32 len);
+    template sham::DeviceBuffer<u32> device_histogram<u32, f32>(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<f32> &bin_edges,
         u64 nbins,
@@ -223,15 +235,15 @@ namespace shamalgs::numeric {
             });
 
         // histogram standard
-        sham::DeviceBuffer<u64> bin_counts
-            = device_histogram(sched, bin_edges, nbins, valid_keys, valid_key_count);
+        sham::DeviceBuffer<u32> bin_counts
+            = device_histogram<u32>(sched, bin_edges, nbins, valid_keys, valid_key_count);
 
         bin_counts.expand(1);
         bin_counts.set_val_at_idx(bin_counts.get_size() - 1, 0);
 
         // exclusive scan
         // bin_ids[i] starts at offset[i] and ends at offset[i+1]
-        sham::DeviceBuffer<u64> offsets_bins
+        sham::DeviceBuffer<u32> offsets_bins
             = exclusive_sum(sched, bin_counts, bin_counts.get_size());
 
         SHAM_ASSERT(offsets_bins.get_val_at_idx(offsets_bins.get_size() - 1) == valid_key_count);

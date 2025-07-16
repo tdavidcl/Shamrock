@@ -117,7 +117,7 @@ namespace shamalgs::numeric {
      *
      *   sham::DeviceBuffer<double> values = ...;
      *
-     *   sham::DeviceBuffer<u64> d_counts = shamalgs::numeric::device_histogram(
+     *   sham::DeviceBuffer<u64> d_counts = shamalgs::numeric::device_histogram<u64>(
      *       dev_sched, d_bin_edges, nbins, values, values.get_size());
      *   ```
      *
@@ -125,13 +125,33 @@ namespace shamalgs::numeric {
      *   values = {0.5, 1.5, 2.5, 3.5, 2.1, 1.9, 0.1, 3.9}
      *   result = {2, 2, 2, 2}
      */
-    template<class T>
-    sham::DeviceBuffer<u64> device_histogram(
+    template<class Tret, class T>
+    sham::DeviceBuffer<Tret> device_histogram(
         const sham::DeviceScheduler_ptr &sched,
         const sham::DeviceBuffer<T> &bin_edges,
         u64 nbins,
         const sham::DeviceBuffer<T> &values,
         u32 len);
+
+    template<class T>
+    inline sham::DeviceBuffer<u64> device_histogram_u64(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &bin_edges,
+        u64 nbins,
+        const sham::DeviceBuffer<T> &values,
+        u32 len) {
+        return device_histogram<u64, T>(sched, bin_edges, nbins, values, len);
+    }
+
+    template<class T>
+    inline sham::DeviceBuffer<u32> device_histogram_u32(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &bin_edges,
+        u64 nbins,
+        const sham::DeviceBuffer<T> &values,
+        u32 len) {
+        return device_histogram<u32, T>(sched, bin_edges, nbins, values, len);
+    }
 
     /**
      * @brief Compute the histogram and bin properties (center, width) for a set of values and bin
@@ -185,7 +205,7 @@ namespace shamalgs::numeric {
     template<class T>
     struct BinnedCompute {
         sham::DeviceBuffer<T> valid_values;
-        sham::DeviceBuffer<u64> offsets_bins;
+        sham::DeviceBuffer<u32> offsets_bins;
     };
 
     template<class T>
