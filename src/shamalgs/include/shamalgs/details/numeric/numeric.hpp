@@ -171,9 +171,9 @@ namespace shamalgs::numeric {
     template<class T>
     histogram_result<T> device_histogram_full(
         const sham::DeviceScheduler_ptr &sched,
-        const sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> &bin_edges,
         u64 nbins,
-        const sham::DeviceBuffer<T> values,
+        const sham::DeviceBuffer<T> &values,
         u32 len) {
 
         SHAM_ASSERT(nbins > 1); // at least a sup and a inf
@@ -211,19 +211,19 @@ namespace shamalgs::numeric {
     template<class T>
     BinnedCompute<T> binned_init_compute(
         const sham::DeviceScheduler_ptr &sched,
-        const sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> &bin_edges,
         u64 nbins,
-        const sham::DeviceBuffer<T> values, // ie f(r)
-        const sham::DeviceBuffer<T> keys,   // ie r
+        const sham::DeviceBuffer<T> &values, // ie f(r)
+        const sham::DeviceBuffer<T> &keys,   // ie r
         u32 len);
 
     template<class T, class Tret, class Fct>
     sham::DeviceBuffer<Tret> binned_compute(
         const sham::DeviceScheduler_ptr &sched,
-        const sham::DeviceBuffer<T> bin_edges,
+        const sham::DeviceBuffer<T> &bin_edges,
         u64 nbins,
-        const sham::DeviceBuffer<T> values, // ie f(r)
-        const sham::DeviceBuffer<T> keys,   // ie r
+        const sham::DeviceBuffer<T> &values, // ie f(r)
+        const sham::DeviceBuffer<T> &keys,   // ie r
         u32 len,
         Fct &&fct) {
 
@@ -243,8 +243,8 @@ namespace shamalgs::numeric {
             [fct](
                 u32 i,
                 const T *__restrict valid_values,
-                const u64 *__restrict offsets_bins,
-                T *__restrict bin_averages) {
+                const u32 *__restrict offsets_bins,
+                Tret *__restrict bin_averages) {
                 u32 bin_start = offsets_bins[i];
                 u32 bin_end   = offsets_bins[i + 1];
                 u32 bin_count = bin_end - bin_start;
@@ -264,10 +264,10 @@ namespace shamalgs::numeric {
     template<class T>
     sham::DeviceBuffer<T> binned_sum(
         const sham::DeviceScheduler_ptr &sched,
-        const sham::DeviceBuffer<T> bin_edges, // r bins
+        const sham::DeviceBuffer<T> &bin_edges, // r bins
         u64 nbins,
-        const sham::DeviceBuffer<T> values, // ie f(r)
-        const sham::DeviceBuffer<T> keys,   // ie r
+        const sham::DeviceBuffer<T> &values, // ie f(r)
+        const sham::DeviceBuffer<T> &keys,   // ie r
         u32 len) {
 
         return binned_compute<T, T>(
