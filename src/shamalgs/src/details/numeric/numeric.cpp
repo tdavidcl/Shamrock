@@ -262,28 +262,30 @@ namespace shamalgs::numeric {
 
         SHAM_ASSERT(offsets_bins.get_val_at_idx(offsets_bins.get_size() - 1) == valid_key_count);
 
-        // sort need 2^n as length
-        {
-            u32 pow2_len_key = shambase::roundup_pow2(valid_key_count);
-            if (pow2_len_key > valid_key_count) {
-                valid_keys.resize(pow2_len_key);
-                valid_values.resize(pow2_len_key);
+        if (valid_key_count > 0) {
+            // sort need 2^n as length
+            {
+                u32 pow2_len_key = shambase::roundup_pow2(valid_key_count);
+                if (pow2_len_key > valid_key_count) {
+                    valid_keys.resize(pow2_len_key);
+                    valid_values.resize(pow2_len_key);
 
-                sham::kernel_call(
-                    q,
-                    sham::MultiRef{},
-                    sham::MultiRef{valid_keys, valid_values},
-                    pow2_len_key - valid_key_count,
-                    [offset_start = valid_key_count](
-                        u32 i, T *__restrict valid_keys, T *__restrict valid_values) {
-                        u32 key_id           = offset_start + i;
-                        valid_keys[key_id]   = shambase::get_max<T>();
-                        valid_values[key_id] = shambase::get_max<T>();
-                    });
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{},
+                        sham::MultiRef{valid_keys, valid_values},
+                        pow2_len_key - valid_key_count,
+                        [offset_start = valid_key_count](
+                            u32 i, T *__restrict valid_keys, T *__restrict valid_values) {
+                            u32 key_id           = offset_start + i;
+                            valid_keys[key_id]   = shambase::get_max<T>();
+                            valid_values[key_id] = shambase::get_max<T>();
+                        });
+                }
             }
-        }
 
-        shamalgs::algorithm::sort_by_key(sched, valid_keys, valid_values, valid_key_count);
+            shamalgs::algorithm::sort_by_key(sched, valid_keys, valid_values, valid_key_count);
+        }
 
         return {std::move(valid_values), std::move(offsets_bins)};
     }
