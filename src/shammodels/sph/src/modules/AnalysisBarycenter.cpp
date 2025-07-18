@@ -7,23 +7,17 @@
 //
 // -------------------------------------------------------//
 
-#pragma once
-
 /**
- * @file experimental_features.hpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @file AnalysisBarycenter.cpp
+ * @author David Fang (fang.david03@gmail.com)
  * @brief
  *
  */
 
-#include "shamcmdopt/env.hpp"
+#include "shammodels/sph/modules/AnalysisBarycenter.hpp"
 
-namespace shamrock {
+using namespace shammath;
 
-    /// Allow the use of experimental features
-    bool are_experimental_features_allowed();
-
-    /// Allow the use of experimental features
-    void enable_experimental_features();
-
-} // namespace shamrock
+template class shammodels::sph::modules::AnalysisBarycenter<f64_3, M4>;
+template class shammodels::sph::modules::AnalysisBarycenter<f64_3, M6>;
+template class shammodels::sph::modules::AnalysisBarycenter<f64_3, M8>;
