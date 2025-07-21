@@ -7,23 +7,17 @@
 //
 // -------------------------------------------------------//
 
+#pragma once
+
 /**
- * @file term_colors.cpp
+ * @file logs.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
 
-#include "shamcmdopt/term_colors.hpp"
-
-namespace shambase::details {
-    TermColors _int_term_colors = TermColors::get_config_colors();
-}
-
-void shambase::term_colors::enable_colors() {
-    details::_int_term_colors = details::TermColors::get_config_colors();
-}
-
-void shambase::term_colors::disable_colors() {
-    details::_int_term_colors = details::TermColors::get_config_nocolors();
-}
+#include "shambase/logs/loglevel.hpp"
+#include "shambase/logs/loglevels.hpp"
+#include "shambase/logs/msgformat.hpp"
+#include "shambase/logs/printer_base.hpp"
+#include "shambase/logs/reformat_message.hpp"

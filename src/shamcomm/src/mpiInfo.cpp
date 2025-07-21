@@ -9,16 +9,16 @@
 
 /**
  * @file mpiInfo.cpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Use this header to include MPI properly
  *
  */
 
-#include "shamcomm/mpiInfo.hpp"
+#include "shambase/term_colors.hpp"
 #include "fmt/core.h"
-#include "shamcmdopt/term_colors.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
+#include "shamcomm/mpiInfo.hpp"
 #include "shamcomm/worldInfo.hpp"
 
 namespace shamcomm {

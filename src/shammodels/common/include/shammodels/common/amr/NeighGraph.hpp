@@ -11,7 +11,7 @@
 
 /**
  * @file NeighGraph.hpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
@@ -104,17 +104,17 @@ namespace shammodels::basegodunov::modules {
 
     using AMRGraph = NeighGraph;
 
+    enum Direction {
+        xp = 0,
+        xm = 1,
+        yp = 2,
+        ym = 3,
+        zp = 4,
+        zm = 5,
+    };
+
     template<class Tvec, class TgridVec>
     struct OrientedAMRGraph {
-
-        enum Direction {
-            xp = 0,
-            xm = 1,
-            yp = 2,
-            ym = 3,
-            zp = 4,
-            zm = 5,
-        };
 
         const std::array<TgridVec, 6> offset_check{
             TgridVec{1, 0, 0},

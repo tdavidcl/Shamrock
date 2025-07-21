@@ -11,7 +11,8 @@
 
 /**
  * @file ComputeFluxUtilities.hpp
- * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr) --no git blame--
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
@@ -20,7 +21,6 @@
 #include "shammath/riemann.hpp"
 #include "shammath/riemann_dust.hpp"
 #include "shammodels/ramses/Solver.hpp"
-#include "shammodels/ramses/modules/ComputeFlux.hpp"
 #include <array>
 #include <string>
 

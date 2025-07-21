@@ -9,7 +9,7 @@
 
 /**
  * @file experimental_features.cpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
@@ -31,7 +31,7 @@ namespace {
 
 namespace shamrock {
     bool are_experimental_features_allowed() {
-        if (!warning_printed) {
+        if (!warning_printed && _env_allow_experimental_features) {
             if (shamcomm::world_rank() == 0) {
 
                 std::string color = shambase::term_colors::col8b_yellow();
@@ -49,5 +49,7 @@ namespace shamrock {
 
         return _env_allow_experimental_features;
     }
+
+    void enable_experimental_features() { _env_allow_experimental_features = true; }
 
 } // namespace shamrock

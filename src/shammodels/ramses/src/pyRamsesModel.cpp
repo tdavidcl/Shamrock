@@ -9,7 +9,10 @@
 
 /**
  * @file pyRamsesModel.cpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Benoit Commercon (benoit.commercon@ens-lyon.fr)
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
+ * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief
  *
  */
@@ -34,8 +37,8 @@ namespace shammodels::basegodunov {
         using TConfig          = typename T::Solver::Config;
         using TAnalysisSodTube = shammodels::basegodunov::modules::AnalysisSodTube<Tvec, TgridVec>;
 
-        logger::debug_ln("[Py]", "registering class :", name_config, typeid(T).name());
-        logger::debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
+        shamlog_debug_ln("[Py]", "registering class :", name_config, typeid(T).name());
+        shamlog_debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
 
         py::class_<TConfig>(m, name_config.c_str())
             .def(
@@ -273,7 +276,15 @@ namespace shammodels::basegodunov {
                         x_ref,
                         x_min,
                         x_max);
-                });
+                })
+            .def(
+                "get_solver_tex",
+                [](T &self) {
+                    return shambase::get_check_ref(self.solver.storage.solver_sequence).get_tex();
+                })
+            .def("get_solver_dot_graph", [](T &self) {
+                return shambase::get_check_ref(self.solver.storage.solver_sequence).get_dot_graph();
+            });
     }
 } // namespace shammodels::basegodunov
 

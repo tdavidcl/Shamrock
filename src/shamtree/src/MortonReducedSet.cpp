@@ -9,7 +9,7 @@
 
 /**
  * @file MortonReducedSet.cpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  */
 
@@ -37,7 +37,7 @@ namespace shamtree {
             morton_codes_set.sorted_morton_codes,
             reduction_level);
 
-        logger::debug_sycl_ln(
+        shamlog_debug_sycl_ln(
             "RadixTree",
             "reduction results : (before :",
             morton_codes_set.cnt_obj,

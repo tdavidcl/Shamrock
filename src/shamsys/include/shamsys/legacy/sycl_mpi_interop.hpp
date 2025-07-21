@@ -11,7 +11,7 @@
 
 /**
  * @file sycl_mpi_interop.hpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  * @version 0.1
  * @date 2022-03-14
@@ -45,7 +45,8 @@
     X(u16_3)                                                                                       \
     X(u64)                                                                                         \
     X(u64_3)                                                                                       \
-    X(i64_3)
+    X(i64_3)                                                                                       \
+    X(i64)
 
 namespace mpi_sycl_interop {
 

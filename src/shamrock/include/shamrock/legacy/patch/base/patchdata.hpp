@@ -11,7 +11,7 @@
 
 /**
  * @file patchdata.hpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief header for PatchData related function and declaration
  * @version 0.1
  * @date 2022-02-28
@@ -48,6 +48,7 @@ struct PatchDataMpiRequest {
     std::vector<patchdata_field::PatchDataFieldMpiRequest<u32_3>> mpi_rq_fields_u32_3;
     std::vector<patchdata_field::PatchDataFieldMpiRequest<u64_3>> mpi_rq_fields_u64_3;
     std::vector<patchdata_field::PatchDataFieldMpiRequest<i64_3>> mpi_rq_fields_i64_3;
+    std::vector<patchdata_field::PatchDataFieldMpiRequest<i64>> mpi_rq_fields_i64;
 
     inline void finalize() {
         for (auto b : mpi_rq_fields_f32) {
@@ -99,6 +100,9 @@ struct PatchDataMpiRequest {
             b.finalize();
         }
         for (auto b : mpi_rq_fields_i64_3) {
+            b.finalize();
+        }
+        for (auto b : mpi_rq_fields_i64) {
             b.finalize();
         }
     }

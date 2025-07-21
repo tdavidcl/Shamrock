@@ -11,6 +11,10 @@
 
 /**
  * @file SolverConfig.hpp
+ * @author Anass Serhani (anass.serhani@cnrs.fr)
+ * @author Benoit Commercon (benoit.commercon@ens-lyon.fr)
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief
  *
@@ -280,6 +284,11 @@ struct shammodels::basegodunov::SolverConfig {
                     "NoGravity mode)",
                     mode));
             }
+        }
+
+        if (!(eos_gamma > 1.0)) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                shambase::format("Gamma must be > 1, currently Gamma = {}", eos_gamma));
         }
 
         if (is_gas_passive_scalar_on()) {
