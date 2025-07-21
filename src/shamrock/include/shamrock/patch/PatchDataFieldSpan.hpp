@@ -21,7 +21,6 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/DeviceBuffer.hpp"
-#include "shambackends/kernel_call.hpp"
 
 // forward declare PatchDataField
 template<class T>
