@@ -178,7 +178,6 @@ int main(int argc, char *argv[]) {
 
     if (shamsys::instance::is_initialized()) {
         bool _ = shamrock::are_experimental_features_allowed();
-
         shamcomm::logs::code_init_done_log();
 
         if (opts::has_option("--pypath")) {

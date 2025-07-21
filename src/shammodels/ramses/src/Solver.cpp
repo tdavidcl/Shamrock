@@ -27,7 +27,6 @@
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
 #include "shammodels/ramses/modules/ComputeCellAABB.hpp"
 #include "shammodels/ramses/modules/ComputeCubeCellSizes.hpp"
-#include "shammodels/ramses/modules/ComputeFlux.hpp"
 #include "shammodels/ramses/modules/ComputeMass.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
 #include "shammodels/ramses/modules/ComputeTimeDerivative.hpp"
@@ -374,7 +373,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         storage.flux_rhov_dust_face_zp
             = std::make_shared<solvergraph::NeighGrapkLinkFieldEdge<Tvec>>(
                 "flux_rhov_dust_face_zp", "flux_rhov_dust_face_zp", ndust);
-
     }
 
     ////////////////////////////////////////////////////////////////////////////////
