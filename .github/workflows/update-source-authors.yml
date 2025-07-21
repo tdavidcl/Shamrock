@@ -20,6 +20,6 @@ jobs:
 
       - name: Run update_source_authors.py
         run: |
-          python3 buildbot/update_authors.py
+          python3 buildbot/update_authors.py || true
 
       - uses: stefanzweifel/git-auto-commit-action@v6
