@@ -9,17 +9,20 @@
 
 /**
  * @file sparseXchg.cpp
- * @author Timothée David--Cléris (timothee.david--cleris@ens-lyon.fr)
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
 
 #include "shamalgs/collective/sparseXchg.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/string.hpp"
 #include "shambase/time.hpp"
+#include "shamcmdopt/env.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -248,6 +251,27 @@ namespace {
               }
           };
 } // namespace
+
+auto get_SHAM_SPARSE_COMM_INFLIGHT_LIM = []() {
+    std::string val = shamcmdopt::getenv_str_default_register(
+        "SHAM_SPARSE_COMM_INFLIGHT_LIM", "128", "Maximum number of inflight messages");
+
+    u64 ret = 128;
+    try {
+        ret = std::stoull(val);
+    } catch (...) {
+        logger::err_ln(
+            "Sparse comm",
+            shambase::format(
+                "Invalid value for SHAM_SPARSE_COMM_INFLIGHT_LIM {}, using default value {}",
+                val,
+                ret));
+    }
+
+    return ret;
+};
+
+const u64 SHAM_SPARSE_COMM_INFLIGHT_LIM = get_SHAM_SPARSE_COMM_INFLIGHT_LIM();
 
 namespace shamalgs::collective {
     void sparse_comm_debug_infos(
@@ -529,7 +553,9 @@ namespace shamalgs::collective {
             }
 
             // routine to limit the number of in-flight messages
-            u64 in_flight_lim = 128;
+
+            u64 in_flight_lim = SHAM_SPARSE_COMM_INFLIGHT_LIM;
+
             if (in_flight > in_flight_lim) {
 
                 f64 timeout    = 120; // seconds
