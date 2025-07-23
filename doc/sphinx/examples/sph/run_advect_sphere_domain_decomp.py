@@ -208,9 +208,10 @@ plt.close(fig)
 ####################################################
 # Convert PNG sequence to Image sequence in mpl
 ####################################################
-def show_image_sequence(glob_str):
+import matplotlib.animation as animation
 
-    import matplotlib.animation as animation
+
+def show_image_sequence(glob_str):
 
     if render_gif and shamrock.sys.world_rank() == 0:
 
@@ -253,14 +254,18 @@ def show_image_sequence(glob_str):
             repeat_delay=10,
         )
 
-        # To save the animation using Pillow as a gif
-        # writer = animation.PillowWriter(fps=15,
-        #                                 metadata=dict(artist='Me'),
-        #                                 bitrate=1800)
-        # ani.save('scatter.gif', writer=writer)
-
-        # Show the animation
-        plt.show()
+        return ani
 
 
-show_image_sequence(dump_folder + sim_name + "_*.png")
+# If the animation is not returned only a static image will be shown in the doc
+ani = show_image_sequence(dump_folder + sim_name + "_*.png")
+
+if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    # writer = animation.PillowWriter(fps=15,
+    #                                 metadata=dict(artist='Me'),
+    #                                 bitrate=1800)
+    # ani.save('scatter.gif', writer=writer)
+
+    # Show the animation
+    plt.show()
