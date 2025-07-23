@@ -998,8 +998,11 @@ namespace sham {
                 shambase::throw_with_loc<std::invalid_argument>("cannot append a buffer to itself");
             }
 
-            u32 old_size   = get_size();
             u32 other_size = other.get_size();
+            if (other_size == 0) {
+                return; // early exit if the other buffer is empty
+            }
+            u32 old_size = get_size();
 
             // allocate space
             expand(other_size);
