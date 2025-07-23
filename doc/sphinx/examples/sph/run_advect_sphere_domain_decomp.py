@@ -28,13 +28,22 @@ C_force = 0.25
 
 bsize = 4
 
-do_plots = True
+render_gif = True
+
+dump_folder = "_to_trash"
+sim_name = "/sphere_domain_decomp_"
 
 
 def is_in_sphere(pt):
     x, y, z = pt
     return (x**2 + y**2 + z**2) < 1
 
+
+# Create the dump directory if it does not exist
+if shamrock.sys.world_rank() == 0:
+    import os
+
+    os.system("mkdir -p " + dump_folder)
 
 ####################################################
 # Setup the simulation
@@ -91,11 +100,6 @@ model.change_htolerance(1.1)
 # Draw utilities
 ####################################################
 
-dump_folder = "_to_trash"
-import os
-
-os.system("mkdir -p " + dump_folder)
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -149,26 +153,29 @@ def draw_aabb(ax, aabb, color, alpha):
 
 
 def plot_state(iplot):
-    plt.cla()
-
-    patch_list = ctx.get_patch_list_global()
-
-    ax.set_xlim3d(bmin[0], bmax[0])
-    ax.set_ylim3d(bmin[1], bmax[1])
-    ax.set_zlim3d(bmin[2], bmax[2])
-
-    ptransf = model.get_patch_transform()
-    for p in patch_list:
-        draw_aabb(ax, ptransf.to_obj_coord(p), "blue", 0.1)
 
     pos = ctx.collect_data()["xyz"]
-    X = pos[:, 0]
-    Y = pos[:, 1]
-    Z = pos[:, 2]
 
-    ax.scatter(X, Y, Z, c="red", s=1)
+    if shamrock.sys.world_rank() == 0:
+        X = pos[:, 0]
+        Y = pos[:, 1]
+        Z = pos[:, 2]
 
-    plt.savefig(dump_folder + f"/tmp_{iplot:04}.png")
+        plt.cla()
+
+        patch_list = ctx.get_patch_list_global()
+
+        ax.set_xlim3d(bmin[0], bmax[0])
+        ax.set_ylim3d(bmin[1], bmax[1])
+        ax.set_zlim3d(bmin[2], bmax[2])
+
+        ptransf = model.get_patch_transform()
+        for p in patch_list:
+            draw_aabb(ax, ptransf.to_obj_coord(p), "blue", 0.1)
+
+        ax.scatter(X, Y, Z, c="red", s=1)
+
+        plt.savefig(dump_folder + sim_name + f"_{iplot:04}.png")
 
 
 ####################################################
@@ -189,64 +196,71 @@ for ttarg in t_stop:
 
     model.evolve_until(ttarg)
 
-    if do_plots:
-        plot_state(iplot)
+    # if do_plots:
+    plot_state(iplot)
 
     iplot += 1
     istop += 1
 
 plt.close(fig)
 
+
 ####################################################
 # Convert PNG sequence to Image sequence in mpl
 ####################################################
-import glob
+def show_image_sequence(glob_str):
 
-files = sorted(glob.glob(dump_folder + "/tmp_*.png"))
+    import matplotlib.animation as animation
 
-from PIL import Image
+    if render_gif and shamrock.sys.world_rank() == 0:
 
-image_array = []
-for my_file in files:
-    image = Image.open(my_file)
-    image_array.append(image)
+        import glob
 
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
+        files = sorted(glob.glob(glob_str))
 
-# Create the figure and axes objects
-fig, ax = plt.subplots()
+        from PIL import Image
 
-# Remove axes, ticks, and frame
-ax.axis("off")
-for spine in ax.spines.values():
-    spine.set_visible(False)
-fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        image_array = []
+        for my_file in files:
+            image = Image.open(my_file)
+            image_array.append(image)
 
-# Set the initial image with correct aspect ratio
-im = ax.imshow(image_array[0], animated=True, aspect="auto")
+        img = Image.open(files[0])
+        pixel_x, pixel_y = img.size
+
+        # Create the figure and axes objects
+        # Remove axes, ticks, and frame & set aspect ratio
+        dpi = 200
+        fig = plt.figure(dpi=dpi)
+        plt.gca().set_position((0, 0, 1, 1))
+        plt.gcf().set_size_inches(pixel_x / dpi, pixel_y / dpi)
+        plt.axis("off")
+
+        # Set the initial image with correct aspect ratio
+        im = plt.imshow(image_array[0], animated=True, aspect="auto")
+
+        def update(i):
+            im.set_array(image_array[i])
+            return (im,)
+
+        # Create the animation object
+        ani = animation.FuncAnimation(
+            fig,
+            update,
+            frames=len(image_array),
+            interval=50,
+            blit=True,
+            repeat_delay=10,
+        )
+
+        # To save the animation using Pillow as a gif
+        # writer = animation.PillowWriter(fps=15,
+        #                                 metadata=dict(artist='Me'),
+        #                                 bitrate=1800)
+        # ani.save('scatter.gif', writer=writer)
+
+        # Show the animation
+        plt.show()
 
 
-def update(i):
-    im.set_array(image_array[i])
-    return (im,)
-
-
-# Create the animation object
-ani = animation.FuncAnimation(
-    fig,
-    update,
-    frames=len(image_array),
-    interval=50,
-    blit=True,
-    repeat_delay=10,
-)
-
-# To save the animation using Pillow as a gif
-# writer = animation.PillowWriter(fps=15,
-#                                 metadata=dict(artist='Me'),
-#                                 bitrate=1800)
-# ani.save('scatter.gif', writer=writer)
-
-# Show the animation
-plt.show()
+show_image_sequence(dump_folder + sim_name + "_*.png")
