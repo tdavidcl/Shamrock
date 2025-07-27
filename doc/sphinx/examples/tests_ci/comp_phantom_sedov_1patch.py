@@ -2,7 +2,10 @@
 Comparing Sedov blast with 1 patch with Phantom
 ==============================================
 
-CI test for comparing Sedov blast with 1 patch with Phantom
+Restart a Sedov blast simulation from a Phantom dump using 1 patch, run it in Shamrock
+and compare the results with the original Phantom dump.
+This test is used to check that the Shamrock solver is able to reproduce the
+same results as Phantom.
 """
 
 import numpy as np

@@ -2,7 +2,10 @@
 Comparing Sedov blast with 8 patches with Phantom
 =================================================
 
-CI test for comparing Sedov blast with 8 patches with Phantom
+Restart a Sedov blast simulation from a Phantom dump using 8 patches, run it in Shamrock
+and compare the results with the original Phantom dump.
+This test is used to check that the Shamrock solver is able to reproduce the
+same results as Phantom also when subdomain decomposition is enabled.
 """
 
 import numpy as np
