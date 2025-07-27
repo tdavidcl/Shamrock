@@ -1,3 +1,10 @@
+"""
+Testing Sod tube with Godunov
+============================
+
+CI test for Sod tube with Godunov
+"""
+
 import os
 
 import matplotlib.pyplot as plt

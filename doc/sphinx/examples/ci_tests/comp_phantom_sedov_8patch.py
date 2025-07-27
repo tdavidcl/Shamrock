@@ -1,3 +1,10 @@
+"""
+Comparing Sedov blast with 8 patches with Phantom
+=================================================
+
+CI test for comparing Sedov blast with 8 patches with Phantom
+"""
+
 import numpy as np
 
 import shamrock

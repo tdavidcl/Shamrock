@@ -1,3 +1,10 @@
+"""
+Testing Sod tube with Godunov with AMR enabled
+==============================================
+
+CI test for Sod tube with Godunov with AMR enabled
+"""
+
 import os
 
 import matplotlib.pyplot as plt

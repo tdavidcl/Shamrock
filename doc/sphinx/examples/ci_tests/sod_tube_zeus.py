@@ -1,3 +1,10 @@
+"""
+Testing Sod tube with Zeus
+=========================
+
+CI test for Sod tube with Zeus
+"""
+
 import os
 
 import matplotlib.pyplot as plt
