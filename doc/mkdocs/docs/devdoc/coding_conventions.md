@@ -1,62 +1,60 @@
 # Coding Conventions
 
-The following avec coding conventions i'm trying to stick to when i devellop shamrock, but in pratice it happends that i might have deviated slightly from them 😅. Don't hesitate to notify me or raise an issue if the following is not followed somewhere in the code.
+The following coding conventions are followed when developing Shamrock. In practice, there may be slight deviations from these guidelines 😅. Please notify or raise an issue if these conventions are not followed somewhere in the code.
 
-## Type naming
+## C++ Style Guide
 
-in shamrock we distinguish between various types of objects:
+### General Rules
+- No tabs (use spaces for indentation)
+- No raw pointers without wrapper or smart pointer
+- Use `T{}` for zero initialization of template types instead of `T(0)` to ensure compatibility with vectors and other complex types
 
-### primitive types
+## Naming Conventions
 
-primitive types are basic types representable by the actual hardware, typically ints, floats, sycl vectors.
+### Primitive Types
 
-Since in shamrock some binary manipulation tend to be used all types are named by a prefix (`u` for unsigned, `i` for int, `f` for floats) followed by the number of bits representing it. This cal optionally be followed by `_x` where `x` is the number of elements in a vector.
+Primitive types are basic types representable by the actual hardware, typically integers, floats, and SYCL vectors.
 
-primitives : `i64`,`i32`,`i16`,`i8 `,`u64`,`u32`,`u16`,`u8 `,`f16`,`f32`,`f64`
+Since Shamrock uses binary manipulation extensively, all types are named with a prefix (`u` for unsigned, `i` for signed integers, `f` for floats) followed by the number of bits. This can optionally be followed by `_x` where `x` is the number of elements in a vector.
 
-exemples of vectors : `f64_3`, `u64_16`, ...
+**Primitive types:** `i64`, `i32`, `i16`, `i8`, `u64`, `u32`, `u16`, `u8`, `f16`, `f32`, `f64`
 
-### Classes, structs, enums
+**Vector examples:** `f64_3`, `u64_16`, ...
 
-Classes, structs and enums in shamrock follows the PascalCase naming scheme, each word is starts with a captial letter,
+### Classes, Structs, and Enums
 
-for exemple : `IMeanIKindaLikeThisCaseTheOthersAreLessReadableToMe`
+Classes, structs, and enums in Shamrock follow PascalCase naming scheme, where each word starts with a capital letter.
 
-### functions
+**Example:** `IMeanIKindaLikeThisCaseTheOthersAreLessReadableToMe`
 
-Functions in shamrock tend to be called using snake_case to distinguish them from classes.
+### Functions
 
-for exemple : `is_this_informatics_or_physics(....)`
+Functions in Shamrock use snake_case to distinguish them from classes.
 
-### Special types
+**Example:** `is_this_informatics_or_physics(...)`
 
+## Template Conventions
 
-#### vectors and scalar templates
+### Vector and Scalar Templates
 
-Since many models can be implemented in shamrock it is required to have some utilities/classes implemented for any primitive types. To deal with that generic classes are implemented using the following patern.
+Since many models can be implemented in Shamrock, utilities/classes are implemented for any primitive types. Generic classes use the following pattern:
 
 ```c++
 template<class Tvec>
-class Whateva{
-
-    using VectorProperties = VectorProperties<Tvec>;
-    using Tscal = VectorProperties::Tscal;
-    static constexpr u32 dimension = VectorProperties::dimension;
-
+class Whateva {
+    using Tscal = shambase::VecComponent<Tvec>;
+    static constexpr u32 dimension = shambase::VectorProperties<Tvec>::dimension;
 }
 ```
 
-`Tvec` is sufficent to infer both the scalar type and the dimension, simplifying the actual template.
+`Tvec` is sufficient to infer both the scalar type and the dimension, simplifying the template.
 
-The following convention applies : `Tscal` for template scalar, `Tvec` for template vector
+**Conventions:**
+- `Tscal` for template scalar types
+- `Tvec` for template vector types
 
-#### Morton & Hilbert codes
+### Special Template Types
 
-Morton codes and hilbert code shall be named `Tmorton`, `THilbert` since they will be templated
+#### Morton & Hilbert Codes
 
-
-## C++ style guide
-
- - no tabs
- - no raw pointers without wrapper or smart pointer.
- - no inheritance
+Morton codes and Hilbert codes shall be named `Tmorton` and `THilbert` respectively, since they will be templated.
