@@ -8,9 +8,9 @@ The following coding conventions are followed when developing Shamrock. In pract
 - No tabs (use spaces for indentation).
 - No raw pointers without wrapper or smart pointer.
 - Use `T{}` for zero initialization of template types instead of `T(0)` to ensure compatibility with vectors and other complex types.
-- Use exceptions for error handling with `shambase::throw_with_loc<exception type>` to carry source location infos.
-- Use `// TODO:` in the code and `@todo` in doxygen doc.
-- Use `sham::kernel_call` when possible to invoque kernels.
+- Use exceptions for error handling with `shambase::throw_with_loc<exception type>` to carry source location information.
+- Use `// TODO:` in the code and `@todo` in Doxygen documentation.
+- Use `sham::kernel_call` when possible to invoke kernels.
 
 ## Naming Conventions
 
