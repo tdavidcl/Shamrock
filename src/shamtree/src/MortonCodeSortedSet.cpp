@@ -15,6 +15,7 @@
 
 #include "shamtree/MortonCodeSortedSet.hpp"
 #include "shamalgs/details/algorithm/algorithm.hpp"
+#include "shamalgs/primitives/sort_by_keys.hpp"
 #include <utility>
 
 namespace shamtree {
@@ -36,7 +37,7 @@ namespace shamtree {
         shamalgs::algorithm::fill_buffer_index_usm(
             dev_sched, morton_count, map_morton_id_to_obj_id);
 
-        shamalgs::algorithm::sort_by_key(
+        shamalgs::primitives::sort_by_key(
             dev_sched, morton_codes_to_sort, map_morton_id_to_obj_id, morton_count);
 
         return MortonCodeSortedSet<Tmorton, Tvec, dim>(

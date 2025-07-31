@@ -34,6 +34,7 @@ set(Sources
         src/serialize.cpp
         src/collective/distributedDataComm.cpp
         src/collective/sparseXchg.cpp
+        src/primitives/sort_by_keys.cpp
     )
 
 if(SHAMROCK_USE_SHARED_LIB)
