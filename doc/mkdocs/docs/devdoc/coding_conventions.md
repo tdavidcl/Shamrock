@@ -47,7 +47,7 @@ template<class Tvec>
 class Whateva {
     using Tscal = shambase::VecComponent<Tvec>;
     static constexpr u32 dimension = shambase::VectorProperties<Tvec>::dimension;
-}
+};
 ```
 
 `Tvec` is sufficient to infer both the scalar type and the dimension, simplifying the template.
