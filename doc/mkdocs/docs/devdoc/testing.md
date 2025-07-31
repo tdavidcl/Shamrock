@@ -70,7 +70,7 @@ The `TestStart` macro registers the test. You can find other assertion macros (l
 Each test case should be in its own scope using curly braces for clarity and variable isolation:
 
 ```c++
-TestStart(Unittest, "test_suite/test_name", test_function_name, mpi_ranks) {
+TestStart(Unittest, "filepath:function", test_function_name, mpi_ranks) {
     { // Test case 1
         // Test setup
         std::vector<T> expected = {...};
