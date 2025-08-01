@@ -88,7 +88,7 @@ TestStart(Unittest, "filepath:function", test_function_name, mpi_ranks) {
 
 - Keep expected vectors defined as separate variables in unit tests
 - Use descriptive test names that indicate what is being tested (e.g. `filepath:function`)
-- Use `REQUIRE` like assertions in tests
+- Use `REQUIRE` macros to perform assertions in tests
 
 ### Test File Organization
 
