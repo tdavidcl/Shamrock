@@ -20,6 +20,7 @@
 #include "shamalgs/numeric.hpp"
 #include "shambackends/sycl_utils.hpp"
 #include "shammath/AABB.hpp"
+#include "shambase/DistributedDataShared.hpp"
 #include "shammath/CoordRange.hpp"
 #include "shammodels/zeus/GhostZoneData.hpp"
 #include "shammodels/zeus/modules/GhostZones.hpp"

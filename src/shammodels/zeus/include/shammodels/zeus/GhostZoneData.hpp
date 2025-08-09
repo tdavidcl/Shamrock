@@ -17,6 +17,7 @@
  */
 
 #include "shambase/DistributedData.hpp"
+#include "shambase/DistributedDataShared.hpp"
 #include "shambackends/sycl.hpp"
 #include "shammath/AABB.hpp"
 
