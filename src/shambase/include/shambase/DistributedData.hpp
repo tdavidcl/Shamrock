@@ -274,7 +274,6 @@ namespace shambase {
         inline void reset() { data.clear(); }
     };
 
-
     /**
      * @brief Compare two distributed data and apply callbacks based on the difference
      *

@@ -17,8 +17,8 @@
  */
 
 #include "shambase/DistributedData.hpp"
-#include "shambackends/sycl.hpp"
 #include "shambase/DistributedDataShared.hpp"
+#include "shambackends/sycl.hpp"
 #include "shammath/AABB.hpp"
 
 namespace shammodels::basegodunov {
