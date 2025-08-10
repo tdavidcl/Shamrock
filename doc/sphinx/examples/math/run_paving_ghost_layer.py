@@ -143,9 +143,6 @@ def plot_paving_function(pav_func, pav_func_name, shear_x=0.0):
             if i == 0 and j == 0:
                 continue
 
-            # if(not (i == -1 and j == -1)):
-            # continue
-
             box_to_intersect = shamrock.math.AABB_f64_3(
                 (0.0, 0.0, 0.0), (box_size_x, box_size_y, 0.0)
             )
