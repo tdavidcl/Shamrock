@@ -18,8 +18,49 @@
 
 #include "shambackends/math.hpp"
 #include "shambackends/sycl.hpp"
+#include "shammath/AABB.hpp"
 
 namespace shammath {
+
+    template<typename Tvec, class paving_func>
+    inline AABB<Tvec> f_aabb(paving_func &paving, AABB<Tvec> &aabb, int i, int j, int k) {
+
+        Tvec min = paving.f(aabb.lower, i, j, k);
+        Tvec max = paving.f(aabb.upper, i, j, k);
+
+        // if the min is greater than the max, swap them
+        if (min[0] > max[0]) {
+            std::swap(min[0], max[0]);
+        }
+        if (min[1] > max[1]) {
+            std::swap(min[1], max[1]);
+        }
+        if (min[2] > max[2]) {
+            std::swap(min[2], max[2]);
+        }
+
+        return AABB<Tvec>{min, max};
+    }
+
+    template<typename Tvec, class paving_func>
+    inline AABB<Tvec> f_aabb_inv(paving_func &paving, AABB<Tvec> &aabb, int i, int j, int k) {
+
+        Tvec min = paving.f_inv(aabb.lower, i, j, k);
+        Tvec max = paving.f_inv(aabb.upper, i, j, k);
+
+        // if the min is greater than the max, swap them
+        if (min[0] > max[0]) {
+            std::swap(min[0], max[0]);
+        }
+        if (min[1] > max[1]) {
+            std::swap(min[1], max[1]);
+        }
+        if (min[2] > max[2]) {
+            std::swap(min[2], max[2]);
+        }
+
+        return AABB<Tvec>{min, max};
+    }
 
     /**
      * @brief A structure for 3D paving functions with periodic boundary conditions.
@@ -52,6 +93,14 @@ namespace shammath {
          * @return The inverse transformed vector.
          */
         Tvec f_inv(Tvec x, int i, int j, int k) { return x - box_size * Tvec{i, j, k}; }
+
+        inline AABB<Tvec> f_aabb(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb(*this, aabb, i, j, k);
+        }
+
+        inline AABB<Tvec> f_aabb_inv(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb_inv(*this, aabb, i, j, k);
+        }
     };
 
     /**
@@ -119,6 +168,14 @@ namespace shammath {
                 (is_z_periodic) ? 0 : (tmp[2] - box_center[2]) * (sham::m1pown<Tscal>(k) - 1)};
             return tmp + off;
         }
+
+        inline AABB<Tvec> f_aabb(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb(*this, aabb, i, j, k);
+        }
+
+        inline AABB<Tvec> f_aabb_inv(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb_inv(*this, aabb, i, j, k);
+        }
     };
 
     /**
@@ -180,6 +237,14 @@ namespace shammath {
                 (is_y_periodic) ? 0 : (tmp[1] - box_center[1]) * (sham::m1pown<Tscal>(j) - 1),
                 (is_z_periodic) ? 0 : (tmp[2] - box_center[2]) * (sham::m1pown<Tscal>(k) - 1)};
             return tmp + off;
+        }
+
+        inline AABB<Tvec> f_aabb(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb(*this, aabb, i, j, k);
+        }
+
+        inline AABB<Tvec> f_aabb_inv(AABB<Tvec> &aabb, int i, int j, int k) {
+            return shammath::f_aabb_inv(*this, aabb, i, j, k);
         }
     };
 
