@@ -111,7 +111,7 @@ def ghost_intersect(part, box_to_intersect):
     return intersect.is_volume_not_null()
 
 
-def plot_paving_function(pav_func, pav_func_name, shear_x=0.0):
+def plot_paving_function(pav_func, pav_func_name):
 
     plt.figure()
 
