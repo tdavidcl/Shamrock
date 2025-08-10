@@ -262,6 +262,11 @@ namespace shammath {
          * @return true if the ray intersect the AABB
          */
         [[nodiscard]] inline bool intersect_ray(Ray<T> ray) const noexcept;
+
+        /// equal operator
+        inline bool operator==(const AABB<T> &other) const noexcept {
+            return sham::equals(lower, other.lower) && sham::equals(upper, other.upper);
+        }
     };
 
     template<class T>
