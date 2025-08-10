@@ -95,6 +95,9 @@ def add_rect_aabb(aabb):
 
 
 def ghost_intersect(part, box_to_intersect):
+    """
+    dummy ghost layer intersection to showcase how it works
+    """
     x, y, z = part["x"], part["y"], 0.0
 
     part_aabb = shamrock.math.AABB_f64_3((x - 0.3, y - 0.3, 0.0), (x + 0.3, y + 0.3, 0.0))
@@ -131,7 +134,7 @@ def plot_paving_function(pav_func, pav_func_name, shear_x=0.0):
         x, y, z = (part["x"], part["y"], 0.0)
         plt.scatter(x, y, color=part["color"])
 
-    plt.title(f"Paving function: {pav_func_name} - 1. Inverse map current sim box")
+    plt.title(f"Paving function: {pav_func_name}\n1. Inverse map current sim box")
     plt.xlabel("x")
     plt.ylabel("y")
 
@@ -159,7 +162,7 @@ def plot_paving_function(pav_func, pav_func_name, shear_x=0.0):
                     print("scatter")
                     plt.scatter(x, y, color=part["color"])
 
-    plt.title(f"Paving function: {pav_func_name} - 2. Inverse ghost layer with inverse map")
+    plt.title(f"Paving function: {pav_func_name}\n2. Inverse ghost layer with inverse map")
     plt.xlabel("x")
     plt.ylabel("y")
 
@@ -193,7 +196,7 @@ def plot_paving_function(pav_func, pav_func_name, shear_x=0.0):
         x, y, z = (part["x"], part["y"], 0.0)
         plt.scatter(x, y, color=part["color"])
 
-    plt.title(f"Paving function: {pav_func_name} - 3. Map back the resulting ghost layer")
+    plt.title(f"Paving function: {pav_func_name}\n3. Map back the resulting ghost layer")
     plt.xlabel("x")
     plt.ylabel("y")
 
