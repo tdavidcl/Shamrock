@@ -113,20 +113,22 @@ def ghost_intersect(part, box_to_intersect):
 
 def plot_paving_function(pav_func, pav_func_name):
 
+    box_to_intersect = shamrock.math.AABB_f64_3((0.0, 0.0, 0.0), (box_size_x, box_size_y, 0.0))
+
+    def get_indices():
+        for i in range(-2, 3):
+            for j in range(-3, 4):
+                if i == 0 and j == 0:
+                    continue
+                yield i, j
+
     plt.figure()
 
-    for i in range(-2, 3):
-        for j in range(-3, 4):
-            if i == 0 and j == 0:
-                continue
+    for i, j in get_indices():
 
-            box_to_intersect = shamrock.math.AABB_f64_3(
-                (0.0, 0.0, 0.0), (box_size_x, box_size_y, 0.0)
-            )
+        box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
 
-            box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
-
-            add_rect_aabb(box_to_intersect_inv_mapped)
+        add_rect_aabb(box_to_intersect_inv_mapped)
 
     for part in parts:
         x, y, z = (part["x"], part["y"], 0.0)
@@ -138,23 +140,16 @@ def plot_paving_function(pav_func, pav_func_name):
 
     plt.figure()
 
-    for i in range(-2, 3):
-        for j in range(-3, 4):
-            if i == 0 and j == 0:
-                continue
+    for i, j in get_indices():
 
-            box_to_intersect = shamrock.math.AABB_f64_3(
-                (0.0, 0.0, 0.0), (box_size_x, box_size_y, 0.0)
-            )
+        box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
 
-            box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
+        add_rect_aabb(box_to_intersect_inv_mapped)
 
-            add_rect_aabb(box_to_intersect_inv_mapped)
-
-            for part in parts:
-                x, y, z = (part["x"], part["y"], 0.0)
-                if ghost_intersect(part, box_to_intersect_inv_mapped):
-                    plt.scatter(x, y, color=part["color"])
+        for part in parts:
+            x, y, z = (part["x"], part["y"], 0.0)
+            if ghost_intersect(part, box_to_intersect_inv_mapped):
+                plt.scatter(x, y, color=part["color"])
 
     plt.title(f"Paving function: {pav_func_name}\n2. Inverse ghost layer with inverse map")
     plt.xlabel("x")
@@ -162,26 +157,19 @@ def plot_paving_function(pav_func, pav_func_name):
 
     plt.figure()
 
-    for i in range(-2, 3):
-        for j in range(-3, 4):
-            if i == 0 and j == 0:
-                continue
+    for i, j in get_indices():
 
-            box_to_intersect = shamrock.math.AABB_f64_3(
-                (0.0, 0.0, 0.0), (box_size_x, box_size_y, 0.0)
-            )
+        box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
+        box_to_intersect_mapped = pav_func.f_aabb(box_to_intersect, i, j, 0)
 
-            box_to_intersect_inv_mapped = pav_func.f_aabb_inv(box_to_intersect, i, j, 0)
-            box_to_intersect_mapped = pav_func.f_aabb(box_to_intersect, i, j, 0)
+        add_rect_aabb(box_to_intersect_mapped)
 
-            add_rect_aabb(box_to_intersect_mapped)
+        for part in parts:
+            x, y, z = (part["x"], part["y"], 0.0)
 
-            for part in parts:
-                x, y, z = (part["x"], part["y"], 0.0)
-
-                if ghost_intersect(part, box_to_intersect_inv_mapped):
-                    x, y, z = pav_func.f((x, y, 0.0), i, j, 0)
-                    plt.scatter(x, y, color=part["color"])
+            if ghost_intersect(part, box_to_intersect_inv_mapped):
+                x, y, z = pav_func.f((x, y, 0.0), i, j, 0)
+                plt.scatter(x, y, color=part["color"])
 
     for part in parts:
         x, y, z = (part["x"], part["y"], 0.0)
@@ -242,7 +230,6 @@ plot_paving_function(
         0.3,
     ),
     "reflective in x periodic in y with shear",
-    shear_x=0.3,
 )
 
 plt.show()
