@@ -233,11 +233,11 @@ namespace shammath {
             return tmp + off;
         }
 
-        inline AABB<Tvec> f_aabb(AABB<Tvec> &aabb, int i, int j, int k) const {
+        inline AABB<Tvec> f_aabb(const AABB<Tvec> &aabb, int i, int j, int k) const {
             return shammath::f_aabb(*this, aabb, i, j, k);
         }
 
-        inline AABB<Tvec> f_aabb_inv(AABB<Tvec> &aabb, int i, int j, int k) const {
+        inline AABB<Tvec> f_aabb_inv(const AABB<Tvec> &aabb, int i, int j, int k) const {
             return shammath::f_aabb_inv(*this, aabb, i, j, k);
         }
     };
