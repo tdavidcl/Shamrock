@@ -78,7 +78,9 @@ Register_pymod(pysham_mathinit) {
                 shammath::paving_function_periodic_3d<f64_3>{box_size});
         }))
         .def("f", &shammath::paving_function_periodic_3d<f64_3>::f)
-        .def("f_inv", &shammath::paving_function_periodic_3d<f64_3>::f_inv);
+        .def("f_inv", &shammath::paving_function_periodic_3d<f64_3>::f_inv)
+        .def("f_aabb", &shammath::paving_function_periodic_3d<f64_3>::f_aabb)
+        .def("f_aabb_inv", &shammath::paving_function_periodic_3d<f64_3>::f_aabb_inv);
 
     py::class_<shammath::paving_function_general_3d<f64_3>>(
         math_module, "paving_function_general_3d")
@@ -92,7 +94,9 @@ Register_pymod(pysham_mathinit) {
                     box_size, box_center, is_x_periodic, is_y_periodic, is_z_periodic});
         }))
         .def("f", &shammath::paving_function_general_3d<f64_3>::f)
-        .def("f_inv", &shammath::paving_function_general_3d<f64_3>::f_inv);
+        .def("f_inv", &shammath::paving_function_general_3d<f64_3>::f_inv)
+        .def("f_aabb", &shammath::paving_function_general_3d<f64_3>::f_aabb)
+        .def("f_aabb_inv", &shammath::paving_function_general_3d<f64_3>::f_aabb_inv);
 
     py::class_<shammath::paving_function_general_3d_shear_x<f64_3>>(
         math_module, "paving_function_general_3d_shear_x")
@@ -107,5 +111,7 @@ Register_pymod(pysham_mathinit) {
                     box_size, box_center, is_x_periodic, is_y_periodic, is_z_periodic, shear_x});
         }))
         .def("f", &shammath::paving_function_general_3d_shear_x<f64_3>::f)
-        .def("f_inv", &shammath::paving_function_general_3d_shear_x<f64_3>::f_inv);
+        .def("f_inv", &shammath::paving_function_general_3d_shear_x<f64_3>::f_inv)
+        .def("f_aabb", &shammath::paving_function_general_3d_shear_x<f64_3>::f_aabb)
+        .def("f_aabb_inv", &shammath::paving_function_general_3d_shear_x<f64_3>::f_aabb_inv);
 }
