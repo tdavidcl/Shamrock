@@ -57,8 +57,8 @@ color_set = [
     "turquoise",
 ]
 
-x_set = np.linspace(0.2, box_size_x - 0.2, 3)
-y_set = np.linspace(0.2, box_size_y - 0.2, 3)
+x_set = np.linspace(0.2, box_size_x - 0.2, 4)
+y_set = np.linspace(0.2, box_size_y - 0.2, 4)
 
 parts = []
 i = 0
