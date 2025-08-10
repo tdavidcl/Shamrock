@@ -1,6 +1,6 @@
 """
-Paving functions
-================
+Ghost layer generation using paving functions
+=============================================
 
 This example showcase how to use the paving functions to generate ghost layers.
 
