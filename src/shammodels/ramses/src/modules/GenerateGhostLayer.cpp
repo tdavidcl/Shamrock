@@ -52,28 +52,6 @@ namespace {
 
 } // namespace
 
-/**
-
-Ok this is the hard bit.
-
-A ghost layer is defined by
-
-Ghost layer = f(patch) V box
-
-so moving in the dual space, we have
-
-Ghost layer = f(patch) V box
-            = f( f_inv(f(patch) V box) )
-            = f( patch V f_inv(box) )
-
-
-
-
-
-
-
-*/
-
 template<class Tvec, class TgridVec>
 void GenerateGhostLayer<Tvec, TgridVec>::_impl_evaluate_internal() {
     auto edges = get_edges();
