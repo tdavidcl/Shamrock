@@ -24,6 +24,7 @@
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
+#include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamrock/solvergraph/SerialPatchTreeEdge.hpp"
 
 namespace shammodels::basegodunov::modules {
@@ -52,6 +53,7 @@ namespace shammodels::basegodunov::modules {
             shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>> &sim_box;
             shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
             shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec> &patch_tree;
+            shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>> &patch_boxes;
             // outputs
             shamrock::solvergraph::PatchDataLayerDDShared &ghost_layers;
         };
@@ -60,8 +62,10 @@ namespace shammodels::basegodunov::modules {
             std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box,
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>> patch_tree,
+            std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
+                patch_boxes,
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_layers) {
-            __internal_set_ro_edges({sim_box, patch_data_layers, patch_tree});
+            __internal_set_ro_edges({sim_box, patch_data_layers, patch_tree, patch_boxes});
             __internal_set_rw_edges({ghost_layers});
         }
 
@@ -70,6 +74,7 @@ namespace shammodels::basegodunov::modules {
                 get_ro_edge<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(0),
                 get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(1),
                 get_ro_edge<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>>(2),
+                get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(3),
                 get_rw_edge<shamrock::solvergraph::PatchDataLayerDDShared>(0),
             };
         }
