@@ -19,7 +19,7 @@
 #include "shammath/AABB.hpp"
 #include "shammath/paving_function.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
-#include "shammodels/ramses/modules/GenGhostZoneLayers.hpp"
+#include "shammodels/ramses/modules/GenGhostZonesLayers.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <stdexcept>
 
@@ -42,8 +42,8 @@ void shammodels::basegodunov::modules::GenGhostZonesLayers<Tvec, TgridVec>::
     auto sched = shamsys::instance::get_compute_scheduler_ptr();
 
     // map candidates to indexes in ghosts
-    ghost_layers_candidates.values.map<sham::DeviceBuffer<u32>>(
-        [&](u64 sender, u64 receiver, &GhostLayerCandidateInfos &infos) -> sham::DeviceBuffer<u32> {
+    ghost_layers_candidates.values.template map<sham::DeviceBuffer<u32>>(
+        [&](u64 sender, u64 receiver, const GhostLayerCandidateInfos &infos) -> sham::DeviceBuffer<u32> {
             sham::DeviceBuffer<u32> ret(0, sched);
 
             return ret;

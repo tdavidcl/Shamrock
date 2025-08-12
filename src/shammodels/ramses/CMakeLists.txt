@@ -41,6 +41,7 @@ set(Sources
     src/modules/ComputeAMRLevel.cpp
     src/modules/ResidualDot.cpp
     src/modules/FindGhostLayerCandidates.cpp
+    src/modules/GenGhostZonesLayers.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
