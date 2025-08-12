@@ -17,6 +17,7 @@
  */
 
 #include "shambase/DistributedData.hpp"
+#include "shambase/DistributedDataShared.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/sparseXchg.hpp"
