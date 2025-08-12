@@ -295,7 +295,7 @@ template<class T>
 class PdatField_insert;
 
 template<class T>
-void PatchDataField<T>::insert(PatchDataField<T> &f2) {
+void PatchDataField<T>::insert(const PatchDataField<T> &f2) {
 
     u32 f2_len = f2.get_obj_cnt();
 

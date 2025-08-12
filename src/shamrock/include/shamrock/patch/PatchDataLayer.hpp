@@ -127,7 +127,7 @@ namespace shamrock::patch {
 
         void keep_ids(sycl::buffer<u32> &index_map, u32 len);
 
-        void insert_elements(PatchDataLayer &pdat);
+        void insert_elements(const PatchDataLayer &pdat);
 
         /**
          * @brief insert elements of pdat only if they are within the range

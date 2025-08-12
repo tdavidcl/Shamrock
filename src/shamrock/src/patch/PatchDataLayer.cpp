@@ -73,7 +73,7 @@ namespace shamrock::patch {
         }
     }
 
-    void PatchDataLayer::insert_elements(PatchDataLayer &pdat) {
+    void PatchDataLayer::insert_elements(const PatchDataLayer &pdat) {
 
         StackEntry stack_loc{};
 

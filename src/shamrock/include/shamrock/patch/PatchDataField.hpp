@@ -189,7 +189,7 @@ class PatchDataField {
 
     void apply_offset(T off);
 
-    void insert(PatchDataField<T> &f2);
+    void insert(const PatchDataField<T> &f2);
 
     void overwrite(PatchDataField<T> &f2, u32 obj_cnt);
 

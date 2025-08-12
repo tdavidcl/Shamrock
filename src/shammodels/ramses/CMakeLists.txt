@@ -45,6 +45,7 @@ set(Sources
     src/modules/ExtractGhostLayer.cpp
     src/modules/ExchangeGhostLayer.cpp
     src/modules/TransformGhostLayer.cpp
+    src/modules/FuseGhostLayer.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
