@@ -18,7 +18,7 @@ TestStart(
 
     {
         DistributedDataShared<int> data{};
-        auto it = data.add_obj(1, 2, 42);
+        data.add_obj(1, 2, 42);
         REQUIRE(data.get_element_count() == 1);
         REQUIRE(data.has_key(1, 2));
     }
