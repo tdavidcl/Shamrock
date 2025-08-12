@@ -16,7 +16,7 @@
  *
  */
 
-#include "shambase/DistributedData.hpp"
+#include "shambase/DistributedDataShared.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 
 namespace shamrock::solvergraph {
