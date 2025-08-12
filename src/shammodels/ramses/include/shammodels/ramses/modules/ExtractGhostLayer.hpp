@@ -10,25 +10,31 @@
 #pragma once
 
 /**
- * @file GenGhostZoneLayers.hpp
+ * @file ExtractGhostLayer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Field variant object to instanciate a variant on the patch types
  * @date 2023-07-31
  */
 
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
+#include "shamrock/patch/PatchDataLayerLayout.hpp"
+#include "shamrock/solvergraph/DDSharedBuffers.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 
 namespace shammodels::basegodunov::modules {
 
     template<class Tvec, class TgridVec>
-    class GenGhostZonesLayers : public shamrock::solvergraph::INode {
+    class ExtractGhostLayer : public shamrock::solvergraph::INode {
 
         public:
-        GenGhostZonesLayers(GhostLayerGenMode mode) : mode(mode) {}
+        ExtractGhostLayer(
+            GhostLayerGenMode mode,
+            std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout)
+            : mode(mode), ghost_layer_layout(ghost_layer_layout) {}
 
         private:
         GhostLayerGenMode mode;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout;
 
         struct Edges {
             // inputs
@@ -36,9 +42,9 @@ namespace shammodels::basegodunov::modules {
             const shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
             const shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>
                 &ghost_layers_candidates;
-            const shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>> &patch_boxes;
+            const shamrock::solvergraph::DDSharedBuffers<u32> &idx_in_ghost;
             // outputs
-            shamrock::solvergraph::PatchDataLayerDDShared &ghost_zones_layers;
+            shamrock::solvergraph::PatchDataLayerDDShared &ghost_layer;
         };
 
         inline void set_edges(
@@ -46,12 +52,11 @@ namespace shammodels::basegodunov::modules {
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
                 ghost_layers_candidates,
-            std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
-                patch_boxes,
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_zones_layers) {
+            std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_in_ghost,
+            std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_layer) {
             __internal_set_ro_edges(
-                {sim_box, patch_data_layers, ghost_layers_candidates, patch_boxes});
-            __internal_set_rw_edges({ghost_zones_layers});
+                {sim_box, patch_data_layers, ghost_layers_candidates, idx_in_ghost});
+            __internal_set_rw_edges({ghost_layer});
         }
 
         inline Edges get_edges() {
@@ -59,14 +64,14 @@ namespace shammodels::basegodunov::modules {
                 get_ro_edge<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(0),
                 get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(1),
                 get_ro_edge<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(2),
-                get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(3),
+                get_ro_edge<shamrock::solvergraph::DDSharedBuffers<u32>>(3),
                 get_rw_edge<shamrock::solvergraph::PatchDataLayerDDShared>(0),
             };
         }
 
         void _impl_evaluate_internal();
 
-        inline virtual std::string _impl_get_label() { return "GenGhostZonesLayers"; };
+        inline virtual std::string _impl_get_label() { return "ExtractGhostLayer"; };
 
         virtual std::string _impl_get_tex();
     };

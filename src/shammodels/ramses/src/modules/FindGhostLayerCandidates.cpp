@@ -26,10 +26,9 @@ void shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>:
     auto edges = get_edges();
 
     // inputs
-    auto &sim_box           = edges.sim_box.value;
-    auto &patch_data_layers = edges.patch_data_layers;
-    auto &patch_tree        = edges.patch_tree.get_patch_tree();
-    auto &patch_boxes       = edges.patch_boxes;
+    auto &sim_box     = edges.sim_box.value;
+    auto &patch_tree  = edges.patch_tree.get_patch_tree();
+    auto &patch_boxes = edges.patch_boxes;
 
     using PtNode = typename SerialPatchTree<TgridVec>::PtNode;
 
@@ -43,10 +42,7 @@ void shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>:
     // for each repetitions
     for_each_paving_tile(mode, [&](i32 xoff, i32 yoff, i32 zoff) {
         // for all local patches
-        patch_data_layers.patchdatas.for_each([&](u64 id, PatchDataLayer &pdat) {
-            // get the current patch box
-            auto &patch_box = patch_boxes.values.get(id);
-
+        patch_boxes.values.for_each([&](u64 id, const shammath::AABB<TgridVec> &patch_box) {
             // f(patch)
             auto patch_box_mapped = paving.f_aabb(patch_box, xoff, yoff, zoff);
 
@@ -78,9 +74,8 @@ template<class Tvec, class TgridVec>
 std::string
 shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::_impl_get_tex() {
     auto sim_box                 = get_ro_edge_base(0).get_tex_symbol();
-    auto patch_data_layers       = get_ro_edge_base(1).get_tex_symbol();
-    auto patch_tree              = get_ro_edge_base(2).get_tex_symbol();
-    auto patch_boxes             = get_ro_edge_base(3).get_tex_symbol();
+    auto patch_tree              = get_ro_edge_base(1).get_tex_symbol();
+    auto patch_boxes             = get_ro_edge_base(2).get_tex_symbol();
     auto ghost_layers_candidates = get_rw_edge_base(0).get_tex_symbol();
 
     std::string tex = R"tex(
@@ -91,7 +86,7 @@ shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::_imp
         \SetAlgoLined
         \SetKwInOut{Input}{Input}
         \SetKwInOut{Output}{Output}
-        \Input{Simulation box, patch data layers, patch tree, patch boxes}
+        \Input{Simulation box, patch tree, patch boxes}
         \Output{Ghost layer candidates}
         \BlankLine
         \For{each paving tile offset $(x_{\rm off}, y_{\rm off}, z_{\rm off})$}{
@@ -120,7 +115,6 @@ shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::_imp
     )tex";
 
     shambase::replace_all(tex, "{sim_box}", sim_box);
-    shambase::replace_all(tex, "{patch_data_layers}", patch_data_layers);
     shambase::replace_all(tex, "{patch_tree}", patch_tree);
     shambase::replace_all(tex, "{patch_boxes}", patch_boxes);
     shambase::replace_all(tex, "{ghost_layers_candidates}", ghost_layers_candidates);

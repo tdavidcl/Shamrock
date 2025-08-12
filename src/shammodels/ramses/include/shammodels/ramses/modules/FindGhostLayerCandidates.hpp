@@ -99,7 +99,6 @@ namespace shammodels::basegodunov::modules {
         struct Edges {
             // inputs
             const shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>> &sim_box;
-            const shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
             const shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec> &patch_tree;
             const shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>> &patch_boxes;
             // outputs
@@ -109,22 +108,20 @@ namespace shammodels::basegodunov::modules {
 
         inline void set_edges(
             std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box,
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>> patch_tree,
             std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
                 patch_boxes,
             std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
                 ghost_layers_candidates) {
-            __internal_set_ro_edges({sim_box, patch_data_layers, patch_tree, patch_boxes});
+            __internal_set_ro_edges({sim_box, patch_tree, patch_boxes});
             __internal_set_rw_edges({ghost_layers_candidates});
         }
 
         inline Edges get_edges() {
             return Edges{
                 get_ro_edge<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(0),
-                get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(1),
-                get_ro_edge<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>>(2),
-                get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(3),
+                get_ro_edge<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>>(1),
+                get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(2),
                 get_rw_edge<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(0),
             };
         }
