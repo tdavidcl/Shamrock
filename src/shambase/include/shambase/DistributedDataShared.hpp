@@ -80,8 +80,7 @@ namespace shambase {
          * @endcode
          */
         inline iterator add_obj(u64 left_id, u64 right_id, T &&obj) {
-            std::pair<u64, u64> tmp = {left_id, right_id};
-            return data.emplace(std::move(tmp), std::forward<T>(obj));
+            return data.emplace(std::pair<u64, u64>{left_id, right_id}, std::forward<T>(obj));
         }
 
         /**
@@ -96,6 +95,13 @@ namespace shambase {
          * @endcode
          */
         inline void for_each(std::function<void(u64, u64, T &)> &&f) {
+            for (auto &[id, obj] : data) {
+                f(id.first, id.second, obj);
+            }
+        }
+
+        /// const version
+        inline void for_each(std::function<void(u64, u64, const T &)> &&f) const {
             for (auto &[id, obj] : data) {
                 f(id.first, id.second, obj);
             }
@@ -149,7 +155,7 @@ namespace shambase {
          * }
          * @endcode
          */
-        inline bool has_key(u64 left_id, u64 right_id) {
+        inline bool has_key(u64 left_id, u64 right_id) const {
             return (data.find({left_id, right_id}) != data.end());
         }
 
@@ -158,7 +164,7 @@ namespace shambase {
          *
          * @return Number of stored objects across all patch pairs
          */
-        inline u64 get_element_count() { return data.size(); }
+        inline u64 get_element_count() const { return data.size(); }
 
         /**
          * @brief Transform all objects to a new type using a mapping function
@@ -187,6 +193,17 @@ namespace shambase {
             return ret;
         }
 
+        /// const version
+        template<class Tmap>
+        inline DistributedDataShared<Tmap>
+        map(std::function<Tmap(u64, u64, const T &)> map_func) const {
+            DistributedDataShared<Tmap> ret;
+            for_each([&](u64 left, u64 right, const T &ref) {
+                ret.add_obj(left, right, map_func(left, right, ref));
+            });
+            return ret;
+        }
+
         /**
          * @brief Clear all objects from the container
          */
@@ -197,7 +214,7 @@ namespace shambase {
          *
          * @return True if no objects are stored in the container
          */
-        inline bool is_empty() { return data.empty(); }
+        inline bool is_empty() const { return data.empty(); }
     };
 
 } // namespace shambase
