@@ -36,7 +36,7 @@ namespace shamrock::solvergraph {
          */
         std::optional<std::reference_wrapper<SerialPatchTree<Tvec>>> patch_tree;
 
-        inline SerialPatchTree<Tvec> &get_patch_tree() {
+        inline SerialPatchTree<Tvec> &get_patch_tree() const {
             if (!patch_tree.has_value()) {
                 shambase::throw_with_loc<std::runtime_error>("Patch tree not set");
             }
