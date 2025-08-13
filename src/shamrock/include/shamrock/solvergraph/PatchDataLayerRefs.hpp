@@ -210,43 +210,4 @@ namespace shamrock::solvergraph {
         std::string _impl_get_tex() { return "TODO"; }
     };
 
-    template<class T>
-    class GetFieldRefFromLayer : public INode {
-
-        public:
-        GetFieldRefFromLayer(u32 field_idx) : field_idx(field_idx) {}
-        u32 field_idx;
-
-        GetFieldRefFromLayer(patch::PatchDataLayerLayout &ghost_layout, std::string field_name)
-            : GetFieldRefFromLayer(ghost_layout.get_field_idx<T>(field_name)) {}
-
-        struct Edges {
-            const PatchDataLayerRefs &source;
-            FieldRefs<T> &out_ref;
-        };
-
-        void set_edges(
-            std::shared_ptr<PatchDataLayerRefs> source, std::shared_ptr<FieldRefs<T>> out_ref) {
-            __internal_set_ro_edges({source});
-            __internal_set_rw_edges({out_ref});
-        }
-
-        Edges get_edges() {
-            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<FieldRefs<T>>(0)};
-        }
-
-        void _impl_evaluate_internal() {
-            auto edges = get_edges();
-
-            edges.out_ref.set_refs(
-                edges.source.patchdatas.template map<std::reference_wrapper<PatchDataField<T>>>(
-                    [&](u64 id_patch, patch::PatchDataLayer &pdat) {
-                        return std::ref(pdat.get_field<T>(field_idx));
-                    }));
-        }
-
-        std::string _impl_get_label() { return "GetFieldRefFromLayer"; }
-
-        std::string _impl_get_tex() { return "TODO"; }
-    };
 } // namespace shamrock::solvergraph

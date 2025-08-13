@@ -10,17 +10,13 @@
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
-#include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
+#include "shamrock/solvergraph/GetFieldRefFromLayer.hpp"
 #include "shamtest/shamtest.hpp"
 #include <memory>
 #include <random>
 #include <stdexcept>
 
-TestStart(
-    Unittest,
-    "shamrock/solvergraph/GetFieldRefFromLayer",
-    testGetFieldRefFromLayerComprehensive,
-    1) {
+TestStart(Unittest, "shamrock/solvergraph/GetFieldRefFromLayer", testGetFieldRefFromLayer, 1) {
     using namespace shamrock::solvergraph;
     using namespace shamrock::patch;
 
