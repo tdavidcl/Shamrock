@@ -44,27 +44,4 @@ namespace shamrock::solvergraph {
         inline virtual void free_alloc() { patchdatas = {}; }
     };
 
-    class PatchDataLayerEdge : public IDataEdgeNamed {
-
-        public:
-        std::shared_ptr<patch::PatchDataLayerLayout> layout;
-        shambase::DistributedData<patch::PatchDataLayer> patchdatas;
-
-        using IDataEdgeNamed::IDataEdgeNamed;
-
-        inline PatchDataLayerEdge(
-            std::string name,
-            std::string label,
-            std::shared_ptr<patch::PatchDataLayerLayout> layout)
-            : IDataEdgeNamed(name, label), layout(layout) {}
-
-        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const {
-            return patchdatas.get(id_patch);
-        }
-
-        inline virtual patch::PatchDataLayer &get(u64 id_patch) { return patchdatas.get(id_patch); }
-
-        inline virtual void free_alloc() { patchdatas = {}; }
-    };
-
 } // namespace shamrock::solvergraph

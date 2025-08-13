@@ -20,6 +20,7 @@
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 #include <memory>
 

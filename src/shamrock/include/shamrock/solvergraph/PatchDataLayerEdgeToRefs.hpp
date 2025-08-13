@@ -18,6 +18,7 @@
  */
 
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 
 namespace shamrock::solvergraph {
