@@ -20,7 +20,7 @@ multy = 1
 multz = 1
 
 sz = 1 << 1
-base = 32
+base = 16
 
 
 dump_folder = "_to_trash"
@@ -47,7 +47,7 @@ model.set_solver_config(cfg)
 
 # %%
 # Setup
-model.init_scheduler(int(1e4), 1)
+model.init_scheduler(int(1e3), 1)
 model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
 kx, ky, kz = 2 * np.pi, 0, 0
@@ -198,6 +198,9 @@ def save_state(iplot):
     data_dict = ctx.collect_data()
     save_collected_data(data_dict, os.path.join(dump_folder, f"{sim_name}_data_{iplot:04}.h5"))
 
+
+# %%
+# Running the simulation
 
 save_state(0)
 
