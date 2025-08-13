@@ -9,6 +9,7 @@
 
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
+#include "shamrock/solvergraph/CopyPatchDataLayerFields.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 #include "shamtest/shamtest.hpp"
 #include <memory>
