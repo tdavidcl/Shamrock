@@ -190,10 +190,10 @@ namespace shamrock::patch {
             std::array<Tvecbox, 8> min_box,
             std::array<Tvecbox, 8> max_box);
 
-        void append_subset_to(const std::vector<u32> &idxs, PatchDataLayer &pfield);
-        void append_subset_to(sycl::buffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pfield);
+        void append_subset_to(const std::vector<u32> &idxs, PatchDataLayer &pdat);
+        void append_subset_to(sycl::buffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat);
         void
-        append_subset_to(const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pfield);
+        append_subset_to(const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat);
 
         inline u32 get_obj_cnt() {
 
@@ -268,7 +268,7 @@ namespace shamrock::patch {
         }
 
         template<class T>
-        PatchDataField<T> &get_field(std::string field_name) {
+        PatchDataField<T> &get_field(const std::string &field_name) {
             return get_field<T>(pdl().get_field_idx<T>(field_name));
         }
 

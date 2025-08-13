@@ -6,8 +6,7 @@ This example showcase how to use the paving functions to generate ghost layers.
 
 The complex thing is that we want to intersect the current data with the ghost layer,
 but we do not want to modify the original buffer. As a result we perform the intersection
-in a space that is transformed by the paving function. We then perform the intersection in that
-space, and then map back the result to the original space.
+in a space transformed by the paving function, and then map the result back to the original space.
 
 Formally speaking for a paving function f:
 
@@ -15,7 +14,7 @@ Ghost layer = f(patch) V box
             = f( f_inv(f(patch) V box) )
             = f( patch V f_inv(box) ),
 
-where V denote a ghost layer intersection.
+where V denotes a ghost layer intersection.
 """
 
 # sphinx_gallery_multi_image = "single"
