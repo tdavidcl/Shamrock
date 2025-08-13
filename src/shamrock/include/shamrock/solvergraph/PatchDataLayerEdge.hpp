@@ -16,7 +16,6 @@
  *
  */
 
-
 #include "shambase/DistributedData.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
