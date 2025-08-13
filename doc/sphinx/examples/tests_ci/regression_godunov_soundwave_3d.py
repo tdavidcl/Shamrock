@@ -47,7 +47,7 @@ model.set_solver_config(cfg)
 
 # %%
 # Setup
-model.init_scheduler(int(1e7), 1)
+model.init_scheduler(int(1e4), 1)
 model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
 kx, ky, kz = 2 * np.pi, 0, 0
