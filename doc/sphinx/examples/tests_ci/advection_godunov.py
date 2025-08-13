@@ -1,3 +1,10 @@
+"""
+Godunov advection test
+======================
+
+This test is used to test the Godunov advection setup
+"""
+
 import os
 
 import matplotlib.pyplot as plt

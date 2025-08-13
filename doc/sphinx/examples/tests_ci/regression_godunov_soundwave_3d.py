@@ -1,3 +1,11 @@
+"""
+Regression test : Godunov soundwave 3D
+======================================
+
+This test is used to check that the Godunov soundwave setup is able to reproduce the
+same results as the reference file.
+"""
+
 import os
 
 import matplotlib.pyplot as plt
