@@ -20,10 +20,12 @@
 #include "shambase/DistributedData.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 #include "shamrock/solvergraph/IFieldRefs.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/Indexes.hpp"
 #include <functional>
 
 namespace shamrock::solvergraph {
@@ -175,4 +177,76 @@ namespace shamrock::solvergraph {
         inline virtual std::string _impl_get_tex() { return "TODO"; }
     };
 
+    class ExtractCounts : public INode {
+
+        public:
+        ExtractCounts() {}
+
+        struct Edges {
+            const PatchDataLayerRefs &refs;
+            Indexes<u32> &counts;
+        };
+
+        void
+        set_edges(std::shared_ptr<PatchDataLayerRefs> refs, std::shared_ptr<Indexes<u32>> counts) {
+            __internal_set_ro_edges({refs});
+            __internal_set_rw_edges({counts});
+        }
+
+        Edges get_edges() {
+            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<Indexes<u32>>(1)};
+        }
+
+        void _impl_evaluate_internal() {
+            auto edges = get_edges();
+            edges.counts.indexes
+                = edges.refs.patchdatas.map<u32>([](u64 id_patch, patch::PatchDataLayer &pdat) {
+                      return pdat.get_obj_cnt();
+                  });
+        }
+
+        std::string _impl_get_label() { return "ExtractCounts"; }
+
+        std::string _impl_get_tex() { return "TODO"; }
+    };
+
+    template<class T>
+    class GetFieldRefFromLayer : public INode {
+
+        public:
+        GetFieldRefFromLayer(u32 field_idx) : field_idx(field_idx) {}
+        u32 field_idx;
+
+        GetFieldRefFromLayer(patch::PatchDataLayerLayout &ghost_layout, std::string field_name)
+            : GetFieldRefFromLayer(ghost_layout.get_field_idx<T>(field_name)) {}
+
+        struct Edges {
+            const PatchDataLayerRefs &source;
+            FieldRefs<T> &out_ref;
+        };
+
+        void set_edges(
+            std::shared_ptr<PatchDataLayerRefs> source, std::shared_ptr<FieldRefs<T>> out_ref) {
+            __internal_set_ro_edges({source});
+            __internal_set_rw_edges({out_ref});
+        }
+
+        Edges get_edges() {
+            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<FieldRefs<T>>(1)};
+        }
+
+        void _impl_evaluate_internal() {
+            auto edges = get_edges();
+
+            edges.out_ref.set_refs(
+                edges.source.patchdatas.template map<std::reference_wrapper<PatchDataField<T>>>(
+                    [&](u64 id_patch, patch::PatchDataLayer &pdat) {
+                        return std::ref(pdat.get_field<T>(field_idx));
+                    }));
+        }
+
+        std::string _impl_get_label() { return "GetFieldRefFromLayer"; }
+
+        std::string _impl_get_tex() { return "TODO"; }
+    };
 } // namespace shamrock::solvergraph
