@@ -71,5 +71,4 @@ TestStart(Unittest, "shamrock/solvergraph/GetFieldRefFromLayer", testGetFieldRef
     test_field_extraction<f32_3>(layout, source_refs, "vector_field", obj_count, 2);
     test_field_extraction<u64>(layout, source_refs, "index_field", obj_count, 1);
     test_field_extraction<f64>(layout, source_refs, "double_field", obj_count, 1);
-
 }
