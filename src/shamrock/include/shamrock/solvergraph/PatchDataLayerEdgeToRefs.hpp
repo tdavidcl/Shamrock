@@ -12,7 +12,8 @@
 /**
  * @file PatchDataLayerEdgeToRefs.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Defines the PatchDataLayerEdgeToRefs class for converting patch data layer edges to references.
+ * @brief Defines the PatchDataLayerEdgeToRefs class for converting patch data layer edges to
+ * references.
  *
  */
 

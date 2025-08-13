@@ -129,37 +129,4 @@ namespace shamrock::solvergraph {
         std::string _impl_get_tex() { return "TODO"; }
     };
 
-    class ExtractCounts : public INode {
-
-        public:
-        ExtractCounts() {}
-
-        struct Edges {
-            const PatchDataLayerRefs &refs;
-            Indexes<u32> &counts;
-        };
-
-        void
-        set_edges(std::shared_ptr<PatchDataLayerRefs> refs, std::shared_ptr<Indexes<u32>> counts) {
-            __internal_set_ro_edges({refs});
-            __internal_set_rw_edges({counts});
-        }
-
-        Edges get_edges() {
-            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<Indexes<u32>>(1)};
-        }
-
-        void _impl_evaluate_internal() {
-            auto edges = get_edges();
-            edges.counts.indexes
-                = edges.refs.patchdatas.map<u32>([](u64 id_patch, patch::PatchDataLayer &pdat) {
-                      return pdat.get_obj_cnt();
-                  });
-        }
-
-        std::string _impl_get_label() { return "ExtractCounts"; }
-
-        std::string _impl_get_tex() { return "TODO"; }
-    };
-
 } // namespace shamrock::solvergraph
