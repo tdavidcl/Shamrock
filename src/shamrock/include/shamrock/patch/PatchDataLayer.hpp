@@ -268,6 +268,11 @@ namespace shamrock::patch {
         }
 
         template<class T>
+        PatchDataField<T> &get_field(std::string field_name) {
+            return get_field<T>(pdl().get_field_idx<T>(field_name));
+        }
+
+        template<class T>
         sham::DeviceBuffer<T> &get_field_buf_ref(u32 idx) {
 
             var_t &tmp = fields.at(idx);
