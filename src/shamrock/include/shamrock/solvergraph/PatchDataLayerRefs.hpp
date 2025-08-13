@@ -232,7 +232,7 @@ namespace shamrock::solvergraph {
         }
 
         Edges get_edges() {
-            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<FieldRefs<T>>(1)};
+            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<FieldRefs<T>>(0)};
         }
 
         void _impl_evaluate_internal() {

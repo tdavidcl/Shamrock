@@ -106,7 +106,7 @@ TestStart(
 
         REQUIRE_EQUAL(out_field.get_obj_cnt(), obj_count);
         REQUIRE_EQUAL(out_field.get_name(), field_name);
-        REQUIRE_EQUAL(out_field.get_nvar(), 1);
+        REQUIRE_EQUAL(out_field.get_nvar(), 2);
 
         // Verify the extracted field is actually the same as the source field
         auto &source_pdat  = source_refs->patchdatas.get(1).get();
