@@ -52,9 +52,6 @@ namespace shamrock::solvergraph {
      * // Free allocated resources when done
      * sharedLayer->free_alloc();
      * @endcode
-     *
-     * @author Timothée David--Cléris (tim.shamrock@proton.me)
-     * @since 2021
      */
     class PatchDataLayerDDShared : public IDataEdgeNamed {
 
