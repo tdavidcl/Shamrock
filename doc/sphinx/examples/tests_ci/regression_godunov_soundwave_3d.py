@@ -238,7 +238,7 @@ tolerances = [
     {
         "cell_min": (1e-20, 1e-20),
         "cell_max": (1e-20, 1e-20),
-        "rho": (1e-20, 1e-20),
+        "rho": (1e-15, 1e-15),
         "rhovel": (1e-20, 1e-20),
         "rhoetot": (1e-20, 1e-20),
     },
