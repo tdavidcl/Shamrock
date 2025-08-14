@@ -17,9 +17,7 @@
 #include "shamalgs/collective/distributedDataComm.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::ExchangeGhostLayer<Tvec, TgridVec>::
-    _impl_evaluate_internal() {
+void shammodels::basegodunov::modules::ExchangeGhostLayer::_impl_evaluate_internal() {
     auto edges = get_edges();
 
     // outputs
@@ -52,9 +50,4 @@ void shammodels::basegodunov::modules::ExchangeGhostLayer<Tvec, TgridVec>::
     ghost_layer.patchdatas = std::move(recv_dat);
 }
 
-template<class Tvec, class TgridVec>
-std::string shammodels::basegodunov::modules::ExchangeGhostLayer<Tvec, TgridVec>::_impl_get_tex() {
-    return "TODO";
-}
-
-template class shammodels::basegodunov::modules::ExchangeGhostLayer<f64_3, i64_3>;
+std::string shammodels::basegodunov::modules::ExchangeGhostLayer::_impl_get_tex() { return "TODO"; }

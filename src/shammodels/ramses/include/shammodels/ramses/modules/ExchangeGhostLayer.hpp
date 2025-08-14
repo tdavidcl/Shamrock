@@ -23,16 +23,13 @@
 
 namespace shammodels::basegodunov::modules {
 
-    template<class Tvec, class TgridVec>
     class ExchangeGhostLayer : public shamrock::solvergraph::INode {
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout;
 
         public:
         ExchangeGhostLayer(
             std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout)
             : ghost_layer_layout(ghost_layer_layout) {}
-
-        private:
-        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout;
 
         struct Edges {
             const shamrock::solvergraph::ScalarsEdge<u32> &rank_owner;
