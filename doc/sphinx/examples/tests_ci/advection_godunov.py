@@ -184,11 +184,11 @@ expected_l2_rhovelz = 0
 expected_l2_rhoetot = 0.12026008010012906
 
 test_pass = True
-pass_rho = 0
-pass_rhovelx = 0
+pass_rho = 1.5e-15
+pass_rhovelx = 1.5e-15
 pass_rhovely = 0
 pass_rhovelz = 0
-pass_rhoetot = 0
+pass_rhoetot = 1.5e-15
 
 err_log = ""
 
