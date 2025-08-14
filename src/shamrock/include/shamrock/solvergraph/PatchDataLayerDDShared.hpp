@@ -24,7 +24,7 @@
  * nodes or processes.
  */
 
-#include "shambase/DistributedData.hpp"
+#include "shambase/DistributedDataShared.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/solvergraph/IDataEdgeNamed.hpp"
 
