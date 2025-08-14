@@ -77,6 +77,7 @@ jobs:
             testfile: regression_sph_kh.py
           - worldsize: 1
             testfile: regression_godunov_soundwave_3d.py
+      fail-fast: false
 
 
     timeout-minutes: 60
