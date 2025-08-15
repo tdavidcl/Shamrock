@@ -446,16 +446,9 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     exchange_gz_edge->patchdatas = std::move(pdat_interf);
 
-    std::shared_ptr<shamrock::solvergraph::ScalarsEdge<u32>> rank_owner
-        = std::make_shared<shamrock::solvergraph::ScalarsEdge<u32>>("", "");
-
-    scheduler().for_each_global_patch([&](const shamrock::patch::Patch p) {
-        rank_owner->values.add_obj(p.id_patch, scheduler().get_patch_rank_owner(p.id_patch));
-    });
-
     std::shared_ptr<ExchangeGhostLayer> exchange_gz_node
         = std::make_shared<ExchangeGhostLayer>(ghost_layout_ptr);
-    exchange_gz_node->set_edges(rank_owner, exchange_gz_edge);
+    exchange_gz_node->set_edges(storage.patch_rank_owner, exchange_gz_edge);
 
     exchange_gz_node->evaluate();
 
