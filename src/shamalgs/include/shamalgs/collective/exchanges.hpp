@@ -129,8 +129,8 @@ namespace shamalgs::collective {
 #endif
         }
 
-        T *send_ptr = (send_vec.size() > 0) ? &send_vec[0] : nullptr;
-        T *recv_ptr = (recv_vec.size() > 0) ? &recv_vec[0] : nullptr;
+        auto send_ptr = (send_vec.size() > 0) ? &send_vec[0] : nullptr;
+        auto recv_ptr = (recv_vec.size() > 0) ? &recv_vec[0] : nullptr;
 
         shamcomm::mpi::Allgatherv(
             send_ptr,
