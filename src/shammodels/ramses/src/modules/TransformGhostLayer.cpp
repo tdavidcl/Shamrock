@@ -34,7 +34,6 @@ void shammodels::basegodunov::modules::TransformGhostLayer<Tvec, TgridVec>::
 
     // inputs
     auto &sim_box                 = edges.sim_box.value;
-    auto &patch_data_layers       = edges.patch_data_layers;
     auto &ghost_layers_candidates = edges.ghost_layers_candidates;
 
     // outputs
@@ -46,8 +45,8 @@ void shammodels::basegodunov::modules::TransformGhostLayer<Tvec, TgridVec>::
     auto paving_function = get_paving(mode, sim_box);
 
     // get the block min and max field
-    u32 iblock_min = ghost_layer_layout->get_field_idx<TgridVec>("block_min");
-    u32 iblock_max = ghost_layer_layout->get_field_idx<TgridVec>("block_max");
+    u32 iblock_min = ghost_layer_layout->get_field_idx<TgridVec>("cell_min");
+    u32 iblock_max = ghost_layer_layout->get_field_idx<TgridVec>("cell_max");
 
     // extract the ghost layers
     auto ghost_layer_it      = ghost_layer.patchdatas.begin();

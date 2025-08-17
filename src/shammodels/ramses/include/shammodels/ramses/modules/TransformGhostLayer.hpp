@@ -25,20 +25,18 @@ namespace shammodels::basegodunov::modules {
     template<class Tvec, class TgridVec>
     class TransformGhostLayer : public shamrock::solvergraph::INode {
 
+        GhostLayerGenMode mode;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout;
+
         public:
         TransformGhostLayer(
             GhostLayerGenMode mode,
             std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout)
             : mode(mode), ghost_layer_layout(ghost_layer_layout) {}
 
-        private:
-        GhostLayerGenMode mode;
-        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layer_layout;
-
         struct Edges {
             // inputs
             const shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>> &sim_box;
-            const shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
             const shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>
                 &ghost_layers_candidates;
             // outputs
@@ -47,19 +45,17 @@ namespace shammodels::basegodunov::modules {
 
         inline void set_edges(
             std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box,
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
                 ghost_layers_candidates,
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_layer) {
-            __internal_set_ro_edges({sim_box, patch_data_layers, ghost_layers_candidates});
+            __internal_set_ro_edges({sim_box, ghost_layers_candidates});
             __internal_set_rw_edges({ghost_layer});
         }
 
         inline Edges get_edges() {
             return Edges{
                 get_ro_edge<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(0),
-                get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(1),
-                get_ro_edge<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(2),
+                get_ro_edge<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(1),
                 get_rw_edge<shamrock::solvergraph::PatchDataLayerDDShared>(0),
             };
         }

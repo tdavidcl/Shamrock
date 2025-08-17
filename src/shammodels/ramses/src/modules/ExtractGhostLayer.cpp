@@ -32,10 +32,9 @@ void shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::
     auto edges = get_edges();
 
     // inputs
-    auto &sim_box                 = edges.sim_box.value;
-    auto &patch_data_layers       = edges.patch_data_layers;
-    auto &ghost_layers_candidates = edges.ghost_layers_candidates;
-    auto &idx_in_ghost            = edges.idx_in_ghost;
+    auto &sim_box           = edges.sim_box.value;
+    auto &patch_data_layers = edges.patch_data_layers;
+    auto &idx_in_ghost      = edges.idx_in_ghost;
 
     // outputs
     auto &ghost_layer = edges.ghost_layer;
@@ -46,17 +45,14 @@ void shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::
     auto paving_function = get_paving(mode, sim_box);
 
     // extract the ghost layers
-    auto idx_in_ghost_it     = idx_in_ghost.buffers.begin();
-    auto ghost_layer_info_it = ghost_layers_candidates.values.begin();
+    auto idx_in_ghost_it = idx_in_ghost.buffers.begin();
 
     // iterate on both DDShared containers
-    for (; idx_in_ghost_it != idx_in_ghost.buffers.end();
-         ++idx_in_ghost_it, ++ghost_layer_info_it) {
+    for (; idx_in_ghost_it != idx_in_ghost.buffers.end(); ++idx_in_ghost_it) {
 
         auto [sender, receiver] = idx_in_ghost_it->first;
 
         const sham::DeviceBuffer<u32> &sender_idx_in_ghost = idx_in_ghost_it->second;
-        auto &sender_ghost_layer_info                      = ghost_layer_info_it->second;
 
         shamrock::patch::PatchDataLayer ghost_zone(ghost_layer_layout);
 
