@@ -15,6 +15,7 @@
 
 #include "shamtree/TreeCellRanges.hpp"
 #include "shamalgs/primitives/equals.hpp"
+#include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shamtree/MortonKernels.hpp"
 #include "shamtree/kernels/compute_ranges.hpp"
 
