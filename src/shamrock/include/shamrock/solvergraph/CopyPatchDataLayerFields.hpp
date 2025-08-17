@@ -54,6 +54,8 @@ namespace shamrock::solvergraph {
         }
 
         void _impl_evaluate_internal() {
+            StackEntry stack_loc{};
+
             auto edges = get_edges();
 
             // Ensures that the layout are all matching sources and targets

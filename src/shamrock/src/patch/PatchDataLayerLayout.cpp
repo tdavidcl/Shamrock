@@ -64,6 +64,8 @@ namespace shamrock::patch {
                         ss << "u32_3 ";
                     } else if (std::is_same<base_t, u64_3>::value) {
                         ss << "u64_3 ";
+                    } else if (std::is_same<base_t, i64_3>::value) {
+                        ss << "i64_3 ";
                     } else {
                         ss << "unknown";
                     }

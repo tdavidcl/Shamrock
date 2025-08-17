@@ -26,13 +26,12 @@
 #include "shamsys/NodeInstance.hpp"
 #include <stdexcept>
 
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::
-    _impl_evaluate_internal() {
+void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_internal() {
+    StackEntry stack_loc{};
+
     auto edges = get_edges();
 
     // inputs
-    auto &sim_box           = edges.sim_box.value;
     auto &patch_data_layers = edges.patch_data_layers;
     auto &idx_in_ghost      = edges.idx_in_ghost;
 
@@ -41,8 +40,6 @@ void shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::
 
     auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
     sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
-
-    auto paving_function = get_paving(mode, sim_box);
 
     // extract the ghost layers
     auto idx_in_ghost_it = idx_in_ghost.buffers.begin();
@@ -64,9 +61,4 @@ void shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::
     }
 }
 
-template<class Tvec, class TgridVec>
-std::string shammodels::basegodunov::modules::ExtractGhostLayer<Tvec, TgridVec>::_impl_get_tex() {
-    return "TODO";
-}
-
-template class shammodels::basegodunov::modules::ExtractGhostLayer<f64_3, i64_3>;
+std::string shammodels::basegodunov::modules::ExtractGhostLayer::_impl_get_tex() { return "TODO"; }

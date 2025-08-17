@@ -45,7 +45,7 @@ namespace shamrock::solvergraph {
             std::shared_ptr<PatchDataLayerEdge> original,
             std::shared_ptr<PatchDataLayerRefs> refs) {
             __internal_set_ro_edges({});
-            __internal_set_rw_edges({refs, original});
+            __internal_set_rw_edges({original, refs});
         }
 
         /// Get the edges of the node
@@ -55,6 +55,7 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void _impl_evaluate_internal() {
+            StackEntry stack_loc{};
 
             auto edges = get_edges();
             edges.refs.patchdatas
