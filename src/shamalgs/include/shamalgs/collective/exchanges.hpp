@@ -128,7 +128,6 @@ namespace shamalgs::collective {
         if (global_len == 0) {
             return;
         }
-      
         shamcomm::mpi::Allgatherv(
             send_vec.data(),
             send_vec.size(),
