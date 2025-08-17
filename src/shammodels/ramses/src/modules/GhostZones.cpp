@@ -560,9 +560,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 #endif
 
     // to see the values of the ghost zones
-    print_debug(exchange_gz_edge->patchdatas);
-
-    throw "";
+    // print_debug(exchange_gz_edge->patchdatas);
 
     std::shared_ptr<shammodels::basegodunov::modules::TransformGhostLayer<Tvec, TgridVec>>
         transform_gz_node
