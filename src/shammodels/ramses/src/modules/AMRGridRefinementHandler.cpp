@@ -18,6 +18,7 @@
 #include "shamcomm/logs.hpp"
 #include "shammodels/ramses/modules/AMRSortBlocks.hpp"
 #include <stdexcept>
+#include "shamalgs/details/algorithm/algorithm.hpp"
 
 template<class Tvec, class TgridVec>
 template<class UserAcc, class... T>
