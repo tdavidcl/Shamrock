@@ -12,7 +12,7 @@
 /**
  * @file ExtractGhostLayer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
+ * @brief Extract the ghost layer from the patch data layers.
  */
 
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
