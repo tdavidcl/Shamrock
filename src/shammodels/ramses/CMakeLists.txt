@@ -41,6 +41,7 @@ set(Sources
     src/modules/ResidualDot.cpp
     src/modules/ExchangeGhostLayer.cpp
     src/modules/TransformGhostLayer.cpp
+    src/modules/ExtractGhostLayer.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)
