@@ -16,10 +16,11 @@
  * @date 2023-07-31
  */
 
-#include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/DDSharedBuffers.hpp"
+#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
+#include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 
 namespace shammodels::basegodunov::modules {
 
