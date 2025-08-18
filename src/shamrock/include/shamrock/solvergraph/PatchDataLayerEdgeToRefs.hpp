@@ -37,9 +37,8 @@ namespace shamrock::solvergraph {
         /**
          * @brief Set the edges of the node
          *
-         * Set the edge that will be freed by this node
-         *
-         * @param to_free The node to free
+         * @param original The input edge containing patch data layers.
+         * @param refs The output edge that will contain references to the patch data layers.
          */
         inline void set_edges(
             std::shared_ptr<PatchDataLayerEdge> original,
