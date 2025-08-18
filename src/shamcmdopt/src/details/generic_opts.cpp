@@ -162,15 +162,8 @@ namespace shamcmdopt {
         }
     }
 
-    /**
-     * @brief Check if the current terminal supports UTF-8 encoding
-     *
-     * This function checks if the current terminal is a TTY and if it supports UTF-8.
-     * It examines the locale settings (LC_ALL, LC_CTYPE, LANG) to determine UTF-8 support.
-     *
-     * @return true if UTF-8 is supported, false otherwise
-     */
-    bool check_utf8_support() {
+    /// Internal function to check if the current terminal supports UTF-8 encoding
+    bool check_utf8_support_internal() {
         // Only check if we're in a TTY
         if (!is_a_tty()) {
             return false;
@@ -204,6 +197,19 @@ namespace shamcmdopt {
         }
 
         return false;
+    }
+
+    bool check_utf8_support() {
+        static bool result_cached = false;
+        static bool cached_result = false;
+        
+        if (result_cached) {
+            return cached_result;
+        }
+    
+        cached_result = check_utf8_support_internal();
+        result_cached = true;
+        return cached_result;
     }
 
     void process_cmdopt_generic_opts() {
