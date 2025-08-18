@@ -27,13 +27,17 @@
 #include "shammath/CoordRange.hpp"
 #include "shammodels/ramses/GhostZoneData.hpp"
 #include "shammodels/ramses/modules/ExchangeGhostLayer.hpp"
+#include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
 #include "shammodels/ramses/modules/TransformGhostLayer.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/InterfacesUtility.hpp"
+#include "shamrock/solvergraph/CopyPatchDataLayerFields.hpp"
 #include "shamrock/solvergraph/DDSharedScalar.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
+#include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
+#include "shamrock/solvergraph/PatchDataLayerEdgeToRefs.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -454,8 +458,32 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         });
     };
 
-    // generate send buffers
-    auto pdat_interf = gen_ghost.template build_interface_native<PatchDataLayer>(
+    // ----------------------------------------------------------------------------------------
+    // temporary wrapper to slowly migrate to the new solvergraph
+    std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> source_patches
+        = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
+
+    source_patches->patchdatas = {};
+    scheduler().for_each_patchdata_nonempty([&](const Patch &p, PatchDataLayer &pdat) {
+        source_patches->patchdatas.add_obj(p.id_patch, std::ref(pdat));
+    });
+
+    std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdge> merged_patches
+        = std::make_shared<shamrock::solvergraph::PatchDataLayerEdge>("", "", ghost_layout_ptr);
+    merged_patches->patchdatas = {};
+
+    std::shared_ptr<shamrock::solvergraph::CopyPatchDataLayerFields> copy_fields
+        = std::make_shared<shamrock::solvergraph::CopyPatchDataLayerFields>(
+            scheduler().get_layout_ptr(), ghost_layout_ptr);
+
+    copy_fields->set_edges(source_patches, merged_patches);
+    copy_fields->evaluate();
+
+    std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> exchange_gz_edge
+        = std::make_shared<shamrock::solvergraph::PatchDataLayerDDShared>("", "");
+
+#if false
+    exchange_gz_edge->patchdatas = gen_ghost.template build_interface_native<PatchDataLayer>(
         [&](u64 sender, u64, InterfaceBuildInfos binfo, sycl::buffer<u32> &buf_idx, u32 cnt) {
             PatchDataLayer &sender_patch = scheduler().patch_data.get_pdat(sender);
 
@@ -502,13 +530,37 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
             return pdat;
         });
+#else
+    auto sched = shamsys::instance::get_compute_scheduler_ptr();
+    std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_in_ghost
+        = std::make_shared<shamrock::solvergraph::DDSharedBuffers<u32>>(
+            "idx_in_ghost", "idx_in_ghost");
 
-    // ----------------------------------------------------------------------------------------
-    // temporary wrapper to slowly migrate to the new solvergraph
-    std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> exchange_gz_edge
-        = std::make_shared<shamrock::solvergraph::PatchDataLayerDDShared>("", "");
+    gen_ghost.ghost_id_build_map.for_each(
+        [&](u64 sender, u64 receiver, InterfaceIdTable &build_table) {
+            auto buf = sham::DeviceBuffer<u32>(build_table.ids_interf->size(), sched);
+            buf.copy_from_sycl_buffer(shambase::get_check_ref(build_table.ids_interf));
+            idx_in_ghost->buffers.add_obj(sender, receiver, std::move(buf));
+        });
 
-    exchange_gz_edge->patchdatas = std::move(pdat_interf);
+    std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> merged_patches_refs
+        = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
+
+    std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdgeToRefs> edge_to_refs
+        = std::make_shared<shamrock::solvergraph::PatchDataLayerEdgeToRefs>();
+    edge_to_refs->set_edges(merged_patches, merged_patches_refs);
+    edge_to_refs->evaluate();
+
+    std::shared_ptr<shammodels::basegodunov::modules::ExtractGhostLayer> extract_gz_node
+        = std::make_shared<shammodels::basegodunov::modules::ExtractGhostLayer>(ghost_layout_ptr);
+
+    extract_gz_node->set_edges(merged_patches_refs, idx_in_ghost, exchange_gz_edge);
+    extract_gz_node->evaluate();
+
+#endif
+
+    // to see the values of the ghost zones
+    // print_debug(exchange_gz_edge->patchdatas);
 
     std::shared_ptr<shammodels::basegodunov::modules::TransformGhostLayer<Tvec, TgridVec>>
         transform_gz_node

@@ -16,6 +16,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shambase/string.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -252,7 +253,11 @@ namespace shamrock::patch {
                     if constexpr (std::is_same<t1, t2>::value) {
                         field.append_subset_to(idxs_buf, sz, out_field);
                     } else {
-                        throw shambase::make_except_with_loc<std::invalid_argument>("missmatch");
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            shambase::format(
+                                "Mismatch in layout\n source layout = {}\n dest layout = {}",
+                                pdl().get_description_str(),
+                                pdat.pdl().get_description_str()));
                     }
                 },
                 fields[idx].value,
