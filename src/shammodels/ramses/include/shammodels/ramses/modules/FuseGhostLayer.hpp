@@ -21,23 +21,21 @@
 
 namespace shammodels::basegodunov::modules {
 
-    template<class Tvec, class TgridVec>
     class FuseGhostLayer : public shamrock::solvergraph::INode {
 
         public:
         FuseGhostLayer() {}
 
-        private:
         struct Edges {
             // inputs
             const shamrock::solvergraph::PatchDataLayerDDShared &ghost_layer;
             // outputs
-            shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
+            shamrock::solvergraph::IPatchDataLayerRefs &patch_data_layers;
         };
 
         inline void set_edges(
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_layer,
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers) {
+            std::shared_ptr<shamrock::solvergraph::IPatchDataLayerRefs> patch_data_layers) {
             __internal_set_ro_edges({ghost_layer});
             __internal_set_rw_edges({patch_data_layers});
         }
@@ -45,7 +43,7 @@ namespace shammodels::basegodunov::modules {
         inline Edges get_edges() {
             return Edges{
                 get_ro_edge<shamrock::solvergraph::PatchDataLayerDDShared>(0),
-                get_rw_edge<shamrock::solvergraph::PatchDataLayerRefs>(0),
+                get_rw_edge<shamrock::solvergraph::IPatchDataLayerRefs>(0),
             };
         }
 

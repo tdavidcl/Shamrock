@@ -15,8 +15,7 @@
 
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::FuseGhostLayer<Tvec, TgridVec>::_impl_evaluate_internal() {
+void shammodels::basegodunov::modules::FuseGhostLayer::_impl_evaluate_internal() {
     auto edges = get_edges();
 
     auto &ghost_layer       = edges.ghost_layer;
@@ -28,9 +27,4 @@ void shammodels::basegodunov::modules::FuseGhostLayer<Tvec, TgridVec>::_impl_eva
         });
 }
 
-template<class Tvec, class TgridVec>
-std::string shammodels::basegodunov::modules::FuseGhostLayer<Tvec, TgridVec>::_impl_get_tex() {
-    return "TODO";
-}
-
-template class shammodels::basegodunov::modules::FuseGhostLayer<f64_3, i64_3>;
+std::string shammodels::basegodunov::modules::FuseGhostLayer::_impl_get_tex() { return "TODO"; }
