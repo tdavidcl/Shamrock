@@ -65,12 +65,12 @@ namespace shamrock::solvergraph {
                 }
             });
 
-            if (edges.target.layout.get() != layout_target.get()) {
+            if (edges.target.get_layout_ptr().get() != layout_target.get()) {
                 throw shambase::make_except_with_loc<std::invalid_argument>("layout mismatch");
             }
 
             // Copy the fields from the original to the target
-            edges.target.patchdatas = edges.original.patchdatas.map<patch::PatchDataLayer>(
+            edges.target.set_patchdatas(edges.original.patchdatas.map<patch::PatchDataLayer>(
                 [&](u64 id_patch, patch::PatchDataLayer &pdat) {
                     patch::PatchDataLayer pdat_new(layout_target);
 
@@ -81,7 +81,7 @@ namespace shamrock::solvergraph {
 
                     pdat_new.check_field_obj_cnt_match();
                     return pdat_new;
-                });
+                }));
         }
 
         std::string _impl_get_label() { return "CopyPatchDataLayerFields"; }

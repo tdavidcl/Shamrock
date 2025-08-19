@@ -17,7 +17,7 @@
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 
 namespace shamrock::patch {
-    std::string PatchDataLayerLayout::get_description_str() {
+    std::string PatchDataLayerLayout::get_description_str() const {
         std::stringstream ss;
 
         if (fields.empty()) {
@@ -25,7 +25,7 @@ namespace shamrock::patch {
         } else {
 
             u32 index = 0;
-            for (var_t &v : fields) {
+            for (const var_t &v : fields) {
                 v.visit([&](auto &field) {
                     using f_t    = typename std::remove_reference<decltype(field)>::type;
                     using base_t = typename f_t::field_T;

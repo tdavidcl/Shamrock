@@ -56,12 +56,8 @@ namespace shamrock::solvergraph {
         inline void _impl_evaluate_internal() {
             StackEntry stack_loc{};
 
-            auto edges = get_edges();
-            edges.refs.patchdatas
-                = edges.original.patchdatas.map<std::reference_wrapper<patch::PatchDataLayer>>(
-                    [](u64 id_patch, patch::PatchDataLayer &pdat) {
-                        return std::ref(pdat);
-                    });
+            auto edges            = get_edges();
+            edges.refs.patchdatas = edges.original.get_refs();
         }
 
         /// Get the label of the node

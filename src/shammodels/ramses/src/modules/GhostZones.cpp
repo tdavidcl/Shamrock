@@ -470,7 +470,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdge> merged_patches
         = std::make_shared<shamrock::solvergraph::PatchDataLayerEdge>("", "", ghost_layout_ptr);
-    merged_patches->patchdatas = {};
+    merged_patches->set_patchdatas({});
 
     std::shared_ptr<shamrock::solvergraph::CopyPatchDataLayerFields> copy_fields
         = std::make_shared<shamrock::solvergraph::CopyPatchDataLayerFields>(

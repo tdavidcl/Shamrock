@@ -62,12 +62,12 @@ TestStart(
     copy_node->evaluate();
 
     // Verify target data was copied correctly
-    REQUIRE_EQUAL(target_edge->patchdatas.get_element_count(), 1);
-    REQUIRE_EQUAL(target_edge->patchdatas.get(1).get_obj_cnt(), obj_count);
+    REQUIRE_EQUAL(target_edge->get_refs().get_element_count(), 1);
+    REQUIRE_EQUAL(target_edge->get(1).get_obj_cnt(), obj_count);
 
     // Verify all field types were copied correctly
     auto &source_pdat = source_refs->patchdatas.get(1).get();
-    auto &target_pdat = target_edge->patchdatas.get(1);
+    auto &target_pdat = target_edge->get(1);
 
     source_pdat.for_each_field_any([&](auto &source_field) {
         using T = typename std::remove_reference<decltype(source_field)>::type::Field_type;

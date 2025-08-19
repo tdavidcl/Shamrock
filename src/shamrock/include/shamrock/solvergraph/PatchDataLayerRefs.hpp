@@ -30,15 +30,39 @@
 
 namespace shamrock::solvergraph {
 
-    class PatchDataLayerRefs : public IDataEdgeNamed {
+    using PatchDataLayerRef = std::reference_wrapper<patch::PatchDataLayer>;
+
+    class iPatchDataLayerRefs : public IDataEdgeNamed {
 
         public:
-        shambase::DistributedData<std::reference_wrapper<patch::PatchDataLayer>> patchdatas;
-
         using IDataEdgeNamed::IDataEdgeNamed;
 
-        inline virtual patch::PatchDataLayer &get(u64 id_patch) const {
+        virtual patch::PatchDataLayer &get(u64 id_patch)             = 0;
+        virtual const patch::PatchDataLayer &get(u64 id_patch) const = 0;
+
+        virtual const shambase::DistributedData<PatchDataLayerRef> &get_const_refs() const = 0;
+        virtual shambase::DistributedData<PatchDataLayerRef> &get_refs()                   = 0;
+    };
+
+    class PatchDataLayerRefs : public iPatchDataLayerRefs {
+
+        public:
+        shambase::DistributedData<PatchDataLayerRef> patchdatas;
+
+        using iPatchDataLayerRefs::iPatchDataLayerRefs;
+
+        inline virtual patch::PatchDataLayer &get(u64 id_patch) { return patchdatas.get(id_patch); }
+
+        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const {
             return patchdatas.get(id_patch);
+        }
+
+        inline virtual shambase::DistributedData<PatchDataLayerRef> &get_refs() {
+            return patchdatas;
+        }
+
+        inline virtual const shambase::DistributedData<PatchDataLayerRef> &get_const_refs() const {
+            return patchdatas;
         }
 
         inline virtual void free_alloc() { patchdatas = {}; }
