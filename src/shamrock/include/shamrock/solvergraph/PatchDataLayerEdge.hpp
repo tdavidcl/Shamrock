@@ -75,8 +75,9 @@ namespace shamrock::solvergraph {
         }
 
         inline virtual void free_alloc() override {
-            patchdatas = {};
-            layout     = {};
+            layout          = {};
+            patchdatas      = {};
+            patchdatas_refs = {};
         }
     };
 } // namespace shamrock::solvergraph
