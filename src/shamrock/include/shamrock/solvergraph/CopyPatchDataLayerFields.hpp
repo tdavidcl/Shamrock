@@ -21,7 +21,6 @@
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
-#include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 #include <memory>
 
 namespace shamrock::solvergraph {
@@ -38,19 +37,19 @@ namespace shamrock::solvergraph {
         std::shared_ptr<patch::PatchDataLayerLayout> layout_target;
 
         struct Edges {
-            const PatchDataLayerRefs &original;
+            const IPatchDataLayerRefs &original;
             PatchDataLayerEdge &target;
         };
 
         void set_edges(
             std::shared_ptr<IPatchDataLayerRefs> original,
-            std::shared_ptr<IPatchDataLayerRefs> target) {
+            std::shared_ptr<PatchDataLayerEdge> target) {
             __internal_set_ro_edges({original});
             __internal_set_rw_edges({target});
         }
 
         Edges get_edges() {
-            return Edges{get_ro_edge<PatchDataLayerRefs>(0), get_rw_edge<PatchDataLayerEdge>(0)};
+            return Edges{get_ro_edge<IPatchDataLayerRefs>(0), get_rw_edge<PatchDataLayerEdge>(0)};
         }
 
         void _impl_evaluate_internal() {
@@ -59,7 +58,8 @@ namespace shamrock::solvergraph {
             auto edges = get_edges();
 
             // Ensures that the layout are all matching sources and targets
-            edges.original.patchdatas.for_each([&](u64 id_patch, patch::PatchDataLayer &pdat) {
+            edges.original.get_const_refs().for_each([&](u64 id_patch,
+                                                         const patch::PatchDataLayer &pdat) {
                 if (pdat.get_layout_ptr().get() != layout_source.get()) {
                     throw shambase::make_except_with_loc<std::invalid_argument>("layout mismatch");
                 }
@@ -70,7 +70,7 @@ namespace shamrock::solvergraph {
             }
 
             // Copy the fields from the original to the target
-            edges.target.set_patchdatas(edges.original.patchdatas.map<patch::PatchDataLayer>(
+            edges.target.set_patchdatas(edges.original.get_const_refs().map<patch::PatchDataLayer>(
                 [&](u64 id_patch, patch::PatchDataLayer &pdat) {
                     patch::PatchDataLayer pdat_new(layout_target);
 

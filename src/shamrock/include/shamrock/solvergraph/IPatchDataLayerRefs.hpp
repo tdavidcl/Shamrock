@@ -31,6 +31,8 @@ namespace shamrock::solvergraph {
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
 
+        virtual ~IPatchDataLayerRefs() = default;
+
         virtual patch::PatchDataLayer &get(u64 id_patch)             = 0;
         virtual const patch::PatchDataLayer &get(u64 id_patch) const = 0;
 

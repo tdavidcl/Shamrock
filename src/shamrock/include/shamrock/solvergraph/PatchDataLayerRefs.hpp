@@ -30,21 +30,24 @@ namespace shamrock::solvergraph {
 
         using IPatchDataLayerRefs::IPatchDataLayerRefs;
 
-        inline virtual patch::PatchDataLayer &get(u64 id_patch) { return patchdatas.get(id_patch); }
-
-        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const {
+        inline virtual patch::PatchDataLayer &get(u64 id_patch) override {
             return patchdatas.get(id_patch);
         }
 
-        inline virtual shambase::DistributedData<PatchDataLayerRef> &get_refs() {
+        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const override {
+            return patchdatas.get(id_patch);
+        }
+
+        inline virtual shambase::DistributedData<PatchDataLayerRef> &get_refs() override {
             return patchdatas;
         }
 
-        inline virtual const shambase::DistributedData<PatchDataLayerRef> &get_const_refs() const {
+        inline virtual const shambase::DistributedData<PatchDataLayerRef> &
+        get_const_refs() const override {
             return patchdatas;
         }
 
-        inline virtual void free_alloc() { patchdatas = {}; }
+        inline virtual void free_alloc() override { patchdatas = {}; }
     };
 
 } // namespace shamrock::solvergraph
