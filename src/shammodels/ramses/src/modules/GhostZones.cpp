@@ -455,6 +455,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                 pdat.get_field_buf_ref<TgridVec>(0).copy_to_stdvec(),
                 pdat.get_field_buf_ref<TgridVec>(1).copy_to_stdvec());
         });
+        throw std::runtime_error("debug");
     };
 
     // ----------------------------------------------------------------------------------------
@@ -550,7 +551,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 #endif
 
     // to see the values of the ghost zones
-    // print_debug(exchange_gz_edge->patchdatas);
+    print_debug(exchange_gz_edge->patchdatas);
 
     std::shared_ptr<shammodels::basegodunov::modules::TransformGhostLayer<Tvec, TgridVec>>
         transform_gz_node
