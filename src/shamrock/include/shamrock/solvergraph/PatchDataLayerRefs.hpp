@@ -18,31 +18,10 @@
  */
 
 #include "shambase/DistributedData.hpp"
-#include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
-#include "shamrock/solvergraph/FieldRefs.hpp"
-#include "shamrock/solvergraph/FieldSpan.hpp"
-#include "shamrock/solvergraph/IDataEdgeNamed.hpp"
-#include "shamrock/solvergraph/IFieldRefs.hpp"
-#include "shamrock/solvergraph/INode.hpp"
-#include "shamrock/solvergraph/Indexes.hpp"
-#include <functional>
+#include "shamrock/solvergraph/IPatchDataLayerRefs.hpp"
 
 namespace shamrock::solvergraph {
-
-    using PatchDataLayerRef = std::reference_wrapper<patch::PatchDataLayer>;
-
-    class IPatchDataLayerRefs : public IDataEdgeNamed {
-
-        public:
-        using IDataEdgeNamed::IDataEdgeNamed;
-
-        virtual patch::PatchDataLayer &get(u64 id_patch)             = 0;
-        virtual const patch::PatchDataLayer &get(u64 id_patch) const = 0;
-
-        virtual const shambase::DistributedData<PatchDataLayerRef> &get_const_refs() const = 0;
-        virtual shambase::DistributedData<PatchDataLayerRef> &get_refs()                   = 0;
-    };
 
     class PatchDataLayerRefs : public IPatchDataLayerRefs {
 
