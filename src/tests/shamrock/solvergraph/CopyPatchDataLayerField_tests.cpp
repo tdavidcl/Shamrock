@@ -56,7 +56,7 @@ TestStart(
     u32 obj_count = 250;
 
     auto source_patchdata = PatchDataLayer::mock_patchdata(seed, obj_count, layout_source);
-    source_refs->patchdatas.add_obj(1, std::ref(source_patchdata));
+    source_refs->get_refs().add_obj(1, std::ref(source_patchdata));
 
     // Execute the copy operation
     copy_node->evaluate();
@@ -66,7 +66,7 @@ TestStart(
     REQUIRE_EQUAL(target_edge->get(1).get_obj_cnt(), obj_count);
 
     // Verify all field types were copied correctly
-    auto &source_pdat = source_refs->patchdatas.get(1).get();
+    auto &source_pdat = source_refs->get_const_refs().get(1).get();
     auto &target_pdat = target_edge->get(1);
 
     source_pdat.for_each_field_any([&](auto &source_field) {

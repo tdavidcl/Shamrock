@@ -57,23 +57,27 @@ namespace shamrock::solvergraph {
 
         inline std::shared_ptr<patch::PatchDataLayerLayout> &get_layout_ptr() { return layout; }
 
-        inline virtual patch::PatchDataLayer &get(u64 id_patch) { return patchdatas.get(id_patch); }
-
-        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const {
+        inline virtual patch::PatchDataLayer &get(u64 id_patch) override {
             return patchdatas.get(id_patch);
         }
 
-        inline virtual shambase::DistributedData<PatchDataLayerRef> &get_refs() {
+        inline virtual const patch::PatchDataLayer &get(u64 id_patch) const override {
+            return patchdatas.get(id_patch);
+        }
+
+        inline virtual shambase::DistributedData<PatchDataLayerRef> &get_refs() override {
             return patchdatas_refs;
         }
 
-        inline virtual const shambase::DistributedData<PatchDataLayerRef> &get_const_refs() const {
+        inline virtual const shambase::DistributedData<PatchDataLayerRef> &
+        get_const_refs() const override {
             return patchdatas_refs;
         }
 
-        inline virtual void free_alloc() {
-            patchdatas = {};
-            layout     = {};
+        inline virtual void free_alloc() override {
+            layout          = {};
+            patchdatas      = {};
+            patchdatas_refs = {};
         }
     };
 } // namespace shamrock::solvergraph

@@ -269,7 +269,32 @@ namespace shamrock::patch {
         }
 
         template<class T>
+        const PatchDataField<T> &get_field(u32 idx) const {
+
+            const var_t &tmp = fields.at(idx);
+
+            const PatchDataField<T> *pval = std::get_if<PatchDataField<T>>(&tmp.value);
+
+            if (pval) {
+                return *pval;
+            }
+
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "the request id is not of correct type\n"
+                "   current map is : \n"
+                + pdl().get_description_str()
+                + "\n"
+                  "    arg : idx = "
+                + std::to_string(idx));
+        }
+
+        template<class T>
         PatchDataField<T> &get_field(const std::string &field_name) {
+            return get_field<T>(pdl().get_field_idx<T>(field_name));
+        }
+
+        template<class T>
+        const PatchDataField<T> &get_field(const std::string &field_name) const {
             return get_field<T>(pdl().get_field_idx<T>(field_name));
         }
 
