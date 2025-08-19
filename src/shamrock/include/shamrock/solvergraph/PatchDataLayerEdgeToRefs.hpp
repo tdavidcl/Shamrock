@@ -30,7 +30,7 @@ namespace shamrock::solvergraph {
 
         /// Utility struct to list the refs to the edges
         struct Edges {
-            PatchDataLayerEdge &original;
+            IPatchDataLayerRefs &original;
             PatchDataLayerRefs &refs;
         };
 
@@ -41,7 +41,7 @@ namespace shamrock::solvergraph {
          * @param refs The output edge that will contain references to the patch data layers.
          */
         inline void set_edges(
-            std::shared_ptr<PatchDataLayerEdge> original,
+            std::shared_ptr<IPatchDataLayerRefs> original,
             std::shared_ptr<PatchDataLayerRefs> refs) {
             __internal_set_ro_edges({});
             __internal_set_rw_edges({original, refs});
@@ -49,7 +49,7 @@ namespace shamrock::solvergraph {
 
         /// Get the edges of the node
         inline Edges get_edges() {
-            return Edges{get_rw_edge<PatchDataLayerEdge>(0), get_rw_edge<PatchDataLayerRefs>(1)};
+            return Edges{get_rw_edge<IPatchDataLayerRefs>(0), get_rw_edge<PatchDataLayerRefs>(1)};
         }
 
         /// Evaluate the node

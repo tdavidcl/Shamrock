@@ -26,7 +26,7 @@
 
 namespace shamrock::solvergraph {
 
-    class PatchDataLayerEdge : public iPatchDataLayerRefs {
+    class PatchDataLayerEdge : public IPatchDataLayerRefs {
 
         using DDPatchDataLayerRef = shambase::DistributedData<PatchDataLayerRef>;
 
@@ -35,13 +35,13 @@ namespace shamrock::solvergraph {
         shambase::DistributedData<PatchDataLayerRef> patchdatas_refs;
 
         public:
-        using iPatchDataLayerRefs::iPatchDataLayerRefs;
+        using IPatchDataLayerRefs::IPatchDataLayerRefs;
 
         inline PatchDataLayerEdge(
             const std::string &name,
             const std::string &label,
             std::shared_ptr<patch::PatchDataLayerLayout> layout)
-            : iPatchDataLayerRefs(name, label), layout(layout) {}
+            : IPatchDataLayerRefs(name, label), layout(layout) {}
 
         inline void set_patchdatas(shambase::DistributedData<patch::PatchDataLayer> &&src) {
             patchdatas      = std::move(src);

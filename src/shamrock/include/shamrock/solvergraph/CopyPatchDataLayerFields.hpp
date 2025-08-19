@@ -43,8 +43,8 @@ namespace shamrock::solvergraph {
         };
 
         void set_edges(
-            std::shared_ptr<PatchDataLayerRefs> original,
-            std::shared_ptr<PatchDataLayerEdge> target) {
+            std::shared_ptr<IPatchDataLayerRefs> original,
+            std::shared_ptr<IPatchDataLayerRefs> target) {
             __internal_set_ro_edges({original});
             __internal_set_rw_edges({target});
         }

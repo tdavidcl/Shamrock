@@ -32,7 +32,7 @@ namespace shamrock::solvergraph {
 
     using PatchDataLayerRef = std::reference_wrapper<patch::PatchDataLayer>;
 
-    class iPatchDataLayerRefs : public IDataEdgeNamed {
+    class IPatchDataLayerRefs : public IDataEdgeNamed {
 
         public:
         using IDataEdgeNamed::IDataEdgeNamed;
@@ -44,12 +44,12 @@ namespace shamrock::solvergraph {
         virtual shambase::DistributedData<PatchDataLayerRef> &get_refs()                   = 0;
     };
 
-    class PatchDataLayerRefs : public iPatchDataLayerRefs {
+    class PatchDataLayerRefs : public IPatchDataLayerRefs {
 
         public:
         shambase::DistributedData<PatchDataLayerRef> patchdatas;
 
-        using iPatchDataLayerRefs::iPatchDataLayerRefs;
+        using IPatchDataLayerRefs::IPatchDataLayerRefs;
 
         inline virtual patch::PatchDataLayer &get(u64 id_patch) { return patchdatas.get(id_patch); }
 
