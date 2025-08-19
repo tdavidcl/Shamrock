@@ -10,21 +10,12 @@
 /**
  * @file ExtractGhostLayer.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
+ * @brief Implementation of the ExtractGhostLayer solver graph node.
  */
 
-#include "shambase/assert.hpp"
-#include "shambase/exception.hpp"
-#include "shambackends/DeviceBuffer.hpp"
-#include "shambackends/DeviceScheduler.hpp"
-#include "shammath/AABB.hpp"
-#include "shammath/paving_function.hpp"
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
-#include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
-#include "shamrock/patch/PatchDataField.hpp"
-#include "shamrock/patch/PatchDataLayer.hpp"
-#include "shamsys/NodeInstance.hpp"
-#include <stdexcept>
+#include "shambackends/DeviceBuffer.hpp"
+#include "shamrock/patch/PatchDataLayer.hpp
 
 void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_internal() {
     StackEntry stack_loc{};
@@ -37,19 +28,10 @@ void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_interna
 
     // outputs
     auto &ghost_layer = edges.ghost_layer;
-
-    auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
-    sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
-
-    // extract the ghost layers
-    auto idx_in_ghost_it = idx_in_ghost.buffers.begin();
-
-    // iterate on both DDShared containers
-    for (; idx_in_ghost_it != idx_in_ghost.buffers.end(); ++idx_in_ghost_it) {
-
-        auto [sender, receiver] = idx_in_ghost_it->first;
-
-        const sham::DeviceBuffer<u32> &sender_idx_in_ghost = idx_in_ghost_it->second;
+  
+    // iterate on buffer storing indexes in ghost layer
+    for (const auto &[key, sender_idx_in_ghost] : idx_in_ghost.buffers) {
+        auto [sender, receiver] = key;
 
         shamrock::patch::PatchDataLayer ghost_zone(ghost_layer_layout);
 

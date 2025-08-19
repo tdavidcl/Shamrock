@@ -12,14 +12,14 @@
 /**
  * @file ExtractGhostLayer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Field variant object to instanciate a variant on the patch types
- * @date 2023-07-31
+ * @brief Extract the ghost layer from the patch data layers.
  */
 
-#include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/DDSharedBuffers.hpp"
+#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
+#include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 
 namespace shammodels::basegodunov::modules {
 
@@ -32,14 +32,14 @@ namespace shammodels::basegodunov::modules {
 
         struct Edges {
             // inputs
-            const shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
+            const shamrock::solvergraph::IPatchDataLayerRefs &patch_data_layers;
             const shamrock::solvergraph::DDSharedBuffers<u32> &idx_in_ghost;
             // outputs
             shamrock::solvergraph::PatchDataLayerDDShared &ghost_layer;
         };
 
         inline void set_edges(
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
+            std::shared_ptr<shamrock::solvergraph::IPatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_in_ghost,
             std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> ghost_layer) {
             __internal_set_ro_edges({patch_data_layers, idx_in_ghost});
@@ -48,7 +48,7 @@ namespace shammodels::basegodunov::modules {
 
         inline Edges get_edges() {
             return Edges{
-                get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(0),
+                get_ro_edge<shamrock::solvergraph::IPatchDataLayerRefs>(0),
                 get_ro_edge<shamrock::solvergraph::DDSharedBuffers<u32>>(1),
                 get_rw_edge<shamrock::solvergraph::PatchDataLayerDDShared>(0),
             };

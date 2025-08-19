@@ -239,7 +239,7 @@ namespace shamrock::patch {
     }
 
     void PatchDataLayer::append_subset_to(
-        const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) {
+        const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) const {
         StackEntry stack_loc{};
 
         for (u32 idx = 0; idx < fields.size(); idx++) {

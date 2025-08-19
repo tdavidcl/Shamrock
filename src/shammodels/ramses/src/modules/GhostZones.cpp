@@ -37,7 +37,6 @@
 #include "shamrock/solvergraph/DDSharedScalar.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
-#include "shamrock/solvergraph/PatchDataLayerEdgeToRefs.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -456,6 +455,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                 pdat.get_field_buf_ref<TgridVec>(0).copy_to_stdvec(),
                 pdat.get_field_buf_ref<TgridVec>(1).copy_to_stdvec());
         });
+        throw std::runtime_error("debug");
     };
 
     // ----------------------------------------------------------------------------------------
@@ -463,14 +463,14 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> source_patches
         = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
 
-    source_patches->patchdatas = {};
+
     scheduler().for_each_patchdata_nonempty([&](const Patch &p, PatchDataLayer &pdat) {
         source_patches->patchdatas.add_obj(p.id_patch, std::ref(pdat));
     });
 
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdge> merged_patches
         = std::make_shared<shamrock::solvergraph::PatchDataLayerEdge>("", "", ghost_layout_ptr);
-    merged_patches->patchdatas = {};
+    merged_patches->set_patchdatas({});
 
     std::shared_ptr<shamrock::solvergraph::CopyPatchDataLayerFields> copy_fields
         = std::make_shared<shamrock::solvergraph::CopyPatchDataLayerFields>(
@@ -543,18 +543,10 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
             idx_in_ghost->buffers.add_obj(sender, receiver, std::move(buf));
         });
 
-    std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> merged_patches_refs
-        = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
-
-    std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdgeToRefs> edge_to_refs
-        = std::make_shared<shamrock::solvergraph::PatchDataLayerEdgeToRefs>();
-    edge_to_refs->set_edges(merged_patches, merged_patches_refs);
-    edge_to_refs->evaluate();
-
     std::shared_ptr<shammodels::basegodunov::modules::ExtractGhostLayer> extract_gz_node
         = std::make_shared<shammodels::basegodunov::modules::ExtractGhostLayer>(ghost_layout_ptr);
 
-    extract_gz_node->set_edges(merged_patches_refs, idx_in_ghost, exchange_gz_edge);
+    extract_gz_node->set_edges(merged_patches, idx_in_ghost, exchange_gz_edge);
     extract_gz_node->evaluate();
 
 #endif
