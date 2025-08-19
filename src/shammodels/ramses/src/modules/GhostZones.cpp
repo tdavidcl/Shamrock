@@ -463,7 +463,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> source_patches
         = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
 
-
     scheduler().for_each_patchdata_nonempty([&](const Patch &p, PatchDataLayer &pdat) {
         source_patches->patchdatas.add_obj(p.id_patch, std::ref(pdat));
     });

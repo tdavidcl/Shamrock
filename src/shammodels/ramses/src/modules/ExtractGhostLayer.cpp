@@ -15,7 +15,7 @@
 
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shambackends/DeviceBuffer.hpp"
-#include "shamrock/patch/PatchDataLayer.hpp
+#include "shamrock/patch/PatchDataLayer.hpp"
 
 void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_internal() {
     StackEntry stack_loc{};
@@ -28,7 +28,7 @@ void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_interna
 
     // outputs
     auto &ghost_layer = edges.ghost_layer;
-  
+
     // iterate on buffer storing indexes in ghost layer
     for (const auto &[key, sender_idx_in_ghost] : idx_in_ghost.buffers) {
         auto [sender, receiver] = key;
