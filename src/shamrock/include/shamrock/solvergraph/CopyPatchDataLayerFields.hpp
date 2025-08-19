@@ -20,6 +20,7 @@
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/IPatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
 #include <memory>
 
@@ -52,37 +53,7 @@ namespace shamrock::solvergraph {
             return Edges{get_ro_edge<IPatchDataLayerRefs>(0), get_rw_edge<PatchDataLayerEdge>(0)};
         }
 
-        void _impl_evaluate_internal() {
-            StackEntry stack_loc{};
-
-            auto edges = get_edges();
-
-            // Ensures that the layout are all matching sources and targets
-            edges.original.get_const_refs().for_each([&](u64 id_patch,
-                                                         const patch::PatchDataLayer &pdat) {
-                if (pdat.get_layout_ptr().get() != layout_source.get()) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>("layout mismatch");
-                }
-            });
-
-            if (edges.target.get_layout_ptr().get() != layout_target.get()) {
-                throw shambase::make_except_with_loc<std::invalid_argument>("layout mismatch");
-            }
-
-            // Copy the fields from the original to the target
-            edges.target.set_patchdatas(edges.original.get_const_refs().map<patch::PatchDataLayer>(
-                [&](u64 id_patch, patch::PatchDataLayer &pdat) {
-                    patch::PatchDataLayer pdat_new(layout_target);
-
-                    pdat_new.for_each_field_any([&](auto &field) {
-                        using T = typename std::remove_reference<decltype(field)>::type::Field_type;
-                        field.insert(pdat.get_field<T>(field.get_name()));
-                    });
-
-                    pdat_new.check_field_obj_cnt_match();
-                    return pdat_new;
-                }));
-        }
+        void _impl_evaluate_internal();
 
         std::string _impl_get_label() { return "CopyPatchDataLayerFields"; }
 
