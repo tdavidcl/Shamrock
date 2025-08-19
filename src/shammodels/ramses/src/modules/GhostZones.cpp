@@ -37,7 +37,6 @@
 #include "shamrock/solvergraph/DDSharedScalar.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
-#include "shamrock/solvergraph/PatchDataLayerEdgeToRefs.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
