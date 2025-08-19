@@ -29,7 +29,7 @@ void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_interna
     // outputs
     auto &ghost_layer = edges.ghost_layer;
 
-    // iterate on both DDShared containers
+    // iterate on buffer storing indexes in ghost layer
     for (const auto &[key, sender_idx_in_ghost] : idx_in_ghost.buffers) {
         auto [sender, receiver] = key;
 
