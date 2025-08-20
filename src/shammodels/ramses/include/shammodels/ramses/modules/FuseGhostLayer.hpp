@@ -12,11 +12,11 @@
 /**
  * @file FuseGhostLayer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
+ * @brief A solver graph node to fuse a ghost layer into a set of patch data layers.
  */
 
-#include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
-#include "shamrock/solvergraph/DDSharedBuffers.hpp"
+#include "shamrock/solvergraph/INode.hpp"
+#include "shamrock/solvergraph/IPatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 
 namespace shammodels::basegodunov::modules {
