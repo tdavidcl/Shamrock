@@ -96,8 +96,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.patch_rank_owner
         = std::make_shared<shamrock::solvergraph::ScalarsEdge<u32>>("patch_rank_owner", "rank");
 
-    storage.merged_patchdata_ghost
-        = std::make_shared<shamrock::solvergraph::PatchDataLayerEdge>("merged_patchdata_ghost", "patchdata_{\\rm ghost}", storage.ghost_layout);
+    storage.merged_patchdata_ghost = std::make_shared<shamrock::solvergraph::PatchDataLayerEdge>(
+        "merged_patchdata_ghost", "patchdata_{\\rm ghost}", storage.ghost_layout);
 
     storage.block_counts
         = std::make_shared<shamrock::solvergraph::Indexes<u32>>("block_count", "N_{\\rm block}");
