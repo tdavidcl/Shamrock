@@ -65,6 +65,14 @@ namespace shamtree {
                 sham::DeviceBuffer<Tmorton>(0, dev_sched),
                 sham::DeviceBuffer<u32>(0, dev_sched));
         }
+
+        inline void free_alloc() {
+            bounding_box = {};
+            cnt_obj      = 0_u32;
+            morton_count = 0_u32;
+            sorted_morton_codes.free_alloc();
+            map_morton_id_to_obj_id.free_alloc();
+        }
     };
 
     /**
