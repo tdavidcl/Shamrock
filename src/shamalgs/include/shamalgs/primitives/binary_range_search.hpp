@@ -46,10 +46,10 @@ namespace shamalgs::primitives {
         //  - std::upper_bound returns the first such that > value_max (searching 8 in
         //      [7,8,9] return 2 where we want 1)
         // The following ajust that to the range with expect in this function
-        if (inf > 0 && inf < last) {
+        if (inf > first && inf < last) {
             inf -= (key[inf] > value_min);
         }
-        if (sup > 0 && sup <= last) {
+        if (sup > first && sup <= last) {
             sup -= (key[sup - 1] == value_max);
         }
     }
