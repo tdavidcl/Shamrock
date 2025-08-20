@@ -36,6 +36,7 @@
 #include "shamrock/scheduler/InterfacesUtility.hpp"
 #include "shamrock/solvergraph/CopyPatchDataLayerFields.hpp"
 #include "shamrock/solvergraph/DDSharedScalar.hpp"
+#include "shamrock/solvergraph/ExtractCounts.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
@@ -614,6 +615,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     auto &merged_patches_refs = shambase::get_check_ref(storage.merged_patchdata_ghost).get_refs();
 
+#if true
     { // set element counts
         using MergedPDat = shamrock::MergedPatchData;
 
@@ -635,6 +637,25 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
                     return cnt;
                 });
     }
+#else
+
+    { // set element counts
+        std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
+            = std::make_shared<shamrock::solvergraph::ExtractCounts>();
+        extract_counts_node->set_edges(source_patches, storage.block_counts);
+        extract_counts_node->evaluate();
+    }
+
+    { // set element counts
+        std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
+            = std::make_shared<shamrock::solvergraph::ExtractCounts>();
+        extract_counts_node->set_edges(merged_patches, storage.block_counts_with_ghost);
+        extract_counts_node->evaluate();
+    }
+#endif
+
+    storage.block_counts->indexes.print_data("{}");
+    storage.block_counts_with_ghost->indexes.print_data("{}");
 
     { // Attach spans to block coords
         using MergedPDat = shamrock::MergedPatchData;
