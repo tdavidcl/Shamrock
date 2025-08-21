@@ -503,66 +503,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     // TODO this should be output nodes from basic ghost ideally
 
     auto &merged_patches_refs = shambase::get_check_ref(storage.merged_patchdata_ghost).get_refs();
-
-    { // set element counts
-        std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
-            = std::make_shared<shamrock::solvergraph::ExtractCounts>();
-        extract_counts_node->set_edges(storage.source_patches, storage.block_counts);
-        extract_counts_node->evaluate();
-    }
-
-    { // set element counts
-        std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
-            = std::make_shared<shamrock::solvergraph::ExtractCounts>();
-        extract_counts_node->set_edges(storage.merged_patchdata_ghost, storage.block_counts_with_ghost);
-        extract_counts_node->evaluate();
-    }
-
-    { // Attach spans to block coords
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>> attach_block_min
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>>(0);
-        attach_block_min->set_edges(storage.merged_patchdata_ghost, storage.refs_block_min);
-        attach_block_min->evaluate();
-
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>> attach_block_max
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>>(1);
-        attach_block_max->set_edges(storage.merged_patchdata_ghost, storage.refs_block_max);
-        attach_block_max->evaluate();
-    }
-
-    { // attach spans to gas field with ghosts
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
-                storage.ghost_layout, "rho");
-        attach_rho->set_edges(storage.merged_patchdata_ghost, storage.refs_rho);
-        attach_rho->evaluate();
-
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>> attach_rhov
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>>(
-                storage.ghost_layout, "rhovel");
-        attach_rhov->set_edges(storage.merged_patchdata_ghost, storage.refs_rhov);
-        attach_rhov->evaluate();
-
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rhoe
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
-                storage.ghost_layout, "rhoetot");
-        attach_rhoe->set_edges(storage.merged_patchdata_ghost, storage.refs_rhoe);
-        attach_rhoe->evaluate();
-    }
-
-    if (solver_config.is_dust_on()) { // attach spans to dust field with ghosts
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho_dust
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
-                storage.ghost_layout, "rho_dust");
-        attach_rho_dust->set_edges(storage.merged_patchdata_ghost, storage.refs_rho_dust);
-        attach_rho_dust->evaluate();
-
-        std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>> attach_rhov_dust
-            = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>>(
-                storage.ghost_layout, "rhovel_dust");
-        attach_rhov_dust->set_edges(storage.merged_patchdata_ghost, storage.refs_rhov_dust);
-        attach_rhov_dust->evaluate();
-    }
 }
 
 template<class Tvec, class TgridVec>
