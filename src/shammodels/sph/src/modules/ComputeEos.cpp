@@ -116,11 +116,15 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
             sham::DeviceBuffer<Tscal> &buf_cs = storage.soundspeed.get().get_buf_check(id);
             auto rho_getter                   = rho_getter_gen(mpdat);
 
+            u32 total_elements
+                = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+            SHAM_ASSERT(mpdat.total_elements == total_elements);
+
             sham::kernel_call(
                 q,
                 sham::MultiRef{rho_getter},
                 sham::MultiRef{buf_P, buf_cs},
-                mpdat.total_elements,
+                total_elements,
                 [cs_cfg
                  = eos_config->cs](u32 i, auto rho, Tscal *__restrict P, Tscal *__restrict cs) {
                     using namespace shamrock::sph;
@@ -142,11 +146,15 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
             sham::DeviceBuffer<Tscal> &buf_uint = mpdat.pdat.get_field_buf_ref<Tscal>(iuint_interf);
             auto rho_getter                     = rho_getter_gen(mpdat);
 
+            u32 total_elements
+                = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+            SHAM_ASSERT(mpdat.total_elements == total_elements);
+
             sham::kernel_call(
                 q,
                 sham::MultiRef{rho_getter, buf_uint},
                 sham::MultiRef{buf_P, buf_cs},
-                mpdat.total_elements,
+                total_elements,
                 [gamma = eos_config->gamma](
                     u32 i,
                     auto rho,
@@ -178,11 +186,15 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
             sham::DeviceBuffer<Tscal> &buf_cs0
                 = mpdat.pdat.get_field_buf_ref<Tscal>(isoundspeed_interf);
 
+            u32 total_elements
+                = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+            SHAM_ASSERT(mpdat.total_elements == total_elements);
+
             sham::kernel_call(
                 q,
                 sham::MultiRef{rho_getter, buf_uint, buf_cs0},
                 sham::MultiRef{buf_P, buf_cs},
-                mpdat.total_elements,
+                total_elements,
                 [](u32 i,
                    auto rho,
                    const Tscal *__restrict U,
@@ -221,11 +233,15 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
             Tscal r0sq = eos_config->r0 * eos_config->r0;
             Tscal mq   = -eos_config->q;
 
+            u32 total_elements
+                = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+            SHAM_ASSERT(mpdat.total_elements == total_elements);
+
             sham::kernel_call(
                 q,
                 sham::MultiRef{rho_getter, buf_uint, buf_xyz},
                 sham::MultiRef{buf_P, buf_cs},
-                mpdat.total_elements,
+                total_elements,
                 [cs0, r0sq, mq](
                     u32 i,
                     auto rho,
@@ -291,6 +307,10 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
             auto U   = buf_uint.get_read_access(depends_list);
             auto xyz = buf_xyz.get_read_access(depends_list);
 
+            u32 total_elements
+                = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+            SHAM_ASSERT(mpdat.total_elements == total_elements);
+
             auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
                 sycl::accessor spos{sink_pos_buf, cgh, sycl::read_only};
                 sycl::accessor smass{sink_mass_buf, cgh, sycl::read_only};
@@ -299,7 +319,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
                 Tscal h_over_r = eos_config->h_over_r;
                 Tscal G        = _G;
 
-                cgh.parallel_for(sycl::range<1>{mpdat.total_elements}, [=](sycl::item<1> item) {
+                cgh.parallel_for(sycl::range<1>{total_elements}, [=](sycl::item<1> item) {
                     using namespace shamrock::sph;
 
                     Tvec R      = xyz[item];
@@ -349,11 +369,19 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
     shamrock::SchedulerUtility utility(scheduler());
 
     storage.pressure.set(utility.make_compute_field<Tscal>("pressure", 1, [&](u64 id) {
-        return storage.merged_patchdata_ghost.get().get(id).total_elements;
+        u32 total_elements
+            = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+        SHAM_ASSERT(storage.merged_patchdata_ghost.get().get(id).total_elements == total_elements);
+
+        return total_elements;
     }));
 
     storage.soundspeed.set(utility.make_compute_field<Tscal>("soundspeed", 1, [&](u64 id) {
-        return storage.merged_patchdata_ghost.get().get(id).total_elements;
+        u32 total_elements
+            = shambase::get_check_ref(storage.part_counts_with_ghost).indexes.get(id);
+        SHAM_ASSERT(storage.merged_patchdata_ghost.get().get(id).total_elements == total_elements);
+
+        return total_elements;
     }));
 
     if (solver_config.dust_config.has_epsilon_field()) {
