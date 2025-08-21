@@ -123,6 +123,8 @@ namespace shammodels::basegodunov {
 
         std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdge> merged_patchdata_ghost;
 
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box_edge;
+
         std::shared_ptr<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>> rho_face_xp;
         std::shared_ptr<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>> rho_face_xm;
         std::shared_ptr<solvergraph::NeighGrapkLinkFieldEdge<std::array<Tscal, 2>>> rho_face_yp;

@@ -95,6 +95,10 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     /// Edges
     ////////////////////////////////////////////////////////////////////////////////
 
+    storage.sim_box_edge
+        = std::make_shared<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(
+            "sim_box", "sim_box");
+
     storage.patch_rank_owner
         = std::make_shared<shamrock::solvergraph::ScalarsEdge<u32>>("patch_rank_owner", "rank");
 
@@ -1046,6 +1050,15 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         [&](const shamrock::patch::Patch &p, shamrock::patch::PatchDataLayer &pdat) {
             storage.source_patches->patchdatas.add_obj(p.id_patch, std::ref(pdat));
         });
+
+    {
+        shamrock::patch::SimulationBoxInfo &sim_box = scheduler().get_sim_box();
+        shamrock::patch::PatchCoordTransform<TgridVec> patch_coord_transf
+            = sim_box.get_patch_transform<TgridVec>();
+        auto [bmin, bmax] = sim_box.get_bounding_box<TgridVec>();
+
+        shambase::get_check_ref(storage.sim_box_edge).value = shammath::AABB<TgridVec>(bmin, bmax);
+    }
 
     SerialPatchTree<TgridVec> _sptree = SerialPatchTree<TgridVec>::build(scheduler());
     _sptree.attach_buf();
