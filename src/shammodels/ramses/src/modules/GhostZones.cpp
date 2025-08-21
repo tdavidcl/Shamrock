@@ -463,55 +463,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> exchange_gz_edge
         = std::make_shared<shamrock::solvergraph::PatchDataLayerDDShared>("", "");
 
-#if false
-    exchange_gz_edge->patchdatas = gen_ghost.template build_interface_native<PatchDataLayer>(
-        [&](u64 sender, u64, InterfaceBuildInfos binfo, sycl::buffer<u32> &buf_idx, u32 cnt) {
-            PatchDataLayer &sender_patch = scheduler().patch_data.get_pdat(sender);
-
-            PatchDataLayer pdat(ghost_layout_ptr);
-
-            pdat.reserve(cnt);
-
-            sender_patch.get_field<TgridVec>(icell_min).append_subset_to(
-                buf_idx, cnt, pdat.get_field<TgridVec>(icell_min_interf));
-
-            sender_patch.get_field<TgridVec>(icell_max).append_subset_to(
-                buf_idx, cnt, pdat.get_field<TgridVec>(icell_max_interf));
-
-            sender_patch.get_field<Tscal>(irho).append_subset_to(
-                buf_idx, cnt, pdat.get_field<Tscal>(irho_interf));
-
-            sender_patch.get_field<Tscal>(irhoetot).append_subset_to(
-                buf_idx, cnt, pdat.get_field<Tscal>(irhoetot_interf));
-
-            sender_patch.get_field<Tvec>(irhovel).append_subset_to(
-                buf_idx, cnt, pdat.get_field<Tvec>(irhovel_interf));
-
-            if (solver_config.is_dust_on()) {
-                sender_patch.get_field<Tscal>(irho_d).append_subset_to(
-                    buf_idx, cnt, pdat.get_field<Tscal>(irho_d_interf));
-
-                sender_patch.get_field<Tvec>(irhovel_d).append_subset_to(
-                    buf_idx, cnt, pdat.get_field<Tvec>(irhovel_d_interf));
-            }
-
-            if (solver_config.is_gravity_on()) {
-                sender_patch.get_field<Tscal>(iphi).append_subset_to(
-                    buf_idx, cnt, pdat.get_field<Tscal>(iphi_interf));
-            }
-
-            if (solver_config.is_gas_passive_scalar_on()) {
-                sender_patch.get_field<Tscal>(irho_gas_pscal)
-                    .append_subset_to(buf_idx, cnt, pdat.get_field<Tscal>(irho_gas_pscal_interf));
-            }
-            pdat.check_field_obj_cnt_match();
-
-            // pdat.get_field<TgridVec>(icell_min_interf).apply_offset(binfo.offset);
-            // pdat.get_field<TgridVec>(icell_max_interf).apply_offset(binfo.offset);
-
-            return pdat;
-        });
-#else
     auto sched = shamsys::instance::get_compute_scheduler_ptr();
     std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_in_ghost
         = std::make_shared<shamrock::solvergraph::DDSharedBuffers<u32>>(
@@ -529,8 +480,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     extract_gz_node->set_edges(merged_patches, idx_in_ghost, exchange_gz_edge);
     extract_gz_node->evaluate();
-
-#endif
 
     // to see the values of the ghost zones
     // print_debug(exchange_gz_edge->patchdatas);
@@ -558,89 +507,12 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     fuse_gz_node->set_edges(exchange_gz_edge, merged_patches);
     fuse_gz_node->evaluate();
 
-    // ----------------------------------------------------------------------------------------
-
-#if false
-    shambase::DistributedDataShared<PatchDataLayer> interf_pdat
-        = std::move(exchange_gz_edge->patchdatas);
-
-    std::map<u64, u64> sz_interf_map;
-    interf_pdat.for_each([&](u64 s, u64 r, PatchDataLayer &pdat_interf) {
-        sz_interf_map[r] += pdat_interf.get_obj_cnt();
-    });
-
-    storage.merged_patchdata_ghost.set(merge_native<PatchDataLayer, PatchDataLayer>(
-        std::move(interf_pdat),
-        [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-            shamlog_debug_ln("Merged patch init", p.id_patch);
-
-            PatchDataLayer pdat_new(ghost_layout_ptr);
-
-            u32 or_elem = pdat.get_obj_cnt();
-            pdat_new.reserve(or_elem + sz_interf_map[p.id_patch]);
-            u32 total_elements = or_elem;
-
-            pdat_new.get_field<TgridVec>(icell_min_interf)
-                .insert(pdat.get_field<TgridVec>(icell_min));
-            pdat_new.get_field<TgridVec>(icell_max_interf)
-                .insert(pdat.get_field<TgridVec>(icell_max));
-            pdat_new.get_field<Tscal>(irho_interf).insert(pdat.get_field<Tscal>(irho));
-            pdat_new.get_field<Tscal>(irhoetot_interf).insert(pdat.get_field<Tscal>(irhoetot));
-            pdat_new.get_field<Tvec>(irhovel_interf).insert(pdat.get_field<Tvec>(irhovel));
-
-            if (solver_config.is_dust_on()) {
-                pdat_new.get_field<Tscal>(irho_d_interf).insert(pdat.get_field<Tscal>(irho_d));
-                pdat_new.get_field<Tvec>(irhovel_d_interf).insert(pdat.get_field<Tvec>(irhovel_d));
-            }
-
-            if (solver_config.is_gravity_on()) {
-                pdat_new.get_field<Tscal>(iphi_interf).insert(pdat.get_field<Tscal>(iphi));
-            }
-
-            if (solver_config.is_gas_passive_scalar_on()) {
-                pdat_new.get_field<Tscal>(irho_gas_pscal_interf)
-                    .insert(pdat.get_field<Tscal>(irho_gas_pscal));
-            }
-
-            pdat_new.check_field_obj_cnt_match();
-
-            return std::move(pdat_new);
-        },
-        [](PatchDataLayer &mpdat, PatchDataLayer &pdat_interf) {
-            mpdat.insert_elements(pdat_interf);
-        }));
-#endif
-
     timer_interf.end();
     storage.timings_details.interface += timer_interf.elasped_sec();
 
     // TODO this should be output nodes from basic ghost ideally
 
     auto &merged_patches_refs = shambase::get_check_ref(storage.merged_patchdata_ghost).get_refs();
-
-#if false
-    { // set element counts
-        using MergedPDat = shamrock::MergedPatchData;
-
-        shambase::get_check_ref(storage.block_counts).indexes
-            = merged_patches_refs.template map<u32>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    u32 cnt = scheduler().patch_data.get_pdat(id).get_obj_cnt();
-                    return cnt;
-                });
-    }
-
-    { // set element counts
-        using MergedPDat = shamrock::MergedPatchData;
-
-        shambase::get_check_ref(storage.block_counts_with_ghost).indexes
-            = merged_patches_refs.template map<u32>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    u32 cnt = mpdat.get_obj_cnt();
-                    return cnt;
-                });
-    }
-#else
 
     { // set element counts
         std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
@@ -655,27 +527,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         extract_counts_node->set_edges(merged_patches, storage.block_counts_with_ghost);
         extract_counts_node->evaluate();
     }
-#endif
 
-    // storage.block_counts->indexes.print_data("{}");
-    // storage.block_counts_with_ghost->indexes.print_data("{}");
-
-#if false
-    { // Attach spans to block coords
-        using MergedPDat = shamrock::MergedPatchData;
-        storage.refs_block_min->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<TgridVec>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<TgridVec>(0));
-                }));
-
-        storage.refs_block_max->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<TgridVec>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<TgridVec>(1));
-                }));
-    }
-#else
     { // Attach spans to block coords
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>> attach_block_min
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>>(0);
@@ -687,36 +539,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         attach_block_max->set_edges(merged_patches, storage.refs_block_max);
         attach_block_max->evaluate();
     }
-#endif
 
-#if false
-    { // attach spans to gas field with ghosts
-        using MergedPDat = shamrock::MergedPatchData;
-        shamrock::patch::PatchDataLayerLayout &ghost_layout
-            = shambase::get_check_ref(storage.ghost_layout);
-        u32 irho_ghost  = ghost_layout.get_field_idx<Tscal>("rho");
-        u32 irhov_ghost = ghost_layout.get_field_idx<Tvec>("rhovel");
-        u32 irhoe_ghost = ghost_layout.get_field_idx<Tscal>("rhoetot");
-
-        storage.refs_rho->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<Tscal>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<Tscal>(irho_ghost));
-                }));
-
-        storage.refs_rhov->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<Tvec>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<Tvec>(irhov_ghost));
-                }));
-
-        storage.refs_rhoe->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<Tscal>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<Tscal>(irhoe_ghost));
-                }));
-    }
-#else
     { // attach spans to gas field with ghosts
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
@@ -736,31 +559,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         attach_rhoe->set_edges(merged_patches, storage.refs_rhoe);
         attach_rhoe->evaluate();
     }
-#endif
 
-#if false
-    if (solver_config.is_dust_on()) { // attach spans to dust field with ghosts
-        using MergedPDat = shamrock::MergedPatchData;
-        u32 ndust        = solver_config.dust_config.ndust;
-        shamrock::patch::PatchDataLayerLayout &ghost_layout
-            = shambase::get_check_ref(storage.ghost_layout);
-
-        u32 irho_dust_ghost  = ghost_layout.get_field_idx<Tscal>("rho_dust");
-        u32 irhov_dust_ghost = ghost_layout.get_field_idx<Tvec>("rhovel_dust");
-
-        storage.refs_rho_dust->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<Tscal>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<Tscal>(irho_dust_ghost));
-                }));
-
-        storage.refs_rhov_dust->set_refs(
-            merged_patches_refs.template map<std::reference_wrapper<PatchDataField<Tvec>>>(
-                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
-                    return std::ref(mpdat.get_field<Tvec>(irhov_dust_ghost));
-                }));
-    }
-#else
     if (solver_config.is_dust_on()) { // attach spans to dust field with ghosts
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho_dust
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
@@ -774,7 +573,6 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         attach_rhov_dust->set_edges(merged_patches, storage.refs_rhov_dust);
         attach_rhov_dust->evaluate();
     }
-#endif
 }
 
 template<class Tvec, class TgridVec>
