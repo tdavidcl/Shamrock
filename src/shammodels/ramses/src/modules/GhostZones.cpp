@@ -442,22 +442,12 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     // ----------------------------------------------------------------------------------------
     // temporary wrapper to slowly migrate to the new solvergraph
-    std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> source_patches
-        = std::make_shared<shamrock::solvergraph::PatchDataLayerRefs>("", "");
-
-    scheduler().for_each_patchdata_nonempty([&](const Patch &p, PatchDataLayer &pdat) {
-        source_patches->patchdatas.add_obj(p.id_patch, std::ref(pdat));
-    });
-
-    std::shared_ptr<shamrock::solvergraph::PatchDataLayerEdge> &merged_patches
-        = storage.merged_patchdata_ghost;
-    merged_patches->set_patchdatas({});
 
     std::shared_ptr<shamrock::solvergraph::CopyPatchDataLayerFields> copy_fields
         = std::make_shared<shamrock::solvergraph::CopyPatchDataLayerFields>(
             scheduler().get_layout_ptr(), ghost_layout_ptr);
 
-    copy_fields->set_edges(source_patches, merged_patches);
+    copy_fields->set_edges(storage.source_patches, storage.merged_patchdata_ghost);
     copy_fields->evaluate();
 
     std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> exchange_gz_edge
@@ -478,7 +468,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     std::shared_ptr<shammodels::basegodunov::modules::ExtractGhostLayer> extract_gz_node
         = std::make_shared<shammodels::basegodunov::modules::ExtractGhostLayer>(ghost_layout_ptr);
 
-    extract_gz_node->set_edges(merged_patches, idx_in_ghost, exchange_gz_edge);
+    extract_gz_node->set_edges(storage.merged_patchdata_ghost, idx_in_ghost, exchange_gz_edge);
     extract_gz_node->evaluate();
 
     // to see the values of the ghost zones
@@ -504,7 +494,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
 
     std::shared_ptr<shammodels::basegodunov::modules::FuseGhostLayer> fuse_gz_node
         = std::make_shared<shammodels::basegodunov::modules::FuseGhostLayer>();
-    fuse_gz_node->set_edges(exchange_gz_edge, merged_patches);
+    fuse_gz_node->set_edges(exchange_gz_edge, storage.merged_patchdata_ghost);
     fuse_gz_node->evaluate();
 
     timer_interf.end();
@@ -517,26 +507,26 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
     { // set element counts
         std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
             = std::make_shared<shamrock::solvergraph::ExtractCounts>();
-        extract_counts_node->set_edges(source_patches, storage.block_counts);
+        extract_counts_node->set_edges(storage.source_patches, storage.block_counts);
         extract_counts_node->evaluate();
     }
 
     { // set element counts
         std::shared_ptr<shamrock::solvergraph::ExtractCounts> extract_counts_node
             = std::make_shared<shamrock::solvergraph::ExtractCounts>();
-        extract_counts_node->set_edges(merged_patches, storage.block_counts_with_ghost);
+        extract_counts_node->set_edges(storage.merged_patchdata_ghost, storage.block_counts_with_ghost);
         extract_counts_node->evaluate();
     }
 
     { // Attach spans to block coords
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>> attach_block_min
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>>(0);
-        attach_block_min->set_edges(merged_patches, storage.refs_block_min);
+        attach_block_min->set_edges(storage.merged_patchdata_ghost, storage.refs_block_min);
         attach_block_min->evaluate();
 
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>> attach_block_max
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<TgridVec>>(1);
-        attach_block_max->set_edges(merged_patches, storage.refs_block_max);
+        attach_block_max->set_edges(storage.merged_patchdata_ghost, storage.refs_block_max);
         attach_block_max->evaluate();
     }
 
@@ -544,19 +534,19 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
                 storage.ghost_layout, "rho");
-        attach_rho->set_edges(merged_patches, storage.refs_rho);
+        attach_rho->set_edges(storage.merged_patchdata_ghost, storage.refs_rho);
         attach_rho->evaluate();
 
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>> attach_rhov
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>>(
                 storage.ghost_layout, "rhovel");
-        attach_rhov->set_edges(merged_patches, storage.refs_rhov);
+        attach_rhov->set_edges(storage.merged_patchdata_ghost, storage.refs_rhov);
         attach_rhov->evaluate();
 
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rhoe
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
                 storage.ghost_layout, "rhoetot");
-        attach_rhoe->set_edges(merged_patches, storage.refs_rhoe);
+        attach_rhoe->set_edges(storage.merged_patchdata_ghost, storage.refs_rhoe);
         attach_rhoe->evaluate();
     }
 
@@ -564,13 +554,13 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::exchange_ghos
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>> attach_rho_dust
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tscal>>(
                 storage.ghost_layout, "rho_dust");
-        attach_rho_dust->set_edges(merged_patches, storage.refs_rho_dust);
+        attach_rho_dust->set_edges(storage.merged_patchdata_ghost, storage.refs_rho_dust);
         attach_rho_dust->evaluate();
 
         std::shared_ptr<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>> attach_rhov_dust
             = std::make_shared<shamrock::solvergraph::GetFieldRefFromLayer<Tvec>>(
                 storage.ghost_layout, "rhovel_dust");
-        attach_rhov_dust->set_edges(merged_patches, storage.refs_rhov_dust);
+        attach_rhov_dust->set_edges(storage.merged_patchdata_ghost, storage.refs_rhov_dust);
         attach_rhov_dust->evaluate();
     }
 }
