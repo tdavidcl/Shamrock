@@ -18,6 +18,7 @@
 
 #include "shambase/DistributedDataShared.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/logs/loglevels.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/print.hpp"
 #include "shambase/stacktrace.hpp"
@@ -45,6 +46,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include <stdexcept>
+#include <vector>
 
 namespace shammodels::basegodunov::modules {
     /**
@@ -228,6 +230,108 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
                 i32(build.build_infos.periodicity_index[2]),
             });
     });
+
+#if true
+    // Compare the new one with the old one
+
+    std::shared_ptr<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>> sptree_edge
+        = std::make_shared<shamrock::solvergraph::SerialPatchTreeRefEdge<TgridVec>>("", "");
+    sptree_edge->patch_tree = std::ref(storage.serial_patch_tree.get());
+
+    auto &sim_box_edge = storage.sim_box_edge;
+
+    std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>> patch_boxes_edge
+        = std::make_shared<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(
+            "patch_boxes", "patch_boxes");
+    {
+        auto &sim_box = scheduler().get_sim_box();
+        auto transf   = sim_box.template get_patch_transform<TgridVec>();
+
+        scheduler().for_each_patchdata_nonempty(
+            [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                auto pbounds = transf.to_obj_coord(p);
+                patch_boxes_edge->values.add_obj(
+                    p.id_patch, shammath::AABB<TgridVec>{pbounds.lower, pbounds.upper});
+            });
+    }
+
+    std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
+        ghost_layers_candidates_edge2
+        = std::make_shared<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(
+            "ghost_layers_candidates", "ghost_layers_candidates");
+
+    FindGhostLayerCandidates<TgridVec> find_ghost_layer_candidates(
+        GhostLayerGenMode{GhostType::Periodic, GhostType::Periodic, GhostType::Periodic});
+    find_ghost_layer_candidates.set_edges(
+        sim_box_edge, sptree_edge, patch_boxes_edge, ghost_layers_candidates_edge2);
+    find_ghost_layer_candidates.evaluate();
+
+    auto &ghost_layers_candidates2 = ghost_layers_candidates_edge2->values;
+    auto &ghost_layers_candidates  = storage.ghost_layers_candidates_edge->values;
+
+    {
+        std::vector<std::tuple<u64, u64, GhostLayerCandidateInfos>> ghost_layers_candidates_vec1;
+        std::vector<std::tuple<u64, u64, GhostLayerCandidateInfos>> ghost_layers_candidates_vec2;
+
+        ghost_layers_candidates.for_each(
+            [&](u64 sender, u64 receiver, GhostLayerCandidateInfos &info) {
+                ghost_layers_candidates_vec1.push_back(std::make_tuple(sender, receiver, info));
+            });
+
+        ghost_layers_candidates2.for_each(
+            [&](u64 sender, u64 receiver, GhostLayerCandidateInfos &info) {
+                ghost_layers_candidates_vec2.push_back(std::make_tuple(sender, receiver, info));
+            });
+
+        if (ghost_layers_candidates_vec1.size() != ghost_layers_candidates_vec2.size()) {
+            shambase::throw_with_loc<std::runtime_error>(
+                "ghost_layers_candidates sizes are different");
+        }
+
+        for (u32 i = 0; i < ghost_layers_candidates_vec1.size(); i++) {
+            auto &[sender, receiver, info]    = ghost_layers_candidates_vec1[i];
+            auto &[sender2, receiver2, info2] = ghost_layers_candidates_vec2[i];
+
+            shamlog_normal_ln(
+                "tmp",
+                "case 1 sender = {}, receiver = {}, info = {} {} {}",
+                sender,
+                receiver,
+                info.xoff,
+                info.yoff,
+                info.zoff);
+            shamlog_normal_ln(
+                "tmp",
+                "case 2 sender = {}, receiver = {}, info = {} {} {}",
+                sender2,
+                receiver2,
+                info2.xoff,
+                info2.yoff,
+                info2.zoff);
+
+            if (sender != sender2) {
+                shambase::throw_with_loc<std::runtime_error>("sender are different");
+            }
+
+            if (receiver != receiver2) {
+                shambase::throw_with_loc<std::runtime_error>("receiver are different");
+            }
+
+            if (info.xoff != info2.xoff) {
+                shambase::throw_with_loc<std::runtime_error>("xoff are different");
+            }
+
+            if (info.yoff != info2.yoff) {
+                shambase::throw_with_loc<std::runtime_error>("yoff are different");
+            }
+
+            if (info.zoff != info2.zoff) {
+                shambase::throw_with_loc<std::runtime_error>("zoff are different");
+            }
+        }
+    }
+
+#endif
 
     auto sched = shamsys::instance::get_compute_scheduler_ptr();
 

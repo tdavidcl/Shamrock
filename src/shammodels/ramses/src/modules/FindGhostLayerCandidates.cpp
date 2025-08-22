@@ -20,9 +20,9 @@
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include <stdexcept>
 
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::
-    _impl_evaluate_internal() {
+template<class TgridVec>
+void shammodels::basegodunov::modules::FindGhostLayerCandidates<
+    TgridVec>::_impl_evaluate_internal() {
     auto edges = get_edges();
 
     // inputs
@@ -70,9 +70,8 @@ void shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>:
     });
 }
 
-template<class Tvec, class TgridVec>
-std::string
-shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::_impl_get_tex() {
+template<class TgridVec>
+std::string shammodels::basegodunov::modules::FindGhostLayerCandidates<TgridVec>::_impl_get_tex() {
     auto sim_box                 = get_ro_edge_base(0).get_tex_symbol();
     auto patch_tree              = get_ro_edge_base(1).get_tex_symbol();
     auto patch_boxes             = get_ro_edge_base(2).get_tex_symbol();
@@ -122,4 +121,4 @@ shammodels::basegodunov::modules::FindGhostLayerCandidates<Tvec, TgridVec>::_imp
     return tex;
 }
 
-template class shammodels::basegodunov::modules::FindGhostLayerCandidates<f64_3, i64_3>;
+template class shammodels::basegodunov::modules::FindGhostLayerCandidates<i64_3>;

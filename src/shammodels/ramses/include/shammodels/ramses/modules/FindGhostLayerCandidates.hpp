@@ -86,14 +86,13 @@ namespace shammodels::basegodunov::modules {
         i32 zoff;
     };
 
-    template<class Tvec, class TgridVec>
+    template<class TgridVec>
     class FindGhostLayerCandidates : public shamrock::solvergraph::INode {
+
+        GhostLayerGenMode mode;
 
         public:
         FindGhostLayerCandidates(GhostLayerGenMode mode) : mode(mode) {}
-
-        private:
-        GhostLayerGenMode mode;
 
         struct Edges {
             // inputs
