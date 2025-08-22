@@ -14,6 +14,7 @@
  * @brief
  */
 
+#include "shambase/assert.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/string.hpp"
@@ -358,14 +359,17 @@ void shammodels::sph::Solver<Tvec, Kern>::merge_position_ghost() {
     { // set element counts
         shambase::get_check_ref(storage.part_counts).indexes
             = storage.merged_xyzh.get().template map<u32>([&](u64 id, PreStepMergedField &mpdat) {
-                  return mpdat.original_elements;
+                  SHAM_ASSERT(
+                      mpdat.original_elements == scheduler().patch_data.get_pdat(id).get_obj_cnt());
+                  return scheduler().patch_data.get_pdat(id).get_obj_cnt();
               });
     }
 
     { // set element counts
         shambase::get_check_ref(storage.part_counts_with_ghost).indexes
             = storage.merged_xyzh.get().template map<u32>([&](u64 id, PreStepMergedField &mpdat) {
-                  return mpdat.total_elements;
+                  SHAM_ASSERT(mpdat.total_elements == mpdat.field_pos.get_obj_cnt());
+                  return mpdat.field_pos.get_obj_cnt();
               });
     }
 
@@ -1374,8 +1378,12 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                     sycl::buffer<Tvec> &buf_vxyz   = mpdat.get_field_buf_ref<Tvec>(ivxyz_interf);
                     sycl::buffer<Tscal> &buf_hpart = mpdat.get_field_buf_ref<Tscal>(ihpart_interf);
 
+                    u32 total_elements = shambase::get_check_ref(storage.part_counts_with_ghost)
+                                             .indexes.get(cur_p.id_patch);
+                    SHAM_ASSERT(merged_patch.total_elements == total_elements);
+
                     Debug_ph_dump<Tvec> info{
-                        merged_patch.total_elements,
+                        total_elements,
                         solver_config.gpart_mass,
 
                         buf_xyz,

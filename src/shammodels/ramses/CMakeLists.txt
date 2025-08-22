@@ -42,7 +42,6 @@ set(Sources
     src/modules/FindGhostLayerCandidates.cpp
     src/modules/FindGhostLayerIndices.cpp
     src/modules/ExtractGhostLayer.cpp
-    src/modules/ExchangeGhostLayer.cpp
     src/modules/TransformGhostLayer.cpp
     src/modules/FuseGhostLayer.cpp
 )
