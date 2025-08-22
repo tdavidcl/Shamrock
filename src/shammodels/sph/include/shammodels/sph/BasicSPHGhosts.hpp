@@ -280,7 +280,6 @@ namespace shammodels::sph {
         // interface generation/communication utility //////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////
 
-
         inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
         build_position_interf_field(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             StackEntry stack_loc{};
@@ -294,25 +293,19 @@ namespace shammodels::sph {
                     InterfaceBuildInfos binfo,
                     sham::DeviceBuffer<u32> &buf_idx,
                     u32 cnt) {
-
                     using namespace shamrock::patch;
-                    
-                    PatchDataLayer & sender_pdat = sched
-                        .patch_data
-                        .get_pdat(sender);
 
+                    PatchDataLayer &sender_pdat = sched.patch_data.get_pdat(sender);
 
                     shamrock::patch::PatchDataLayer ret(xyzh_ghost_layout);
 
-                    sender_pdat
-                        .get_field<vec>(0).append_subset_to(buf_idx,cnt,ret.get_field<vec>(0));
-                    sender_pdat
-                        .get_field<flt>(ihpart).append_subset_to(buf_idx,cnt,ret.get_field<flt>(1));
-
-
+                    sender_pdat.get_field<vec>(0).append_subset_to(
+                        buf_idx, cnt, ret.get_field<vec>(0));
+                    sender_pdat.get_field<flt>(ihpart).append_subset_to(
+                        buf_idx, cnt, ret.get_field<flt>(1));
 
                     ret.get_field<vec>(0).apply_offset(binfo.offset);
-                    
+
                     return ret;
                 });
         }
@@ -383,7 +376,7 @@ namespace shammodels::sph {
         inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
         build_communicate_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             auto pos_interf = build_position_interf_field(builder);
-            return communicate_pdat(xyzh_ghost_layout,std::move(pos_interf));
+            return communicate_pdat(xyzh_ghost_layout, std::move(pos_interf));
         }
 
         template<class T, class Tmerged>
@@ -413,14 +406,15 @@ namespace shammodels::sph {
             return merge_f;
         }
 
-        inline shambase::DistributedData<shamrock::patch::PatchDataLayer>
-        merge_position_buf(shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> &&positioninterfs) {
+        inline shambase::DistributedData<shamrock::patch::PatchDataLayer> merge_position_buf(
+            shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> &&positioninterfs) {
             StackEntry stack_loc{};
 
             const u32 ihpart = sched.pdl().template get_field_idx<flt>("hpart");
 
             return merge_native<shamrock::patch::PatchDataLayer, shamrock::patch::PatchDataLayer>(
-                std::forward<shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>>(positioninterfs),
+                std::forward<shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>>(
+                    positioninterfs),
                 [=](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
                     PatchDataField<vec> &pos   = pdat.get_field<vec>(0);
                     PatchDataField<flt> &hpart = pdat.get_field<flt>(ihpart);
@@ -443,7 +437,7 @@ namespace shammodels::sph {
         inline shambase::DistributedData<shamrock::patch::PatchDataLayer>
         build_comm_merge_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             auto pos_interf = build_position_interf_field(builder);
-            return merge_position_buf(communicate_pdat(xyzh_ghost_layout,std::move(pos_interf)));
+            return merge_position_buf(communicate_pdat(xyzh_ghost_layout, std::move(pos_interf)));
         }
     };
 
