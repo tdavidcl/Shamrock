@@ -280,99 +280,41 @@ namespace shammodels::sph {
         // interface generation/communication utility //////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////
 
-        struct PositionInterface {
-            PatchDataField<vec> position_field;
-            PatchDataField<flt> hpart_field;
-            vec bmin;
-            vec bmax;
-        };
 
-        inline shambase::DistributedDataShared<PositionInterface>
+        inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
         build_position_interf_field(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             StackEntry stack_loc{};
 
             const u32 ihpart = sched.pdl().template get_field_idx<flt>("hpart");
 
-            return build_interface_native<PositionInterface>(
+            return build_interface_native<shamrock::patch::PatchDataLayer>(
                 builder,
                 [&](u64 sender,
                     u64 /*receiver*/,
                     InterfaceBuildInfos binfo,
                     sham::DeviceBuffer<u32> &buf_idx,
                     u32 cnt) {
+
                     using namespace shamrock::patch;
-                    // clang-format off
+                    
                     PatchDataLayer & sender_pdat = sched
                         .patch_data
                         .get_pdat(sender);
 
-                    PatchDataField<vec> pfield = sender_pdat
-                        .get_field<vec>(0)
-                        .make_new_from_subset(buf_idx, cnt);
 
-                    PatchDataField<flt> hpartfield = sender_pdat
-                        .get_field<flt>(ihpart)
-                        .make_new_from_subset(buf_idx, cnt);
-                    // clang-format on
+                    shamrock::patch::PatchDataLayer ret(xyzh_ghost_layout);
 
-                    pfield.apply_offset(binfo.offset);
+                    sender_pdat
+                        .get_field<vec>(0).append_subset_to(buf_idx,cnt,ret.get_field<vec>(0));
+                    sender_pdat
+                        .get_field<flt>(ihpart).append_subset_to(buf_idx,cnt,ret.get_field<flt>(1));
 
-                    vec bmin = binfo.cut_volume.lower + binfo.offset;
-                    vec bmax = binfo.cut_volume.upper + binfo.offset;
 
-                    return PositionInterface{std::move(pfield), std::move(hpartfield), bmin, bmax};
+
+                    ret.get_field<vec>(0).apply_offset(binfo.offset);
+                    
+                    return ret;
                 });
-        }
-
-        inline shambase::DistributedDataShared<PositionInterface>
-        communicate_positions(shambase::DistributedDataShared<PositionInterface> &&interf) {
-            StackEntry stack_loc{};
-
-            shambase::DistributedDataShared<PositionInterface> recv_dat;
-
-            shamalgs::collective::serialize_sparse_comm<PositionInterface>(
-                shamsys::instance::get_compute_scheduler_ptr(),
-                std::forward<shambase::DistributedDataShared<PositionInterface>>(interf),
-                recv_dat,
-                [&](u64 id) {
-                    return sched.get_patch_rank_owner(id);
-                },
-                [](PositionInterface &pos_interf) {
-                    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
-
-                    shamalgs::SerializeSize size
-                        = pos_interf.position_field.serialize_buf_byte_size();
-                    size += pos_interf.hpart_field.serialize_buf_byte_size();
-                    size += shamalgs::SerializeHelper::serialize_byte_size<vec>() * 2;
-
-                    ser.allocate(size);
-
-                    pos_interf.position_field.serialize_buf(ser);
-                    pos_interf.hpart_field.serialize_buf(ser);
-                    ser.write(pos_interf.bmin);
-                    ser.write(pos_interf.bmax);
-
-                    return ser.finalize();
-                },
-                [&](sham::DeviceBuffer<u8> &&buf) {
-                    // exchange the buffer held by the distrib data and give it to the
-                    // serializer
-                    shamalgs::SerializeHelper ser(
-                        shamsys::instance::get_compute_scheduler_ptr(),
-                        std::forward<sham::DeviceBuffer<u8>>(buf));
-
-                    PatchDataField<vec> f = PatchDataField<vec>::deserialize_buf(ser, "xyz", 1);
-                    PatchDataField<flt> hpart
-                        = PatchDataField<flt>::deserialize_buf(ser, "hpart", 1);
-
-                    vec bmin, bmax;
-                    ser.load(bmin);
-                    ser.load(bmax);
-
-                    return PositionInterface{std::move(f), std::move(hpart), bmin, bmax};
-                });
-
-            return recv_dat;
         }
 
         inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> communicate_pdat(
@@ -438,10 +380,10 @@ namespace shammodels::sph {
             return recv_dat;
         }
 
-        inline shambase::DistributedDataShared<PositionInterface>
+        inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
         build_communicate_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             auto pos_interf = build_position_interf_field(builder);
-            return communicate_positions(std::move(pos_interf));
+            return communicate_pdat(xyzh_ghost_layout,std::move(pos_interf));
         }
 
         template<class T, class Tmerged>
@@ -472,13 +414,13 @@ namespace shammodels::sph {
         }
 
         inline shambase::DistributedData<shamrock::patch::PatchDataLayer>
-        merge_position_buf(shambase::DistributedDataShared<PositionInterface> &&positioninterfs) {
+        merge_position_buf(shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> &&positioninterfs) {
             StackEntry stack_loc{};
 
             const u32 ihpart = sched.pdl().template get_field_idx<flt>("hpart");
 
-            return merge_native<PositionInterface, shamrock::patch::PatchDataLayer>(
-                std::forward<shambase::DistributedDataShared<PositionInterface>>(positioninterfs),
+            return merge_native<shamrock::patch::PatchDataLayer, shamrock::patch::PatchDataLayer>(
+                std::forward<shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>>(positioninterfs),
                 [=](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
                     PatchDataField<vec> &pos   = pdat.get_field<vec>(0);
                     PatchDataField<flt> &hpart = pdat.get_field<flt>(ihpart);
@@ -491,9 +433,8 @@ namespace shammodels::sph {
 
                     return ret;
                 },
-                [](shamrock::patch::PatchDataLayer &merged, PositionInterface &pint) {
-                    merged.get_field<vec>(0).insert(pint.position_field);
-                    merged.get_field<flt>(1).insert(pint.hpart_field);
+                [](shamrock::patch::PatchDataLayer &merged, shamrock::patch::PatchDataLayer &pint) {
+                    merged.insert_elements(pint);
 
                     merged.check_field_obj_cnt_match();
                 });
@@ -502,7 +443,7 @@ namespace shammodels::sph {
         inline shambase::DistributedData<shamrock::patch::PatchDataLayer>
         build_comm_merge_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
             auto pos_interf = build_position_interf_field(builder);
-            return merge_position_buf(communicate_positions(std::move(pos_interf)));
+            return merge_position_buf(communicate_pdat(xyzh_ghost_layout,std::move(pos_interf)));
         }
     };
 
