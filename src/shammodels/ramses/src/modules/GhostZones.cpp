@@ -30,6 +30,7 @@
 #include "shammodels/ramses/GhostZoneData.hpp"
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
+#include "shammodels/ramses/modules/FindGhostLayerIndices.hpp"
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/GhostZones.hpp"
 #include "shammodels/ramses/modules/TransformGhostLayer.hpp"
@@ -45,6 +46,7 @@
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
@@ -266,10 +268,10 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
         sim_box_edge, sptree_edge, patch_boxes_edge, ghost_layers_candidates_edge2);
     find_ghost_layer_candidates.evaluate();
 
-    auto &ghost_layers_candidates2 = ghost_layers_candidates_edge2->values;
-    auto &ghost_layers_candidates  = storage.ghost_layers_candidates_edge->values;
-
     {
+        auto &ghost_layers_candidates2 = ghost_layers_candidates_edge2->values;
+        auto &ghost_layers_candidates  = storage.ghost_layers_candidates_edge->values;
+
         std::vector<std::tuple<u64, u64, GhostLayerCandidateInfos>> ghost_layers_candidates_vec1;
         std::vector<std::tuple<u64, u64, GhostLayerCandidateInfos>> ghost_layers_candidates_vec2;
 
@@ -341,6 +343,88 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
             buf.copy_from_sycl_buffer(shambase::get_check_ref(build_table.ids_interf));
             storage.idx_in_ghost->buffers.add_obj(sender, receiver, std::move(buf));
         });
+
+#if true
+
+    auto idx_in_ghost2 = std::make_shared<shamrock::solvergraph::DDSharedBuffers<u32>>("", "");
+
+    FindGhostLayerIndices<TgridVec> find_ghost_layer_indices(
+        GhostLayerGenMode{GhostType::Periodic, GhostType::Periodic, GhostType::Periodic});
+    find_ghost_layer_indices.set_edges(
+        sim_box_edge,
+        storage.source_patches,
+        storage.ghost_layers_candidates_edge,
+        patch_boxes_edge,
+        idx_in_ghost2);
+    find_ghost_layer_indices.evaluate();
+
+    {
+        auto &_idx_in_ghost2 = idx_in_ghost2->buffers;
+        auto &_idx_in_ghost  = storage.idx_in_ghost->buffers;
+
+        using vec_t
+            = std::vector<std::tuple<u64, u64, std::reference_wrapper<sham::DeviceBuffer<u32>>>>;
+
+        vec_t ghost_layers_candidates_vec1;
+        vec_t ghost_layers_candidates_vec2;
+
+        _idx_in_ghost.for_each([&](u64 sender, u64 receiver, sham::DeviceBuffer<u32> &idx) {
+            ghost_layers_candidates_vec1.push_back(
+                std::make_tuple(sender, receiver, std::ref(idx)));
+        });
+
+        _idx_in_ghost2.for_each([&](u64 sender, u64 receiver, sham::DeviceBuffer<u32> &idx) {
+            ghost_layers_candidates_vec2.push_back(
+                std::make_tuple(sender, receiver, std::ref(idx)));
+        });
+
+        if (ghost_layers_candidates_vec1.size() != ghost_layers_candidates_vec2.size()) {
+            shambase::throw_with_loc<std::runtime_error>(
+                "ghost_layers_candidates sizes are different");
+        }
+
+        for (u32 i = 0; i < ghost_layers_candidates_vec1.size(); i++) {
+            auto &[sender, receiver, idx]    = ghost_layers_candidates_vec1[i];
+            auto &[sender2, receiver2, idx2] = ghost_layers_candidates_vec2[i];
+
+            shamlog_normal_ln(
+                "tmp",
+                shambase::format(
+                    "case 1 sender = {}, receiver = {}, idx = {}",
+                    sender,
+                    receiver,
+                    idx.get().get_size()));
+            shamlog_normal_ln(
+                "tmp",
+                shambase::format(
+                    "case 2 sender = {}, receiver = {}, idx = {}, idx1==idx2 = {}",
+                    sender2,
+                    receiver2,
+                    idx2.get().get_size(),
+                    idx.get().copy_to_stdvec() == idx2.get().copy_to_stdvec()));
+
+            if (sender != sender2) {
+                shambase::throw_with_loc<std::runtime_error>("sender are different");
+            }
+
+            if (receiver != receiver2) {
+                shambase::throw_with_loc<std::runtime_error>("receiver are different");
+            }
+
+            if (idx.get().get_size() != idx2.get().get_size()) {
+                shambase::throw_with_loc<std::runtime_error>("idx sizes are different");
+            }
+
+            std::vector<u32> idx_vec1 = idx.get().copy_to_stdvec();
+            std::vector<u32> idx_vec2 = idx2.get().copy_to_stdvec();
+
+            if (idx_vec1 != idx_vec2) {
+                shambase::throw_with_loc<std::runtime_error>("idx are different");
+            }
+        }
+    }
+
+#endif
 }
 
 template<class Tvec, class TgridVec>

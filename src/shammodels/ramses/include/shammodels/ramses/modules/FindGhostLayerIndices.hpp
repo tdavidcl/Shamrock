@@ -17,23 +17,21 @@
 
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include "shamrock/solvergraph/DDSharedBuffers.hpp"
-#include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 
 namespace shammodels::basegodunov::modules {
 
-    template<class Tvec, class TgridVec>
+    template<class TgridVec>
     class FindGhostLayerIndices : public shamrock::solvergraph::INode {
+
+        GhostLayerGenMode mode;
 
         public:
         FindGhostLayerIndices(GhostLayerGenMode mode) : mode(mode) {}
 
-        private:
-        GhostLayerGenMode mode;
-
         struct Edges {
             // inputs
             const shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>> &sim_box;
-            const shamrock::solvergraph::PatchDataLayerRefs &patch_data_layers;
+            const shamrock::solvergraph::IPatchDataLayerRefs &patch_data_layers;
             const shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>
                 &ghost_layers_candidates;
             const shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>> &patch_boxes;
@@ -43,7 +41,7 @@ namespace shammodels::basegodunov::modules {
 
         inline void set_edges(
             std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box,
-            std::shared_ptr<shamrock::solvergraph::PatchDataLayerRefs> patch_data_layers,
+            std::shared_ptr<shamrock::solvergraph::IPatchDataLayerRefs> patch_data_layers,
             std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
                 ghost_layers_candidates,
             std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
@@ -57,7 +55,7 @@ namespace shammodels::basegodunov::modules {
         inline Edges get_edges() {
             return Edges{
                 get_ro_edge<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>>(0),
-                get_ro_edge<shamrock::solvergraph::PatchDataLayerRefs>(1),
+                get_ro_edge<shamrock::solvergraph::IPatchDataLayerRefs>(1),
                 get_ro_edge<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>(2),
                 get_ro_edge<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(3),
                 get_rw_edge<shamrock::solvergraph::DDSharedBuffers<u32>>(0),

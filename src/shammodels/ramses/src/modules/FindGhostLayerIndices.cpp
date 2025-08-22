@@ -63,9 +63,8 @@ namespace {
     }
 } // namespace
 
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::FindGhostLayerIndices<Tvec, TgridVec>::
-    _impl_evaluate_internal() {
+template<class TgridVec>
+void shammodels::basegodunov::modules::FindGhostLayerIndices<TgridVec>::_impl_evaluate_internal() {
     auto edges = get_edges();
 
     // inputs
@@ -82,13 +81,14 @@ void shammodels::basegodunov::modules::FindGhostLayerIndices<Tvec, TgridVec>::
 
     auto paving_function = get_paving(mode, sim_box);
 
+    auto &patch_data_layers_ref = patch_data_layers.get_const_refs();
+
     // map candidates to indexes in ghosts
     idx_in_ghost.buffers = ghost_layers_candidates.values.template map<sham::DeviceBuffer<u32>>(
         [&](u64 sender,
             u64 receiver,
             const GhostLayerCandidateInfos &infos) -> sham::DeviceBuffer<u32> {
-            shamrock::patch::PatchDataLayer &sender_patch
-                = patch_data_layers.patchdatas.get(sender).get();
+            shamrock::patch::PatchDataLayer &sender_patch = patch_data_layers_ref.get(sender).get();
 
             PatchDataField<TgridVec> &block_min = sender_patch.get_field<TgridVec>(0);
             PatchDataField<TgridVec> &block_max = sender_patch.get_field<TgridVec>(1);
@@ -108,10 +108,9 @@ void shammodels::basegodunov::modules::FindGhostLayerIndices<Tvec, TgridVec>::
         });
 }
 
-template<class Tvec, class TgridVec>
-std::string
-shammodels::basegodunov::modules::FindGhostLayerIndices<Tvec, TgridVec>::_impl_get_tex() {
+template<class TgridVec>
+std::string shammodels::basegodunov::modules::FindGhostLayerIndices<TgridVec>::_impl_get_tex() {
     return "TODO";
 }
 
-template class shammodels::basegodunov::modules::FindGhostLayerIndices<f64_3, i64_3>;
+template class shammodels::basegodunov::modules::FindGhostLayerIndices<i64_3>;
