@@ -16,6 +16,7 @@
  *
  */
 
+#include "shambase/SourceLocation.hpp"
 #include "shambase/aliases_int.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/print.hpp"
@@ -159,7 +160,7 @@ namespace shambase {
         }
 
         /// Const variant of get
-        inline const T &get(u64 id) const {
+        inline const T &get(u64 id, SourceLocation loc = SourceLocation{}) const {
             try {
                 return data.at(id);
             } catch (std::out_of_range &) {
@@ -170,8 +171,9 @@ namespace shambase {
                     id_list.push_back(id);
                 });
 
-                throw make_except_with_loc<std::runtime_error>(format(
-                    "The querried id {} does not exist, current id list is {}", id, id_list));
+                throw make_except_with_loc<std::runtime_error>(
+                    format("The querried id {} does not exist, current id list is {}", id, id_list),
+                    loc);
             }
         }
 

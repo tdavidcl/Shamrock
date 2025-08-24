@@ -242,19 +242,34 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
 
     auto &sim_box_edge = storage.sim_box_edge;
 
-    std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>> patch_boxes_edge
+    std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
+        global_patch_boxes_edge
         = std::make_shared<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(
-            "patch_boxes", "patch_boxes");
+            "global_patch_boxes", "global_patch_boxes");
     {
         auto &sim_box = scheduler().get_sim_box();
         auto transf   = sim_box.template get_patch_transform<TgridVec>();
 
-        scheduler().for_each_patchdata_nonempty(
-            [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-                auto pbounds = transf.to_obj_coord(p);
-                patch_boxes_edge->values.add_obj(
-                    p.id_patch, shammath::AABB<TgridVec>{pbounds.lower, pbounds.upper});
-            });
+        scheduler().for_each_global_patch([&](const shamrock::patch::Patch p) {
+            auto pbounds = transf.to_obj_coord(p);
+            global_patch_boxes_edge->values.add_obj(
+                p.id_patch, shammath::AABB<TgridVec>{pbounds.lower, pbounds.upper});
+        });
+    }
+
+    std::shared_ptr<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>
+        local_patch_boxes_edge
+        = std::make_shared<shamrock::solvergraph::ScalarsEdge<shammath::AABB<TgridVec>>>(
+            "local_patch_boxes", "local_patch_boxes");
+    {
+        auto &sim_box = scheduler().get_sim_box();
+        auto transf   = sim_box.template get_patch_transform<TgridVec>();
+
+        scheduler().for_each_local_patch([&](const shamrock::patch::Patch p) {
+            auto pbounds = transf.to_obj_coord(p);
+            local_patch_boxes_edge->values.add_obj(
+                p.id_patch, shammath::AABB<TgridVec>{pbounds.lower, pbounds.upper});
+        });
     }
 
     std::shared_ptr<shamrock::solvergraph::DDSharedScalar<GhostLayerCandidateInfos>>
@@ -265,7 +280,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
     FindGhostLayerCandidates<TgridVec> find_ghost_layer_candidates(
         GhostLayerGenMode{GhostType::Periodic, GhostType::Periodic, GhostType::Periodic});
     find_ghost_layer_candidates.set_edges(
-        sim_box_edge, sptree_edge, patch_boxes_edge, ghost_layers_candidates_edge2);
+        sim_box_edge, sptree_edge, local_patch_boxes_edge, ghost_layers_candidates_edge2);
     find_ghost_layer_candidates.evaluate();
 
     {
@@ -286,8 +301,10 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
             });
 
         if (ghost_layers_candidates_vec1.size() != ghost_layers_candidates_vec2.size()) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "ghost_layers_candidates sizes are different");
+            shambase::throw_with_loc<std::runtime_error>(shambase::format(
+                "ghost_layers_candidates sizes are different, {} != {}",
+                ghost_layers_candidates_vec1.size(),
+                ghost_layers_candidates_vec2.size()));
         }
 
         for (u32 i = 0; i < ghost_layers_candidates_vec1.size(); i++) {
@@ -354,7 +371,7 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
         sim_box_edge,
         storage.source_patches,
         storage.ghost_layers_candidates_edge,
-        patch_boxes_edge,
+        global_patch_boxes_edge,
         idx_in_ghost2);
     find_ghost_layer_indices.evaluate();
 
