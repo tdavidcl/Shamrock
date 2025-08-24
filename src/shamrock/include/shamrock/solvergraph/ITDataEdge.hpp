@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file IDataEdge.hpp
+ * @file ITDataEdge.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *

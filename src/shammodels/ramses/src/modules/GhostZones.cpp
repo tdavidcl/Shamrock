@@ -258,10 +258,8 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
         });
     }
 
-    std::shared_ptr<shamrock::solvergraph::ITDataEdge<std::vector<u64>>>
-        local_patch_ids
-        = std::make_shared<shamrock::solvergraph::ITDataEdge<std::vector<u64>>>(
-            "", "");
+    std::shared_ptr<shamrock::solvergraph::ITDataEdge<std::vector<u64>>> local_patch_ids
+        = std::make_shared<shamrock::solvergraph::ITDataEdge<std::vector<u64>>>("", "");
     {
         auto &sim_box = scheduler().get_sim_box();
         auto transf   = sim_box.template get_patch_transform<TgridVec>();
@@ -279,7 +277,11 @@ void shammodels::basegodunov::modules::GhostZones<Tvec, TgridVec>::build_ghost_c
     FindGhostLayerCandidates<TgridVec> find_ghost_layer_candidates(
         GhostLayerGenMode{GhostType::Periodic, GhostType::Periodic, GhostType::Periodic});
     find_ghost_layer_candidates.set_edges(
-        local_patch_ids, sim_box_edge, sptree_edge, global_patch_boxes_edge, ghost_layers_candidates_edge2);
+        local_patch_ids,
+        sim_box_edge,
+        sptree_edge,
+        global_patch_boxes_edge,
+        ghost_layers_candidates_edge2);
     find_ghost_layer_candidates.evaluate();
 
     {

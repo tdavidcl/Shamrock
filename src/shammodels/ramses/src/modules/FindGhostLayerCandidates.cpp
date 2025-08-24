@@ -27,9 +27,9 @@ void shammodels::basegodunov::modules::FindGhostLayerCandidates<
 
     // inputs
     auto &ids_to_check = edges.ids_to_check.data;
-    auto &sim_box     = edges.sim_box.value;
-    auto &patch_tree  = edges.patch_tree.get_patch_tree();
-    auto &patch_boxes = edges.patch_boxes;
+    auto &sim_box      = edges.sim_box.value;
+    auto &patch_tree   = edges.patch_tree.get_patch_tree();
+    auto &patch_boxes  = edges.patch_boxes;
 
     using PtNode = typename SerialPatchTree<TgridVec>::PtNode;
 
