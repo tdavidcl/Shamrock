@@ -62,7 +62,7 @@ namespace shambase {
      *
      * // Check if stack has elements
      * while (stack.is_not_empty()) {
-     *     u32 value = stack.pop();
+     *     u32 value = stack.pop_ret();
      *     // Process value (8, 17, 42 in LIFO order)
      * }
      *
@@ -75,7 +75,7 @@ namespace shambase {
      * node_stack.push(root_node_id);
      *
      * while (node_stack.is_not_empty()) {
-     *     u32 current_node = node_stack.pop();
+     *     u32 current_node = node_stack.pop_ret();
      *     // Process current node
      *     // Push child nodes for further processing
      *     for (u32 child : get_children(current_node)) {
@@ -97,23 +97,25 @@ namespace shambase {
         /// Cursor pointing to the next available slot (stack_size = empty, 0 = full)
         u32 stack_cursor;
 
-        // Note that the stack it self is volontarely not initialized
+        // Note that the stack itself is voluntarily not initialized
         // do not add it to the constructor otherwise we may have to pay for zero initialization
 
         /// Default constructor creating an empty stack
-        FixedStack() : stack_cursor{stack_size} {}
+        inline constexpr FixedStack() : stack_cursor{stack_size} {}
 
         /// Constructor creating a stack with one initial element
-        FixedStack(const T &val) : stack_cursor{stack_size - 1} { id_stack[stack_cursor] = val; }
+        inline constexpr FixedStack(const T &val) : stack_cursor{stack_size - 1} {
+            id_stack[stack_cursor] = val;
+        }
 
         /// Check if the stack contains any elements
-        inline bool is_not_empty() const { return stack_cursor < stack_size; }
+        inline constexpr bool is_not_empty() const { return stack_cursor < stack_size; }
 
         /// Check if the stack is empty
-        inline bool empty() const { return stack_cursor == stack_size; }
+        inline constexpr bool empty() const { return stack_cursor == stack_size; }
 
         /// Returns the number of elements in the stack
-        inline u32 size() const { return stack_size - stack_cursor; }
+        inline constexpr u32 size() const { return stack_size - stack_cursor; }
 
         /// Push an element onto the top of the stack
         inline void push(const T &val) {
@@ -132,13 +134,13 @@ namespace shambase {
         }
 
         /// Access the top element (const version)
-        inline const T &top() const {
+        inline constexpr const T &top() const {
             SHAM_ASSERT(is_not_empty());
             return id_stack[stack_cursor];
         }
 
-        /// Remove  the top element from the stack
-        inline void pop() {
+        /// Remove the top element from the stack
+        inline constexpr void pop() {
 
             // FixedStack underflow: cannot pop from an empty stack.
             SHAM_ASSERT(is_not_empty());
