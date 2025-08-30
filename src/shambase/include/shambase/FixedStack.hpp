@@ -96,55 +96,16 @@ namespace shambase {
         // Note that the stack it self is volontarely not initialized
         // do not add it to the constructor otherwise we may have to pay for zero initialization
 
-        /**
-         * @brief Default constructor creating an empty stack
-         *
-         * Initializes the stack cursor to stack_size, indicating an empty stack.
-         * The stack array is intentionally not initialized to avoid unnecessary
-         * zero-initialization overhead in performance-critical applications.
-         */
+        /// Default constructor creating an empty stack
         FixedStack() : stack_cursor{stack_size} {}
 
-        /**
-         * @brief Constructor creating a stack with one initial element
-         *
-         * Initializes the stack with a single element and sets the cursor
-         * appropriately. The stack will contain one element after construction.
-         *
-         * @param val Initial value to push onto the stack
-         */
+        /// Constructor creating a stack with one initial element
         FixedStack(T val) : stack_cursor{stack_size - 1} { id_stack[stack_cursor] = val; }
 
-        /**
-         * @brief Check if the stack contains any elements
-         *
-         * Tests whether the stack is not empty by comparing the cursor position
-         * with the stack size. An empty stack has cursor equal to stack_size.
-         *
-         * @return true if the stack contains at least one element, false if empty
-         *
-         * @note This method is preferred over an is_empty() method for performance
-         *       reasons in typical usage patterns where the condition is used in
-         *       while loops for stack processing.
-         */
+        /// Check if the stack contains any elements
         inline bool is_not_empty() const { return stack_cursor < stack_size; }
 
-        /**
-         * @brief Push an element onto the top of the stack
-         *
-         * Adds a new element to the stack by decreasing the cursor and storing
-         * the value at the new cursor position. The stack grows downward in
-         * memory (towards lower array indices).
-         *
-         * @param val Value to push onto the stack
-         *
-         * @pre The stack must not be full (stack_cursor > 0)
-         * @post The stack contains one additional element
-         *
-         * @throws SHAM_ASSERT failure if the stack is full
-         *
-         * @note This operation has O(1) time complexity
-         */
+        /// Push an element onto the top of the stack
         inline void push(T val) {
 
             // FixedStack overflow: cannot push to a full stack.
@@ -154,25 +115,7 @@ namespace shambase {
             id_stack[stack_cursor] = val;
         }
 
-        /**
-         * @brief Remove and return the top element from the stack
-         *
-         * Retrieves the element at the top of the stack (at the cursor position)
-         * and increases the cursor to effectively remove it from the stack.
-         * The element is returned by value following LIFO (Last In, First Out)
-         * semantics.
-         *
-         * @return The top element of the stack
-         *
-         * @pre The stack must not be empty (is_not_empty() must return true)
-         * @post The stack contains one fewer element
-         *
-         * @throws SHAM_ASSERT failure if the stack is empty
-         *
-         * @note This operation has O(1) time complexity. The popped element
-         *       remains in the array memory but is no longer considered part
-         *       of the stack.
-         */
+        /// Remove and return the top element from the stack
         inline T pop() {
 
             // FixedStack underflow: cannot pop from an empty stack.
