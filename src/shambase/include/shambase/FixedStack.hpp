@@ -26,6 +26,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
+#include <type_traits>
 
 namespace shambase {
 
@@ -86,6 +87,9 @@ namespace shambase {
     template<class T, u32 stack_size>
     struct FixedStack {
 
+        static_assert(
+            std::is_trivially_destructible_v<T>,
+            "FixedStack only supports trivially destructible types to avoid resource leaks.");
         static_assert(stack_size > 0, "FixedStack must have a size greater than 0.");
 
         /// Storage array for stack elements
@@ -100,13 +104,19 @@ namespace shambase {
         FixedStack() : stack_cursor{stack_size} {}
 
         /// Constructor creating a stack with one initial element
-        FixedStack(T val) : stack_cursor{stack_size - 1} { id_stack[stack_cursor] = val; }
+        FixedStack(const T &val) : stack_cursor{stack_size - 1} { id_stack[stack_cursor] = val; }
 
         /// Check if the stack contains any elements
         inline bool is_not_empty() const { return stack_cursor < stack_size; }
 
+        /// Check if the stack is empty
+        inline bool empty() const { return stack_cursor == stack_size; }
+
+        /// Returns the number of elements in the stack
+        inline u32 size() const { return stack_size - stack_cursor; }
+
         /// Push an element onto the top of the stack
-        inline void push(T val) {
+        inline void push(const T &val) {
 
             // FixedStack overflow: cannot push to a full stack.
             SHAM_ASSERT(stack_cursor > 0);
@@ -115,14 +125,32 @@ namespace shambase {
             id_stack[stack_cursor] = val;
         }
 
-        /// Remove and return the top element from the stack
-        inline T pop() {
+        /// Access the top element
+        inline T &top() {
+            SHAM_ASSERT(is_not_empty());
+            return id_stack[stack_cursor];
+        }
+
+        /// Access the top element (const version)
+        inline const T &top() const {
+            SHAM_ASSERT(is_not_empty());
+            return id_stack[stack_cursor];
+        }
+
+        /// Remove  the top element from the stack
+        inline void pop() {
 
             // FixedStack underflow: cannot pop from an empty stack.
             SHAM_ASSERT(is_not_empty());
 
-            T val = id_stack[stack_cursor];
             stack_cursor++;
+        }
+
+        /// Remove and return the top element from the stack
+        [[nodiscard]]
+        inline T pop_ret() {
+            T val = top();
+            pop();
             return val;
         }
     };
