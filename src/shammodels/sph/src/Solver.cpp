@@ -559,6 +559,12 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
                 solver_config.gpart_mass, solver_config.htol_up_tol, solver_config.htol_up_iter);
         smth_h_iter->set_edges(sizes, neigh_cache, pos_merged, hold, hnew, eps_h);
 
+        // here add mode over number density
+        bool use_number_density = true;
+        if (use_number_density) {
+            // bla
+        }
+
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<bool>> is_converged
             = std::make_shared<shamrock::solvergraph::ScalarEdge<bool>>("", "");
 
