@@ -518,35 +518,33 @@ namespace sham {
      * @param func The functor to call for each thread launched.
      * @param args Additional arguments to pass to the functor.
      */
-    template<class RefIn, class RefOut, class... Targs, class Functor>
-    void kernel_call(
-        sham::DeviceQueue &q, RefIn in, RefOut in_out, u32 n, Functor &&func, Targs... args) {
+    template<class RefIn, class RefOut, class Functor>
+    void kernel_call(sham::DeviceQueue &q, RefIn in, RefOut in_out, u32 n, Functor &&func) {
         details::typed_index_kernel_call<u32, RefIn, RefOut>(
-            q, in, in_out, n, std::forward<Functor>(func), args...);
+            q, in, in_out, n, std::forward<Functor>(func));
     }
 
     /// u64 indexed variant of kernel_call
-    template<class RefIn, class RefOut, class... Targs, class Functor>
-    void kernel_call_u64(
-        sham::DeviceQueue &q, RefIn in, RefOut in_out, u64 n, Functor &&func, Targs... args) {
+    template<class RefIn, class RefOut, class Functor>
+    void kernel_call_u64(sham::DeviceQueue &q, RefIn in, RefOut in_out, u64 n, Functor &&func) {
         details::typed_index_kernel_call<u64, RefIn, RefOut>(
-            q, in, in_out, n, std::forward<Functor>(func), args...);
+            q, in, in_out, n, std::forward<Functor>(func));
     }
 
     // version where one supplies a kernel generator in the form of [&](sycl::handler &cgh) { ... }
-    template<class RefIn, class RefOut, class... Targs, class Functor>
+    template<class RefIn, class RefOut, class Functor>
     void kernel_call_hndl(
-        sham::DeviceQueue &q, RefIn in, RefOut in_out, u32 n, Functor &&kernel_gen, Targs... args) {
+        sham::DeviceQueue &q, RefIn in, RefOut in_out, u32 n, Functor &&kernel_gen) {
         details::typed_index_kernel_call_lambda<u32, RefIn, RefOut>(
-            q, in, in_out, n, std::forward<Functor>(kernel_gen), args...);
+            q, in, in_out, n, std::forward<Functor>(kernel_gen));
     }
 
     /// u64 indexed variant of kernel_call_hndl
-    template<class RefIn, class RefOut, class... Targs, class Functor>
+    template<class RefIn, class RefOut, class Functor>
     void kernel_call_hndl_u64(
-        sham::DeviceQueue &q, RefIn in, RefOut in_out, u64 n, Functor &&kernel_gen, Targs... args) {
+        sham::DeviceQueue &q, RefIn in, RefOut in_out, u64 n, Functor &&kernel_gen) {
         details::typed_index_kernel_call_lambda<u64, RefIn, RefOut>(
-            q, in, in_out, n, std::forward<Functor>(kernel_gen), args...);
+            q, in, in_out, n, std::forward<Functor>(kernel_gen));
     }
 
 } // namespace sham
