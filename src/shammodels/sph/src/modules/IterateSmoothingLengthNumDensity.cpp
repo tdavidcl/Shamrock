@@ -24,8 +24,8 @@
 
 using namespace shammodels::sph::modules;
 
-template<class Tvec, class SPHKernel>
-void IterateSmoothingLengthNumDensity<Tvec, SPHKernel>::_impl_evaluate_internal() {
+template<class Tvec, class SPHKernel_old>
+void IterateSmoothingLengthNumDensity<Tvec, SPHKernel_old>::_impl_evaluate_internal() {
     StackEntry stack_loc{};
 
     auto edges = get_edges();
@@ -46,16 +46,21 @@ void IterateSmoothingLengthNumDensity<Tvec, SPHKernel>::_impl_evaluate_internal(
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
+    using SPHKernel = shammath::M4<Tscal>;
+    // using SPHKernel = shammath::M4DH<Tscal>;
+    // using SPHKernel = shammath::M4DH3<Tscal>;
+    // using SPHKernel = shammath::M4DH5<Tscal>;
+
     static constexpr Tscal Rkern = SPHKernel::Rkern;
+
+    Tscal hfact = SPHKernel::hfactd;
 
     sham::distributed_data_kernel_call(
         dev_sched,
         sham::DDMultiRef{neigh_cache, positions, old_h},
         sham::DDMultiRef{new_h, eps_h},
         thread_counts,
-        [gpart_mass      = this->gpart_mass,
-         h_evol_max      = this->h_evol_max,
-         h_evol_iter_max = this->h_evol_iter_max](
+        [h_evol_max = this->h_evol_max, h_evol_iter_max = this->h_evol_iter_max, hfact = hfact](
             u32 id_a,
             auto ploop_ptrs,
             const Tvec *__restrict r,
@@ -65,7 +70,6 @@ void IterateSmoothingLengthNumDensity<Tvec, SPHKernel>::_impl_evaluate_internal(
             // attach the neighbor looper on the cache
             shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
 
-            Tscal part_mass          = gpart_mass;
             Tscal h_max_tot_max_evol = h_evol_max;
             Tscal h_max_evol_p       = h_evol_iter_max;
             Tscal h_max_evol_m       = 1 / h_evol_iter_max;
@@ -91,14 +95,14 @@ void IterateSmoothingLengthNumDensity<Tvec, SPHKernel>::_impl_evaluate_internal(
 
                     Tscal rab = sycl::sqrt(rab2);
 
-                    rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
-                    sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
+                    rho_sum += SPHKernel::W_3d(rab, h_a);
+                    sumdWdh += SPHKernel::dhW_3d(rab, h_a);
                 });
 
                 using namespace shamrock::sph;
 
-                Tscal rho_ha = rho_h(part_mass, h_a, SPHKernel::hfactd);
-                Tscal new_h  = newtown_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a);
+                Tscal rho_ha = num_dens_h(h_a, hfact);
+                Tscal new_h  = newtown_iterate_new_h_num_dens(rho_ha, rho_sum, sumdWdh, h_a);
 
                 if (new_h < h_a * h_max_evol_m)
                     new_h = h_max_evol_m * h_a;

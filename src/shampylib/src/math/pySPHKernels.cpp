@@ -95,6 +95,42 @@ namespace shampylib {
         sphkernel_module.def("C6_dW3d", &shammath::C6<f64>::dW_3d);
         sphkernel_module.def("C6_dhW3d", &shammath::C6<f64>::dhW_3d);
         sphkernel_module.def("C6_f3d_integ_z", &shammath::C6<f64>::f3d_integ_z);
+
+        sphkernel_module.def("M4DH_Rkern", []() {
+            return shammath::M4DH<f64>::Rkern;
+        });
+        sphkernel_module.def("M4DH_f", &shammath::M4DH<f64>::f);
+        sphkernel_module.def("M4DH_df", &shammath::M4DH<f64>::df);
+        sphkernel_module.def("M4DH_W1d", &shammath::M4DH<f64>::W_1d);
+        sphkernel_module.def("M4DH_W2d", &shammath::M4DH<f64>::W_2d);
+        sphkernel_module.def("M4DH_W3d", &shammath::M4DH<f64>::W_3d);
+        sphkernel_module.def("M4DH_dW3d", &shammath::M4DH<f64>::dW_3d);
+        sphkernel_module.def("M4DH_dhW3d", &shammath::M4DH<f64>::dhW_3d);
+        sphkernel_module.def("M4DH_f3d_integ_z", &shammath::M4DH<f64>::f3d_integ_z);
+
+        sphkernel_module.def("M4DH3_Rkern", []() {
+            return shammath::M4DH3<f64>::Rkern;
+        });
+        sphkernel_module.def("M4DH3_f", &shammath::M4DH3<f64>::f);
+        sphkernel_module.def("M4DH3_df", &shammath::M4DH3<f64>::df);
+        sphkernel_module.def("M4DH3_W1d", &shammath::M4DH3<f64>::W_1d);
+        sphkernel_module.def("M4DH3_W2d", &shammath::M4DH3<f64>::W_2d);
+        sphkernel_module.def("M4DH3_W3d", &shammath::M4DH3<f64>::W_3d);
+        sphkernel_module.def("M4DH3_dW3d", &shammath::M4DH3<f64>::dW_3d);
+        sphkernel_module.def("M4DH3_dhW3d", &shammath::M4DH3<f64>::dhW_3d);
+        sphkernel_module.def("M4DH3_f3d_integ_z", &shammath::M4DH3<f64>::f3d_integ_z);
+
+        sphkernel_module.def("M4DH5_Rkern", []() {
+            return shammath::M4DH5<f64>::Rkern;
+        });
+        sphkernel_module.def("M4DH5_f", &shammath::M4DH5<f64>::f);
+        sphkernel_module.def("M4DH5_df", &shammath::M4DH5<f64>::df);
+        sphkernel_module.def("M4DH5_W1d", &shammath::M4DH5<f64>::W_1d);
+        sphkernel_module.def("M4DH5_W2d", &shammath::M4DH5<f64>::W_2d);
+        sphkernel_module.def("M4DH5_W3d", &shammath::M4DH5<f64>::W_3d);
+        sphkernel_module.def("M4DH5_dW3d", &shammath::M4DH5<f64>::dW_3d);
+        sphkernel_module.def("M4DH5_dhW3d", &shammath::M4DH5<f64>::dhW_3d);
+        sphkernel_module.def("M4DH5_f3d_integ_z", &shammath::M4DH5<f64>::f3d_integ_z);
     }
 
 } // namespace shampylib

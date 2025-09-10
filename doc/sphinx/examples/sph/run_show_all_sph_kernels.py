@@ -1,0 +1,101 @@
+"""
+SPH kernels
+========================
+
+This example shows the all the SPH kernels
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+import shamrock
+
+
+def compute_integ_3d(q, W):
+    return np.trapezoid(4 * np.pi * q**2 * W, q)
+
+
+def plot_test_sph_kernel(q, f, df, W, dW, title, ax):
+
+    integral_result = compute_integ_3d(q, W)
+    assert np.abs(integral_result - 1) < 1e-6, (
+        "3D integration of 4π q² W(q) is not 1, kernel: " + title
+    )
+
+    ax[0, 0].plot(q, f, label=f"$f_{{{title}}}(q)$")
+    ax[1, 0].plot(q, W, label=f"$W_{{{title}}}(q)$")
+    ax[0, 1].plot(q, df, label=f"$df_{{{title}}}(q)$")
+    ax[1, 1].plot(q, dW, label=f"$dW_{{{title}}}(q)$")
+
+
+q = np.linspace(0, 4, 1000)
+
+
+# [0,0] f
+# [0,1] W3d
+# [1,0] df
+# [1,1] dW3d
+fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+
+f_M4 = [shamrock.math.sphkernel.M4_f(x) for x in q]
+w3d_M4 = [shamrock.math.sphkernel.M4_W3d(x, 1) for x in q]
+df_M4 = [shamrock.math.sphkernel.M4_df(x) for x in q]
+dW3d_M4 = [shamrock.math.sphkernel.M4_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4, df_M4, w3d_M4, dW3d_M4, "M4", axs)
+
+f_M6 = [shamrock.math.sphkernel.M6_f(x) for x in q]
+w3d_M6 = [shamrock.math.sphkernel.M6_W3d(x, 1) for x in q]
+df_M6 = [shamrock.math.sphkernel.M6_df(x) for x in q]
+dW3d_M6 = [shamrock.math.sphkernel.M6_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M6, df_M6, w3d_M6, dW3d_M6, "M6", axs)
+
+f_M8 = [shamrock.math.sphkernel.M8_f(x) for x in q]
+w3d_M8 = [shamrock.math.sphkernel.M8_W3d(x, 1) for x in q]
+df_M8 = [shamrock.math.sphkernel.M8_df(x) for x in q]
+dW3d_M8 = [shamrock.math.sphkernel.M8_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M8, df_M8, w3d_M8, dW3d_M8, "M8", axs)
+
+
+f_C2 = [shamrock.math.sphkernel.C2_f(x) for x in q]
+w3d_C2 = [shamrock.math.sphkernel.C2_W3d(x, 1) for x in q]
+df_C2 = [shamrock.math.sphkernel.C2_df(x) for x in q]
+dW3d_C2 = [shamrock.math.sphkernel.C2_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_C2, df_C2, w3d_C2, dW3d_C2, "C2", axs)
+
+f_C4 = [shamrock.math.sphkernel.C4_f(x) for x in q]
+w3d_C4 = [shamrock.math.sphkernel.C4_W3d(x, 1) for x in q]
+df_C4 = [shamrock.math.sphkernel.C4_df(x) for x in q]
+dW3d_C4 = [shamrock.math.sphkernel.C4_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_C4, df_C4, w3d_C4, dW3d_C4, "C4", axs)
+
+f_C6 = [shamrock.math.sphkernel.C6_f(x) for x in q]
+w3d_C6 = [shamrock.math.sphkernel.C6_W3d(x, 1) for x in q]
+df_C6 = [shamrock.math.sphkernel.C6_df(x) for x in q]
+dW3d_C6 = [shamrock.math.sphkernel.C6_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_C6, df_C6, w3d_C6, dW3d_C6, "C6", axs)
+
+f_M4DH = [shamrock.math.sphkernel.M4DH_f(x) for x in q]
+w3d_M4DH = [shamrock.math.sphkernel.M4DH_W3d(x, 1) for x in q]
+df_M4DH = [shamrock.math.sphkernel.M4DH_df(x) for x in q]
+dW3d_M4DH = [shamrock.math.sphkernel.M4DH_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4DH, df_M4DH, w3d_M4DH, dW3d_M4DH, "M4DH", axs)
+
+f_M4DH3 = [shamrock.math.sphkernel.M4DH3_f(x) for x in q]
+w3d_M4DH3 = [shamrock.math.sphkernel.M4DH3_W3d(x, 1) for x in q]
+df_M4DH3 = [shamrock.math.sphkernel.M4DH3_df(x) for x in q]
+dW3d_M4DH3 = [shamrock.math.sphkernel.M4DH3_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4DH3, df_M4DH3, w3d_M4DH3, dW3d_M4DH3, "M4DH3", axs)
+
+f_M4DH5 = [shamrock.math.sphkernel.M4DH5_f(x) for x in q]
+w3d_M4DH5 = [shamrock.math.sphkernel.M4DH5_W3d(x, 1) for x in q]
+df_M4DH5 = [shamrock.math.sphkernel.M4DH5_df(x) for x in q]
+dW3d_M4DH5 = [shamrock.math.sphkernel.M4DH5_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4DH5, df_M4DH5, w3d_M4DH5, dW3d_M4DH5, "M4DH5", axs)
+
+
+axs[0, 0].legend()
+axs[0, 1].legend()
+axs[1, 0].legend()
+axs[1, 1].legend()
+plt.xlabel(r"$q$")
+plt.show()
