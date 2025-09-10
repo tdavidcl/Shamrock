@@ -275,6 +275,7 @@ else:
         rot_profile=rot_profile,
         cs_profile=cs_profile,
         random_seed=666,
+        init_h_factor=0.1,
     )
 
     # Print the dot graph of the setup
@@ -294,6 +295,8 @@ else:
     model.change_htolerance(1.3)
     model.timestep()
     model.change_htolerance(1.1)
+
+    # exit()
 
 
 # %%
