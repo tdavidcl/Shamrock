@@ -49,6 +49,7 @@
 #include "shammodels/sph/modules/ExternalForces.hpp"
 #include "shammodels/sph/modules/GetParticlesOutsideSphere.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensity.hpp"
+#include "shammodels/sph/modules/IterateSmoothingLengthNumDensity.hpp"
 #include "shammodels/sph/modules/KillParticles.hpp"
 #include "shammodels/sph/modules/LoopSmoothingLengthIter.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
@@ -559,17 +560,26 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
                 solver_config.gpart_mass, solver_config.htol_up_tol, solver_config.htol_up_iter);
         smth_h_iter->set_edges(sizes, neigh_cache, pos_merged, hold, hnew, eps_h);
 
+        std::shared_ptr<shammodels::sph::modules::IterateSmoothingLengthNumDensity<Tvec, Kernel>>
+            smth_h_iter_num = std::make_shared<
+                shammodels::sph::modules::IterateSmoothingLengthNumDensity<Tvec, Kernel>>(
+                solver_config.gpart_mass, solver_config.htol_up_tol, solver_config.htol_up_iter);
+        smth_h_iter_num->set_edges(sizes, neigh_cache, pos_merged, hold, hnew, eps_h);
+
+        std::shared_ptr<shamrock::solvergraph::INode> smth_h_iter_ptr;
         // here add mode over number density
         bool use_number_density = true;
         if (use_number_density) {
-            // bla
+            smth_h_iter_ptr = smth_h_iter_num;
+        } else {
+            smth_h_iter_ptr = smth_h_iter;
         }
 
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<bool>> is_converged
             = std::make_shared<shamrock::solvergraph::ScalarEdge<bool>>("", "");
 
         shammodels::sph::modules::LoopSmoothingLengthIter<Tvec> loop_smth_h_iter(
-            smth_h_iter, solver_config.epsilon_h, solver_config.h_iter_per_subcycles, false);
+            smth_h_iter_ptr, solver_config.epsilon_h, solver_config.h_iter_per_subcycles, false);
         loop_smth_h_iter.set_edges(eps_h, is_converged);
 
         loop_smth_h_iter.evaluate();
