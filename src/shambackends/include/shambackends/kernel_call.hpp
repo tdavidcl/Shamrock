@@ -331,7 +331,7 @@ namespace sham {
                 in,
                 in_out,
                 n,
-                [func](u32 n, auto &...__acc_in, auto &...__acc_in_out, auto &...args) {
+                [func](u32 n, auto... __acc_in, auto... __acc_in_out, auto... args) {
                     return [=](sycl::handler &cgh) {
                         cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
                             shambase::check_functor_signature_deduce<void>(
