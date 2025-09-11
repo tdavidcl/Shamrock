@@ -92,6 +92,23 @@ df_M4DH5 = [shamrock.math.sphkernel.M4DH5_df(x) for x in q]
 dW3d_M4DH5 = [shamrock.math.sphkernel.M4DH5_dW3d(x, 1) for x in q]
 plot_test_sph_kernel(q, f_M4DH5, df_M4DH5, w3d_M4DH5, dW3d_M4DH5, "M4DH5", axs)
 
+f_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_f(x) for x in q]
+w3d_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_W3d(x, 1) for x in q]
+df_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_df(x) for x in q]
+dW3d_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4Shift2, df_M4Shift2, w3d_M4Shift2, dW3d_M4Shift2, "M4Shift2", axs)
+
+f_M4Shift4 = [shamrock.math.sphkernel.M4Shift4_f(x) for x in q]
+w3d_M4Shift4 = [shamrock.math.sphkernel.M4Shift4_W3d(x, 1) for x in q]
+df_M4Shift4 = [shamrock.math.sphkernel.M4Shift4_df(x) for x in q]
+dW3d_M4Shift4 = [shamrock.math.sphkernel.M4Shift4_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4Shift4, df_M4Shift4, w3d_M4Shift4, dW3d_M4Shift4, "M4Shift4", axs)
+
+f_M4Shift8 = [shamrock.math.sphkernel.M4Shift8_f(x) for x in q]
+w3d_M4Shift8 = [shamrock.math.sphkernel.M4Shift8_W3d(x, 1) for x in q]
+df_M4Shift8 = [shamrock.math.sphkernel.M4Shift8_df(x) for x in q]
+dW3d_M4Shift8 = [shamrock.math.sphkernel.M4Shift8_dW3d(x, 1) for x in q]
+plot_test_sph_kernel(q, f_M4Shift8, df_M4Shift8, w3d_M4Shift8, dW3d_M4Shift8, "M4Shift8", axs)
 
 axs[0, 0].legend()
 axs[0, 1].legend()

@@ -46,10 +46,13 @@ void IterateSmoothingLengthNumDensity<Tvec, SPHKernel_old>::_impl_evaluate_inter
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-    using SPHKernel = shammath::M4<Tscal>;
-    // using SPHKernel = shammath::M4DH<Tscal>;
-    // using SPHKernel = shammath::M4DH3<Tscal>;
-    // using SPHKernel = shammath::M4DH5<Tscal>;
+    // using SPHKernel = shammath::M4<Tscal>;
+    //  using SPHKernel = shammath::M4DH<Tscal>;
+    //  using SPHKernel = shammath::M4DH3<Tscal>;
+    //  using SPHKernel = shammath::M4DH5<Tscal>;
+    // using SPHKernel = shammath::M4Shift2<Tscal>;
+    //  using SPHKernel = shammath::M4Shift4<Tscal>;
+    using SPHKernel = shammath::M4Shift8<Tscal>;
 
     static constexpr Tscal Rkern = SPHKernel::Rkern;
 
