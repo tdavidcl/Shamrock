@@ -909,9 +909,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
         pcache.complete_event_state(resulting_events);
 
         profiler.complete_event_state(e);
-        profiler.dump_to_file("core_timeline_m4shift8.json");
-
-       
+        profiler.dump_to_file("core_timeline_m4dh7.json");
     });
 }
 

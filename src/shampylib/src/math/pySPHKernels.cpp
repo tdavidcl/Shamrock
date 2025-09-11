@@ -132,6 +132,18 @@ namespace shampylib {
         sphkernel_module.def("M4DH5_dhW3d", &shammath::M4DH5<f64>::dhW_3d);
         sphkernel_module.def("M4DH5_f3d_integ_z", &shammath::M4DH5<f64>::f3d_integ_z);
 
+        sphkernel_module.def("M4DH7_Rkern", []() {
+            return shammath::M4DH7<f64>::Rkern;
+        });
+        sphkernel_module.def("M4DH7_f", &shammath::M4DH7<f64>::f);
+        sphkernel_module.def("M4DH7_df", &shammath::M4DH7<f64>::df);
+        sphkernel_module.def("M4DH7_W1d", &shammath::M4DH7<f64>::W_1d);
+        sphkernel_module.def("M4DH7_W2d", &shammath::M4DH7<f64>::W_2d);
+        sphkernel_module.def("M4DH7_W3d", &shammath::M4DH7<f64>::W_3d);
+        sphkernel_module.def("M4DH7_dW3d", &shammath::M4DH7<f64>::dW_3d);
+        sphkernel_module.def("M4DH7_dhW3d", &shammath::M4DH7<f64>::dhW_3d);
+        sphkernel_module.def("M4DH7_f3d_integ_z", &shammath::M4DH7<f64>::f3d_integ_z);
+
         sphkernel_module.def("M4Shift2_Rkern", []() {
             return shammath::M4Shift2<f64>::Rkern;
         });

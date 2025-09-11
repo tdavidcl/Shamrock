@@ -112,6 +112,11 @@ TestStart(Unittest, "shammath/sphkernels/M4DH5", validateM4DH5kernel, 1) {
     validate_kernel_3d<shammath::M4DH5<f64>>(1e-5, 1e-5, 1e-5);
 }
 
+TestStart(Unittest, "shammath/sphkernels/M4DH7", validateM4DH7kernel, 1) {
+    validate_kernel_3d<shammath::M4DH7<f32>>(1e-3, 1e-4, 1e-3);
+    validate_kernel_3d<shammath::M4DH7<f64>>(1e-5, 1e-5, 1e-5);
+}
+
 TestStart(Unittest, "shammath/sphkernels/M4Shift2", validateM4Shift2kernel, 1) {
     validate_kernel_3d<shammath::M4Shift2<f32>>(1e-3, 1e-4, 1e-3);
     validate_kernel_3d<shammath::M4Shift2<f64>>(1e-5, 1e-5, 1e-5);

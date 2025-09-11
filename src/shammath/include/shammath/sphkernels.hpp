@@ -771,6 +771,30 @@ namespace shammath::details {
     };
 
     template<class Tscal>
+    class KernelDefM4DoubleHump7 {
+        public:
+        inline static constexpr Tscal Rkern = 2; ///< Compact support radius of the kernel
+        /// default hfact to be used for this kernel
+        inline static constexpr Tscal hfactd = 1.2;
+
+        /// 1D norm of the kernel
+        inline static constexpr Tscal norm_1d = 1. / 0.7742424242383008;
+        /// 2D norm of the kernel
+        inline static constexpr Tscal norm_2d = 1. / 3.246312408690764;
+        /// 3D norm of the kernel
+        inline static constexpr Tscal norm_3d = 1. / 8.99418204455883;
+
+        inline static Tscal f(Tscal q) {
+            return KernelDefM4<Tscal>::f(q) * q * q * q * q * q * q * q;
+        }
+
+        inline static Tscal df(Tscal q) {
+            return KernelDefM4<Tscal>::df(q) * q * q * q * q * q * q * q
+                   + 7 * KernelDefM4<Tscal>::f(q) * q * q * q * q * q * q;
+        }
+    };
+
+    template<class Tscal>
     class KernelDefM4Shift2 {
         public:
         inline static constexpr Tscal Rkern = 2; ///< Compact support radius of the kernel
@@ -863,7 +887,6 @@ namespace shammath::details {
         }
     };
 
-
     template<class Tscal>
     class KernelDefM4Shift16 {
         public:
@@ -876,7 +899,7 @@ namespace shammath::details {
         /// 2D norm of the kernel
         inline static constexpr Tscal norm_2d = 1. / 11.60548504872985;
         /// 3D norm of the kernel
-        inline static constexpr Tscal norm_3d = 1. /29.747722428921268;
+        inline static constexpr Tscal norm_3d = 1. / 29.747722428921268;
 
         inline static Tscal f(Tscal q) {
             if (q < 1.875) {
@@ -1081,6 +1104,9 @@ namespace shammath {
     using M4DH5 = SPHKernelGen<flt_type, details::KernelDefM4DoubleHump5<flt_type>>;
 
     template<class flt_type>
+    using M4DH7 = SPHKernelGen<flt_type, details::KernelDefM4DoubleHump7<flt_type>>;
+
+    template<class flt_type>
     using M4Shift2 = SPHKernelGen<flt_type, details::KernelDefM4Shift2<flt_type>>;
 
     template<class flt_type>
@@ -1150,6 +1176,11 @@ namespace shambase {
     template<class flt_type>
     struct TypeNameInfo<shammath::M4DH5<flt_type>> {
         inline static const std::string name = "M4DH5<" + get_type_name<flt_type>() + ">";
+    };
+
+    template<class flt_type>
+    struct TypeNameInfo<shammath::M4DH7<flt_type>> {
+        inline static const std::string name = "M4DH7<" + get_type_name<flt_type>() + ">";
     };
 
     template<class flt_type>

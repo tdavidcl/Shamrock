@@ -45,7 +45,7 @@ namespace shammodels::sph::modules {
 
         shamrock::patch::PatchDataLayer next_n(u32 nmax) {
 
-__shamrock_stack_entry();
+            __shamrock_stack_entry();
 
             u32 cnt1 = (parent1->is_done()) ? 0 : (nmax / 2);
             u32 cnt2 = nmax - cnt1;

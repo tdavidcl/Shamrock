@@ -91,7 +91,7 @@ if args.max_lane is not None:
 # Set the y-axis label
 ax.set_ylabel("Time (s)")
 
-ax.set_title("GPU Core Timeline (M4)")
+ax.set_title("GPU Core Timeline (M4dh5)")
 
 plt.savefig("update_derivs.png")
 
@@ -106,5 +106,5 @@ print(
 )
 
 # Show the plot
-plt.savefig("update_derivs_m4.png")
+plt.savefig("update_derivs_m4dh5.png")
 plt.show()
