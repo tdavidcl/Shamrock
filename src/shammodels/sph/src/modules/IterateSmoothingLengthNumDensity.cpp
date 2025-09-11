@@ -53,6 +53,7 @@ void IterateSmoothingLengthNumDensity<Tvec, SPHKernel_old>::_impl_evaluate_inter
     // using SPHKernel = shammath::M4Shift2<Tscal>;
     //  using SPHKernel = shammath::M4Shift4<Tscal>;
     using SPHKernel = shammath::M4Shift8<Tscal>;
+    // using SPHKernel = shammath::M4Shift16<Tscal>;
 
     static constexpr Tscal Rkern = SPHKernel::Rkern;
 

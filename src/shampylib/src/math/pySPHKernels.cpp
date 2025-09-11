@@ -167,6 +167,18 @@ namespace shampylib {
         sphkernel_module.def("M4Shift8_dW3d", &shammath::M4Shift8<f64>::dW_3d);
         sphkernel_module.def("M4Shift8_dhW3d", &shammath::M4Shift8<f64>::dhW_3d);
         sphkernel_module.def("M4Shift8_f3d_integ_z", &shammath::M4Shift8<f64>::f3d_integ_z);
+
+        sphkernel_module.def("M4Shift16_Rkern", []() {
+            return shammath::M4Shift16<f64>::Rkern;
+        });
+        sphkernel_module.def("M4Shift16_f", &shammath::M4Shift16<f64>::f);
+        sphkernel_module.def("M4Shift16_df", &shammath::M4Shift16<f64>::df);
+        sphkernel_module.def("M4Shift16_W1d", &shammath::M4Shift16<f64>::W_1d);
+        sphkernel_module.def("M4Shift16_W2d", &shammath::M4Shift16<f64>::W_2d);
+        sphkernel_module.def("M4Shift16_W3d", &shammath::M4Shift16<f64>::W_3d);
+        sphkernel_module.def("M4Shift16_dW3d", &shammath::M4Shift16<f64>::dW_3d);
+        sphkernel_module.def("M4Shift16_dhW3d", &shammath::M4Shift16<f64>::dhW_3d);
+        sphkernel_module.def("M4Shift16_f3d_integ_z", &shammath::M4Shift16<f64>::f3d_integ_z);
     }
 
 } // namespace shampylib

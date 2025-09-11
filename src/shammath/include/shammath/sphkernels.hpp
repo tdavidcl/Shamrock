@@ -862,6 +862,38 @@ namespace shammath::details {
             }
         }
     };
+
+
+    template<class Tscal>
+    class KernelDefM4Shift16 {
+        public:
+        inline static constexpr Tscal Rkern = 2; ///< Compact support radius of the kernel
+        /// default hfact to be used for this kernel
+        inline static constexpr Tscal hfactd = 1.2;
+
+        /// 1D norm of the kernel
+        inline static constexpr Tscal norm_1d = 1. / 3.8437599999993775;
+        /// 2D norm of the kernel
+        inline static constexpr Tscal norm_2d = 1. / 11.60548504872985;
+        /// 3D norm of the kernel
+        inline static constexpr Tscal norm_3d = 1. /29.747722428921268;
+
+        inline static Tscal f(Tscal q) {
+            if (q < 1.875) {
+                return 1.;
+            } else {
+                return KernelDefM4<Tscal>::f((q - 1.875) * 16);
+            }
+        }
+
+        inline static Tscal df(Tscal q) {
+            if (q < 1.875) {
+                return 0.;
+            } else {
+                return 16 * KernelDefM4<Tscal>::df((q - 1.875) * 16);
+            }
+        }
+    };
 } // namespace shammath::details
 
 namespace shammath {
@@ -1056,6 +1088,9 @@ namespace shammath {
 
     template<class flt_type>
     using M4Shift8 = SPHKernelGen<flt_type, details::KernelDefM4Shift8<flt_type>>;
+
+    template<class flt_type>
+    using M4Shift16 = SPHKernelGen<flt_type, details::KernelDefM4Shift16<flt_type>>;
 } // namespace shammath
 
 namespace shambase {
@@ -1130,6 +1165,11 @@ namespace shambase {
     template<class flt_type>
     struct TypeNameInfo<shammath::M4Shift8<flt_type>> {
         inline static const std::string name = "M4Shift8<" + get_type_name<flt_type>() + ">";
+    };
+
+    template<class flt_type>
+    struct TypeNameInfo<shammath::M4Shift16<flt_type>> {
+        inline static const std::string name = "M4Shift16<" + get_type_name<flt_type>() + ">";
     };
 
 } // namespace shambase
