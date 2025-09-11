@@ -278,11 +278,21 @@ else:
         init_h_factor=0.1,
     )
 
+    # add a hcp box above the disc
+    dr = 0.1
+    fact = 1.0
+    center_box = (0, 0, rout * 0.5)
+    bmin_box = (center_box[0] - dr * fact, center_box[1] - dr * fact, center_box[2] - dr * fact)
+    bmax_box = (center_box[0] + dr * fact, center_box[1] + dr * fact, center_box[2] + dr * fact)
+    gen_hcp = setup.make_generator_lattice_hcp(dr, bmin_box, bmax_box)
+
+    comb = setup.make_combiner_add(gen_disc, gen_hcp)
+
     # Print the dot graph of the setup
-    print(gen_disc.get_dot())
+    print(comb.get_dot())
 
     # Apply the setup
-    setup.apply_setup(gen_disc)
+    setup.apply_setup(comb)
 
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
@@ -296,7 +306,11 @@ else:
     model.timestep()
     model.change_htolerance(1.1)
 
-    # exit()
+    model.do_vtk_dump("init.vtk", True)
+
+    model.timestep()
+
+    exit()
 
 
 # %%

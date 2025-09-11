@@ -555,7 +555,9 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     shambase::parallel_for(cgh, obj_cnt, "compute neigh cache 1", [=](u64 gid) {
                         u32 id_a = (u32) gid;
 
-                        Tscal rint_a = hpart[id_a];
+                        Tscal tol = 1;
+
+                        Tscal rint_a = hpart[id_a] * tol;
 
                         Tvec xyz_a = xyz[id_a];
 
@@ -570,7 +572,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                                 leaf_b - offset_leaf, [&](u32 id_b) {
                                     Tvec dr      = xyz_a - xyz[id_b];
                                     Tscal rab2   = sycl::dot(dr, dr);
-                                    Tscal rint_b = hpart[id_b];
+                                    Tscal rint_b = hpart[id_b] * tol;
 
                                     bool no_interact = rab2 > rint_a * rint_a * Rker2
                                                        && rab2 > rint_b * rint_b * Rker2;
