@@ -789,7 +789,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
 
             u32 sz = pdat.get_obj_cnt();
 
-            u64 group_size = 32;
+            u64 group_size = 128;
             cgh.parallel_for(shambase::make_range(sz, group_size), [=](sycl::nd_item<1> id) {
                 gpu_core_timer.init_timeline_event(id, gpu_core_timer_data);
 
