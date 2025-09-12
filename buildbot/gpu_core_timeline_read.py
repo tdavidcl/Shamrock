@@ -14,7 +14,7 @@ with open(args.filename) as f:
     data = json.load(f)
 
 # Create a figure and axis
-fig, ax = plt.subplots(dpi=200)
+fig, ax = plt.subplots(figsize=(10, 5), dpi=200)
 
 
 lane_count = 0
@@ -68,6 +68,7 @@ for index, item in enumerate(data):
         width=width,
         color="blue",
         edgecolor="black",
+        linewidth=0.5,
     )
     ax.bar(
         item["lane"] + (width) * (loc_lane_id_offset) - base_width / 2,
@@ -76,6 +77,7 @@ for index, item in enumerate(data):
         width=width / 1.5,
         color="red",
         edgecolor="black",
+        linewidth=0.5,
     )
 
     lane_loc_id[item["lane"]] += 1
@@ -91,7 +93,7 @@ if args.max_lane is not None:
 # Set the y-axis label
 ax.set_ylabel("Time (s)")
 
-ax.set_title("GPU Core Timeline (M4dh5)")
+ax.set_title("GPU Core Timeline (M4 hard lim)")
 
 plt.savefig("update_derivs.png")
 
@@ -106,5 +108,5 @@ print(
 )
 
 # Show the plot
-plt.savefig("update_derivs_m4dh5.png")
+plt.savefig("update_derivs_m4hardlim.png")
 plt.show()
