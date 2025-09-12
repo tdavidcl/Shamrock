@@ -53,9 +53,9 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
         sham::DDMultiRef{neigh_cache, positions, old_h},
         sham::DDMultiRef{new_h, eps_h},
         thread_counts,
-        [gpart_mass      = this->gpart_mass,
-         h_evol_max      = this->h_evol_max,
-         h_evol_iter_max = this->h_evol_iter_max,
+        [gpart_mass        = this->gpart_mass,
+         h_evol_max        = this->h_evol_max,
+         h_evol_iter_max   = this->h_evol_iter_max,
          trigger_threshold = this->trigger_threshold](
             u32 id_a,
             auto ploop_ptrs,
