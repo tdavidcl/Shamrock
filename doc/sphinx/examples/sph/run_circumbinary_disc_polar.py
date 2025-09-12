@@ -82,7 +82,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 5
-nstop = 48
+nstop = 46
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
