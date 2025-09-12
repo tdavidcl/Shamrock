@@ -580,8 +580,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
         std::shared_ptr<shamrock::solvergraph::INode> smth_h_iter_ptr;
 
         // select the mode
-        smth_h_iter_ptr = smth_h_iter;
-        // smth_h_iter_ptr = smth_h_iter_neigh_lim;
+        // smth_h_iter_ptr = smth_h_iter;
+        smth_h_iter_ptr = smth_h_iter_neigh_lim;
         //  smth_h_iter_ptr = smth_h_iter_num;
 
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<bool>> is_converged

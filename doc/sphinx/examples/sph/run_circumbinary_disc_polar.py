@@ -82,7 +82,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 5
-nstop = 46
+nstop = 48
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -112,7 +112,7 @@ C_cour = 0.3
 C_force = 0.25
 
 
-dump_folder = f"_to_trash/circumbinary_disc_polar_normal_h_{Npart}/"
+dump_folder = f"_to_trash/circumbinary_disc_polar_hlim_{Npart}/"
 dump_prefix = dump_folder + "dump_"
 
 
