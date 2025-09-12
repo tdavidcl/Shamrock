@@ -105,21 +105,24 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
                     count_within++;
                 });
 
-                if (count_within > trigger_threshold) {
+                using namespace shamrock::sph;
+
+                Tscal rho_ha = rho_h(part_mass, h_a, SPHKernel::hfactd);
+                Tscal new_h  = newtown_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a);
+
+                bool exceed_inner_threshold = count_within > trigger_threshold;
+                bool exceed_outer_threshold = count_within_next > trigger_threshold;
+
+                if (exceed_inner_threshold) {
                     h_new[id_a] = h_max_evol_m * h_a;
                     eps[id_a]   = 0;
                     return;
                 }
 
-                if (count_within_next > trigger_threshold) {
+                if (exceed_outer_threshold && new_h < h_a) {
                     eps[id_a] = 0;
                     return;
                 }
-
-                using namespace shamrock::sph;
-
-                Tscal rho_ha = rho_h(part_mass, h_a, SPHKernel::hfactd);
-                Tscal new_h  = newtown_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a);
 
                 if (new_h < h_a * h_max_evol_m)
                     new_h = h_max_evol_m * h_a;
