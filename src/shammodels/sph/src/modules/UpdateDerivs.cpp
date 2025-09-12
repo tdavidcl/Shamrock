@@ -742,7 +742,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
         sham::gpu_core_timeline_profilier profiler(
             shamsys::instance::get_compute_scheduler_ptr(), 1000000);
 
-        profiler.setFrameStartClock();
+        // profiler.setFrameStartClock();
 
         /////////////////////////////////////////////
 
@@ -760,7 +760,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
         auto cs         = buf_cs.get_read_access(depends_list);
         auto ploop_ptrs = pcache.get_read_access(depends_list);
 
-        auto gpu_core_timer = profiler.get_write_access(depends_list);
+        // auto gpu_core_timer = profiler.get_write_access(depends_list);
 
         auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
             const Tscal pmass    = solver_config.gpart_mass;
@@ -785,15 +785,15 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
 
             constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-            sham::gpu_core_timeline_profilier::local_access_t gpu_core_timer_data(cgh);
+            // sham::gpu_core_timeline_profilier::local_access_t gpu_core_timer_data(cgh);
 
             u32 sz = pdat.get_obj_cnt();
 
             u64 group_size = 128;
             cgh.parallel_for(shambase::make_range(sz, group_size), [=](sycl::nd_item<1> id) {
-                gpu_core_timer.init_timeline_event(id, gpu_core_timer_data);
+                // gpu_core_timer.init_timeline_event(id, gpu_core_timer_data);
 
-                gpu_core_timer.start_timeline_event(gpu_core_timer_data);
+                // gpu_core_timer.start_timeline_event(gpu_core_timer_data);
 
                 u32 id_a = (u32) id.get_global_linear_id();
                 if (id_a >= sz) {
@@ -894,7 +894,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
                 axyz[id_a] = force_pressure;
                 du[id_a]   = tmpdU_pressure;
 
-                gpu_core_timer.end_timeline_event(gpu_core_timer_data);
+                // gpu_core_timer.end_timeline_event(gpu_core_timer_data);
             });
         });
 
@@ -912,8 +912,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_disc
         resulting_events.add_event(e);
         pcache.complete_event_state(resulting_events);
 
-        profiler.complete_event_state(e);
-        profiler.dump_to_file("core_timeline_m4dh7.json");
+        // profiler.complete_event_state(e);
+        // profiler.dump_to_file("core_timeline_m4dh7.json");
     });
 }
 

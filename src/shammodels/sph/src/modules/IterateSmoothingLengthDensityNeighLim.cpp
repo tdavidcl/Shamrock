@@ -106,6 +106,11 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
                 });
 
                 if (count_within_next > trigger_threshold) {
+                    printf(
+                        "Limiting particle %d, count_within_next %d, count_within %d\n",
+                        id_a,
+                        count_within_next,
+                        count_within);
                     eps[id_a] = 0;
                     return;
                 }
