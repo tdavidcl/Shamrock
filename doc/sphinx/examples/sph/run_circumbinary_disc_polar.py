@@ -110,9 +110,10 @@ beta_AV = 2
 # Integrator parameters
 C_cour = 0.3
 C_force = 0.25
+C_mult_stiffness = 10
 
 
-dump_folder = f"_to_trash/circumbinary_disc_polar_hlim_{Npart}/"
+dump_folder = f"_to_trash/circumbinary_disc_polar_normal_h_{Npart}/"
 dump_prefix = dump_folder + "dump_"
 
 
@@ -305,6 +306,7 @@ else:
     # Set the CFL
     cfg.set_cfl_cour(C_cour)
     cfg.set_cfl_force(C_force)
+    cfg.set_cfl_mult_stiffness(C_mult_stiffness)
 
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
