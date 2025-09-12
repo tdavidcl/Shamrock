@@ -47,6 +47,7 @@ set(Sources
     src/modules/GetParticlesOutsideSphere.cpp
     src/modules/IterateSmoothingLengthDensity.cpp
     src/modules/IterateSmoothingLengthNumDensity.cpp
+    src/modules/IterateSmoothingLengthDensityNeighLim.cpp
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/setup/GeneratorMCDisc.cpp
     src/modules/setup/ModifierApplyDiscWarp.cpp
