@@ -119,7 +119,7 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
                     return;
                 }
 
-                if (exceed_outer_threshold && new_h < h_a) {
+                if (exceed_outer_threshold && new_h > h_a) {
                     eps[id_a] = 0;
                     return;
                 }
