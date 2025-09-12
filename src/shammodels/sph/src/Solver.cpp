@@ -565,7 +565,10 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
             shammodels::sph::modules::IterateSmoothingLengthDensityNeighLim<Tvec, Kernel>>
             smth_h_iter_neigh_lim = std::make_shared<
                 shammodels::sph::modules::IterateSmoothingLengthDensityNeighLim<Tvec, Kernel>>(
-                solver_config.gpart_mass, solver_config.htol_up_tol, solver_config.htol_up_iter);
+                solver_config.gpart_mass,
+                solver_config.htol_up_tol,
+                solver_config.htol_up_iter,
+                500);
         smth_h_iter_neigh_lim->set_edges(sizes, neigh_cache, pos_merged, hold, hnew, eps_h);
 
         std::shared_ptr<shammodels::sph::modules::IterateSmoothingLengthNumDensity<Tvec, Kernel>>

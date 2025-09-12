@@ -55,7 +55,8 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
         thread_counts,
         [gpart_mass      = this->gpart_mass,
          h_evol_max      = this->h_evol_max,
-         h_evol_iter_max = this->h_evol_iter_max](
+         h_evol_iter_max = this->h_evol_iter_max,
+         trigger_threshold = this->trigger_threshold](
             u32 id_a,
             auto ploop_ptrs,
             const Tvec *__restrict r,
@@ -104,7 +105,7 @@ void IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_evaluate_inte
                     count_within++;
                 });
 
-                if (count_within_next > 500) {
+                if (count_within_next > trigger_threshold) {
                     eps[id_a] = 0;
                     return;
                 }
