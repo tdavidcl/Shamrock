@@ -113,7 +113,7 @@ C_force = 0.25
 C_mult_stiffness = 10
 
 
-dump_folder = f"_to_trash/circumbinary_disc_polar_hlim500_{Npart}/"
+dump_folder = f"_to_trash/circumbinary_disc_polar_hlim500_hcoarse1.2_{Npart}/"
 dump_prefix = dump_folder + "dump_"
 
 
@@ -419,9 +419,9 @@ else:
     # Note that both ``change_htolerance`` can be removed and it will work the same but would converge
     # more slowly at the first timestep
 
-    model.change_htolerance(1.3)
+    model.change_htolerances(coarse=1.3, fine=1.1)
     model.timestep()
-    model.change_htolerance(1.1)
+    model.change_htolerances(coarse=1.1, fine=1.05)
 
     model.do_vtk_dump("init.vtk", True)
 
