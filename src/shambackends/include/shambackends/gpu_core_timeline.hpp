@@ -83,7 +83,8 @@ namespace sham {
 
         public:
         /// CTOR
-        inline gpu_core_timeline_profilier(sham::DeviceScheduler_ptr dev_sched, u32 max_event_count)
+        inline gpu_core_timeline_profilier(
+            const sham::DeviceScheduler_ptr &dev_sched, u32 max_event_count)
             : dev_sched(dev_sched), frame_start_clock(1, dev_sched),
               events(max_event_count, dev_sched), event_count(1, dev_sched) {
             event_count.set_val_at_idx(0, 0);
@@ -152,7 +153,6 @@ namespace sham {
                     clock[0] = 0;
 #endif
                 });
-            frame_start_clock.synchronize();
         }
 
         inline u64 get_base_clock_value() { return frame_start_clock.get_val_at_idx(0); }
