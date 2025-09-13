@@ -762,11 +762,13 @@ namespace shammath::details {
         /// 3D norm of the kernel
         inline static constexpr Tscal norm_3d = 1. / 4.864708624169304;
 
-        inline static Tscal f(Tscal q) { return KernelDefM4<Tscal>::f(q) * q * q * q * q * q; }
+        inline static Tscal f(Tscal q) {
+            return KernelDefM4<Tscal>::f(q) * sham::pow_constexpr<5>(q);
+        }
 
         inline static Tscal df(Tscal q) {
-            return KernelDefM4<Tscal>::df(q) * q * q * q * q * q
-                   + 5 * KernelDefM4<Tscal>::f(q) * q * q * q * q;
+            return KernelDefM4<Tscal>::df(q) * sham::pow_constexpr<5>(q)
+                   + 5 * KernelDefM4<Tscal>::f(q) * sham::pow_constexpr<4>(q);
         }
     };
 
@@ -785,12 +787,12 @@ namespace shammath::details {
         inline static constexpr Tscal norm_3d = 1. / 8.99418204455883;
 
         inline static Tscal f(Tscal q) {
-            return KernelDefM4<Tscal>::f(q) * q * q * q * q * q * q * q;
+            return KernelDefM4<Tscal>::f(q) * sham::pow_constexpr<7>(q);
         }
 
         inline static Tscal df(Tscal q) {
-            return KernelDefM4<Tscal>::df(q) * q * q * q * q * q * q * q
-                   + 7 * KernelDefM4<Tscal>::f(q) * q * q * q * q * q * q;
+            return KernelDefM4<Tscal>::df(q) * sham::pow_constexpr<7>(q)
+                   + 7 * KernelDefM4<Tscal>::f(q) * sham::pow_constexpr<6>(q);
         }
     };
 
@@ -1103,20 +1105,51 @@ namespace shammath {
     template<class flt_type>
     using M4DH5 = SPHKernelGen<flt_type, details::KernelDefM4DoubleHump5<flt_type>>;
 
+    /**
+     * @brief The M4DoubleHump7 SPH kernel
+     * \todo add graph
+     *
+     * @tparam flt_type the flating point representation to use
+     */
     template<class flt_type>
     using M4DH7 = SPHKernelGen<flt_type, details::KernelDefM4DoubleHump7<flt_type>>;
 
+    /**
+     * @brief The M4Shift2 SPH kernel
+     * \todo add graph
+     *
+     * @tparam flt_type the flating point representation to use
+     */
     template<class flt_type>
     using M4Shift2 = SPHKernelGen<flt_type, details::KernelDefM4Shift2<flt_type>>;
 
+    /**
+     * @brief The M4Shift4 SPH kernel
+     * \todo add graph
+     *
+     * @tparam flt_type the flating point representation to use
+     */
     template<class flt_type>
     using M4Shift4 = SPHKernelGen<flt_type, details::KernelDefM4Shift4<flt_type>>;
 
+    /**
+     * @brief The M4Shift8 SPH kernel
+     * \todo add graph
+     *
+     * @tparam flt_type the flating point representation to use
+     */
     template<class flt_type>
     using M4Shift8 = SPHKernelGen<flt_type, details::KernelDefM4Shift8<flt_type>>;
 
+    /**
+     * @brief The M4Shift16 SPH kernel
+     * \todo add graph
+     *
+     * @tparam flt_type the flating point representation to use
+     */
     template<class flt_type>
     using M4Shift16 = SPHKernelGen<flt_type, details::KernelDefM4Shift16<flt_type>>;
+
 } // namespace shammath
 
 namespace shambase {

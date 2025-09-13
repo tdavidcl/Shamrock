@@ -1,6 +1,6 @@
 """
 SPH kernels
-========================
+===========
 
 This example shows the all the SPH kernels
 """
@@ -10,9 +10,16 @@ import numpy as np
 
 import shamrock
 
+# %%
+# utilities & check integral == 1
+
 
 def compute_integ_3d(q, W):
-    return np.trapezoid(4 * np.pi * q**2 * W, q)
+    if hasattr(np, "trapezoid"):
+        integrate_func = getattr(np, "trapezoid")
+    else:
+        integrate_func = getattr(np, "trapz")
+    return integrate_func(4 * np.pi * q**2 * W, q)
 
 
 def plot_test_sph_kernel(q, f, df, W, dW, title, ax):
@@ -22,20 +29,16 @@ def plot_test_sph_kernel(q, f, df, W, dW, title, ax):
         "3D integration of 4π q² W(q) is not 1, kernel: " + title
     )
 
-    ax[0, 0].plot(q, f, label=f"$f_{{{title}}}(q)$")
-    ax[1, 0].plot(q, W, label=f"$W_{{{title}}}(q)$")
-    ax[0, 1].plot(q, df, label=f"$df_{{{title}}}(q)$")
-    ax[1, 1].plot(q, dW, label=f"$dW_{{{title}}}(q)$")
+    ax[0].plot(q, W, label=f"$W_{{{title}}}(q)$")
+    ax[1].plot(q, dW, label=f"$dW_{{{title}}}(q)$")
 
 
 q = np.linspace(0, 4, 1000)
 
+# %%
+# Cubic splines
 
-# [0,0] f
-# [0,1] W3d
-# [1,0] df
-# [1,1] dW3d
-fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
 f_M4 = [shamrock.math.sphkernel.M4_f(x) for x in q]
 w3d_M4 = [shamrock.math.sphkernel.M4_W3d(x, 1) for x in q]
@@ -55,6 +58,17 @@ df_M8 = [shamrock.math.sphkernel.M8_df(x) for x in q]
 dW3d_M8 = [shamrock.math.sphkernel.M8_dW3d(x, 1) for x in q]
 plot_test_sph_kernel(q, f_M8, df_M8, w3d_M8, dW3d_M8, "M8", axs)
 
+axs[0].legend()
+axs[1].legend()
+axs[0].set_xlabel(r"$q$")
+axs[1].set_xlabel(r"$q$")
+plt.show()
+
+
+# %%
+# Wendland kernels
+
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
 f_C2 = [shamrock.math.sphkernel.C2_f(x) for x in q]
 w3d_C2 = [shamrock.math.sphkernel.C2_W3d(x, 1) for x in q]
@@ -73,6 +87,18 @@ w3d_C6 = [shamrock.math.sphkernel.C6_W3d(x, 1) for x in q]
 df_C6 = [shamrock.math.sphkernel.C6_df(x) for x in q]
 dW3d_C6 = [shamrock.math.sphkernel.C6_dW3d(x, 1) for x in q]
 plot_test_sph_kernel(q, f_C6, df_C6, w3d_C6, dW3d_C6, "C6", axs)
+
+axs[0].legend()
+axs[1].legend()
+axs[0].set_xlabel(r"$q$")
+axs[1].set_xlabel(r"$q$")
+plt.show()
+
+
+# %%
+# Double hump kernels
+
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
 f_M4DH = [shamrock.math.sphkernel.M4DH_f(x) for x in q]
 w3d_M4DH = [shamrock.math.sphkernel.M4DH_W3d(x, 1) for x in q]
@@ -98,6 +124,18 @@ df_M4DH7 = [shamrock.math.sphkernel.M4DH7_df(x) for x in q]
 dW3d_M4DH7 = [shamrock.math.sphkernel.M4DH7_dW3d(x, 1) for x in q]
 plot_test_sph_kernel(q, f_M4DH7, df_M4DH7, w3d_M4DH7, dW3d_M4DH7, "M4DH7", axs)
 
+axs[0].legend()
+axs[1].legend()
+axs[0].set_xlabel(r"$q$")
+axs[1].set_xlabel(r"$q$")
+plt.show()
+
+
+# %%
+# shifted cubic splines kernels
+
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
 f_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_f(x) for x in q]
 w3d_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_W3d(x, 1) for x in q]
 df_M4Shift2 = [shamrock.math.sphkernel.M4Shift2_df(x) for x in q]
@@ -122,9 +160,8 @@ df_M4Shift16 = [shamrock.math.sphkernel.M4Shift16_df(x) for x in q]
 dW3d_M4Shift16 = [shamrock.math.sphkernel.M4Shift16_dW3d(x, 1) for x in q]
 plot_test_sph_kernel(q, f_M4Shift16, df_M4Shift16, w3d_M4Shift16, dW3d_M4Shift16, "M4Shift16", axs)
 
-axs[0, 0].legend()
-axs[0, 1].legend()
-axs[1, 0].legend()
-axs[1, 1].legend()
-plt.xlabel(r"$q$")
+axs[0].legend()
+axs[1].legend()
+axs[0].set_xlabel(r"$q$")
+axs[1].set_xlabel(r"$q$")
 plt.show()
