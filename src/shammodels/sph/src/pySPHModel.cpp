@@ -807,7 +807,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def(
             "change_htolerance",
             [](T &self, Tscal in) {
-                self.change_htolerances(in, 1.1);
+                ON_RANK_0(shamlog_warn_ln(
+                              "SPH",
+                              ".change_htolerance(val) is deprecated,\n"
+                              "    -> calling this is replaced internally by "
+                              ".change_htolerances(coarse=val, fine=min(val, 1.1))\n"
+                              "    see: "
+                              "https://shamrock-code.github.io/Shamrock/mkdocs/models/sph/"
+                              "smoothing_length_tolerance"););
+                self.change_htolerances(in, std::min(in, (Tscal) 1.1));
             })
         .def(
             "change_htolerances",
