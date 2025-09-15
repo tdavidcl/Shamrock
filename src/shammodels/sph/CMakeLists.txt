@@ -49,6 +49,7 @@ set(Sources
     src/modules/IterateSmoothingLengthNumDensity.cpp
     src/modules/IterateSmoothingLengthDensityNeighLim.cpp
     src/modules/LoopSmoothingLengthIter.cpp
+    src/modules/ComputeNeighStats.cpp
     src/modules/setup/GeneratorMCDisc.cpp
     src/modules/setup/ModifierApplyDiscWarp.cpp
     src/modules/setup/ModifierApplyCustomWarp.cpp
