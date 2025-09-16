@@ -679,9 +679,6 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
         // The hpart is not valid anymore in ghost zones since we iterated it's value
         shambase::get_check_ref(storage.hpart_with_ghosts).free_alloc();
 
-        modules::ComputeOmega<Tvec, Kern> omega(context, solver_config, storage);
-        omega.compute_omega();
-
         _epsilon_h.reset();
         _h_old.reset();
         break;
@@ -690,6 +687,24 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
     if (hstep_cnt == hstep_max) {
         logger::err_ln("SPH", "the h iterator is not converged after", hstep_cnt, "iterations");
     }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> hnew_edge
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+    shamrock::solvergraph::DDPatchDataFieldRef<Tscal> hnew_refs = {};
+    scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+        auto &field = pdat.get_field<Tscal>(ihpart);
+        hnew_refs.add_obj(p.id_patch, std::ref(field));
+    });
+    hnew_edge->set_refs(hnew_refs);
+
+    modules::NodeComputeOmega<Tvec, Kern<Tscal>> compute_omega{solver_config.gpart_mass};
+    compute_omega.set_edges(
+        storage.part_counts,
+        storage.neigh_cache,
+        storage.positions_with_ghosts,
+        hnew_edge,
+        storage.omega);
+    compute_omega.evaluate();
 }
 
 template<class Tvec, template<class> class Kern>
