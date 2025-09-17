@@ -71,7 +71,7 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = 1000000
+Npart = 100000
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -439,14 +439,19 @@ else:
 
 # %%
 # On the fly analysis
-def save_plot(ext,center, sinks, arr, iplot, prefix):
-    x,y = center
+def save_plot(ext, center, sinks, arr, iplot, prefix):
+    x, y = center
     if shamrock.sys.world_rank() == 0:
-        metadata = {"extent": [-ext + x, ext + x, -ext + y, ext + y], "sinks": sinks, "time": model.get_time()}
+        metadata = {
+            "extent": [-ext + x, ext + x, -ext + y, ext + y],
+            "sinks": sinks,
+            "time": model.get_time(),
+        }
         np.save(dump_folder + f"{prefix}_{iplot:07}.npy", arr)
 
         with open(dump_folder + f"{prefix}_{iplot:07}.json", "w") as fp:
             json.dump(metadata, fp, indent=4)
+
 
 def analysis_plot(iplot):
     sinks = model.get_sinks()
@@ -480,8 +485,8 @@ def analysis_plot(iplot):
     save_plot(ext, (0.0, 0.0), sinks, arr_rho_integ_y, iplot, "rho_integ_y_global")
 
     # local plots
-    x_0,y_0,z_0 = sinks[0]["pos"]
-    x_1,y_1,z_1 = sinks[1]["pos"]
+    x_0, y_0, z_0 = sinks[0]["pos"]
+    x_1, y_1, z_1 = sinks[1]["pos"]
 
     print(f"sinks positions: {x_0,y_0,z_0} {x_1,y_1,z_1}")
 
@@ -549,6 +554,7 @@ def analysis_plot(iplot):
     save_plot(ext_local, (x_1, z_1), sinks, arr_rho_slice_y_local1, iplot, "rho_slice_y_local1")
     save_plot(ext_local, (x_0, y_0), sinks, arr_rho_inte_z_local0, iplot, "rho_integ_z_local0")
     save_plot(ext_local, (x_1, y_1), sinks, arr_rho_inte_z_local1, iplot, "rho_integ_z_local1")
+
 
 # %%
 # Evolve the simulation
@@ -701,21 +707,101 @@ if shamrock.sys.world_rank() == 0:
     for iplot in get_list_dumps_id():
         print("Rendering rho integ plot for dump", iplot)
         arr_rho, metadata = load_plot("rho_integ_z_global", iplot)
-        plot_rho_xy(metadata, arr_rho, iplot, "rho_integ_z_global", "x", "y", r"$\int \rho \, \mathrm{d}z$ [code unit]", 1e-10, 1e-7)
+        plot_rho_xy(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_integ_z_global",
+            "x",
+            "y",
+            r"$\int \rho \, \mathrm{d}z$ [code unit]",
+            1e-10,
+            1e-7,
+        )
         arr_rho, metadata = load_plot("rho_integ_y_global", iplot)
-        plot_rho_xz(metadata, arr_rho, iplot, "rho_integ_y_global", "x", "z", r"$\int \rho \, \mathrm{d}y$ [code unit]", 1e-10, 1e-7)
+        plot_rho_xz(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_integ_y_global",
+            "x",
+            "z",
+            r"$\int \rho \, \mathrm{d}y$ [code unit]",
+            1e-10,
+            1e-7,
+        )
         arr_rho, metadata = load_plot("rho_slice_z_local0", iplot)
-        plot_rho_xy(metadata, arr_rho, iplot, "rho_slice_z_local0", "x", "y", r"$\rho$ [code unit]", 1e-12, 1e-9)
+        plot_rho_xy(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_slice_z_local0",
+            "x",
+            "y",
+            r"$\rho$ [code unit]",
+            1e-12,
+            1e-9,
+        )
         arr_rho, metadata = load_plot("rho_slice_y_local0", iplot)
-        plot_rho_xz(metadata, arr_rho, iplot, "rho_slice_y_local0", "x", "z", r"$\rho$ [code unit]", 1e-12, 1e-9)
+        plot_rho_xz(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_slice_y_local0",
+            "x",
+            "z",
+            r"$\rho$ [code unit]",
+            1e-12,
+            1e-9,
+        )
         arr_rho, metadata = load_plot("rho_slice_z_local1", iplot)
-        plot_rho_xy(metadata, arr_rho, iplot, "rho_slice_z_local1", "x", "y", r"$\rho$ [code unit]", 1e-12, 1e-9)
+        plot_rho_xy(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_slice_z_local1",
+            "x",
+            "y",
+            r"$\rho$ [code unit]",
+            1e-12,
+            1e-9,
+        )
         arr_rho, metadata = load_plot("rho_slice_y_local1", iplot)
-        plot_rho_xz(metadata, arr_rho, iplot, "rho_slice_y_local1", "x", "z", r"$\rho$ [code unit]", 1e-12, 1e-9)
+        plot_rho_xz(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_slice_y_local1",
+            "x",
+            "z",
+            r"$\rho$ [code unit]",
+            1e-12,
+            1e-9,
+        )
         arr_rho, metadata = load_plot("rho_integ_z_local0", iplot)
-        plot_rho_xy(metadata, arr_rho, iplot, "rho_integ_z_local0", "x", "y", r"$\int \rho \, \mathrm{d}z$ [code unit]", 1e-10, 1e-7)
+        plot_rho_xy(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_integ_z_local0",
+            "x",
+            "y",
+            r"$\int \rho \, \mathrm{d}z$ [code unit]",
+            1e-10,
+            1e-7,
+        )
         arr_rho, metadata = load_plot("rho_integ_z_local1", iplot)
-        plot_rho_xy(metadata, arr_rho, iplot, "rho_integ_z_local1", "x", "y", r"$\int \rho \, \mathrm{d}z$ [code unit]", 1e-10, 1e-7)
+        plot_rho_xy(
+            metadata,
+            arr_rho,
+            iplot,
+            "rho_integ_z_local1",
+            "x",
+            "y",
+            r"$\int \rho \, \mathrm{d}z$ [code unit]",
+            1e-10,
+            1e-7,
+        )
 
 
 # %%
