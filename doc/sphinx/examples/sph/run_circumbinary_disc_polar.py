@@ -82,7 +82,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 5
-nstop = 30
+nstop = 50
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -331,6 +331,37 @@ else:
     # Set the simulation box size
     model.resize_simulation_box(bmin, bmax)
 
+    # Create the setup
+    setup = model.get_setup()
+    gen_disc = setup.make_generator_disc_mc(
+        part_mass=pmass,
+        disc_mass=disc_mass,
+        r_in=rin,
+        r_out=rout,
+        sigma_profile=sigma_profile,
+        H_profile=H_profile,
+        rot_profile=rot_profile,
+        cs_profile=cs_profile,
+        random_seed=666,
+        init_h_factor=0.1,
+    )
+
+    # Print the dot graph of the setup
+    print(gen_disc.get_dot())
+
+    # Apply the setup
+    setup.apply_setup(gen_disc, insert_step=int(scheduler_split_val / 4))
+
+    # correct the momentum of the disc to 0 before adding the sinks
+    analysis = shamrock.model_sph.analysisTotalMomentum(model=model)
+    total_momentum = analysis.get_total_momentum()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc momentum = {total_momentum}")
+
+    model.apply_momentum_offset((-total_momentum[0], -total_momentum[1], -total_momentum[2]))
+
+    # add the sinks
     sink_list = [
         {"mass": center_mass, "racc": center_racc, "pos": (0, 0, 0), "vel": (0, 0, 0)},
     ]
@@ -400,27 +431,6 @@ else:
             "add sink : mass {} pos {} vel {} racc {}".format(mass, (x, y, z), (vx, vy, vz), racc)
         )
         model.add_sink(mass, (x, y, z), (vx, vy, vz), racc)
-
-    # Create the setup
-    setup = model.get_setup()
-    gen_disc = setup.make_generator_disc_mc(
-        part_mass=pmass,
-        disc_mass=disc_mass,
-        r_in=rin,
-        r_out=rout,
-        sigma_profile=sigma_profile,
-        H_profile=H_profile,
-        rot_profile=rot_profile,
-        cs_profile=cs_profile,
-        random_seed=666,
-        init_h_factor=0.1,
-    )
-
-    # Print the dot graph of the setup
-    print(gen_disc.get_dot())
-
-    # Apply the setup
-    setup.apply_setup(gen_disc, insert_step=int(scheduler_split_val / 4))
 
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
@@ -554,6 +564,81 @@ def analysis_plot(iplot):
     save_plot(ext_local, (x_1, z_1), sinks, arr_rho_slice_y_local1, iplot, "rho_slice_y_local1")
     save_plot(ext_local, (x_0, y_0), sinks, arr_rho_inte_z_local0, iplot, "rho_integ_z_local0")
     save_plot(ext_local, (x_1, y_1), sinks, arr_rho_inte_z_local1, iplot, "rho_integ_z_local1")
+
+    analysis = shamrock.model_sph.analysisEnergyKinetic(model=model)
+    ekin = analysis.get_kinetic_energy()
+
+    analysis = shamrock.model_sph.analysisBarycenter(model=model)
+    barycenter, disc_mass = analysis.get_barycenter()
+
+    analysis = shamrock.model_sph.analysisEnergyPotential(model=model)
+    epot = analysis.get_potential_energy()
+
+    analysis = shamrock.model_sph.analysisTotalMomentum(model=model)
+    total_momentum = analysis.get_total_momentum()
+
+    # Update the json with array of (t,ekin) and create it if it doesn't exist
+    if shamrock.sys.world_rank() == 0:
+        if not os.path.exists(dump_folder + "ekin.json"):
+            with open(dump_folder + "ekin.json", "w") as fp:
+                json.dump({"ekin": []}, fp, indent=4)
+        with open(dump_folder + "ekin.json", "r") as fp:
+            data = json.load(fp)
+
+        # resize the array to the correct size and expand it if needed
+        data["ekin"] = data["ekin"][:iplot]
+
+        data["ekin"].append({"t": model.get_time(), "ekin": ekin})
+        with open(dump_folder + "ekin.json", "w") as fp:
+            json.dump(data, fp, indent=4)
+
+    # same with (t, epot)
+    if shamrock.sys.world_rank() == 0:
+        if not os.path.exists(dump_folder + "epot.json"):
+            with open(dump_folder + "epot.json", "w") as fp:
+                json.dump({"epot": []}, fp, indent=4)
+        with open(dump_folder + "epot.json", "r") as fp:
+            data = json.load(fp)
+        data["epot"] = data["epot"][:iplot]
+        data["epot"].append({"t": model.get_time(), "epot": epot})
+        with open(dump_folder + "epot.json", "w") as fp:
+            json.dump(data, fp, indent=4)
+
+    # same with (t, barycenter)
+    if shamrock.sys.world_rank() == 0:
+        if not os.path.exists(dump_folder + "barycenter.json"):
+            with open(dump_folder + "barycenter.json", "w") as fp:
+                json.dump({"barycenter": []}, fp, indent=4)
+        with open(dump_folder + "barycenter.json", "r") as fp:
+            data = json.load(fp)
+        data["barycenter"] = data["barycenter"][:iplot]
+        data["barycenter"].append({"t": model.get_time(), "barycenter": barycenter})
+        with open(dump_folder + "barycenter.json", "w") as fp:
+            json.dump(data, fp, indent=4)
+
+    # same with (t, disc_mass)
+    if shamrock.sys.world_rank() == 0:
+        if not os.path.exists(dump_folder + "disc_mass.json"):
+            with open(dump_folder + "disc_mass.json", "w") as fp:
+                json.dump({"disc_mass": []}, fp, indent=4)
+        with open(dump_folder + "disc_mass.json", "r") as fp:
+            data = json.load(fp)
+        data["disc_mass"] = data["disc_mass"][:iplot]
+        data["disc_mass"].append({"t": model.get_time(), "disc_mass": disc_mass})
+        with open(dump_folder + "disc_mass.json", "w") as fp:
+            json.dump(data, fp, indent=4)
+
+    # same with (t, total_momentum)
+    if shamrock.sys.world_rank() == 0:
+        if not os.path.exists(dump_folder + "total_momentum.json"):
+            with open(dump_folder + "total_momentum.json", "w") as fp:
+                json.dump({"total_momentum": []}, fp, indent=4)
+        with open(dump_folder + "total_momentum.json", "r") as fp:
+            data = json.load(fp)
+        data["total_momentum"] = data["total_momentum"][:iplot]
+        data["total_momentum"].append({"t": model.get_time(), "total_momentum": total_momentum})
+        with open(dump_folder + "total_momentum.json", "w") as fp:
+            json.dump(data, fp, indent=4)
 
 
 # %%
@@ -872,10 +957,8 @@ ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
     # To save the animation using Pillow as a gif
-    # writer = animation.PillowWriter(fps=15,
-    #                                 metadata=dict(artist='Me'),
-    #                                 bitrate=1800)
-    # ani.save('scatter.gif', writer=writer)
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_integ_z_global.gif", writer=writer)
 
     # Show the animation
     plt.show()
@@ -889,6 +972,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_integ_y_global_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_integ_y_global.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -901,6 +988,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_slice_z_local0_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_slice_z_local0.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -913,6 +1004,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_slice_y_local0_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_slice_y_local0.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -925,6 +1020,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_slice_z_local1_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_slice_z_local1.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -937,6 +1036,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_slice_y_local1_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_slice_y_local1.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -949,6 +1052,10 @@ glob_str = os.path.join(dump_folder, "plot_rho_integ_z_local0_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_integ_z_local0.gif", writer=writer)
+
     # Show the animation
     plt.show()
 
@@ -961,5 +1068,102 @@ glob_str = os.path.join(dump_folder, "plot_rho_integ_z_local1_*.png")
 ani = show_image_sequence(glob_str, render_gif)
 
 if render_gif and shamrock.sys.world_rank() == 0:
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("rho_integ_z_local1.gif", writer=writer)
+
     # Show the animation
     plt.show()
+
+
+# %%
+# make plots from json files (json_to_figs.py)
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# %%
+# load the json file for ekin
+with open(dump_folder + "ekin.json", "r") as fp:
+    data = json.load(fp)
+ekin = data["ekin"]
+
+with open(dump_folder + "epot.json", "r") as fp:
+    data = json.load(fp)
+epot = data["epot"]
+
+plt.figure(figsize=(8, 5), dpi=200)
+
+t = [d["t"] for d in ekin]
+ekin = [d["ekin"] for d in ekin]
+plt.plot(t, ekin, label="ekin")
+
+t = [d["t"] for d in epot]
+epot = [d["epot"] for d in epot]
+plt.plot(t, epot, label="epot")
+
+# sum of ekin and epot
+plt.plot(t, np.array(ekin) + np.array(epot), label="ekin + epot")
+
+plt.xlabel("t")
+plt.ylabel("energy")
+plt.legend()
+plt.savefig(dump_folder + "ekin.png")
+plt.show()
+
+
+# %%
+# load the json file for barycenter
+with open(dump_folder + "barycenter.json", "r") as fp:
+    data = json.load(fp)
+barycenter = data["barycenter"]
+t = [d["t"] for d in barycenter]
+barycenter_x = [d["barycenter"][0] for d in barycenter]
+barycenter_y = [d["barycenter"][1] for d in barycenter]
+barycenter_z = [d["barycenter"][2] for d in barycenter]
+
+plt.figure(figsize=(8, 5), dpi=200)
+
+plt.plot(t, barycenter_x)
+plt.plot(t, barycenter_y)
+plt.plot(t, barycenter_z)
+plt.xlabel("t")
+plt.ylabel("barycenter")
+plt.legend(["x", "y", "z"])
+plt.savefig(dump_folder + "barycenter.png")
+plt.show()
+
+# %%
+# load the json file for disc_mass
+with open(dump_folder + "disc_mass.json", "r") as fp:
+    data = json.load(fp)
+disc_mass = data["disc_mass"]
+t = [d["t"] for d in disc_mass]
+disc_mass = [d["disc_mass"] for d in disc_mass]
+
+plt.figure(figsize=(8, 5), dpi=200)
+
+plt.plot(t, disc_mass)
+plt.xlabel("t")
+plt.ylabel("disc_mass")
+plt.savefig(dump_folder + "disc_mass.png")
+plt.show()
+
+# %%
+# load the json file for total_momentum
+with open(dump_folder + "total_momentum.json", "r") as fp:
+    data = json.load(fp)
+total_momentum = data["total_momentum"]
+t = [d["t"] for d in total_momentum]
+total_momentum_x = [d["total_momentum"][0] for d in total_momentum]
+total_momentum_y = [d["total_momentum"][1] for d in total_momentum]
+total_momentum_z = [d["total_momentum"][2] for d in total_momentum]
+
+plt.figure(figsize=(8, 5), dpi=200)
+
+plt.plot(t, total_momentum_x)
+plt.plot(t, total_momentum_y)
+plt.plot(t, total_momentum_z)
+plt.xlabel("t")
+plt.ylabel("total_momentum")
+plt.legend(["x", "y", "z"])
+plt.savefig(dump_folder + "total_momentum.png")
+plt.show()
