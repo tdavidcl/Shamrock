@@ -58,7 +58,14 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_particle_tracking", &TConfig::set_particle_tracking)
         .def("set_tree_reduction_level", &TConfig::set_tree_reduction_level)
         .def("set_two_stage_search", &TConfig::set_two_stage_search)
-        .def("set_show_neigh_stats", &TConfig::set_show_neigh_stats)
+        .def(
+            "set_show_neigh_stats",
+            [](TConfig &self, bool enable, std::string filename) {
+                self.set_show_neigh_stats(enable, filename);
+            },
+            py::arg("enable"),
+            py::kw_only(),
+            py::arg("filename") = "")
         .def(
             "set_max_neigh_cache_size",
             [](TConfig &self, py::object max_neigh_cache_size) {
@@ -782,6 +789,10 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_debug_dump", &T::set_debug_dump)
         .def("solver_logs_last_rate", &T::solver_logs_last_rate)
         .def("solver_logs_last_obj_count", &T::solver_logs_last_obj_count)
+        .def("solver_logs_cumulated_step_time", &T::solver_logs_cumulated_step_time)
+        .def("solver_logs_reset_cumulated_step_time", &T::solver_logs_reset_cumulated_step_time)
+        .def("solver_logs_step_count", &T::solver_logs_step_count)
+        .def("solver_logs_reset_step_count", &T::solver_logs_reset_step_count)
         .def(
             "get_time",
             [](T &self) {
@@ -868,7 +879,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 PatchScheduler &sched = shambase::get_check_ref(self.ctx.sched);
                 return sched.get_patch_transform<Tvec>();
             })
-        .def("apply_momentum_offset", &T::apply_momentum_offset);
+        .def("apply_momentum_offset", &T::apply_momentum_offset)
+        .def("apply_position_offset", &T::apply_position_offset);
 }
 
 template<class Tvec, template<class> class SPHKernel>

@@ -113,7 +113,7 @@ C_force = 0.25
 C_mult_stiffness = 10
 
 
-dump_folder = f"_to_trash/circumbinary_disc_polar_normalh_{Npart}/"
+dump_folder = f"_to_trash/circumbinary_disc_polar_hlim500_{Npart}/"
 dump_prefix = dump_folder + "dump_"
 
 
@@ -135,7 +135,6 @@ def cs_profile(r):
     cs_in = (H_r_in * rin) * omega_k(rin)
     return ((r / rin) ** (-q)) * cs_in
 
-
 # hierarichle split
 split_list = [
     {
@@ -147,6 +146,7 @@ split_list = [
     },
     # {"index" : 0, "mass_ratio" : 0.5, "a": 0.33333333, "e":0., "euler_angle" :(0,0,0)}
 ]
+
 
 
 # %%
@@ -379,15 +379,15 @@ else:
     cfg.set_cfl_mult_stiffness(C_mult_stiffness)
 
     # Enable this to debug the neighbor counts
-    cfg.set_show_neigh_stats(True, filename=dump_folder + "neigh_stats.json")
+    cfg.set_show_neigh_stats(True, filename = dump_folder + "neigh_stats.json")
 
     # Standard way to set the smoothing length (e.g. Price et al. 2018)
-    cfg.set_smoothing_length_density_based()
+    # cfg.set_smoothing_length_density_based()
 
     # Standard density based smoothing lenght but with a neighbor count limit
     # Use it if you have large slowdowns due to giant particles
     # I recommend to use it if you have a circumbinary discs as the issue is very likely to happen
-    # cfg.set_smoothing_length_density_based_neigh_lim(500)
+    cfg.set_smoothing_length_density_based_neigh_lim(500)
 
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
@@ -431,7 +431,7 @@ else:
 
     model.apply_momentum_offset((-total_momentum[0], -total_momentum[1], -total_momentum[2]))
 
-    # Correct the barycenter
+    # Correct the barycenter
     analysis = shamrock.model_sph.analysisBarycenter(model=model)
     barycenter, disc_mass = analysis.get_barycenter()
 
@@ -676,9 +676,7 @@ def analysis_plot(iplot):
         with open(dump_folder + "delta_cumulated_step_time.json", "r") as fp:
             data = json.load(fp)
         data["delta_cumulated_step_time"] = data["delta_cumulated_step_time"][:iplot]
-        data["delta_cumulated_step_time"].append(
-            {"t": model.get_time(), "delta_cumulated_step_time": delta_cumulated_step_time}
-        )
+        data["delta_cumulated_step_time"].append({"t": model.get_time(), "delta_cumulated_step_time": delta_cumulated_step_time})
         with open(dump_folder + "delta_cumulated_step_time.json", "w") as fp:
             json.dump(data, fp, indent=4)
 
@@ -690,9 +688,7 @@ def analysis_plot(iplot):
         with open(dump_folder + "delta_step_count.json", "r") as fp:
             data = json.load(fp)
         data["delta_step_count"] = data["delta_step_count"][:iplot]
-        data["delta_step_count"].append(
-            {"t": model.get_time(), "delta_step_count": delta_step_count}
-        )
+        data["delta_step_count"].append({"t": model.get_time(), "delta_step_count": delta_step_count})
         with open(dump_folder + "delta_step_count.json", "w") as fp:
             json.dump(data, fp, indent=4)
 
@@ -1007,7 +1003,6 @@ def show_image_sequence(glob_str, render_gif):
 
         return ani
 
-
 show_plots = False
 
 # %%
@@ -1289,7 +1284,7 @@ delta_step_count = [d["delta_step_count"] for d in delta_step_count]
 cumulated_step_count = np.cumsum(delta_step_count)
 
 plt.figure(figsize=(8, 5), dpi=200)
-plt.plot(t, cumulated_step_time)
+plt.plot(t,cumulated_step_time)
 plt.xlabel("simulation time (s)")
 plt.ylabel("cumulated step time (s)")
 plt.savefig(dump_folder + "cumulated_step_time.png")
@@ -1329,7 +1324,7 @@ else:
 # load the json file for neigh_stats
 with open(dump_folder + "neigh_stats.json", "r") as fp:
     data = json.load(fp)
-
+    
 t = [d["time"] for d in data]
 neigh_stats = [d["max_true"] for d in data]
 

@@ -360,8 +360,12 @@ struct shammodels::sph::SolverConfig {
     /// Setter for the two stage search
     inline void set_two_stage_search(bool enable) { use_two_stage_search = enable; }
 
-    bool show_neigh_stats = false;
-    inline void set_show_neigh_stats(bool enable) { show_neigh_stats = enable; }
+    bool show_neigh_stats            = false;
+    std::string neigh_stats_filename = "";
+    inline void set_show_neigh_stats(bool enable, std::string filename) {
+        show_neigh_stats     = enable;
+        neigh_stats_filename = filename;
+    }
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Tree config (END)
     //////////////////////////////////////////////////////////////////////////////////////////////

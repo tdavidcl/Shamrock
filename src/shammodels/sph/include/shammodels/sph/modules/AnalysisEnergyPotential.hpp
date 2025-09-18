@@ -76,7 +76,11 @@ namespace shammodels::sph::modules {
                         epot += shamalgs::primitives::sum(dev_sched_ptr, epot_part, 0, len);
                     });
                 }
+            }
 
+            Tscal tot_epot = shamalgs::collective::allreduce_sum(epot);
+
+            if (!solver.storage.sinks.is_empty()) {
                 Tscal G = solver.solver_config.get_constant_G();
 
                 for (auto &sink1 : solver.storage.sinks.get()) {
@@ -85,13 +89,11 @@ namespace shammodels::sph::modules {
                         Tscal d    = sycl::length(delta);
 
                         if (d > 1e-6 * (sink1.accretion_radius + sink2.accretion_radius)) {
-                            epot += -G * sink1.mass * sink2.mass / d;
+                            tot_epot += -G * sink1.mass * sink2.mass / d;
                         }
                     }
                 }
             }
-
-            Tscal tot_epot = shamalgs::collective::allreduce_sum(epot);
 
             return tot_epot;
         }
