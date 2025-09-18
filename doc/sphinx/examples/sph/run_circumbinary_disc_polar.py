@@ -78,7 +78,7 @@ scheduler_split_val = int(1e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-dump_freq_stop = 2
+dump_freq_stop = 5
 plot_freq_stop = 1
 
 dt_stop = 5
@@ -718,8 +718,8 @@ for ttarg in t_stop:
             model.do_vtk_dump(get_vtk_dump_name(idump), True)
             model.dump(get_dump_name(idump))
 
-            # dump = model.make_phantom_dump()
-            # dump.save_dump(get_ph_dump_name(idump))
+            dump = model.make_phantom_dump()
+            dump.save_dump(get_ph_dump_name(idump))
 
             purge_old_dumps()
 
