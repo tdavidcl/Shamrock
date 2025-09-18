@@ -71,7 +71,7 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = 1000000
+Npart = 100000
 
 # Domain decomposition parameters
 scheduler_split_val = int(1e7)  # split patches with more than 1e7 particles
@@ -377,6 +377,9 @@ else:
     cfg.set_cfl_cour(C_cour)
     cfg.set_cfl_force(C_force)
     cfg.set_cfl_mult_stiffness(C_mult_stiffness)
+
+    cfg.set_enable_particle_reordering(False)
+    cfg.set_particle_reordering_step_freq(10)
 
     # Enable this to debug the neighbor counts
     cfg.set_show_neigh_stats(True, filename=dump_folder + "neigh_stats.json")
@@ -718,8 +721,8 @@ for ttarg in t_stop:
             model.do_vtk_dump(get_vtk_dump_name(idump), True)
             model.dump(get_dump_name(idump))
 
-            dump = model.make_phantom_dump()
-            dump.save_dump(get_ph_dump_name(idump))
+            # dump = model.make_phantom_dump()
+            # dump.save_dump(get_ph_dump_name(idump))
 
             purge_old_dumps()
 
