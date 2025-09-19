@@ -1355,30 +1355,30 @@ stddev_all = [d["stddev_all"] for d in data]
 fig, axes = plt.subplots(4, 1, figsize=(10, 12), dpi=200, sharex=True)
 
 # Max neighbors
-axes[0].plot(t, max_true, label="max (true neighbors)", color='blue')
-axes[0].plot(t, max_all, label="max (all neighbors)", color='red')
+axes[0].plot(t, max_true, label="max (true neighbors)", color="blue")
+axes[0].plot(t, max_all, label="max (all neighbors)", color="red")
 axes[0].set_ylabel("max neigh counts")
 axes[0].set_yscale("log")
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
 # Min neighbors
-axes[1].plot(t, min_true, label="min (true neighbors)", color='blue')
-axes[1].plot(t, min_all, label="min (all neighbors)", color='red')
+axes[1].plot(t, min_true, label="min (true neighbors)", color="blue")
+axes[1].plot(t, min_all, label="min (all neighbors)", color="red")
 axes[1].set_ylabel("min neigh counts")
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
 # Mean neighbors
-axes[2].plot(t, mean_true, label="mean (true neighbors)", color='blue')
-axes[2].plot(t, mean_all, label="mean (all neighbors)", color='red')
+axes[2].plot(t, mean_true, label="mean (true neighbors)", color="blue")
+axes[2].plot(t, mean_all, label="mean (all neighbors)", color="red")
 axes[2].set_ylabel("mean neigh counts")
 axes[2].legend()
 axes[2].grid(True, alpha=0.3)
 
 # Standard deviation
-axes[3].plot(t, stddev_true, label="stddev (true neighbors)", color='blue')
-axes[3].plot(t, stddev_all, label="stddev (all neighbors)", color='red')
+axes[3].plot(t, stddev_true, label="stddev (true neighbors)", color="blue")
+axes[3].plot(t, stddev_all, label="stddev (all neighbors)", color="red")
 axes[3].set_ylabel("stddev neigh counts")
 axes[3].set_xlabel("simulation time (s)")
 axes[3].legend()
