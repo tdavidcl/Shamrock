@@ -19,7 +19,7 @@ if not shamrock.sys.is_initialized():
 
 results = {}
 
-for N_target in [1e3, 2e3, 3e3]:
+for N_target in [1e3, 1e4, 1e5, 1e6]:
     for split_fact in [0.5, 0.9, 1, 1.1, 8]:
         # %%
         # Setup parameters
@@ -121,18 +121,22 @@ for N_target in [1e3, 2e3, 3e3]:
         del model
         del ctx
 
-import matplotlib.pyplot as plt
+import json
+print(json.dumps(results, indent=4))
 
-for N_target in results:
-    plt.plot(
-        results[N_target]["patch_count"],
-        results[N_target]["rate"],
-        "x-",
-        label=f"N_target = {N_target:.1e}",
-    )
-plt.xlabel("patch count")
-plt.ylabel("rate")
-plt.xscale("log")
-plt.title("rate vs patch count")
-plt.legend()
-plt.show()
+if False:
+    import matplotlib.pyplot as plt
+
+    for N_target in results:
+        plt.plot(
+            results[N_target]["patch_count"],
+            results[N_target]["rate"],
+            "x-",
+            label=f"N_target = {N_target:.1e}",
+        )
+    plt.xlabel("patch count")
+    plt.ylabel("rate")
+    plt.xscale("log")
+    plt.title("rate vs patch count")
+    plt.legend()
+    plt.show()
