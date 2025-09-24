@@ -738,7 +738,8 @@ namespace shammodels::sph {
             }
 
             // compute the offset velocity
-            Tvec offset_vel = offset / tot_mass;
+            Tvec offset_vel = (tot_mass > 0) ? (offset / tot_mass)
+                                             : shambase::VectorProperties<Tvec>::get_zero();
 
             // apply the offset velocity to the sinks
             if (!solver.storage.sinks.is_empty()) {
@@ -761,14 +762,14 @@ namespace shammodels::sph {
 
             u32 ixyz = sched.pdl().get_field_idx<Tvec>("xyz");
 
-            // apply the offset velocity to the sinks
+            // apply the position offset to the sinks
             if (!solver.storage.sinks.is_empty()) {
                 for (auto &s : solver.storage.sinks.get()) {
                     s.pos += offset;
                 }
             }
 
-            // apply the offset velocity to the particles
+            // apply the position offset to the particles
             sched.for_each_patchdata_nonempty(
                 [&](shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
                     PatchDataField<Tvec> &xyz = pdat.get_field<Tvec>(ixyz);
