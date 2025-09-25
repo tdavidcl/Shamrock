@@ -51,6 +51,7 @@
 #include "shammodels/sph/modules/GetParticlesOutsideSphere.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensity.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensityNeighLim.hpp"
+#include "shammodels/sph/modules/IterateSmoothingNumDensity.hpp"
 #include "shammodels/sph/modules/KillParticles.hpp"
 #include "shammodels/sph/modules/LoopSmoothingLengthIter.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
@@ -561,9 +562,9 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
 
         std::shared_ptr<shamrock::solvergraph::INode> smth_h_iter_ptr;
 
-        using h_conf_density_based = typename SmoothingLengthConfig::DensityBased;
-        using h_conf_neigh_lim     = typename SmoothingLengthConfig::DensityBasedNeighLim;
-
+        using h_conf_density_based     = typename SmoothingLengthConfig::DensityBased;
+        using h_conf_neigh_lim         = typename SmoothingLengthConfig::DensityBasedNeighLim;
+        using h_conf_num_density_based = typename SmoothingLengthConfig::NumDensityBased;
         if (h_conf_density_based *conf
             = std::get_if<h_conf_density_based>(&solver_config.smoothing_length_config.config)) {
             std::shared_ptr<shammodels::sph::modules::IterateSmoothingLengthDensity<Tvec, Kernel>>
@@ -588,6 +589,124 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
             smth_h_iter_neigh_lim->set_edges(
                 sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
             smth_h_iter_ptr = smth_h_iter_neigh_lim;
+        } else if (
+            h_conf_num_density_based *conf = std::get_if<h_conf_num_density_based>(
+                &solver_config.smoothing_length_config.config)) {
+
+            if (conf->mode == h_conf_num_density_based::Mode::BaseKernel) {
+                std::shared_ptr<
+                    shammodels::sph::modules::IterateSmoothingNumDensity<Tvec, shammath::M4<Tscal>>>
+                    smth_h_iter_num_density
+                    = std::make_shared<shammodels::sph::modules::
+                                           IterateSmoothingNumDensity<Tvec, shammath::M4<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::DoubleHump) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4DH<Tscal>>>
+                    smth_h_iter_num_density
+                    = std::make_shared<shammodels::sph::modules::
+                                           IterateSmoothingNumDensity<Tvec, shammath::M4DH<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::DoubleHump3) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4DH3<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4DH3<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::DoubleHump5) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4DH5<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4DH5<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::DoubleHump7) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4DH7<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4DH7<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::Shift2) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4Shift2<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4Shift2<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::Shift4) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4Shift4<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4Shift4<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::Shift8) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4Shift8<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4Shift8<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            } else if (conf->mode == h_conf_num_density_based::Mode::Shift16) {
+                std::shared_ptr<shammodels::sph::modules::
+                                    IterateSmoothingNumDensity<Tvec, shammath::M4Shift16<Tscal>>>
+                    smth_h_iter_num_density = std::make_shared<
+                        shammodels::sph::modules::
+                            IterateSmoothingNumDensity<Tvec, shammath::M4Shift16<Tscal>>>(
+                        solver_config.gpart_mass,
+                        solver_config.htol_up_coarse_cycle,
+                        solver_config.htol_up_fine_cycle);
+                smth_h_iter_num_density->set_edges(
+                    sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
+                smth_h_iter_ptr = smth_h_iter_num_density;
+            }
+
+            else {
+                throw std::runtime_error("Invalid smoothing length configuration");
+            }
+
         } else {
             shambase::throw_with_loc<std::runtime_error>("Invalid smoothing length configuration");
         }
@@ -708,7 +827,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
         storage.omega);
     compute_omega.evaluate();
 
-    if (solver_config.smoothing_length_config.is_density_based_neigh_lim()) {
+    if (solver_config.smoothing_length_config.is_density_based_neigh_lim()
+        || solver_config.smoothing_length_config.is_num_density_based()) {
         // if the h limiter is triggered, omega does not hold it's sense of dh/dr anymore
         // so we set it to 1, this effectively is equivalent of disabling the energy correction
         // term corresponding to dh/dr
