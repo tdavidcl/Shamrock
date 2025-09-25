@@ -397,6 +397,10 @@ struct shammodels::sph::SolverConfig {
     inline void set_enable_particle_reordering(bool enable) { enable_particle_reordering = enable; }
     u64 particle_reordering_step_freq = 1000;
     inline void set_particle_reordering_step_freq(u64 freq) {
+        if (freq == 0) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "particle_reordering_step_freq cannot be zero");
+        }
         particle_reordering_step_freq = freq;
     }
 
@@ -913,6 +917,7 @@ namespace shammodels::sph {
             {"h_max_subcycles_count", p.h_max_subcycles_count},
 
             {"enable_particle_reordering", p.enable_particle_reordering},
+            {"particle_reordering_step_freq", p.particle_reordering_step_freq},
 
             {"eos_config", p.eos_config},
 
@@ -1021,6 +1026,15 @@ namespace shammodels::sph {
                 "SPHConfig",
                 "enable_particle_reordering not found when deserializing, defaulting to ",
                 p.enable_particle_reordering);
+        }
+
+        if (j.contains("particle_reordering_step_freq")) {
+            j.at("particle_reordering_step_freq").get_to(p.particle_reordering_step_freq);
+        } else {
+            logger::warn_ln(
+                "SPHConfig",
+                "particle_reordering_step_freq not found when deserializing, defaulting to ",
+                p.particle_reordering_step_freq);
         }
 
         j.at("eos_config").get_to(p.eos_config);
