@@ -81,7 +81,7 @@ namespace shamrock::solvergraph {
         inline std::string get_tex_partial() { return _impl_get_tex(); };
 
         inline virtual std::string print_node_info() {
-            std::string node_info = shambase::format("Node info :");
+            std::string node_info = shambase::format("Node info :\n");
             node_info += shambase::format(" - Node type : {}\n", typeid(*this).name());
             node_info += shambase::format(" - Node UUID : {}\n", get_uuid());
             node_info += shambase::format(" - Node label : {}\n", _impl_get_label());
