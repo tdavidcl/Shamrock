@@ -80,6 +80,49 @@ namespace shamrock::solvergraph {
         inline std::string get_tex() { return _impl_get_tex(); };
         inline std::string get_tex_partial() { return _impl_get_tex(); };
 
+        inline virtual std::string print_node_info() {
+            std::string node_info = shambase::format("Node info :");
+            node_info += shambase::format(" - Node type : {}\n", typeid(*this).name());
+            node_info += shambase::format(" - Node UUID : {}\n", get_uuid());
+            node_info += shambase::format(" - Node label : {}\n", _impl_get_label());
+
+            node_info += shambase::format(" - Node Read Only edges : {}\n", ro_edges.size());
+            for (auto &edge : ro_edges) {
+                auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
+                node_info += shambase::format(
+                    "     - Edge ptr = {}, uuid = {}, label = {},\n          type = {} \n",
+                    static_cast<void *>(edge.get()),
+                    edge->get_uuid(),
+                    edge->get_label(),
+                    typeid(e).name());
+                // node_info += "    {\n";
+                // node_info += shambase::format("     - Edge type : {}\n", typeid(e).name());
+                // node_info += shambase::format("     - Edge UUID : {}\n", edge->get_uuid());
+                // node_info += shambase::format("     - Edge label : {}\n", edge->get_label());
+                // node_info += shambase::format("     - Edge ptr : {}\n", static_cast<void
+                // *>(edge.get())); node_info += "    }\n";
+            }
+
+            node_info += shambase::format(" - Node Read Write edges : {}\n", rw_edges.size());
+            for (auto &edge : rw_edges) {
+                auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
+                node_info += shambase::format(
+                    "     - Edge ptr = {}, uuid = {}, label = {},\n          type = {} \n",
+                    static_cast<void *>(edge.get()),
+                    edge->get_uuid(),
+                    edge->get_label(),
+                    typeid(e).name());
+                // node_info += "    {\n";
+                // node_info += shambase::format("     - Edge type : {}\n", typeid(e).name());
+                // node_info += shambase::format("     - Edge UUID : {}\n", edge->get_uuid());
+                // node_info += shambase::format("     - Edge label : {}\n", edge->get_label());
+                // node_info += shambase::format("     - Edge ptr : {}\n", static_cast<void
+                // *>(edge.get())); node_info += "    }\n";
+            }
+
+            return node_info;
+        };
+
         protected:
         virtual void _impl_evaluate_internal() = 0;
 
