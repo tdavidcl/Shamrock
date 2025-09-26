@@ -900,7 +900,7 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
             u32 cnt,
             PatchDataLayer &pdat) {
             PatchDataLayer &sender_patch        = scheduler().patch_data.get_pdat(sender);
-            PatchDataField<Tscal> &sender_omega = omega.get_field(sender);
+            PatchDataField<Tscal> &sender_omega = omega.get(sender);
 
             sender_patch.get_field<Tscal>(ihpart).append_subset_to(
                 buf_idx, cnt, pdat.get_field<Tscal>(ihpart_interf));
@@ -980,7 +980,7 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
                 pdat_new.reserve(or_elem + sz_interf_map[p.id_patch]);
                 u32 total_elements = or_elem;
 
-                PatchDataField<Tscal> &cur_omega = omega.get_field(p.id_patch);
+                PatchDataField<Tscal> &cur_omega = omega.get(p.id_patch);
 
                 pdat_new.get_field<Tscal>(ihpart_interf).insert(pdat.get_field<Tscal>(ihpart));
                 pdat_new.get_field<Tscal>(iuint_interf).insert(pdat.get_field<Tscal>(iuint));
