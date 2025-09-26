@@ -16,7 +16,9 @@
 
 #include "shambase/assert.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/logs/loglevels.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/numeric_limits.hpp"
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
 #include "shamalgs/collective/exchanges.hpp"
@@ -25,6 +27,7 @@
 #include "shambackends/MemPerfInfos.hpp"
 #include "shambackends/details/memoryHandle.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shambackends/math.hpp"
 #include "shamcomm/collectives.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
@@ -1972,9 +1975,62 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             Tscal rank_dt = cfl_dt.compute_rank_min();
 
+            Tscal sink_sink_cfl = shambase::get_infty<Tscal>();
+            if (!storage.sinks.is_empty()) {
+                // sink sink CFL
+
+                Tscal G = solver_config.get_constant_G();
+
+                Tscal C_force
+                    = solver_config.cfl_config.cfl_force * solver_config.time_state.cfl_multiplier;
+                Tscal eta_phi = solver_config.cfl_config.eta_sink;
+
+                std::vector<SinkParticle<Tvec>> &sink_parts = storage.sinks.get();
+
+                for (u32 i = 0; i < sink_parts.size(); i++) {
+                    SinkParticle<Tvec> &s_i = sink_parts[i];
+                    Tscal sink_sink_cfl_i   = shambase::get_infty<Tscal>();
+
+                    Tvec f_i = s_i.ext_acceleration;
+
+                    Tscal grad_phi_i_sq = sham::dot(f_i, f_i); // m^2.s^-4
+
+                    if (grad_phi_i_sq == 0) {
+                        continue;
+                    }
+
+                    for (u32 j = 0; j < sink_parts.size(); j++) {
+                        SinkParticle<Tvec> &s_j = sink_parts[j];
+
+                        if (i == j) {
+                            continue;
+                        }
+
+                        Tvec rij       = s_i.pos - s_j.pos;
+                        Tscal rij_scal = sycl::length(rij);
+
+                        Tscal phi_ij  = G * s_j.mass / rij_scal;           // J / kg = m^2.s^-2
+                        Tscal term_ij = sham::abs(phi_ij) / grad_phi_i_sq; // s^2
+                        Tscal dt_ij   = C_force * eta_phi * sycl::sqrt(term_ij); // s
+
+                        sink_sink_cfl_i = sham::min(sink_sink_cfl_i, dt_ij);
+                    }
+
+                    sink_sink_cfl = sham::min(sink_sink_cfl, sink_sink_cfl_i);
+                }
+
+                sink_sink_cfl = shamalgs::collective::allreduce_min(sink_sink_cfl);
+            }
+
             shamlog_debug_ln("BasigGas", "rank", shamcomm::world_rank(), "found cfl dt =", rank_dt);
 
-            next_cfl = shamalgs::collective::allreduce_min(rank_dt);
+            Tscal hydro_cfl = shamalgs::collective::allreduce_min(rank_dt);
+
+            if (shamcomm::world_rank() == 0) {
+                shamlog_info_ln("SPH", "CFL hydro =", hydro_cfl, "sink sink =", sink_sink_cfl);
+            }
+
+            next_cfl = sham::min(hydro_cfl, sink_sink_cfl);
 
             if (shamcomm::world_rank() == 0) {
                 logger::info_ln(
