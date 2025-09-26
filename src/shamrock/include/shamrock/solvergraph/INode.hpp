@@ -95,12 +95,6 @@ namespace shamrock::solvergraph {
                     edge->get_uuid(),
                     edge->get_label(),
                     typeid(e).name());
-                // node_info += "    {\n";
-                // node_info += shambase::format("     - Edge type : {}\n", typeid(e).name());
-                // node_info += shambase::format("     - Edge UUID : {}\n", edge->get_uuid());
-                // node_info += shambase::format("     - Edge label : {}\n", edge->get_label());
-                // node_info += shambase::format("     - Edge ptr : {}\n", static_cast<void
-                // *>(edge.get())); node_info += "    }\n";
             }
 
             node_info += shambase::format(" - Node Read Write edges : {}\n", rw_edges.size());
@@ -112,12 +106,6 @@ namespace shamrock::solvergraph {
                     edge->get_uuid(),
                     edge->get_label(),
                     typeid(e).name());
-                // node_info += "    {\n";
-                // node_info += shambase::format("     - Edge type : {}\n", typeid(e).name());
-                // node_info += shambase::format("     - Edge UUID : {}\n", edge->get_uuid());
-                // node_info += shambase::format("     - Edge label : {}\n", edge->get_label());
-                // node_info += shambase::format("     - Edge ptr : {}\n", static_cast<void
-                // *>(edge.get())); node_info += "    }\n";
             }
 
             return node_info;
