@@ -86,27 +86,21 @@ namespace shamrock::solvergraph {
             node_info += shambase::format(" - Node UUID : {}\n", get_uuid());
             node_info += shambase::format(" - Node label : {}\n", _impl_get_label());
 
-            node_info += shambase::format(" - Node Read Only edges : {}\n", ro_edges.size());
-            for (auto &edge : ro_edges) {
-                auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
-                node_info += shambase::format(
-                    "     - Edge ptr = {}, uuid = {}, label = {},\n          type = {} \n",
-                    static_cast<void *>(edge.get()),
-                    edge->get_uuid(),
-                    edge->get_label(),
-                    typeid(e).name());
-            }
+            auto append_edges_info = [&](const char *title, const auto &edges) {
+                node_info += shambase::format(" - {}: {}\n", title, edges.size());
+                for (const auto &edge : edges) {
+                    const auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
+                    node_info += shambase::format(
+                        "     - Edge ptr = {}, uuid = {}, label = {},\n          type = {} \n",
+                        static_cast<void *>(edge.get()),
+                        edge->get_uuid(),
+                        edge->get_label(),
+                        typeid(e).name());
+                }
+            };
 
-            node_info += shambase::format(" - Node Read Write edges : {}\n", rw_edges.size());
-            for (auto &edge : rw_edges) {
-                auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
-                node_info += shambase::format(
-                    "     - Edge ptr = {}, uuid = {}, label = {},\n          type = {} \n",
-                    static_cast<void *>(edge.get()),
-                    edge->get_uuid(),
-                    edge->get_label(),
-                    typeid(e).name());
-            }
+            append_edges_info("Node Read Only edges", ro_edges);
+            append_edges_info("Node Read Write edges", rw_edges);
 
             return node_info;
         };
