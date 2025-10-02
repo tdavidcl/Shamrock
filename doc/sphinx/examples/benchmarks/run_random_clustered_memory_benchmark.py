@@ -54,7 +54,9 @@ def prepare_run(N, cluster_size, do_shuffle):
 runs = {}
 # Create all parameter combinations
 param_combinations = [
-    (cluster_size, do_shuffle) for cluster_size in cluster_sizes for do_shuffle in do_shuffle_options
+    (cluster_size, do_shuffle)
+    for cluster_size in cluster_sizes
+    for do_shuffle in do_shuffle_options
 ]
 
 # Parallelize the prepare_run calls
@@ -110,4 +112,6 @@ for cluster_size in cluster_sizes:
         t = benchmark_random_chunk_copy(
             N, cluster_size, do_shuffle, runs[cluster_size, do_shuffle], hardcoded=True
         )
-        print(f"N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}, bandwidth={t:e} (hardcoded)")
+        print(
+            f"N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}, bandwidth={t:e} (hardcoded)"
+        )
