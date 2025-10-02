@@ -28,47 +28,50 @@ def make_index_constrained_shuffle(N, max_delta):
     return idx
 
 
-Nelement = 2**20
+Nelement = 2**25
 cluster_sizes = [1, 2, 4, 8]
-spacings = [0, 10, 100, 1000, 10000, 100000]
+do_shuffle_options = [False, True]
 
 
-def prepare_run(N, cluster_size, max_delta):
-    print(f"Preparing run for N={N}, cluster_size={cluster_size}, max_delta={max_delta}")
+def prepare_run(N, cluster_size, do_shuffle):
+    print(f"Preparing run for N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}")
 
     if N % cluster_size != 0:
         raise ValueError("N must be divisible by cluster_size")
 
     N_cluster = N // cluster_size
 
-    ret = make_index_constrained_shuffle(N_cluster, max_delta)
+    to_shuffle = [i for i in range(N_cluster)]
 
-    print(f"Prepared run for N={N}, cluster_size={cluster_size}, max_delta={max_delta}")
+    if do_shuffle:
+        random.shuffle(to_shuffle)
 
-    return ret
+    print(f"Prepared run for N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}")
+
+    return to_shuffle
 
 
 runs = {}
 # Create all parameter combinations
 param_combinations = [
-    (cluster_size, spacing) for cluster_size in cluster_sizes for spacing in spacings
+    (cluster_size, do_shuffle) for cluster_size in cluster_sizes for do_shuffle in do_shuffle_options
 ]
 
 # Parallelize the prepare_run calls
 with ThreadPoolExecutor() as executor:
     # Submit all jobs
     futures = {
-        executor.submit(prepare_run, Nelement, cluster_size, spacing): (cluster_size, spacing)
-        for cluster_size, spacing in param_combinations
+        executor.submit(prepare_run, Nelement, cluster_size, do_shuffle): (cluster_size, do_shuffle)
+        for cluster_size, do_shuffle in param_combinations
     }
 
     # Collect results
     for future in futures:
-        cluster_size, spacing = futures[future]
-        runs[cluster_size, spacing] = future.result()
+        cluster_size, do_shuffle = futures[future]
+        runs[cluster_size, do_shuffle] = future.result()
 
 
-def benchmark_random_chunk_copy(N, cluster_size, max_delta, shuffle_table, hardcoded=False):
+def benchmark_random_chunk_copy(N, cluster_size, do_shuffle, shuffle_table, hardcoded=False):
     if N % cluster_size != 0:
         raise ValueError("N must be divisible by cluster_size")
 
@@ -96,15 +99,15 @@ def benchmark_random_chunk_copy(N, cluster_size, max_delta, shuffle_table, hardc
 
 
 for cluster_size in cluster_sizes:
-    for spacing in spacings:
+    for do_shuffle in do_shuffle_options:
         N = Nelement
         t = benchmark_random_chunk_copy(
-            N, cluster_size, spacing, runs[cluster_size, spacing], hardcoded=False
+            N, cluster_size, do_shuffle, runs[cluster_size, do_shuffle], hardcoded=False
         )
         print(
-            f"N={N}, cluster_size={cluster_size}, spacing={spacing}, bandwidth={t:e} (non-hardcoded)"
+            f"N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}, bandwidth={t:e} (non-hardcoded)"
         )
         t = benchmark_random_chunk_copy(
-            N, cluster_size, spacing, runs[cluster_size, spacing], hardcoded=True
+            N, cluster_size, do_shuffle, runs[cluster_size, do_shuffle], hardcoded=True
         )
-        print(f"N={N}, cluster_size={cluster_size}, spacing={spacing}, bandwidth={t:e} (hardcoded)")
+        print(f"N={N}, cluster_size={cluster_size}, do_shuffle={do_shuffle}, bandwidth={t:e} (hardcoded)")

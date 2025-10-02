@@ -48,32 +48,38 @@ f64 benchmark_random_chunk_copy_hardcoded(
     f64 duration_empty = shambase::timeitfor(
         [&]() {
             q.parallel_for(sycl::range<1>(Ncluster), [=](sycl::item<1> id) {
-                 u64 cluster_id_source = id.get_linear_id();
-                 u64 cluster_id_result = ptr_index[cluster_id_source];
+                 u64 cluster_id_source = ptr_index[id.get_linear_id()];
+                 u64 cluster_id_result = id.get_linear_id();
              }).wait();
         },
-        2);
+        0.1);
 
-    f64 duration = shambase::timeitfor(
+    f64 duration = shambase::timeit(
         [&]() {
             q.parallel_for(sycl::range<1>(Ncluster), [=](sycl::item<1> id) {
-                 u64 cluster_id_source = id.get_linear_id();
-                 u64 cluster_id_result = ptr_index[cluster_id_source];
+                 u64 cluster_id_source = ptr_index[id.get_linear_id()];
+                 u64 cluster_id_result = id.get_linear_id();
+
+                 T tmp[cluster_size];
 
 #pragma unroll
                  for (u32 i = 0; i < cluster_size; i++) {
-                     ptr_result[cluster_id_result * cluster_size + i]
-                         = ptr_source[cluster_id_source * cluster_size + i];
+                     tmp[i] = ptr_source[cluster_id_source * cluster_size + i];
+                 }
+
+#pragma unroll
+                 for (u32 i = 0; i < cluster_size; i++) {
+                     ptr_result[cluster_id_result * cluster_size + i] = tmp[i];
                  }
              }).wait();
         },
-        2);
+        1);
 
     buf_result.complete_event_state(sycl::event{});
     buf_source.complete_event_state(sycl::event{});
     buf_index.complete_event_state(sycl::event{});
 
-    return 2 * f64(Ncluster * cluster_size) * sizeof(T) / (duration - duration_empty);
+    return (2 * f64(Ncluster * cluster_size) * sizeof(T) + sizeof(u32) * Ncluster) / (duration);
 }
 
 template<class T>
@@ -98,17 +104,17 @@ f64 benchmark_random_chunk_copy(
     f64 duration_empty = shambase::timeitfor(
         [&]() {
             q.parallel_for(sycl::range<1>(Ncluster), [=](sycl::item<1> id) {
-                 u64 cluster_id_source = id.get_linear_id();
-                 u64 cluster_id_result = ptr_index[cluster_id_source];
+                 u64 cluster_id_source = ptr_index[id.get_linear_id()];
+                 u64 cluster_id_result = id.get_linear_id();
              }).wait();
         },
-        0.5);
+        0.1);
 
-    f64 duration = shambase::timeitfor(
+    f64 duration = shambase::timeit(
         [&]() {
             q.parallel_for(sycl::range<1>(Ncluster), [=](sycl::item<1> id) {
-                 u64 cluster_id_source = id.get_linear_id();
-                 u64 cluster_id_result = ptr_index[cluster_id_source];
+                 u64 cluster_id_source = ptr_index[id.get_linear_id()];
+                 u64 cluster_id_result = id.get_linear_id();
 
                  for (u32 i = 0; i < cluster_size; i++) {
                      ptr_result[cluster_id_result * cluster_size + i]
@@ -116,13 +122,13 @@ f64 benchmark_random_chunk_copy(
                  }
              }).wait();
         },
-        0.5);
+        1);
 
     buf_result.complete_event_state(sycl::event{});
     buf_source.complete_event_state(sycl::event{});
     buf_index.complete_event_state(sycl::event{});
 
-    return 2 * f64(Ncluster * cluster_size) * sizeof(T) / (duration - duration_empty);
+    return (2 * f64(Ncluster * cluster_size) * sizeof(T) + sizeof(u32) * Ncluster) / (duration);
 }
 
 Register_pymod(shamalgslibinit) {
