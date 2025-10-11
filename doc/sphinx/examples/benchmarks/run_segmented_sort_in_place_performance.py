@@ -49,11 +49,12 @@ def benchmark_u32_balanced(N, slice_size, nb_repeat=10):
 # Run performance sweep
 particle_counts = 2**20  # = 1.048.576
 
+
 def run_performance_sweep_balanced():
 
     # Define parameter ranges
     # logspace as array
-    
+
     slice_sizes = [2**i for i in range(0, 15)]
 
     # Initialize results matrix
@@ -115,7 +116,14 @@ for impl in all_default_impls:
 
 
 Time100M = particle_counts / 1e8
-plt.plot(slice_sizes, [Time100M for _ in slice_sizes], color="grey", linestyle="-", alpha=0.7, label="100M obj/sec")
+plt.plot(
+    slice_sizes,
+    [Time100M for _ in slice_sizes],
+    color="grey",
+    linestyle="-",
+    alpha=0.7,
+    label="100M obj/sec",
+)
 
 
 plt.xlabel("Slice size")
