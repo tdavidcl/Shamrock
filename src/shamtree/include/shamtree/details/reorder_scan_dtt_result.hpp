@@ -96,10 +96,7 @@ namespace shamtree::details {
                 });
 
             // we now perform a local sort on each slots which make the result deterministic
-            shamalgs::primitives::segmented_sort_in_place(
-                in_out_sorted, offsets, [](u32_2 a, u32_2 b) {
-                    return (a.x() == b.x()) ? (a.y() < b.y()) : (a.x() < b.x());
-                });
+            shamalgs::primitives::segmented_sort_in_place(in_out_sorted, offsets);
 
             in_out = std::move(in_out_sorted);
         } else {

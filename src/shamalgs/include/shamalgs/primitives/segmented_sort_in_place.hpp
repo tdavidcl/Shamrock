@@ -15,57 +15,29 @@
  * @brief
  */
 
+#include "shamalgs/impl_utils.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 
 namespace shamalgs::primitives {
 
-    template<class T, class Comp>
-    inline void segmented_sort_in_place(
-        sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
+    template<class T>
+    void segmented_sort_in_place(
+        sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets);
 
-        auto &q = buf.get_dev_scheduler().get_queue();
+    /// namespace to control implementation behavior
+    namespace impl {
 
-        size_t interact_count = buf.get_size();
-        size_t offsets_count  = offsets.get_size();
-        size_t N              = offsets_count - 1;
+        /// Get list of available segmented sort in place implementations
+        std::vector<shamalgs::impl_param> get_default_impl_list_segmented_sort_in_place();
 
-        sham::kernel_call(
-            q,
-            sham::MultiRef{offsets},
-            sham::MultiRef{buf},
-            N,
-            [interact_count,
-             comp](u32 gid, const u32 *__restrict__ offsets, T *__restrict__ in_out_sorted) {
-                u32 start_index = offsets[gid];
-                u32 end_index   = offsets[gid + 1];
+        /// Get the current implementation for segmented sort in place
+        shamalgs::impl_param get_current_impl_segmented_sort_in_place();
 
-                // can be equal if there is no interaction for this sender
-                SHAM_ASSERT(start_index <= end_index);
+        /// Set the implementation for segmented sort in place
+        void set_impl_segmented_sort_in_place(
+            const std::string &impl, const std::string &param = "");
 
-                // skip empty ranges to avoid unnecessary work
-                if (start_index == end_index) {
-                    return;
-                }
-
-                // if there is no interactions at the end of the offset list
-                // offsets[gid] can be equal to interact_count
-                // but we check that start_index != end_index, so here the correct assertions
-                // is indeed start_index < interact_count
-                SHAM_ASSERT(start_index < interact_count);
-                SHAM_ASSERT(end_index <= interact_count); // see the for loop for this one
-
-                // simple insertion sort between those indexes
-                for (u32 i = start_index + 1; i < end_index; ++i) {
-                    auto key = in_out_sorted[i];
-                    u32 j    = i;
-                    while (j > start_index && comp(key, in_out_sorted[j - 1])) {
-                        in_out_sorted[j] = in_out_sorted[j - 1];
-                        --j;
-                    }
-                    in_out_sorted[j] = key;
-                }
-            });
-    }
+    } // namespace impl
 
 } // namespace shamalgs::primitives
