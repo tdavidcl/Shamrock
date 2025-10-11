@@ -46,12 +46,14 @@ def benchmark_u32_balanced(N, slice_size, nb_repeat=10):
 
 
 # %%
-# Run per
+# Run performance sweep
+particle_counts = 2**20  # = 1.048.576
+
 def run_performance_sweep_balanced():
 
     # Define parameter ranges
     # logspace as array
-    particle_counts = 2**20  # = 1.048.576
+    
     slice_sizes = [2**i for i in range(0, 15)]
 
     # Initialize results matrix
@@ -96,7 +98,7 @@ print(all_default_impls)
 
 # %%
 # Run the performance benchmarks for all implementations
-for impl in all_default_impls[:1]:
+for impl in all_default_impls:
     shamrock.algs.set_impl_segmented_sort_in_place(impl.impl_name, impl.params)
 
     print(f"Running segmented sort in place performance benchmarks for {impl}...")
@@ -108,18 +110,17 @@ for impl in all_default_impls[:1]:
         slice_sizes,
         results_u32_balanced,
         "--.",
-        label=impl.impl_name + " (u32) N=" + str(particle_counts),
+        label=impl.impl_name + " (u32)",
     )
 
 
-Nobj = np.array(slice_sizes)
-Time100M = Nobj / 1e8
-plt.plot(slice_sizes, Time100M, color="grey", linestyle="-", alpha=0.7, label="100M obj/sec")
+Time100M = particle_counts / 1e8
+plt.plot(slice_sizes, [Time100M for _ in slice_sizes], color="grey", linestyle="-", alpha=0.7, label="100M obj/sec")
 
 
 plt.xlabel("Slice size")
 plt.ylabel("Time (s)")
-plt.title("segmented sort in place performance benchmarks")
+plt.title("segmented sort in place benchmarks, N=" + str(particle_counts))
 
 plt.xscale("log")
 plt.yscale("log")

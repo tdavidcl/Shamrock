@@ -18,63 +18,104 @@
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 
-namespace shamalgs::primitives {
+namespace shamalgs::primitives::details {
 
-    namespace details {
-        template<class T, class Comp>
-        inline void segmented_sort_in_place(
-            sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
+    template<class T, class Comp>
+    inline void segmented_sort_in_place_local_insertion_sort(
+        sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
 
-            auto &q = buf.get_dev_scheduler().get_queue();
+        auto &q = buf.get_dev_scheduler().get_queue();
 
-            size_t interact_count = buf.get_size();
-            size_t offsets_count  = offsets.get_size();
-            size_t N              = offsets_count - 1;
+        size_t interact_count = buf.get_size();
+        size_t offsets_count  = offsets.get_size();
+        size_t N              = offsets_count - 1;
 
-            sham::kernel_call(
-                q,
-                sham::MultiRef{offsets},
-                sham::MultiRef{buf},
-                N,
-                [interact_count,
-                 comp](u32 gid, const u32 *__restrict__ offsets, T *__restrict__ in_out_sorted) {
-                    u32 start_index = offsets[gid];
-                    u32 end_index   = offsets[gid + 1];
+        sham::kernel_call(
+            q,
+            sham::MultiRef{offsets},
+            sham::MultiRef{buf},
+            N,
+            [interact_count,
+             comp](u32 gid, const u32 *__restrict__ offsets, T *__restrict__ in_out_sorted) {
+                u32 start_index = offsets[gid];
+                u32 end_index   = offsets[gid + 1];
 
-                    // can be equal if there is no interaction for this sender
-                    SHAM_ASSERT(start_index <= end_index);
+                // can be equal if there is no interaction for this sender
+                SHAM_ASSERT(start_index <= end_index);
 
-                    // skip empty ranges to avoid unnecessary work
-                    if (start_index == end_index) {
-                        return;
+                // skip empty ranges to avoid unnecessary work
+                if (start_index == end_index) {
+                    return;
+                }
+
+                // if there is no interactions at the end of the offset list
+                // offsets[gid] can be equal to interact_count
+                // but we check that start_index != end_index, so here the correct assertions
+                // is indeed start_index < interact_count
+                SHAM_ASSERT(start_index < interact_count);
+                SHAM_ASSERT(end_index <= interact_count); // see the for loop for this one
+
+                // simple insertion sort between those indexes
+                for (u32 i = start_index + 1; i < end_index; ++i) {
+                    auto key = in_out_sorted[i];
+                    u32 j    = i;
+                    while (j > start_index && comp(key, in_out_sorted[j - 1])) {
+                        in_out_sorted[j] = in_out_sorted[j - 1];
+                        --j;
                     }
+                    in_out_sorted[j] = key;
+                }
+            });
+    }
 
-                    // if there is no interactions at the end of the offset list
-                    // offsets[gid] can be equal to interact_count
-                    // but we check that start_index != end_index, so here the correct assertions
-                    // is indeed start_index < interact_count
-                    SHAM_ASSERT(start_index < interact_count);
-                    SHAM_ASSERT(end_index <= interact_count); // see the for loop for this one
+    template<class T, class Comp>
+    inline void segmented_sort_in_place_multi_std_sort(
+        sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
 
-                    // simple insertion sort between those indexes
-                    for (u32 i = start_index + 1; i < end_index; ++i) {
-                        auto key = in_out_sorted[i];
-                        u32 j    = i;
-                        while (j > start_index && comp(key, in_out_sorted[j - 1])) {
-                            in_out_sorted[j] = in_out_sorted[j - 1];
-                            --j;
-                        }
-                        in_out_sorted[j] = key;
-                    }
-                });
+        auto &q = buf.get_dev_scheduler().get_queue();
+
+        size_t interact_count = buf.get_size();
+        size_t offsets_count  = offsets.get_size();
+        size_t N              = offsets_count - 1;
+
+        std::vector<T> buf_stdvec       = buf.copy_to_stdvec();
+        std::vector<u32> offsets_stdvec = offsets.copy_to_stdvec();
+
+        for (u32 i = 0; i < N; ++i) {
+            u32 start_index = offsets_stdvec[i];
+            u32 end_index   = offsets_stdvec[i + 1];
+
+            // can be equal if there is no interaction for this sender
+            SHAM_ASSERT(start_index <= end_index);
+
+            // skip empty ranges to avoid unnecessary work
+            if (start_index == end_index) {
+                return;
+            }
+
+            // if there is no interactions at the end of the offset list
+            // offsets[gid] can be equal to interact_count
+            // but we check that start_index != end_index, so here the correct assertions
+            // is indeed start_index < interact_count
+            SHAM_ASSERT(start_index < interact_count);
+            SHAM_ASSERT(end_index <= interact_count); // see the for loop for this one
+
+            std::sort(buf_stdvec.begin() + start_index, buf_stdvec.begin() + end_index, comp);
         }
-    } // namespace details
+
+        buf.copy_from_stdvec(buf_stdvec);
+    }
+
+} // namespace shamalgs::primitives::details
+
+namespace shamalgs::primitives {
 
     /// namespace to control implementation behavior
     namespace impl {
 
         enum class SEGMENTED_SORT_IN_PLACE_IMPL : u32 {
             LOCAL_INSERTION_SORT,
+            MULTI_STD_SORT,
         };
 
         SEGMENTED_SORT_IN_PLACE_IMPL get_default_segmented_sort_in_place_impl() {
@@ -88,6 +129,8 @@ namespace shamalgs::primitives {
             const std::string &impl) {
             if (impl == "local_insertion_sort") {
                 return SEGMENTED_SORT_IN_PLACE_IMPL::LOCAL_INSERTION_SORT;
+            } else if (impl == "multi_std_sort") {
+                return SEGMENTED_SORT_IN_PLACE_IMPL::MULTI_STD_SORT;
             }
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                 "invalid implementation : {}, possible implementations : {}",
@@ -99,6 +142,8 @@ namespace shamalgs::primitives {
             const SEGMENTED_SORT_IN_PLACE_IMPL &impl) {
             if (impl == SEGMENTED_SORT_IN_PLACE_IMPL::LOCAL_INSERTION_SORT) {
                 return {"local_insertion_sort", ""};
+            } else if (impl == SEGMENTED_SORT_IN_PLACE_IMPL::MULTI_STD_SORT) {
+                return {"multi_std_sort", ""};
             }
             throw shambase::make_except_with_loc<std::invalid_argument>(
                 shambase::format("unknow segmented sort in place implementation : {}", u32(impl)));
@@ -108,6 +153,7 @@ namespace shamalgs::primitives {
         std::vector<shamalgs::impl_param> get_default_impl_list_segmented_sort_in_place() {
             return {
                 {"local_insertion_sort", ""},
+                {"multi_std_sort", ""},
             };
         }
 
@@ -125,11 +171,28 @@ namespace shamalgs::primitives {
 
     } // namespace impl
 
+    template<class T, class Comp>
+    void internal_segmented_sort_in_place(
+        sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
+        switch (impl::segmented_sort_in_place_impl) {
+        case impl::SEGMENTED_SORT_IN_PLACE_IMPL::LOCAL_INSERTION_SORT:
+            details::segmented_sort_in_place_local_insertion_sort(buf, offsets, comp);
+            break;
+
+        case impl::SEGMENTED_SORT_IN_PLACE_IMPL::MULTI_STD_SORT:
+            details::segmented_sort_in_place_multi_std_sort(buf, offsets, comp);
+            break;
+        default:
+            shambase::throw_with_loc<std::invalid_argument>(shambase::format(
+                "unimplemented case : {}", u32(impl::segmented_sort_in_place_impl)));
+        }
+    }
+
     template<>
     void segmented_sort_in_place<u32_2>(
         sham::DeviceBuffer<u32_2> &buf, const sham::DeviceBuffer<u32> &offsets) {
 
-        shamalgs::primitives::details::segmented_sort_in_place(buf, offsets, [](u32_2 a, u32_2 b) {
+        internal_segmented_sort_in_place(buf, offsets, [](u32_2 a, u32_2 b) {
             return (a.x() == b.x()) ? (a.y() < b.y()) : (a.x() < b.x());
         });
     }
@@ -137,7 +200,7 @@ namespace shamalgs::primitives {
     template<>
     void segmented_sort_in_place<u32>(
         sham::DeviceBuffer<u32> &buf, const sham::DeviceBuffer<u32> &offsets) {
-        shamalgs::primitives::details::segmented_sort_in_place(buf, offsets, [](u32 a, u32 b) {
+        internal_segmented_sort_in_place(buf, offsets, [](u32 a, u32 b) {
             return a < b;
         });
     }
