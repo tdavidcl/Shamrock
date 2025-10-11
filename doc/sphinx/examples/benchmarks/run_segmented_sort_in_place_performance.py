@@ -7,6 +7,7 @@ This example benchmarks the segmented sort in place performance for the differen
 
 # sphinx_gallery_multi_image = "single"
 
+import random
 import time
 
 import matplotlib.colors as colors
@@ -28,13 +29,11 @@ def benchmark_u32_balanced(N, slice_size, nb_repeat=10):
 
     assert N % slice_size == 0, "N must be divisible by slice_size"
 
+    random.seed(111)
+
     times = []
     for _ in range(nb_repeat):
-
-        values = np.random.randint(0, 100, N)
-        buf = shamrock.backends.DeviceBuffer_u32()
-        buf.resize(N)
-        buf.copy_from_stdvec(values)
+        buf = shamrock.algs.mock_buffer_u32(random.randint(0, 1000000), N, 0, 1000000)
 
         offsets_values = [i * slice_size for i in range((N // slice_size) + 1)]
 

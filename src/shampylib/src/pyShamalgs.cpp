@@ -84,6 +84,10 @@ Register_pymod(shamalgslibinit) {
         return shamalgs::random::mock_buffer_usm<u8>(
             shamsys::instance::get_compute_scheduler_ptr(), seed, len, min_bound, max_bound);
     });
+    shamalgs_module.def("mock_buffer_u32", [](u64 seed, u32 len, u32 min_bound, u32 max_bound) {
+        return shamalgs::random::mock_buffer_usm<u32>(
+            shamsys::instance::get_compute_scheduler_ptr(), seed, len, min_bound, max_bound);
+    });
     shamalgs_module.def(
         "mock_buffer_f64_2", [](u64 seed, u32 len, f64_2 min_bound, f64_2 max_bound) {
             return shamalgs::random::mock_buffer_usm<f64_2>(
