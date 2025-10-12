@@ -55,7 +55,7 @@ def run_performance_sweep_balanced():
     # Define parameter ranges
     # logspace as array
 
-    slice_sizes = [2**i for i in range(0, 15)]
+    slice_sizes = [2**i for i in range(0, 14)]
 
     # Initialize results matrix
     results_u32_balanced = []

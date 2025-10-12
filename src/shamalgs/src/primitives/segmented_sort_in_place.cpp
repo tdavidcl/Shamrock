@@ -119,7 +119,7 @@ namespace shamalgs::primitives {
         };
 
         SEGMENTED_SORT_IN_PLACE_IMPL get_default_segmented_sort_in_place_impl() {
-            return SEGMENTED_SORT_IN_PLACE_IMPL::LOCAL_INSERTION_SORT;
+            return SEGMENTED_SORT_IN_PLACE_IMPL::MULTI_STD_SORT;
         }
 
         SEGMENTED_SORT_IN_PLACE_IMPL segmented_sort_in_place_impl
