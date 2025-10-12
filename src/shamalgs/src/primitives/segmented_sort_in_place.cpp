@@ -81,6 +81,7 @@ namespace shamalgs::primitives::details {
         std::vector<T> buf_stdvec       = buf.copy_to_stdvec();
         std::vector<u32> offsets_stdvec = offsets.copy_to_stdvec();
 
+        #pragma omp parallel for
         for (u32 i = 0; i < N; ++i) {
             u32 start_index = offsets_stdvec[i];
             u32 end_index   = offsets_stdvec[i + 1];
@@ -90,7 +91,7 @@ namespace shamalgs::primitives::details {
 
             // skip empty ranges to avoid unnecessary work
             if (start_index == end_index) {
-                return;
+                continue;
             }
 
             // if there is no interactions at the end of the offset list
