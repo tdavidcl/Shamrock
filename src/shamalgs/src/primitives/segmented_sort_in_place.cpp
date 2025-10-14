@@ -175,6 +175,15 @@ namespace shamalgs::primitives {
     template<class T, class Comp>
     void internal_segmented_sort_in_place(
         sham::DeviceBuffer<T> &buf, const sham::DeviceBuffer<u32> &offsets, Comp &&comp) {
+
+        if (buf.get_size() == 0) {
+            return;
+        }
+
+        if (offsets.get_size() == 0) {
+            throw shambase::make_except_with_loc<std::invalid_argument>("offsets buffer is empty");
+        }
+
         switch (impl::segmented_sort_in_place_impl) {
         case impl::SEGMENTED_SORT_IN_PLACE_IMPL::LOCAL_INSERTION_SORT:
             details::segmented_sort_in_place_local_insertion_sort(buf, offsets, comp);
