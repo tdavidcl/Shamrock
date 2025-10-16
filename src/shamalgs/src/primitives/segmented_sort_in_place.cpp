@@ -14,6 +14,7 @@
  */
 
 #include "shamalgs/primitives/segmented_sort_in_place.hpp"
+#include "shambase/alg_primitives.hpp"
 #include "shambase/assert.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
@@ -55,16 +56,7 @@ namespace shamalgs::primitives::details {
                 SHAM_ASSERT(start_index < interact_count);
                 SHAM_ASSERT(end_index <= interact_count); // see the for loop for this one
 
-                // simple insertion sort between those indexes
-                for (u32 i = start_index + 1; i < end_index; ++i) {
-                    auto key = in_out_sorted[i];
-                    u32 j    = i;
-                    while (j > start_index && comp(key, in_out_sorted[j - 1])) {
-                        in_out_sorted[j] = in_out_sorted[j - 1];
-                        --j;
-                    }
-                    in_out_sorted[j] = key;
-                }
+                shambase::ptr_insert_sort(in_out_sorted, start_index, end_index, comp);
             });
     }
 

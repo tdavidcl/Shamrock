@@ -7,8 +7,13 @@
 //
 // -------------------------------------------------------//
 
+#include "shambase/alg_primitives.hpp"
+#include "shambase/integer.hpp"
 #include "shamalgs/primitives/mock_vector.hpp"
 #include "shamalgs/primitives/segmented_sort_in_place.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/kernel_call.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamtest/shamtest.hpp"
 #include <algorithm>
@@ -189,8 +194,22 @@ TestStart(
         current_impl.impl_name, current_impl.params);
 }
 
+template<int I, int ArrSize>
+struct OddEvenTransposeSortT {
+    template<typename K, typename Comp>
+    inline static void Sort(K *keys, const bool *segment_boundary, Comp comp) {
+#pragma unroll
+        for (int i = 1 & I; i < ArrSize - 1; i += 2)
+            if (!segment_boundary[i] && comp(keys[i + 1], keys[i])) {
+                std::swap(keys[i], keys[i + 1]);
+            }
+        OddEvenTransposeSortT<I + 1, ArrSize>::Sort(keys, segment_boundary, comp);
+    }
+};
+
 TestStart(Unittest, "test_segsort", tmptest, 1) {
     auto sched = shamsys::instance::get_compute_scheduler_ptr();
+    auto &q    = sched->get_queue();
 
     std::vector<u32> data    = {41, 67, 34, 0, 39, 24, 78, 58, 62, 64, 5, 81, 45, 27, 61, 91};
     std::vector<u32> offsets = {0, 5, 10, 13, 16};
@@ -201,9 +220,7 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
     sham::DeviceBuffer<u32> offsets_buf(offsets.size(), sched);
     offsets_buf.copy_from_stdvec(offsets);
 
-    auto print_array = [](const std::vector<u32> &arr,
-                          std::vector<u32> &offsets,
-                          bool with_header) {
+    auto print_array = [](const auto &arr, std::vector<u32> &offsets, bool with_header) {
         std::string acc = "";
         std::vector<bool> is_offset(arr.size(), false);
         for (u32 i = 0; i < offsets.size(); i++) {
@@ -217,7 +234,7 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
         }
 
         for (u32 i = 0; i < arr.size(); i++) {
-            acc += shambase::format("{:4}", arr[i]);
+            acc += shambase::format("{:4}", static_cast<u64>(arr[i]));
         }
         acc += "\n";
         for (u32 i = 0; i < arr.size(); i++) {
@@ -233,5 +250,59 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
 
     print_array(data, offsets, true);
 
-    //
+    sham::DeviceBuffer<u8> head_flags(data.size(), sched);
+    head_flags.fill(0);
+    sham::kernel_call(
+        q,
+        sham::MultiRef{offsets_buf},
+        sham::MultiRef{head_flags},
+        offsets_buf.get_size() - 1,
+        [=](u32 gid, const u32 *__restrict__ offsets, u8 *__restrict__ head_flags) {
+            u32 seg_start = offsets[gid];
+            if (seg_start > 0) {
+                head_flags[seg_start - 1] = 1;
+            }
+        });
+
+    logger::raw_ln("head_flags:");
+    print_array(head_flags.copy_to_stdvec(), offsets, true);
+
+    // block sort groups of n elems in each segs
+    static constexpr u32 group_size = 3;
+    u32 group_count                 = shambase::group_count(data_buf.get_size(), group_size);
+    sham::kernel_call(
+        q,
+        sham::MultiRef{head_flags},
+        sham::MultiRef{data_buf},
+        group_count,
+        [sz = data_buf.get_size()](
+            u32 gid, const u8 *__restrict__ head_flags, u32 *__restrict__ data) {
+            std::array<u32, group_size> data_array;
+            for (u32 i = 0; i < group_size; i++) {
+                u32 idx       = gid * group_size + i;
+                data_array[i] = (idx < sz) ? data[idx] : 0;
+            }
+            std::array<u8, group_size> head_flags_array;
+            for (u32 i = 0; i < group_size; i++) {
+                u32 idx             = gid * group_size + i;
+                head_flags_array[i] = (idx < sz) ? head_flags[idx] : 1_u8;
+            }
+
+            shambase::odd_even_transpose_sort_segment_flags<u32, group_size>(
+                data_array.data(), head_flags_array.data(), [](u32 a, u32 b) {
+                    return a < b;
+                });
+
+            for (u32 i = 0; i < group_size; i++) {
+                u32 idx = gid * group_size + i;
+                if (idx < sz) {
+                    data[idx] = data_array[i];
+                }
+            }
+        });
+
+    data = data_buf.copy_to_stdvec();
+
+    logger::raw_ln("data after block sort:");
+    print_array(data, offsets, true);
 }
