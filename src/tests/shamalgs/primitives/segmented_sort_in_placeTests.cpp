@@ -188,3 +188,50 @@ TestStart(
     shamalgs::primitives::impl::set_impl_segmented_sort_in_place(
         current_impl.impl_name, current_impl.params);
 }
+
+TestStart(Unittest, "test_segsort", tmptest, 1) {
+    auto sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    std::vector<u32> data    = {41, 67, 34, 0, 39, 24, 78, 58, 62, 64, 5, 81, 45, 27, 61, 91};
+    std::vector<u32> offsets = {0, 5, 10, 13, 16};
+
+    sham::DeviceBuffer<u32> data_buf(data.size(), sched);
+    data_buf.copy_from_stdvec(data);
+
+    sham::DeviceBuffer<u32> offsets_buf(offsets.size(), sched);
+    offsets_buf.copy_from_stdvec(offsets);
+
+    auto print_array = [](const std::vector<u32> &arr,
+                          std::vector<u32> &offsets,
+                          bool with_header) {
+        std::string acc = "";
+        std::vector<bool> is_offset(arr.size(), false);
+        for (u32 i = 0; i < offsets.size(); i++) {
+            is_offset[offsets[i]] = true;
+        }
+        if (with_header) {
+            for (u32 i = 0; i < arr.size(); i++) {
+                acc += shambase::format("{:4}", i);
+            }
+            acc += "\n--------------------------------------------------------------------------\n";
+        }
+
+        for (u32 i = 0; i < arr.size(); i++) {
+            acc += shambase::format("{:4}", arr[i]);
+        }
+        acc += "\n";
+        for (u32 i = 0; i < arr.size(); i++) {
+            if (is_offset[i]) {
+                acc += shambase::format("{:>4}", "^");
+            } else {
+                acc += shambase::format("{:4}", " ");
+            }
+        }
+        acc += "\n";
+        shambase::println(acc);
+    };
+
+    print_array(data, offsets, true);
+
+    //
+}
