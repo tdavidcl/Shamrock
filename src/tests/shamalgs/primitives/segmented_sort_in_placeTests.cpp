@@ -9,6 +9,8 @@
 
 #include "shambase/alg_primitives.hpp"
 #include "shambase/integer.hpp"
+#include "shambase/term_colors.hpp"
+#include "shamalgs/primitives/mock_value.hpp"
 #include "shamalgs/primitives/mock_vector.hpp"
 #include "shamalgs/primitives/segmented_sort_in_place.hpp"
 #include "shambackends/DeviceBuffer.hpp"
@@ -194,25 +196,22 @@ TestStart(
         current_impl.impl_name, current_impl.params);
 }
 
-template<int I, int ArrSize>
-struct OddEvenTransposeSortT {
-    template<typename K, typename Comp>
-    inline static void Sort(K *keys, const bool *segment_boundary, Comp comp) {
-#pragma unroll
-        for (int i = 1 & I; i < ArrSize - 1; i += 2)
-            if (!segment_boundary[i] && comp(keys[i + 1], keys[i])) {
-                std::swap(keys[i], keys[i + 1]);
-            }
-        OddEvenTransposeSortT<I + 1, ArrSize>::Sort(keys, segment_boundary, comp);
-    }
-};
-
 TestStart(Unittest, "test_segsort", tmptest, 1) {
     auto sched = shamsys::instance::get_compute_scheduler_ptr();
     auto &q    = sched->get_queue();
 
-    std::vector<u32> data    = {41, 67, 34, 0, 39, 24, 78, 58, 62, 64, 5, 81, 45, 27, 61, 91};
-    std::vector<u32> offsets = {0, 5, 10, 13, 16};
+    // generate a
+    std::vector<u32> data = shamalgs::primitives::mock_vector<u32>(0x123, 128, 0, 99);
+    std::vector<u32> offsets{};
+    u32 ptr = 0;
+
+    std::mt19937 eng(0x123);
+    while (ptr < data.size()) {
+        offsets.push_back(ptr);
+        ptr += shamalgs::primitives::mock_value(eng, 1, 64);
+    }
+
+    offsets.push_back(data.size());
 
     sham::DeviceBuffer<u32> data_buf(data.size(), sched);
     data_buf.copy_from_stdvec(data);
@@ -220,35 +219,45 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
     sham::DeviceBuffer<u32> offsets_buf(offsets.size(), sched);
     offsets_buf.copy_from_stdvec(offsets);
 
-    auto print_array = [](const auto &arr, std::vector<u32> &offsets, bool with_header) {
+    auto print_array = [](const auto &arr,
+                          std::vector<u32> &offsets,
+                          std::optional<int> color_grouping = std::nullopt,
+                          u32 print_per_line                = 16) {
         std::string acc = "";
         std::vector<bool> is_offset(arr.size(), false);
         for (u32 i = 0; i < offsets.size(); i++) {
             is_offset[offsets[i]] = true;
         }
-        if (with_header) {
-            for (u32 i = 0; i < arr.size(); i++) {
-                acc += shambase::format("{:4}", i);
+
+        for (u32 i = 0; i < arr.size(); i += print_per_line) {
+
+            acc += shambase::format("\n{:4} : ", i);
+            for (u32 j = i; (j < i + print_per_line) && (j < arr.size()); j++) {
+                if (color_grouping) {
+                    std::string color = (j / color_grouping.value()) % 2 == 0
+                                            ? shambase::term_colors::col8b_red()
+                                            : shambase::term_colors::col8b_green();
+                    acc += color + shambase::format("{:4}", static_cast<u64>(arr[j]))
+                           + shambase::term_colors::reset();
+                } else {
+                    acc += shambase::format("{:4}", static_cast<u64>(arr[j]));
+                }
             }
-            acc += "\n--------------------------------------------------------------------------\n";
+            acc += "\n       ";
+            for (u32 j = i; (j < i + print_per_line) && (j < arr.size()); j++) {
+                if (is_offset[j]) {
+                    acc += shambase::format("{:>4}", "^");
+                } else {
+                    acc += shambase::format("{:4}", " ");
+                }
+            }
         }
 
-        for (u32 i = 0; i < arr.size(); i++) {
-            acc += shambase::format("{:4}", static_cast<u64>(arr[i]));
-        }
-        acc += "\n";
-        for (u32 i = 0; i < arr.size(); i++) {
-            if (is_offset[i]) {
-                acc += shambase::format("{:>4}", "^");
-            } else {
-                acc += shambase::format("{:4}", " ");
-            }
-        }
         acc += "\n";
         shambase::println(acc);
     };
 
-    print_array(data, offsets, true);
+    print_array(data, offsets);
 
     sham::DeviceBuffer<u8> head_flags(data.size(), sched);
     head_flags.fill(0);
@@ -265,36 +274,36 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
         });
 
     logger::raw_ln("head_flags:");
-    print_array(head_flags.copy_to_stdvec(), offsets, true);
+    print_array(head_flags.copy_to_stdvec(), offsets);
 
     // block sort groups of n elems in each segs
-    static constexpr u32 group_size = 3;
-    u32 group_count                 = shambase::group_count(data_buf.get_size(), group_size);
+    static constexpr u32 cluster_size = 4;
+    u32 cluster_count                 = shambase::group_count(data_buf.get_size(), cluster_size);
     sham::kernel_call(
         q,
         sham::MultiRef{head_flags},
         sham::MultiRef{data_buf},
-        group_count,
+        cluster_count,
         [sz = data_buf.get_size()](
             u32 gid, const u8 *__restrict__ head_flags, u32 *__restrict__ data) {
-            std::array<u32, group_size> data_array;
-            for (u32 i = 0; i < group_size; i++) {
-                u32 idx       = gid * group_size + i;
+            std::array<u32, cluster_size> data_array;
+            for (u32 i = 0; i < cluster_size; i++) {
+                u32 idx       = gid * cluster_size + i;
                 data_array[i] = (idx < sz) ? data[idx] : 0;
             }
-            std::array<u8, group_size> head_flags_array;
-            for (u32 i = 0; i < group_size; i++) {
-                u32 idx             = gid * group_size + i;
+            std::array<u8, cluster_size> head_flags_array;
+            for (u32 i = 0; i < cluster_size; i++) {
+                u32 idx             = gid * cluster_size + i;
                 head_flags_array[i] = (idx < sz) ? head_flags[idx] : 1_u8;
             }
 
-            shambase::odd_even_transpose_sort_segment_flags<u32, group_size>(
+            shambase::odd_even_transpose_sort_segment_flags<u32, cluster_size>(
                 data_array.data(), head_flags_array.data(), [](u32 a, u32 b) {
                     return a < b;
                 });
 
-            for (u32 i = 0; i < group_size; i++) {
-                u32 idx = gid * group_size + i;
+            for (u32 i = 0; i < cluster_size; i++) {
+                u32 idx = gid * cluster_size + i;
                 if (idx < sz) {
                     data[idx] = data_array[i];
                 }
@@ -303,6 +312,65 @@ TestStart(Unittest, "test_segsort", tmptest, 1) {
 
     data = data_buf.copy_to_stdvec();
 
-    logger::raw_ln("data after block sort:");
-    print_array(data, offsets, true);
+    logger::raw_ln("data after block sort private mem:");
+    print_array(data, offsets, cluster_size);
+
+    static constexpr u32 cluster_per_group = 4;
+
+    sham::kernel_call_hndl(
+        q,
+        sham::MultiRef{head_flags},
+        sham::MultiRef{data_buf},
+        cluster_count,
+        [sz = data_buf.get_size()](
+            u32 cluster_count, const u8 *__restrict__ head_flags, u32 *__restrict__ data) {
+            return [=](sycl::handler &cgh) {
+
+                u32 wg_count = shambase::group_count(cluster_count, cluster_per_group);
+                u32 wg_size = cluster_per_group * cluster_size;
+
+                sycl::local_accessor<u32, 1> val_buf(cluster_per_group*cluster_size, cgh);
+                sycl::local_accessor<u8, 1> flag_buf(cluster_per_group*cluster_size, cgh);
+
+                cgh.parallel_for(sycl::nd_range<1>{wg_size, cluster_per_group}, [=](sycl::nd_item<1> item) {
+                    
+                    u32 gid = item.get_global_linear_id();
+                    u32 lid = item.get_local_linear_id();
+
+                    u32 * val_ptr = &(val_buf[0]);
+                    u8 * flag_ptr = &(flag_buf[0]);
+
+                    u32 * local_val_ptr = val_ptr + lid * cluster_size;
+                    u8 * local_flag_ptr = flag_ptr + lid * cluster_size;
+
+                    for (u32 i = 0; i < cluster_size; i++) {
+                        u32 idx = gid * cluster_size + i;
+                        if (idx < sz) {
+                            local_val_ptr[i] = data[idx];
+                            local_flag_ptr[i] = head_flags[idx];
+                        }
+                    }
+
+                    item.barrier(sycl::access::fence_space::local_space);
+
+                    // Record the first and last occurrence of head flags in this segment.
+                    int blockEnd, blockStart;
+
+
+                    item.barrier(sycl::access::fence_space::local_space);
+
+                    // copy back to global memory
+                    for (u32 i = 0; i < cluster_size; i++) {
+                        u32 idx = gid * cluster_size + i;
+                        if (idx < sz) {
+                            data[idx] = local_val_ptr[i];
+                        }
+                    }
+
+                });
+            };
+        });
+
+    logger::raw_ln("data after block sort local mem:");
+    print_array(data_buf.copy_to_stdvec(), offsets, cluster_size*cluster_per_group);
 }
