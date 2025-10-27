@@ -19,6 +19,58 @@ jobs:
     strategy:
       matrix:
         include:
+
+          ##########################################################################################
+          # Ubuntu
+          ##########################################################################################
+          - machine: debian-generic.acpp
+            args: --backend omp
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20llvm15
+            runson: ubuntu-latest
+            imagename: Ubuntu 20 LLVM 15
+            runtest: yes
+            runtestpy: yes
+            mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
+
+          - machine: debian-generic.acpp
+            args: --backend generic
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20llvm15
+            runson: ubuntu-latest
+            imagename: Ubuntu 20 LLVM 15
+            runtest: yes
+            runtestpy: yes
+            mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
+
+          - machine: debian-generic.acpp
+            args: --backend cuda.explicit-multipass --arch sm_80
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20llvm15cuda11
+            runson: ubuntu-latest
+            imagename: Ubuntu 20 LLVM 15 CUDA 11
+            runtest: yes
+            runtestpy: yes
+            mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
+
+          - machine: debian-generic.acpp
+            args: --backend cuda.integrated-multipass --arch sm_80
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20llvm15cuda11
+            runson: ubuntu-latest
+            imagename: Ubuntu 20 LLVM 15 CUDA 11
+            runtest: yes
+            runtestpy: yes
+            mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
+
+          - machine: debian-generic.acpp
+            args: --backend hip --arch gfx906
+            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu20llvm15rocm543
+            runson: ubuntu-latest
+            imagename: Ubuntu 20 LLVM 15 ROCM 5.4.3
+            runtest: yes
+            runtestpy: yes
+            mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
+
+          ##########################################################################################
+          # Arch Linux
+          ##########################################################################################
           - machine: archlinux.acpp
             args: --backend generic
             container: archlinux/archlinux:base-devel
@@ -28,6 +80,9 @@ jobs:
             runtestpy: yes
             mpiargs: --allow-run-as-root --bind-to socket:overload-allowed --oversubscribe
 
+          ##########################################################################################
+          # MacOS
+          ##########################################################################################
           - machine: macos-generic.acpp
             runson: macos-14
             imagename: MacOS-14
