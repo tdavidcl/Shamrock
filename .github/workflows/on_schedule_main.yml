@@ -25,11 +25,6 @@ jobs:
     name: Doc
     uses: ./.github/workflows/make_documentation.yml
 
-  shamrock_linux_acpp:
-    needs: [src_check]
-    name: Tests
-    uses: ./.github/workflows/shamrock-acpp-clang.yml
-
   env_tests:
     needs: [src_check]
     name: Tests

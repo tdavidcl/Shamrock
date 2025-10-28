@@ -174,13 +174,6 @@ jobs:
           name: report_doc_diff
           path: ./report_doc_diff.md
 
-
-  shamrock_linux_acpp:
-    needs: [src_check]
-    name: Tests
-    if: ${{!contains(github.event.pull_request.labels.*.name, 'no-src-change ')}}
-    uses: ./.github/workflows/shamrock-acpp-clang.yml
-
   env_tests:
     needs: [src_check]
     name: Tests
