@@ -251,9 +251,13 @@ def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
 # Mass moments
 # ^^^^^^^^^^^^
 
-
 # %%
-# This is a helper to plot the situation
+# .. raw:: html
+#
+#   <details>
+#   <summary><a>def plot_mass_moment_case(box_B_center,box_B_size,x_j):</a></summary>
+#
+
 def plot_mass_moment_case(box_B_center,box_B_size,x_j):
     box_B = shamrock.math.AABB_f64_3(
             (
@@ -271,7 +275,7 @@ def plot_mass_moment_case(box_B_center,box_B_size,x_j):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-    draw_arrow(ax, box_B_center, x_j, "black", "$x_j - s_B$")
+    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
 
     ax.scatter(
             box_B_center[0], box_B_center[1], box_B_center[2], color="black", label="box_B_center"
@@ -293,7 +297,10 @@ def plot_mass_moment_case(box_B_center,box_B_size,x_j):
     ax.set_zlabel("Z")
     return ax
 
-
+# %%
+# .. raw:: html
+#
+#   </details>
 
 # %%
 # Let's start with the following 
@@ -333,7 +340,7 @@ plt.show()
 Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
 Q_n_B *= m_j
 
-print(Q_n_B)
+print("Q_n_B =",Q_n_B)
 
 # %%
 # Now if we take a displacment that is only along the x axis we get null components in the Q_n_B if for cases that do not only exhibit x
@@ -354,7 +361,7 @@ plt.show()
 Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
 Q_n_B *= m_j
 
-print(Q_n_B)
+print("Q_n_B =",Q_n_B)
 
 
 # %%
@@ -363,188 +370,442 @@ print(Q_n_B)
 # ^^^^^^^^^^^^^^^^^^^^^
 
 # %%
+# .. raw:: html
+#
+#   <details>
+#   <summary><a>def plot_mass_moment_case(box_B_center,box_B_size,x_j):</a></summary>
+#
+def plot_grav_moment_case(box_A_center,box_A_size,box_B_center,box_B_size,x_j):
+    box_A = shamrock.math.AABB_f64_3(
+            (
+                box_A_center[0] - box_A_size / 2,
+                box_A_center[1] - box_A_size / 2,
+                box_A_center[2] - box_A_size / 2,
+            ),
+            (
+                box_A_center[0] + box_A_size / 2,
+                box_A_center[1] + box_A_size / 2,
+                box_A_center[2] + box_A_size / 2,
+            ),
+        )
 
-def run_fmm(p_i, p_j, box_1_center, box_2_center, order=4, do_print=False):
+    box_B = shamrock.math.AABB_f64_3(
+            (
+                box_B_center[0] - box_B_size / 2,
+                box_B_center[1] - box_B_size / 2,
+                box_B_center[2] - box_B_size / 2,
+            ),
+            (
+                box_B_center[0] + box_B_size / 2,
+                box_B_center[1] + box_B_size / 2,
+                box_B_center[2] + box_B_size / 2,
+            ),
+        )
 
-    # %%
-    # Compute the mass moment of box_1
-    delta_1 = (p_i[0] - box_1_center[0], p_i[1] - box_1_center[1], p_i[2] - box_1_center[2])
-    delta_r = (
-        box_1_center[0] - box_2_center[0],
-        box_1_center[1] - box_2_center[1],
-        box_1_center[2] - box_2_center[2],
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
+
+    draw_arrow(ax, box_A_center, box_B_center, "purple", "$r = s_B - s_A$")
+
+    ax.scatter(
+            box_A_center[0], box_A_center[1], box_A_center[2], color="black", label="box_A_center"
+        )
+    
+    ax.scatter(
+            box_B_center[0], box_B_center[1], box_B_center[2], color="green", label="box_B_center"
+        )
+
+    ax.scatter(
+        x_j[0], x_j[1], x_j[2], color="red", label="$x_j$"
     )
-    delta_2_j = (p_j[0] - box_2_center[0], p_j[1] - box_2_center[1], p_j[2] - box_2_center[2])
-
-    # such that p_i - p_j = delta_1 + delta_r - delta_2_j
-
-    if do_print:
-        print("delta_1 =", delta_1)
-
-    if order == 0:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_0.from_vec(delta_1)
-    elif order == 1:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_1.from_vec(delta_1)
-    elif order == 2:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_2.from_vec(delta_1)
-    elif order == 3:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_3.from_vec(delta_1)
-    elif order == 4:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_4.from_vec(delta_1)
-    elif order == 5:
-        Q_n_1 = shamrock.math.SymTensorCollection_f64_0_5.from_vec(delta_1)
-    else:
-        raise ValueError("Invalid order")
-
-    Q_n_1 *= m_i
-    if do_print:
-        print("Q_n_1 =", Q_n_1)
-
-    # %%
-    # Green function from box_1 to box_2
-    # delta_r = (box_2_center[0] - box_1_center[0], box_2_center[1] - box_1_center[1], box_2_center[2] - box_1_center[2])
-
-    if order == 0:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_1(delta_r)
-    elif order == 1:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_2(delta_r)
-    elif order == 2:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_3(delta_r)
-    elif order == 3:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_4(delta_r)
-    elif order == 4:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_5(delta_r)
-    else:
-        raise ValueError("Invalid order")
-
-    if do_print:
-        print("D_n =", D_n)
-
-    D_n *= -1
-
-    # %%
-    # Gravitational moment of box_1 on box_2
-    if order == 0:
-        dM_n = shamrock.phys.get_dM_mat_0(D_n, Q_n_1)
-    elif order == 1:
-        dM_n = shamrock.phys.get_dM_mat_1(D_n, Q_n_1)
-    elif order == 2:
-        dM_n = shamrock.phys.get_dM_mat_2(D_n, Q_n_1)
-    elif order == 3:
-        dM_n = shamrock.phys.get_dM_mat_3(D_n, Q_n_1)
-    elif order == 4:
-        dM_n = shamrock.phys.get_dM_mat_4(D_n, Q_n_1)
-    else:
-        raise ValueError("Invalid order")
-
-    if do_print:
-        print("dM_n =", dM_n)
-
-    # %%
-    # Local displacement moment of p_j in box_2
-    if order == 0:
-        Aj_n_2 = shamrock.math.SymTensorCollection_f64_0_0.from_vec(delta_2_j)
-    elif order == 1:
-        Aj_n_2 = shamrock.math.SymTensorCollection_f64_0_1.from_vec(delta_2_j)
-    elif order == 2:
-        Aj_n_2 = shamrock.math.SymTensorCollection_f64_0_2.from_vec(delta_2_j)
-    elif order == 3:
-        Aj_n_2 = shamrock.math.SymTensorCollection_f64_0_3.from_vec(delta_2_j)
-    elif order == 4:
-        Aj_n_2 = shamrock.math.SymTensorCollection_f64_0_4.from_vec(delta_2_j)
-    else:
-        raise ValueError("Invalid order")
-
-    if do_print:
-        print("Aj_n_2 =", Aj_n_2)
-
-    # %%
-    # FMM force on p_j
-    if order == 0:
-        force_j = shamrock.phys.contract_grav_moment_to_force_1(Aj_n_2, dM_n)
-    elif order == 1:
-        force_j = shamrock.phys.contract_grav_moment_to_force_2(Aj_n_2, dM_n)
-    elif order == 2:
-        force_j = shamrock.phys.contract_grav_moment_to_force_3(Aj_n_2, dM_n)
-    elif order == 3:
-        force_j = shamrock.phys.contract_grav_moment_to_force_4(Aj_n_2, dM_n)
-    elif order == 4:
-        force_j = shamrock.phys.contract_grav_moment_to_force_5(Aj_n_2, dM_n)
-    else:
-        raise ValueError("Invalid order")
-
-    return (force_j[0], force_j[1], force_j[2])
 
 
-def analytic_force_j(p_i, p_j, box_1_center, box_2_center):
-    force_j_direct = (p_i[0] - p_j[0], p_i[1] - p_j[1], p_i[2] - p_j[2])
-    force_j_direct /= np.linalg.norm(force_j_direct) ** 3
-    force_j_direct *= m_i
-    return force_j_direct
+    draw_aabb(ax, box_A, "blue",0.1)
+    draw_aabb(ax, box_B, "red",0.1)
+
+    center_view = (0.5, 0.0, 0.0)
+    view_size = 2.0
+    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
+    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
+    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    return ax
+
+# %%
+# .. raw:: html
+#
+#   </details>
+
+# %%
+# Let's now show the example of a gravitational moment, for the following case
+s_B = (0,0,0)
+s_A = (1,0,0)
+
+box_B_size = 0.5
+box_A_size = 0.5
+
+x_j = (0.2,0.2,0.0)
+m_j = 1
+
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+r = (s_B[0] - s_A[0],s_B[1] - s_A[1],s_B[2] - s_A[2])
+
+ax = plot_grav_moment_case(s_A, box_A_size, s_B,box_B_size,x_j)
+plt.title(f"Grav moment illustration")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+# %%
+# The mass moment :math:`{Q_n^B}` is 
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+Q_n_B *= m_j
+print("Q_n_B =",Q_n_B)
+
+# %%
+# The green function n'th gradients :math:`D_{n+k+1}` are
+D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+print("D_n =",D_n)
+
+# %%
+# And finally the gravitational moments :math:`dM_{p,k}` are 
+dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+print("dM_k =",dM_k)
+
+# %%
+# 
+# From Gravitational moments to force
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# %%
+# .. raw:: html
+#
+#   <details>
+#   <summary><a>def plot_fmm_case(box_A_center,box_A_size,x_i,box_B_center,box_B_size,x_j, f_i_fmm, f_i_exact):</a></summary>
+#
+def plot_fmm_case(box_A_center,box_A_size,x_i,box_B_center,box_B_size,x_j, f_i_fmm, f_i_exact, fscale_fact):
+    box_A = shamrock.math.AABB_f64_3(
+            (
+                box_A_center[0] - box_A_size / 2,
+                box_A_center[1] - box_A_size / 2,
+                box_A_center[2] - box_A_size / 2,
+            ),
+            (
+                box_A_center[0] + box_A_size / 2,
+                box_A_center[1] + box_A_size / 2,
+                box_A_center[2] + box_A_size / 2,
+            ),
+        )
+
+    box_B = shamrock.math.AABB_f64_3(
+            (
+                box_B_center[0] - box_B_size / 2,
+                box_B_center[1] - box_B_size / 2,
+                box_B_center[2] - box_B_size / 2,
+            ),
+            (
+                box_B_center[0] + box_B_size / 2,
+                box_B_center[1] + box_B_size / 2,
+                box_B_center[2] + box_B_size / 2,
+            ),
+        )
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
+    draw_arrow(ax, box_A_center, x_i, "blue", "$a_i = x_i - s_A$")
+
+    draw_arrow(ax, box_A_center, box_B_center, "purple", "$r = s_B - s_A$")
+
+    ax.scatter(
+            box_A_center[0], box_A_center[1], box_A_center[2], color="black", label="box_A_center"
+        )
+    
+    ax.scatter(
+            box_B_center[0], box_B_center[1], box_B_center[2], color="green", label="box_B_center"
+        )
+
+    ax.scatter(
+        x_i[0], x_i[1], x_i[2], color="orange", label="$x_i$"
+    )
+
+    ax.scatter(
+        x_j[0], x_j[1], x_j[2], color="red", label="$x_j$"
+    )
+
+
+    draw_arrow(ax, x_i, x_i + force_i * fscale_fact, "green", "$f_i$")
+    draw_arrow(ax, x_i, x_i + force_i_exact * fscale_fact, "red", "$f_i$ (exact)")
+
+    abs_error = np.linalg.norm(force_i - force_i_exact)
+    rel_error = abs_error / np.linalg.norm(force_i_exact)
+
+    draw_aabb(ax, box_A, "blue",0.1)
+    draw_aabb(ax, box_B, "red",0.1)
+
+    center_view = (0.5, 0.0, 0.0)
+    view_size = 2.0
+    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
+    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
+    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+
+    return ax, rel_error,abs_error
 
 
 # %%
-# A first example
-m_i = 1.0
-m_j = 1.0
+# .. raw:: html
+#
+#   </details>
 
-p_i = (0.0, 0.0, 0.0)
-p_j = (2.0, 0.0, 0.0)
 
-box_1_center = (0.0, 0.5, 0.0)
-box_2_center = (2.0, 0.5, 0.2)
+# %%
+# Now let's put everything together to get a FMM force
+# We start with the following parameters (see figure below for the representation)
 
-box_1_size = 1.0
-box_2_size = 1.0
+s_B = (0,0,0)
+s_A = (1,0,0)
 
-order = 4
+box_B_size = 0.5
+box_A_size = 0.5
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
+x_j = (0.2,0.2,0.0)
+x_i = (1.2,0.2,0.0)
+m_j = 1
+m_i = 1
 
-force_j = run_fmm(p_i, p_j, box_1_center, box_2_center, order=order, do_print=True)
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+r = (s_B[0] - s_A[0],s_B[1] - s_A[1],s_B[2] - s_A[2])
+a_i = (x_i[0] - s_A[0],x_i[1] - s_A[1],x_i[2] - s_A[2])
 
-draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size)
+# %%
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+Q_n_B *= m_j
+print("Q_n_B =",Q_n_B)
 
-force_j_direct = analytic_force_j(p_i, p_j, box_1_center, box_2_center)
+# %%
+D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+print("D_n =",D_n)
 
-p_i = np.array(p_i)
-p_j = np.array(p_j)
-force_j = np.array(force_j)
-force_j_direct = np.array(force_j_direct)
+# %%
+dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+print("dM_k =",dM_k)
 
-print("force_j =", force_j)
-print("force_j_direct =", force_j_direct)
-abs_error = np.linalg.norm(force_j - force_j_direct)
-rel_error = abs_error / np.linalg.norm(force_j_direct)
+# %%
+a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
+print("a_k =",a_k)
+
+# %%
+result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+Gconst = 1 # let's just set the grav constant to 1
+force_i = -Gconst * np.array(result)
+print("force_i =",force_i)
+
+# %%
+# Now we just need the analytical force to compare
+def analytic_force_i(x_i, x_j, Gconst):
+    force_i_direct = (x_j[0] - x_i[0], x_j[1] - x_i[1], x_j[2] - x_i[2])
+    force_i_direct /= np.linalg.norm(force_i_direct) ** 3
+    force_i_direct *= m_i
+    return force_i_direct
+
+force_i_exact = analytic_force_i(x_i,x_j,Gconst)
+print("force_i_exact =",force_i_exact)
+
+# %%
+# This yields the following case
+ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.5)
+
+plt.title(f"FMM, rel error={rel_error}")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+print("force_i =", force_i)
+print("force_i_exact =", force_i_exact)
 print("abs error =", abs_error)
 print("rel error =", rel_error)
 
-draw_arrow(ax, p_j, p_j + force_j * 3, "green", "force_j")
-draw_arrow(ax, p_j, p_j + force_j_direct * 3, "red", "force_j_direct")
-
-plt.title(f"FMM order = {order}, rel error = {rel_error}")
-
-plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
-
-plt.show()
-
+# %%
+# And yeah the error is insanelly low, but it is the special case where :math:`a_i = b_j`.
+# Anyway now let's wrap all of that mess into a function that does it all and see how the error
+# changes depending on the configure and order of the expansion.
 
 # %%
-# Sweeping through FMM orders
+# FMM in box
+# ^^^^^^^^^^
+# The following is the function to do the same as above but for whatever order
+
+def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
+
+    b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+    r = (s_B[0] - s_A[0],s_B[1] - s_A[1],s_B[2] - s_A[2])
+    a_i = (x_i[0] - s_A[0],x_i[1] - s_A[1],x_i[2] - s_A[2])
+
+    if do_print:
+        print("x_i =",x_i)
+        print("x_j =",x_j)
+        print("s_A =",s_A)
+        print("s_B =",s_B)
+        print("b_j =",b_j)
+        print("r =",r)
+        print("a_i =",a_i)
+
+    # compute the tensor product of the displacment
+    if order == 0:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_0.from_vec(b_j)
+    elif order == 1:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_1.from_vec(b_j)
+    elif order == 2:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
+    elif order == 3:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
+    elif order == 4:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+    elif order == 5:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+    else:
+        raise ValueError("Invalid order")
+
+    # multiply by mass to get the mass moment
+    Q_n_B *= m_j
+
+    if do_print:
+        print("Q_n_B =",Q_n_B)
+
+    # green function gradients
+    if order == 0:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_1(r)
+    elif order == 1:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_2(r)
+    elif order == 2:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_3(r)
+    elif order == 3:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_4(r)
+    elif order == 4:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("D_n =",D_n)
+
+    if order == 0:
+        dM_k = shamrock.phys.get_dM_mat_0(D_n, Q_n_B)
+    elif order == 1:
+        dM_k = shamrock.phys.get_dM_mat_1(D_n, Q_n_B)
+    elif order == 2:
+        dM_k = shamrock.phys.get_dM_mat_2(D_n, Q_n_B)
+    elif order == 3:
+        dM_k = shamrock.phys.get_dM_mat_3(D_n, Q_n_B)
+    elif order == 4:
+        dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("dM_k =",dM_k)
+
+    if order == 0:
+        a_k = shamrock.math.SymTensorCollection_f64_0_0.from_vec(a_i)
+    elif order == 1:
+        a_k = shamrock.math.SymTensorCollection_f64_0_1.from_vec(a_i)
+    elif order == 2:
+        a_k = shamrock.math.SymTensorCollection_f64_0_2.from_vec(a_i)
+    elif order == 3:
+        a_k = shamrock.math.SymTensorCollection_f64_0_3.from_vec(a_i)
+    elif order == 4:
+        a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
+    else:
+        raise ValueError("Invalid order")
+        
+    if do_print:
+        print("a_k =",a_k)
+
+
+    if order == 0:
+        result = shamrock.phys.contract_grav_moment_to_force_1(a_k, dM_k)
+    elif order == 1:
+        result = shamrock.phys.contract_grav_moment_to_force_2(a_k, dM_k)
+    elif order == 2:
+        result = shamrock.phys.contract_grav_moment_to_force_3(a_k, dM_k)
+    elif order == 3:
+        result = shamrock.phys.contract_grav_moment_to_force_4(a_k, dM_k)
+    elif order == 4:
+        result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+    else:
+        raise ValueError("Invalid order")
+        
+    Gconst = 1 # let's just set the grav constant to 1
+    force_i = -Gconst * np.array(result)
+    if do_print:
+        print("force_i =",force_i)
+
+    force_i_exact = analytic_force_i(x_i,x_j,Gconst)
+    if do_print:
+        print("force_i_exact =",force_i_exact)
+
+    
+    b_A_size = np.linalg.norm(np.array(s_A) - np.array(x_i))
+    b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+    b_dist = np.linalg.norm(np.array(s_A) - np.array(s_B))
+
+    angle = (b_A_size + b_B_size) / b_dist
+
+    if do_print:
+        print("b_A_size =",b_A_size)
+        print("b_B_size =",b_B_size)
+        print("b_dist =",b_dist)
+        print("angle =",angle)
+
+    return force_i, force_i_exact, angle
+
+# %%
+# Let's try with some new parameters
+s_B = (0,0,0)
+s_A = (1,0,0)
+
+box_B_size = 0.5
+box_A_size = 0.5
+
+x_j = (0.2,0.2,0.0)
+x_i = (1.2,0.2,0.2)
+m_j = 1
+m_i = 1
+
+force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order=4, do_print=True)
+ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.5)
+
+plt.title(f"FMM angle={angle:.5f} rel error={rel_error:.2e}")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+print("force_i =", force_i)
+print("force_i_exact =", force_i_exact)
+print("abs error =", abs_error)
+print("rel error =", rel_error)
+
+# %%
+# Varying the order of the expansion
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 # sphinx_gallery_multi_image = "single"
 
-m_i = 1.0
-m_j = 1.0
+s_B = (0,0,0)
+s_A = (1,0,0)
 
-p_i = (0.0, 0.0, 0.0)
-p_j = (2.0, 0.0, 0.0)
+box_B_size = 0.5
+box_A_size = 0.5
 
-box_1_center = (0.0, 0.5, 0.0)
-box_2_center = (2.0, 0.5, 0.2)
-
-box_1_size = 1.0
-box_2_size = 1.0
+x_j = (0.2,0.2,0.0)
+x_i = (0.8,0.2,0.2)
+m_j = 1
+m_i = 1
 
 
 for order in range(1, 4):
@@ -552,92 +813,54 @@ for order in range(1, 4):
     print(f"Running FMM order = {order}")
     print("--------------------------------")
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order, do_print=True)
+    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.3)
 
-    force_j = run_fmm(p_i, p_j, box_1_center, box_2_center, order=order, do_print=True)
+    plt.title(f"FMM order={order} angle={angle:.5f} rel error={rel_error:.2e}")
+    plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+    plt.show()
 
-    draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size)
-
-    # Direct force on p_j for comparison
-    force_j_direct = analytic_force_j(p_i, p_j, box_1_center, box_2_center)
-
-    p_i = np.array(p_i)
-    p_j = np.array(p_j)
-    force_j = np.array(force_j)
-    force_j_direct = np.array(force_j_direct)
-
-    print("force_j =", force_j)
-    print("force_j_direct =", force_j_direct)
-    abs_error = np.linalg.norm(force_j - force_j_direct)
-    rel_error = abs_error / np.linalg.norm(force_j_direct)
+    print("force_i =", force_i)
+    print("force_i_exact =", force_i_exact)
     print("abs error =", abs_error)
     print("rel error =", rel_error)
-
-    draw_arrow(ax, p_j, p_j + force_j * 3, "green", "force_j")
-    draw_arrow(ax, p_j, p_j + force_j_direct * 3, "red", "force_j_direct")
-
-    plt.title(f"FMM order = {order}, rel error = {rel_error}")
-
-    plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
-
-
-plt.show()
 
 
 # %%
-# Sweeping through opening angles
-m_i = 1.0
-m_j = 1.0
+# Sweeping through angles
+# ^^^^^^^^^^^^^^^^^^^^^^^
 
-p_i_rel = (0.0, -0.5, 0.0)
-p_j = (2.0, 0.0, 0.0)
+s_B = (0,0,0)
+s_A_all = [(0.8,0,0),(1,0,0),(1.2,0,0)]
 
-box_1_centers = [(-1.0, 0.5, 0.0), (0.0, 0.5, 0.0), (0.5, 0.5, 0.0)]
-box_2_center = (2.0, 0.5, 0.2)
+box_B_size = 0.5
+box_A_size = 0.5
 
-box_1_size = 1.0
-box_2_size = 1.0
-order = 4
+x_j = (0.2,0.2,0.0)
+x_i = (0.8,0.2,0.2)
+m_j = 1
+m_i = 1
 
-for box_1_center in box_1_centers:
+order=2
+
+for s_A in s_A_all:
     print("--------------------------------")
-    print(f"Running FMM order = {order} for box_1_center = {box_1_center}")
+    print(f"Running FMM s_a = {s_A}")
     print("--------------------------------")
 
-    p_i = (p_i_rel[0] + box_1_center[0], p_i_rel[1] + box_1_center[1], p_i_rel[2] + box_1_center[2])
+    force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order, do_print=True)
+    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.3)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    plt.title(f"FMM order={order} angle={angle:.5f} rel error={rel_error:.2e}")
+    plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+    plt.show()
 
-    force_j = run_fmm(p_i, p_j, box_1_center, box_2_center, order=order, do_print=True)
-
-    draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size)
-
-    # Direct force on p_j for comparison
-    force_j_direct = analytic_force_j(p_i, p_j, box_1_center, box_2_center)
-
-    p_i = np.array(p_i)
-    p_j = np.array(p_j)
-    force_j = np.array(force_j)
-    force_j_direct = np.array(force_j_direct)
-
-    print("force_j =", force_j)
-    print("force_j_direct =", force_j_direct)
-    abs_error = np.linalg.norm(force_j - force_j_direct)
-    rel_error = abs_error / np.linalg.norm(force_j_direct)
+    print("force_i =", force_i)
+    print("force_i_exact =", force_i_exact)
     print("abs error =", abs_error)
     print("rel error =", rel_error)
 
-    draw_arrow(ax, p_j, p_j + force_j * 3, "green", "force_j")
-    draw_arrow(ax, p_j, p_j + force_j_direct * 3, "red", "force_j_direct")
 
-    plt.title(f"FMM order = {order}, rel error = {rel_error}")
-
-    plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
-
-
-plt.show()
 
 
 # %%
@@ -652,24 +875,24 @@ for order in range(1, 5):
     # set seed
     np.random.seed(111)
 
-    N = 1000
+    N = 50000
 
     # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
-    p_i = []
+    x_i_all = []
     for i in range(N):
-        p_i.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
+        x_i_all.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
 
-    # same for p_j
-    p_j = []
+    # same for x_j
+    x_j_all = []
     for i in range(N):
-        p_j.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
+        x_j_all.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
 
-    box_scale_fact = 0.01
+    box_scale_fact_all = np.linspace(0,0.1,N).tolist()
 
     # same for box_1_center
-    box_1_centers = []
-    for p in p_i:
-        box_1_centers.append(
+    s_A_all = []
+    for p,box_scale_fact in zip(x_i_all,box_scale_fact_all):
+        s_A_all.append(
             (
                 p[0] + box_scale_fact * np.random.uniform(-1, 1),
                 p[1] + box_scale_fact * np.random.uniform(-1, 1),
@@ -678,9 +901,9 @@ for order in range(1, 5):
         )
 
     # same for box_2_center
-    box_2_centers = []
-    for p in p_j:
-        box_2_centers.append(
+    s_B_all = []
+    for p,box_scale_fact in zip(x_j_all,box_scale_fact_all):
+        s_B_all.append(
             (
                 p[0] + box_scale_fact * np.random.uniform(-1, 1),
                 p[1] + box_scale_fact * np.random.uniform(-1, 1),
@@ -691,41 +914,27 @@ for order in range(1, 5):
     angles = []
     rel_errors = []
 
-    for p_i, p_j, box_1_center, box_2_center in zip(p_i, p_j, box_1_centers, box_2_centers):
+    for x_i, x_j, s_A, s_B in zip(x_i_all, x_j_all, s_A_all, s_B_all):
 
-        # print(f"p_i = {p_i}")
-        # print(f"p_j = {p_j}")
-        # print(f"box_1_center = {box_1_center}")
-        # print(f"box_2_center = {box_2_center}")
+        force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order, do_print=False)
+        
+        abs_error = np.linalg.norm(force_i - force_i_exact)
+        rel_error = abs_error / np.linalg.norm(force_i_exact)
 
-        force_j = run_fmm(p_i, p_j, box_1_center, box_2_center, order=order, do_print=False)
-        force_j_direct = analytic_force_j(p_i, p_j, box_1_center, box_2_center)
-        abs_error = np.linalg.norm(force_j - force_j_direct)
-        rel_error = abs_error / np.linalg.norm(force_j_direct)
+        b_A_size = np.linalg.norm(np.array(s_A) - np.array(x_i))
+        b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+        b_dist = np.linalg.norm(np.array(s_A) - np.array(s_B))
+        angle = (b_A_size + b_B_size) / b_dist
 
-        p_i = np.array(p_i)
-        p_j = np.array(p_j)
-        box_1_center = np.array(box_1_center)
-        box_2_center = np.array(box_2_center)
-        force_j = np.array(force_j)
-        force_j_direct = np.array(force_j_direct)
-
-        b_i_size = np.linalg.norm(box_1_center - p_i)
-        b_j_size = np.linalg.norm(box_2_center - p_j)
-
-        b_dist = np.linalg.norm(box_1_center - box_2_center)
-
-        angle = (b_i_size + b_j_size) / b_dist
-
-        if angle > 1.0:
+        if angle > 5.0 or angle < 1e-4:
             continue
 
         angles.append(angle)
         rel_errors.append(rel_error)
 
-        print(f"angle = {angle}, rel error = {rel_error}")
+    print(f"Computed for {len(angles)} cases")
 
-    plt.plot(angles, rel_errors, "o", label=f"FMM order = {order}")
+    plt.scatter(angles, rel_errors, s=1, label=f"FMM order = {order}")
 
 plt.xlabel("Angle")
 plt.ylabel("Relative Error")
@@ -735,3 +944,4 @@ plt.title("FMM precision")
 plt.legend()
 plt.grid()
 plt.show()
+
