@@ -598,18 +598,16 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
         print("a_i =",a_i)
 
     # compute the tensor product of the displacment
-    if order == 0:
+    if order == 1:
         Q_n_B = shamrock.math.SymTensorCollection_f64_0_0.from_vec(b_j)
-    elif order == 1:
-        Q_n_B = shamrock.math.SymTensorCollection_f64_0_1.from_vec(b_j)
     elif order == 2:
-        Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_1.from_vec(b_j)
     elif order == 3:
-        Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
     elif order == 4:
-        Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
     elif order == 5:
-        Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
     else:
         raise ValueError("Invalid order")
 
@@ -620,15 +618,15 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
         print("Q_n_B =",Q_n_B)
 
     # green function gradients
-    if order == 0:
+    if order == 1:
         D_n = shamrock.phys.green_func_grav_cartesian_1_1(r)
-    elif order == 1:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_2(r)
     elif order == 2:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_3(r)
+        D_n = shamrock.phys.green_func_grav_cartesian_1_2(r)
     elif order == 3:
-        D_n = shamrock.phys.green_func_grav_cartesian_1_4(r)
+        D_n = shamrock.phys.green_func_grav_cartesian_1_3(r)
     elif order == 4:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_4(r)
+    elif order == 5:
         D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
     else:
         raise ValueError("Invalid order")
@@ -636,15 +634,15 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
     if do_print:
         print("D_n =",D_n)
 
-    if order == 0:
+    if order == 1:
         dM_k = shamrock.phys.get_dM_mat_0(D_n, Q_n_B)
-    elif order == 1:
-        dM_k = shamrock.phys.get_dM_mat_1(D_n, Q_n_B)
     elif order == 2:
-        dM_k = shamrock.phys.get_dM_mat_2(D_n, Q_n_B)
+        dM_k = shamrock.phys.get_dM_mat_1(D_n, Q_n_B)
     elif order == 3:
-        dM_k = shamrock.phys.get_dM_mat_3(D_n, Q_n_B)
+        dM_k = shamrock.phys.get_dM_mat_2(D_n, Q_n_B)
     elif order == 4:
+        dM_k = shamrock.phys.get_dM_mat_3(D_n, Q_n_B)
+    elif order == 5:
         dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
     else:
         raise ValueError("Invalid order")
@@ -652,15 +650,15 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
     if do_print:
         print("dM_k =",dM_k)
 
-    if order == 0:
+    if order == 1:
         a_k = shamrock.math.SymTensorCollection_f64_0_0.from_vec(a_i)
-    elif order == 1:
-        a_k = shamrock.math.SymTensorCollection_f64_0_1.from_vec(a_i)
     elif order == 2:
-        a_k = shamrock.math.SymTensorCollection_f64_0_2.from_vec(a_i)
+        a_k = shamrock.math.SymTensorCollection_f64_0_1.from_vec(a_i)
     elif order == 3:
-        a_k = shamrock.math.SymTensorCollection_f64_0_3.from_vec(a_i)
+        a_k = shamrock.math.SymTensorCollection_f64_0_2.from_vec(a_i)
     elif order == 4:
+        a_k = shamrock.math.SymTensorCollection_f64_0_3.from_vec(a_i)
+    elif order == 5:
         a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
     else:
         raise ValueError("Invalid order")
@@ -669,15 +667,15 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
         print("a_k =",a_k)
 
 
-    if order == 0:
+    if order == 1:
         result = shamrock.phys.contract_grav_moment_to_force_1(a_k, dM_k)
-    elif order == 1:
-        result = shamrock.phys.contract_grav_moment_to_force_2(a_k, dM_k)
     elif order == 2:
-        result = shamrock.phys.contract_grav_moment_to_force_3(a_k, dM_k)
+        result = shamrock.phys.contract_grav_moment_to_force_2(a_k, dM_k)
     elif order == 3:
-        result = shamrock.phys.contract_grav_moment_to_force_4(a_k, dM_k)
+        result = shamrock.phys.contract_grav_moment_to_force_3(a_k, dM_k)
     elif order == 4:
+        result = shamrock.phys.contract_grav_moment_to_force_4(a_k, dM_k)
+    elif order == 5:
         result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
     else:
         raise ValueError("Invalid order")
@@ -719,7 +717,7 @@ x_i = (1.2,0.2,0.2)
 m_j = 1
 m_i = 1
 
-force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order=4, do_print=True)
+force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order=5, do_print=True)
 ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.5)
 
 plt.title(f"FMM angle={angle:.5f} rel error={rel_error:.2e}")
@@ -749,7 +747,7 @@ m_j = 1
 m_i = 1
 
 
-for order in range(1, 5):
+for order in range(2, 6):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
@@ -782,7 +780,7 @@ x_i = (0.8,0.2,0.2)
 m_j = 1
 m_i = 1
 
-order=2
+order=3
 
 for s_A in s_A_all:
     print("--------------------------------")
@@ -808,7 +806,7 @@ for s_A in s_A_all:
 # Testing the precision
 
 plt.figure()
-for order in range(1, 5):
+for order in range(2, 6):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
@@ -881,7 +879,7 @@ def plot_powerlaw(order,center_y):
     X = [1e-3,1e-2/3, 1e-1]
     Y = [center_y*(x)**order for x in X]
     plt.plot(X,Y,linestyle='dashed', color="black")
-    bbox = dict(boxstyle='round', fc='blanchedalmond', ec='orange', alpha=0.7)
+    bbox = dict(boxstyle='round', fc='blanchedalmond', ec='orange', alpha=0.9)
     plt.text(X[1],Y[1],f"$\\propto x^{order}$", fontsize=9,bbox=bbox)
 
 plot_powerlaw(2,1)
