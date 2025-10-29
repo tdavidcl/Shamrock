@@ -1,12 +1,17 @@
 """
-Illustation of the math behind the Fast Multipole Method (FMM)
-==============================================================
+FMM math demo in python
+=======================
 
 This example shows how to use the FMM maths to compute the force between two points
 """
 
 # %%
 # As always, we start by importing the necessary libraries
+import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
+
+import shamrock
 
 # %%
 # Utilities
@@ -14,17 +19,14 @@ This example shows how to use the FMM maths to compute the force between two poi
 # You can ignore this first block, it just contains some utility functions to draw the AABB and the arrows
 # We only defines the function `draw_aabb` and `draw_arrow`, which are used to draw the AABB and the arrows in the plots
 # and the function `draw_box_pair`, which is used to draw the box pair with all the vectors needed to compute the FMM force
+
 # %%
 # .. raw:: html
 #
 #   <details>
 #   <summary><a>Click here to expand the utility code</a></summary>
 #
-import matplotlib.pyplot as plt
-import numpy as np
-from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
-import shamrock
 
 
 def draw_aabb(ax, aabb, color, alpha):
@@ -168,8 +170,10 @@ def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
 
 
 # %%
+# 
 # FMM force computation
 # ^^^^^^^^^^^^^^^^^^^^^
+#
 # Let's start by assuming that we have two particles at positions :math:`\mathbf{x}_i` and
 # :math:`\mathbf{x}_j` contained in two boxes (:math:`A` and :math:`B`) whose centers are at positions
 # :math:`\mathbf{s}_a` and :math:`\mathbf{s}_b` respectively.
@@ -198,7 +202,7 @@ def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
 # and the force exerted onto particle :math:`i` is:
 #
 # .. math::
-#    f_i = -\nabla_i \Phi (\mathbf{x}_i) &= \int - \nabla_i \frac{\mathcal{G} \rho(\mathbf{x}_j)}{\vert\vert\mathbf{x}_i - \mathbf{x}_j\vert\vert} d\mathbf{x}_j \\
+#    \mathbf{f}_i = -\nabla_i \Phi (\mathbf{x}_i) &= \int - \nabla_i \frac{\mathcal{G} \rho(\mathbf{x}_j)}{\vert\vert\mathbf{x}_i - \mathbf{x}_j\vert\vert} d\mathbf{x}_j \\
 #    &= \mathcal{G} \int \rho(\mathbf{x}_j) \nabla_i G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
 #    &= -\mathcal{G} \int \rho(\mathbf{x}_j) \nabla_j G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j
 #
@@ -210,6 +214,8 @@ def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
 #
 # where :math:`D_{n} = \nabla^{(n)}_r G(\mathbf{r})` is the n-th order derivative of the Green
 # function and the operator :math:`\mathbf{a}_i^{(k)}` is the tensor product of :math:`k` :math:`\mathbf{a}_i` vectors.
+
+# %%
 #
 # Similarly the gradient of the green function is:
 #
@@ -221,30 +227,142 @@ def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
 #
 # .. math::
 #    \Phi_i &= - \mathcal{G} \int \rho(\mathbf{x}_j) G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
-#    &= - \mathcal{G} \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k} \cdot \underbrace{\int \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{M_k} \\
+#    &= - \mathcal{G} \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k} \cdot \underbrace{\int \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{M_{p,k}} \\
 #
 # .. math::
-#    f_i &= -\mathcal{G} \int \rho(\mathbf{x}_j) \nabla_j G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
-#    &= -\mathcal{G}  \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k+1} \cdot  \underbrace{\int \rho(\mathbf{x}_j)\mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{dM_k}
+#    \mathbf{f}_i &= -\mathcal{G} \int \rho(\mathbf{x}_j) \nabla_j G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
+#    &= -\mathcal{G}  \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k+1} \cdot  \underbrace{\int \rho(\mathbf{x}_j)\mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{dM_{p,k} = M_{p+1,k+1}}
 #
 
-# This is the direct force between the two particles.
+# %%
 #
-# The basic idea of the FMM is to decompose the force between two particles into 3 components:
-#
-# - The mass moment associated to the position of part p_i in box_1
-# - The green function derivatives associated to the distance between the centers of the boxes
-# - The local displacement moment associated to the position of part p_j in box_2
-#
-# The FMM force is computed as follows:
+# As one can tell sadly the two expressions while similar do not share the same terms.
+# 
+# I will not go in this rabit hole of using the same expansion for both now but the idea is to 
+# use the primitive of the force which is the same expansion as the force but with the primitive 
+# of :math:`\mathbf{a}_i^{(k)}` instead.
 #
 # .. math::
-#    G(\mathbf{x}_i - \mathbf{x}_j) = G(\mathbf{r} + \mathbf{b}_j - \mathbf{a}_i)
-#
-# where :math:`\mathbf{r}` is the distance between the centers of the boxes, :math:`\mathbf{a}_i` is the position of the particle in box_1, and :math:`\mathbf{b}_j` is the position of the particle in box_2.
-#
-# The FMM force is computed as follows:
+#    \Phi_i  = - \int \mathbf{f}_i =  -\mathcal{G}  \sum_{k = 0}^p \frac{(-1)^k}{k!} \int\mathbf{a}_i^{(k)} \cdot {M_{p+1,k+1}}
+#   
 
+# %%
+# 
+# Mass moments
+# ^^^^^^^^^^^^
+
+
+# %%
+# This is a helper to plot the situation
+def plot_mass_moment_case(box_B_center,box_B_size,x_j):
+    box_B = shamrock.math.AABB_f64_3(
+            (
+                box_B_center[0] - box_B_size / 2,
+                box_B_center[1] - box_B_size / 2,
+                box_B_center[2] - box_B_size / 2,
+            ),
+            (
+                box_B_center[0] + box_B_size / 2,
+                box_B_center[1] + box_B_size / 2,
+                box_B_center[2] + box_B_size / 2,
+            ),
+        )
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_arrow(ax, box_B_center, x_j, "black", "$x_j - s_B$")
+
+    ax.scatter(
+            box_B_center[0], box_B_center[1], box_B_center[2], color="black", label="box_B_center"
+        )
+
+    ax.scatter(
+        x_j[0], x_j[1], x_j[2], color="red", label="$x_j$"
+    )
+
+    draw_aabb(ax, box_B, "blue",0.2)
+
+    center_view = (0.0, 0.0, 0.0)
+    view_size = 2.0
+    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
+    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
+    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    return ax
+
+
+
+# %%
+# Let's start with the following 
+
+s_B = (0,0,0)
+box_B_size = 1
+
+x_j = (0.2,0.2,0.2)
+m_j = 1
+
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+
+ax = plot_mass_moment_case(s_B,box_B_size,x_j)
+plt.title(f"Mass moment illustration")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+
+# %%
+# Here the mass moment of a set of particles (here only one) of mass :math:`m_j` is
+#
+# .. math::
+#    {Q_n^B} &= \int \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)} d\mathbf{x}_j\\
+#            &= \sum_j m_j \mathbf{b}_j^{(n)}
+# 
+# In Shamrock python bindings the function 
+
+# %%
+# .. code-block::
+# 
+#        shamrock.math.SymTensorCollection_f64_<low order>_<high order>.from_vec(b_j)
+
+# %%
+# will return the collection of symetrical tensors :math:`\mathbf{b}_j^{(n)}` for n in between `<low order>` and `<high order>`
+# Here are the values of the tensors :math:`{Q_n^B}` from order 0 up to 5 using shamrock symmetrical tensor collections
+
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+Q_n_B *= m_j
+
+print(Q_n_B)
+
+# %%
+# Now if we take a displacment that is only along the x axis we get null components in the Q_n_B if for cases that do not only exhibit x
+
+s_B = (0,0,0)
+box_B_size = 1
+
+x_j = (0.5,0.0,0.0)
+m_j = 1
+
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+
+ax = plot_mass_moment_case(s_B,box_B_size,x_j)
+plt.title(f"Mass moment illustration")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+Q_n_B *= m_j
+
+print(Q_n_B)
+
+
+# %%
+# 
+# Gravitational moments
+# ^^^^^^^^^^^^^^^^^^^^^
+
+# %%
 
 def run_fmm(p_i, p_j, box_1_center, box_2_center, order=4, do_print=False):
 
