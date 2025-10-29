@@ -89,7 +89,7 @@ def draw_aabb(ax, aabb, color, alpha):
     ax.add_collection3d(edge_collection)
 
 
-def draw_arrow(ax, p1, p2, color, label, arr_scale=0.2):
+def draw_arrow(ax, p1, p2, color, label, arr_scale=0.1):
     length = np.linalg.norm(np.array(p2) - np.array(p1))
     arrow_length_ratio = arr_scale / length
     ax.quiver(
@@ -103,65 +103,6 @@ def draw_arrow(ax, p1, p2, color, label, arr_scale=0.2):
         label=label,
         arrow_length_ratio=arrow_length_ratio,
     )
-
-
-def draw_box_pair(ax, box_1_center, box_2_center, box_1_size, box_2_size):
-
-    box_1 = shamrock.math.AABB_f64_3(
-        (
-            box_1_center[0] - box_1_size / 2,
-            box_1_center[1] - box_1_size / 2,
-            box_1_center[2] - box_1_size / 2,
-        ),
-        (
-            box_1_center[0] + box_1_size / 2,
-            box_1_center[1] + box_1_size / 2,
-            box_1_center[2] + box_1_size / 2,
-        ),
-    )
-    box_2 = shamrock.math.AABB_f64_3(
-        (
-            box_2_center[0] - box_2_size / 2,
-            box_2_center[1] - box_2_size / 2,
-            box_2_center[2] - box_2_size / 2,
-        ),
-        (
-            box_2_center[0] + box_2_size / 2,
-            box_2_center[1] + box_2_size / 2,
-            box_2_center[2] + box_2_size / 2,
-        ),
-    )
-
-    ax.scatter(p_i[0], p_i[1], p_i[2], color="red", label="p_i")
-    ax.scatter(p_j[0], p_j[1], p_j[2], color="blue", label="p_j")
-
-    ax.scatter(
-        box_1_center[0], box_1_center[1], box_1_center[2], color="black", label="box_1_center"
-    )
-    ax.scatter(
-        box_2_center[0], box_2_center[1], box_2_center[2], color="black", label="box_2_center"
-    )
-
-    draw_aabb(ax, box_1, "b", 0.1)
-    draw_aabb(ax, box_2, "r", 0.1)
-
-    center_view = (1.0, 0.0, 0.0)
-    view_size = 3.0
-    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
-    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
-    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
-
-    # arrow from p_i to center of box_1
-    draw_arrow(ax, box_1_center, p_i, "black", "p_i <- box_1")
-    draw_arrow(ax, box_2_center, p_j, "black", "p_j <- box_2")
-
-    # arrow from center of box_1 to center of box_2
-    draw_arrow(ax, box_1_center, box_2_center, "black", "box_1 -> box_2")
-
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-
 
 # %%
 # .. raw:: html
@@ -808,13 +749,13 @@ m_j = 1
 m_i = 1
 
 
-for order in range(1, 4):
+for order in range(1, 5):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
 
     force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order, do_print=True)
-    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.3)
+    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.2)
 
     plt.title(f"FMM order={order} angle={angle:.5f} rel error={rel_error:.2e}")
     plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
@@ -849,7 +790,7 @@ for s_A in s_A_all:
     print("--------------------------------")
 
     force_i, force_i_exact,angle = run_fmm(x_i, x_j, s_A, s_B,m_j, order, do_print=True)
-    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.3)
+    ax, rel_error,abs_error = plot_fmm_case(s_A, box_A_size, x_i, s_B,box_B_size,x_j, force_i, force_i_exact,0.2)
 
     plt.title(f"FMM order={order} angle={angle:.5f} rel error={rel_error:.2e}")
     plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
@@ -936,12 +877,24 @@ for order in range(1, 5):
 
     plt.scatter(angles, rel_errors, s=1, label=f"FMM order = {order}")
 
+def plot_powerlaw(order,center_y):
+    X = [1e-3,1e-2/3, 1e-1]
+    Y = [center_y*(x)**order for x in X]
+    plt.plot(X,Y,linestyle='dashed', color="black")
+    bbox = dict(boxstyle='round', fc='blanchedalmond', ec='orange', alpha=0.7)
+    plt.text(X[1],Y[1],f"$\\propto x^{order}$", fontsize=9,bbox=bbox)
+
+plot_powerlaw(2,1)
+plot_powerlaw(3,1)
+plot_powerlaw(4,1)
+plot_powerlaw(5,1)
+
 plt.xlabel("Angle")
 plt.ylabel("Relative Error")
 plt.xscale("log")
 plt.yscale("log")
 plt.title("FMM precision")
-plt.legend()
+plt.legend(loc="lower right")
 plt.grid()
 plt.show()
 
