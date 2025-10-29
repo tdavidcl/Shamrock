@@ -320,10 +320,11 @@ Register_pymod(shamphyslibinit) {
     shamphys_module.def("get_M_mat_2", &shamphys::get_M_mat<f64, 0, 2>);
     shamphys_module.def("get_M_mat_1", &shamphys::get_M_mat<f64, 0, 1>);
     shamphys_module.def("get_M_mat_0", &shamphys::get_M_mat<f64, 0, 0>);
-    shamphys_module.def("get_dM_mat_4", &shamphys::get_dM_mat<f64, 4>);
-    shamphys_module.def("get_dM_mat_3", &shamphys::get_dM_mat<f64, 3>);
-    shamphys_module.def("get_dM_mat_2", &shamphys::get_dM_mat<f64, 2>);
-    shamphys_module.def("get_dM_mat_1", &shamphys::get_dM_mat<f64, 1>);
+    shamphys_module.def("get_dM_mat_5", &shamphys::get_dM_mat<f64, 4>);
+    shamphys_module.def("get_dM_mat_4", &shamphys::get_dM_mat<f64, 3>);
+    shamphys_module.def("get_dM_mat_3", &shamphys::get_dM_mat<f64, 2>);
+    shamphys_module.def("get_dM_mat_2", &shamphys::get_dM_mat<f64, 1>);
+    shamphys_module.def("get_dM_mat_1", &shamphys::get_dM_mat<f64, 0>);
 
     shamcomm::logs::debug_ln("[Py]", "registering shamrock.phys.contract_grav_moment_to_force");
     shamphys_module.def(

@@ -413,7 +413,7 @@ print("D_n =",D_n)
 
 # %%
 # And finally the gravitational moments :math:`dM_{p,k}` are 
-dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
 print("dM_k =",dM_k)
 
 # %%
@@ -535,7 +535,7 @@ D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
 print("D_n =",D_n)
 
 # %%
-dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
 print("dM_k =",dM_k)
 
 # %%
@@ -635,15 +635,15 @@ def run_fmm(x_i, x_j, s_A, s_B, m_j, order, do_print):
         print("D_n =",D_n)
 
     if order == 1:
-        dM_k = shamrock.phys.get_dM_mat_0(D_n, Q_n_B)
-    elif order == 2:
         dM_k = shamrock.phys.get_dM_mat_1(D_n, Q_n_B)
-    elif order == 3:
+    elif order == 2:
         dM_k = shamrock.phys.get_dM_mat_2(D_n, Q_n_B)
-    elif order == 4:
+    elif order == 3:
         dM_k = shamrock.phys.get_dM_mat_3(D_n, Q_n_B)
-    elif order == 5:
+    elif order == 4:
         dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+    elif order == 5:
+        dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
     else:
         raise ValueError("Invalid order")
 
@@ -747,7 +747,7 @@ m_j = 1
 m_i = 1
 
 
-for order in range(2, 6):
+for order in range(1, 6):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
@@ -806,7 +806,7 @@ for s_A in s_A_all:
 # Testing the precision
 
 plt.figure()
-for order in range(2, 6):
+for order in range(1, 6):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
@@ -882,6 +882,7 @@ def plot_powerlaw(order,center_y):
     bbox = dict(boxstyle='round', fc='blanchedalmond', ec='orange', alpha=0.9)
     plt.text(X[1],Y[1],f"$\\propto x^{order}$", fontsize=9,bbox=bbox)
 
+plot_powerlaw(1,1)
 plot_powerlaw(2,1)
 plot_powerlaw(3,1)
 plot_powerlaw(4,1)
