@@ -18,6 +18,7 @@
 #include "shambase/time.hpp"
 #include "shammath/symtensor_collections.hpp"
 #include "shamphys/fmm/GreenFuncGravCartesian.hpp"
+#include "shamphys/fmm/contract_grav_moment.hpp"
 #include "shamphys/fmm/grav_moments.hpp"
 #include "shamphys/fmm/offset_multipole.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -117,6 +118,13 @@ class FMM_prec_eval {
     static T eval_prec_fmm_force(
         sycl::vec<T, 3> xi, sycl::vec<T, 3> xj, sycl::vec<T, 3> sa, sycl::vec<T, 3> sb) {
 
+        logger::raw_ln("--------------------------------");
+        logger::raw_ln("Order =", order);
+        logger::raw_ln("xi =", xi);
+        logger::raw_ln("xj =", xj);
+        logger::raw_ln("sa =", sa);
+        logger::raw_ln("sb =", sb);
+
         using namespace shammath;
         f64 m_j = 1;
 
@@ -142,6 +150,9 @@ class FMM_prec_eval {
 
                 auto B_n = moment_types::from_vec(bj);
 
+                logger::raw_ln("bj =", bj);
+                logger::raw_ln("B_n =", py::str(py::cast(B_n)).cast<std::string>());
+
                 B_n *= m_j;
 
                 B_n.store(multipoles, 0);
@@ -157,13 +168,20 @@ class FMM_prec_eval {
 
             f64_3 a_i = xi - sa;
 
-            auto a_k = SymTensorCollection<f64, 0, order>::from_vec(a_i);
+            auto a_k = SymTensorCollection<f64, 0, order - 1>::from_vec(a_i);
 
             auto Q_n = moment_types::load(multipoles, 0);
 
             auto D_n = shamphys::GreenFuncGravCartesian<f64, 1, order>::get_der_tensors(r_fmm);
 
             auto dM_k = shamphys::get_dM_mat(D_n, Q_n);
+
+            logger::raw_ln("r_fmm =", r_fmm);
+            logger::raw_ln("a_i =", a_i);
+            logger::raw_ln("a_k =", py::str(py::cast(a_k)).cast<std::string>());
+            logger::raw_ln("Q_n =", py::str(py::cast(Q_n)).cast<std::string>());
+            logger::raw_ln("D_n =", py::str(py::cast(D_n)).cast<std::string>());
+            logger::raw_ln("dM_k =", py::str(py::cast(dM_k)).cast<std::string>());
 
             auto tensor_to_sycl = [](SymTensor3d_1<T> a) {
                 return sycl::vec<T, 3>{a.v_0, a.v_1, a.v_2};
@@ -183,6 +201,11 @@ class FMM_prec_eval {
                 force_val += tensor_to_sycl(dM_k.t5 * a_k.t4);
             }
 
+            f64_3 force_val_t = shamphys::contract_grav_moment_to_force<f64, order>(a_k, dM_k);
+            force_val         = force_val_t;
+            logger::raw_ln("force_val_t =", force_val_t);
+            logger::raw_ln("force_val =", force_val);
+
             // printf("contrib phi : %e %e %e %e %e %e\n",phi_0,phi_1,phi_2,phi_3,phi_4,phi_5);
 
             f64_3 real_r = xi - xj;
@@ -199,13 +222,6 @@ class FMM_prec_eval {
 
 TestStart(ValidationTest, "models/generic/fmm/precision", fmm_prec, 1) {
 
-    std::mt19937 eng(0x1111);
-
-    std::uniform_real_distribution<f64> distf64(-1, 1);
-
-    f64 avg_spa = 1e-2;
-    std::uniform_real_distribution<f64> distf64_red(-avg_spa, avg_spa);
-
     struct Entry {
         f64 angle;
         f64 result_pot_5;
@@ -220,6 +236,60 @@ TestStart(ValidationTest, "models/generic/fmm/precision", fmm_prec, 1) {
         f64 result_force_2;
         f64 result_force_1;
     };
+
+    {
+        f64_3 x_j(0.22434035123523732, -0.6618604913087272, -0.1278819612576596);
+        f64_3 x_i(0.5385249450462457, -0.4093493911942476, -0.7016740857210204);
+        f64_3 s_b(0.21478991772612055, -0.663456001463436, -0.1331083184327307);
+        f64_3 s_a(0.5352780688840215, -0.39953514190163003, -0.70691955664302);
+
+        auto dist_func = [](f64_3 a, f64_3 b) {
+            f64_3 d = a - b;
+
+            f64_3 dabs = sycl::fabs(d);
+
+            return sycl::max(sycl::max(dabs.x(), dabs.y()), dabs.z());
+        };
+
+        f64 angle = 2 * (dist_func(x_i, s_a) + dist_func(x_j, s_b)) / dist_func(s_a, s_b);
+
+        Entry e{
+            angle,
+            FMM_prec_eval<f64, 5>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 4>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 3>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 2>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 1>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 0>::eval_prec_fmm_pot(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 5>::eval_prec_fmm_force(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 4>::eval_prec_fmm_force(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 3>::eval_prec_fmm_force(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 2>::eval_prec_fmm_force(x_i, x_j, s_a, s_b),
+            FMM_prec_eval<f64, 1>::eval_prec_fmm_force(x_i, x_j, s_a, s_b)};
+
+        logger::raw_ln("angle =", angle);
+        logger::raw_ln("result_pot_5 =", e.result_pot_5);
+        logger::raw_ln("result_pot_4 =", e.result_pot_4);
+        logger::raw_ln("result_pot_3 =", e.result_pot_3);
+        logger::raw_ln("result_pot_2 =", e.result_pot_2);
+        logger::raw_ln("result_pot_1 =", e.result_pot_1);
+        logger::raw_ln("result_pot_0 =", e.result_pot_0);
+        logger::raw_ln("result_force_5 =", e.result_force_5);
+        logger::raw_ln("result_force_4 =", e.result_force_4);
+        logger::raw_ln("result_force_3 =", e.result_force_3);
+        logger::raw_ln("result_force_2 =", e.result_force_2);
+        logger::raw_ln("result_force_1 =", e.result_force_1);
+    }
+
+    return;
+
+    std::mt19937 eng(0x1111);
+
+    std::uniform_real_distribution<f64> distf64(-1, 1);
+
+    f64 avg_spa = 1e-2;
+    std::uniform_real_distribution<f64> distf64_red(-avg_spa, avg_spa);
+
     std::vector<Entry> vec_result;
 
     for (u32 i = 0; i < 1e4; i++) {

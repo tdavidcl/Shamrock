@@ -575,7 +575,18 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 5>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 5>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 5>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 5>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 5>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 5> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_0_5(\n  t0={},\n  t1={},\n  t2={},\n  t3={},\n  t4={},\n  "
+                "t5={}\n)",
+                c.t0,
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>(),
+                py::str(py::cast(c.t4)).cast<std::string>(),
+                py::str(py::cast(c.t5)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 0, 4>
     py::class_<shammath::SymTensorCollection<f64, 0, 4>>(math_module, "SymTensorCollection_f64_0_4")
@@ -600,7 +611,16 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 4>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 4>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 4>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 4>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 4>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 4> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_0_4(\n  t0={},\n  t1={},\n  t2={},\n  t3={},\n  t4={}\n)",
+                c.t0,
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>(),
+                py::str(py::cast(c.t4)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 0, 3>
     py::class_<shammath::SymTensorCollection<f64, 0, 3>>(math_module, "SymTensorCollection_f64_0_3")
@@ -622,7 +642,15 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 3>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 3>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 3>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 3>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 3>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 3> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_0_3(\n  t0={},\n  t1={},\n  t2={},\n  t3={}\n)",
+                c.t0,
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 0, 2>
     py::class_<shammath::SymTensorCollection<f64, 0, 2>>(math_module, "SymTensorCollection_f64_0_2")
@@ -638,7 +666,14 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 2>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 2>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 2>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 2>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 2>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 2> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_0_2(\n  t0={},\n  t1={},\n  t2={}\n)",
+                c.t0,
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 0, 1>
     py::class_<shammath::SymTensorCollection<f64, 0, 1>>(math_module, "SymTensorCollection_f64_0_1")
@@ -649,7 +684,13 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 1>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 1>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 1>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 1>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 1>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 1> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_0_1(\n  t0={},\n  t1={}\n)",
+                c.t0,
+                py::str(py::cast(c.t1)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 0, 0>
     py::class_<shammath::SymTensorCollection<f64, 0, 0>>(math_module, "SymTensorCollection_f64_0_0")
@@ -659,7 +700,10 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 0, 0>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 0, 0>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 0, 0>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 0>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 0, 0>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 0, 0> &c) {
+            return fmt::format("SymTensorCollection_f64_0_0(t0={})", c.t0);
+        });
 
     // SymTensorCollection<f64, 1, 5>
     py::class_<shammath::SymTensorCollection<f64, 1, 5>>(math_module, "SymTensorCollection_f64_1_5")
@@ -684,7 +728,16 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 1, 5>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 1, 5>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 1, 5>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 5>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 5>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 1, 5> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_1_5(\n  t1={},\n  t2={},\n  t3={},\n  t4={},\n  t5={}\n)",
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>(),
+                py::str(py::cast(c.t4)).cast<std::string>(),
+                py::str(py::cast(c.t5)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 1, 4>
     py::class_<shammath::SymTensorCollection<f64, 1, 4>>(math_module, "SymTensorCollection_f64_1_4")
@@ -706,7 +759,15 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 1, 4>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 1, 4>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 1, 4>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 4>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 4>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 1, 4> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_1_4(\n  t1={},\n  t2={},\n  t3={},\n  t4={}\n)",
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>(),
+                py::str(py::cast(c.t4)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 1, 3>
     py::class_<shammath::SymTensorCollection<f64, 1, 3>>(math_module, "SymTensorCollection_f64_1_3")
@@ -725,7 +786,14 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 1, 3>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 1, 3>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 1, 3>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 3>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 3>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 1, 3> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_1_3(\n  t1={},\n  t2={},\n  t3={}\n)",
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>(),
+                py::str(py::cast(c.t3)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 1, 2>
     py::class_<shammath::SymTensorCollection<f64, 1, 2>>(math_module, "SymTensorCollection_f64_1_2")
@@ -739,7 +807,13 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 1, 2>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 1, 2>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 1, 2>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 2>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 2>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 1, 2> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_1_2(\n  t1={},\n  t2={}\n)",
+                py::str(py::cast(c.t1)).cast<std::string>(),
+                py::str(py::cast(c.t2)).cast<std::string>());
+        });
 
     // SymTensorCollection<f64, 1, 1>
     py::class_<shammath::SymTensorCollection<f64, 1, 1>>(math_module, "SymTensorCollection_f64_1_1")
@@ -749,5 +823,10 @@ Register_pymod(pysham_mathinit) {
         .def_static("zeros", &shammath::SymTensorCollection<f64, 1, 1>::zeros)
         .def_static("from_vec", &shammath::SymTensorCollection<f64, 1, 1>::from_vec, py::arg("v"))
         .def("__imul__", &shammath::SymTensorCollection<f64, 1, 1>::operator*=)
-        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 1>::operator+=);
+        .def("__iadd__", &shammath::SymTensorCollection<f64, 1, 1>::operator+=)
+        .def("__repr__", [](const shammath::SymTensorCollection<f64, 1, 1> &c) {
+            return fmt::format(
+                "SymTensorCollection_f64_1_1(\n  t1={}\n)",
+                py::str(py::cast(c.t1)).cast<std::string>());
+        });
 }
