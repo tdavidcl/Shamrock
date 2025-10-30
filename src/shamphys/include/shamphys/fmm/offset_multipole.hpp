@@ -21,19 +21,22 @@
 
 namespace shamphys {
 
-    /// utility to offset a multipole, see PHD
-    template<class T, u32 low_order, u32 high_order>
-    inline shammath::SymTensorCollection<T, low_order, high_order> offset_multipole_delta(
-        const shammath::SymTensorCollection<T, low_order, high_order> &Q,
-        const sycl::vec<T, 3> &offset) {
+    namespace details {
 
-        using namespace shammath;
+        template<class T>
+        shammath::SymTensor3d_1<T> offset_multipole_1(
+            const T &Qt0,
+            const shammath::SymTensor3d_1<T> &Qt1,
+            const shammath::SymTensor3d_1<T> &dt1) {
+            return Qt1 + Qt0 * dt1;
+        }
 
-        if constexpr (low_order == 0 && high_order == 5) {
-            SymTensorCollection<T, 0, 5> d = SymTensorCollection<T, 0, 5>::from_vec(offset);
-
-            auto Qn1 = Q.t1 + Q.t0 * d.t1;
-
+        template<class T>
+        shammath::SymTensor3d_2<T> offset_multipole_2(
+            const shammath::SymTensor3d_1<T> &Qn1,
+            const shammath::SymTensor3d_1<T> &Qt1,
+            const shammath::SymTensor3d_2<T> &Qt2,
+            const shammath::SymTensor3d_1<T> &dt1) {
             // mathematica out
             // auto Qn2 = SymTensor3d_2<T>{
             //     Q.t2.v_00 + 2*Q.t1.v_0*d.t1.v_0 + Q.t0*d.t2.v_00,
@@ -45,13 +48,31 @@ namespace shamphys {
             // };
 
             // symbolic Qn2 : d_\mu Qn1_\nu + Q1_\mu d_\nu + Q2
-            auto Qn2 = SymTensor3d_2<T>{
-                d.t1.v_0 * Qn1.v_0 + Q.t1.v_0 * d.t1.v_0 + Q.t2.v_00,
-                d.t1.v_0 * Qn1.v_1 + Q.t1.v_0 * d.t1.v_1 + Q.t2.v_01,
-                d.t1.v_0 * Qn1.v_2 + Q.t1.v_0 * d.t1.v_2 + Q.t2.v_02,
-                d.t1.v_1 * Qn1.v_1 + Q.t1.v_1 * d.t1.v_1 + Q.t2.v_11,
-                d.t1.v_1 * Qn1.v_2 + Q.t1.v_1 * d.t1.v_2 + Q.t2.v_12,
-                d.t1.v_2 * Qn1.v_2 + Q.t1.v_2 * d.t1.v_2 + Q.t2.v_22};
+            return shammath::SymTensor3d_2<T>{
+                dt1.v_0 * Qn1.v_0 + Qt1.v_0 * dt1.v_0 + Qt2.v_00,
+                dt1.v_0 * Qn1.v_1 + Qt1.v_0 * dt1.v_1 + Qt2.v_01,
+                dt1.v_0 * Qn1.v_2 + Qt1.v_0 * dt1.v_2 + Qt2.v_02,
+                dt1.v_1 * Qn1.v_1 + Qt1.v_1 * dt1.v_1 + Qt2.v_11,
+                dt1.v_1 * Qn1.v_2 + Qt1.v_1 * dt1.v_2 + Qt2.v_12,
+                dt1.v_2 * Qn1.v_2 + Qt1.v_2 * dt1.v_2 + Qt2.v_22};
+        }
+
+    } // namespace details
+
+    /// utility to offset a multipole, see PHD
+    template<class T, u32 low_order, u32 high_order>
+    inline shammath::SymTensorCollection<T, low_order, high_order> offset_multipole_delta(
+        const shammath::SymTensorCollection<T, low_order, high_order> &Q,
+        const sycl::vec<T, 3> &offset) {
+
+        using namespace shammath;
+
+        if constexpr (low_order == 0 && high_order == 5) {
+            SymTensorCollection<T, 0, 5> d = SymTensorCollection<T, 0, 5>::from_vec(offset);
+
+            auto Qn1 = details::offset_multipole_1(Q.t0, Q.t1, d.t1);
+
+            auto Qn2 = details::offset_multipole_2(Qn1, Q.t1, Q.t2, d.t1);
 
             // mathematica out
             // auto Qn3 = SymTensor3d_3<T>{
@@ -367,32 +388,13 @@ namespace shamphys {
             // };
 
             return {Q.t0, Qn1, Qn2, Qn3, Qn4, Qn5};
-        }
-        else 
-        if constexpr (low_order == 0 && high_order == 4) {
+        } else if constexpr (low_order == 0 && high_order == 4) {
 
             SymTensorCollection<T, 0, 5> d = SymTensorCollection<T, 0, 5>::from_vec(offset);
 
-            auto Qn1 = Q.t1 + Q.t0 * d.t1;
+            auto Qn1 = details::offset_multipole_1(Q.t0, Q.t1, d.t1);
 
-            // mathematica out
-            // auto Qn2 = SymTensor3d_2<T>{
-            //     Q.t2.v_00 + 2*Q.t1.v_0*d.t1.v_0 + Q.t0*d.t2.v_00,
-            //     Q.t2.v_01 + Q.t1.v_1*d.t1.v_0 + Q.t1.v_0*d.t1.v_1 + Q.t0*d.t2.v_01,
-            //     Q.t2.v_02 + Q.t1.v_2*d.t1.v_0 + Q.t1.v_0*d.t1.v_2 + Q.t0*d.t2.v_02,
-            //     Q.t2.v_11 + 2*Q.t1.v_1*d.t1.v_1 + Q.t0*d.t2.v_11,
-            //     Q.t2.v_12 + Q.t1.v_2*d.t1.v_1 + Q.t1.v_1*d.t1.v_2 + Q.t0*d.t2.v_12,
-            //     Q.t2.v_22 + 2*Q.t1.v_2*d.t1.v_2 + Q.t0*d.t2.v_22
-            // };
-
-            // symbolic Qn2 : d_\mu Qn1_\nu + Q1_\mu d_\nu + Q2
-            auto Qn2 = SymTensor3d_2<T>{
-                d.t1.v_0 * Qn1.v_0 + Q.t1.v_0 * d.t1.v_0 + Q.t2.v_00,
-                d.t1.v_0 * Qn1.v_1 + Q.t1.v_0 * d.t1.v_1 + Q.t2.v_01,
-                d.t1.v_0 * Qn1.v_2 + Q.t1.v_0 * d.t1.v_2 + Q.t2.v_02,
-                d.t1.v_1 * Qn1.v_1 + Q.t1.v_1 * d.t1.v_1 + Q.t2.v_11,
-                d.t1.v_1 * Qn1.v_2 + Q.t1.v_1 * d.t1.v_2 + Q.t2.v_12,
-                d.t1.v_2 * Qn1.v_2 + Q.t1.v_2 * d.t1.v_2 + Q.t2.v_22};
+            auto Qn2 = details::offset_multipole_2(Qn1, Q.t1, Q.t2, d.t1);
 
             // mathematica out
             // auto Qn3 = SymTensor3d_3<T>{
@@ -533,31 +535,13 @@ namespace shamphys {
                     + Q.t4.v_2222};
 
             return {Q.t0, Qn1, Qn2, Qn3, Qn4};
-        }
-        else if constexpr (low_order == 0 && high_order == 3) {
+        } else if constexpr (low_order == 0 && high_order == 3) {
 
             SymTensorCollection<T, 0, 5> d = SymTensorCollection<T, 0, 5>::from_vec(offset);
 
-            auto Qn1 = Q.t1 + Q.t0 * d.t1;
+            auto Qn1 = details::offset_multipole_1(Q.t0, Q.t1, d.t1);
 
-            // mathematica out
-            // auto Qn2 = SymTensor3d_2<T>{
-            //     Q.t2.v_00 + 2*Q.t1.v_0*d.t1.v_0 + Q.t0*d.t2.v_00,
-            //     Q.t2.v_01 + Q.t1.v_1*d.t1.v_0 + Q.t1.v_0*d.t1.v_1 + Q.t0*d.t2.v_01,
-            //     Q.t2.v_02 + Q.t1.v_2*d.t1.v_0 + Q.t1.v_0*d.t1.v_2 + Q.t0*d.t2.v_02,
-            //     Q.t2.v_11 + 2*Q.t1.v_1*d.t1.v_1 + Q.t0*d.t2.v_11,
-            //     Q.t2.v_12 + Q.t1.v_2*d.t1.v_1 + Q.t1.v_1*d.t1.v_2 + Q.t0*d.t2.v_12,
-            //     Q.t2.v_22 + 2*Q.t1.v_2*d.t1.v_2 + Q.t0*d.t2.v_22
-            // };
-
-            // symbolic Qn2 : d_\mu Qn1_\nu + Q1_\mu d_\nu + Q2
-            auto Qn2 = SymTensor3d_2<T>{
-                d.t1.v_0 * Qn1.v_0 + Q.t1.v_0 * d.t1.v_0 + Q.t2.v_00,
-                d.t1.v_0 * Qn1.v_1 + Q.t1.v_0 * d.t1.v_1 + Q.t2.v_01,
-                d.t1.v_0 * Qn1.v_2 + Q.t1.v_0 * d.t1.v_2 + Q.t2.v_02,
-                d.t1.v_1 * Qn1.v_1 + Q.t1.v_1 * d.t1.v_1 + Q.t2.v_11,
-                d.t1.v_1 * Qn1.v_2 + Q.t1.v_1 * d.t1.v_2 + Q.t2.v_12,
-                d.t1.v_2 * Qn1.v_2 + Q.t1.v_2 * d.t1.v_2 + Q.t2.v_22};
+            auto Qn2 = details::offset_multipole_2(Qn1, Q.t1, Q.t2, d.t1);
 
             // mathematica out
             // auto Qn3 = SymTensor3d_3<T>{
@@ -647,32 +631,13 @@ namespace shamphys {
             // };
 
             return {Q.t0, Qn1, Qn2, Qn3};
-        }
-        else 
-        if constexpr (low_order == 0 && high_order == 2) {
+        } else if constexpr (low_order == 0 && high_order == 2) {
 
             SymTensorCollection<T, 0, 1> d = SymTensorCollection<T, 0, 1>::from_vec(offset);
 
-            auto Qn1 = Q.t1 + Q.t0 * d.t1;
+            auto Qn1 = details::offset_multipole_1(Q.t0, Q.t1, d.t1);
 
-            // mathematica out
-            // auto Qn2 = SymTensor3d_2<T>{
-            //     Q.t2.v_00 + 2*Q.t1.v_0*d.t1.v_0 + Q.t0*d.t2.v_00,
-            //     Q.t2.v_01 + Q.t1.v_1*d.t1.v_0 + Q.t1.v_0*d.t1.v_1 + Q.t0*d.t2.v_01,
-            //     Q.t2.v_02 + Q.t1.v_2*d.t1.v_0 + Q.t1.v_0*d.t1.v_2 + Q.t0*d.t2.v_02,
-            //     Q.t2.v_11 + 2*Q.t1.v_1*d.t1.v_1 + Q.t0*d.t2.v_11,
-            //     Q.t2.v_12 + Q.t1.v_2*d.t1.v_1 + Q.t1.v_1*d.t1.v_2 + Q.t0*d.t2.v_12,
-            //     Q.t2.v_22 + 2*Q.t1.v_2*d.t1.v_2 + Q.t0*d.t2.v_22
-            // };
-
-            // symbolic Qn2 : d_\mu Qn1_\nu + Q1_\mu d_\nu + Q2
-            auto Qn2 = SymTensor3d_2<T>{
-                d.t1.v_0 * Qn1.v_0 + Q.t1.v_0 * d.t1.v_0 + Q.t2.v_00,
-                d.t1.v_0 * Qn1.v_1 + Q.t1.v_0 * d.t1.v_1 + Q.t2.v_01,
-                d.t1.v_0 * Qn1.v_2 + Q.t1.v_0 * d.t1.v_2 + Q.t2.v_02,
-                d.t1.v_1 * Qn1.v_1 + Q.t1.v_1 * d.t1.v_1 + Q.t2.v_11,
-                d.t1.v_1 * Qn1.v_2 + Q.t1.v_1 * d.t1.v_2 + Q.t2.v_12,
-                d.t1.v_2 * Qn1.v_2 + Q.t1.v_2 * d.t1.v_2 + Q.t2.v_22};
+            auto Qn2 = details::offset_multipole_2(Qn1, Q.t1, Q.t2, d.t1);
 
             return {Q.t0, Qn1, Qn2};
         } else {

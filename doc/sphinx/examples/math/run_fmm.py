@@ -1156,3 +1156,4 @@ plt.title("Multipole offset precision")
 plt.legend(loc="lower right")
 plt.grid()
 plt.show()
+
