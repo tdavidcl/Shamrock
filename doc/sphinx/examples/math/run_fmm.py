@@ -1255,14 +1255,14 @@ def plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j):
 
 
 
-s_B = (0,0,0)
+s_B = (0,-0.2,-0.5)
 s_A = (1,0,0)
 s_Ap = (1.1,0.1,0.0)
 
 box_B_size = 0.5
 box_A_size = 0.5
 
-x_j = (0.2,0.2,0.0)
+x_j = (0.2,0.0,-0.5)
 x_i = (1.2,0.2,0.0)
 m_j = 1
 m_i = 1
@@ -1301,6 +1301,10 @@ dM_k_offset = shamrock.phys.offset_dM_mat_5(dM_k, s_A, s_Ap)
 print("dM_k_offset =",dM_k_offset)
 
 # %%
+# Weirdly we can see that for dMk are different even though they will be contracted with the same a_k
+# This is normal because we translate the moment dMk into the box A', so even if we estimate the 
+# force in A' after the translation we will still get the same force as the one we had in A before the translation.
+# Which is arguably what we want XD.
 delta = dM_k_offset - dMp_k
 
 print("delta =",delta)
@@ -1329,29 +1333,274 @@ result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
 
 print("force_i         =", -Gconst * np.array(result))
 print("force_ip        =", -Gconst * np.array(resultp))
-print("force_ip_offset =", -Gconst * np.array(result_offset))
+print("force_ip_offset =", -Gconst * np.array(result_offset), "force_i translated to A'")
 
-box_scale_fact = 0.3
-for i in range(50):
-    x_i = (
-        (
-            s_A[0] + box_scale_fact * np.random.uniform(-1, 1),
-            s_A[1] + box_scale_fact * np.random.uniform(-1, 1),
-            s_A[2] + box_scale_fact * np.random.uniform(-1, 1),
-        )
-    )
+# %%
+# As expected the delta is almost null
+delta_f = np.linalg.norm(np.array(result_offset) - np.array(result))
+delta_f /= np.linalg.norm(np.array(result))
+print("delta_f =",delta_f)
 
+# %%
+# Let's modify FMM in a box to add the translation of the box A
+def test_grav_moment_offset(x_i, x_j, s_A, s_Ap, s_B, m_j, order, do_print):
+
+    b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+    r = (s_B[0] - s_A[0],s_B[1] - s_A[1],s_B[2] - s_A[2])
     a_i = (x_i[0] - s_A[0],x_i[1] - s_A[1],x_i[2] - s_A[2])
     a_ip = (x_i[0] - s_Ap[0],x_i[1] - s_Ap[1],x_i[2] - s_Ap[2])
 
-    a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
-    a_kp = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_ip)
+    if do_print:
+        print("x_i =",x_i)
+        print("x_j =",x_j)
+        print("s_A =",s_A)
+        print("s_Ap =",s_Ap)
+        print("s_B =",s_B)
+        print("b_j =",b_j)
+        print("r =",r)
+        print("a_i =",a_i)
 
-    result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
-    resultp = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dMp_k)
-    result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
+    # compute the tensor product of the displacment
+    if order == 1:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_0.from_vec(b_j)
+    elif order == 2:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_1.from_vec(b_j)
+    elif order == 3:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
+    elif order == 4:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
+    elif order == 5:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+    else:
+        raise ValueError("Invalid order")
 
-    delta_f = np.linalg.norm(np.array(result_offset) - np.array(resultp))
-    delta_f /= np.linalg.norm(np.array(resultp))
+    # multiply by mass to get the mass moment
+    Q_n_B *= m_j
 
-    print(delta_f,i)
+    if do_print:
+        print("Q_n_B =",Q_n_B)
+
+    # green function gradients
+    if order == 1:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_1(r)
+    elif order == 2:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_2(r)
+    elif order == 3:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_3(r)
+    elif order == 4:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_4(r)
+    elif order == 5:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("D_n =",D_n)
+
+    if order == 1:
+        dM_k = shamrock.phys.get_dM_mat_1(D_n, Q_n_B)
+    elif order == 2:
+        dM_k = shamrock.phys.get_dM_mat_2(D_n, Q_n_B)
+    elif order == 3:
+        dM_k = shamrock.phys.get_dM_mat_3(D_n, Q_n_B)
+    elif order == 4:
+        dM_k = shamrock.phys.get_dM_mat_4(D_n, Q_n_B)
+    elif order == 5:
+        dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("dM_k =",dM_k)
+
+
+    if order == 5:
+        dM_k_offset = shamrock.phys.offset_dM_mat_5(dM_k, s_A, s_Ap)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("dM_k_offset =",dM_k_offset)
+
+    if order == 1:
+        a_k = shamrock.math.SymTensorCollection_f64_0_0.from_vec(a_i)
+    elif order == 2:
+        a_k = shamrock.math.SymTensorCollection_f64_0_1.from_vec(a_i)
+    elif order == 3:
+        a_k = shamrock.math.SymTensorCollection_f64_0_2.from_vec(a_i)
+    elif order == 4:
+        a_k = shamrock.math.SymTensorCollection_f64_0_3.from_vec(a_i)
+    elif order == 5:
+        a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
+    else:
+        raise ValueError("Invalid order")
+        
+    if do_print:
+        print("a_k =",a_k)
+
+    
+    if order == 1:
+        a_kp = shamrock.math.SymTensorCollection_f64_0_0.from_vec(a_ip)
+    elif order == 2:
+        a_kp = shamrock.math.SymTensorCollection_f64_0_1.from_vec(a_ip)
+    elif order == 3:
+        a_kp = shamrock.math.SymTensorCollection_f64_0_2.from_vec(a_ip)
+    elif order == 4:
+        a_kp = shamrock.math.SymTensorCollection_f64_0_3.from_vec(a_ip)
+    elif order == 5:
+        a_kp = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_ip)
+    else:
+        raise ValueError("Invalid order")
+        
+    if do_print:
+        print("a_kp =",a_kp)
+
+
+    if order == 1:
+        result = shamrock.phys.contract_grav_moment_to_force_1(a_k, dM_k)
+    elif order == 2:
+        result = shamrock.phys.contract_grav_moment_to_force_2(a_k, dM_k)
+    elif order == 3:
+        result = shamrock.phys.contract_grav_moment_to_force_3(a_k, dM_k)
+    elif order == 4:
+        result = shamrock.phys.contract_grav_moment_to_force_4(a_k, dM_k)
+    elif order == 5:
+        result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+    else:
+        raise ValueError("Invalid order")
+        
+    Gconst = 1 # let's just set the grav constant to 1
+    force_i = -Gconst * np.array(result)
+    if do_print:
+        print("force_i =",force_i)
+
+
+    
+
+    if order == 1:
+        result_offset = shamrock.phys.contract_grav_moment_to_force_1(a_kp, dM_k_offset)
+    elif order == 2:
+        result_offset = shamrock.phys.contract_grav_moment_to_force_2(a_kp, dM_k_offset)
+    elif order == 3:
+        result_offset = shamrock.phys.contract_grav_moment_to_force_3(a_kp, dM_k_offset)
+    elif order == 4:
+        result_offset = shamrock.phys.contract_grav_moment_to_force_4(a_kp, dM_k_offset)
+    elif order == 5:
+        result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
+    else:
+        raise ValueError("Invalid order")
+        
+    force_i_offset = -Gconst * np.array(result_offset)
+    if do_print:
+        print("force_i_offset =",force_i_offset)
+
+    
+    b_A_size = np.linalg.norm(np.array(s_A) - np.array(x_i))
+    b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+    b_dist = np.linalg.norm(np.array(s_A) - np.array(s_B))
+
+    angle = (b_A_size + b_B_size) / b_dist
+
+    delta_A = np.linalg.norm(np.array(s_A) - np.array(s_Ap))
+
+    if do_print:
+        print("b_A_size =",b_A_size)
+        print("b_B_size =",b_B_size)
+        print("b_dist =",b_dist)
+        print("angle =",angle)
+
+    return force_i, force_i_offset, angle, delta_A
+
+# %%
+# Let test for many different parameters
+# For clarification a perfect result here is that the translated dMk contracted with the new 
+# displacment ak_p give the same result as the original expansion (which it does ;) ).
+plt.figure()
+for order in range(5, 6):
+    print("--------------------------------")
+    print(f"Running FMM order = {order}")
+    print("--------------------------------")
+
+    # set seed
+    np.random.seed(111)
+
+    N = 50000
+
+    # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
+    x_i_all = []
+    for i in range(N):
+        x_i_all.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
+
+    # same for x_j
+    x_j_all = []
+    for i in range(N):
+        x_j_all.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
+
+    box_scale_fact_all = np.linspace(0,0.1,N).tolist()
+
+    # same for box_1_center
+    s_A_all = []
+    s_Ap_all = []
+    for p,box_scale_fact in zip(x_i_all,box_scale_fact_all):
+        s_A_all.append(
+            (
+                p[0] + box_scale_fact * np.random.uniform(-1, 1),
+                p[1] + box_scale_fact * np.random.uniform(-1, 1),
+                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+            )
+        )
+        s_Ap_all.append(
+            (
+                p[0] + box_scale_fact * np.random.uniform(-1, 1),
+                p[1] + box_scale_fact * np.random.uniform(-1, 1),
+                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+            )
+        )
+
+    # same for box_2_center
+    s_B_all = []
+    for p,box_scale_fact in zip(x_j_all,box_scale_fact_all):
+        s_B_all.append(
+            (
+                p[0] + box_scale_fact * np.random.uniform(-1, 1),
+                p[1] + box_scale_fact * np.random.uniform(-1, 1),
+                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+            )
+        )
+
+    angles = []
+    delta_A_all = []
+    rel_errors = []
+
+    for x_i, x_j, s_A, s_Ap, s_B in zip(x_i_all, x_j_all, s_A_all,s_Ap_all, s_B_all):
+
+        force_i, force_i_offset,angle, delta_A = test_grav_moment_offset(x_i, x_j, s_A, s_Ap, s_B, m_j, order, do_print=False)
+        
+        abs_error = np.linalg.norm(force_i_offset - force_i)
+        rel_error = abs_error / np.linalg.norm(force_i)
+
+        b_A_size = np.linalg.norm(np.array(s_A) - np.array(x_i))
+        b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+        b_dist = np.linalg.norm(np.array(s_A) - np.array(s_B))
+        angle = (b_A_size + b_B_size) / b_dist
+
+        if angle > 5.0 or angle < 1e-4:
+            continue
+
+        angles.append(angle)
+        delta_A_all.append(delta_A)
+        rel_errors.append(rel_error)
+
+    print(f"Computed for {len(angles)} cases")
+
+    plt.scatter(angles, rel_errors, s=1, label=f"FMM order = {order}")
+
+
+plt.xlabel("Angle")
+plt.ylabel("$|f_{\\rm fmm} - f_{\\rm fmm, offset}| / |f_{\\rm fmm}|$ (Relative error)")
+plt.xscale("log")
+plt.yscale("log")
+plt.title("Grav moment translation error")
+plt.legend(loc="lower right")
+plt.grid()
+plt.show()
