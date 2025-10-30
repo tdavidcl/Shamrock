@@ -25,6 +25,7 @@
 #include "shamphys/SodTube.hpp"
 #include "shamphys/fmm/GreenFuncGravCartesian.hpp"
 #include "shamphys/fmm/contract_grav_moment.hpp"
+#include "shamphys/fmm/grav_moment_offset.hpp"
 #include "shamphys/fmm/grav_moments.hpp"
 #include "shamphys/fmm/offset_multipole.hpp"
 #include "shamphys/orbits.hpp"
@@ -344,6 +345,16 @@ Register_pymod(shamphyslibinit) {
     shamphys_module.def("offset_multipole_4", &shamphys::offset_multipole<f64, 0, 4>, py::arg("Q"), py::arg("from"), py::arg("to"));
     shamphys_module.def("offset_multipole_3", &shamphys::offset_multipole<f64, 0, 3>, py::arg("Q"), py::arg("from"), py::arg("to"));
     shamphys_module.def("offset_multipole_2", &shamphys::offset_multipole<f64, 0, 2>, py::arg("Q"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_multipole_1", &shamphys::offset_multipole<f64, 0, 1>);
+    //shamphys_module.def("offset_multipole_0", &shamphys::offset_multipole<f64, 0, 0>);
+
+
+    shamcomm::logs::debug_ln("[Py]", "registering shamrock.phys.offset_dM_mat");
+    shamphys_module.def("offset_dM_mat_5", &shamphys::offset_dM_mat<f64, 1, 5>, py::arg("dM"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_dM_mat_4", &shamphys::offset_dM_mat<f64, 1, 4>, py::arg("dM"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_dM_mat_3", &shamphys::offset_dM_mat<f64, 1, 3>, py::arg("dM"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_dM_mat_2", &shamphys::offset_dM_mat<f64, 1, 2>, py::arg("dM"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_dM_mat_1", &shamphys::offset_dM_mat<f64, 1, 1>, py::arg("dM"), py::arg("from"), py::arg("to"));
     //shamphys_module.def("offset_multipole_1", &shamphys::offset_multipole<f64, 0, 1>);
     //shamphys_module.def("offset_multipole_0", &shamphys::offset_multipole<f64, 0, 0>);
 }

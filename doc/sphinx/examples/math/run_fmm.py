@@ -13,6 +13,10 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
 import shamrock
 
+import matplotlib
+matplotlib.use('Agg')
+
+
 # %%
 # Utilities
 # ^^^^^^^^^
@@ -196,30 +200,30 @@ def draw_arrow(ax, p1, p2, color, label, arr_scale=0.1):
 # .. raw:: html
 #
 #   <details>
-#   <summary><a>def plot_mass_moment_case(box_B_center,box_B_size,x_j):</a></summary>
+#   <summary><a>def plot_mass_moment_case(s_B,box_B_size,x_j):</a></summary>
 #
 
-def plot_mass_moment_case(box_B_center,box_B_size,x_j):
+def plot_mass_moment_case(s_B,box_B_size,x_j):
     box_B = shamrock.math.AABB_f64_3(
             (
-                box_B_center[0] - box_B_size / 2,
-                box_B_center[1] - box_B_size / 2,
-                box_B_center[2] - box_B_size / 2,
+                s_B[0] - box_B_size / 2,
+                s_B[1] - box_B_size / 2,
+                s_B[2] - box_B_size / 2,
             ),
             (
-                box_B_center[0] + box_B_size / 2,
-                box_B_center[1] + box_B_size / 2,
-                box_B_center[2] + box_B_size / 2,
+                s_B[0] + box_B_size / 2,
+                s_B[1] + box_B_size / 2,
+                s_B[2] + box_B_size / 2,
             ),
         )
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
+    draw_arrow(ax, s_B, x_j, "black", "$b_j = x_j - s_B$")
 
     ax.scatter(
-            box_B_center[0], box_B_center[1], box_B_center[2], color="black", label="box_B_center"
+            s_B[0], s_B[1], s_B[2], color="black", label="s_B"
         )
 
     ax.scatter(
@@ -314,48 +318,48 @@ print("Q_n_B =",Q_n_B)
 # .. raw:: html
 #
 #   <details>
-#   <summary><a>def plot_mass_moment_case(box_B_center,box_B_size,x_j):</a></summary>
+#   <summary><a>def plot_mass_moment_case(s_B,box_B_size,x_j):</a></summary>
 #
-def plot_grav_moment_case(box_A_center,box_A_size,box_B_center,box_B_size,x_j):
+def plot_grav_moment_case(s_A,box_A_size,s_B,box_B_size,x_j):
     box_A = shamrock.math.AABB_f64_3(
             (
-                box_A_center[0] - box_A_size / 2,
-                box_A_center[1] - box_A_size / 2,
-                box_A_center[2] - box_A_size / 2,
+                s_A[0] - box_A_size / 2,
+                s_A[1] - box_A_size / 2,
+                s_A[2] - box_A_size / 2,
             ),
             (
-                box_A_center[0] + box_A_size / 2,
-                box_A_center[1] + box_A_size / 2,
-                box_A_center[2] + box_A_size / 2,
+                s_A[0] + box_A_size / 2,
+                s_A[1] + box_A_size / 2,
+                s_A[2] + box_A_size / 2,
             ),
         )
 
     box_B = shamrock.math.AABB_f64_3(
             (
-                box_B_center[0] - box_B_size / 2,
-                box_B_center[1] - box_B_size / 2,
-                box_B_center[2] - box_B_size / 2,
+                s_B[0] - box_B_size / 2,
+                s_B[1] - box_B_size / 2,
+                s_B[2] - box_B_size / 2,
             ),
             (
-                box_B_center[0] + box_B_size / 2,
-                box_B_center[1] + box_B_size / 2,
-                box_B_center[2] + box_B_size / 2,
+                s_B[0] + box_B_size / 2,
+                s_B[1] + box_B_size / 2,
+                s_B[2] + box_B_size / 2,
             ),
         )
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
+    draw_arrow(ax, s_B, x_j, "black", "$b_j = x_j - s_B$")
 
-    draw_arrow(ax, box_A_center, box_B_center, "purple", "$r = s_B - s_A$")
+    draw_arrow(ax, s_A, s_B, "purple", "$r = s_B - s_A$")
 
     ax.scatter(
-            box_A_center[0], box_A_center[1], box_A_center[2], color="black", label="box_A_center"
+            s_A[0], s_A[1], s_A[2], color="black", label="s_A"
         )
     
     ax.scatter(
-            box_B_center[0], box_B_center[1], box_B_center[2], color="green", label="box_B_center"
+            s_B[0], s_B[1], s_B[2], color="green", label="s_B"
         )
 
     ax.scatter(
@@ -425,49 +429,49 @@ print("dM_k =",dM_k)
 # .. raw:: html
 #
 #   <details>
-#   <summary><a>def plot_fmm_case(box_A_center,box_A_size,x_i,box_B_center,box_B_size,x_j, f_i_fmm, f_i_exact):</a></summary>
+#   <summary><a>def plot_fmm_case(s_A,box_A_size,x_i,s_B,box_B_size,x_j, f_i_fmm, f_i_exact):</a></summary>
 #
-def plot_fmm_case(box_A_center,box_A_size,x_i,box_B_center,box_B_size,x_j, f_i_fmm, f_i_exact, fscale_fact):
+def plot_fmm_case(s_A,box_A_size,x_i,s_B,box_B_size,x_j, f_i_fmm, f_i_exact, fscale_fact):
     box_A = shamrock.math.AABB_f64_3(
             (
-                box_A_center[0] - box_A_size / 2,
-                box_A_center[1] - box_A_size / 2,
-                box_A_center[2] - box_A_size / 2,
+                s_A[0] - box_A_size / 2,
+                s_A[1] - box_A_size / 2,
+                s_A[2] - box_A_size / 2,
             ),
             (
-                box_A_center[0] + box_A_size / 2,
-                box_A_center[1] + box_A_size / 2,
-                box_A_center[2] + box_A_size / 2,
+                s_A[0] + box_A_size / 2,
+                s_A[1] + box_A_size / 2,
+                s_A[2] + box_A_size / 2,
             ),
         )
 
     box_B = shamrock.math.AABB_f64_3(
             (
-                box_B_center[0] - box_B_size / 2,
-                box_B_center[1] - box_B_size / 2,
-                box_B_center[2] - box_B_size / 2,
+                s_B[0] - box_B_size / 2,
+                s_B[1] - box_B_size / 2,
+                s_B[2] - box_B_size / 2,
             ),
             (
-                box_B_center[0] + box_B_size / 2,
-                box_B_center[1] + box_B_size / 2,
-                box_B_center[2] + box_B_size / 2,
+                s_B[0] + box_B_size / 2,
+                s_B[1] + box_B_size / 2,
+                s_B[2] + box_B_size / 2,
             ),
         )
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-    draw_arrow(ax, box_B_center, x_j, "black", "$b_j = x_j - s_B$")
-    draw_arrow(ax, box_A_center, x_i, "blue", "$a_i = x_i - s_A$")
+    draw_arrow(ax, s_B, x_j, "black", "$b_j = x_j - s_B$")
+    draw_arrow(ax, s_A, x_i, "blue", "$a_i = x_i - s_A$")
 
-    draw_arrow(ax, box_A_center, box_B_center, "purple", "$r = s_B - s_A$")
+    draw_arrow(ax, s_A, s_B, "purple", "$r = s_B - s_A$")
 
     ax.scatter(
-            box_A_center[0], box_A_center[1], box_A_center[2], color="black", label="box_A_center"
+            s_A[0], s_A[1], s_A[2], color="black", label="s_A"
         )
     
     ax.scatter(
-            box_B_center[0], box_B_center[1], box_B_center[2], color="green", label="box_B_center"
+            s_B[0], s_B[1], s_B[2], color="green", label="s_B"
         )
 
     ax.scatter(
@@ -898,7 +902,7 @@ plt.grid()
 plt.show()
 
 # %%
-# Multipoles offset
+# Mass moment offset
 # ^^^^^^^^^^^^^^^^^
 
 s_B = (0,0,0)
@@ -1011,17 +1015,27 @@ print("Q_n_B_offset =",Q_n_B_offset)
 def tensor_collect_norm(d):
     # detect the type of the tensor collection
     if isinstance(d, shamrock.math.SymTensorCollection_f64_0_5):
-        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3) + d.t4.inner(d.t4) + d.t5.inner(d.t5))
+        return np.sqrt(d.t0*d.t0) + np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 +np.sqrt(d.t4.inner(d.t4))/24 +np.sqrt(d.t5.inner(d.t5))/120 
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_4):
-        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3) + d.t4.inner(d.t4))
+        return np.sqrt(d.t0*d.t0) + np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 +np.sqrt(d.t4.inner(d.t4))/24 
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_3):
-        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3))
+        return np.sqrt(d.t0*d.t0) + np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_2):
-        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2))
+        return np.sqrt(d.t0*d.t0) + np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_1):
-        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1))
+        return np.sqrt(d.t0*d.t0) + np.sqrt(d.t1.inner(d.t1)) 
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_0):
-        return np.sqrt(d.t0*d.t0)
+        return np.sqrt(d.t0*d.t0) 
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_5):
+        return  np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 +np.sqrt(d.t4.inner(d.t4))/24 +np.sqrt(d.t5.inner(d.t5))/120 
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_4):
+        return  np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 +np.sqrt(d.t4.inner(d.t4))/24 
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_3):
+        return  np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 +np.sqrt(d.t3.inner(d.t3))/6 
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_2):
+        return  np.sqrt(d.t1.inner(d.t1)) +np.sqrt(d.t2.inner(d.t2))/2 
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_1):
+        return  np.sqrt(d.t1.inner(d.t1)) 
     else:
         raise ValueError(f"Unsupported tensor collection type: {type(d)}")
 
@@ -1030,10 +1044,7 @@ print("Q_n_Bp norm =",tensor_collect_norm(Q_n_Bp))
 
 # %%
 # Compute the delta between the moments
-tmp = Q_n_Bp
-tmp *= -1
-delta = Q_n_B_offset
-delta += tmp
+delta = Q_n_B_offset - Q_n_Bp
 print("delta =",delta)
 
 
@@ -1050,7 +1061,7 @@ print("sqdist_t3 =",sqdist_t3)
 print("sqdist_t4 =",sqdist_t4)
 print("sqdist_t5 =",sqdist_t5)
 
-norm_delta = np.sqrt(sqdist_t0 + sqdist_t1 + sqdist_t2 + sqdist_t3 + sqdist_t4 + sqdist_t5)
+norm_delta = np.sqrt(sqdist_t0) + np.sqrt(sqdist_t1) +np.sqrt(sqdist_t2)/2 +np.sqrt(sqdist_t3)/6 +np.sqrt(sqdist_t4)/24 +np.sqrt(sqdist_t5)/120 
 print("norm_delta =",norm_delta)
 
 print("rel error =",tensor_collect_norm(delta)/tensor_collect_norm(Q_n_Bp))
@@ -1137,11 +1148,9 @@ for order in range(2, 6):
         else:
             raise ValueError(f"Unsupported offset order: {order}")
 
-        tmp = Q_n_Bp
-        tmp *= -1
-        Q_n_B_offset += tmp
+        delta = Q_n_B_offset - Q_n_Bp
 
-        rel_error = tensor_collect_norm(Q_n_B_offset)/tensor_collect_norm(Q_n_B)
+        rel_error = tensor_collect_norm(delta)/tensor_collect_norm(Q_n_B)
         rel_errors.append(rel_error)
 
         center_distances.append(np.linalg.norm(np.array(s_B) - np.array(s_Bp)))
@@ -1152,8 +1161,169 @@ plt.xlabel("$\\vert \\vert s_B - s_B'\\vert \\vert$")
 plt.ylabel("$\\vert \\vert Q_n(s_B) - Q_n(s_B') \\vert \\vert / \\vert \\vert Q_n(s_B) \\vert \\vert$ (relative error) ")
 plt.xscale("log")
 plt.yscale("log")
-plt.title("Multipole offset precision")
+plt.title("Mass moment offset precision")
 plt.legend(loc="lower right")
 plt.grid()
 plt.show()
 
+
+# %%
+# Gravitational moment offset
+# ^^^^^^^^^^^^^^^^^
+
+def plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j):
+    box_A = shamrock.math.AABB_f64_3(
+            (
+                s_A[0] - box_A_size / 2,
+                s_A[1] - box_A_size / 2,
+                s_A[2] - box_A_size / 2,
+            ),
+            (
+                s_A[0] + box_A_size / 2,
+                s_A[1] + box_A_size / 2,
+                s_A[2] + box_A_size / 2,
+            ),
+        )
+
+    box_Ap = shamrock.math.AABB_f64_3(
+            (
+                s_Ap[0] - box_A_size / 2,
+                s_Ap[1] - box_A_size / 2,
+                s_Ap[2] - box_A_size / 2,
+            ),
+            (
+                s_Ap[0] + box_A_size / 2,
+                s_Ap[1] + box_A_size / 2,
+                s_Ap[2] + box_A_size / 2,
+            ),
+        )
+
+    box_B = shamrock.math.AABB_f64_3(
+            (
+                s_B[0] - box_B_size / 2,
+                s_B[1] - box_B_size / 2,
+                s_B[2] - box_B_size / 2,
+            ),
+            (
+                s_B[0] + box_B_size / 2,
+                s_B[1] + box_B_size / 2,
+                s_B[2] + box_B_size / 2,
+            ),
+        )
+
+
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+
+    draw_arrow(ax, s_A, s_B, "purple", "$r = s_B - s_A$")
+    draw_arrow(ax, s_Ap, s_B, "purple", "$r' = s_B - s_A'$")
+
+
+    ax.scatter(
+            s_A[0], s_A[1], s_A[2], color="black", label="s_A"
+        )
+    ax.scatter(
+            s_Ap[0], s_Ap[1], s_Ap[2], color="black", label="s_Ap"
+        )
+    ax.scatter(
+            s_B[0], s_B[1], s_B[2], color="black", label="s_B"
+        )
+    
+    draw_arrow(ax, s_B, x_j, "black", "$b_j = x_j - s_B$")
+
+    ax.scatter(
+        x_j[0], x_j[1], x_j[2], color="red", label="$x_j$"
+    )
+
+    draw_aabb(ax, box_A, "blue",0.1)
+    draw_aabb(ax, box_Ap, "cyan",0.1)
+    draw_aabb(ax, box_B, "red",0.1)
+
+    center_view = (0.5, 0.0, 0.0)
+    view_size = 2.0
+    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
+    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
+    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+
+    return ax, rel_error,abs_error
+
+
+
+s_B = (0,0,0)
+s_A = (1,0,0)
+s_Ap = (1.1,0.1,0.0)
+
+box_B_size = 0.5
+box_A_size = 0.5
+
+x_j = (0.2,0.2,0.0)
+x_i = (1.2,0.2,0.0)
+m_j = 1
+m_i = 1
+
+plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j)
+
+plt.title(f"Mass moment offset illustration")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+r = (s_B[0] - s_A[0],s_B[1] - s_A[1],s_B[2] - s_A[2])
+rp = (s_B[0] - s_Ap[0],s_B[1] - s_Ap[1],s_B[2] - s_Ap[2])
+
+
+# %%
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+Q_n_B *= m_j
+print("Q_n_B =",Q_n_B)
+
+# %%
+D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
+print("D_n =",D_n)
+print("dM_k =",dM_k)
+
+# %%
+Dp_n = shamrock.phys.green_func_grav_cartesian_1_5(rp)
+dMp_k = shamrock.phys.get_dM_mat_5(Dp_n, Q_n_B)
+print("Dp_n =",Dp_n)
+print("dMp_k =",dMp_k)
+
+# %%
+# Offset the grav moment to dMp_k
+dM_k_offset = shamrock.phys.offset_dM_mat_5(dM_k, s_Ap, s_A)
+
+delta = dM_k_offset - dMp_k
+
+print("delta =",delta)
+print("sqdist_t1 =",np.sqrt(delta.t1.inner(delta.t1)))
+print("sqdist_t2 =",np.sqrt(delta.t2.inner(delta.t2))/2)
+print("sqdist_t3 =",np.sqrt(delta.t3.inner(delta.t3))/6)
+print("sqdist_t4 =",np.sqrt(delta.t4.inner(delta.t4))/24)
+print("sqdist_t5 =",np.sqrt(delta.t5.inner(delta.t5))/120)
+print("(norm) =",tensor_collect_norm(delta))
+
+
+# %%
+a_i = (x_i[0] - s_A[0],x_i[1] - s_A[1],x_i[2] - s_A[2])
+a_ip = (x_i[0] - s_Ap[0],x_i[1] - s_Ap[1],x_i[2] - s_Ap[2])
+
+a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
+a_kp = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_ip)
+
+print("a_k  =",a_k)
+print("a_kp =",a_kp)
+
+# %%
+result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+resultp = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dMp_k)
+result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
+
+print("force_i         =", -Gconst * np.array(result))
+print("force_ip        =", -Gconst * np.array(resultp))
+print("force_ip_offset =", -Gconst * np.array(result_offset))
