@@ -897,3 +897,262 @@ plt.legend(loc="lower right")
 plt.grid()
 plt.show()
 
+# %%
+# Multipoles offset
+# ^^^^^^^^^^^^^^^^^
+
+s_B = (0,0,0)
+box_B_size = 1.0
+x_j = (0.2,0.2,0.0)
+m_j = 1
+
+s_B_new = (0.3,0.3,0.3)
+
+# %%
+# .. raw:: html
+#
+#   <details>
+#   <summary><a>def plot_mass_moment_offset(s_B, s_B_new, box_B_size):</a></summary>
+#
+def plot_mass_moment_offset(s_B, s_B_new, box_B_size):
+    box_B = shamrock.math.AABB_f64_3(
+            (
+                s_B[0] - box_B_size / 2,
+                s_B[1] - box_B_size / 2,
+                s_B[2] - box_B_size / 2,
+            ),
+            (
+                s_B[0] + box_B_size / 2,
+                s_B[1] + box_B_size / 2,
+                s_B[2] + box_B_size / 2,
+            ),
+        )
+
+    box_B_new = shamrock.math.AABB_f64_3(
+        (
+            s_B_new[0] - box_B_size / 2,
+            s_B_new[1] - box_B_size / 2,
+            s_B_new[2] - box_B_size / 2,
+        ),
+        (
+            s_B_new[0] + box_B_size / 2,
+            s_B_new[1] + box_B_size / 2,
+            s_B_new[2] + box_B_size / 2,
+        ),
+    )
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_arrow(ax, s_B, x_j, "black", "$b_j = x_j - s_B$")
+    draw_arrow(ax, s_B_new, x_j, "red", "$b_j' = x_j - s_B'$")
+
+    ax.scatter(
+            s_B[0], s_B[1], s_B[2], color="black", label="s_B"
+        )
+    ax.scatter(
+            s_B_new[0], s_B_new[1], s_B_new[2], color="red", label="s_B'"
+        )
+    ax.scatter(
+        x_j[0], x_j[1], x_j[2], color="blue", label="$x_j$"
+    )
+
+    draw_aabb(ax, box_B, "blue",0.2)
+    draw_aabb(ax, box_B_new, "red",0.2)
+
+    center_view = (0.0, 0.0, 0.0)
+    view_size = 2.0
+    ax.set_xlim(center_view[0] - view_size / 2, center_view[0] + view_size / 2)
+    ax.set_ylim(center_view[1] - view_size / 2, center_view[1] + view_size / 2)
+    ax.set_zlim(center_view[2] - view_size / 2, center_view[2] + view_size / 2)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+
+    return ax
+
+# %%
+# .. raw:: html
+#
+#   </details>
+
+# %%
+
+plot_mass_moment_offset(s_B, s_B_new, box_B_size)
+
+plt.title(f"Mass moment offset illustration")
+plt.legend(loc="center left", bbox_to_anchor=(-0.3, 0.5))
+plt.show()
+
+# %%
+# Moment for box B
+b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+Q_n_B *= m_j
+print("b_j =",b_j)
+print("Q_n_B =",Q_n_B)
+
+# %%
+# Moment for box B'
+b_jp = (x_j[0] - s_B_new[0],x_j[1] - s_B_new[1],x_j[2] - s_B_new[2])
+Q_n_Bp = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_jp)
+Q_n_Bp *= m_j
+print("b_jp =",b_jp)
+print("Q_n_Bp =",Q_n_Bp)
+
+# %%
+# Offset the moment in box B to box B'
+Q_n_B_offset = shamrock.phys.offset_multipole_5(Q_n_B, s_B, s_B_new)
+print("Q_n_B_offset =",Q_n_B_offset)
+
+# %%
+# Print the norm of the moment in box B'
+
+def tensor_collect_norm(d):
+    # detect the type of the tensor collection
+    if isinstance(d, shamrock.math.SymTensorCollection_f64_0_5):
+        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3) + d.t4.inner(d.t4) + d.t5.inner(d.t5))
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_4):
+        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3) + d.t4.inner(d.t4))
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_3):
+        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2) + d.t3.inner(d.t3))
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_2):
+        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1) + d.t2.inner(d.t2))
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_1):
+        return np.sqrt(d.t0*d.t0 + d.t1.inner(d.t1))
+    elif isinstance(d, shamrock.math.SymTensorCollection_f64_0_0):
+        return np.sqrt(d.t0*d.t0)
+    else:
+        raise ValueError(f"Unsupported tensor collection type: {type(d)}")
+
+print("Q_n_B norm =",tensor_collect_norm(Q_n_B))
+print("Q_n_Bp norm =",tensor_collect_norm(Q_n_Bp))
+
+# %%
+# Compute the delta between the moments
+tmp = Q_n_Bp
+tmp *= -1
+delta = Q_n_B_offset
+delta += tmp
+print("delta =",delta)
+
+
+sqdist_t0 = delta.t0*delta.t0
+sqdist_t1 = delta.t1.inner(delta.t1)
+sqdist_t2 = delta.t2.inner(delta.t2)
+sqdist_t3 = delta.t3.inner(delta.t3)
+sqdist_t4 = delta.t4.inner(delta.t4)
+sqdist_t5 = delta.t5.inner(delta.t5)
+print("sqdist_t0 =",sqdist_t0)
+print("sqdist_t1 =",sqdist_t1)
+print("sqdist_t2 =",sqdist_t2)
+print("sqdist_t3 =",sqdist_t3)
+print("sqdist_t4 =",sqdist_t4)
+print("sqdist_t5 =",sqdist_t5)
+
+norm_delta = np.sqrt(sqdist_t0 + sqdist_t1 + sqdist_t2 + sqdist_t3 + sqdist_t4 + sqdist_t5)
+print("norm_delta =",norm_delta)
+
+print("rel error =",tensor_collect_norm(delta)/tensor_collect_norm(Q_n_Bp))
+
+# %%
+# We now want to explore the precision of the offset as a function of the order & distance
+
+plt.figure()
+
+for order in range(2, 6):
+    # set seed
+    np.random.seed(111)
+
+    N = 50000
+
+    # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
+    x_j_all = []
+    for i in range(N):
+        x_j_all.append((np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)))
+
+    box_scale_fact_all = np.linspace(0,1,N).tolist()
+
+    # same for box_1_center
+    s_B_all = []
+    for p,box_scale_fact in zip(x_j_all,box_scale_fact_all):
+        s_B_all.append(
+            (
+                p[0] + box_scale_fact * np.random.uniform(-1, 1),
+                p[1] + box_scale_fact * np.random.uniform(-1, 1),
+                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+            )
+        )
+
+    # same for box_2_center
+    s_Bp_all = []
+    for p,box_scale_fact in zip(x_j_all,box_scale_fact_all):
+        s_Bp_all.append(
+            (
+                p[0] + box_scale_fact * np.random.uniform(-1, 1),
+                p[1] + box_scale_fact * np.random.uniform(-1, 1),
+                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+            )
+        )
+
+    center_distances = []
+    rel_errors = []
+    for x_j, s_B, s_Bp in zip(x_j_all, s_B_all, s_Bp_all):
+
+        b_j = (x_j[0] - s_B[0],x_j[1] - s_B[1],x_j[2] - s_B[2])
+        b_jp = (x_j[0] - s_Bp[0],x_j[1] - s_Bp[1],x_j[2] - s_Bp[2])
+
+        if order == 5:
+            Q_n_B = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_j)
+            Q_n_B *= m_j
+
+            Q_n_Bp = shamrock.math.SymTensorCollection_f64_0_5.from_vec(b_jp)
+            Q_n_Bp *= m_j
+
+            Q_n_B_offset = shamrock.phys.offset_multipole_5(Q_n_B, s_B, s_Bp)
+        elif order == 4:
+            Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+            Q_n_B *= m_j
+
+            Q_n_Bp = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_jp)
+            Q_n_Bp *= m_j
+
+            Q_n_B_offset = shamrock.phys.offset_multipole_4(Q_n_B, s_B, s_Bp)
+        elif order == 3:
+            Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
+            Q_n_B *= m_j
+
+            Q_n_Bp = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_jp)
+            Q_n_Bp *= m_j
+
+            Q_n_B_offset = shamrock.phys.offset_multipole_3(Q_n_B, s_B, s_Bp)
+        elif order == 2:
+            Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
+            Q_n_B *= m_j
+
+            Q_n_Bp = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_jp)
+            Q_n_Bp *= m_j
+
+            Q_n_B_offset = shamrock.phys.offset_multipole_2(Q_n_B, s_B, s_Bp)
+        else:
+            raise ValueError(f"Unsupported offset order: {order}")
+
+        tmp = Q_n_Bp
+        tmp *= -1
+        Q_n_B_offset += tmp
+
+        rel_error = tensor_collect_norm(Q_n_B_offset)/tensor_collect_norm(Q_n_B)
+        rel_errors.append(rel_error)
+
+        center_distances.append(np.linalg.norm(np.array(s_B) - np.array(s_Bp)))
+    
+    plt.scatter(center_distances, rel_errors, s=1, label=f"multipole order = {order}")
+
+plt.xlabel("$\\vert \\vert s_B - s_B'\\vert \\vert$")
+plt.ylabel("$\\vert \\vert Q_n(s_B) - Q_n(s_B') \\vert \\vert / \\vert \\vert Q_n(s_B) \\vert \\vert$ (relative error) ")
+plt.xscale("log")
+plt.yscale("log")
+plt.title("Multipole offset precision")
+plt.legend(loc="lower right")
+plt.grid()
+plt.show()

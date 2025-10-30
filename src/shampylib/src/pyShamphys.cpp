@@ -26,6 +26,7 @@
 #include "shamphys/fmm/GreenFuncGravCartesian.hpp"
 #include "shamphys/fmm/contract_grav_moment.hpp"
 #include "shamphys/fmm/grav_moments.hpp"
+#include "shamphys/fmm/offset_multipole.hpp"
 #include "shamphys/orbits.hpp"
 #include <pybind11/complex.h>
 #include <complex>
@@ -337,4 +338,12 @@ Register_pymod(shamphyslibinit) {
         "contract_grav_moment_to_force_2", &shamphys::contract_grav_moment_to_force<f64, 2>);
     shamphys_module.def(
         "contract_grav_moment_to_force_1", &shamphys::contract_grav_moment_to_force<f64, 1>);
+
+    shamcomm::logs::debug_ln("[Py]", "registering shamrock.phys.offset_multipole");
+    shamphys_module.def("offset_multipole_5", &shamphys::offset_multipole<f64, 0, 5>, py::arg("Q"), py::arg("from"), py::arg("to"));
+    shamphys_module.def("offset_multipole_4", &shamphys::offset_multipole<f64, 0, 4>, py::arg("Q"), py::arg("from"), py::arg("to"));
+    shamphys_module.def("offset_multipole_3", &shamphys::offset_multipole<f64, 0, 3>, py::arg("Q"), py::arg("from"), py::arg("to"));
+    shamphys_module.def("offset_multipole_2", &shamphys::offset_multipole<f64, 0, 2>, py::arg("Q"), py::arg("from"), py::arg("to"));
+    //shamphys_module.def("offset_multipole_1", &shamphys::offset_multipole<f64, 0, 1>);
+    //shamphys_module.def("offset_multipole_0", &shamphys::offset_multipole<f64, 0, 0>);
 }
