@@ -34,16 +34,16 @@ namespace shamphys {
 
         auto force_val = tensor_to_sycl(dM_k.t1 * a_k.t0);
         if constexpr (order >= 2) {
-            force_val += tensor_to_sycl(dM_k.t2 * a_k.t1);
+            force_val += tensor_to_sycl(dM_k.t2 * a_k.t1)/1;
         }
         if constexpr (order >= 3) {
-            force_val += tensor_to_sycl(dM_k.t3 * a_k.t2);
+            force_val += tensor_to_sycl(dM_k.t3 * a_k.t2)/2;
         }
         if constexpr (order >= 4) {
-            force_val += tensor_to_sycl(dM_k.t4 * a_k.t3);
+            force_val += tensor_to_sycl(dM_k.t4 * a_k.t3)/6;
         }
         if constexpr (order >= 5) {
-            force_val += tensor_to_sycl(dM_k.t5 * a_k.t4);
+            force_val += tensor_to_sycl(dM_k.t5 * a_k.t4)/24;
         }
 
         return force_val;

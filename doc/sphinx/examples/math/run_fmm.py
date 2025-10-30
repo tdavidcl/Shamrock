@@ -1237,6 +1237,7 @@ def plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j):
         x_j[0], x_j[1], x_j[2], color="red", label="$x_j$"
     )
 
+
     draw_aabb(ax, box_A, "blue",0.1)
     draw_aabb(ax, box_Ap, "cyan",0.1)
     draw_aabb(ax, box_B, "red",0.1)
@@ -1285,19 +1286,21 @@ print("Q_n_B =",Q_n_B)
 # %%
 D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
 dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
-print("D_n =",D_n)
+#print("D_n =",D_n)
 print("dM_k =",dM_k)
 
 # %%
 Dp_n = shamrock.phys.green_func_grav_cartesian_1_5(rp)
 dMp_k = shamrock.phys.get_dM_mat_5(Dp_n, Q_n_B)
-print("Dp_n =",Dp_n)
+#print("Dp_n =",Dp_n)
 print("dMp_k =",dMp_k)
 
 # %%
 # Offset the grav moment to dMp_k
-dM_k_offset = shamrock.phys.offset_dM_mat_5(dM_k, s_Ap, s_A)
+dM_k_offset = shamrock.phys.offset_dM_mat_5(dM_k, s_A, s_Ap)
+print("dM_k_offset =",dM_k_offset)
 
+# %%
 delta = dM_k_offset - dMp_k
 
 print("delta =",delta)
@@ -1327,3 +1330,28 @@ result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
 print("force_i         =", -Gconst * np.array(result))
 print("force_ip        =", -Gconst * np.array(resultp))
 print("force_ip_offset =", -Gconst * np.array(result_offset))
+
+box_scale_fact = 0.3
+for i in range(50):
+    x_i = (
+        (
+            s_A[0] + box_scale_fact * np.random.uniform(-1, 1),
+            s_A[1] + box_scale_fact * np.random.uniform(-1, 1),
+            s_A[2] + box_scale_fact * np.random.uniform(-1, 1),
+        )
+    )
+
+    a_i = (x_i[0] - s_A[0],x_i[1] - s_A[1],x_i[2] - s_A[2])
+    a_ip = (x_i[0] - s_Ap[0],x_i[1] - s_Ap[1],x_i[2] - s_Ap[2])
+
+    a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_i)
+    a_kp = shamrock.math.SymTensorCollection_f64_0_4.from_vec(a_ip)
+
+    result = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+    resultp = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dMp_k)
+    result_offset = shamrock.phys.contract_grav_moment_to_force_5(a_kp, dM_k_offset)
+
+    delta_f = np.linalg.norm(np.array(result_offset) - np.array(resultp))
+    delta_f /= np.linalg.norm(np.array(resultp))
+
+    print(delta_f,i)
