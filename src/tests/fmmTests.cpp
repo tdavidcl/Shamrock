@@ -91,16 +91,16 @@ class FMM_prec_eval {
                 phi_val += M_k.t1 * a_k.t1;
             }
             if constexpr (order >= 2) {
-                phi_val += M_k.t2 * a_k.t2;
+                phi_val += M_k.t2 * a_k.t2/2;
             }
             if constexpr (order >= 3) {
-                phi_val += M_k.t3 * a_k.t3;
+                phi_val += M_k.t3 * a_k.t3/6;
             }
             if constexpr (order >= 4) {
-                phi_val += M_k.t4 * a_k.t4;
+                phi_val += M_k.t4 * a_k.t4/24;
             }
             if constexpr (order >= 5) {
-                phi_val += M_k.t5 * a_k.t5;
+                phi_val += M_k.t5 * a_k.t5/120;
             }
 
             // printf("contrib phi : %e %e %e %e %e %e\n",phi_0,phi_1,phi_2,phi_3,phi_4,phi_5);
