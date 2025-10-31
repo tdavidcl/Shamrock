@@ -44,17 +44,16 @@ namespace shamphys {
             SymTensor3d_4<T> &TQ4 = Q.t4;
             SymTensor3d_5<T> &TQ5 = Q.t5;
 
-            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * (1 / 2.)
-                       + ((TD3 * TQ3)) * (1 / 6.) + ((TD4 * TQ4)) * (1 / 24.)
-                       + ((TD5 * TQ5)) * (1 / 120.);
-            auto M_1 = (-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * (1 / 2.)
-                       - ((TD4 * TQ3)) * (1 / 6.) - ((TD5 * TQ4)) * (1 / 24.);
-            auto M_2 = (1.)
-                       * ((TD2 * TQ0) + (TD3 * TQ1) + ((TD4 * TQ2)) * (1 / 2.)
-                          + ((TD5 * TQ3)) * (1 / 6.));
-            auto M_3 = (1.) * ((-1.) * (TD3 * TQ0) - (TD4 * TQ1) - ((TD5 * TQ2)) * (1 / 2.));
-            auto M_4 = (1.) * ((TD4 * TQ0) + (TD5 * TQ1));
-            auto M_5 = (-1.) * (TD5 * TQ0);
+            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * T(1 / 2.)
+                       + ((TD3 * TQ3)) * T(1 / 6.) + ((TD4 * TQ4)) * T(1 / 24.)
+                       + ((TD5 * TQ5)) * T(1 / 120.);
+            auto M_1 = T(-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * T(1 / 2.)
+                       - ((TD4 * TQ3)) * T(1 / 6.) - ((TD5 * TQ4)) * T(1 / 24.);
+            auto M_2
+                = (TD2 * TQ0) + (TD3 * TQ1) + ((TD4 * TQ2)) * T(1 / 2.) + ((TD5 * TQ3)) * T(1 / 6.);
+            auto M_3 = T(-1.) * (TD3 * TQ0) - (TD4 * TQ1) - ((TD5 * TQ2)) * T(1 / 2.);
+            auto M_4 = (TD4 * TQ0) + (TD5 * TQ1);
+            auto M_5 = T(-1.) * (TD5 * TQ0);
 
             return SymTensorCollection<T, 0, 5>{M_0, M_1, M_2, M_3, M_4, M_5};
         } else if constexpr (low_order == 0 && high_order == 4) {
@@ -71,13 +70,13 @@ namespace shamphys {
             SymTensor3d_3<T> &TQ3 = Q.t3;
             SymTensor3d_4<T> &TQ4 = Q.t4;
 
-            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * (1 / 2.)
-                       + ((TD3 * TQ3)) * (1 / 6.) + ((TD4 * TQ4)) * (1 / 24.);
-            auto M_1 = (-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * (1 / 2.)
-                       - ((TD4 * TQ3)) * (1 / 6.);
-            auto M_2 = (1.) * ((TD2 * TQ0) + (TD3 * TQ1) + ((TD4 * TQ2)) * (1 / 2.));
-            auto M_3 = (1.) * ((-1.) * (TD3 * TQ0) - (TD4 * TQ1));
-            auto M_4 = (1.) * ((TD4 * TQ0));
+            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * T(1 / 2.)
+                       + ((TD3 * TQ3)) * T(1 / 6.) + ((TD4 * TQ4)) * T(1 / 24.);
+            auto M_1 = T(-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * T(1 / 2.)
+                       - ((TD4 * TQ3)) * T(1 / 6.);
+            auto M_2 = (TD2 * TQ0) + (TD3 * TQ1) + ((TD4 * TQ2)) * T(1 / 2.);
+            auto M_3 = T(-1.) * (TD3 * TQ0) - (TD4 * TQ1);
+            auto M_4 = (TD4 * TQ0);
 
             return SymTensorCollection<T, 0, 4>{M_0, M_1, M_2, M_3, M_4};
         } else if constexpr (low_order == 0 && high_order == 3) {
@@ -93,10 +92,10 @@ namespace shamphys {
             SymTensor3d_3<T> &TQ3 = Q.t3;
 
             auto M_0
-                = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * (1 / 2.) + ((TD3 * TQ3)) * (1 / 6.);
-            auto M_1 = (-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * (1 / 2.);
-            auto M_2 = (1.) * ((TD2 * TQ0) + (TD3 * TQ1));
-            auto M_3 = (1.) * ((-1.) * (TD3 * TQ0));
+                = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * T(1 / 2.) + ((TD3 * TQ3)) * T(1 / 6.);
+            auto M_1 = T(-1.) * (TD1 * TQ0) - (TD2 * TQ1) - ((TD3 * TQ2)) * T(1 / 2.);
+            auto M_2 = (TD2 * TQ0) + (TD3 * TQ1);
+            auto M_3 = T(-1.) * (TD3 * TQ0);
 
             return SymTensorCollection<T, 0, 3>{M_0, M_1, M_2, M_3};
         } else if constexpr (low_order == 0 && high_order == 2) {
@@ -109,9 +108,9 @@ namespace shamphys {
             SymTensor3d_1<T> &TQ1 = Q.t1;
             SymTensor3d_2<T> &TQ2 = Q.t2;
 
-            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * (1 / 2.);
-            auto M_1 = (-1.) * (TD1 * TQ0) - (TD2 * TQ1);
-            auto M_2 = (1.) * ((TD2 * TQ0));
+            auto M_0 = (TD0 * TQ0) + (TD1 * TQ1) + ((TD2 * TQ2)) * T(1 / 2.);
+            auto M_1 = T(-1.) * (TD1 * TQ0) - (TD2 * TQ1);
+            auto M_2 = TD2 * TQ0;
 
             return SymTensorCollection<T, 0, 2>{M_0, M_1, M_2};
         } else if constexpr (low_order == 0 && high_order == 1) {
@@ -123,7 +122,7 @@ namespace shamphys {
             SymTensor3d_1<T> &TQ1 = Q.t1;
 
             auto M_0 = (TD0 * TQ0) + (TD1 * TQ1);
-            auto M_1 = (-1.) * (TD1 * TQ0);
+            auto M_1 = T(-1.) * (TD1 * TQ0);
 
             return SymTensorCollection<T, 0, 1>{M_0, M_1};
         } else if constexpr (low_order == 0 && high_order == 0) {
@@ -132,7 +131,7 @@ namespace shamphys {
 
             T &TQ0 = Q.t0;
 
-            auto M_0 = (TD0 * TQ0);
+            auto M_0 = TD0 * TQ0;
 
             return SymTensorCollection<T, 0, 0>{M_0};
         } else {
@@ -164,16 +163,16 @@ namespace shamphys {
             SymTensor3d_4<T> &TQ4 = Q.t4;
             // SymTensor3d_5<T> & TQ5 = Q.t5;
 
-            constexpr T _1i2  = (1. / 2.);
-            constexpr T _1i6  = (1. / 6.);
-            constexpr T _1i24 = (1. / 24.);
+            constexpr T _1i2  = T(1. / 2.);
+            constexpr T _1i6  = T(1. / 6.);
+            constexpr T _1i24 = T(1. / 24.);
 
             auto M_1 = TD1 * TQ0 + TD2 * TQ1 + (TD3 * TQ2) * _1i2 + (TD4 * TQ3) * _1i6
                        + (TD5 * TQ4) * _1i24;
             auto M_2 = (T(-1.) * TD2 * TQ0) - TD3 * TQ1 - (TD4 * TQ2) * _1i2 - (TD5 * TQ3) * _1i6;
-            auto M_3 = (TD3 * TQ0 + TD4 * TQ1 + (TD5 * TQ2) * _1i2);
-            auto M_4 = ((T(-1.) * (TD4 * TQ0)) - TD5 * TQ1);
-            auto M_5 = (TD5 * TQ0);
+            auto M_3 = TD3 * TQ0 + TD4 * TQ1 + (TD5 * TQ2) * _1i2;
+            auto M_4 = (T(-1.) * (TD4 * TQ0)) - TD5 * TQ1;
+            auto M_5 = TD5 * TQ0;
 
             return SymTensorCollection<T, 1, 5>{M_1, M_2, M_3, M_4, M_5};
         } else if constexpr (high_order == 3) {
@@ -191,8 +190,8 @@ namespace shamphys {
 
             auto M_1 = TD1 * TQ0 + TD2 * TQ1 + (TD3 * TQ2) * T(1. / 2.) + (TD4 * TQ3) * T(1. / 6.);
             auto M_2 = (T(-1.) * TD2 * TQ0) - TD3 * TQ1 - (TD4 * TQ2) * T(1. / 2.);
-            auto M_3 = T(1.) * (TD3 * TQ0 + TD4 * TQ1);
-            auto M_4 = T(1.) * ((T(-1.) * (TD4 * TQ0)));
+            auto M_3 = TD3 * TQ0 + TD4 * TQ1;
+            auto M_4 = T(-1.) * (TD4 * TQ0);
 
             return SymTensorCollection<T, 1, 4>{M_1, M_2, M_3, M_4};
         } else if constexpr (high_order == 2) {
@@ -208,7 +207,7 @@ namespace shamphys {
 
             auto M_1 = TD1 * TQ0 + TD2 * TQ1 + (TD3 * TQ2) * (1. / 2.);
             auto M_2 = (T(-1.) * TD2 * TQ0) - TD3 * TQ1;
-            auto M_3 = T(1.) * (TD3 * TQ0);
+            auto M_3 = TD3 * TQ0;
 
             return SymTensorCollection<T, 1, 3>{M_1, M_2, M_3};
         } else if constexpr (high_order == 1) {
@@ -221,7 +220,7 @@ namespace shamphys {
             SymTensor3d_1<T> &TQ1 = Q.t1;
 
             auto M_1 = TD1 * TQ0 + TD2 * TQ1;
-            auto M_2 = (T(-1.) * TD2 * TQ0);
+            auto M_2 = T(-1.) * TD2 * TQ0;
 
             return SymTensorCollection<T, 1, 2>{M_1, M_2};
         } else if constexpr (high_order == 0) {
