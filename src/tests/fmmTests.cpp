@@ -91,16 +91,16 @@ class FMM_prec_eval {
                 phi_val += M_k.t1 * a_k.t1;
             }
             if constexpr (order >= 2) {
-                phi_val += M_k.t2 * a_k.t2/2;
+                phi_val += M_k.t2 * a_k.t2 / 2;
             }
             if constexpr (order >= 3) {
-                phi_val += M_k.t3 * a_k.t3/6;
+                phi_val += M_k.t3 * a_k.t3 / 6;
             }
             if constexpr (order >= 4) {
-                phi_val += M_k.t4 * a_k.t4/24;
+                phi_val += M_k.t4 * a_k.t4 / 24;
             }
             if constexpr (order >= 5) {
-                phi_val += M_k.t5 * a_k.t5/120;
+                phi_val += M_k.t5 * a_k.t5 / 120;
             }
 
             // printf("contrib phi : %e %e %e %e %e %e\n",phi_0,phi_1,phi_2,phi_3,phi_4,phi_5);
@@ -118,12 +118,12 @@ class FMM_prec_eval {
     static T eval_prec_fmm_force(
         sycl::vec<T, 3> xi, sycl::vec<T, 3> xj, sycl::vec<T, 3> sa, sycl::vec<T, 3> sb) {
 
-        //logger::raw_ln("--------------------------------");
-        //logger::raw_ln("Order =", order);
-        //logger::raw_ln("xi =", xi);
-        //logger::raw_ln("xj =", xj);
-        //logger::raw_ln("sa =", sa);
-        //logger::raw_ln("sb =", sb);
+        // logger::raw_ln("--------------------------------");
+        // logger::raw_ln("Order =", order);
+        // logger::raw_ln("xi =", xi);
+        // logger::raw_ln("xj =", xj);
+        // logger::raw_ln("sa =", sa);
+        // logger::raw_ln("sb =", sb);
 
         using namespace shammath;
         f64 m_j = 1;
@@ -150,8 +150,8 @@ class FMM_prec_eval {
 
                 auto B_n = moment_types::from_vec(bj);
 
-                //logger::raw_ln("bj =", bj);
-                //logger::raw_ln("B_n =", py::str(py::cast(B_n)).cast<std::string>());
+                // logger::raw_ln("bj =", bj);
+                // logger::raw_ln("B_n =", py::str(py::cast(B_n)).cast<std::string>());
 
                 B_n *= m_j;
 
@@ -176,12 +176,12 @@ class FMM_prec_eval {
 
             auto dM_k = shamphys::get_dM_mat(D_n, Q_n);
 
-            //logger::raw_ln("r_fmm =", r_fmm);
-            //logger::raw_ln("a_i =", a_i);
-            //logger::raw_ln("a_k =", py::str(py::cast(a_k)).cast<std::string>());
-            //logger::raw_ln("Q_n =", py::str(py::cast(Q_n)).cast<std::string>());
-            //logger::raw_ln("D_n =", py::str(py::cast(D_n)).cast<std::string>());
-            //logger::raw_ln("dM_k =", py::str(py::cast(dM_k)).cast<std::string>());
+            // logger::raw_ln("r_fmm =", r_fmm);
+            // logger::raw_ln("a_i =", a_i);
+            // logger::raw_ln("a_k =", py::str(py::cast(a_k)).cast<std::string>());
+            // logger::raw_ln("Q_n =", py::str(py::cast(Q_n)).cast<std::string>());
+            // logger::raw_ln("D_n =", py::str(py::cast(D_n)).cast<std::string>());
+            // logger::raw_ln("dM_k =", py::str(py::cast(dM_k)).cast<std::string>());
 
             auto tensor_to_sycl = [](SymTensor3d_1<T> a) {
                 return sycl::vec<T, 3>{a.v_0, a.v_1, a.v_2};
@@ -203,8 +203,8 @@ class FMM_prec_eval {
 
             f64_3 force_val_t = shamphys::contract_grav_moment_to_force<f64, order>(a_k, dM_k);
             force_val         = force_val_t;
-            //logger::raw_ln("force_val_t =", force_val_t);
-            //logger::raw_ln("force_val =", force_val);
+            // logger::raw_ln("force_val_t =", force_val_t);
+            // logger::raw_ln("force_val =", force_val);
 
             // printf("contrib phi : %e %e %e %e %e %e\n",phi_0,phi_1,phi_2,phi_3,phi_4,phi_5);
 

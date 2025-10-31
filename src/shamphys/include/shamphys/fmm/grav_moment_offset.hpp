@@ -19,7 +19,6 @@
 #include "shambase/type_traits.hpp"
 #include "shammath/symtensor_collections.hpp"
 #include "shamphys/fmm/grav_moments.hpp"
-#include <hipSYCL/sycl/libkernel/vec.hpp>
 
 namespace shamphys {
 
