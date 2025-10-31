@@ -807,7 +807,14 @@ for s_A in s_A_all:
 
 
 # %%
-# Testing the precision
+# FMM precision (Angle)
+# ^^^^^^^^^^^^^^^^^^^^^
+
+# %%
+# For this test we will generate a pair of random positions :math:`x_i` and :math:`x_j`.
+# Then we will generate two boxes around the positions :math:`s_A` and :math:`s_B` where each is at a distance box_scale_fact from their respective particle.
+# We then perform the FMM expansion to compute the force on :math:`x_i` as well as the exact force.
+# We will then plot the relative error as a function of the angle :math:`\theta = (b_A + b_B) / |\mathbf{s}_A - \mathbf{s}_B|` where :math:`b_A` and :math:`b_B` are the distances from the particle to the box centers.
 
 plt.figure()
 for order in range(1, 6):
@@ -903,7 +910,30 @@ plt.show()
 
 # %%
 # Mass moment offset
-# ^^^^^^^^^^^^^^^^^
+# ^^^^^^^^^^^^^^^^^^
+#
+# Now that we know how to compute a FMM force, we now need some remaining 
+# tools to exploit it fully in a code. In a code using a tree the procedure 
+# to using a FMM is to first propagate the mass moment upward from leafs 
+# cells up to the root. Then compute the gravitation moments for all 
+# cell-cell interations and then propagate the gravitational moment downward 
+# down to the leaves.
+#
+# We start with the upward pass for the mass moment. To perform it we need 
+# to compute the mass moment of a parent according to the one of its children.
+# The issue is that the childrens and the parents do not share the same center.
+# Therefor we need to offset the mass moment of the children to the parent 
+# center before summing their moments to get the parent's one.
+#
+# This is what we call mass moment translation/offset. This section will 
+# showcase its usage and precision.
+#
+# We start of by defining a particle :math:`x_j` and a box :math:`s_B` around 
+# it as well as a new box :math:`s_B'`. The goal will be to offset the mass 
+# moment of the box :math:`s_B` to the box :math:`s_B'` and compare it to 
+# the moment of the box :math:`s_B'` computed directly. This should yield 
+# the same result meaning that we never need to compute the moment directly 
+# at the parent center and simply use its childrens instead.
 
 s_B = (0,0,0)
 box_B_size = 1.0
@@ -1166,10 +1196,31 @@ plt.legend(loc="lower right")
 plt.grid()
 plt.show()
 
+# %%
+# As shown the precision is basically the floating point precision.
+# Also as a result we can observe a small precision loss for high orders.
 
 # %%
 # Gravitational moment offset
-# ^^^^^^^^^^^^^^^^^
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# %%
+# Now that we know how to offset the mass moment, we need to offset the gravitational moment.
+# This is required as we will compute gravitational moments for cell-cell interactions, 
+# but we still need to propagate that moment from a parent cell to its children until
+# each leaves contains the complete gravitational moment which will be used to compute 
+# the resulting force.
+
+# %%
+# We devise a similar setup to the mass moment offset. We define a particle 
+# :math:`x_j` and a box of center :math:`s_B` around it. We then define a box 
+# of center :math:`s_A` around the particle :math:`x_i` as well as a new box 
+# of center :math:`s_A'`. 
+#
+# The goal will be to offset the gravitational moment of the box :math:`s_A` 
+# to the box :math:`s_A'` and then compute the resulting FMM force on 
+# :math:`x_i` in the new box and compare it to the force given the FMM in the 
+# box :math:`s_A`. If everything is working correctly they should be equals.
 
 def plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j):
     box_A = shamrock.math.AABB_f64_3(
@@ -1255,7 +1306,7 @@ def plot_grav_moment_offset(s_A, s_Ap, s_B, box_A_size, box_B_size,x_j):
 
 
 
-s_B = (0,-0.2,-0.5)
+s_B = (0,-0.2,-0.2)
 s_A = (1,0,0)
 s_Ap = (1.1,0.1,0.0)
 
@@ -1518,9 +1569,9 @@ def test_grav_moment_offset(x_i, x_j, s_A, s_Ap, s_B, m_j, order, do_print):
     return force_i, force_i_offset, angle, delta_A
 
 # %%
-# Let test for many different parameters
-# For clarification a perfect result here is that the translated dMk contracted with the new 
-# displacment ak_p give the same result as the original expansion (which it does ;) ).
+# Let test for many different parameters.
+# For clarification a perfect result here is that the translated dMk contracted with the new displacment ak_p give the same result as the original expansion (which it does ;) ).
+
 plt.figure()
 for order in range(2, 6):
     print("--------------------------------")
