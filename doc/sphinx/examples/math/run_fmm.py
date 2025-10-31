@@ -813,23 +813,19 @@ for order in range(1, 6):
     print("--------------------------------")
 
     # set seed
-    np.random.seed(111)
+    rng = np.random.default_rng(111)
 
     N = 50000
 
     # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
     x_i_all = []
     for i in range(N):
-        x_i_all.append(
-            (np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1))
-        )
+        x_i_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
 
     # same for x_j
     x_j_all = []
     for i in range(N):
-        x_j_all.append(
-            (np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1))
-        )
+        x_j_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
 
     box_scale_fact_all = np.linspace(0, 0.1, N).tolist()
 
@@ -838,9 +834,9 @@ for order in range(1, 6):
     for p, box_scale_fact in zip(x_i_all, box_scale_fact_all):
         s_A_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
@@ -849,9 +845,9 @@ for order in range(1, 6):
     for p, box_scale_fact in zip(x_j_all, box_scale_fact_all):
         s_B_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
@@ -1137,16 +1133,14 @@ plt.figure()
 
 for order in range(2, 6):
     # set seed
-    np.random.seed(111)
+    rng = np.random.default_rng(111)
 
     N = 50000
 
     # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
     x_j_all = []
     for i in range(N):
-        x_j_all.append(
-            (np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1))
-        )
+        x_j_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
 
     box_scale_fact_all = np.linspace(0, 1, N).tolist()
 
@@ -1155,9 +1149,9 @@ for order in range(2, 6):
     for p, box_scale_fact in zip(x_j_all, box_scale_fact_all):
         s_B_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
@@ -1166,9 +1160,9 @@ for order in range(2, 6):
     for p, box_scale_fact in zip(x_j_all, box_scale_fact_all):
         s_Bp_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
@@ -1599,23 +1593,19 @@ for order in range(2, 6):
     print("--------------------------------")
 
     # set seed
-    np.random.seed(111)
+    rng = np.random.default_rng(111)
 
     N = 50000
 
     # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
     x_i_all = []
     for i in range(N):
-        x_i_all.append(
-            (np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1))
-        )
+        x_i_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
 
     # same for x_j
     x_j_all = []
     for i in range(N):
-        x_j_all.append(
-            (np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1))
-        )
+        x_j_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
 
     box_scale_fact_all = np.linspace(0, 0.1, N).tolist()
 
@@ -1625,16 +1615,16 @@ for order in range(2, 6):
     for p, box_scale_fact in zip(x_i_all, box_scale_fact_all):
         s_A_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
         s_Ap_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
@@ -1643,9 +1633,9 @@ for order in range(2, 6):
     for p, box_scale_fact in zip(x_j_all, box_scale_fact_all):
         s_B_all.append(
             (
-                p[0] + box_scale_fact * np.random.uniform(-1, 1),
-                p[1] + box_scale_fact * np.random.uniform(-1, 1),
-                p[2] + box_scale_fact * np.random.uniform(-1, 1),
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
             )
         )
 
