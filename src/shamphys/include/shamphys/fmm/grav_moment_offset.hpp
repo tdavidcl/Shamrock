@@ -25,9 +25,17 @@ namespace shamphys {
     // Offset the gravitational moment derivatives
     template<class T, u32 low_order, u32 high_order>
     inline shammath::SymTensorCollection<T, low_order, high_order> offset_dM_mat_delta(
-        shammath::SymTensorCollection<T, low_order, high_order> &dM, sycl::vec<T, 3> offset) {
+        const shammath::SymTensorCollection<T, low_order, high_order> &dM,
+        const sycl::vec<T, 3> &offset) {
 
         using namespace shammath;
+
+        static constexpr T inv_factorial_0 = 1. / 1;
+        static constexpr T inv_factorial_1 = 1. / 1;
+        static constexpr T inv_factorial_2 = 1. / 2;
+        static constexpr T inv_factorial_3 = 1. / 6;
+        static constexpr T inv_factorial_4 = 1. / 24;
+        static constexpr T inv_factorial_5 = 1. / 120;
 
         if constexpr (low_order == 0 && high_order == 5) {
 
@@ -55,13 +63,6 @@ namespace shamphys {
             auto &dM_ret_3 = dM_ret.t3;
             auto &dM_ret_4 = dM_ret.t4;
             auto &dM_ret_5 = dM_ret.t5;
-
-            static constexpr T inv_factorial_0 = 1. / 1;
-            static constexpr T inv_factorial_1 = 1. / 1;
-            static constexpr T inv_factorial_2 = 1. / 2;
-            static constexpr T inv_factorial_3 = 1. / 6;
-            static constexpr T inv_factorial_4 = 1. / 24;
-            static constexpr T inv_factorial_5 = 1. / 120;
 
             // dM_k = sum_{l=k}^p \frac{1}{(l-k)!} h^(l-k).dM_l
 
@@ -108,13 +109,6 @@ namespace shamphys {
             auto &dM_ret_4 = dM_ret.t4;
             auto &dM_ret_5 = dM_ret.t5;
 
-            static constexpr T inv_factorial_0 = 1. / 1;
-            static constexpr T inv_factorial_1 = 1. / 1;
-            static constexpr T inv_factorial_2 = 1. / 2;
-            static constexpr T inv_factorial_3 = 1. / 6;
-            static constexpr T inv_factorial_4 = 1. / 24;
-            static constexpr T inv_factorial_5 = 1. / 120;
-
             // dM_k = sum_{l=k}^p \frac{1}{(l-k)!} h^(l-k).dM_l
 
             dM_ret_1 = inv_factorial_0 * h_0 * dM_1 + inv_factorial_1 * h_1 * dM_2
@@ -153,13 +147,6 @@ namespace shamphys {
             auto &dM_ret_3 = dM_ret.t3;
             auto &dM_ret_4 = dM_ret.t4;
 
-            static constexpr T inv_factorial_0 = 1. / 1;
-            static constexpr T inv_factorial_1 = 1. / 1;
-            static constexpr T inv_factorial_2 = 1. / 2;
-            static constexpr T inv_factorial_3 = 1. / 6;
-            static constexpr T inv_factorial_4 = 1. / 24;
-            static constexpr T inv_factorial_5 = 1. / 120;
-
             // dM_k = sum_{l=k}^p \frac{1}{(l-k)!} h^(l-k).dM_l
 
             dM_ret_1 = inv_factorial_0 * h_0 * dM_1 + inv_factorial_1 * h_1 * dM_2
@@ -192,13 +179,6 @@ namespace shamphys {
             auto &dM_ret_2 = dM_ret.t2;
             auto &dM_ret_3 = dM_ret.t3;
 
-            static constexpr T inv_factorial_0 = 1. / 1;
-            static constexpr T inv_factorial_1 = 1. / 1;
-            static constexpr T inv_factorial_2 = 1. / 2;
-            static constexpr T inv_factorial_3 = 1. / 6;
-            static constexpr T inv_factorial_4 = 1. / 24;
-            static constexpr T inv_factorial_5 = 1. / 120;
-
             // dM_k = sum_{l=k}^p \frac{1}{(l-k)!} h^(l-k).dM_l
 
             dM_ret_1 = inv_factorial_0 * h_0 * dM_1 + inv_factorial_1 * h_1 * dM_2
@@ -225,13 +205,6 @@ namespace shamphys {
             auto &dM_ret_1 = dM_ret.t1;
             auto &dM_ret_2 = dM_ret.t2;
 
-            static constexpr T inv_factorial_0 = 1. / 1;
-            static constexpr T inv_factorial_1 = 1. / 1;
-            static constexpr T inv_factorial_2 = 1. / 2;
-            static constexpr T inv_factorial_3 = 1. / 6;
-            static constexpr T inv_factorial_4 = 1. / 24;
-            static constexpr T inv_factorial_5 = 1. / 120;
-
             // dM_k = sum_{l=k}^p \frac{1}{(l-k)!} h^(l-k).dM_l
 
             dM_ret_1 = inv_factorial_0 * h_0 * dM_1 + inv_factorial_1 * h_1 * dM_2;
@@ -247,9 +220,9 @@ namespace shamphys {
     // Offset the gravitational moment derivatives (with two vecs)
     template<class T, u32 low_order, u32 high_order>
     inline shammath::SymTensorCollection<T, low_order, high_order> offset_dM_mat(
-        shammath::SymTensorCollection<T, low_order, high_order> &dM,
-        sycl::vec<T, 3> from,
-        sycl::vec<T, 3> to) {
+        const shammath::SymTensorCollection<T, low_order, high_order> &dM,
+        const sycl::vec<T, 3> &from,
+        const sycl::vec<T, 3> &to) {
         return offset_dM_mat_delta(dM, to - from);
     }
 
