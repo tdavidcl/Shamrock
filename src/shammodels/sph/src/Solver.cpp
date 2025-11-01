@@ -1405,7 +1405,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         n,
                         [corrected_len, group_size, G, gpart_mass, gravitational_softening](
                             u32 Npart, const Tvec *__restrict xyz, Tvec *__restrict axyz_ext) {
-
                             auto range = sycl::nd_range<1>{corrected_len, group_size};
 
                             return [=](sycl::handler &cgh) {
@@ -1452,7 +1451,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                                 });
                             };
                         });
-
                 });
             }
         } else {

@@ -169,11 +169,11 @@ def draw_arrow(ax, p1, p2, color, label, arr_scale=0.1):
 #
 # .. math::
 #    \Phi_i &= - \mathcal{G} \int \rho(\mathbf{x}_j) G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
-#    &= - \mathcal{G} \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k} \cdot \underbrace{\int \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{M_{p,k}} \\
+#    &= - \mathcal{G} \sum_{k = 0}^p \frac{1}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{(-1)^k \sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k} \cdot \underbrace{\int \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{M_{p,k}} \\
 #
 # .. math::
 #    \mathbf{f}_i &= -\mathcal{G} \int \rho(\mathbf{x}_j) \nabla_j G(\mathbf{x}_j - \mathbf{x}_i) d\mathbf{x}_j \\
-#    &= -\mathcal{G}  \sum_{k = 0}^p \frac{(-1)^k}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{\sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k+1} \cdot  \underbrace{\int \rho(\mathbf{x}_j)\mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{dM_{p,k} = M_{p+1,k+1}}
+#    &= -\mathcal{G}  \sum_{k = 0}^p \frac{1}{k!} \mathbf{a}_i^{(k)} \cdot \underbrace{(-1)^k \sum_{n=0}^{p-k} \frac{1}{n!} D_{n+k+1} \cdot  \underbrace{\int \rho(\mathbf{x}_j)\mathbf{b}_j^{(n)} d\mathbf{x}_j}_{Q_n^B}}_{dM_{p,k} = M_{p+1,k+1}}
 #
 
 # %%
@@ -185,7 +185,7 @@ def draw_arrow(ax, p1, p2, color, label, arr_scale=0.1):
 # of :math:`\mathbf{a}_i^{(k)}` instead.
 #
 # .. math::
-#    \Phi_i  = - \int \mathbf{f}_i =  -\mathcal{G}  \sum_{k = 0}^p \frac{(-1)^k}{k!} \int\mathbf{a}_i^{(k)} \cdot {M_{p+1,k+1}}
+#    \Phi_i  = - \int \mathbf{f}_i =  -\mathcal{G}  \sum_{k = 0}^p \frac{1}{k!} \int\mathbf{a}_i^{(k)} \cdot {M_{p+1,k+1}}
 #
 
 # %%
@@ -1674,6 +1674,287 @@ plt.ylabel("$|f_{\\rm fmm} - f_{\\rm fmm, offset}| / |f_{\\rm fmm}|$ (Relative e
 plt.xscale("log")
 plt.yscale("log")
 plt.title("Grav moment translation error")
+plt.legend(loc="lower right")
+plt.grid()
+plt.show()
+
+# %%
+# Small note on multipole method (Without FMM)
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+# %%
+# In some ways a MM method is a FMM where there is no box A.
+# If we reuse the formula at the start of this page we get:
+#
+# .. math::
+#    \mathbf{b}_j = \mathbf{x}_j - \mathbf{s}_b
+#
+# and the distance between the centers of the boxes is:
+#
+# .. math::
+#    \mathbf{r} = \mathbf{s}_b - \mathbf{x}_i
+#
+# This implies that the distance between the two particles is:
+#
+# .. math::
+#    \mathbf{x}_j - \mathbf{x}_i = \mathbf{r} + \mathbf{b}_j
+
+# %%
+# .. math::
+#    \phi(\mathbf{x}_i) &= - \mathcal{G}\iiint_V \rho(\mathbf{x}_j) G(\mathbf{x}_j - \mathbf{x}_i) ~{\rm d}^3\mathbf{x}_j\\
+#    &\simeq - \mathcal{G}\iiint_V \rho(\mathbf{x}_j)  \sum_{n = 0}^p \frac{1}{n!} \nabla_r^{(n)} G(\mathbf{r}) \cdot \mathbf{b}_j^{(n)} ~{\rm d}^3\mathbf{x}_j\\
+#    &= - \mathcal{G}\sum_{n = 0}^p \frac{1}{n!} \underbrace{\nabla_r^{(n)} G(\mathbf{r})}_{D_n} \cdot \underbrace{\left(\iiint_V \rho(\mathbf{x}_j) \mathbf{b}_j^{(n)}~{\rm d}^3\mathbf{x}_j\right)}_{Q_n^B},
+#
+# where :math:`D_n` are the gradients of the Green function and :math:`Q^B_n` are
+# the moments of the mass distribution. Hence, the force can then be written as
+# follows:
+#
+# .. math::
+#   f_{\rm g}(\mathbf{x}_i) &= -\nabla_i \phi(\mathbf{x}_i)\\
+#                           &= \mathcal{G}\iiint_V \rho(\mathbf{x}_j) \nabla_i G(\mathbf{x}_j - \mathbf{x}_i) ~{\rm d}^3\mathbf{x}_j\\
+#                           &= - \mathcal{G}\iiint_V \rho(\mathbf{x}_j) \nabla_j G(\mathbf{x}_j - \mathbf{x}_i) ~{\rm d}^3\mathbf{x}_j\\
+#                           &= - \mathcal{G}\sum_{n = 0}^p \frac{1}{n!} \nabla_r {D_n} \cdot {Q_n^B}\\
+#                           &= -\mathcal{G} \sum_{n = 0}^p \frac{1}{n!} {D_{n+1}} \cdot {Q_n^B} \\
+#                           &= -\mathcal{G} \sum_{n = 0}^p \frac{1}{n!} {Q_n^B} \cdot {D_{n+1}}
+#
+# As we can see, the expression of the MM force is litteraly the same contraction
+# as the end of the FMM. Essentially in MM the green function moments are the
+# equivalent of :math:`dM_k` in FMM. So we can use the same final function but put the mass moments
+# instead of box a displacements.
+
+
+s_B = (0, 0, 0)
+
+box_B_size = 0.5
+
+x_j = (0.2, 0.2, 0.0)
+x_i = (1.2, 0.2, 0.0)
+m_j = 1
+m_i = 1
+
+b_j = (x_j[0] - s_B[0], x_j[1] - s_B[1], x_j[2] - s_B[2])
+r = (s_B[0] - x_i[0], s_B[1] - x_i[1], s_B[2] - x_i[2])
+
+# %%
+Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+Q_n_B *= m_j
+print("Q_n_B =", Q_n_B)
+
+# %%
+D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+print("D_n =", D_n)
+
+# %%
+result = shamrock.phys.contract_grav_moment_to_force_5(Q_n_B, D_n)
+Gconst = 1  # let's just set the grav constant to 1
+force_i = -Gconst * np.array(result)
+print("force_i =", force_i)
+
+# %%
+# We can check that this is equivalent to the FMM with s_A = (0,0,0)
+dM_k = shamrock.phys.get_dM_mat_5(D_n, Q_n_B)
+print("dM_k =", dM_k)
+a_k = shamrock.math.SymTensorCollection_f64_0_4.from_vec((0, 0, 0))
+print("a_k =", a_k)
+force_i_fmm_sA_null = shamrock.phys.contract_grav_moment_to_force_5(a_k, dM_k)
+Gconst = 1  # let's just set the grav constant to 1
+force_i_fmm_sA_null = -Gconst * np.array(force_i_fmm_sA_null)
+print("force_i_fmm_sA_null =", force_i_fmm_sA_null)
+
+
+# %%
+# Now we just need the analytical force to compare
+def analytic_force_i(x_i, x_j, Gconst):
+    force_i_direct = (x_j[0] - x_i[0], x_j[1] - x_i[1], x_j[2] - x_i[2])
+    force_i_direct /= np.linalg.norm(force_i_direct) ** 3
+    force_i_direct *= m_i
+    return force_i_direct
+
+
+force_i_exact = analytic_force_i(x_i, x_j, Gconst)
+print("force_i_exact =", force_i_exact)
+
+# %%
+abs_error = np.linalg.norm(force_i - force_i_exact)
+rel_error = abs_error / np.linalg.norm(force_i)
+
+
+b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+b_dist = np.linalg.norm(np.array(x_i) - np.array(s_B))
+angle = (b_B_size) / b_dist
+
+print("abs_error =", abs_error)
+print("rel_error =", rel_error)
+print("angle =", angle)
+
+assert rel_error < 1e-2
+
+# %%
+# Let's code MM in a box
+
+
+def run_mm(x_i, x_j, s_B, m_j, order, do_print):
+
+    b_j = (x_j[0] - s_B[0], x_j[1] - s_B[1], x_j[2] - s_B[2])
+    r = (s_B[0] - x_i[0], s_B[1] - x_i[1], s_B[2] - x_i[2])
+
+    if do_print:
+        print("x_i =", x_i)
+        print("x_j =", x_j)
+        print("s_B =", s_B)
+        print("b_j =", b_j)
+        print("r =", r)
+
+    # compute the tensor product of the displacment
+    if order == 1:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_0.from_vec(b_j)
+    elif order == 2:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_1.from_vec(b_j)
+    elif order == 3:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_2.from_vec(b_j)
+    elif order == 4:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_3.from_vec(b_j)
+    elif order == 5:
+        Q_n_B = shamrock.math.SymTensorCollection_f64_0_4.from_vec(b_j)
+    else:
+        raise ValueError("Invalid order")
+
+    # multiply by mass to get the mass moment
+    Q_n_B *= m_j
+
+    if do_print:
+        print("Q_n_B =", Q_n_B)
+
+    # green function gradients
+    if order == 1:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_1(r)
+    elif order == 2:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_2(r)
+    elif order == 3:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_3(r)
+    elif order == 4:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_4(r)
+    elif order == 5:
+        D_n = shamrock.phys.green_func_grav_cartesian_1_5(r)
+    else:
+        raise ValueError("Invalid order")
+
+    if do_print:
+        print("D_n =", D_n)
+
+    if order == 1:
+        result = shamrock.phys.contract_grav_moment_to_force_1(Q_n_B, D_n)
+    elif order == 2:
+        result = shamrock.phys.contract_grav_moment_to_force_2(Q_n_B, D_n)
+    elif order == 3:
+        result = shamrock.phys.contract_grav_moment_to_force_3(Q_n_B, D_n)
+    elif order == 4:
+        result = shamrock.phys.contract_grav_moment_to_force_4(Q_n_B, D_n)
+    elif order == 5:
+        result = shamrock.phys.contract_grav_moment_to_force_5(Q_n_B, D_n)
+    else:
+        raise ValueError("Invalid order")
+
+    Gconst = 1  # let's just set the grav constant to 1
+    force_i = -Gconst * np.array(result)
+    if do_print:
+        print("force_i =", force_i)
+
+    force_i_exact = analytic_force_i(x_i, x_j, Gconst)
+    if do_print:
+        print("force_i_exact =", force_i_exact)
+
+    b_B_size = np.linalg.norm(np.array(s_B) - np.array(x_j))
+    b_dist = np.linalg.norm(np.array(x_i) - np.array(s_B))
+
+    angle = (b_B_size) / b_dist
+
+    if do_print:
+        print("b_A_size =", b_A_size)
+        print("b_B_size =", b_B_size)
+        print("b_dist =", b_dist)
+        print("angle =", angle)
+
+    return force_i, force_i_exact, angle
+
+
+# %%
+
+plt.figure()
+for order in range(1, 6):
+    print("--------------------------------")
+    print(f"Running MM order = {order}")
+    print("--------------------------------")
+
+    # set seed
+    rng = np.random.default_rng(111)
+
+    N = 50000
+
+    # generate a random set of position in a box of bounds (-1,1)x(-1,1)x(-1,1)
+    x_i_all = []
+    for i in range(N):
+        x_i_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+
+    # same for x_j
+    x_j_all = []
+    for i in range(N):
+        x_j_all.append((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+
+    box_scale_fact_all = np.linspace(0, 0.1, N).tolist()
+
+    # same for box_2_center
+    s_B_all = []
+    for p, box_scale_fact in zip(x_j_all, box_scale_fact_all):
+        s_B_all.append(
+            (
+                p[0] + box_scale_fact * rng.uniform(-1, 1),
+                p[1] + box_scale_fact * rng.uniform(-1, 1),
+                p[2] + box_scale_fact * rng.uniform(-1, 1),
+            )
+        )
+
+    angles = []
+    rel_errors = []
+
+    for x_i, x_j, s_B in zip(x_i_all, x_j_all, s_B_all):
+
+        force_i, force_i_exact, angle = run_mm(x_i, x_j, s_B, m_j, order, do_print=False)
+
+        abs_error = np.linalg.norm(force_i - force_i_exact)
+        rel_error = abs_error / np.linalg.norm(force_i_exact)
+
+        if angle > 5.0 or angle < 1e-4:
+            continue
+
+        angles.append(angle)
+        rel_errors.append(rel_error)
+
+    print(f"Computed for {len(angles)} cases")
+
+    plt.scatter(angles, rel_errors, s=1, label=f"MM order = {order}")
+
+
+def plot_powerlaw(order, center_y):
+    X = [1e-3, 1e-2 / 3, 1e-1]
+    Y = [center_y * (x) ** order for x in X]
+    plt.plot(X, Y, linestyle="dashed", color="black")
+    bbox = dict(boxstyle="round", fc="blanchedalmond", ec="orange", alpha=0.9)
+    plt.text(X[1], Y[1], f"$\\propto x^{order}$", fontsize=9, bbox=bbox)
+
+
+plot_powerlaw(1, 1)
+plot_powerlaw(2, 1)
+plot_powerlaw(3, 1)
+plot_powerlaw(4, 1)
+plot_powerlaw(5, 1)
+
+plt.xlabel("Angle")
+plt.ylabel("Relative Error")
+plt.xscale("log")
+plt.yscale("log")
+plt.title("MM precision")
 plt.legend(loc="lower right")
 plt.grid()
 plt.show()

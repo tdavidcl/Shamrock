@@ -1,6 +1,7 @@
 from statistics import mean, stdev
 
 import shamrock
+
 # Particle tracking is an experimental feature
 
 shamrock.enable_experimental_features()
