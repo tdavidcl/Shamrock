@@ -171,8 +171,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 self.self_grav_config.set_direct(reference_mode);
             },
             py::kw_only(),
-            py::arg("reference_mode") = false
-            )
+            py::arg("reference_mode") = false)
         .def(
             "set_self_gravity_mm",
             [](TConfig &self, u32 mm_order) {

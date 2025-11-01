@@ -195,7 +195,9 @@ namespace shammodels::sph {
             u32 mm_order;
         };
 
-        struct Direct {bool reference_mode = false;};
+        struct Direct {
+            bool reference_mode = false;
+        };
 
         struct None {};
 

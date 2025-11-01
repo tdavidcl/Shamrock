@@ -1468,8 +1468,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                                                     + gravitational_softening);
 
                                                 if (global_id != offset + i) {
-                                                    force += position_scratch[i].w()
-                                                             * r_inv * r_inv * r_inv * R;
+                                                    force += position_scratch[i].w() * r_inv * r_inv
+                                                             * r_inv * R;
                                                 }
                                             }
 

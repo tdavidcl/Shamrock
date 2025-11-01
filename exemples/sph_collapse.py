@@ -1,6 +1,6 @@
-
 import matplotlib.pyplot as plt
 import numpy as np
+
 import shamrock
 
 # Particle tracking is an experimental feature
@@ -56,6 +56,7 @@ part_vol_lattice = 0.74 * part_vol
 
 dr = (part_vol_lattice / ((4.0 / 3.0) * 3.1416)) ** (1.0 / 3.0)
 
+
 def run_case(case_name):
     pmass = -1
 
@@ -101,14 +102,12 @@ def run_case(case_name):
     # On aurora /2 was correct to avoid out of memory
     setup.apply_setup(gen, insert_step=int(scheduler_split_val / 2))
 
-
     vol_b = (xM - xm) * (yM - ym) * (zM - zm)
     totmass = rho_g * vol_b
     pmass = model.total_mass_to_part_mass(totmass)
     model.set_particle_mass(pmass)
 
     model.set_value_in_a_box("uint", "f64", initial_u, bmin, bmax)
-
 
     model.set_cfl_cour(0.1)
     model.set_cfl_force(0.1)
@@ -118,14 +117,24 @@ def run_case(case_name):
     data = ctx.collect_data()
     return data
 
+
 def add_data_to_collect(collected_data, none_case):
 
     # substract the none case from the collected data
     collected_data["axyz"] = collected_data["axyz"] - none_case["axyz"]
-    
-    collected_data["r"] = np.sqrt(collected_data["xyz"][:, 0] ** 2 + collected_data["xyz"][:, 1] ** 2 + collected_data["xyz"][:, 2] ** 2)
-    collected_data["ar"] = np.sqrt(collected_data["axyz"][:, 0] ** 2 + collected_data["axyz"][:, 1] ** 2 + collected_data["axyz"][:, 2] ** 2)
+
+    collected_data["r"] = np.sqrt(
+        collected_data["xyz"][:, 0] ** 2
+        + collected_data["xyz"][:, 1] ** 2
+        + collected_data["xyz"][:, 2] ** 2
+    )
+    collected_data["ar"] = np.sqrt(
+        collected_data["axyz"][:, 0] ** 2
+        + collected_data["axyz"][:, 1] ** 2
+        + collected_data["axyz"][:, 2] ** 2
+    )
     return collected_data
+
 
 data_none = run_case("none")
 
@@ -154,10 +163,16 @@ plt.scatter(data_sfmm["r"], data_sfmm["ar"], s=1, label="sfmm order 4")
 plt.legend()
 
 plt.figure()
-plt.scatter(data_direct["r"], np.abs(data_direct["ar"] - data_direct_safe["ar"]), s=1, label="direct")
+plt.scatter(
+    data_direct["r"], np.abs(data_direct["ar"] - data_direct_safe["ar"]), s=1, label="direct"
+)
 plt.scatter(data_mm["r"], np.abs(data_mm["ar"] - data_direct_safe["ar"]), s=1, label="mm order 4")
-plt.scatter(data_fmm["r"], np.abs(data_fmm["ar"] - data_direct_safe["ar"]), s=1, label="fmm order 4")
-plt.scatter(data_sfmm["r"], np.abs(data_sfmm["ar"] - data_direct_safe["ar"]), s=1, label="sfmm order 4")
+plt.scatter(
+    data_fmm["r"], np.abs(data_fmm["ar"] - data_direct_safe["ar"]), s=1, label="fmm order 4"
+)
+plt.scatter(
+    data_sfmm["r"], np.abs(data_sfmm["ar"] - data_direct_safe["ar"]), s=1, label="sfmm order 4"
+)
 plt.yscale("log")
 plt.legend()
 plt.show()
