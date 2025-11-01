@@ -160,6 +160,12 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("sigma_mhd"),
             py::arg("sigma_u"))
+        .def("set_self_gravity_none",[](TConfig &self) {
+            self.self_grav_config.set_none();
+        })
+        .def("set_self_gravity_direct",[](TConfig &self) {
+            self.self_grav_config.set_direct();
+        })
         .def("set_boundary_free", &TConfig::set_boundary_free)
         .def("set_boundary_periodic", &TConfig::set_boundary_periodic)
         .def("set_boundary_shearing_periodic", &TConfig::set_boundary_shearing_periodic)
