@@ -195,7 +195,7 @@ namespace shammodels::sph {
             u32 mm_order;
         };
 
-        struct Direct {};
+        struct Direct {bool reference_mode = false;};
 
         struct None {};
 
@@ -206,7 +206,7 @@ namespace shammodels::sph {
         void set_sfmm(u32 fmm_order) { config = SFMM{fmm_order}; }
         void set_fmm(u32 fmm_order) { config = FMM{fmm_order}; }
         void set_mm(u32 mm_order) { config = MM{mm_order}; }
-        void set_direct() { config = Direct{}; }
+        void set_direct(bool reference_mode = false) { config = Direct{reference_mode}; }
         void set_none() { config = None{}; }
 
         bool is_none() const { return std::holds_alternative<None>(config); }
@@ -956,6 +956,7 @@ namespace shammodels::sph {
             const SelfGravConfig::Direct *conf = std::get_if<SelfGravConfig::Direct>(&p.config)) {
             j = {
                 {"type", "direct"},
+                {"reference_mode", conf->reference_mode},
             };
         } else if (
             const SelfGravConfig::None *conf = std::get_if<SelfGravConfig::None>(&p.config)) {
@@ -974,7 +975,7 @@ namespace shammodels::sph {
         } else if (j.at("type").get<std::string>() == "mm") {
             p.config = SelfGravConfig::MM{j.at("mm_order").get<u32>()};
         } else if (j.at("type").get<std::string>() == "direct") {
-            p.config = SelfGravConfig::Direct{};
+            p.config = SelfGravConfig::Direct{j.at("reference_mode").get<bool>()};
         } else if (j.at("type").get<std::string>() == "none") {
             p.config = SelfGravConfig::None{};
         }
