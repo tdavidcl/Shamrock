@@ -97,4 +97,10 @@ namespace shamtree {
         shambase::VecComponent<f64_3> theta_crit,
         bool ordered_result);
 
+    template DTTResult clbvh_dual_tree_traversal<u32, f64_3, 3>(
+        sham::DeviceScheduler_ptr dev_sched,
+        const CompressedLeafBVH<u32, f64_3, 3> &bvh,
+        shambase::VecComponent<f64_3> theta_crit,
+        bool ordered_result);
+
 } // namespace shamtree

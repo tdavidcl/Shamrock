@@ -115,10 +115,16 @@ def run_case(case_name):
     model.timestep()
 
     data = ctx.collect_data()
+
+    # for i in range(10):
+    #    model.do_vtk_dump(f"dump_{case_name}_{i:04}.vtk", True)
+    #    for i in range(10):
+    #        model.timestep()
+
     return data
 
 
-def add_data_to_collect(collected_data, none_case):
+def add_data_to_collect(collected_data, none_case, ref_case=None):
 
     # substract the none case from the collected data
     collected_data["axyz"] = collected_data["axyz"] - none_case["axyz"]
@@ -133,6 +139,14 @@ def add_data_to_collect(collected_data, none_case):
         + collected_data["axyz"][:, 1] ** 2
         + collected_data["axyz"][:, 2] ** 2
     )
+
+    if ref_case is not None:
+        collected_data["axyz_delta"] = collected_data["axyz"] - ref_case["axyz"]
+
+        tmp = np.linalg.norm(collected_data["axyz_delta"], axis=1)
+        tmp = tmp / np.linalg.norm(ref_case["axyz"], axis=1)
+        collected_data["rel_error"] = tmp
+
     return collected_data
 
 
@@ -142,16 +156,16 @@ data_direct_safe = run_case("direct_safe")
 data_direct_safe = add_data_to_collect(data_direct_safe, data_none)
 
 data_direct = run_case("direct")
-data_direct = add_data_to_collect(data_direct, data_none)
+data_direct = add_data_to_collect(data_direct, data_none, data_direct_safe)
 
 data_mm = run_case("mm4")
-data_mm = add_data_to_collect(data_mm, data_none)
+data_mm = add_data_to_collect(data_mm, data_none, data_direct_safe)
 
 data_fmm = run_case("fmm4")
-data_fmm = add_data_to_collect(data_fmm, data_none)
+data_fmm = add_data_to_collect(data_fmm, data_none, data_direct_safe)
 
 data_sfmm = run_case("sfmm4")
-data_sfmm = add_data_to_collect(data_sfmm, data_none)
+data_sfmm = add_data_to_collect(data_sfmm, data_none, data_direct_safe)
 
 plt.figure()
 
@@ -162,17 +176,16 @@ plt.scatter(data_fmm["r"], data_fmm["ar"], s=1, label="fmm order 4")
 plt.scatter(data_sfmm["r"], data_sfmm["ar"], s=1, label="sfmm order 4")
 plt.legend()
 
+plt.xlabel("$r$")
+plt.ylabel("$a_r$")
+
 plt.figure()
-plt.scatter(
-    data_direct["r"], np.abs(data_direct["ar"] - data_direct_safe["ar"]), s=1, label="direct"
-)
-plt.scatter(data_mm["r"], np.abs(data_mm["ar"] - data_direct_safe["ar"]), s=1, label="mm order 4")
-plt.scatter(
-    data_fmm["r"], np.abs(data_fmm["ar"] - data_direct_safe["ar"]), s=1, label="fmm order 4"
-)
-plt.scatter(
-    data_sfmm["r"], np.abs(data_sfmm["ar"] - data_direct_safe["ar"]), s=1, label="sfmm order 4"
-)
+plt.scatter(data_direct["r"], data_direct["rel_error"], s=1, label="direct")
+plt.scatter(data_mm["r"], data_mm["rel_error"], s=1, label="mm order 4")
+plt.scatter(data_fmm["r"], data_fmm["rel_error"], s=1, label="fmm order 4")
+plt.scatter(data_sfmm["r"], data_sfmm["rel_error"], s=1, label="sfmm order 4")
 plt.yscale("log")
 plt.legend()
+plt.xlabel("$r$")
+plt.ylabel("relative error")
 plt.show()
