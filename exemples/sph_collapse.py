@@ -81,11 +81,11 @@ def run_case(case_name):
     elif case_name == "direct_safe":
         cfg.set_self_gravity_direct(reference_mode=True)
     elif case_name == "mm4":
-        cfg.set_self_gravity_mm(order=4)
+        cfg.set_self_gravity_mm(order=4, opening_angle=0.5)
     elif case_name == "fmm4":
-        cfg.set_self_gravity_fmm(order=4)
+        cfg.set_self_gravity_fmm(order=4, opening_angle=0.5)
     elif case_name == "sfmm4":
-        cfg.set_self_gravity_sfmm(order=4)
+        cfg.set_self_gravity_sfmm(order=4, opening_angle=0.5)
     else:
         raise ValueError(f"Invalid case name: {case_name}")
 

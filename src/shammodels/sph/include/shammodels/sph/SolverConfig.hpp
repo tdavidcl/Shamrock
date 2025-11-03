@@ -185,14 +185,17 @@ namespace shammodels::sph {
     struct SelfGravConfig {
         struct SFMM {
             u32 fmm_order;
+            f64 opening_angle;
         };
 
         struct FMM {
             u32 fmm_order;
+            f64 opening_angle;
         };
 
         struct MM {
             u32 mm_order;
+            f64 opening_angle;
         };
 
         struct Direct {
@@ -205,9 +208,9 @@ namespace shammodels::sph {
 
         mode config = None{};
 
-        void set_sfmm(u32 fmm_order) { config = SFMM{fmm_order}; }
-        void set_fmm(u32 fmm_order) { config = FMM{fmm_order}; }
-        void set_mm(u32 mm_order) { config = MM{mm_order}; }
+        void set_sfmm(u32 fmm_order, f64 opening_angle) { config = SFMM{fmm_order, opening_angle}; }
+        void set_fmm(u32 fmm_order, f64 opening_angle) { config = FMM{fmm_order, opening_angle}; }
+        void set_mm(u32 mm_order, f64 opening_angle) { config = MM{mm_order, opening_angle}; }
         void set_direct(bool reference_mode = false) { config = Direct{reference_mode}; }
         void set_none() { config = None{}; }
 
@@ -943,16 +946,19 @@ namespace shammodels::sph {
             j = {
                 {"type", "sfmm"},
                 {"fmm_order", conf->fmm_order},
+                {"opening_angle", conf->opening_angle},
             };
         } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
             j = {
                 {"type", "fmm"},
                 {"fmm_order", conf->fmm_order},
+                {"opening_angle", conf->opening_angle},
             };
         } else if (const SelfGravConfig::MM *conf = std::get_if<SelfGravConfig::MM>(&p.config)) {
             j = {
                 {"type", "mm"},
                 {"mm_order", conf->mm_order},
+                {"opening_angle", conf->opening_angle},
             };
         } else if (
             const SelfGravConfig::Direct *conf = std::get_if<SelfGravConfig::Direct>(&p.config)) {
@@ -971,11 +977,14 @@ namespace shammodels::sph {
     /// JSON deserialization for SelfGravConfig
     inline void from_json(const nlohmann::json &j, SelfGravConfig &p) {
         if (j.at("type").get<std::string>() == "sfmm") {
-            p.config = SelfGravConfig::SFMM{j.at("fmm_order").get<u32>()};
+            p.config = SelfGravConfig::SFMM{
+                j.at("fmm_order").get<u32>(), j.at("opening_angle").get<f64>()};
         } else if (j.at("type").get<std::string>() == "fmm") {
-            p.config = SelfGravConfig::FMM{j.at("fmm_order").get<u32>()};
+            p.config = SelfGravConfig::FMM{
+                j.at("fmm_order").get<u32>(), j.at("opening_angle").get<f64>()};
         } else if (j.at("type").get<std::string>() == "mm") {
-            p.config = SelfGravConfig::MM{j.at("mm_order").get<u32>()};
+            p.config
+                = SelfGravConfig::MM{j.at("mm_order").get<u32>(), j.at("opening_angle").get<f64>()};
         } else if (j.at("type").get<std::string>() == "direct") {
             p.config = SelfGravConfig::Direct{j.at("reference_mode").get<bool>()};
         } else if (j.at("type").get<std::string>() == "none") {

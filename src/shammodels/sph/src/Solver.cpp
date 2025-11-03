@@ -1485,6 +1485,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             // do nothing
         } else if (solver_config.self_grav_config.is_sfmm()) {
 
+            SelfGravConfig::SFMM &sfmm_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::SFMM>(&solver_config.self_grav_config.config));
+
             // temp thing to prototype here
             struct Edges {
                 const shamrock::solvergraph::IDataEdge<Tscal> &gpart_mass;
@@ -1515,7 +1518,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 Tscal gpart_mass = edges.gpart_mass.data;
 
                 Tscal gravitational_softening = 1e-9;
-                Tscal theta_crit              = 0.5;
+                Tscal theta_crit              = sfmm_config.opening_angle;
 
                 using MassMoments                      = shammath::SymTensorCollection<Tscal, 0, 4>;
                 static constexpr u32 mass_moment_terms = MassMoments::num_component;
@@ -1523,9 +1526,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
                 sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-                if (std::get_if<SelfGravConfig::SFMM>(&solver_config.self_grav_config.config)
-                        ->fmm_order
-                    != 4) {
+                if (sfmm_config.fmm_order != 4) {
                     shambase::throw_unimplemented();
                 }
 
@@ -1787,6 +1788,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             }
         } else if (solver_config.self_grav_config.is_fmm()) {
 
+            SelfGravConfig::FMM &fmm_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::FMM>(&solver_config.self_grav_config.config));
+
             // temp thing to prototype here
             struct Edges {
                 const shamrock::solvergraph::IDataEdge<Tscal> &gpart_mass;
@@ -1817,7 +1821,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 Tscal gpart_mass = edges.gpart_mass.data;
 
                 Tscal gravitational_softening = 1e-9;
-                Tscal theta_crit              = 0.5;
+                Tscal theta_crit              = fmm_config.opening_angle;
 
                 using MassMoments                      = shammath::SymTensorCollection<Tscal, 0, 4>;
                 static constexpr u32 mass_moment_terms = MassMoments::num_component;
@@ -1825,9 +1829,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
                 sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-                if (std::get_if<SelfGravConfig::FMM>(&solver_config.self_grav_config.config)
-                        ->fmm_order
-                    != 4) {
+                if (fmm_config.fmm_order != 4) {
                     shambase::throw_unimplemented();
                 }
 
@@ -1945,6 +1947,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             }
         } else if (solver_config.self_grav_config.is_mm()) {
 
+            SelfGravConfig::MM &mm_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::MM>(&solver_config.self_grav_config.config));
+
             // temp thing to prototype here
             struct Edges {
                 const shamrock::solvergraph::IDataEdge<Tscal> &gpart_mass;
@@ -1975,7 +1980,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 Tscal gpart_mass = edges.gpart_mass.data;
 
                 Tscal gravitational_softening = 1e-9;
-                Tscal theta_crit              = 0.5;
+                Tscal theta_crit              = mm_config.opening_angle;
 
                 using MassMoments                      = shammath::SymTensorCollection<Tscal, 0, 4>;
                 static constexpr u32 mass_moment_terms = MassMoments::num_component;
@@ -1983,9 +1988,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
                 sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-                if (std::get_if<SelfGravConfig::MM>(&solver_config.self_grav_config.config)
-                        ->mm_order
-                    != 4) {
+                if (mm_config.mm_order != 4) {
                     shambase::throw_unimplemented();
                 }
 
@@ -2082,6 +2085,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             }
         } else if (solver_config.self_grav_config.is_direct()) {
 
+            SelfGravConfig::Direct &direct_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::Direct>(&solver_config.self_grav_config.config));
+
             // temp thing to prototype here
             struct Edges {
                 const shamrock::solvergraph::IDataEdge<Tscal> &gpart_mass;
@@ -2117,8 +2123,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                     PatchDataField<Tvec> &xyz      = edges.field_xyz.get_field(id);
                     PatchDataField<Tvec> &axyz_ext = edges.field_axyz_ext.get_field(id);
 
-                    if (std::get_if<SelfGravConfig::Direct>(&solver_config.self_grav_config.config)
-                            ->reference_mode) {
+                    if (direct_config.reference_mode) {
 
                         std::vector<Tvec> xyz_vec      = xyz.get_buf().copy_to_stdvec();
                         std::vector<Tvec> axyz_ext_vec = axyz_ext.get_buf().copy_to_stdvec();
