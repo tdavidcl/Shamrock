@@ -292,6 +292,7 @@ plt.xlabel("Npart")
 plt.ylabel("Gravitational rate [part.s-1]")
 
 plt.legend()
+plt.savefig("fmm_perf1.pdf")
 
 
 plt.figure()
@@ -306,7 +307,7 @@ plt.ylabel("Hydro rate / Gravitational rate")
 plt.legend()
 plt.show()
     
-
+plt.savefig("fmm_perf2.pdf")
 
 plt.show()
     
