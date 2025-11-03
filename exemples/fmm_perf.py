@@ -7,6 +7,8 @@ import shamrock
 
 shamrock.enable_experimental_features()
 
+shamrock.tree.set_impl_clbvh_dual_tree_traversal("parallel_select", "")
+
 def run_benchmark(ctx, model):
 
     res_rates = []
