@@ -9,6 +9,7 @@ shamrock.enable_experimental_features()
 
 shamrock.tree.set_impl_clbvh_dual_tree_traversal("parallel_select", "")
 
+
 def run_benchmark(ctx, model):
 
     res_rates = []
@@ -33,7 +34,7 @@ def run_benchmark(ctx, model):
     return data, res_rate, res_cnt
 
 
-def cub_collapse(config_func,Npart):
+def cub_collapse(config_func, Npart):
 
     si = shamrock.UnitSystem()
     sicte = shamrock.Constants(si)
@@ -43,7 +44,6 @@ def cub_collapse(config_func,Npart):
         unit_mass=sicte.sol_mass(),
     )
     ucte = shamrock.Constants(codeu)
-
 
     gamma = 5.0 / 3.0
     rho_g = 100
@@ -58,10 +58,8 @@ def cub_collapse(config_func,Npart):
     init_part_bmin = (-sphere_radius, -sphere_radius, -sphere_radius)
     init_part_bmax = (sphere_radius, sphere_radius, sphere_radius)
 
-
     scheduler_split_val = int(2e7)
     scheduler_merge_val = int(1)
-
 
     N_target = Npart
     xm, ym, zm = init_part_bmin
@@ -123,7 +121,7 @@ def cub_collapse(config_func,Npart):
     model.set_cfl_cour(1e-6)
     model.set_cfl_force(1e-6)
 
-    return run_benchmark(ctx,model)
+    return run_benchmark(ctx, model)
 
 
 def add_data_to_collect(collected_data, none_case, ref_case=None):
@@ -156,73 +154,91 @@ def none_config(cfg):
     cfg.set_self_gravity_none()
     return cfg
 
+
 def direct_config(cfg):
     cfg.set_self_gravity_direct()
     return cfg
+
 
 def direct_safe_config(cfg):
     cfg.set_self_gravity_direct(reference_mode=True)
     return cfg
 
+
 def mm1_config(cfg):
     cfg.set_self_gravity_mm(order=1, opening_angle=0.5)
     return cfg
+
 
 def mm2_config(cfg):
     cfg.set_self_gravity_mm(order=2, opening_angle=0.5)
     return cfg
 
+
 def mm3_config(cfg):
     cfg.set_self_gravity_mm(order=3, opening_angle=0.5)
     return cfg
+
 
 def mm4_config(cfg):
     cfg.set_self_gravity_mm(order=4, opening_angle=0.5)
     return cfg
 
+
 def mm5_config(cfg):
     cfg.set_self_gravity_mm(order=5, opening_angle=0.5)
     return cfg
+
 
 def fmm1_config(cfg):
     cfg.set_self_gravity_fmm(order=1, opening_angle=0.5)
     return cfg
 
+
 def fmm2_config(cfg):
     cfg.set_self_gravity_fmm(order=2, opening_angle=0.5)
     return cfg
+
 
 def fmm3_config(cfg):
     cfg.set_self_gravity_fmm(order=3, opening_angle=0.5)
     return cfg
 
+
 def fmm4_config(cfg):
     cfg.set_self_gravity_fmm(order=4, opening_angle=0.5)
     return cfg
+
 
 def fmm5_config(cfg):
     cfg.set_self_gravity_fmm(order=5, opening_angle=0.5)
     return cfg
 
+
 def sfmm1_config(cfg):
     cfg.set_self_gravity_sfmm(order=1, opening_angle=0.5)
     return cfg
+
 
 def sfmm2_config(cfg):
     cfg.set_self_gravity_sfmm(order=2, opening_angle=0.5)
     return cfg
 
+
 def sfmm3_config(cfg):
     cfg.set_self_gravity_sfmm(order=3, opening_angle=0.5)
     return cfg
+
 
 def sfmm4_config(cfg):
     cfg.set_self_gravity_sfmm(order=4, opening_angle=0.5)
     return cfg
 
+
 def sfmm5_config(cfg):
     cfg.set_self_gravity_sfmm(order=5, opening_angle=0.5)
     return cfg
+
 
 configs = {
     "none": none_config,
@@ -243,11 +259,7 @@ for config in configs.keys():
     if config in ["none"]:
         continue
 
-    perf_curves[config] = {
-        "Npart": [],
-        "grav_rate": [],
-        "grav_hydro_cost" : []
-    }
+    perf_curves[config] = {"Npart": [], "grav_rate": [], "grav_hydro_cost": []}
 
 for Npart in Nparts:
 
@@ -262,7 +274,7 @@ for Npart in Nparts:
     # TODO compute error relative to reference_sg_config
 
     _, no_sg_rate, no_sg_cnt = results[no_sg_config]
-    no_sg_tstep = no_sg_cnt/no_sg_rate
+    no_sg_tstep = no_sg_cnt / no_sg_rate
 
     for config in results.keys():
         if config in ["none"]:
@@ -270,10 +282,10 @@ for Npart in Nparts:
 
         _, rate, cnt = results[config]
 
-        tstep = cnt/rate
-        
+        tstep = cnt / rate
+
         grav_tstep = tstep - no_sg_tstep
-        grav_rate = cnt/grav_tstep
+        grav_rate = cnt / grav_tstep
 
         ratio = no_sg_rate / grav_rate
 
@@ -306,9 +318,7 @@ plt.ylabel("Hydro rate / Gravitational rate")
 
 plt.legend()
 plt.show()
-    
+
 plt.savefig("fmm_perf2.pdf")
 
 plt.show()
-    
-

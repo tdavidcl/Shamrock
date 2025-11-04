@@ -1214,6 +1214,8 @@ compute_tree_mass_moments(
     const sham::DeviceBuffer<Tvec> &xyz,
     shambase::VecComponent<Tvec> gpart_mass) {
 
+    __shamrock_stack_entry();
+
     using Tscal                            = shambase::VecComponent<Tvec>;
     using MassMoments                      = shammath::SymTensorCollection<Tscal, 0, moment_order>;
     static constexpr u32 mass_moment_terms = MassMoments::num_component;
@@ -1566,6 +1568,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
                     // we do not need to reset grav moments tree as it will be overwritten in the
                     // M2L step
+
+                    logger::info_ln(
+                        "SPH", "M2L interact count: ", dtt_result.node_interactions_m2m.get_size());
 
                     // M2L kernel
                     sham::kernel_call(
