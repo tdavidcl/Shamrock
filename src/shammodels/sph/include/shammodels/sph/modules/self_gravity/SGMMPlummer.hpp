@@ -33,10 +33,10 @@ namespace shammodels::sph::modules {
     template<class Tvec, u32 mm_order>
     class SGMMPlummer : public shamrock::solvergraph::INode {
 
-        using Tscal          = shambase::VecComponent<Tvec>;
+        using Tscal = shambase::VecComponent<Tvec>;
 
-        Tscal epsilon;       ///< Gravitational softening length
-        Tscal theta_crit;    ///< Critical opening angle for the MM method
+        Tscal epsilon;    ///< Gravitational softening length
+        Tscal theta_crit; ///< Critical opening angle for the MM method
 
         public:
         explicit SGMMPlummer(Tscal epsilon, Tscal theta_crit)

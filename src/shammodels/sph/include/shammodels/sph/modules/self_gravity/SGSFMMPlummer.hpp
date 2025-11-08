@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file SGFMMPlummer.hpp
+ * @file SGSFMMPlummer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -31,7 +31,7 @@
 namespace shammodels::sph::modules {
 
     template<class Tvec, u32 mm_order>
-    class SGFMMPlummer : public shamrock::solvergraph::INode {
+    class SGSFMMPlummer : public shamrock::solvergraph::INode {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -39,7 +39,7 @@ namespace shammodels::sph::modules {
         Tscal theta_crit; ///< Critical opening angle for the MM method
 
         public:
-        explicit SGFMMPlummer(Tscal epsilon, Tscal theta_crit)
+        explicit SGSFMMPlummer(Tscal epsilon, Tscal theta_crit)
             : epsilon(epsilon), theta_crit(theta_crit) {}
 
         struct Edges {
@@ -69,7 +69,7 @@ namespace shammodels::sph::modules {
                 get_rw_edge<shamrock::solvergraph::FieldRefs<Tvec>>(0)};
         }
 
-        inline std::string _impl_get_label() override { return "SGFMMPlummer"; }
+        inline std::string _impl_get_label() override { return "SGSFMMPlummer"; }
         std::string _impl_get_tex() override { return "TODO"; }
 
         protected:

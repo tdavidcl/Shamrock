@@ -15,12 +15,12 @@
  * @brief
  *
  */
- #include "shammath/AABB.hpp"
- #include "shammath/symtensor_collections.hpp"
- #include "shamphys/fmm/offset_multipole.hpp"
- #include "shamtree/CompressedLeafBVH.hpp"
- #include "shamtree/KarrasRadixTreeField.hpp"
- 
+#include "shammath/AABB.hpp"
+#include "shammath/symtensor_collections.hpp"
+#include "shamphys/fmm/offset_multipole.hpp"
+#include "shamtree/CompressedLeafBVH.hpp"
+#include "shamtree/KarrasRadixTreeField.hpp"
+
 namespace shammodels::sph::modules {
 
     template<class Tvec, class Umorton, u32 moment_order>
@@ -139,4 +139,4 @@ namespace shammodels::sph::modules {
 
         return mass_moments_tree;
     }
-}
+} // namespace shammodels::sph::modules

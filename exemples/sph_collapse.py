@@ -94,8 +94,12 @@ def run_case(case_name):
         cfg.set_self_gravity_fmm(order=4, opening_angle=0.5)
     elif case_name == "fmm5":
         cfg.set_self_gravity_fmm(order=5, opening_angle=0.5)
+    elif case_name == "sfmm3":
+        cfg.set_self_gravity_sfmm(order=3, opening_angle=0.5)
     elif case_name == "sfmm4":
         cfg.set_self_gravity_sfmm(order=4, opening_angle=0.5)
+    elif case_name == "sfmm5":
+        cfg.set_self_gravity_sfmm(order=5, opening_angle=0.5)
     else:
         raise ValueError(f"Invalid case name: {case_name}")
     cfg.set_softening_plummer(epsilon=1e-9)
@@ -187,9 +191,14 @@ data_fmm4 = add_data_to_collect(data_fmm4, data_none, data_direct_safe)
 data_fmm5 = run_case("fmm5")
 data_fmm5 = add_data_to_collect(data_fmm5, data_none, data_direct_safe)
 
-data_sfmm = run_case("sfmm4")
-data_sfmm = add_data_to_collect(data_sfmm, data_none, data_direct_safe)
+data_sfmm3 = run_case("sfmm3")
+data_sfmm3 = add_data_to_collect(data_sfmm3, data_none, data_direct_safe)
 
+data_sfmm4 = run_case("sfmm4")
+data_sfmm4 = add_data_to_collect(data_sfmm4, data_none, data_direct_safe)
+
+data_sfmm5 = run_case("sfmm5")
+data_sfmm5 = add_data_to_collect(data_sfmm5, data_none, data_direct_safe)
 
 plt.figure()
 
@@ -201,7 +210,9 @@ plt.scatter(data_mm3["r"], data_mm3["ar"], s=1, label="mm order 3")
 plt.scatter(data_fmm3["r"], data_fmm3["ar"], s=1, label="fmm order 3")
 plt.scatter(data_fmm4["r"], data_fmm4["ar"], s=1, label="fmm order 4")
 plt.scatter(data_fmm5["r"], data_fmm5["ar"], s=1, label="fmm order 5")
-plt.scatter(data_sfmm["r"], data_sfmm["ar"], s=1, label="sfmm order 4")
+plt.scatter(data_sfmm3["r"], data_sfmm3["ar"], s=1, label="sfmm order 3")
+plt.scatter(data_sfmm4["r"], data_sfmm4["ar"], s=1, label="sfmm order 4")
+plt.scatter(data_sfmm5["r"], data_sfmm5["ar"], s=1, label="sfmm order 5")
 plt.legend()
 
 plt.xlabel("$r$")
@@ -234,7 +245,9 @@ cases = (
     ("fmm order 3", data_fmm3),
     ("fmm order 4", data_fmm4),
     ("fmm order 5", data_fmm5),
-    ("sfmm order 4", data_sfmm),
+    ("sfmm order 3", data_sfmm3),
+    ("sfmm order 4", data_sfmm4),
+    ("sfmm order 5", data_sfmm5),
 )
 
 for label, dataset in cases:
