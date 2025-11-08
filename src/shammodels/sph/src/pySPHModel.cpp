@@ -196,6 +196,23 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("order"),
             py::arg("opening_angle"))
+        .def(
+            "set_softening_plummer",
+            [](TConfig &self, f64 epsilon) {
+                self.self_grav_config.set_softening_plummer(epsilon);
+            },
+            py::kw_only(),
+            py::arg("epsilon"))
+        .def(
+            "set_softening_SPH",
+            [](TConfig &self) {
+                self.self_grav_config.set_softening_SPH();
+            })
+        .def(
+            "set_softening_none",
+            [](TConfig &self) {
+                self.self_grav_config.set_softening_none();
+            })
         .def("set_boundary_free", &TConfig::set_boundary_free)
         .def("set_boundary_periodic", &TConfig::set_boundary_periodic)
         .def("set_boundary_shearing_periodic", &TConfig::set_boundary_shearing_periodic)

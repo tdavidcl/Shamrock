@@ -451,14 +451,14 @@ namespace shammath {
         }
 
         template<class Tacc>
-        inline void store(Tacc &acc, u32 offset) const {
+        inline void store(const Tacc &acc, u32 offset) const {
             acc[offset + offset_t0] = t0;
             t1.store(acc, offset + offset_t1);
             t2.store(acc, offset + offset_t2);
         }
 
         template<class Tacc>
-        inline static SymTensorCollection load(Tacc &acc, u32 offset) {
+        inline static SymTensorCollection load(const Tacc &acc, u32 offset) {
             return SymTensorCollection{
                 acc[offset + offset_t0],
                 SymTensor3d_1<T>::load(acc, offset + offset_t1),
@@ -554,12 +554,12 @@ namespace shammath {
         inline static SymTensorCollection zeros() { return {0}; }
 
         template<class Tacc>
-        inline void store(Tacc &acc, u32 offset) const {
+        inline void store(const Tacc &acc, u32 offset) const {
             acc[offset + 0] = t0;
         }
 
         template<class Tacc>
-        inline static SymTensorCollection load(Tacc &acc, u32 offset) {
+        inline static SymTensorCollection load(const Tacc &acc, u32 offset) {
             return SymTensorCollection{acc[offset + 0]};
         }
 

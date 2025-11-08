@@ -90,6 +90,7 @@ def run_case(case_name):
         cfg.set_self_gravity_sfmm(order=4, opening_angle=0.5)
     else:
         raise ValueError(f"Invalid case name: {case_name}")
+    cfg.set_softening_plummer(epsilon=1e-9)
 
     cfg.set_units(codeu)
     cfg.print_status()

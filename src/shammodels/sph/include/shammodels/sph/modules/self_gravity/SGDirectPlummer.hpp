@@ -21,7 +21,6 @@
 #include "shambase/stacktrace.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shamcomm/logs.hpp"
-#include "shammodels/sph/SolverConfig.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/IDataEdge.hpp"
