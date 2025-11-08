@@ -183,6 +183,7 @@ namespace shammodels::sph {
     };
 
     struct SelfGravConfig {
+
         struct SFMM {
             u32 fmm_order;
             f64 opening_angle;
@@ -219,6 +220,27 @@ namespace shammodels::sph {
         bool is_fmm() const { return std::holds_alternative<FMM>(config); }
         bool is_mm() const { return std::holds_alternative<MM>(config); }
         bool is_direct() const { return std::holds_alternative<Direct>(config); }
+
+        struct SofteningPlummer {
+            f64 epsilon;
+        };
+
+        struct SofteningSPH {};
+
+        using mode_soft          = std::variant<SofteningPlummer, SofteningSPH, None>;
+        mode_soft softening_mode = None{};
+
+        void set_softening_plummer(f64 epsilon) { softening_mode = SofteningPlummer{epsilon}; }
+        void set_softening_SPH() { softening_mode = SofteningSPH{}; }
+        void set_softening_none() { softening_mode = None{}; }
+
+        bool is_softening_plummer() const {
+            return std::holds_alternative<SofteningPlummer>(softening_mode);
+        }
+        bool is_softening_SPH() const {
+            return std::holds_alternative<SofteningSPH>(softening_mode);
+        }
+        bool is_softening_none() const { return std::holds_alternative<None>(softening_mode); }
     };
 
 } // namespace shammodels::sph
@@ -972,6 +994,20 @@ namespace shammodels::sph {
                 {"type", "none"},
             };
         }
+
+        if (const SelfGravConfig::SofteningPlummer *conf
+            = std::get_if<SelfGravConfig::SofteningPlummer>(&p.softening_mode)) {
+            j["softening_mode"]   = "plummer";
+            j["softening_length"] = conf->epsilon;
+        } else if (
+            const SelfGravConfig::SofteningSPH *conf
+            = std::get_if<SelfGravConfig::SofteningSPH>(&p.softening_mode)) {
+            j["softening_mode"] = "SPH";
+        } else if (
+            const SelfGravConfig::None *conf
+            = std::get_if<SelfGravConfig::None>(&p.softening_mode)) {
+            j["softening_mode"] = "none";
+        }
     }
 
     /// JSON deserialization for SelfGravConfig
@@ -989,6 +1025,18 @@ namespace shammodels::sph {
             p.config = SelfGravConfig::Direct{j.at("reference_mode").get<bool>()};
         } else if (j.at("type").get<std::string>() == "none") {
             p.config = SelfGravConfig::None{};
+        }
+
+        if (j.contains("softening_mode")) {
+            std::string softening_mode = j.at("softening_mode").get<std::string>();
+            if (softening_mode == "plummer") {
+                p.softening_mode
+                    = SelfGravConfig::SofteningPlummer{j.at("softening_length").get<f64>()};
+            } else if (softening_mode == "SPH") {
+                p.softening_mode = SelfGravConfig::SofteningSPH{};
+            } else if (softening_mode == "none") {
+                p.softening_mode = SelfGravConfig::None{};
+            }
         }
     }
 

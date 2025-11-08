@@ -154,10 +154,10 @@ def add_data_to_collect(collected_data, none_case, ref_case=None):
 
 data_none = run_case("none")
 
-data_direct_safe = run_case("none")
+data_direct_safe = run_case("direct_safe")
 data_direct_safe = add_data_to_collect(data_direct_safe, data_none)
 
-data_direct = run_case("none")
+data_direct = run_case("direct")
 data_direct = add_data_to_collect(data_direct, data_none, data_direct_safe)
 
 data_mm = run_case("mm4")
