@@ -82,10 +82,18 @@ def run_case(case_name):
         cfg.set_self_gravity_direct()
     elif case_name == "direct_safe":
         cfg.set_self_gravity_direct(reference_mode=True)
+    elif case_name == "mm5":
+        cfg.set_self_gravity_mm(order=5, opening_angle=0.5)
     elif case_name == "mm4":
         cfg.set_self_gravity_mm(order=4, opening_angle=0.5)
+    elif case_name == "mm3":
+        cfg.set_self_gravity_mm(order=3, opening_angle=0.5)
+    elif case_name == "fmm3":
+        cfg.set_self_gravity_fmm(order=3, opening_angle=0.5)
     elif case_name == "fmm4":
         cfg.set_self_gravity_fmm(order=4, opening_angle=0.5)
+    elif case_name == "fmm5":
+        cfg.set_self_gravity_fmm(order=5, opening_angle=0.5)
     elif case_name == "sfmm4":
         cfg.set_self_gravity_sfmm(order=4, opening_angle=0.5)
     else:
@@ -161,32 +169,79 @@ data_direct_safe = add_data_to_collect(data_direct_safe, data_none)
 data_direct = run_case("direct")
 data_direct = add_data_to_collect(data_direct, data_none, data_direct_safe)
 
-data_mm = run_case("mm4")
-data_mm = add_data_to_collect(data_mm, data_none, data_direct_safe)
+data_mm5 = run_case("mm5")
+data_mm5 = add_data_to_collect(data_mm5, data_none, data_direct_safe)
 
-data_fmm = run_case("fmm4")
-data_fmm = add_data_to_collect(data_fmm, data_none, data_direct_safe)
+data_mm4 = run_case("mm4")
+data_mm4 = add_data_to_collect(data_mm4, data_none, data_direct_safe)
+
+data_mm3 = run_case("mm3")
+data_mm3 = add_data_to_collect(data_mm3, data_none, data_direct_safe)
+
+data_fmm3 = run_case("fmm3")
+data_fmm3 = add_data_to_collect(data_fmm3, data_none, data_direct_safe)
+
+data_fmm4 = run_case("fmm4")
+data_fmm4 = add_data_to_collect(data_fmm4, data_none, data_direct_safe)
+
+data_fmm5 = run_case("fmm5")
+data_fmm5 = add_data_to_collect(data_fmm5, data_none, data_direct_safe)
 
 data_sfmm = run_case("sfmm4")
 data_sfmm = add_data_to_collect(data_sfmm, data_none, data_direct_safe)
+
 
 plt.figure()
 
 plt.scatter(data_direct_safe["r"], data_direct_safe["ar"], s=1, label="direct_safe")
 plt.scatter(data_direct["r"], data_direct["ar"], s=1, label="direct")
-plt.scatter(data_mm["r"], data_mm["ar"], s=1, label="mm order 4")
-plt.scatter(data_fmm["r"], data_fmm["ar"], s=1, label="fmm order 4")
+plt.scatter(data_mm5["r"], data_mm5["ar"], s=1, label="mm order 5")
+plt.scatter(data_mm4["r"], data_mm4["ar"], s=1, label="mm order 4")
+plt.scatter(data_mm3["r"], data_mm3["ar"], s=1, label="mm order 3")
+plt.scatter(data_fmm3["r"], data_fmm3["ar"], s=1, label="fmm order 3")
+plt.scatter(data_fmm4["r"], data_fmm4["ar"], s=1, label="fmm order 4")
+plt.scatter(data_fmm5["r"], data_fmm5["ar"], s=1, label="fmm order 5")
 plt.scatter(data_sfmm["r"], data_sfmm["ar"], s=1, label="sfmm order 4")
 plt.legend()
 
 plt.xlabel("$r$")
 plt.ylabel("$a_r$")
 
+
+def compute_binned_average(r_values, err_values, bin_size):
+    r = np.asarray(r_values)
+    err = np.asarray(err_values)
+    valid = np.isfinite(r) & np.isfinite(err) & (r >= 0.0)
+    if not np.any(valid):
+        return np.array([]), np.array([])
+
+    idx = np.floor(r[valid] / bin_size).astype(int)
+    counts = np.bincount(idx)
+    sums = np.bincount(idx, weights=err[valid])
+    mask = counts > 0
+
+    centers = (np.arange(len(counts)) + 0.5) * bin_size
+    averages = sums / counts
+    return centers[mask], averages[mask]
+
+
 plt.figure()
-plt.scatter(data_direct["r"], data_direct["rel_error"], s=1, label="direct")
-plt.scatter(data_mm["r"], data_mm["rel_error"], s=1, label="mm order 4")
-plt.scatter(data_fmm["r"], data_fmm["rel_error"], s=1, label="fmm order 4")
-plt.scatter(data_sfmm["r"], data_sfmm["rel_error"], s=1, label="sfmm order 4")
+cases = (
+    ("direct", data_direct),
+    ("mm order 5", data_mm5),
+    ("mm order 4", data_mm4),
+    ("mm order 3", data_mm3),
+    ("fmm order 3", data_fmm3),
+    ("fmm order 4", data_fmm4),
+    ("fmm order 5", data_fmm5),
+    ("sfmm order 4", data_sfmm),
+)
+
+for label, dataset in cases:
+    plt.scatter(dataset["r"], dataset["rel_error"], s=1, label=label, alpha=0.05)
+    r_avg, err_avg = compute_binned_average(dataset["r"], dataset["rel_error"], dr)
+    plt.plot(r_avg, err_avg, label=f"{label}")
+
 plt.yscale("log")
 plt.legend()
 plt.xlabel("$r$")
