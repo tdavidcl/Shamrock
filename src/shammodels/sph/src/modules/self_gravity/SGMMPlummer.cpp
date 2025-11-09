@@ -154,6 +154,7 @@ namespace shammodels::sph::modules {
     }
 } // namespace shammodels::sph::modules
 
+template class shammodels::sph::modules::SGMMPlummer<f64_3, 1>;
 template class shammodels::sph::modules::SGMMPlummer<f64_3, 2>;
 template class shammodels::sph::modules::SGMMPlummer<f64_3, 3>;
 template class shammodels::sph::modules::SGMMPlummer<f64_3, 4>;

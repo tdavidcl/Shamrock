@@ -102,14 +102,18 @@ def cub_collapse(theta_crit, config_mode, Npart):
         cfg.set_self_gravity_direct()
     elif config_mode == "direct_safe":
         cfg.set_self_gravity_direct(reference_mode=True)
-    elif config_mode == "mm5":
-        cfg.set_self_gravity_mm(order=5, opening_angle=theta_crit)
-    elif config_mode == "mm4":
-        cfg.set_self_gravity_mm(order=4, opening_angle=theta_crit)
-    elif config_mode == "mm3":
-        cfg.set_self_gravity_mm(order=3, opening_angle=theta_crit)
+    elif config_mode == "mm1":
+        cfg.set_self_gravity_mm(order=1, opening_angle=theta_crit)
     elif config_mode == "mm2":
         cfg.set_self_gravity_mm(order=2, opening_angle=theta_crit)
+    elif config_mode == "mm3":
+        cfg.set_self_gravity_mm(order=3, opening_angle=theta_crit)
+    elif config_mode == "mm4":
+        cfg.set_self_gravity_mm(order=4, opening_angle=theta_crit)
+    elif config_mode == "mm5":
+        cfg.set_self_gravity_mm(order=5, opening_angle=theta_crit)
+    elif config_mode == "fmm1":
+        cfg.set_self_gravity_fmm(order=1, opening_angle=theta_crit)
     elif config_mode == "fmm2":
         cfg.set_self_gravity_fmm(order=2, opening_angle=theta_crit)
     elif config_mode == "fmm3":
@@ -118,6 +122,8 @@ def cub_collapse(theta_crit, config_mode, Npart):
         cfg.set_self_gravity_fmm(order=4, opening_angle=theta_crit)
     elif config_mode == "fmm5":
         cfg.set_self_gravity_fmm(order=5, opening_angle=theta_crit)
+    elif config_mode == "sfmm1":
+        cfg.set_self_gravity_sfmm(order=1, opening_angle=theta_crit)
     elif config_mode == "sfmm2":
         cfg.set_self_gravity_sfmm(order=2, opening_angle=theta_crit)
     elif config_mode == "sfmm3":
@@ -182,24 +188,55 @@ def add_data_to_collect(collected_data, none_case, ref_case=None):
     return collected_data
 
 
-# Nparts = [1000, 10000, 100000]
-Nparts = [1000, 10000]
+base_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+extended_colors = base_colors * 3
+color_cycle = extended_colors
+
+
+def get_linestyle(key):
+    if "sfmm" in key:
+        return "dotted"
+    elif "fmm" in key:
+        return "dashed"
+    elif "mm" in key:
+        return "solid"
+    else:
+        return "solid"
+
+
+Nparts = np.logspace(3, 5.5, 10).astype(int).tolist()
+# Nparts = [1000, 10000]
 configs = [
+    "mm1",
     "mm2",
     "mm3",
     "mm4",
     "mm5",
+    "fmm1",
     "fmm2",
     "fmm3",
     "fmm4",
     "fmm5",
+    "sfmm1",
     "sfmm2",
     "sfmm3",
     "sfmm4",
     "sfmm5",
 ]
 # configs = ["mm5", "fmm5", "sfmm5"]
-theta_vals = [0.1, 0.5, 1.0]
+theta_vals = [
+    0.1,
+    0.12915497,
+    0.16681005,
+    0.21544347,
+    0.27825594,
+    0.35938137,
+    0.46415888,
+    0.5,
+    0.59948425,
+    0.77426368,
+    1.0,
+]
 
 no_sg_config = "none"
 reference_sg_config = "direct_safe"
@@ -217,16 +254,20 @@ for npart in Nparts:
 
     data_direct, direct_rate, direct_cnt = cub_collapse(0, "direct", npart)
 
-    if not "none" in curve_rates:
-        curve_rates["none"] = []
-    if not "direct_safe" in curve_rates:
-        curve_rates["direct_safe"] = []
-    if not "direct" in curve_rates:
-        curve_rates["direct"] = []
+    key_rate_none = ("none", get_linestyle("none"), color_cycle[0])
+    key_rate_direct_safe = ("direct_safe", get_linestyle("direct_safe"), color_cycle[1])
+    key_rate_direct = ("direct", get_linestyle("direct"), color_cycle[2])
 
-    curve_rates["none"].append(none_rate)
-    curve_rates["direct_safe"].append(direct_safe_rate)
-    curve_rates["direct"].append(direct_rate)
+    if not key_rate_none in curve_rates:
+        curve_rates[key_rate_none] = []
+    if not key_rate_direct_safe in curve_rates:
+        curve_rates[key_rate_direct_safe] = []
+    if not key_rate_direct in curve_rates:
+        curve_rates[key_rate_direct] = []
+
+    curve_rates[key_rate_none].append(none_rate)
+    curve_rates[key_rate_direct_safe].append(direct_safe_rate)
+    curve_rates[key_rate_direct].append(direct_rate)
 
     data_direct = add_data_to_collect(data_direct, data_none, data_direct_safe)
 
@@ -243,11 +284,12 @@ for npart in Nparts:
     # plt.legend()
     # plt.show()
 
-    for theta in theta_vals:
+    for itheta, theta in enumerate(theta_vals):
 
-        if not "direct" in prec_npart:
-            prec_npart["direct"] = []
-        prec_npart["direct"].append(avg_rel_error_direct)
+        key_prec_direct = ("direct", get_linestyle("direct"), color_cycle[2])
+        if not key_prec_direct in prec_npart:
+            prec_npart[key_prec_direct] = []
+        prec_npart[key_prec_direct].append(avg_rel_error_direct)
 
         for config in configs:
             data, rate, cnt = cub_collapse(theta, config, npart)
@@ -256,12 +298,13 @@ for npart in Nparts:
 
             avg_rel_error = np.mean(data["rel_error"])
 
-            key = f"{config}_{theta}"
-            if not key in curve_rates:
-                curve_rates[key] = []
-            curve_rates[key].append(rate)
+            if theta == 0.5:
+                key = (f"{config}", get_linestyle(config), color_cycle[int(config[-1]) + 2])
+                if not key in curve_rates:
+                    curve_rates[key] = []
+                curve_rates[key].append(rate)
 
-            key = f"{config}_{npart}"
+            key = (f"{config}", get_linestyle(config), color_cycle[int(config[-1]) + 2])
             if not key in prec_npart:
                 prec_npart[key] = []
             prec_npart[key].append(avg_rel_error)
@@ -275,9 +318,11 @@ for npart in Nparts:
 
     curve_precisions[npart] = prec_npart
 
+
 plt.figure(figsize=(10, 5))
 for key in curve_rates.keys():
-    plt.plot(Nparts, curve_rates[key], label=key)
+    (label, linestyle, color) = key
+    plt.plot(Nparts, curve_rates[key], label=label, linestyle=linestyle, color=color)
 plt.legend()
 plt.xlabel("Npart")
 plt.ylabel("rate")
@@ -289,7 +334,10 @@ for npart in Nparts:
     plt.figure(figsize=(10, 5))
     plt.title(f"Npart = {npart}")
     for key in curve_precisions[npart].keys():
-        plt.plot(theta_vals, curve_precisions[npart][key], label=key)
+        (label, linestyle, color) = key
+        plt.plot(
+            theta_vals, curve_precisions[npart][key], label=label, linestyle=linestyle, color=color
+        )
     plt.xlabel("theta")
     plt.ylabel("precision")
     plt.xscale("log")

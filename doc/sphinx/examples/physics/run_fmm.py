@@ -1510,6 +1510,8 @@ def test_grav_moment_offset(x_i, x_j, s_A, s_Ap, s_B, m_j, order, do_print):
         dM_k_offset = shamrock.phys.offset_dM_mat_3(dM_k, s_A, s_Ap)
     elif order == 2:
         dM_k_offset = shamrock.phys.offset_dM_mat_2(dM_k, s_A, s_Ap)
+    elif order == 1:
+        dM_k_offset = shamrock.phys.offset_dM_mat_1(dM_k, s_A, s_Ap)
     else:
         raise ValueError("Invalid order")
 
@@ -1605,7 +1607,7 @@ def test_grav_moment_offset(x_i, x_j, s_A, s_Ap, s_B, m_j, order, do_print):
 # For clarification a perfect result here is that the translated dMk contracted with the new displacment ak_p give the same result as the original expansion (which it does ;) ).
 
 plt.figure()
-for order in range(2, 6):
+for order in range(1, 6):
     print("--------------------------------")
     print(f"Running FMM order = {order}")
     print("--------------------------------")
