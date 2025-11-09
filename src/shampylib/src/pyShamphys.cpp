@@ -365,8 +365,18 @@ Register_pymod(shamphyslibinit) {
         py::arg("Q"),
         py::arg("from"),
         py::arg("to"));
-    // shamphys_module.def("offset_multipole_1", &shamphys::offset_multipole<f64, 0, 1>);
-    // shamphys_module.def("offset_multipole_0", &shamphys::offset_multipole<f64, 0, 0>);
+    shamphys_module.def(
+        "offset_multipole_1",
+        &shamphys::offset_multipole<f64, 0, 1>,
+        py::arg("Q"),
+        py::arg("from"),
+        py::arg("to"));
+    shamphys_module.def(
+        "offset_multipole_0",
+        &shamphys::offset_multipole<f64, 0, 0>,
+        py::arg("Q"),
+        py::arg("from"),
+        py::arg("to"));
 
     shamcomm::logs::debug_ln("[Py]", "registering shamrock.phys.offset_dM_mat");
     shamphys_module.def(

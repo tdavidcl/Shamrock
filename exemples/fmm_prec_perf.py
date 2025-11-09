@@ -108,12 +108,18 @@ def cub_collapse(theta_crit, config_mode, Npart):
         cfg.set_self_gravity_mm(order=4, opening_angle=theta_crit)
     elif config_mode == "mm3":
         cfg.set_self_gravity_mm(order=3, opening_angle=theta_crit)
+    elif config_mode == "mm2":
+        cfg.set_self_gravity_mm(order=2, opening_angle=theta_crit)
+    elif config_mode == "fmm2":
+        cfg.set_self_gravity_fmm(order=2, opening_angle=theta_crit)
     elif config_mode == "fmm3":
         cfg.set_self_gravity_fmm(order=3, opening_angle=theta_crit)
     elif config_mode == "fmm4":
         cfg.set_self_gravity_fmm(order=4, opening_angle=theta_crit)
     elif config_mode == "fmm5":
         cfg.set_self_gravity_fmm(order=5, opening_angle=theta_crit)
+    elif config_mode == "sfmm2":
+        cfg.set_self_gravity_sfmm(order=2, opening_angle=theta_crit)
     elif config_mode == "sfmm3":
         cfg.set_self_gravity_sfmm(order=3, opening_angle=theta_crit)
     elif config_mode == "sfmm4":
@@ -176,9 +182,22 @@ def add_data_to_collect(collected_data, none_case, ref_case=None):
     return collected_data
 
 
-Nparts = [1000, 10000, 100000]
-# Nparts = [1000]
-configs = ["mm3", "mm4", "mm5", "fmm3", "fmm4", "fmm5", "sfmm3", "sfmm4", "sfmm5"]
+# Nparts = [1000, 10000, 100000]
+Nparts = [1000, 10000]
+configs = [
+    "mm2",
+    "mm3",
+    "mm4",
+    "mm5",
+    "fmm2",
+    "fmm3",
+    "fmm4",
+    "fmm5",
+    "sfmm2",
+    "sfmm3",
+    "sfmm4",
+    "sfmm5",
+]
 # configs = ["mm5", "fmm5", "sfmm5"]
 theta_vals = [0.1, 0.5, 1.0]
 

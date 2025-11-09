@@ -175,6 +175,7 @@ namespace shammodels::sph::modules {
     }
 } // namespace shammodels::sph::modules
 
+template class shammodels::sph::modules::SGFMMPlummer<f64_3, 2>;
 template class shammodels::sph::modules::SGFMMPlummer<f64_3, 3>;
 template class shammodels::sph::modules::SGFMMPlummer<f64_3, 4>;
 template class shammodels::sph::modules::SGFMMPlummer<f64_3, 5>;

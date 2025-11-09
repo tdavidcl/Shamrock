@@ -1512,6 +1512,12 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
+            } else if (sfmm_config.fmm_order == 2) {
+                modules::SGSFMMPlummer<Tvec, 2> self_gravity_mm_node(
+                    1e-9, sfmm_config.opening_angle);
+                self_gravity_mm_node.set_edges(
+                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
+                self_gravity_mm_node.evaluate();
             } else {
                 shambase::throw_unimplemented();
             }
@@ -1536,6 +1542,11 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
+            } else if (fmm_config.fmm_order == 2) {
+                modules::SGFMMPlummer<Tvec, 2> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                self_gravity_mm_node.set_edges(
+                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
+                self_gravity_mm_node.evaluate();
             } else {
                 shambase::throw_unimplemented();
             }
@@ -1557,6 +1568,11 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 3) {
                 modules::SGMMPlummer<Tvec, 3> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                self_gravity_mm_node.set_edges(
+                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
+                self_gravity_mm_node.evaluate();
+            } else if (mm_config.mm_order == 2) {
+                modules::SGMMPlummer<Tvec, 2> self_gravity_mm_node(1e-9, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
