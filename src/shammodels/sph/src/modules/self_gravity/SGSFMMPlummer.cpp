@@ -15,6 +15,7 @@
  */
 
 #include "shammodels/sph/modules/self_gravity/SGSFMMPlummer.hpp"
+#include "shamalgs/primitives/reduction.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/AABB.hpp"
@@ -86,11 +87,12 @@ namespace shammodels::sph::modules {
                 bvh.structure,
                 shamtree::new_empty_karras_radix_tree_field_multi_var<Tscal>(grav_moment_terms));
 
-            // we do not need to reset grav moments tree as it will be overwritten in the
-            // M2L step
+            // we do not need to reset grav moments tree as it will be overwritten in the M2L step
 
-            logger::info_ln(
+            logger::raw_ln(
                 "SPH", "M2L interact count: ", dtt_result.node_interactions_m2m.get_size());
+            logger::raw_ln(
+                "SPH", "P2P interact count: ", dtt_result.node_interactions_p2p.get_size());
 
             // M2L kernel
             sham::kernel_call(
@@ -228,8 +230,12 @@ namespace shammodels::sph::modules {
             sham::kernel_call(
                 q,
                 sham::MultiRef{
-                    xyz.get_buf(), cell_it, bvh.aabbs.buf_aabb_min, bvh.aabbs.buf_aabb_max},
-                sham::MultiRef{axyz_ext.get_buf(), grav_moments_tree.buf_field},
+                    xyz.get_buf(),
+                    cell_it,
+                    bvh.aabbs.buf_aabb_min,
+                    bvh.aabbs.buf_aabb_max,
+                    grav_moments_tree.buf_field},
+                sham::MultiRef{axyz_ext.get_buf()},
                 bvh.structure.get_leaf_count(),
                 [leaf_offset = bvh.structure.get_internal_cell_count(),
                  G](u32 ileaf,
@@ -237,8 +243,8 @@ namespace shammodels::sph::modules {
                     auto cell_iter,
                     const Tvec *aabb_min,
                     const Tvec *aabb_max,
-                    Tvec *axyz_ext,
-                    Tscal *grav_moments) {
+                    const Tscal *grav_moments,
+                    Tvec *axyz_ext) {
                     auto load_grav_moment = [&](u32 cell_id) -> GravMoments {
                         const Tscal *grav_moment_ptr = grav_moments + cell_id * grav_moment_terms;
                         return GravMoments::load(grav_moment_ptr, 0);
@@ -261,7 +267,29 @@ namespace shammodels::sph::modules {
                                            a_k, dM_k);
                     });
                 });
+#if false
+            {
+                auto tmp = axyz_ext.get_buf().copy_to_stdvec();
+                logger::raw_ln(
+                    "SPH", "axyz: \n", shambase::format_array(tmp.begin(), tmp.size(), 20, "{}"));
+            }
 
+            {
+                auto p2p_off = dtt_result.ordered_result->offset_p2p.copy_to_stdvec();
+                logger::raw_ln(
+                    "SPH",
+                    "P2P offsets: \n",
+                    shambase::format_array(p2p_off.begin(), p2p_off.size(), 20, "{:6}"));
+            }
+
+            {
+                auto interact = dtt_result.node_interactions_p2p.copy_to_stdvec();
+                logger::raw_ln(
+                    "SPH",
+                    "P2P interactions: \n",
+                    shambase::format_array(interact.begin(), interact.size(), 20, "{}"));
+            }
+#endif
             // P2P
             u32 leaf_offset = bvh.structure.get_internal_cell_count();
             auto node_it
@@ -274,20 +302,20 @@ namespace shammodels::sph::modules {
                     dtt_result.node_interactions_p2p,
                     dtt_result.ordered_result->offset_p2p},
                 sham::MultiRef{axyz_ext.get_buf()},
-                bvh.structure.get_leaf_count(),
+                bvh.structure.get_total_cell_count(),
                 [leaf_offset, gpart_mass, G, gravitational_softening](
-                    u32 ileaf,
+                    u32 icell,
                     const Tvec *xyz,
                     auto node_iter,
                     const u32_2 *p2p_interactions,
                     const u32 *offset_p2p,
                     Tvec *axyz_ext) {
-                    u32 cell_id_a = ileaf + leaf_offset;
-
-                    for (u32 j = offset_p2p[ileaf]; j < offset_p2p[ileaf + 1]; j++) {
+                    for (u32 j = offset_p2p[icell]; j < offset_p2p[icell + 1]; j++) {
                         u32_2 interaction = p2p_interactions[j];
                         u32 cell_id_a     = interaction.x();
                         u32 cell_id_b     = interaction.y();
+
+                        SHAM_ASSERT(icell == cell_id_a);
 
                         node_iter.for_each_in_cell(cell_id_a, [&](u32 i) {
                             node_iter.for_each_in_cell(cell_id_b, [&](u32 j) {
@@ -300,6 +328,13 @@ namespace shammodels::sph::modules {
                         });
                     }
                 });
+#if false
+            {
+                auto tmp = axyz_ext.get_buf().copy_to_stdvec();
+                logger::raw_ln(
+                    "SPH", "axyz: \n", shambase::format_array(tmp.begin(), tmp.size(), 20, "{}"));
+            }
+#endif
         });
     }
 } // namespace shammodels::sph::modules
