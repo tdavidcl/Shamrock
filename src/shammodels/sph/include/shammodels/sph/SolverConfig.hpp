@@ -221,6 +221,9 @@ namespace shammodels::sph {
         bool is_mm() const { return std::holds_alternative<MM>(config); }
         bool is_direct() const { return std::holds_alternative<Direct>(config); }
 
+        bool is_sg_on() const { return !is_none(); }
+        bool is_sg_off() const { return is_none(); }
+
         struct SofteningPlummer {
             f64 epsilon;
         };
@@ -240,6 +243,8 @@ namespace shammodels::sph {
         bool is_softening_SPH() const {
             return std::holds_alternative<SofteningSPH>(softening_mode);
         }
+
+        bool has_xi_field() const { return is_sg_on() && is_softening_SPH(); }
     };
 
 } // namespace shammodels::sph

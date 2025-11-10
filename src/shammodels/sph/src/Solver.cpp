@@ -63,6 +63,7 @@
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shammodels/sph/modules/UpdateViscosity.hpp"
 #include "shammodels/sph/modules/io/VTKDump.hpp"
+#include "shammodels/sph/modules/self_gravity/ComputeSPHXi.hpp"
 #include "shammodels/sph/modules/self_gravity/SGDirectPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGFMMPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGMMPlummer.hpp"
@@ -123,6 +124,10 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         = std::make_shared<shammodels::sph::solvergraph::NeighCache>("neigh_cache", "neigh");
 
     storage.omega = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "omega", "\\Omega");
+
+    if (solver_config.self_grav_config.has_xi_field()) {
+        storage.xi = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "xi", "\\xi");
+    }
 }
 
 template<class Tvec, template<class> class Kern>
@@ -731,6 +736,17 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
         set_omega_mask.set_edges(storage.part_counts, should_set_omega_mask, storage.omega);
         set_omega_mask.evaluate();
     }
+
+    if (solver_config.self_grav_config.has_xi_field()) {
+        modules::ComputeSPHXi<Tvec, Kern> compute_xi{solver_config.gpart_mass};
+        compute_xi.set_edges(
+            storage.part_counts,
+            storage.neigh_cache,
+            storage.positions_with_ghosts,
+            hnew_edge,
+            storage.xi);
+        compute_xi.evaluate();
+    }
 }
 
 template<class Tvec, template<class> class Kern>
@@ -835,6 +851,7 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
     bool has_curlB_field   = solver_config.has_field_curlB();
     bool has_epsilon_field = solver_config.dust_config.has_epsilon_field();
     bool has_deltav_field  = solver_config.dust_config.has_deltav_field();
+    bool has_xi_field      = solver_config.self_grav_config.has_xi_field();
 
     PatchDataLayerLayout &pdl = scheduler().pdl();
     const u32 ixyz            = pdl.get_field_idx<Tvec>("xyz");
@@ -872,6 +889,7 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
     u32 iuint_interf  = ghost_layout.get_field_idx<Tscal>("uint");
     u32 ivxyz_interf  = ghost_layout.get_field_idx<Tvec>("vxyz");
     u32 iomega_interf = ghost_layout.get_field_idx<Tscal>("omega");
+    u32 ixi_interf    = (has_xi_field) ? ghost_layout.get_field_idx<Tscal>("xi") : 0;
 
     const u32 iaxyz_interf
         = (solver_config.has_axyz_in_ghost()) ? ghost_layout.get_field_idx<Tvec>("axyz") : 0;
@@ -928,6 +946,11 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
                 buf_idx, cnt, pdat.get_field<Tvec>(ivxyz_interf));
 
             sender_omega.append_subset_to(buf_idx, cnt, pdat.get_field<Tscal>(iomega_interf));
+
+            if (has_xi_field) {
+                PatchDataField<Tscal> &sender_xi = shambase::get_check_ref(storage.xi).get(sender);
+                sender_xi.append_subset_to(buf_idx, cnt, pdat.get_field<Tscal>(ixi_interf));
+            }
 
             if (has_soundspeed_field) {
                 sender_patch.get_field<Tscal>(isoundspeed)
@@ -1003,6 +1026,12 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
                 }
 
                 pdat_new.get_field<Tscal>(iomega_interf).insert(cur_omega);
+
+                if (has_xi_field) {
+                    PatchDataField<Tscal> &cur_xi
+                        = shambase::get_check_ref(storage.xi).get(p.id_patch);
+                    pdat_new.get_field<Tscal>(ixi_interf).insert(cur_xi);
+                }
 
                 if (has_soundspeed_field) {
                     pdat_new.get_field<Tscal>(isoundspeed_interf)

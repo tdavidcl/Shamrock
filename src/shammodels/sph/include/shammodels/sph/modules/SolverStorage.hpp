@@ -76,6 +76,7 @@ namespace shammodels::sph {
             rtree_rint_field;
 
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> omega;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> xi;
 
         Component<std::shared_ptr<shamrock::patch::PatchDataLayerLayout>> ghost_layout;
 
