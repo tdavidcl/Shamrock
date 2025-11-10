@@ -267,29 +267,7 @@ namespace shammodels::sph::modules {
                                            a_k, dM_k);
                     });
                 });
-#if false
-            {
-                auto tmp = axyz_ext.get_buf().copy_to_stdvec();
-                logger::raw_ln(
-                    "SPH", "axyz: \n", shambase::format_array(tmp.begin(), tmp.size(), 20, "{}"));
-            }
 
-            {
-                auto p2p_off = dtt_result.ordered_result->offset_p2p.copy_to_stdvec();
-                logger::raw_ln(
-                    "SPH",
-                    "P2P offsets: \n",
-                    shambase::format_array(p2p_off.begin(), p2p_off.size(), 20, "{:6}"));
-            }
-
-            {
-                auto interact = dtt_result.node_interactions_p2p.copy_to_stdvec();
-                logger::raw_ln(
-                    "SPH",
-                    "P2P interactions: \n",
-                    shambase::format_array(interact.begin(), interact.size(), 20, "{}"));
-            }
-#endif
             // P2P
             u32 leaf_offset = bvh.structure.get_internal_cell_count();
             auto node_it
@@ -328,13 +306,6 @@ namespace shammodels::sph::modules {
                         });
                     }
                 });
-#if false
-            {
-                auto tmp = axyz_ext.get_buf().copy_to_stdvec();
-                logger::raw_ln(
-                    "SPH", "axyz: \n", shambase::format_array(tmp.begin(), tmp.size(), 20, "{}"));
-            }
-#endif
         });
     }
 } // namespace shammodels::sph::modules
