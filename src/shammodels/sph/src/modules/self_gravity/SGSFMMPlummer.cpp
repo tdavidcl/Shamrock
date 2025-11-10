@@ -90,7 +90,7 @@ namespace shammodels::sph::modules {
             // we do not need to reset grav moments tree as it will be overwritten in the M2L step
 
             logger::raw_ln(
-                "SPH", "M2L interact count: ", dtt_result.node_interactions_m2m.get_size());
+                "SPH", "M2L interact count: ", dtt_result.node_interactions_m2l.get_size());
             logger::raw_ln(
                 "SPH", "P2P interact count: ", dtt_result.node_interactions_p2p.get_size());
 
@@ -98,8 +98,8 @@ namespace shammodels::sph::modules {
             sham::kernel_call(
                 q,
                 sham::MultiRef{
-                    dtt_result.node_interactions_m2m,
-                    dtt_result.ordered_result->offset_m2m,
+                    dtt_result.node_interactions_m2l,
+                    dtt_result.ordered_result->offset_m2l,
                     mass_moments_tree.buf_field,
                     bvh.aabbs.buf_aabb_min,
                     bvh.aabbs.buf_aabb_max},
