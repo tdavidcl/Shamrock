@@ -68,6 +68,7 @@
 #include "shammodels/sph/modules/self_gravity/SGFMMPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGMMPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGSFMMPlummer.hpp"
+#include "shammodels/sph/modules/self_gravity/SGSPHCorrection.hpp"
 #include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamphys/fmm/GreenFuncGravCartesian.hpp"
 #include "shamphys/fmm/contract_grav_moment.hpp"
@@ -1149,6 +1150,131 @@ void shammodels::sph::Solver<Tvec, Kern>::update_derivs() {
 
     modules::UpdateDerivs<Tvec, Kern> derivs(context, solver_config, storage);
     derivs.update_derivs();
+
+    if (solver_config.self_grav_config.has_xi_field()) {
+
+        auto constant_G = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::IDataEdge<Tscal>> set_constant_G(
+            [&](shamrock::solvergraph::IDataEdge<Tscal> &constant_G) {
+                constant_G.data = solver_config.get_constant_G();
+            });
+
+        set_constant_G.set_edges(constant_G);
+        set_constant_G.evaluate();
+
+        auto gpart_mass = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::IDataEdge<Tscal>> set_gpart_mass(
+            [&](shamrock::solvergraph::IDataEdge<Tscal> &gpart_mass) {
+                gpart_mass.data = solver_config.gpart_mass;
+            });
+
+        set_gpart_mass.set_edges(gpart_mass);
+        set_gpart_mass.evaluate();
+
+        using namespace shamrock;
+        using namespace shamrock::patch;
+        PatchDataLayerLayout &pdl = scheduler().pdl();
+
+        auto &merged_xyzh = storage.merged_xyzh.get();
+
+        shambase::DistributedData<PatchDataLayer> &mpdats = storage.merged_patchdata_ghost.get();
+
+        shamrock::patch::PatchDataLayerLayout &ghost_layout
+            = shambase::get_check_ref(storage.ghost_layout.get());
+        u32 ihpart_interf = ghost_layout.get_field_idx<Tscal>("hpart");
+        u32 iomega_interf = ghost_layout.get_field_idx<Tscal>("omega");
+        u32 ixi_interf    = ghost_layout.get_field_idx<Tscal>("xi");
+
+        auto field_xyz = shamrock::solvergraph::FieldRefs<Tvec>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tvec>> set_field_xyz(
+            [&](shamrock::solvergraph::FieldRefs<Tvec> &field_xyz_edge) {
+                shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_xyz_refs = {};
+                scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                    auto &field = merged_xyzh.get(p.id_patch).template get_field<Tvec>(0);
+                    field_xyz_refs.add_obj(p.id_patch, std::ref(field));
+                });
+                field_xyz_edge.set_refs(field_xyz_refs);
+            });
+        set_field_xyz.set_edges(field_xyz);
+        set_field_xyz.evaluate();
+
+        auto field_hpart = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>> set_field_hpart(
+            [&](shamrock::solvergraph::FieldRefs<Tscal> &field_hpart_edge) {
+                shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_hpart_refs = {};
+                scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                    PatchDataLayer &mpdat = mpdats.get(p.id_patch);
+                    auto &field           = mpdat.get_field<Tscal>(ihpart_interf);
+                    field_hpart_refs.add_obj(p.id_patch, std::ref(field));
+                });
+                field_hpart_edge.set_refs(field_hpart_refs);
+            });
+        set_field_hpart.set_edges(field_hpart);
+        set_field_hpart.evaluate();
+
+        auto field_omega = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>> set_field_omega(
+            [&](shamrock::solvergraph::FieldRefs<Tscal> &field_omega_edge) {
+                shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_omega_refs = {};
+                scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                    PatchDataLayer &mpdat = mpdats.get(p.id_patch);
+                    auto &field           = mpdat.get_field<Tscal>(iomega_interf);
+                    field_omega_refs.add_obj(p.id_patch, std::ref(field));
+                });
+                field_omega_edge.set_refs(field_omega_refs);
+            });
+        set_field_omega.set_edges(field_omega);
+        set_field_omega.evaluate();
+
+        auto field_xi = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>> set_field_xi(
+            [&](shamrock::solvergraph::FieldRefs<Tscal> &field_xi_edge) {
+                shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_xi_refs = {};
+                scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                    PatchDataLayer &mpdat = mpdats.get(p.id_patch);
+                    auto &field           = mpdat.get_field<Tscal>(ixi_interf);
+                    field_xi_refs.add_obj(p.id_patch, std::ref(field));
+                });
+                field_xi_edge.set_refs(field_xi_refs);
+            });
+        set_field_xi.set_edges(field_xi);
+        set_field_xi.evaluate();
+
+        const u32 iaxyz = pdl.get_field_idx<Tvec>("axyz");
+
+        auto field_axyz = shamrock::solvergraph::FieldRefs<Tvec>::make_shared("", "");
+
+        shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tvec>> set_field_axyz(
+            [&](shamrock::solvergraph::FieldRefs<Tvec> &field_axyz_edge) {
+                shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_axyz_refs = {};
+                scheduler().for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                    auto &field = pdat.get_field<Tvec>(iaxyz);
+                    field_axyz_refs.add_obj(p.id_patch, std::ref(field));
+                });
+                field_axyz_edge.set_refs(field_axyz_refs);
+            });
+        set_field_axyz.set_edges(field_axyz);
+        set_field_axyz.evaluate();
+
+        modules::SGSPHCorrection<Tvec, Kern> sg_softening_correction{};
+        sg_softening_correction.set_edges(
+            storage.part_counts,
+            gpart_mass,
+            constant_G,
+            storage.neigh_cache,
+            field_xyz,
+            field_hpart,
+            field_omega,
+            field_xi,
+            field_axyz);
+        sg_softening_correction.evaluate();
+    }
 
     modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
     ext_forces.add_ext_forces();
