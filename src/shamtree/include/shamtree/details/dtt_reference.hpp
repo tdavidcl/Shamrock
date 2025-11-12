@@ -133,7 +133,8 @@ namespace shamtree::details {
             sham::DeviceScheduler_ptr dev_sched,
             const shamtree::CompressedLeafBVH<Tmorton, Tvec, dim> &bvh,
             shambase::VecComponent<Tvec> theta_crit,
-            bool ordered_result) {
+            bool ordered_result,
+            bool allow_leaf_lowering) {
             StackEntry stack_loc{};
 
             std::vector<u32_2> interact_m2l{};
