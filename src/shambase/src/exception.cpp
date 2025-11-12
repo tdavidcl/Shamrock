@@ -38,8 +38,6 @@ namespace shambase {
         exception_print_callback = callback;
     }
 
-    exception_gen_callback_t get_exception_gen_callback() {
-        return exception_print_callback;
-    }
+    exception_gen_callback_t get_exception_gen_callback() { return exception_print_callback; }
 
 } // namespace shambase
