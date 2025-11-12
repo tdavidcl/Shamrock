@@ -42,6 +42,8 @@ namespace shammodels::sph::modules {
 
         auto edges = get_edges();
 
+        edges.field_axyz_ext.ensure_sizes(edges.sizes.indexes);
+
         if (edges.sizes.indexes.get_ids().size() != 1) {
             throw shambase::make_except_with_loc<std::runtime_error>(
                 "Self gravity direct mode only supports one patch so far, current number "
@@ -74,7 +76,8 @@ namespace shammodels::sph::modules {
                 bvh, xyz.get_buf(), gpart_mass);
 
             // DTT
-            auto dtt_result = shamtree::clbvh_dual_tree_traversal(dev_sched, bvh, theta_crit, true);
+            auto dtt_result
+                = shamtree::clbvh_dual_tree_traversal(dev_sched, bvh, theta_crit, true, false);
 
             // M2L step
             using GravMoments = shammath::SymTensorCollection<Tscal, 1, mm_order>;
@@ -267,6 +270,113 @@ namespace shammodels::sph::modules {
                                            a_k, dM_k);
                     });
                 });
+
+            if (true) {
+                // tmp checks
+                u32 leaf_offset = bvh.structure.get_internal_cell_count();
+                auto node_it    = bvh.reduced_morton_set.get_cell_iterator_host(
+                    bvh.structure.buf_endrange, leaf_offset);
+
+                auto node_iter = node_it.get_read_access();
+
+                auto offset_p2p       = dtt_result.ordered_result->offset_p2p.copy_to_stdvec();
+                auto p2p_interactions = dtt_result.node_interactions_p2p.copy_to_stdvec();
+
+                std::vector<std::pair<u32, u32>> part_calls  = {};
+                std::set<std::pair<u32, u32>> part_calls_set = {};
+                std::vector<std::set<u32>> a_acc_by_tid      = {};
+                for (u32 i = 0; i < xyz.get_obj_cnt(); i++) {
+                    a_acc_by_tid.push_back(std::set<u32>());
+                }
+
+                // cpu variant of the kernel
+                for (u32 icell = 0; icell < bvh.structure.get_total_cell_count(); icell++) {
+
+                    shamcomm::logs::raw_ln(
+                        "cell id: ",
+                        icell,
+                        "runs from offset: ",
+                        offset_p2p[icell],
+                        "to offset: ",
+                        offset_p2p[icell + 1]);
+
+                    std::vector<u32> local_particles = {};
+                    node_iter.for_each_in_cell(icell, [&](u32 i) {
+                        local_particles.push_back(i);
+                    });
+
+                    shamcomm::logs::raw_ln(
+                        "local particles: cell id: ", icell, " data: ", local_particles);
+
+                    for (u32 j = offset_p2p[icell]; j < offset_p2p[icell + 1]; j++) {
+                        u32_2 interaction = p2p_interactions[j];
+                        u32 cell_id_a     = interaction.x();
+                        u32 cell_id_b     = interaction.y();
+
+                        if (icell != cell_id_a) {
+                            throw shambase::make_except_with_loc<std::runtime_error>(
+                                "Cell id mismatch: " + std::to_string(icell)
+                                + " != " + std::to_string(cell_id_a));
+                        }
+
+                        node_iter.for_each_in_cell(cell_id_a, [&](u32 i) {
+                            node_iter.for_each_in_cell(cell_id_b, [&](u32 j) {
+                                std::pair<u32, u32> call = {i, j};
+                                part_calls.push_back(call);
+                                part_calls_set.insert(call);
+                            });
+
+                            if (a_acc_by_tid[i].count(icell) == 0) {
+                                a_acc_by_tid[i].insert(icell);
+                            }
+
+                            if (a_acc_by_tid[i].size() > 1) {
+                                throw shambase::make_except_with_loc<std::runtime_error>(
+                                    "Potential race condition detected in part_calls for particle "
+                                    + std::to_string(i) + " and cell " + std::to_string(icell) + " current set: "+ shambase::format("{}",a_acc_by_tid[i]));
+                            }
+                        });
+                    }
+                }
+
+                shamlog_info_ln(
+                    "FMM",
+                    "Part calls size: ",
+                    part_calls.size(),
+                    "expected: ",
+                    xyz.get_obj_cnt() * xyz.get_obj_cnt());
+                if (part_calls.size() != xyz.get_obj_cnt() * xyz.get_obj_cnt()) {
+                    throw shambase::make_except_with_loc<std::runtime_error>(
+                        "Part calls size mismatch");
+                }
+
+                for (size_t outer = 0; outer < part_calls.size(); ++outer) {
+                    const auto call = part_calls[outer];
+
+                    u32 count = part_calls_set.count(call);
+                    if (count != 1) {
+                        shamlog_error_ln("FMM", "Duplicate particle call detected in part_calls.");
+                        throw shambase::make_except_with_loc<std::runtime_error>(
+                            "Duplicate particle call detected in part_calls for particle "
+                            + std::to_string(call.first) + " and " + std::to_string(call.second)
+                            + " with count " + std::to_string(count));
+                    }
+
+                    u32 count_reverse = part_calls_set.count({call.second, call.first});
+                    if (count_reverse != 1) {
+                        shamlog_error_ln(
+                            "FMM", "Duplicate reverse particle call detected in part_calls.");
+                        throw shambase::make_except_with_loc<std::runtime_error>(
+                            "Duplicate reverse particle call detected in part_calls for particle "
+                            + std::to_string(call.second) + " and " + std::to_string(call.first)
+                            + " with count " + std::to_string(count_reverse));
+                    }
+                }
+
+                shamcomm::logs::raw_ln(a_acc_by_tid);
+
+                throw "";
+            }
 
             // P2P
             u32 leaf_offset = bvh.structure.get_internal_cell_count();

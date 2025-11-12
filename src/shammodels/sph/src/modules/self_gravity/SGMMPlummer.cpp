@@ -39,6 +39,8 @@ namespace shammodels::sph::modules {
 
         auto edges = get_edges();
 
+        edges.field_axyz_ext.ensure_sizes(edges.sizes.indexes);
+
         if (edges.sizes.indexes.get_ids().size() != 1) {
             throw shambase::make_except_with_loc<std::runtime_error>(
                 "Self gravity direct mode only supports one patch so far, current number "
@@ -83,7 +85,7 @@ namespace shammodels::sph::modules {
                         sham::MultiRef{xyz.get_buf(), obj_it, mass_moments_tree.buf_field},
                         sham::MultiRef{axyz_ext.get_buf()},
                         n,
-                        [=](u32 i,
+                        [theta_crit = theta_crit, gravitational_softening, gpart_mass, G](u32 i,
                             const Tvec *xyz,
                             auto particle_looper,
                             const Tscal *mass_moments_scal,
