@@ -61,6 +61,24 @@ namespace shambase {
      */
     exception_gen_callback_t get_exception_gen_callback();
 
+    /// Scoped exception generator callback
+    class scoped_exception_gen_callback {
+        private:
+        exception_gen_callback_t old_callback;
+
+        public:
+        scoped_exception_gen_callback(exception_gen_callback_t callback)
+            : old_callback(get_exception_gen_callback()) {
+            set_exception_gen_callback(callback);
+        }
+        ~scoped_exception_gen_callback() { set_exception_gen_callback(old_callback); }
+
+        scoped_exception_gen_callback(const scoped_exception_gen_callback &)            = delete;
+        scoped_exception_gen_callback &operator=(const scoped_exception_gen_callback &) = delete;
+        scoped_exception_gen_callback(scoped_exception_gen_callback &&)                 = delete;
+        scoped_exception_gen_callback &operator=(scoped_exception_gen_callback &&)      = delete;
+    };
+
     /**
      * @brief The callback called when an exception is thrown
      *
