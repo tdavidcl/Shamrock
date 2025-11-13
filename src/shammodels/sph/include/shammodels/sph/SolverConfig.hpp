@@ -188,16 +188,19 @@ namespace shammodels::sph {
             u32 fmm_order;
             f64 opening_angle;
             bool leaf_lowering;
+            u32 reduction_level;
         };
 
         struct FMM {
             u32 fmm_order;
             f64 opening_angle;
+            u32 reduction_level;
         };
 
         struct MM {
             u32 mm_order;
             f64 opening_angle;
+            u32 reduction_level;
         };
 
         struct Direct {
@@ -210,11 +213,15 @@ namespace shammodels::sph {
 
         mode config = None{};
 
-        void set_sfmm(u32 fmm_order, f64 opening_angle, bool leaf_lowering) {
-            config = SFMM{fmm_order, opening_angle, leaf_lowering};
+        void set_sfmm(u32 fmm_order, f64 opening_angle, bool leaf_lowering, u32 reduction_level) {
+            config = SFMM{fmm_order, opening_angle, leaf_lowering, reduction_level};
         }
-        void set_fmm(u32 fmm_order, f64 opening_angle) { config = FMM{fmm_order, opening_angle}; }
-        void set_mm(u32 mm_order, f64 opening_angle) { config = MM{mm_order, opening_angle}; }
+        void set_fmm(u32 fmm_order, f64 opening_angle, u32 reduction_level) {
+            config = FMM{fmm_order, opening_angle, reduction_level};
+        }
+        void set_mm(u32 mm_order, f64 opening_angle, u32 reduction_level) {
+            config = MM{mm_order, opening_angle, reduction_level};
+        }
         void set_direct(bool reference_mode = false) { config = Direct{reference_mode}; }
         void set_none() { config = None{}; }
 
@@ -976,6 +983,7 @@ namespace shammodels::sph {
                 {"type", "sfmm"},
                 {"fmm_order", conf->fmm_order},
                 {"opening_angle", conf->opening_angle},
+                {"reduction_level", conf->reduction_level},
                 {"leaf_lowering", conf->leaf_lowering},
             };
         } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
@@ -983,12 +991,14 @@ namespace shammodels::sph {
                 {"type", "fmm"},
                 {"fmm_order", conf->fmm_order},
                 {"opening_angle", conf->opening_angle},
+                {"reduction_level", conf->reduction_level},
             };
         } else if (const SelfGravConfig::MM *conf = std::get_if<SelfGravConfig::MM>(&p.config)) {
             j = {
                 {"type", "mm"},
                 {"mm_order", conf->mm_order},
                 {"opening_angle", conf->opening_angle},
+                {"reduction_level", conf->reduction_level},
             };
         } else if (
             const SelfGravConfig::Direct *conf = std::get_if<SelfGravConfig::Direct>(&p.config)) {
@@ -1022,13 +1032,18 @@ namespace shammodels::sph {
             p.config = SelfGravConfig::SFMM{
                 j.at("fmm_order").get<u32>(),
                 j.at("opening_angle").get<f64>(),
-                j.at("leaf_lowering").get<bool>()};
+                j.at("leaf_lowering").get<bool>(),
+                j.at("reduction_level").get<u32>()};
         } else if (j.at("type").get<std::string>() == "fmm") {
             p.config = SelfGravConfig::FMM{
-                j.at("fmm_order").get<u32>(), j.at("opening_angle").get<f64>()};
+                j.at("fmm_order").get<u32>(),
+                j.at("opening_angle").get<f64>(),
+                j.at("reduction_level").get<u32>()};
         } else if (j.at("type").get<std::string>() == "mm") {
-            p.config
-                = SelfGravConfig::MM{j.at("mm_order").get<u32>(), j.at("opening_angle").get<f64>()};
+            p.config = SelfGravConfig::MM{
+                j.at("mm_order").get<u32>(),
+                j.at("opening_angle").get<f64>(),
+                j.at("reduction_level").get<u32>()};
         } else if (j.at("type").get<std::string>() == "direct") {
             p.config = SelfGravConfig::Direct{j.at("reference_mode").get<bool>()};
         } else if (j.at("type").get<std::string>() == "none") {

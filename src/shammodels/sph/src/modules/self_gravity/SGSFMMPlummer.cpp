@@ -40,9 +40,8 @@ namespace shammodels::sph::modules {
     void SGSFMMPlummer<Tvec, mm_order>::_impl_evaluate_internal() {
         __shamrock_stack_entry();
 
-        using Umorton       = u32;
-        using RTree         = shamtree::CompressedLeafBVH<Umorton, Tvec, 3>;
-        u32 reduction_level = 3;
+        using Umorton = u32;
+        using RTree   = shamtree::CompressedLeafBVH<Umorton, Tvec, 3>;
 
         auto edges = get_edges();
 
@@ -384,7 +383,8 @@ namespace shammodels::sph::modules {
             }
 
             // P2P
-            enum mode { atomic, invert_list } p2p_mode = (leaf_lowering ? atomic : invert_list);
+            // enum mode { atomic, invert_list } p2p_mode = (leaf_lowering ? atomic : invert_list);
+            enum mode { atomic, invert_list } p2p_mode = invert_list;
 
             if (p2p_mode == atomic) {
                 u32 leaf_offset = bvh.structure.get_internal_cell_count();

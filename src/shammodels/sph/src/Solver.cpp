@@ -1656,31 +1656,46 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             if (sfmm_config.fmm_order == 5) {
                 modules::SGSFMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 4) {
                 modules::SGSFMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 3) {
                 modules::SGSFMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 2) {
                 modules::SGSFMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 1) {
                 modules::SGSFMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
@@ -1695,31 +1710,31 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             if (fmm_config.fmm_order == 5) {
                 modules::SGFMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 4) {
                 modules::SGFMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 3) {
                 modules::SGFMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 2) {
                 modules::SGFMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 1) {
                 modules::SGFMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
@@ -1734,31 +1749,31 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             if (mm_config.mm_order == 5) {
                 modules::SGMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle);
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 4) {
                 modules::SGMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle);
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 3) {
                 modules::SGMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle);
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 2) {
                 modules::SGMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle);
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 1) {
                 modules::SGMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle);
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();

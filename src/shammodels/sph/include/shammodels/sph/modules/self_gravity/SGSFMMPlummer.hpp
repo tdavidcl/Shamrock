@@ -35,13 +35,16 @@ namespace shammodels::sph::modules {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
-        Tscal epsilon;      ///< Gravitational softening length
-        Tscal theta_crit;   ///< Critical opening angle for the MM method
-        bool leaf_lowering; ///< If true, leaf lowering is used
+        Tscal epsilon;       ///< Gravitational softening length
+        Tscal theta_crit;    ///< Critical opening angle for the MM method
+        bool leaf_lowering;  ///< If true, leaf lowering is used
+        u32 reduction_level; ///< Reduction level for the tree
 
         public:
-        explicit SGSFMMPlummer(Tscal epsilon, Tscal theta_crit, bool leaf_lowering)
-            : epsilon(epsilon), theta_crit(theta_crit), leaf_lowering(leaf_lowering) {}
+        explicit SGSFMMPlummer(
+            Tscal epsilon, Tscal theta_crit, bool leaf_lowering, u32 reduction_level)
+            : epsilon(epsilon), theta_crit(theta_crit), leaf_lowering(leaf_lowering),
+              reduction_level(reduction_level) {}
 
         struct Edges {
             const shamrock::solvergraph::Indexes<u32> &sizes;

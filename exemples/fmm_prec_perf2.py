@@ -11,7 +11,7 @@ import shamrock
 
 shamrock.enable_experimental_features()
 
-shamrock.tree.set_impl_clbvh_dual_tree_traversal("reference", "")
+shamrock.tree.set_impl_clbvh_dual_tree_traversal("parallel_select", "")
 
 
 def save_bench_result(filename, data, res_rate, res_cnt):
@@ -31,11 +31,11 @@ def load_bench_result(filename):
         return tmp["data"], tmp["res_rate"], tmp["res_cnt"]
 
 
-def config_to_filename(theta_crit, config_mode, Npart):
+def config_to_filename(theta_crit, config_mode, Npart, reduction_level):
     if config_mode in ["none", "direct", "direct_safe"]:
         return f"/tmp/bench_result_{config_mode}_{Npart}.pkl"
 
-    return f"/tmp/bench_result_{theta_crit:.3f}_{config_mode}_{Npart}.pkl"
+    return f"/tmp/bench_result_{theta_crit:.3f}_{config_mode}_{Npart}_{reduction_level}.pkl"
 
 
 def run_benchmark(ctx, model):
@@ -62,7 +62,7 @@ def run_benchmark(ctx, model):
     return data, res_rate, res_cnt
 
 
-def cub_collapse(theta_crit, config_mode, Npart):
+def cub_collapse(theta_crit, config_mode, Npart, reduction_level):
 
     si = shamrock.UnitSystem()
     sicte = shamrock.Constants(si)
@@ -131,44 +131,59 @@ def cub_collapse(theta_crit, config_mode, Npart):
     elif config_mode == "direct_safe":
         cfg.set_self_gravity_direct(reference_mode=True)
     elif config_mode == "mm1":
-        cfg.set_self_gravity_mm(order=1, opening_angle=theta_crit)
+        cfg.set_self_gravity_mm(order=1, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "mm2":
-        cfg.set_self_gravity_mm(order=2, opening_angle=theta_crit)
+        cfg.set_self_gravity_mm(order=2, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "mm3":
-        cfg.set_self_gravity_mm(order=3, opening_angle=theta_crit)
+        cfg.set_self_gravity_mm(order=3, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "mm4":
-        cfg.set_self_gravity_mm(order=4, opening_angle=theta_crit)
+        cfg.set_self_gravity_mm(order=4, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "mm5":
-        cfg.set_self_gravity_mm(order=5, opening_angle=theta_crit)
+        cfg.set_self_gravity_mm(order=5, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "fmm1":
-        cfg.set_self_gravity_fmm(order=1, opening_angle=theta_crit)
+        cfg.set_self_gravity_fmm(order=1, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "fmm2":
-        cfg.set_self_gravity_fmm(order=2, opening_angle=theta_crit)
+        cfg.set_self_gravity_fmm(order=2, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "fmm3":
-        cfg.set_self_gravity_fmm(order=3, opening_angle=theta_crit)
+        cfg.set_self_gravity_fmm(order=3, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "fmm4":
-        cfg.set_self_gravity_fmm(order=4, opening_angle=theta_crit)
+        cfg.set_self_gravity_fmm(order=4, opening_angle=theta_crit, reduction_level=reduction_level)
     elif config_mode == "fmm5":
-        cfg.set_self_gravity_fmm(order=5, opening_angle=theta_crit)
+        cfg.set_self_gravity_fmm(order=5, opening_angle=theta_crit, reduction_level=reduction_level)
     elif "sfmm1" in config_mode:
         cfg.set_self_gravity_sfmm(
-            order=1, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+            order=1,
+            opening_angle=theta_crit,
+            leaf_lowering="lowering" in config_mode,
+            reduction_level=reduction_level,
         )
     elif "sfmm2" in config_mode:
         cfg.set_self_gravity_sfmm(
-            order=2, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+            order=2,
+            opening_angle=theta_crit,
+            leaf_lowering="lowering" in config_mode,
+            reduction_level=reduction_level,
         )
     elif "sfmm3" in config_mode:
         cfg.set_self_gravity_sfmm(
-            order=3, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+            order=3,
+            opening_angle=theta_crit,
+            leaf_lowering="lowering" in config_mode,
+            reduction_level=reduction_level,
         )
     elif "sfmm4" in config_mode:
         cfg.set_self_gravity_sfmm(
-            order=4, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+            order=4,
+            opening_angle=theta_crit,
+            leaf_lowering="lowering" in config_mode,
+            reduction_level=reduction_level,
         )
     elif "sfmm5" in config_mode:
         cfg.set_self_gravity_sfmm(
-            order=5, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+            order=5,
+            opening_angle=theta_crit,
+            leaf_lowering="lowering" in config_mode,
+            reduction_level=reduction_level,
         )
     else:
         raise ValueError(f"Invalid case name: {config_mode}")
@@ -202,7 +217,9 @@ def cub_collapse(theta_crit, config_mode, Npart):
 
     data, res_rate, res_cnt = run_benchmark(ctx, model)
 
-    save_bench_result(config_to_filename(theta_crit, config_mode, Npart), data, res_rate, res_cnt)
+    save_bench_result(
+        config_to_filename(theta_crit, config_mode, Npart, reduction_level), data, res_rate, res_cnt
+    )
 
     return data, res_rate, res_cnt
 
@@ -234,17 +251,17 @@ def add_data_to_collect(collected_data, none_case, ref_case=None):
     return collected_data
 
 
-def bench_entry(theta_crit, config_mode, Npart):
-    filename = config_to_filename(theta_crit, config_mode, Npart)
+def bench_entry(theta_crit, config_mode, Npart, reduction_level):
+    filename = config_to_filename(theta_crit, config_mode, Npart, reduction_level)
     if os.path.exists(filename):
         print(f"Loading benchmark result from {filename}")
         return load_bench_result(filename)
     else:
-        print(f"Running benchmark for {theta_crit:.3f}, {config_mode}, {Npart}")
-        return cub_collapse(theta_crit, config_mode, Npart)
+        print(f"Running benchmark for {theta_crit:.3f}, {config_mode}, {Npart}, {reduction_level}")
+        return cub_collapse(theta_crit, config_mode, Npart, reduction_level)
 
 
-Nparts = np.logspace(3, 6, 10).astype(int).tolist()
+Nparts = np.logspace(3, 5.5, 10).astype(int).tolist()
 
 configs = [
     "mm1",
@@ -320,83 +337,91 @@ plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath} \usepackage{amssymb
 
 
 # perf curves
-theta_perf_curve = 0.5
+for reduction_level in [1, 2, 3, 4, 5]:
+    theta_perf_curve = 0.5
 
-base_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-extended_colors = base_colors * 3
-color_cycle = extended_colors
+    base_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    extended_colors = base_colors * 3
+    color_cycle = extended_colors
 
-true_cnt = {config: [] for config in configs_all}
-true_rate = {config: [] for config in configs_all}
+    true_cnt = {config: [] for config in configs_all}
+    true_rate = {config: [] for config in configs_all}
 
-config_plot = {
-    "none": ("none", "solid", color_cycle[0]),
-    "direct": ("direct", "solid", color_cycle[1]),
-    "direct_safe": ("direct_safe", "solid", color_cycle[2]),
-}
+    config_plot = {
+        "none": ("none", "solid", color_cycle[0]),
+        "direct": ("direct", "solid", color_cycle[1]),
+        "direct_safe": ("direct_safe", "solid", color_cycle[2]),
+    }
 
-order_list = []
-for config in configs_all:
+    order_list = []
+    for config in configs_all:
 
-    if "mm" in config:
-        order = int(config[-1])
-    elif "fmm" in config:
-        order = int(config[-1])
-    elif "sfmm" in config:
-        order = int(config[-1])
-    elif "lowering_sfmm" in config:
-        order = int(config[-1])
-    else:
-        continue
-
-    order_list.append(order)
-
-order_list = list(set(order_list))
-order_list.sort()
-
-for i, order in enumerate(order_list):
-    config_plot[f"mm{order}"] = (f"mm{order}", "solid", color_cycle[3 + i])
-    config_plot[f"fmm{order}"] = (f"fmm{order}", "dashed", color_cycle[3 + i])
-    config_plot[f"sfmm{order}"] = (f"sfmm{order}", "dotted", color_cycle[3 + i])
-    config_plot[f"lowering_sfmm{order}"] = (f"lowering_sfmm{order}", "dashdot", color_cycle[3 + i])
-
-for config in configs_all:
-    for Npart in Nparts:
-        if config in ["direct", "direct_safe"] and Npart > 2e4:
+        if "mm" in config:
+            order = int(config[-1])
+        elif "fmm" in config:
+            order = int(config[-1])
+        elif "sfmm" in config:
+            order = int(config[-1])
+        elif "lowering_sfmm" in config:
+            order = int(config[-1])
+        else:
             continue
-        _, rate, cnt = bench_entry(theta_perf_curve, config, Npart)
-        true_cnt[config].append(cnt)
-        true_rate[config].append(rate)
 
-plt.figure(figsize=(10, 5))
-for config in configs_all:
-    (label, linestyle, color) = config_plot[config]
-    plt.plot(true_cnt[config], true_rate[config], label=label, linestyle=linestyle, color=color)
-plt.legend()
-plt.xlabel("Npart")
-plt.ylabel("rate")
-plt.xscale("log")
-plt.yscale("log")
-plt.tight_layout()
+        order_list.append(order)
 
-plt.figure(figsize=(10, 5))
-for config in configs_all:
-    (label, linestyle, color) = config_plot[config]
-    rate = true_rate[config]
-    slowdown_factor = np.array(true_rate["none"][: len(rate)]) / rate
-    plt.plot(true_cnt[config], slowdown_factor, label=label, linestyle=linestyle, color=color)
-plt.legend()
-plt.xlabel("Npart")
-plt.ylabel("none rate / rate (slowdown factor)")
-plt.xscale("log")
-plt.tight_layout()
+    order_list = list(set(order_list))
+    order_list.sort()
+
+    for i, order in enumerate(order_list):
+        config_plot[f"mm{order}"] = (f"mm{order}", "solid", color_cycle[3 + i])
+        config_plot[f"fmm{order}"] = (f"fmm{order}", "dashed", color_cycle[3 + i])
+        config_plot[f"sfmm{order}"] = (f"sfmm{order}", "dotted", color_cycle[3 + i])
+        config_plot[f"lowering_sfmm{order}"] = (
+            f"lowering_sfmm{order}",
+            "dashdot",
+            color_cycle[3 + i],
+        )
+
+    for config in configs_all:
+        for Npart in Nparts:
+            if config in ["direct", "direct_safe"] and Npart > 2e4:
+                continue
+            _, rate, cnt = bench_entry(theta_perf_curve, config, Npart, reduction_level)
+            true_cnt[config].append(cnt)
+            true_rate[config].append(rate)
+
+    plt.figure(figsize=(10, 5))
+    for config in configs_all:
+        (label, linestyle, color) = config_plot[config]
+        plt.plot(true_cnt[config], true_rate[config], label=label, linestyle=linestyle, color=color)
+    plt.legend()
+    plt.xlabel("Npart")
+    plt.ylabel("rate")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.tight_layout()
+    plt.title(f"reduction_level = {reduction_level}")
+
+    plt.figure(figsize=(10, 5))
+    for config in configs_all:
+        (label, linestyle, color) = config_plot[config]
+        rate = true_rate[config]
+        slowdown_factor = np.array(true_rate["none"][: len(rate)]) / rate
+        plt.plot(true_cnt[config], slowdown_factor, label=label, linestyle=linestyle, color=color)
+    plt.legend()
+    plt.xlabel("Npart")
+    plt.ylabel("none rate / rate (slowdown factor)")
+    plt.xscale("log")
+    plt.tight_layout()
+    plt.title(f"reduction_level = {reduction_level}")
 
 # precision plot
+reduc_level_prec_plot = 3
 Npart_precision_plot = 5e4
 
-none_case, none_rate, none_cnt = bench_entry(0, "none", Npart_precision_plot)
+none_case, none_rate, none_cnt = bench_entry(0, "none", Npart_precision_plot, reduc_level_prec_plot)
 direct_safe_case, direct_safe_rate, direct_safe_cnt = bench_entry(
-    0, "direct_safe", Npart_precision_plot
+    0, "direct_safe", Npart_precision_plot, reduc_level_prec_plot
 )
 
 direct_safe_case = add_data_to_collect(direct_safe_case, none_case)
@@ -409,7 +434,9 @@ perf_data["direct"] = []
 
 for config in precision_data.keys():
     for theta_crit in theta_vals:
-        case, rate, cnt = bench_entry(theta_crit, config, Npart_precision_plot)
+        case, rate, cnt = bench_entry(
+            theta_crit, config, Npart_precision_plot, reduc_level_prec_plot
+        )
         case = add_data_to_collect(case, none_case, direct_safe_case)
         mask = case["r"] > 1e-2  # avoid div by zero in center
         avg_rel_error = np.max(case["rel_error"][mask])

@@ -33,9 +33,8 @@ namespace shammodels::sph::modules {
     void SGMMPlummer<Tvec, mm_order>::_impl_evaluate_internal() {
         __shamrock_stack_entry();
 
-        using Umorton       = u32;
-        using RTree         = shamtree::CompressedLeafBVH<Umorton, Tvec, 3>;
-        u32 reduction_level = 3;
+        using Umorton = u32;
+        using RTree   = shamtree::CompressedLeafBVH<Umorton, Tvec, 3>;
 
         auto edges = get_edges();
 
