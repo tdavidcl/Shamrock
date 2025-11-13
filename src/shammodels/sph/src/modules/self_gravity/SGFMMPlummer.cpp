@@ -39,7 +39,6 @@ namespace shammodels::sph::modules {
 
         auto edges = get_edges();
 
-
         edges.field_axyz_ext.ensure_sizes(edges.sizes.indexes);
 
         if (edges.sizes.indexes.get_ids().size() != 1) {
@@ -86,7 +85,8 @@ namespace shammodels::sph::modules {
                         sham::MultiRef{xyz.get_buf(), obj_it, mass_moments_tree.buf_field},
                         sham::MultiRef{axyz_ext.get_buf()},
                         bvh.structure.get_leaf_count(),
-                        [theta_crit = theta_crit, gravitational_softening, gpart_mass, G](u32 ileaf,
+                        [theta_crit = theta_crit, gravitational_softening, gpart_mass, G](
+                            u32 ileaf,
                             const Tvec *xyz,
                             auto particle_looper,
                             const Tscal *mass_moments_scal,

@@ -85,7 +85,8 @@ namespace shammodels::sph::modules {
                         sham::MultiRef{xyz.get_buf(), obj_it, mass_moments_tree.buf_field},
                         sham::MultiRef{axyz_ext.get_buf()},
                         n,
-                        [theta_crit = theta_crit, gravitational_softening, gpart_mass, G](u32 i,
+                        [theta_crit = theta_crit, gravitational_softening, gpart_mass, G](
+                            u32 i,
                             const Tvec *xyz,
                             auto particle_looper,
                             const Tscal *mass_moments_scal,

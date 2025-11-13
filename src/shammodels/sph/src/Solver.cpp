@@ -1642,6 +1642,11 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         set_field_axyz_ext.evaluate();
         set_sizes.evaluate();
 
+        Tscal eps_grav = shambase::get_check_ref(
+                             std::get_if<SelfGravConfig::SofteningPlummer>(
+                                 &solver_config.self_grav_config.softening_mode))
+                             .epsilon;
+
         if (solver_config.self_grav_config.is_none()) {
             // do nothing
         } else if (solver_config.self_grav_config.is_sfmm()) {
@@ -1651,31 +1656,31 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             if (sfmm_config.fmm_order == 5) {
                 modules::SGSFMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    1e-9, sfmm_config.opening_angle);
+                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 4) {
                 modules::SGSFMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    1e-9, sfmm_config.opening_angle);
+                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 3) {
                 modules::SGSFMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    1e-9, sfmm_config.opening_angle);
+                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 2) {
                 modules::SGSFMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    1e-9, sfmm_config.opening_angle);
+                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (sfmm_config.fmm_order == 1) {
                 modules::SGSFMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    1e-9, sfmm_config.opening_angle);
+                    eps_grav, sfmm_config.opening_angle, sfmm_config.leaf_lowering);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
@@ -1689,27 +1694,32 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 std::get_if<SelfGravConfig::FMM>(&solver_config.self_grav_config.config));
 
             if (fmm_config.fmm_order == 5) {
-                modules::SGFMMPlummer<Tvec, 5> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                modules::SGFMMPlummer<Tvec, 5> self_gravity_mm_node(
+                    eps_grav, fmm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 4) {
-                modules::SGFMMPlummer<Tvec, 4> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                modules::SGFMMPlummer<Tvec, 4> self_gravity_mm_node(
+                    eps_grav, fmm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 3) {
-                modules::SGFMMPlummer<Tvec, 3> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                modules::SGFMMPlummer<Tvec, 3> self_gravity_mm_node(
+                    eps_grav, fmm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 2) {
-                modules::SGFMMPlummer<Tvec, 2> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                modules::SGFMMPlummer<Tvec, 2> self_gravity_mm_node(
+                    eps_grav, fmm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (fmm_config.fmm_order == 1) {
-                modules::SGFMMPlummer<Tvec, 1> self_gravity_mm_node(1e-9, fmm_config.opening_angle);
+                modules::SGFMMPlummer<Tvec, 1> self_gravity_mm_node(
+                    eps_grav, fmm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
@@ -1723,27 +1733,32 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 std::get_if<SelfGravConfig::MM>(&solver_config.self_grav_config.config));
 
             if (mm_config.mm_order == 5) {
-                modules::SGMMPlummer<Tvec, 5> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                modules::SGMMPlummer<Tvec, 5> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 4) {
-                modules::SGMMPlummer<Tvec, 4> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                modules::SGMMPlummer<Tvec, 4> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 3) {
-                modules::SGMMPlummer<Tvec, 3> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                modules::SGMMPlummer<Tvec, 3> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 2) {
-                modules::SGMMPlummer<Tvec, 2> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                modules::SGMMPlummer<Tvec, 2> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             } else if (mm_config.mm_order == 1) {
-                modules::SGMMPlummer<Tvec, 1> self_gravity_mm_node(1e-9, mm_config.opening_angle);
+                modules::SGMMPlummer<Tvec, 1> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
@@ -1757,7 +1772,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 std::get_if<SelfGravConfig::Direct>(&solver_config.self_grav_config.config));
 
             modules::SGDirectPlummer<Tvec> self_gravity_direct_node(
-                1e-9, direct_config.reference_mode);
+                eps_grav, direct_config.reference_mode);
             self_gravity_direct_node.set_edges(
                 sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
             self_gravity_direct_node.evaluate();

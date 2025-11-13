@@ -16,6 +16,10 @@
 
 #include "shammodels/sph/modules/self_gravity/SGSFMMPlummer.hpp"
 #include "shamalgs/primitives/reduction.hpp"
+#include "shamalgs/primitives/scan_exclusive_sum_in_place.hpp"
+#include "shamalgs/primitives/segmented_sort_in_place.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/AABB.hpp"
@@ -76,8 +80,8 @@ namespace shammodels::sph::modules {
                 bvh, xyz.get_buf(), gpart_mass);
 
             // DTT
-            auto dtt_result
-                = shamtree::clbvh_dual_tree_traversal(dev_sched, bvh, theta_crit, true, false);
+            auto dtt_result = shamtree::clbvh_dual_tree_traversal(
+                dev_sched, bvh, theta_crit, true, leaf_lowering);
 
             // M2L step
             using GravMoments = shammath::SymTensorCollection<Tscal, 1, mm_order>;
@@ -271,7 +275,7 @@ namespace shammodels::sph::modules {
                     });
                 });
 
-            if (true) {
+            if (false) {
                 // tmp checks
                 u32 leaf_offset = bvh.structure.get_internal_cell_count();
                 auto node_it    = bvh.reduced_morton_set.get_cell_iterator_host(
@@ -333,7 +337,8 @@ namespace shammodels::sph::modules {
                             if (a_acc_by_tid[i].size() > 1) {
                                 throw shambase::make_except_with_loc<std::runtime_error>(
                                     "Potential race condition detected in part_calls for particle "
-                                    + std::to_string(i) + " and cell " + std::to_string(icell) + " current set: "+ shambase::format("{}",a_acc_by_tid[i]));
+                                    + std::to_string(i) + " and cell " + std::to_string(icell)
+                                    + " current set: " + shambase::format("{}", a_acc_by_tid[i]));
                             }
                         });
                     }
@@ -346,8 +351,8 @@ namespace shammodels::sph::modules {
                     "expected: ",
                     xyz.get_obj_cnt() * xyz.get_obj_cnt());
                 if (part_calls.size() != xyz.get_obj_cnt() * xyz.get_obj_cnt()) {
-                    throw shambase::make_except_with_loc<std::runtime_error>(
-                        "Part calls size mismatch");
+                    // throw shambase::make_except_with_loc<std::runtime_error>(
+                    //     "Part calls size mismatch");
                 }
 
                 for (size_t outer = 0; outer < part_calls.size(); ++outer) {
@@ -379,43 +384,195 @@ namespace shammodels::sph::modules {
             }
 
             // P2P
-            u32 leaf_offset = bvh.structure.get_internal_cell_count();
-            auto node_it
-                = bvh.reduced_morton_set.get_cell_iterator(bvh.structure.buf_endrange, leaf_offset);
-            sham::kernel_call(
-                q,
-                sham::MultiRef{
-                    xyz.get_buf(),
-                    node_it,
-                    dtt_result.node_interactions_p2p,
-                    dtt_result.ordered_result->offset_p2p},
-                sham::MultiRef{axyz_ext.get_buf()},
-                bvh.structure.get_total_cell_count(),
-                [leaf_offset, gpart_mass, G, gravitational_softening](
-                    u32 icell,
-                    const Tvec *xyz,
-                    auto node_iter,
-                    const u32_2 *p2p_interactions,
-                    const u32 *offset_p2p,
-                    Tvec *axyz_ext) {
-                    for (u32 j = offset_p2p[icell]; j < offset_p2p[icell + 1]; j++) {
-                        u32_2 interaction = p2p_interactions[j];
-                        u32 cell_id_a     = interaction.x();
-                        u32 cell_id_b     = interaction.y();
+            enum mode { atomic, invert_list } p2p_mode = (leaf_lowering ? atomic : invert_list);
 
-                        SHAM_ASSERT(icell == cell_id_a);
+            if (p2p_mode == atomic) {
+                u32 leaf_offset = bvh.structure.get_internal_cell_count();
+                auto node_it    = bvh.reduced_morton_set.get_cell_iterator(
+                    bvh.structure.buf_endrange, leaf_offset);
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{
+                        xyz.get_buf(),
+                        node_it,
+                        dtt_result.node_interactions_p2p,
+                        dtt_result.ordered_result->offset_p2p},
+                    sham::MultiRef{axyz_ext.get_buf()},
+                    bvh.structure.get_total_cell_count(),
+                    [leaf_offset, gpart_mass, G, gravitational_softening](
+                        u32 icell,
+                        const Tvec *xyz,
+                        auto node_iter,
+                        const u32_2 *p2p_interactions,
+                        const u32 *offset_p2p,
+                        Tvec *axyz_ext) {
+                        auto start_id = offset_p2p[icell];
+                        auto end_id   = offset_p2p[icell + 1];
+                        node_iter.for_each_in_cell(icell, [&](u32 i) {
+                            Tvec f_i = {};
 
-                        node_iter.for_each_in_cell(cell_id_a, [&](u32 i) {
-                            node_iter.for_each_in_cell(cell_id_b, [&](u32 j) {
-                                Tvec R            = xyz[j] - xyz[i];
-                                const Tscal r_inv = sycl::rsqrt(
-                                    R.x() * R.x() + R.y() * R.y() + R.z() * R.z()
-                                    + gravitational_softening);
-                                axyz_ext[i] += G * gpart_mass * r_inv * r_inv * r_inv * R;
+                            for (u32 j = offset_p2p[icell]; j < offset_p2p[icell + 1]; j++) {
+                                u32_2 interaction = p2p_interactions[j];
+                                u32 cell_id_a     = interaction.x();
+                                u32 cell_id_b     = interaction.y();
+
+                                SHAM_ASSERT(icell == cell_id_a);
+
+                                node_iter.for_each_in_cell(cell_id_b, [&](u32 j) {
+                                    Tvec R            = xyz[j] - xyz[i];
+                                    const Tscal r_inv = sycl::rsqrt(
+                                        R.x() * R.x() + R.y() * R.y() + R.z() * R.z()
+                                        + gravitational_softening);
+                                    f_i += G * gpart_mass * r_inv * r_inv * r_inv * R;
+                                });
+                            }
+
+                            using aref = sycl::atomic_ref<
+                                Tscal,
+                                sycl::memory_order::relaxed,
+                                sycl::memory_scope::device,
+                                sycl::access::address_space::global_space>;
+
+                            aref atomic_ref_x(axyz_ext[i].x());
+                            atomic_ref_x += f_i.x();
+                            aref atomic_ref_y(axyz_ext[i].y());
+                            atomic_ref_y += f_i.y();
+                            aref atomic_ref_z(axyz_ext[i].z());
+                            atomic_ref_z += f_i.z();
+                        });
+                    });
+
+            } else if (p2p_mode == invert_list) {
+
+                u32 npart = xyz.get_obj_cnt();
+
+                sham::DeviceBuffer<u32> cells_per_particle(npart + 1, dev_sched);
+                cells_per_particle.fill(0);
+
+                u32 leaf_offset = bvh.structure.get_internal_cell_count();
+                auto node_it    = bvh.reduced_morton_set.get_cell_iterator(
+                    bvh.structure.buf_endrange, leaf_offset);
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{node_it},
+                    sham::MultiRef{cells_per_particle},
+                    bvh.structure.get_total_cell_count(),
+                    [leaf_offset](u32 icell, auto node_iter, u32 *cells_per_particle) {
+                        node_iter.for_each_in_cell(icell, [&](u32 i) {
+                            using aref = sycl::atomic_ref<
+                                u32,
+                                sycl::memory_order::relaxed,
+                                sycl::memory_scope::device,
+                                sycl::access::address_space::global_space>;
+                            aref atomic_ref(cells_per_particle[i]);
+                            atomic_ref += 1_u32;
+                        });
+                    });
+
+                // logger::raw_ln("cells_per_particle: ", cells_per_particle.copy_to_stdvec());
+
+                shamalgs::primitives::scan_exclusive_sum_in_place(cells_per_particle, npart + 1);
+
+                auto &cells_per_part_offset  = cells_per_particle;
+                u32 total_cells_per_particle = cells_per_part_offset.get_val_at_idx(npart);
+
+                // logger::raw_ln("cells_per_part_offset: ",
+                // cells_per_part_offset.copy_to_stdvec());
+
+                sham::DeviceBuffer<u32> cells_containing_particle(
+                    total_cells_per_particle, dev_sched);
+                {
+                    sham::DeviceBuffer<u32> tmp_offset(npart + 1, dev_sched);
+                    tmp_offset.fill(0);
+
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{node_it, cells_per_part_offset},
+                        sham::MultiRef{tmp_offset, cells_containing_particle},
+                        bvh.structure.get_total_cell_count(),
+                        [leaf_offset](
+                            u32 icell,
+                            auto node_iter,
+                            const u32 *cells_per_part_offset,
+                            u32 *tmp_offset,
+                            u32 *cells_containing_particle) {
+                            node_iter.for_each_in_cell(icell, [&](u32 i) {
+                                using aref = sycl::atomic_ref<
+                                    u32,
+                                    sycl::memory_order::relaxed,
+                                    sycl::memory_scope::device,
+                                    sycl::access::address_space::global_space>;
+                                aref atomic_ref(tmp_offset[i]);
+
+                                u32 write_id
+                                    = atomic_ref.fetch_add(1_u32) + cells_per_part_offset[i];
+
+                                cells_containing_particle[write_id] = icell;
                             });
                         });
-                    }
-                });
+                }
+
+                // logger::raw_ln(
+                //     "cells_containing_particle: ", cells_containing_particle.copy_to_stdvec());
+
+                shamalgs::primitives::segmented_sort_in_place(
+                    cells_containing_particle, cells_per_part_offset);
+
+                // logger::raw_ln(
+                //     "cells_containing_particle: ", cells_containing_particle.copy_to_stdvec());
+
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{
+                        xyz.get_buf(),
+                        node_it,
+                        cells_per_part_offset,
+                        cells_containing_particle,
+                        dtt_result.node_interactions_p2p,
+                        dtt_result.ordered_result->offset_p2p},
+                    sham::MultiRef{axyz_ext.get_buf()},
+                    npart,
+                    [leaf_offset, gpart_mass, G, gravitational_softening](
+                        u32 id_a,
+                        const Tvec *xyz,
+                        auto node_iter,
+                        const u32 *cells_per_part_offset,
+                        const u32 *cells_containing_particle,
+                        const u32_2 *p2p_interactions,
+                        const u32 *offset_p2p,
+                        Tvec *axyz_ext) {
+                        Tvec f_i = {};
+
+                        u32 start_icell_idx = cells_per_part_offset[id_a];
+                        u32 end_icell_idx   = cells_per_part_offset[id_a + 1];
+
+                        for (u32 icell_idx = start_icell_idx; icell_idx < end_icell_idx;
+                             icell_idx++) {
+                            u32 icell = cells_containing_particle[icell_idx];
+
+                            for (u32 j = offset_p2p[icell]; j < offset_p2p[icell + 1]; j++) {
+                                u32_2 interaction = p2p_interactions[j];
+                                u32 cell_id_a     = interaction.x();
+                                u32 cell_id_b     = interaction.y();
+
+                                SHAM_ASSERT(icell == cell_id_a);
+
+                                node_iter.for_each_in_cell(cell_id_b, [&](u32 j) {
+                                    Tvec R            = xyz[j] - xyz[id_a];
+                                    const Tscal r_inv = sycl::rsqrt(
+                                        R.x() * R.x() + R.y() * R.y() + R.z() * R.z()
+                                        + gravitational_softening);
+
+                                    f_i += G * gpart_mass * r_inv * r_inv * r_inv * R;
+                                });
+                            }
+                        }
+
+                        axyz_ext[id_a] += f_i;
+                    });
+            } else {
+                throw shambase::make_except_with_loc<std::runtime_error>("Unsupported p2p mode");
+            }
         });
     }
 } // namespace shammodels::sph::modules

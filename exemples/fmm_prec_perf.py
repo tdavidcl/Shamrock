@@ -122,19 +122,32 @@ def cub_collapse(theta_crit, config_mode, Npart):
         cfg.set_self_gravity_fmm(order=4, opening_angle=theta_crit)
     elif config_mode == "fmm5":
         cfg.set_self_gravity_fmm(order=5, opening_angle=theta_crit)
-    elif config_mode == "sfmm1":
-        cfg.set_self_gravity_sfmm(order=1, opening_angle=theta_crit)
-    elif config_mode == "sfmm2":
-        cfg.set_self_gravity_sfmm(order=2, opening_angle=theta_crit)
-    elif config_mode == "sfmm3":
-        cfg.set_self_gravity_sfmm(order=3, opening_angle=theta_crit)
-    elif config_mode == "sfmm4":
-        cfg.set_self_gravity_sfmm(order=4, opening_angle=theta_crit)
-    elif config_mode == "sfmm5":
-        cfg.set_self_gravity_sfmm(order=5, opening_angle=theta_crit)
+    elif "sfmm1" in config_mode:
+        cfg.set_self_gravity_sfmm(
+            order=1, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+        )
+    elif "sfmm2" in config_mode:
+        cfg.set_self_gravity_sfmm(
+            order=2, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+        )
+    elif "sfmm3" in config_mode:
+        cfg.set_self_gravity_sfmm(
+            order=3, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+        )
+    elif "sfmm4" in config_mode:
+        cfg.set_self_gravity_sfmm(
+            order=4, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+        )
+    elif "sfmm5" in config_mode:
+        cfg.set_self_gravity_sfmm(
+            order=5, opening_angle=theta_crit, leaf_lowering="lowering" in config_mode
+        )
     else:
         raise ValueError(f"Invalid case name: {config_mode}")
-    cfg.set_softening_plummer(epsilon=1e-9)
+
+    # otherwise the MM precision at very low angle does
+    # not match the direct mode
+    cfg.set_softening_plummer(epsilon=1e-15)
 
     cfg.set_units(codeu)
     cfg.print_status()
@@ -185,6 +198,13 @@ def add_data_to_collect(collected_data, none_case, ref_case=None):
         tmp = tmp / np.linalg.norm(ref_case["axyz"], axis=1)
         collected_data["rel_error"] = tmp
 
+        # if(np.mean(tmp) > 1e-3):
+        #    print(f"failed rel_error = {tmp}")
+        #    plt.figure(figsize=(10, 5))
+        #    plt.scatter(collected_data["r"], collected_data["rel_error"], s=1)
+        #    plt.legend()
+        #    plt.show()
+
     return collected_data
 
 
@@ -194,7 +214,9 @@ color_cycle = extended_colors
 
 
 def get_linestyle(key):
-    if "sfmm" in key:
+    if "lowering" in key:
+        return "dashdot"
+    elif "sfmm" in key:
         return "dotted"
     elif "fmm" in key:
         return "dashed"
@@ -204,37 +226,45 @@ def get_linestyle(key):
         return "solid"
 
 
-Nparts = np.logspace(3, 5.5, 10).astype(int).tolist()
+Nparts = np.logspace(3, 5, 3).astype(int).tolist()
 # Nparts = [1000, 10000]
 configs = [
     "mm1",
-    "mm2",
-    "mm3",
-    "mm4",
+    # "mm2",
+    # "mm3",
+    # "mm4",
     "mm5",
     "fmm1",
-    "fmm2",
-    "fmm3",
-    "fmm4",
+    # "fmm2",
+    # "fmm3",
+    # "fmm4",
     "fmm5",
     "sfmm1",
-    "sfmm2",
-    "sfmm3",
-    "sfmm4",
+    # "sfmm2",
+    # "sfmm3",
+    # "sfmm4",
     "sfmm5",
+    "lowering_sfmm1",
+    # "lowering_sfmm2",
+    # "lowering_sfmm3",
+    # "lowering_sfmm4",
+    "lowering_sfmm5",
 ]
 # configs = ["mm5", "fmm5", "sfmm5"]
 theta_vals = [
-    0.1,
-    0.12915497,
-    0.16681005,
-    0.21544347,
-    0.27825594,
-    0.35938137,
-    0.46415888,
+    1e-3,
+    1e-2,
+    1e-1,
+    # 0.1,
+    # 0.12915497,
+    # 0.16681005,
+    # 0.21544347,
+    # 0.27825594,
+    # 0.35938137,
+    # 0.46415888,
     0.5,
-    0.59948425,
-    0.77426368,
+    # 0.59948425,
+    # 0.77426368,
     1.0,
 ]
 
@@ -296,7 +326,7 @@ for npart in Nparts:
 
             data = add_data_to_collect(data, data_none, data_direct_safe)
 
-            avg_rel_error = np.mean(data["rel_error"])
+            avg_rel_error = np.max(data["rel_error"])
 
             if theta == 0.5:
                 key = (f"{config}", get_linestyle(config), color_cycle[int(config[-1]) + 2])

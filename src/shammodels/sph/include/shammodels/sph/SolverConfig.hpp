@@ -187,6 +187,7 @@ namespace shammodels::sph {
         struct SFMM {
             u32 fmm_order;
             f64 opening_angle;
+            bool leaf_lowering;
         };
 
         struct FMM {
@@ -209,7 +210,9 @@ namespace shammodels::sph {
 
         mode config = None{};
 
-        void set_sfmm(u32 fmm_order, f64 opening_angle) { config = SFMM{fmm_order, opening_angle}; }
+        void set_sfmm(u32 fmm_order, f64 opening_angle, bool leaf_lowering) {
+            config = SFMM{fmm_order, opening_angle, leaf_lowering};
+        }
         void set_fmm(u32 fmm_order, f64 opening_angle) { config = FMM{fmm_order, opening_angle}; }
         void set_mm(u32 mm_order, f64 opening_angle) { config = MM{mm_order, opening_angle}; }
         void set_direct(bool reference_mode = false) { config = Direct{reference_mode}; }
@@ -973,6 +976,7 @@ namespace shammodels::sph {
                 {"type", "sfmm"},
                 {"fmm_order", conf->fmm_order},
                 {"opening_angle", conf->opening_angle},
+                {"leaf_lowering", conf->leaf_lowering},
             };
         } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
             j = {
@@ -1016,7 +1020,9 @@ namespace shammodels::sph {
     inline void from_json(const nlohmann::json &j, SelfGravConfig &p) {
         if (j.at("type").get<std::string>() == "sfmm") {
             p.config = SelfGravConfig::SFMM{
-                j.at("fmm_order").get<u32>(), j.at("opening_angle").get<f64>()};
+                j.at("fmm_order").get<u32>(),
+                j.at("opening_angle").get<f64>(),
+                j.at("leaf_lowering").get<bool>()};
         } else if (j.at("type").get<std::string>() == "fmm") {
             p.config = SelfGravConfig::FMM{
                 j.at("fmm_order").get<u32>(), j.at("opening_angle").get<f64>()};

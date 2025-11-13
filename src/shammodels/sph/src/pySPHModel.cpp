@@ -190,12 +190,13 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("opening_angle"))
         .def(
             "set_self_gravity_sfmm",
-            [](TConfig &self, u32 sfmm_order, f64 opening_angle) {
-                self.self_grav_config.set_sfmm(sfmm_order, opening_angle);
+            [](TConfig &self, u32 sfmm_order, f64 opening_angle, bool leaf_lowering) {
+                self.self_grav_config.set_sfmm(sfmm_order, opening_angle, leaf_lowering);
             },
             py::kw_only(),
             py::arg("order"),
-            py::arg("opening_angle"))
+            py::arg("opening_angle"),
+            py::arg("leaf_lowering") = true)
         .def(
             "set_softening_plummer",
             [](TConfig &self, f64 epsilon) {
