@@ -18,14 +18,49 @@
 
 #include "shambase/WithUUID.hpp"
 #include "shambase/memory.hpp"
+#include "shamrock/solvergraph/HypergraphLog.hpp"
 #include "shamrock/solvergraph/IEdge.hpp"
 #include <memory>
 #include <vector>
 
 namespace shamrock::solvergraph {
 
+    inline bool log_enabled = true;
+
+    /// class to check if the object was moved to somewhere else to avoid double deletion
+    class MoveAware {
+        public:
+            bool is_valid() const noexcept {
+                return sentinel_;   // false was moved somewhere else
+            }
+        
+        protected:
+            MoveAware() : sentinel_(true) {} // intact by default
+        
+            MoveAware(const MoveAware&) = default;
+            MoveAware& operator=(const MoveAware&) = default;
+        
+            /// Move constructor - marks the source as moved-from
+            MoveAware(MoveAware&& other) noexcept
+                : sentinel_(std::exchange(other.sentinel_, false))
+            {}
+        
+            /// Move assignment - marks the source as moved-from
+            MoveAware& operator=(MoveAware&& other) noexcept {
+                if (this != &other) {
+                    sentinel_ = std::exchange(other.sentinel_, false);
+                }
+                return *this;
+            }
+        
+            virtual ~MoveAware() = default;
+        
+        private:
+            bool sentinel_;   // true = intact, false = moved-from
+        };
+
     /// Inode is node between data edges, takes multiple inputs, multiple outputs
-    class INode : public std::enable_shared_from_this<INode>,
+    class INode : public std::enable_shared_from_this<INode>, public MoveAware,
                   public shambase::WithUUID<INode, u64> {
 
         /// Read only edges
@@ -34,6 +69,22 @@ namespace shamrock::solvergraph {
         std::vector<std::shared_ptr<IEdge>> rw_edges;
 
         public:
+
+        inline INode() {
+            if (log_enabled) {
+                // Can't use shared_from_this() in constructor - object not in shared_ptr yet
+                shamrock::solvergraph::log_new_inode(get_uuid());
+            }
+        }
+
+        /// Move constructor - automatically delegates to base classes and members
+        /// MoveAware's move constructor will be called automatically, handling sentinel invalidation
+        INode(INode&&) noexcept = default;
+
+        /// Move assignment - automatically delegates to base classes and members
+        /// MoveAware's move assignment will be called automatically, handling sentinel invalidation
+        INode& operator=(INode&&) noexcept = default;
+
         /// Get a shared pointer to this node
         inline std::shared_ptr<INode> getptr_shared() { return shared_from_this(); }
         /// Get a weak pointer to this node
@@ -59,6 +110,10 @@ namespace shamrock::solvergraph {
 
         /// Destructor (virtual) & reset the edges
         virtual ~INode() {
+            if (log_enabled && is_valid()) {
+                // Use UUID directly - shared_from_this() may not be safe in destructor
+                shamrock::solvergraph::log_del_inode(get_uuid());
+            }
             __internal_set_ro_edges({});
             __internal_set_rw_edges({});
         }
