@@ -100,7 +100,33 @@ namespace shammodels::basegodunov {
                 [](TConfig &self, bool face_time_interpolate) {
                     self.face_half_time_interpolation = face_time_interpolate;
                 })
+            .def(
+                "set_boundary_condition",
+                [](TConfig &self, const std::string &axis, const std::string &bc_type) {
+                    BCConfig::GhostType ghost_type;
+                    if (bc_type == "periodic") {
+                        ghost_type = BCConfig::GhostType::Periodic;
+                    } else if (bc_type == "reflective") {
+                        ghost_type = BCConfig::GhostType::Reflective;
+                    } else if (bc_type == "outflow") {
+                        ghost_type = BCConfig::GhostType::Outflow;
+                    } else {
+                        throw std::invalid_argument(
+                            "Unsupported boundary condition type: " + bc_type);
+                    }
 
+                    if (axis == "x") {
+                        self.bc_config.set_x(ghost_type);
+                    } else if (axis == "y") {
+                        self.bc_config.set_y(ghost_type);
+                    } else if (axis == "z") {
+                        self.bc_config.set_z(ghost_type);
+                    } else {
+                        throw std::invalid_argument("Unsupported axis: " + axis);
+                    }
+                },
+                py::arg("axis"),
+                py::arg("bc_type"))
             .def(
                 "set_dust_mode_dhll",
                 [](TConfig &self, u32 ndust) {
