@@ -26,6 +26,6 @@ namespace shamrock::solvergraph {
     void log_new_inode(u64 uuid);
     void log_del_inode(u64 uuid);
 
-    void notify_inode_ptr(u64 uuid, std::shared_ptr<INode>& ptr);
+    void notify_inode_ptr(u64 uuid, std::shared_ptr<INode> &ptr);
 
 } // namespace shamrock::solvergraph
