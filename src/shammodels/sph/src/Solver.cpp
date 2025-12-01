@@ -1748,45 +1748,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 shambase::throw_unimplemented();
             }
 
-        } else if (solver_config.self_grav_config.is_mm()) {
-
-            SelfGravConfig::MM &mm_config = shambase::get_check_ref(
-                std::get_if<SelfGravConfig::MM>(&solver_config.self_grav_config.config));
-
-            if (mm_config.mm_order == 5) {
-                modules::SGMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (mm_config.mm_order == 4) {
-                modules::SGMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (mm_config.mm_order == 3) {
-                modules::SGMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (mm_config.mm_order == 2) {
-                modules::SGMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (mm_config.mm_order == 1) {
-                modules::SGMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else {
-                shambase::throw_unimplemented();
-            }
-
         } else if (solver_config.self_grav_config.is_direct()) {
 
             SelfGravConfig::Direct &direct_config = shambase::get_check_ref(
@@ -1797,6 +1758,29 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             self_gravity_direct_node.set_edges(
                 sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
             self_gravity_direct_node.evaluate();
+
+        } else if (solver_config.self_grav_config.is_mm()) {
+
+            SelfGravConfig::MM &mm_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::MM>(&solver_config.self_grav_config.config));
+
+            auto run_sg_mm = [&](auto mm_order_tag) {
+                constexpr u32 order = decltype(mm_order_tag)::value;
+                modules::SGMMPlummer<Tvec, order> self_gravity_mm_node(
+                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
+                self_gravity_mm_node.set_edges(
+                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
+                self_gravity_mm_node.evaluate();
+            };
+
+            switch (mm_config.order) {
+            case 1 : run_sg_mm(std::integral_constant<u32, 1>{}); break;
+            case 2 : run_sg_mm(std::integral_constant<u32, 2>{}); break;
+            case 3 : run_sg_mm(std::integral_constant<u32, 3>{}); break;
+            case 4 : run_sg_mm(std::integral_constant<u32, 4>{}); break;
+            case 5 : run_sg_mm(std::integral_constant<u32, 5>{}); break;
+            default: shambase::throw_unimplemented();
+            }
 
         } else {
             throw shambase::make_except_with_loc<std::runtime_error>(
