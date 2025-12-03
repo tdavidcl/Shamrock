@@ -42,15 +42,15 @@ TestStart(Unittest, "shamrock/solvergraph/CopyPatchDataField", testCopyPatchData
         copy_node->evaluate();
 
         REQUIRE_EQUAL(target_field->get_refs().get_element_count(), 2);
-        REQUIRE_EQUAL(target_field->get_field(10).get_obj_cnt(), obj_count1);
-        REQUIRE_EQUAL(target_field->get_field(20).get_obj_cnt(), obj_count2);
+        REQUIRE_EQUAL(target_field->get(10).get_obj_cnt(), obj_count1);
+        REQUIRE_EQUAL(target_field->get(20).get_obj_cnt(), obj_count2);
 
         auto original_data1 = mock_field1.get_buf().copy_to_stdvec();
-        auto target_data1   = target_field->get_field(10).get_buf().copy_to_stdvec();
+        auto target_data1   = target_field->get(10).get_buf().copy_to_stdvec();
         REQUIRE_EQUAL(original_data1, target_data1);
 
         auto original_data2 = mock_field2.get_buf().copy_to_stdvec();
-        auto target_data2   = target_field->get_field(20).get_buf().copy_to_stdvec();
+        auto target_data2   = target_field->get(20).get_buf().copy_to_stdvec();
         REQUIRE_EQUAL(original_data2, target_data2);
     }
 }

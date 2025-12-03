@@ -209,7 +209,6 @@ def get_last_dump():
         try:
             dump_num = int(f[len(dump_prefix) : -5])
             if dump_num > num_max:
-                f_max = f
                 num_max = dump_num
         except ValueError:
             pass
@@ -301,6 +300,39 @@ else:
     # Apply the setup
     setup.apply_setup(gen_disc)
 
+    # correct the momentum and barycenter of the disc to 0
+    analysis_momentum = shamrock.model_sph.analysisTotalMomentum(model=model)
+    total_momentum = analysis_momentum.get_total_momentum()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc momentum = {total_momentum}")
+
+    model.apply_momentum_offset((-total_momentum[0], -total_momentum[1], -total_momentum[2]))
+
+    # Correct the barycenter
+    analysis_barycenter = shamrock.model_sph.analysisBarycenter(model=model)
+    barycenter, disc_mass = analysis_barycenter.get_barycenter()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc barycenter = {barycenter}")
+
+    model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
+
+    total_momentum = shamrock.model_sph.analysisTotalMomentum(model=model).get_total_momentum()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc momentum after correction = {total_momentum}")
+
+    barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc barycenter after correction = {barycenter}")
+
+    if not np.allclose(total_momentum, 0.0):
+        raise RuntimeError("disc momentum is not 0")
+    if not np.allclose(barycenter, 0.0):
+        raise RuntimeError("disc barycenter is not 0")
+
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
     # Smoothing length iterations, increasing it affect the performance negatively but increse the
@@ -329,11 +361,11 @@ def save_analysis_data(filename, key, value, ianalysis):
     """Helper to save analysis data to a JSON file."""
     if shamrock.sys.world_rank() == 0:
         filepath = os.path.join(analysis_folder, filename)
-        if not os.path.exists(filepath):
-            with open(filepath, "w") as fp:
-                json.dump({key: []}, fp, indent=4)
-        with open(filepath, "r") as fp:
-            data = json.load(fp)
+        try:
+            with open(filepath, "r") as fp:
+                data = json.load(fp)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {key: []}
         data[key] = data[key][:ianalysis]
         data[key].append({"t": model.get_time(), key: value})
         with open(filepath, "w") as fp:
@@ -358,19 +390,40 @@ def analysis(ianalysis):
 
     save_rho_integ(ext, arr_rho2, ianalysis)
 
-    analysis = shamrock.model_sph.analysisBarycenter(model=model)
-    barycenter, disc_mass = analysis.get_barycenter()
+    barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
-    analysis = shamrock.model_sph.analysisTotalMomentum(model=model)
-    total_momentum = analysis.get_total_momentum()
+    total_momentum = shamrock.model_sph.analysisTotalMomentum(model=model).get_total_momentum()
+
+    potential_energy = shamrock.model_sph.analysisEnergyPotential(
+        model=model
+    ).get_potential_energy()
+
+    kinetic_energy = shamrock.model_sph.analysisEnergyKinetic(model=model).get_kinetic_energy()
 
     save_analysis_data("barycenter.json", "barycenter", barycenter, ianalysis)
     save_analysis_data("disc_mass.json", "disc_mass", disc_mass, ianalysis)
     save_analysis_data("total_momentum.json", "total_momentum", total_momentum, ianalysis)
+    save_analysis_data("potential_energy.json", "potential_energy", potential_energy, ianalysis)
+    save_analysis_data("kinetic_energy.json", "kinetic_energy", kinetic_energy, ianalysis)
+
+    sim_time_delta = model.solver_logs_cumulated_step_time()
+    scount = model.solver_logs_step_count()
+
+    save_analysis_data("sim_time_delta.json", "sim_time_delta", sim_time_delta, ianalysis)
+    save_analysis_data("sim_step_count_delta.json", "sim_step_count_delta", scount, ianalysis)
+
+    model.solver_logs_reset_cumulated_step_time()
+    model.solver_logs_reset_step_count()
+
+    part_count = model.get_total_part_count()
+    save_analysis_data("part_count.json", "part_count", part_count, ianalysis)
 
 
 # %%
 # Evolve the simulation
+model.solver_logs_reset_cumulated_step_time()
+model.solver_logs_reset_step_count()
+
 t_start = model.get_time()
 
 idump = 0
@@ -378,7 +431,7 @@ iplot = 0
 istop = 0
 for ttarg in t_stop:
 
-    if ttarg > t_start:
+    if ttarg >= t_start:
         model.evolve_until(ttarg)
 
         if istop % dump_freq_stop == 0:
@@ -543,14 +596,22 @@ if render_gif and shamrock.sys.world_rank() == 0:
 
 
 # %%
+# helper function to load data from JSON files
+def load_data_from_json(filename, key):
+    filepath = os.path.join(analysis_folder, filename)
+    with open(filepath, "r") as fp:
+        data = json.load(fp)[key]
+    t = [d["t"] for d in data]
+    values = [d[key] for d in data]
+    return t, values
+
+
+# %%
 # load the json file for barycenter
-with open(analysis_folder + "barycenter.json", "r") as fp:
-    data = json.load(fp)
-barycenter = data["barycenter"]
-t = [d["t"] for d in barycenter]
-barycenter_x = [d["barycenter"][0] for d in barycenter]
-barycenter_y = [d["barycenter"][1] for d in barycenter]
-barycenter_z = [d["barycenter"][2] for d in barycenter]
+t, barycenter = load_data_from_json("barycenter.json", "barycenter")
+barycenter_x = [d[0] for d in barycenter]
+barycenter_y = [d[1] for d in barycenter]
+barycenter_z = [d[2] for d in barycenter]
 
 plt.figure(figsize=(8, 5), dpi=200)
 
@@ -565,11 +626,7 @@ plt.show()
 
 # %%
 # load the json file for disc_mass
-with open(analysis_folder + "disc_mass.json", "r") as fp:
-    data = json.load(fp)
-disc_mass = data["disc_mass"]
-t = [d["t"] for d in disc_mass]
-disc_mass = [d["disc_mass"] for d in disc_mass]
+t, disc_mass = load_data_from_json("disc_mass.json", "disc_mass")
 
 plt.figure(figsize=(8, 5), dpi=200)
 
@@ -581,13 +638,10 @@ plt.show()
 
 # %%
 # load the json file for total_momentum
-with open(analysis_folder + "total_momentum.json", "r") as fp:
-    data = json.load(fp)
-total_momentum = data["total_momentum"]
-t = [d["t"] for d in total_momentum]
-total_momentum_x = [d["total_momentum"][0] for d in total_momentum]
-total_momentum_y = [d["total_momentum"][1] for d in total_momentum]
-total_momentum_z = [d["total_momentum"][2] for d in total_momentum]
+t, total_momentum = load_data_from_json("total_momentum.json", "total_momentum")
+total_momentum_x = [d[0] for d in total_momentum]
+total_momentum_y = [d[1] for d in total_momentum]
+total_momentum_z = [d[2] for d in total_momentum]
 
 plt.figure(figsize=(8, 5), dpi=200)
 
@@ -598,4 +652,82 @@ plt.xlabel("t")
 plt.ylabel("total_momentum")
 plt.legend(["x", "y", "z"])
 plt.savefig(analysis_folder + "total_momentum.png")
+plt.show()
+
+# %%
+# load the json file for energies
+t, potential_energy = load_data_from_json("potential_energy.json", "potential_energy")
+_, kinetic_energy = load_data_from_json("kinetic_energy.json", "kinetic_energy")
+
+total_energy = [p + k for p, k in zip(potential_energy, kinetic_energy)]
+
+plt.figure(figsize=(8, 5), dpi=200)
+plt.plot(t, potential_energy)
+plt.plot(t, kinetic_energy)
+plt.plot(t, total_energy)
+plt.xlabel("t")
+plt.ylabel("energy")
+plt.legend(["potential_energy", "kinetic_energy", "total_energy"])
+plt.savefig(analysis_folder + "energies.png")
+plt.show()
+
+# %%
+# load the json file for sim_time_delta
+t, sim_time_delta = load_data_from_json("sim_time_delta.json", "sim_time_delta")
+
+plt.figure(figsize=(8, 5), dpi=200)
+plt.plot(t, sim_time_delta)
+plt.xlabel("t")
+plt.ylabel("sim_time_delta")
+plt.savefig(analysis_folder + "sim_time_delta.png")
+plt.show()
+
+# %%
+# load the json file for sim_step_count_delta
+t, sim_step_count_delta = load_data_from_json("sim_step_count_delta.json", "sim_step_count_delta")
+
+plt.figure(figsize=(8, 5), dpi=200)
+plt.plot(t, sim_step_count_delta)
+plt.xlabel("t")
+plt.ylabel("sim_step_count_delta")
+plt.savefig(analysis_folder + "sim_step_count_delta.png")
+plt.show()
+
+# %%
+# Time per step
+t, sim_time_delta = load_data_from_json("sim_time_delta.json", "sim_time_delta")
+_, sim_step_count_delta = load_data_from_json("sim_step_count_delta.json", "sim_step_count_delta")
+_, part_count = load_data_from_json("part_count.json", "part_count")
+
+time_per_step = []
+
+for td, sc, pc in zip(sim_time_delta, sim_step_count_delta, part_count):
+    if sc > 0:
+        time_per_step.append(td / sc)
+    else:
+        # NAN here because the step count is 0
+        time_per_step.append(np.nan)
+
+plt.figure(figsize=(8, 5), dpi=200)
+plt.plot(t, time_per_step, "+-")
+plt.xlabel("t")
+plt.ylabel("time_per_step")
+plt.savefig(analysis_folder + "time_per_step.png")
+plt.show()
+
+rate = []
+
+for td, sc, pc in zip(sim_time_delta, sim_step_count_delta, part_count):
+    if sc > 0:
+        rate.append(pc / (td / sc))
+    else:
+        # NAN here because the step count is 0
+        rate.append(np.nan)
+
+plt.figure(figsize=(8, 5), dpi=200)
+plt.plot(t, rate, "+-")
+plt.xlabel("t")
+plt.ylabel("Particles / second")
+plt.yscale("log")
+plt.savefig(analysis_folder + "rate.png")
 plt.show()
