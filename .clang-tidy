@@ -1,7 +1,31 @@
 ---
 Checks: >
+  cppcoreguidelines-narrowing-conversions,
   -clang-analyzer-optin.mpi*,
+  modernize-use-override,
+  modernize-use-nullptr,
+  bugprone-use-after-move,
+  performance-move-const-arg,
+  misc-static-assert,
+  readability-else-after-return,
+  google-build-namespaces,
+  performance-*,
+  -performance-noexcept-destructor,
+  readability-redundant-parentheses,
+  readability-suspicious-call-argument,
+  readability-string-compare,
+  readability-static-accessed-through-instance,
+  readability-simplify-boolean-expr,
+  readability-non-const-parameter,
+  readability-math-missing-parentheses,
+  readability-named-parameter,
   -readability-magic-numbers,
+
+# Future options that are likely to be added:
+#
+# hicpp-signed-bitwise,
+# bugprone-throwing-static-initialization
+# readability-redundant-inline-specifier,
 
 # -clang-analyzer-optin.mpi* to avoid crash from llvm 15 to 17
 # -readability-magic-numbers, to avoid false positives
