@@ -168,6 +168,12 @@ jobs:
       - name: Setup env
         run : ./env/new-env --machine ${{ matrix.machine }} --builddir build -- ${{ matrix.args }}
 
+      - name: Activate env (first time)
+        shell: bash # In docker container github action default to sh
+        run: |
+          cd build
+          source ./activate
+
       - name: Configure
         shell: bash # In docker container github action default to sh
         run: |
@@ -185,6 +191,7 @@ jobs:
         shell: bash # In docker container github action default to sh
         run: |
           cd build
+          export NINJA_STATUS="[%f/%t j=%r] "
           source ./activate && shammake install
 
       - name: Pull reference files
