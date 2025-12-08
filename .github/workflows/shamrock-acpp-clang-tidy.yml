@@ -100,7 +100,7 @@ jobs:
       - name: Run clang-tidy
         run: |
           run-clang-tidy-${{matrix.clang}} \
-            -p clang-tidy.mod \
+            -p build/clang-tidy.mod \
             -use-color \
             -config-file .clang-tidy \
             -export-fixes clang-tidy_results.yaml \
