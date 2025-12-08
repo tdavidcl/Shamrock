@@ -12,7 +12,6 @@ Checks: >
   readability-math-missing-parentheses,
   readability-named-parameter,
   readability-non-const-parameter,
-  readability-redundant-parentheses,
   readability-simplify-boolean-expr,
   readability-static-accessed-through-instance,
   readability-string-compare,
@@ -26,6 +25,7 @@ Checks: >
 # hicpp-signed-bitwise,
 # bugprone-throwing-static-initialization
 # readability-redundant-inline-specifier,
+# readability-redundant-parentheses, (not available yet in llvm 20)
 
 # -clang-analyzer-optin.mpi* to avoid crash from llvm 15 to 17
 # -readability-magic-numbers, to avoid false positives
