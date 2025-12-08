@@ -94,7 +94,7 @@ jobs:
 
       - name: Copy DB
         run: |
-          ls build
+          cd build
           python3 ./buildbot/make_clang_tidy_db.py
 
       - name: Run clang-tidy
