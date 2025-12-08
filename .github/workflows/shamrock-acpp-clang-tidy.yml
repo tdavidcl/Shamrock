@@ -99,7 +99,26 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          run-clang-tidy-${{matrix.clang}} -p build/clang-tidy.mod -use-color -config-file .clang-tidy -export-fixes clang-tidy_results.yaml -extra-arg-before="-Wno-unused-command-line-argument"
+          run-clang-tidy-${{matrix.clang}} \
+            -p clang-tidy.mod \
+            -use-color \
+            -config-file .clang-tidy \
+            -export-fixes clang-tidy_results.yaml \
+            -extra-arg-before="-Wno-unused-command-line-argument" \
+            | tee clang-tidy.log
+
+      - name: Convert clang-tidy log to HTML
+        run: |
+          python -m pip install --break-system-packages ansi2html
+          ansi2html < clang-tidy.log > clang-tidy.html
+
+      - uses: actions/upload-artifact@v4
+        if: >
+          (github.event_name == 'pull_request_target' ||
+            github.event_name == 'pull_request')
+        with:
+          name: clang-tidy.html
+          path: ./clang-tidy.html
 
       - name: Run clang-tidy-diff
         if: >
