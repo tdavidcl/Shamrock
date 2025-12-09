@@ -72,6 +72,13 @@ jobs:
       if: failure()
       run: git diff > diff-pre-commit
 
+    - name: Archive git diff
+      uses: actions/upload-artifact@v4
+      id: artifact-upload-step-diff
+      with:
+        name: report_diff_pre_commit
+        path: ./diff-pre-commit
+
     - name : Cat diff
       if: failure()
       run: cat diff-pre-commit
@@ -79,6 +86,10 @@ jobs:
     - name: Run pre-commit-report
       if: failure()
       run: python3 buildbot/precommit_report.py >> ./report_a_precommit.md
+
+    # See https://github.com/actions/upload-artifact/issues/50#issuecomment-1856471599
+    - name: Report GH page artifact url
+      run: echo "you can download the diff here ${{ steps.artifact-upload-step-diff.outputs.artifact-url }}" >> report_a_precommit.md
 
     - name: rm tmpfiles
       if: failure()
