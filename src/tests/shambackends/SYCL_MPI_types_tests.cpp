@@ -9,6 +9,7 @@
 
 #include "shambase/narrowing.hpp"
 #include "shamalgs/primitives/mock_value.hpp"
+#include "shamalgs/primitives/mock_vector.hpp"
 #include "shambackends/SyclMpiTypes.hpp"
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shambackends/math.hpp"
@@ -97,6 +98,7 @@ TestStart(Unittest, "shambackends/test_sycl_mpi_types_sizes", test_sycl_mpi_type
 
 template<class T>
 void test_comm() {
+    // single element communication
     std::mt19937 eng(0x111);
 
     auto get_bounds = []() {
@@ -121,9 +123,41 @@ void test_comm() {
             MPI_Recv(&val_recv, 1, get_mpi_type<T>(), 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE));
         REQUIRE_EQUAL_CUSTOM_COMP(val_test, val_recv, sham::equals);
     }
+
+    // array communication
+    std::vector<T> val_test_array
+        = shamalgs::primitives::mock_vector<T>(0x111, 420, bound_min, bound_max);
+
+    if (shamcomm::world_rank() == 0) {
+        MPICHECK(MPI_Send(
+            val_test_array.data(), val_test_array.size(), get_mpi_type<T>(), 1, 0, MPI_COMM_WORLD));
+    }
+    if (shamcomm::world_rank() == 1) {
+        std::vector<T> val_recv_array(val_test_array.size());
+        MPICHECK(MPI_Recv(
+            val_recv_array.data(),
+            val_test_array.size(),
+            get_mpi_type<T>(),
+            0,
+            0,
+            MPI_COMM_WORLD,
+            MPI_STATUS_IGNORE));
+
+        auto vec_equals = [](std::vector<T> a, std::vector<T> b) {
+            bool same_size = a.size() == b.size();
+            if (!same_size) {
+                return false;
+            }
+            for (size_t i = 0; i < a.size(); i++) {
+                same_size = same_size && sham::equals(a[i], b[i]);
+            }
+            return same_size;
+        };
+        REQUIRE_EQUAL_CUSTOM_COMP(val_test_array, val_recv_array, vec_equals);
+    }
 }
 
-TestStart(Unittest, "shambackends/test_sycl_mpi_types_sizes", test_sycl_mpi_types_comm, 2) {
+TestStart(Unittest, "shambackends/test_sycl_mpi_types_comm", test_sycl_mpi_types_comm, 2) {
 
 #define X(args) test_comm<args>();
     XMAC_SYCLMPI_TYPE_TO_TEST
