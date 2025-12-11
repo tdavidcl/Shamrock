@@ -85,8 +85,8 @@ namespace shammodels::sph::modules {
                 get_rw_edge<shamrock::solvergraph::IFieldSpan<Tvec>>(0)};
         }
 
-        inline std::string _impl_get_label() override { return "SGSPHCorrection"; }
-        std::string _impl_get_tex() override { return "TODO"; }
+        inline std::string _impl_get_label() const override { return "SGSPHCorrection"; }
+        std::string _impl_get_tex() const override { return "TODO"; }
 
         protected:
         void _impl_evaluate_internal() override;

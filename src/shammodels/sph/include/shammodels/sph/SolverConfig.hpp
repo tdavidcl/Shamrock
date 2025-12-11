@@ -231,8 +231,6 @@ namespace shammodels::sph {
         bool is_mm() const { return std::holds_alternative<MM>(config); }
         bool is_direct() const { return std::holds_alternative<Direct>(config); }
 
-        bool is_mm() const { return std::holds_alternative<MM>(config); }
-
         bool is_sg_on() const { return !is_none(); }
         bool is_sg_off() const { return is_none(); }
 

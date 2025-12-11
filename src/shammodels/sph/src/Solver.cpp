@@ -129,8 +129,8 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
     if (solver_config.self_grav_config.has_xi_field()) {
         storage.xi = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "xi", "\\xi");
-        }
-        
+    }
+
     if (solver_config.has_field_alphaAV()) {
         storage.alpha_av_updated = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
             1, "alpha_av_updated", "\\alpha_{\\rm AV}");

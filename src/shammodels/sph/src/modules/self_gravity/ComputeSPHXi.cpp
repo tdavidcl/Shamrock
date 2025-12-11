@@ -73,7 +73,7 @@ void shammodels::sph::modules::ComputeSPHXi<Tvec, SPHKernel>::_impl_evaluate_int
 }
 
 template<class Tvec, template<class> class SPHKernel>
-std::string shammodels::sph::modules::ComputeSPHXi<Tvec, SPHKernel>::_impl_get_tex() {
+std::string shammodels::sph::modules::ComputeSPHXi<Tvec, SPHKernel>::_impl_get_tex() const {
     return "TODO";
 }
 
