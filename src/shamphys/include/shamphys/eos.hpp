@@ -67,4 +67,28 @@ namespace shamphys {
         static constexpr T pressure_from_cs(T cs0sq, T rho) { return cs0sq * rho; }
     };
 
+    template<class T>
+    struct EOS_Machida06 {
+
+        static constexpr T soundspeed(T P, T rho) { return sycl::sqrt(P / rho); }
+
+        static constexpr T temperature(T P, T rho, T mu, T mh, T kb) {
+            return mu * mh * P / (rho * kb);
+        }
+
+        static constexpr T pressure(T cs, T rho, T rho_c1, T rho_c2, T rho_c3) {
+            if (rho < rho_c1) {
+                return cs * cs * rho;
+            } else if (rho < rho_c2) {
+                return cs * cs * rho_c1 * sycl::pow(rho / rho_c1, 7. / 5.);
+            } else if (rho < rho_c3) {
+                return cs * cs * rho_c1 * sycl::pow(rho_c2 / rho_c1, 7. / 5.)
+                       * sycl::pow(rho / rho_c2, 1.1);
+            } else {
+                return cs * cs * rho_c1 * sycl::pow(rho_c2 / rho_c1, 7. / 5.)
+                       * sycl::pow(rho_c3 / rho_c2, 1.1) * sycl::pow(rho / rho_c3, 5. / 3.);
+            }
+        }
+    };
+
 } // namespace shamphys
