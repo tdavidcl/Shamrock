@@ -394,13 +394,14 @@ for reduction_level in [1, 2, 3, 4, 5]:
     for config in configs_all:
         (label, linestyle, color) = config_plot[config]
         plt.plot(true_cnt[config], true_rate[config], label=label, linestyle=linestyle, color=color)
-    plt.legend()
+    plt.legend(loc="upper left")
     plt.xlabel("Npart")
     plt.ylabel("rate")
     plt.xscale("log")
     plt.yscale("log")
-    plt.tight_layout()
     plt.title(f"reduction_level = {reduction_level}")
+    plt.tight_layout()
+    plt.savefig(f"fmm_prec_perf2_reduction_level_{reduction_level}.pdf")
 
     plt.figure(figsize=(10, 5))
     for config in configs_all:
@@ -408,12 +409,14 @@ for reduction_level in [1, 2, 3, 4, 5]:
         rate = true_rate[config]
         slowdown_factor = np.array(true_rate["none"][: len(rate)]) / rate
         plt.plot(true_cnt[config], slowdown_factor, label=label, linestyle=linestyle, color=color)
-    plt.legend()
+    plt.legend(loc="upper left")
     plt.xlabel("Npart")
     plt.ylabel("none rate / rate (slowdown factor)")
     plt.xscale("log")
-    plt.tight_layout()
     plt.title(f"reduction_level = {reduction_level}")
+    plt.ylim(0, 5)
+    plt.tight_layout()
+    plt.savefig(f"fmm_prec_perf2_reduction_level_{reduction_level}_slowdown.pdf")
 
 # precision plot
 reduc_level_prec_plot = 3
@@ -445,7 +448,7 @@ for config in precision_data.keys():
             plt.scatter(
                 case["r"][mask], case["rel_error"][mask], s=1, label=f"{config} {theta_crit:.3f}"
             )
-            plt.legend()
+            plt.legend(loc="upper left")
             plt.xlabel("r")
             plt.ylabel("relative error")
             plt.xscale("log")
@@ -475,7 +478,9 @@ plt.xlabel("theta")
 plt.ylabel("precision")
 plt.xscale("log")
 plt.yscale("log")
+plt.ylim(1e-8, 100)
 plt.tight_layout()
+plt.savefig("fmm_prec_perf2_precision.pdf")
 
 
 plt.figure(figsize=(10, 5))
@@ -489,7 +494,9 @@ plt.xlabel("precision")
 plt.ylabel("rate")
 plt.xscale("log")
 plt.yscale("log")
+plt.xlim(1e-8, 100)
 plt.tight_layout()
+plt.savefig("fmm_prec_perf2_rate.pdf")
 
 fig = plt.figure(figsize=(12, 8))
 ax = fig.add_subplot(111, projection="3d")
@@ -522,4 +529,5 @@ ax.set_ylim(1, 3)
 ax.legend(loc="best")
 ax.set_title("Precision vs Rate vs Opening Angle", fontsize=14)
 plt.tight_layout()
+plt.savefig("fmm_prec_perf2_3d.pdf")
 plt.show()
