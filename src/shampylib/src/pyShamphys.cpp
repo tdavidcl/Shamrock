@@ -419,7 +419,7 @@ Register_pymod(shamphyslibinit) {
         "eos_Machida06",
         [](f64 cs, f64 rho, f64 rho_c1, f64 rho_c2, f64 rho_c3, f64 mu, f64 mh, f64 kb) {
             auto P   = shamphys::EOS_Machida06<f64>::pressure(cs, rho, rho_c1, rho_c2, rho_c3);
-            auto _cs = shamphys::EOS_Machida06<f64>::soundspeed(P, rho);
+            auto _cs = shamphys::EOS_Machida06<f64>::soundspeed(P, rho, rho_c1, rho_c2, rho_c3);
             auto T   = shamphys::EOS_Machida06<f64>::temperature(P, rho, mu, mh, kb);
             return std::tuple<f64, f64, f64>{P, _cs, T};
         },

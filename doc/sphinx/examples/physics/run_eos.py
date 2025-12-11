@@ -23,7 +23,7 @@ mu = 2.375
 mh = 1.00784 * sicte.dalton()
 print(mu * mh * kb)
 
-rho_plot = np.logspace(-15, 5, 100)
+rho_plot = np.logspace(-15, 5, 1000)
 P_plot = []
 cs_plot = []
 T_plot = []

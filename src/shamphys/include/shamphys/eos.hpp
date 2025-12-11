@@ -70,7 +70,13 @@ namespace shamphys {
     template<class T>
     struct EOS_Machida06 {
 
-        static constexpr T soundspeed(T P, T rho) { return sycl::sqrt(P / rho); }
+        static constexpr T soundspeed(T P, T rho, T rho_c1, T rho_c2, T rho_c3) {
+            const T gamma = (rho < rho_c1)   ? T(1.0)
+                            : (rho < rho_c2) ? T(7.0 / 5.0)
+                            : (rho < rho_c3) ? T(1.1)
+                                             : T(5.0 / 3.0);
+            return sycl::sqrt(gamma * P / rho);
+        }
 
         static constexpr T temperature(T P, T rho, T mu, T mh, T kb) {
             return mu * mh * P / (rho * kb);
