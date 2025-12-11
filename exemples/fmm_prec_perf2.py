@@ -414,7 +414,7 @@ for reduction_level in [1, 2, 3, 4, 5]:
     plt.ylabel("none rate / rate (slowdown factor)")
     plt.xscale("log")
     plt.title(f"reduction_level = {reduction_level}")
-    plt.ylim(0, 5)
+    plt.ylim(0.9, 5)
     plt.tight_layout()
     plt.savefig(f"fmm_prec_perf2_reduction_level_{reduction_level}_slowdown.pdf")
 
