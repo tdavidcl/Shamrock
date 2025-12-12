@@ -19,18 +19,20 @@ def git_tree_is_clean():
         print(err)
         return False
 
+
 # get the PRE_COMMIT_HOME variable (it should be /pc in pre-commit.ci)
 PRE_COMMIT_HOME = os.getenv("PRE_COMMIT_HOME")
-#print("PRE_COMMIT_HOME: ", PRE_COMMIT_HOME)
+# print("PRE_COMMIT_HOME: ", PRE_COMMIT_HOME)
 PRE_COMMIT = os.getenv("PRE_COMMIT")
-#print("PRE_COMMIT: ", PRE_COMMIT)
+# print("PRE_COMMIT: ", PRE_COMMIT)
 git_tree_clean = git_tree_is_clean()
-#print("git tree clean:", git_tree_clean)
+# print("git tree clean:", git_tree_clean)
 
 is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 
 if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
-    print_buildbot_info("Authors check tool")
+    if PRE_COMMIT == None:
+        print_buildbot_info("Authors check tool")
 
     if len(sys.argv) > 1:
         print("Updating authors for files: ", sys.argv[1:])
