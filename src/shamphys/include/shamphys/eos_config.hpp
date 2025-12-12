@@ -11,9 +11,9 @@
 
 /**
  * @file eos_config.hpp
- * @author David Fang (david.fang@ikmail.com) --no git blame--
+ * @author David Fang (david.fang@ikmail.com)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr) --no git blame--
+ * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief
  */
 

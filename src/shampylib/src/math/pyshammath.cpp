@@ -10,7 +10,7 @@
 /**
  * @file pyshammath.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @author Yann Bernard (yann.bernard@univ-grenoble-alpes.fr) --no git blame--
+ * @author Yann Bernard (yann.bernard@univ-grenoble-alpes.fr)
  * @brief
  */
 
