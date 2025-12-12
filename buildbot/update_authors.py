@@ -30,6 +30,10 @@ git_tree_clean = git_tree_is_clean()
 
 is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 
+# unshallow the repo if precommit.ci is running
+if is_precommit_ci:
+    subprocess.run(["git", "fetch", "--unshallow"])
+
 if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
     if PRE_COMMIT == None:
         print_buildbot_info("Authors check tool")
@@ -204,7 +208,7 @@ if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
         do_replace = not (new_src == source)
 
         if do_replace:
-            print("autocorect : ", filename)
+            print("autocorect :", filename, "current authors :", current_authors)
             print_diff(source, new_src, filename, filename + " (corec)")
 
         return do_replace, new_src
