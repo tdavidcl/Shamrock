@@ -35,7 +35,7 @@ if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
         print_buildbot_info("Authors check tool")
 
     if len(sys.argv) > 1:
-        print("Updating authors for files: ", sys.argv[1:])
+        # print("Updating authors for files: ", sys.argv[1:])
         file_list = sys.argv[1:]
     else:
         file_list = glob.glob(str(abs_src_dir) + "/**", recursive=True)
