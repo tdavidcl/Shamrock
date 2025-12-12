@@ -142,8 +142,7 @@ repos:
 
     - id: update_authors
       name: "Update authors"
-      # Only runs when invoked with --hook-stage manual (e.g. in CI job)
-      stages: [manual]
       language: python
       entry: python buildbot/update_authors.py
       pass_filenames: true
+      verbose: true

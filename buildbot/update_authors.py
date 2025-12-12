@@ -1,8 +1,12 @@
 import glob
+import os
 import subprocess
 import sys
 
 from lib.buildbot import *
+
+# print env variables
+print("env variables: ", os.environ)
 
 print_buildbot_info("Authors check tool")
 
