@@ -5,255 +5,264 @@ import sys
 
 from lib.buildbot import *
 
-# print env variables
-print("env variables: ", os.environ)
 
-print_buildbot_info("Authors check tool")
+def git_tree_is_clean():
+    """
+    Return True when the working tree is clean (no staged/unstaged changes).
+    """
+    try:
+        status_output = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=abs_proj_dir
+        ).decode()
+        return status_output.strip() == ""
+    except subprocess.CalledProcessError as err:
+        print(err)
+        return False
 
-if len(sys.argv) > 1:
-    print("Updating authors for files: ", sys.argv[1:])
-    file_list = sys.argv[1:]
-else:
-    file_list = glob.glob(str(abs_src_dir) + "/**", recursive=True)
+# get the PRE_COMMIT_HOME variable (it should be /pc in pre-commit.ci)
+PRE_COMMIT_HOME = os.getenv("PRE_COMMIT_HOME")
+#print("PRE_COMMIT_HOME: ", PRE_COMMIT_HOME)
+PRE_COMMIT = os.getenv("PRE_COMMIT")
+#print("PRE_COMMIT: ", PRE_COMMIT)
+git_tree_clean = git_tree_is_clean()
+#print("git tree clean:", git_tree_clean)
 
-file_list.sort()
+is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 
-missing_doxygenfilehead = []
+if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
+    print_buildbot_info("Authors check tool")
 
-authorlist = []
+    if len(sys.argv) > 1:
+        print("Updating authors for files: ", sys.argv[1:])
+        file_list = sys.argv[1:]
+    else:
+        file_list = glob.glob(str(abs_src_dir) + "/**", recursive=True)
 
+    file_list.sort()
 
-AUTH_BLACKLIST = ["gemini-code-assist[bot]"]
+    missing_doxygenfilehead = []
 
+    authorlist = []
 
-def is_not_in_blacklist(a):
-    return not any(b in a["author"] for b in AUTH_BLACKLIST)
+    AUTH_BLACKLIST = ["gemini-code-assist[bot]"]
 
+    def is_not_in_blacklist(a):
+        return not any(b in a["author"] for b in AUTH_BLACKLIST)
 
-def apply_mailmap(authors):
-    ret = []
-    for a in authors:
+    def apply_mailmap(authors):
+        ret = []
+        for a in authors:
 
+            try:
+                cmd = f'git check-mailmap "{a['author']} <{a['email']}>"'
+                output = subprocess.check_output(cmd, shell=True).decode()
+
+                match = re.search(r"(.*) <(.*)>", output)
+                if match is not None:
+                    app = {"author": match.group(1), "email": match.group(2)}
+                    if not app in ret:
+                        ret.append(app)
+
+            except subprocess.CalledProcessError as err:
+                print(err)
+
+        # Filter out AUTH_BLACKLIST
+        ret = [a for a in ret if is_not_in_blacklist(a)]
+
+        return ret
+
+    def get_author_list_from_blame(path):
+        authors = []
+        coauthors = []
         try:
-            cmd = f'git check-mailmap "{a['author']} <{a['email']}>"'
-            output = subprocess.check_output(cmd, shell=True).decode()
+            output = subprocess.check_output(R"git log " + path, shell=True).decode()
+            for l in output.split("\n"):
+                # if we get an answer like
+                # Author: Timothée David--Cléris <tim.shamrock@proton.me>
+                # extract the author name and email
+                match = re.search(r"Author: (.*) <(.*)>", l)
+                if match is not None:
+                    app = {"author": match.group(1), "email": match.group(2)}
+                    if not app in authors:
+                        authors.append(app)
 
-            match = re.search(r"(.*) <(.*)>", output)
-            if match is not None:
-                app = {"author": match.group(1), "email": match.group(2)}
-                if not app in ret:
-                    ret.append(app)
+                match = re.search(r"Co-authored-by: (.*) <(.*)>", l)
+                if match is not None:
+                    app = {"author": match.group(1), "email": match.group(2)}
+                    if not app in coauthors:
+                        coauthors.append(app)
+
+            # print(authors, coauthors)
 
         except subprocess.CalledProcessError as err:
             print(err)
 
-    # Filter out AUTH_BLACKLIST
-    ret = [a for a in ret if is_not_in_blacklist(a)]
+        authors = apply_mailmap(authors)
+        coauthors = apply_mailmap(coauthors)
 
-    return ret
+        for a in coauthors:
+            if not a in authors:
+                authors.append(a)
 
+        for a in authors:
+            if not a in authorlist:
+                authorlist.append(a)
 
-def get_author_list_from_blame(path):
-    authors = []
-    coauthors = []
-    try:
-        output = subprocess.check_output(R"git log " + path, shell=True).decode()
-        for l in output.split("\n"):
-            # if we get an answer like
-            # Author: Timothée David--Cléris <tim.shamrock@proton.me>
-            # extract the author name and email
-            match = re.search(r"Author: (.*) <(.*)>", l)
-            if match is not None:
-                app = {"author": match.group(1), "email": match.group(2)}
-                if not app in authors:
-                    authors.append(app)
+        return authors
 
-            match = re.search(r"Co-authored-by: (.*) <(.*)>", l)
-            if match is not None:
-                app = {"author": match.group(1), "email": match.group(2)}
-                if not app in coauthors:
-                    coauthors.append(app)
+    def extract_current_authors_from_header(splt, l_start, l_end):
+        current_authors = []
+        for l in splt[l_start : l_end + 1]:
+            match = re.search(r"^\s*\*?\s*@author\s+(.+?)\s+\((.+?)\)", l)
+            # print(match)
+            if match:
+                current_authors.append({"author": match.group(1), "email": match.group(2)})
+        # Apply mailmap correction before returning
+        current_authors = apply_mailmap(current_authors)
 
-        # print(authors, coauthors)
+        for a in current_authors:
+            if not a in authorlist:
+                authorlist.append(a)
 
-    except subprocess.CalledProcessError as err:
-        print(err)
+        return current_authors
 
-    authors = apply_mailmap(authors)
-    coauthors = apply_mailmap(coauthors)
+    def merge_author_lists(list_blame, list_other):
+        """
+        Merge two lists of authors (dicts with 'author' and 'email').
+        Deduplicate by email. If duplicate, the entry from list_blame takes precedence.
+        Returns a list of dicts with 'author', 'email', and 'from_blame' (True if from blame, False otherwise).
+        """
+        # Start with blame list
+        merged = {a["email"]: {**a, "from_blame": True} for a in list_blame}
+        # Add others only if not already present
+        for a in list_other:
+            if a["email"] not in merged:
+                merged[a["email"]] = {**a, "from_blame": False}
+        # Sort by author name
+        merged_list = sorted(merged.values(), key=lambda x: x["author"])
 
-    for a in coauthors:
-        if not a in authors:
-            authors.append(a)
+        return merged_list
 
-    for a in authors:
-        if not a in authorlist:
-            authorlist.append(a)
+    def get_doxstring(path, filename, current_authors=None):
+        tmp = " * @file " + filename
+        try:
+            lst = merge_author_lists(get_author_list_from_blame(path), current_authors)
+            for a in lst:
+                suffix = " --no git blame--" if not a.get("from_blame", False) else ""
+                tmp += f"\n * @author {a['author']} ({a['email']}){suffix}"
+            # tmp+= (subprocess.check_output(R'git log --pretty=format:" * @author %aN (%aE)" '+path+' |sort |uniq',shell=True).decode())[:-1]
+        except subprocess.CalledProcessError as err:
+            print(err)
 
-    return authors
+        return tmp
 
+    import difflib
+    import re
 
-def extract_current_authors_from_header(splt, l_start, l_end):
-    current_authors = []
-    for l in splt[l_start : l_end + 1]:
-        match = re.search(r"^\s*\*?\s*@author\s+(.+?)\s+\((.+?)\)", l)
-        # print(match)
-        if match:
-            current_authors.append({"author": match.group(1), "email": match.group(2)})
-    # Apply mailmap correction before returning
-    current_authors = apply_mailmap(current_authors)
-
-    for a in current_authors:
-        if not a in authorlist:
-            authorlist.append(a)
-
-    return current_authors
-
-
-def merge_author_lists(list_blame, list_other):
-    """
-    Merge two lists of authors (dicts with 'author' and 'email').
-    Deduplicate by email. If duplicate, the entry from list_blame takes precedence.
-    Returns a list of dicts with 'author', 'email', and 'from_blame' (True if from blame, False otherwise).
-    """
-    # Start with blame list
-    merged = {a["email"]: {**a, "from_blame": True} for a in list_blame}
-    # Add others only if not already present
-    for a in list_other:
-        if a["email"] not in merged:
-            merged[a["email"]] = {**a, "from_blame": False}
-    # Sort by author name
-    merged_list = sorted(merged.values(), key=lambda x: x["author"])
-
-    return merged_list
-
-
-def get_doxstring(path, filename, current_authors=None):
-    tmp = " * @file " + filename
-    try:
-        lst = merge_author_lists(get_author_list_from_blame(path), current_authors)
-        for a in lst:
-            suffix = " --no git blame--" if not a.get("from_blame", False) else ""
-            tmp += f"\n * @author {a['author']} ({a['email']}){suffix}"
-        # tmp+= (subprocess.check_output(R'git log --pretty=format:" * @author %aN (%aE)" '+path+' |sort |uniq',shell=True).decode())[:-1]
-    except subprocess.CalledProcessError as err:
-        print(err)
-
-    return tmp
-
-
-import difflib
-import re
-
-
-def print_diff(before, after, beforename, aftername):
-    sys.stdout.writelines(
-        difflib.context_diff(
-            before.split("\n"), after.split("\n"), fromfile=beforename, tofile=aftername
+    def print_diff(before, after, beforename, aftername):
+        sys.stdout.writelines(
+            difflib.context_diff(
+                before.split("\n"), after.split("\n"), fromfile=beforename, tofile=aftername
+            )
         )
-    )
 
+    def autocorect(source, filename, path):
 
-def autocorect(source, filename, path):
+        l_start = 0
+        l_end = 0
+        i = 0
 
-    l_start = 0
-    l_end = 0
-    i = 0
+        splt = source.split("\n")
+        for l in splt:
+            if l_start > 0:
+                if not ("@author" in l):
+                    break
+            if "@file" in l:
+                l_start = i
+            if "@author" in l:
+                l_end = i
+            i += 1
 
-    splt = source.split("\n")
-    for l in splt:
-        if l_start > 0:
-            if not ("@author" in l):
-                break
-        if "@file" in l:
-            l_start = i
-        if "@author" in l:
-            l_end = i
-        i += 1
+        if l_end == 0:
+            l_end = l_start
 
-    if l_end == 0:
-        l_end = l_start
+        # Extract current authors from header
+        current_authors = extract_current_authors_from_header(splt, l_start, l_end)
+        # print(current_authors)
 
-    # Extract current authors from header
-    current_authors = extract_current_authors_from_header(splt, l_start, l_end)
-    # print(current_authors)
+        new_splt = splt[:l_start]
+        new_splt.append(get_doxstring(path, filename, current_authors))
+        new_splt += splt[l_end + 1 :]
 
-    new_splt = splt[:l_start]
-    new_splt.append(get_doxstring(path, filename, current_authors))
-    new_splt += splt[l_end + 1 :]
+        new_src = ""
+        for l in new_splt:
+            new_src += l + "\n"
+        new_src = new_src[:-1]
 
-    new_src = ""
-    for l in new_splt:
-        new_src += l + "\n"
-    new_src = new_src[:-1]
+        do_replace = not (new_src == source)
 
-    do_replace = not (new_src == source)
+        if do_replace:
+            print("autocorect : ", filename)
+            print_diff(source, new_src, filename, filename + " (corec)")
 
-    if do_replace:
-        print("autocorect : ", filename)
-        print_diff(source, new_src, filename, filename + " (corec)")
+        return do_replace, new_src
 
-    return do_replace, new_src
+    def run_autocorect():
 
+        errors = []
 
-def run_autocorect():
+        for fname in file_list:
 
-    errors = []
+            if (not fname.endswith(".cpp")) and (not fname.endswith(".hpp")):
+                continue
 
-    for fname in file_list:
+            if fname.endswith("version.cpp"):
+                continue
 
-        if (not fname.endswith(".cpp")) and (not fname.endswith(".hpp")):
-            continue
+            if "cmake/feature_test" in fname:
+                continue
+            if "src/tests/" in fname:
+                continue
+            if "exemple.cpp" in fname:
+                continue
+            if "godbolt.cpp" in fname:
+                continue
 
-        if fname.endswith("version.cpp"):
-            continue
-
-        if "cmake/feature_test" in fname:
-            continue
-        if "src/tests/" in fname:
-            continue
-        if "exemple.cpp" in fname:
-            continue
-        if "godbolt.cpp" in fname:
-            continue
-
-        f = open(fname, "r")
-        source = f.read()
-        f.close()
-
-        change, source = autocorect(source, os.path.basename(fname), fname)
-
-        if change:
-            print("autocorect : ", fname.split(abs_proj_dir)[-1])
-            f = open(fname, "w")
-            f.write(source)
+            f = open(fname, "r")
+            source = f.read()
             f.close()
-            errors.append(fname.split(abs_proj_dir)[-1])
 
-    return errors
+            change, source = autocorect(source, os.path.basename(fname), fname)
 
+            if change:
+                print("autocorect : ", fname.split(abs_proj_dir)[-1])
+                f = open(fname, "w")
+                f.write(source)
+                f.close()
+                errors.append(fname.split(abs_proj_dir)[-1])
 
-missing_doxygenfilehead = run_autocorect()
+        return errors
 
-print("--------------------------------")
-print("Current author list:")
-for a in authorlist:
-    print(f"    {a['author']} <{a['email']}>")
+    missing_doxygenfilehead = run_autocorect()
 
-
-if missing_doxygenfilehead:
     print("--------------------------------")
+    print("Current author list:")
+    for a in authorlist:
+        print(f"    {a['author']} <{a['email']}>")
 
-    # Write markdown report
-    report = "## ❌ Authorship update required\n\n"
-    report += (
-        "The following files had their author headers updated by the author update script.\n\n"
-    )
-    report += "Please run the script again (`python3 buildbot/update_authors.py`) and commit these changes.\n\n"
-    report += "**Note:** The list below is only partial. Only the first 10 files are shown.\n\n"
-    for fname in missing_doxygenfilehead[:10]:
-        report += f"- `{fname}`\n"
-    with open("log_precommit_check-Authorship-update", "w") as f:
-        f.write(report)
+    if missing_doxygenfilehead:
+        print("--------------------------------")
 
-    sys.exit("authors were not up to date -> exiting")
+        # Write markdown report
+        report = "## ❌ Authorship update required\n\n"
+        report += (
+            "The following files had their author headers updated by the author update script.\n\n"
+        )
+        report += "Please run the script again (`python3 buildbot/update_authors.py`) and commit these changes.\n\n"
+        report += "**Note:** The list below is only partial. Only the first 10 files are shown.\n\n"
+        for fname in missing_doxygenfilehead[:10]:
+            report += f"- `{fname}`\n"
+        with open("log_precommit_check-Authorship-update", "w") as f:
+            f.write(report)
+
+        sys.exit("authors were not up to date -> exiting")
