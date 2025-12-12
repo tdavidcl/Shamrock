@@ -32,7 +32,9 @@ is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 
 # unshallow the repo if precommit.ci is running
 if is_precommit_ci:
-    subprocess.run(["git", "fetch", "--unshallow"])
+    cmd = f'git fetch --unshallow'
+    output = subprocess.check_output(cmd, shell=True).decode()
+    print(output)
 
 if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
     if PRE_COMMIT == None:
