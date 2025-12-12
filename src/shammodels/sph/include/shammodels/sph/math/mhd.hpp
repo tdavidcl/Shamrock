@@ -12,7 +12,7 @@
 /**
  * @file mhd.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
+ * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr) --no git blame--
  * @brief file containing formulas for sphmhd forces, evolution of magnetic and divergence cleaning
  * fields.
  */

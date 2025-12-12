@@ -11,9 +11,9 @@
 
 /**
  * @file matrix_op.hpp
- * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr) --no git blame--
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @author Yann Bernard (yann.bernard@univ-grenoble-alpes.fr)
+ * @author Yann Bernard (yann.bernard@univ-grenoble-alpes.fr) --no git blame--
  * @brief
  *
  */

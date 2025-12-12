@@ -9,7 +9,7 @@
 
 /**
  * @file EOSConfig.cpp
- * @author David Fang (david.fang@ikmail.com)
+ * @author David Fang (david.fang@ikmail.com) --no git blame--
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr) --no git blame--
  * @brief

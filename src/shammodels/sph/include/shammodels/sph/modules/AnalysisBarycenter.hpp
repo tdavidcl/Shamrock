@@ -11,7 +11,7 @@
 
 /**
  * @file AnalysisBarycenter.hpp
- * @author David Fang (david.fang@ikmail.com)
+ * @author David Fang (david.fang@ikmail.com) --no git blame--
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief AnalysisBarycenter class with one method AnalysisBarycenter.get_barycenter()
  *
