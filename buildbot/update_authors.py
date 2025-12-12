@@ -32,8 +32,11 @@ is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 
 # unshallow the repo if precommit.ci is running
 if is_precommit_ci:
-    output = subprocess.check_output("git fetch --unshallow", shell=True).decode()
+    output = subprocess.check_output("git fetch origin --unshallow", shell=True).decode()
     print("Unshallowing repo: ", output)
+
+    output = subprocess.check_output("git rev-parse --is-shallow-repository", shell=True).decode()
+    print("Is shallow repository: ", output)
 
 if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
     if PRE_COMMIT == None:
