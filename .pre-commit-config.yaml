@@ -146,3 +146,4 @@ repos:
       entry: python buildbot/update_authors.py
       pass_filenames: true
       verbose: true
+      require_serial: true
