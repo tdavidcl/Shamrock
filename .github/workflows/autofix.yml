@@ -2,6 +2,7 @@ name: autofix.ci  # needed to securely identify the workflow
 
 on:
   pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
 
 
 permissions:
@@ -10,6 +11,8 @@ permissions:
 jobs:
   autofix:
     runs-on: ubuntu-latest
+    env:
+      FIX_MODE: "${{ contains(github.event.pull_request.labels.*.name, 'autofix.ci') && 'fix' || 'check' }}"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -24,4 +27,6 @@ jobs:
         run: |
           python3 buildbot/update_authors.py
 
-      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
+      - name: Commit and push if changed
+        if: env.FIX_MODE == 'fix'
+        uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
