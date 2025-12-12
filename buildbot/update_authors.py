@@ -34,7 +34,7 @@ is_precommit_ci = PRE_COMMIT_HOME == "/pc"
 if is_precommit_ci:
     cmd = f'git fetch --unshallow'
     output = subprocess.check_output(cmd, shell=True).decode()
-    print(output)
+    print("Unshallowing repo: ", output)
 
 if is_precommit_ci or git_tree_clean or PRE_COMMIT == None:
     if PRE_COMMIT == None:
