@@ -140,10 +140,8 @@ repos:
       language: python
       pass_filenames: false
 
-    - id: update_authors
-      name: "Update authors"
-      language: python
-      entry: python buildbot/update_authors.py
-      pass_filenames: true
-      verbose: true
-      require_serial: true
+    # - id: update_authors
+    #   name: "Update authors"
+    #   entry: python buildbot/update_authors.py
+    #   language: python
+    #   pass_filenames: true
