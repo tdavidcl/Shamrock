@@ -168,12 +168,6 @@ jobs:
       - name: Setup env
         run : ./env/new-env --machine ${{ matrix.machine }} --builddir build -- ${{ matrix.args }}
 
-      - name: Activate env (first time)
-        shell: bash # In docker container github action default to sh
-        run: |
-          cd build
-          source ./activate
-
       - name: Configure
         shell: bash # In docker container github action default to sh
         run: |
