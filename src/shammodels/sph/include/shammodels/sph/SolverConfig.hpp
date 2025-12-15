@@ -192,8 +192,9 @@ namespace shammodels::sph {
             u32 reduction_level;
         };
 
+
         struct FMM {
-            u32 fmm_order;
+            u32 order;
             f64 opening_angle;
             u32 reduction_level;
         };

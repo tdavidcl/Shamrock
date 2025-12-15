@@ -184,8 +184,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("reduction_level") = 3)
         .def(
             "set_self_gravity_fmm",
-            [](TConfig &self, u32 fmm_order, f64 opening_angle, u32 reduction_level) {
-                self.self_grav_config.set_fmm(fmm_order, opening_angle, reduction_level);
+            [](TConfig &self, u32 order, f64 opening_angle, u32 reduction_level) {
+                self.self_grav_config.set_fmm(order, opening_angle, reduction_level);
             },
             py::kw_only(),
             py::arg("order"),

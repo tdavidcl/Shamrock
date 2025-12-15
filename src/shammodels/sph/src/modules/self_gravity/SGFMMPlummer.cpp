@@ -42,7 +42,7 @@ namespace shammodels::sph::modules {
 
         if (edges.sizes.indexes.get_ids().size() != 1) {
             throw shambase::make_except_with_loc<std::runtime_error>(
-                "Self gravity direct mode only supports one patch so far, current number "
+                "Self gravity FMM mode only supports one patch so far, current number "
                 "of patches is : "
                 + std::to_string(edges.sizes.indexes.get_ids().size()));
         }
@@ -50,7 +50,7 @@ namespace shammodels::sph::modules {
         Tscal G          = edges.constant_G.data;
         Tscal gpart_mass = edges.gpart_mass.data;
 
-        Tscal gravitational_softening = epsilon;
+        Tscal gravitational_softening = epsilon * epsilon;
 
         using MassMoments = shammath::SymTensorCollection<Tscal, 0, mm_order - 1>;
         static constexpr u32 mass_moment_terms = MassMoments::num_component;
