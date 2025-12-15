@@ -1713,46 +1713,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 shambase::throw_unimplemented();
             }
 
-        } else if (solver_config.self_grav_config.is_fmm()) {
-
-            SelfGravConfig::FMM &fmm_config = shambase::get_check_ref(
-                std::get_if<SelfGravConfig::FMM>(&solver_config.self_grav_config.config));
-
-            if (fmm_config.fmm_order == 5) {
-                modules::SGFMMPlummer<Tvec, 5> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (fmm_config.fmm_order == 4) {
-                modules::SGFMMPlummer<Tvec, 4> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (fmm_config.fmm_order == 3) {
-                modules::SGFMMPlummer<Tvec, 3> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (fmm_config.fmm_order == 2) {
-                modules::SGFMMPlummer<Tvec, 2> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else if (fmm_config.fmm_order == 1) {
-                modules::SGFMMPlummer<Tvec, 1> self_gravity_mm_node(
-                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
-                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
-            } else {
-                shambase::throw_unimplemented();
-            }
-
-        } else if (solver_config.self_grav_config.is_direct()) {
+        }  else if (solver_config.self_grav_config.is_direct()) {
 
             SelfGravConfig::Direct &direct_config = shambase::get_check_ref(
                 std::get_if<SelfGravConfig::Direct>(&solver_config.self_grav_config.config));

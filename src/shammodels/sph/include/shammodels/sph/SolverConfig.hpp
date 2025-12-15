@@ -1004,7 +1004,7 @@ namespace shammodels::sph {
         } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
             j = {
                 {"type", "fmm"},
-                {"fmm_order", conf->fmm_order},
+                {"order", conf->order},
                 {"opening_angle", conf->opening_angle},
                 {"reduction_level", conf->reduction_level},
             };
