@@ -77,6 +77,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_particle_reordering_step_freq", &TConfig::set_particle_reordering_step_freq)
         .def("set_eos_isothermal", &TConfig::set_eos_isothermal)
         .def("set_eos_adiabatic", &TConfig::set_eos_adiabatic)
+        .def("set_eos_polytropic", &TConfig::set_eos_polytropic)
         .def("set_eos_locally_isothermal", &TConfig::set_eos_locally_isothermal)
         .def(
             "set_eos_locally_isothermalLP07",
@@ -176,6 +177,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             "set_self_gravity_mm",
             [](TConfig &self, u32 mm_order, f64 opening_angle, u32 reduction_level) {
                 self.self_grav_config.set_mm(mm_order, opening_angle, reduction_level);
+            },
+            py::kw_only(),
+            py::arg("order"),
+            py::arg("opening_angle"),
+            py::arg("reduction_level") = 3)
+        .def(
+            "set_self_gravity_fmm",
+            [](TConfig &self, u32 order, f64 opening_angle, u32 reduction_level) {
+                self.self_grav_config.set_fmm(order, opening_angle, reduction_level);
             },
             py::kw_only(),
             py::arg("order"),

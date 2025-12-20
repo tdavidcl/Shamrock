@@ -11,6 +11,7 @@
 
 /**
  * @file SolverConfig.hpp
+ * @author David Fang (david.fang@ikmail.com)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief
@@ -184,6 +185,12 @@ namespace shammodels::sph {
 
     struct SelfGravConfig {
 
+        struct FMM {
+            u32 order;
+            f64 opening_angle;
+            u32 reduction_level;
+        };
+
         struct MM {
             u32 order;
             f64 opening_angle;
@@ -196,7 +203,7 @@ namespace shammodels::sph {
 
         struct None {};
 
-        using mode = std::variant<MM, Direct, None>;
+        using mode = std::variant<FMM, MM, Direct, None>;
 
         mode config = None{};
 
@@ -205,11 +212,14 @@ namespace shammodels::sph {
         void set_mm(u32 mm_order, f64 opening_angle, u32 reduction_level) {
             config = MM{mm_order, opening_angle, reduction_level};
         }
+        void set_fmm(u32 order, f64 opening_angle, u32 reduction_level) {
+            config = FMM{order, opening_angle, reduction_level};
+        }
 
         bool is_none() const { return std::holds_alternative<None>(config); }
         bool is_direct() const { return std::holds_alternative<Direct>(config); }
-
         bool is_mm() const { return std::holds_alternative<MM>(config); }
+        bool is_fmm() const { return std::holds_alternative<FMM>(config); }
 
         bool is_sg_on() const { return !is_none(); }
         bool is_sg_off() const { return is_none(); }
@@ -487,6 +497,12 @@ struct shammodels::sph::SolverConfig {
         return bool(std::get_if<T>(&eos_config.config));
     }
 
+    /// Check if the EOS is an polytropic equation of state
+    inline bool is_eos_polytropic() {
+        using T = typename EOSConfig::Polytropic;
+        return bool(std::get_if<T>(&eos_config.config));
+    }
+
     /// Check if the EOS is an isothermal equation of state
     inline bool is_eos_isothermal() {
         using T = typename EOSConfig::Isothermal;
@@ -506,6 +522,13 @@ struct shammodels::sph::SolverConfig {
      * @param gamma The adiabatic index
      */
     inline void set_eos_adiabatic(Tscal gamma) { eos_config.set_adiabatic(gamma); }
+
+    /**
+     * @brief Set the EOS configuration to an polytropic equation of state
+     *
+     * @param gamma The adiabatic index
+     */
+    inline void set_eos_polytropic(Tscal K, Tscal gamma) { eos_config.set_polytropic(K, gamma); }
 
     /**
      * @brief Set the EOS configuration to a locally isothermal equation of state
@@ -950,7 +973,14 @@ namespace shammodels::sph {
 
     /// JSON serialization for SelfGravConfig
     inline void to_json(nlohmann::json &j, const SelfGravConfig &p) {
-        if (const SelfGravConfig::MM *conf = std::get_if<SelfGravConfig::MM>(&p.config)) {
+        if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
+            j = {
+                {"type", "fmm"},
+                {"order", conf->order},
+                {"opening_angle", conf->opening_angle},
+                {"reduction_level", conf->reduction_level},
+            };
+        } else if (const SelfGravConfig::MM *conf = std::get_if<SelfGravConfig::MM>(&p.config)) {
             j = {
                 {"type", "mm"},
                 {"order", conf->order},
@@ -981,7 +1011,12 @@ namespace shammodels::sph {
 
     /// JSON deserialization for SelfGravConfig
     inline void from_json(const nlohmann::json &j, SelfGravConfig &p) {
-        if (j.at("type").get<std::string>() == "mm") {
+        if (j.at("type").get<std::string>() == "fmm") {
+            p.config = SelfGravConfig::FMM{
+                j.at("order").get<u32>(),
+                j.at("opening_angle").get<f64>(),
+                j.at("reduction_level").get<u32>()};
+        } else if (j.at("type").get<std::string>() == "mm") {
             p.config = SelfGravConfig::MM{
                 j.at("order").get<u32>(),
                 j.at("opening_angle").get<f64>(),
