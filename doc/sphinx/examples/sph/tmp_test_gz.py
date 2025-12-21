@@ -112,7 +112,7 @@ def run_case(N_target, split_fact):
 
     ret_last_rate = model.solver_logs_last_rate()
     ret_last_obj_count = model.solver_logs_last_obj_count()
-    ret_patch_count = model.get_patch_count()
+    ret_patch_count =len(ctx.get_patch_list_global())
 
     del model
     del ctx
@@ -129,7 +129,7 @@ for i in range(3):
 sleep(5)
 
 for N_target in [1e3, 1e4, 1e5, 1e6]:
-    for split_fact in [0.5, 0.9, 1, 1.1, 8]:
+    for split_fact in [0.5,  1,  8]:
 
         rate, cnt, patch_count = run_case(N_target, split_fact)
 
@@ -137,10 +137,12 @@ for N_target in [1e3, 1e4, 1e5, 1e6]:
             results[N_target] = {
                 "rate": [],
                 "cnt": [],
+                "tstep": [],
                 "patch_count": [],
             }
         results[N_target]["rate"].append(rate)
         results[N_target]["cnt"].append(cnt)
+        results[N_target]["tstep"].append(cnt/rate)
         results[N_target]["patch_count"].append(patch_count)
 
 
@@ -151,6 +153,7 @@ if True and shamrock.sys.world_rank() == 0:
 
     import matplotlib.pyplot as plt
 
+    plt.figure(figsize=(8, 5), dpi=200)
     for N_target in results:
         plt.plot(
             results[N_target]["patch_count"],
@@ -164,4 +167,21 @@ if True and shamrock.sys.world_rank() == 0:
     plt.yscale("log")
     plt.title("rate vs patch count")
     plt.legend()
+    plt.savefig("rate_vs_patch_count.png")
+
+    plt.figure(figsize=(8, 5), dpi=200)
+    for N_target in results:
+        plt.plot(
+            results[N_target]["patch_count"],
+            results[N_target]["tstep"],
+            "x-",
+            label=f"N_target = {N_target:.1e}",
+        )
+    plt.xlabel("patch count")
+    plt.ylabel("tstep")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.title("tstep vs patch count")
+    plt.legend()
+    plt.savefig("tstep_vs_patch_count.png")
     plt.show()
