@@ -415,8 +415,8 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
                                 sham::max(sender_h_max, int_range_max.get(id_found)));
 #else
                         CoordRange<vec> receiv_exp
-                        = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
-                            int_range_max.get(id_found));
+                            = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
+                                int_range_max.get(id_found));
 #endif
 
                         CoordRange<vec> interf_volume
