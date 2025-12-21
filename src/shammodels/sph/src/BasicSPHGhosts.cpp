@@ -621,7 +621,7 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     }
 
     if (has_warn) {
-        // logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
+        logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
     }
 
     return res;
