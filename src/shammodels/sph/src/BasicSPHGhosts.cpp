@@ -260,7 +260,8 @@ template<class vec>
 auto BasicSPHGhostHandler<vec>::find_interfaces(
     SerialPatchTree<vec> &sptree,
     shamrock::patch::PatchtreeField<flt> &int_range_max_tree,
-    shamrock::patch::PatchField<flt> &int_range_max) -> GeneratorMap {
+    shamrock::patch::PatchField<flt> &int_range_max,
+    bool filter_empty_patch_gz) -> GeneratorMap {
 
     StackEntry stack_loc{};
 
@@ -501,11 +502,57 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
         });
     }
 
-    // interf_map.for_each([](u64 sender, u64 receiver, InterfaceBuildInfos build){
-    //     logger::raw_ln("found interface
-    //     :",sender,"->",receiver,"ratio:",build.volume_ratio,
-    //     "volume:",build.cut_volume.lower,build.cut_volume.upper);
-    // });
+    if (filter_empty_patch_gz) {
+        PatchField<u32> patchdata_obj_cnt = sched.map_owned_to_patch_field_simple<u32>(
+            [&](const Patch p, PatchDataLayer &pdat) -> u32 {
+                return pdat.get_obj_cnt();
+            });
+
+        GeneratorMap interf_map2 = {};
+
+        interf_map.for_each([&](u64 sender, u64 receiver, InterfaceBuildInfos build) {
+            u32 sender_obj_cnt   = patchdata_obj_cnt.get(sender);
+            u32 receiver_obj_cnt = patchdata_obj_cnt.get(receiver);
+
+            if (sender_obj_cnt == 0 || receiver_obj_cnt == 0) {
+                logger::debug_ln("Ghost", "patch ", sender, "->", receiver, "is empty, skipping");
+                return;
+            }
+
+            interf_map2.add_obj(sender, receiver, InterfaceBuildInfos{build});
+        });
+        interf_map = interf_map2;
+    }
+
+    u32 total          = 0;
+    u32 empty_receiver = 0;
+    u32 empty_sender   = 0;
+    u32 empty_either   = 0;
+    interf_map.for_each([&](u64 sender, u64 receiver, InterfaceBuildInfos build) {
+        // logger::raw_ln("found interface :",sender,"->",receiver,"ratio:",build.volume_ratio,
+        //"volume:",build.cut_volume.lower,build.cut_volume.upper,
+        // sched.get_patch(receiver).load_value);
+        total++;
+        if (sched.get_patch(receiver).load_value == 0) {
+            empty_receiver++;
+        }
+        if (sched.get_patch(sender).load_value == 0) {
+            empty_sender++;
+        }
+        if (sched.get_patch(receiver).load_value == 0 || sched.get_patch(sender).load_value == 0) {
+            empty_either++;
+        }
+    });
+    logger::debug_ln(
+        "Ghost",
+        "total:",
+        total,
+        "empty_receiver:",
+        empty_receiver,
+        "empty_sender:",
+        empty_sender,
+        "empty_either:",
+        empty_either);
 
     return interf_map;
 }
@@ -574,7 +621,7 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     }
 
     if (has_warn) {
-        logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
+        // logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
     }
 
     return res;
