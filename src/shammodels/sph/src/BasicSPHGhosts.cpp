@@ -396,11 +396,11 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
                                 shammath::AABB<vec>{sender_bsize_off.lower, sender_bsize_off.upper})
                             .is_not_empty();
 #else
-                                flt receiv_h_max = acc_tf[tree_id];
-                                CoordRange<vec> receiv_exp{
-                                    n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+                        flt receiv_h_max = acc_tf[tree_id];
+                        CoordRange<vec> receiv_exp{
+                            n.box_min - receiv_h_max, n.box_max + receiv_h_max};
 
-                                return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
+                        return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
 #endif
                     },
                     [&](u64 id_found, PtNode n) {
