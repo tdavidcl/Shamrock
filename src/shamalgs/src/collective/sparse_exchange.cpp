@@ -19,8 +19,11 @@
 #include "shamalgs/collective/sparse_exchange.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/narrowing.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shamalgs/collective/RequestList.hpp"
 #include "shamalgs/collective/exchanges.hpp"
+#include "shambackends/USMPtrHolder.hpp"
 #include "shambackends/math.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/worldInfo.hpp"
@@ -180,6 +183,67 @@ namespace shamalgs::collective {
         const CommTable &comm_table) {
 
         __shamrock_stack_entry();
+
+        bool direct_gpu_capable = dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable;
+
+        // TODO: check device loc depending on dgpu support
+
+        u32 SHAM_SPARSE_COMM_INFLIGHT_LIM = 128; // TODO: use the env variable
+
+        if (comm_table.send_total_size < bytebuffer_send.get_size()) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                "The send total size is greater than the send buffer size\n"
+                "    send_total_size = {}, send_buffer_size = {}",
+                comm_table.send_total_size,
+                bytebuffer_send.get_size()));
+        }
+
+        if (comm_table.recv_total_size < bytebuffer_recv.get_size()) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                "The recv total size is greater than the recv buffer size\n"
+                "    recv_total_size = {}, recv_buffer_size = {}",
+                comm_table.recv_total_size,
+                bytebuffer_recv.get_size()));
+        }
+
+        sham::EventList depends_list;
+        const u8 *send_ptr = bytebuffer_send.get_read_access(depends_list);
+        u8 *recv_ptr       = bytebuffer_recv.get_write_access(depends_list);
+        depends_list.wait();
+        bytebuffer_send.complete_event_state(sycl::event{});
+        bytebuffer_recv.complete_event_state(sycl::event{});
+
+        RequestList rqs;
+        for (u32 i = 0; i < comm_table.message_all.size(); i++) {
+
+            auto message_info = comm_table.message_all[i];
+
+            if (message_info.rank_sender == shamcomm::world_rank()) {
+                auto &rq = rqs.new_request();
+                shamcomm::mpi::Isend(
+                    send_ptr + shambase::get_check_ref(message_info.message_bytebuf_offset_send),
+                    shambase::narrow_or_throw<i32>(message_info.message_size),
+                    MPI_BYTE,
+                    message_info.rank_receiver,
+                    shambase::get_check_ref(message_info.message_tag),
+                    MPI_COMM_WORLD,
+                    &rq);
+            }
+
+            if (message_info.rank_receiver == shamcomm::world_rank()) {
+                auto &rq = rqs.new_request();
+                shamcomm::mpi::Irecv(
+                    recv_ptr + shambase::get_check_ref(message_info.message_bytebuf_offset_recv),
+                    shambase::narrow_or_throw<i32>(message_info.message_size),
+                    MPI_BYTE,
+                    message_info.rank_sender,
+                    shambase::get_check_ref(message_info.message_tag),
+                    MPI_COMM_WORLD,
+                    &rq);
+            }
+
+            rqs.spin_lock_partial_wait(SHAM_SPARSE_COMM_INFLIGHT_LIM, 120, 10);
+        }
     }
 
 } // namespace shamalgs::collective
