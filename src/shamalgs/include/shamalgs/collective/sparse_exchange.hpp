@@ -45,10 +45,11 @@ namespace shamalgs::collective {
 
     CommTable build_sparse_exchange_table(const std::vector<CommMessageInfo> &messages_send);
 
+    template<sham::USMKindTarget target>
     void sparse_exchange(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        sham::DeviceBuffer<u8> &bytebuffer_send,
-        sham::DeviceBuffer<u8> &bytebuffer_recv,
+        sham::DeviceBuffer<u8, target> &bytebuffer_send,
+        sham::DeviceBuffer<u8, target> &bytebuffer_recv,
         const CommTable &comm_table);
 
 } // namespace shamalgs::collective

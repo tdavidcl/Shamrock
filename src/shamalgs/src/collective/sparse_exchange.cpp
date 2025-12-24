@@ -178,17 +178,57 @@ namespace shamalgs::collective {
 
     void sparse_exchange(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        sham::DeviceBuffer<u8> &bytebuffer_send,
-        sham::DeviceBuffer<u8> &bytebuffer_recv,
+        const u8 *bytebuffer_send,
+        u8 *bytebuffer_recv,
         const CommTable &comm_table) {
 
         __shamrock_stack_entry();
 
-        bool direct_gpu_capable = dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable;
-
-        // TODO: check device loc depending on dgpu support
-
         u32 SHAM_SPARSE_COMM_INFLIGHT_LIM = 128; // TODO: use the env variable
+
+        RequestList rqs;
+        for (u32 i = 0; i < comm_table.message_all.size(); i++) {
+
+            auto message_info = comm_table.message_all[i];
+
+            if (message_info.rank_sender == shamcomm::world_rank()) {
+                auto &rq = rqs.new_request();
+                shamcomm::mpi::Isend(
+                    bytebuffer_send
+                        + shambase::get_check_ref(message_info.message_bytebuf_offset_send),
+                    shambase::narrow_or_throw<i32>(message_info.message_size),
+                    MPI_BYTE,
+                    message_info.rank_receiver,
+                    shambase::get_check_ref(message_info.message_tag),
+                    MPI_COMM_WORLD,
+                    &rq);
+            }
+
+            if (message_info.rank_receiver == shamcomm::world_rank()) {
+                auto &rq = rqs.new_request();
+                shamcomm::mpi::Irecv(
+                    bytebuffer_recv
+                        + shambase::get_check_ref(message_info.message_bytebuf_offset_recv),
+                    shambase::narrow_or_throw<i32>(message_info.message_size),
+                    MPI_BYTE,
+                    message_info.rank_sender,
+                    shambase::get_check_ref(message_info.message_tag),
+                    MPI_COMM_WORLD,
+                    &rq);
+            }
+
+            rqs.spin_lock_partial_wait(SHAM_SPARSE_COMM_INFLIGHT_LIM, 120, 10);
+        }
+    }
+
+    template<sham::USMKindTarget target>
+    void sparse_exchange(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        sham::DeviceBuffer<u8, target> &bytebuffer_send,
+        sham::DeviceBuffer<u8, target> &bytebuffer_recv,
+        const CommTable &comm_table) {
+
+        __shamrock_stack_entry();
 
         if (comm_table.send_total_size < bytebuffer_send.get_size()) {
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
@@ -206,44 +246,23 @@ namespace shamalgs::collective {
                 bytebuffer_recv.get_size()));
         }
 
+        bool direct_gpu_capable = dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable;
+
+        if (!direct_gpu_capable && target == sham::device) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(
+                "You are trying to use a device buffer on the device but the device is not direct "
+                "GPU capable");
+        }
+
         sham::EventList depends_list;
         const u8 *send_ptr = bytebuffer_send.get_read_access(depends_list);
         u8 *recv_ptr       = bytebuffer_recv.get_write_access(depends_list);
         depends_list.wait();
+
+        sparse_exchange(dev_sched, send_ptr, recv_ptr, comm_table);
+
         bytebuffer_send.complete_event_state(sycl::event{});
         bytebuffer_recv.complete_event_state(sycl::event{});
-
-        RequestList rqs;
-        for (u32 i = 0; i < comm_table.message_all.size(); i++) {
-
-            auto message_info = comm_table.message_all[i];
-
-            if (message_info.rank_sender == shamcomm::world_rank()) {
-                auto &rq = rqs.new_request();
-                shamcomm::mpi::Isend(
-                    send_ptr + shambase::get_check_ref(message_info.message_bytebuf_offset_send),
-                    shambase::narrow_or_throw<i32>(message_info.message_size),
-                    MPI_BYTE,
-                    message_info.rank_receiver,
-                    shambase::get_check_ref(message_info.message_tag),
-                    MPI_COMM_WORLD,
-                    &rq);
-            }
-
-            if (message_info.rank_receiver == shamcomm::world_rank()) {
-                auto &rq = rqs.new_request();
-                shamcomm::mpi::Irecv(
-                    recv_ptr + shambase::get_check_ref(message_info.message_bytebuf_offset_recv),
-                    shambase::narrow_or_throw<i32>(message_info.message_size),
-                    MPI_BYTE,
-                    message_info.rank_sender,
-                    shambase::get_check_ref(message_info.message_tag),
-                    MPI_COMM_WORLD,
-                    &rq);
-            }
-
-            rqs.spin_lock_partial_wait(SHAM_SPARSE_COMM_INFLIGHT_LIM, 120, 10);
-        }
     }
 
 } // namespace shamalgs::collective
