@@ -43,6 +43,14 @@
 
 namespace shamalgs::collective {
 
+    struct CommMessage {
+        sham::DeviceBuffer<u8> &bytebuffer;
+        size_t message_offset;
+        size_t message_size;
+        i32 sender_rank;
+        i32 receiver_rank;
+    };
+
     struct SendPayload {
         i32 receiver_rank;
         std::unique_ptr<shamcomm::CommunicationBuffer> payload;
