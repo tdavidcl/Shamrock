@@ -7,8 +7,6 @@
 //
 // -------------------------------------------------------//
 
-#pragma once
-
 /**
  * @file sparse_exchange.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
@@ -152,7 +150,7 @@ namespace shamalgs::collective {
                         "The sender has not set the offset for all messages, otherwise throw\n"
                         "    expected_offset = {}, actual_offset = {}",
                         expected_offset,
-                        message_info.message_bytebuf_offset_send));
+                        message_info.message_bytebuf_offset_send.value()));
                 }
 
                 ret_message_send[send_idx]        = message_info;
@@ -219,6 +217,7 @@ namespace shamalgs::collective {
 
             rqs.spin_lock_partial_wait(SHAM_SPARSE_COMM_INFLIGHT_LIM, 120, 10);
         }
+        rqs.wait_all();
     }
 
     template<sham::USMKindTarget target>
@@ -264,5 +263,18 @@ namespace shamalgs::collective {
         bytebuffer_send.complete_event_state(sycl::event{});
         bytebuffer_recv.complete_event_state(sycl::event{});
     }
+
+    // template instantiations
+    template void sparse_exchange<sham::device>(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        sham::DeviceBuffer<u8, sham::device> &bytebuffer_send,
+        sham::DeviceBuffer<u8, sham::device> &bytebuffer_recv,
+        const CommTable &comm_table);
+
+    template void sparse_exchange<sham::host>(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        sham::DeviceBuffer<u8, sham::host> &bytebuffer_send,
+        sham::DeviceBuffer<u8, sham::host> &bytebuffer_recv,
+        const CommTable &comm_table);
 
 } // namespace shamalgs::collective
