@@ -79,6 +79,7 @@ namespace shamalgs::collective {
         SerializedDDataComm &send_distrib_data,
         SerializedDDataComm &recv_distrib_data,
         std::function<i32(u64)> rank_getter,
+        DDSCommCache &cache,
         std::optional<SparseCommTable> comm_table) {
 
         StackEntry stack_loc{};
@@ -139,9 +140,23 @@ namespace shamalgs::collective {
             shamalgs::collective::sparse_exchange<sham::device>(
                 dev_sched, send_buf, recv_buf, comm_table2);
         } else {
-            auto send_buf_host = send_buf.copy_to<sham::host>();
-            sham::DeviceBuffer<u8, sham::host> recv_buf_host(
-                comm_table2.recv_total_size, dev_sched);
+            if (!cache.cache1) {
+                cache.cache1 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
+                    send_buf.get_size(), dev_sched);
+            } else {
+                cache.cache1->resize(send_buf.get_size());
+            }
+            cache.cache1->copy_from(send_buf);
+            sham::DeviceBuffer<u8, sham::host> &send_buf_host = *cache.cache1;
+
+            if (!cache.cache2) {
+                cache.cache2 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
+                    comm_table2.recv_total_size, dev_sched);
+            } else {
+                cache.cache2->resize(comm_table2.recv_total_size);
+            }
+            sham::DeviceBuffer<u8, sham::host> &recv_buf_host = *cache.cache2;
+
             shamalgs::collective::sparse_exchange<sham::host>(
                 dev_sched, send_buf_host, recv_buf_host, comm_table2);
             recv_buf.copy_from(recv_buf_host);
