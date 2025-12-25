@@ -54,16 +54,18 @@ void test_sparse_exchange(std::vector<TestElement> test_elements) {
     size_t sender_count     = 0;
     for (u32 i = 0; i < test_elements.size(); i++) {
         if (test_elements[i].sender == shamcomm::world_rank()) {
-            messages_send.push_back(shamalgs::collective::CommMessageInfo{
-                test_elements[i].size,
-                test_elements[i].sender,
-                test_elements[i].receiver,
-                std::nullopt,
-                sender_offset,
-                std::nullopt,
-            });
+            messages_send.push_back(
+                shamalgs::collective::CommMessageInfo{
+                    test_elements[i].size,
+                    test_elements[i].sender,
+                    test_elements[i].receiver,
+                    std::nullopt,
+                    sender_offset,
+                    std::nullopt,
+                });
 
-            logger::info_ln("sparse exchange test",
+            logger::info_ln(
+                "sparse exchange test",
                 "rank :",
                 shamcomm::world_rank(),
                 "send message : (",
@@ -132,7 +134,16 @@ void test_sparse_exchange(std::vector<TestElement> test_elements) {
             size_t end = begin + test_elements[i].size;
             recv_buf.copy_range(begin, end, recov);
 
-            logger::info_ln("sparse exchange test","rank :", shamcomm::world_rank(), "recv message : (", test_elements[i].sender, "->", test_elements[i].receiver, ") data :", recov.copy_to_stdvec());
+            logger::info_ln(
+                "sparse exchange test",
+                "rank :",
+                shamcomm::world_rank(),
+                "recv message : (",
+                test_elements[i].sender,
+                "->",
+                test_elements[i].receiver,
+                ") data :",
+                recov.copy_to_stdvec());
 
             REQUIRE_EQUAL(recov.copy_to_stdvec(), ref_buf.copy_to_stdvec());
 
@@ -145,15 +156,15 @@ void test_sparse_exchange(std::vector<TestElement> test_elements) {
 }
 
 TestStart(Unittest, "shamalgs/collective/test_sparse_exchange", testsparsexchg_2, -1) {
-    
-    if(shamcomm::world_rank() == 0){
-        logger::info_ln("sparse exchange test","empty comm");
+
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("sparse exchange test", "empty comm");
     }
-    
+
     test_sparse_exchange({});
 
-    if(shamcomm::world_rank() == 0){
-        logger::info_ln("sparse exchange test","send to self");
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("sparse exchange test", "send to self");
     }
 
     {
@@ -161,17 +172,14 @@ TestStart(Unittest, "shamalgs/collective/test_sparse_exchange", testsparsexchg_2
         std::mt19937 eng(0x123);
         std::vector<TestElement> test_elements;
         for (i32 i = 0; i < shamcomm::world_size(); i++) {
-            test_elements.push_back(TestElement{
-                i,
-                i,
-                shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
+            test_elements.push_back(
+                TestElement{i, i, shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
         }
         test_sparse_exchange(test_elements);
     }
 
-
-    if(shamcomm::world_rank() == 0){
-        logger::info_ln("sparse exchange test","send to next"); 
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("sparse exchange test", "send to next");
     }
 
     {
@@ -179,27 +187,29 @@ TestStart(Unittest, "shamalgs/collective/test_sparse_exchange", testsparsexchg_2
         std::mt19937 eng(0x123);
         std::vector<TestElement> test_elements;
         for (i32 i = 0; i < shamcomm::world_size(); i++) {
-            test_elements.push_back(TestElement{
-                i,
-                (i + 1) % shamcomm::world_size(),
-                shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
+            test_elements.push_back(
+                TestElement{
+                    i,
+                    (i + 1) % shamcomm::world_size(),
+                    shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
         }
         test_sparse_exchange(test_elements);
     }
 
-    if(shamcomm::world_rank() == 0){
-        logger::info_ln("sparse exchange test","random test");
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("sparse exchange test", "random test");
     }
 
     {
         // random test
         std::mt19937 eng(0x123);
         std::vector<TestElement> test_elements;
-        for (u32 i = 0; i < 3*shamcomm::world_size(); i++) {
-            test_elements.push_back(TestElement{
-                shamalgs::primitives::mock_value<i32>(eng, 0, shamcomm::world_size() - 1),
-                shamalgs::primitives::mock_value<i32>(eng, 0, shamcomm::world_size() - 1),
-                shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
+        for (u32 i = 0; i < 3 * shamcomm::world_size(); i++) {
+            test_elements.push_back(
+                TestElement{
+                    shamalgs::primitives::mock_value<i32>(eng, 0, shamcomm::world_size() - 1),
+                    shamalgs::primitives::mock_value<i32>(eng, 0, shamcomm::world_size() - 1),
+                    shamalgs::primitives::mock_value<u32>(eng, 1, 10)});
         }
         test_sparse_exchange(test_elements);
     }
