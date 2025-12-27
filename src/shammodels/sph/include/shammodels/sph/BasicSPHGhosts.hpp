@@ -80,24 +80,17 @@ namespace shammodels::sph {
 
         using GeneratorMap = shambase::DistributedDataShared<InterfaceBuildInfos>;
 
-        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> xyzh_ghost_layout;
-
-        std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> exchange_gz_positions;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> &xyzh_ghost_layout;
 
         std::shared_ptr<shamrock::solvergraph::ScalarsEdge<u32>> patch_rank_owner;
 
         BasicSPHGhostHandler(
             PatchScheduler &sched,
             Config ghost_config,
-            std::shared_ptr<shamrock::solvergraph::ScalarsEdge<u32>> patch_rank_owner)
-            : sched(sched), ghost_config(ghost_config), patch_rank_owner(patch_rank_owner) {
-            xyzh_ghost_layout = std::make_shared<shamrock::patch::PatchDataLayerLayout>();
-            xyzh_ghost_layout->add_field<vec>("xyz", 1);
-            xyzh_ghost_layout->add_field<flt>("hpart", 1);
-
-            exchange_gz_positions
-                = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(xyzh_ghost_layout);
-        }
+            std::shared_ptr<shamrock::solvergraph::ScalarsEdge<u32>> patch_rank_owner,
+            std::shared_ptr<shamrock::patch::PatchDataLayerLayout> &xyzh_ghost_layout)
+            : sched(sched), ghost_config(ghost_config), patch_rank_owner(patch_rank_owner),
+              xyzh_ghost_layout(xyzh_ghost_layout) {}
 
         /**
          * @brief Find interfaces and their metadata
@@ -427,7 +420,9 @@ namespace shammodels::sph {
         }
 
         inline shambase::DistributedDataShared<shamrock::patch::PatchDataLayer>
-        build_communicate_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
+        build_communicate_positions(
+            shambase::DistributedDataShared<InterfaceIdTable> &builder,
+            std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> &exchange_gz_positions) {
             auto pos_interf = build_position_interf_field(builder);
             return communicate_pdat(
                 xyzh_ghost_layout, std::move(pos_interf), exchange_gz_positions);
@@ -489,7 +484,9 @@ namespace shammodels::sph {
         }
 
         inline shambase::DistributedData<shamrock::patch::PatchDataLayer>
-        build_comm_merge_positions(shambase::DistributedDataShared<InterfaceIdTable> &builder) {
+        build_comm_merge_positions(
+            shambase::DistributedDataShared<InterfaceIdTable> &builder,
+            std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> &exchange_gz_positions) {
             auto pos_interf = build_position_interf_field(builder);
             return merge_position_buf(
                 communicate_pdat(xyzh_ghost_layout, std::move(pos_interf), exchange_gz_positions));

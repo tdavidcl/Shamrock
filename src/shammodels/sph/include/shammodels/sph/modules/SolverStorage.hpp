@@ -54,6 +54,7 @@ namespace shammodels::sph {
 
         std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> exchange_gz_node;
         std::shared_ptr<shamrock::solvergraph::ExchangeGhostField<Tscal>> exchange_gz_alpha;
+        std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> exchange_gz_positions;
 
         std::shared_ptr<shamrock::solvergraph::Indexes<u32>> part_counts;
         std::shared_ptr<shamrock::solvergraph::Indexes<u32>> part_counts_with_ghost;
@@ -80,7 +81,8 @@ namespace shammodels::sph {
 
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> omega;
 
-        Component<std::shared_ptr<shamrock::patch::PatchDataLayerLayout>> ghost_layout;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layout;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> xyzh_ghost_layout;
 
         Component<shambase::DistributedData<shamrock::patch::PatchDataLayer>>
             merged_patchdata_ghost;

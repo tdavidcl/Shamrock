@@ -141,18 +141,36 @@ namespace shamalgs::collective {
                 dev_sched, send_buf, recv_buf, comm_table2);
         } else {
             if (!cache.cache1) {
+                // logger::info_ln("ddcomm", "alloc cache1", shambase::fmt_callstack());
                 cache.cache1 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
                     send_buf.get_size(), dev_sched);
             } else {
+                // logger::info_ln(
+                //     "ddcomm",
+                //     shambase::format(
+                //     "resize cache1 from {} to {} (cache1 ptr = {})",
+                //     cache.cache1->get_size(),
+                //     send_buf.get_size(),
+                //     static_cast<void*>(cache.cache1.get())),
+                //     shambase::fmt_callstack());
                 cache.cache1->resize(send_buf.get_size());
             }
             cache.cache1->copy_from(send_buf);
             sham::DeviceBuffer<u8, sham::host> &send_buf_host = *cache.cache1;
 
             if (!cache.cache2) {
+                // logger::info_ln("ddcomm", "alloc cache2", shambase::fmt_callstack());
                 cache.cache2 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
                     comm_table2.recv_total_size, dev_sched);
             } else {
+                // logger::info_ln(
+                //     "ddcomm",
+                //     shambase::format(
+                //     "resize cache2 from {} to {} (cache2 ptr = {})",
+                //     cache.cache2->get_size(),
+                //     comm_table2.recv_total_size,
+                //     static_cast<void*>(cache.cache2.get())),
+                //     shambase::fmt_callstack());
                 cache.cache2->resize(comm_table2.recv_total_size);
             }
             sham::DeviceBuffer<u8, sham::host> &recv_buf_host = *cache.cache2;
