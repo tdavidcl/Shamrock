@@ -10,48 +10,39 @@
 #pragma once
 
 /**
- * @file ParticleReordering.hpp
+ * @file VTKDump.hpp
+ * @author Guo Yansong (guo.yansong.ngy@gmail.com)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
- *
+ * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr) --no git blame--
+ * @brief VTK dump module for GSPH solver
  */
 
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/vec.hpp"
-#include "shammodels/sph/SolverConfig.hpp"
-#include "shammodels/sph/modules/SolverStorage.hpp"
+#include "shammodels/gsph/SolverConfig.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 
-namespace shammodels::sph::modules {
+namespace shammodels::gsph::modules {
 
-    /**
-     * @brief Module for reordering particles to improve cache locality
-     * @tparam Tvec Vector type for positions
-     * @tparam Tmorton Morton code type
-     * @tparam SPHKernel SPH kernel template
-     */
-    template<class Tvec, class Tmorton, template<class> class SPHKernel>
-    class ParticleReordering {
+    template<class Tvec, template<class> class SPHKernel>
+    class VTKDump {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
         using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
-        using Storage = SolverStorage<Tvec, u32>;
+        using Config = SolverConfig<Tvec, SPHKernel>;
 
         ShamrockCtx &context;
         Config &solver_config;
-        Storage &storage;
 
-        ParticleReordering(ShamrockCtx &context, Config &solver_config, Storage &storage)
-            : context(context), solver_config(solver_config), storage(storage) {}
+        VTKDump(ShamrockCtx &context, Config &solver_config)
+            : context(context), solver_config(solver_config) {}
 
-        /// @brief Reorders particles by Morton code for improved memory access patterns
-        void reorder_particles();
+        void do_dump(std::string filename, bool add_patch_world_id);
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 
-} // namespace shammodels::sph::modules
+} // namespace shammodels::gsph::modules
