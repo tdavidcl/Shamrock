@@ -11,6 +11,7 @@
 
 /**
  * @file PatchDataField.hpp
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  */
@@ -281,14 +282,14 @@ class PatchDataField {
      * @return std::vector<u32>
      */
     template<class Lambdacd, class... Args>
-    inline std::vector<u32> get_ids_vec_where(Lambdacd &&cd_true, Args... args) {
+    inline std::vector<u32> get_ids_vec_where(Lambdacd &&cd_true, Args &&...args) {
         StackEntry stack_loc{};
         std::vector<u32> idx_cd{};
         if (get_obj_cnt() > 0) {
             auto acc = buf.copy_to_stdvec();
 
             for (u32 i = 0; i < get_obj_cnt(); i++) {
-                if (cd_true(acc, i * nvar, args...)) {
+                if (std::forward<Lambdacd>(cd_true)(acc, i * nvar, std::forward<Args>(args)...)) {
                     idx_cd.push_back(i);
                 }
             }
@@ -406,6 +407,7 @@ class PatchDataField {
     void check_err_range(Lambdacd &&cd_true, T vmin, T vmax, std::string add_log = "");
 
     void extract_element(u32 pidx, PatchDataField<T> &to);
+    void extract_elements(const sham::DeviceBuffer<u32> &idxs, PatchDataField<T> &to);
 
     bool check_field_match(PatchDataField<T> &f2);
 
