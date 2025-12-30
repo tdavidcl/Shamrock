@@ -20,8 +20,10 @@
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pybindings.hpp"
 #include "shambindings/start_python.hpp"
+#include "shamcmdopt/env.hpp"
 #include <pybind11/embed.h>
 #include <cstdlib>
+#include <filesystem>
 #include <optional>
 #include <string>
 
@@ -85,11 +87,37 @@ if not cur_path.startswith(sysprefix):
 
 )";
 
+// env var to set the path to the pylib
+std::optional<std::string> pylib_path_env_var = shamcmdopt::getenv_str("SHAMROCK_PYLIB_PATH");
+
 namespace shambindings {
 
     std::string get_pylib_path(bool do_print) {
 
+        // Get the path to the current binary
+        std::filesystem::path binary_path = std::filesystem::read_symlink("/proc/self/exe");
+        std::filesystem::path binary_dir = binary_path.parent_path();
+        std::filesystem::path pyshamrock_path = binary_dir / ".." / "pyshamrock";
+        
+        std::vector<std::string> possible_paths = {
+            "pyshamrock",
+            pyshamrock_path.string(),
+            std::string(configure_time_pylib_path())};
+
+        if (pylib_path_env_var.has_value()) {
+            possible_paths.push_back(pylib_path_env_var.value());
+        }
+
         std::string ret = std::string(configure_time_pylib_path());
+
+        for (const auto &path : possible_paths) {
+            if (std::filesystem::is_directory(path.c_str())) {
+                ret = path;
+                break;
+            }else{
+                shambase::println("pylib path " + path + " does not exist, skipping");
+            }
+        }
 
         if (do_print) {
             shambase::println("using pylib path : " + ret);
