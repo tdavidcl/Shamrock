@@ -35,6 +35,9 @@ extern const char *configure_time_py_sys_path();
 /// @brief path of the python executable that was used to configure sys.path
 extern const char *configure_time_py_executable();
 
+/// @brief Path to shamrock utils lib a config time
+extern const char *configure_time_pylib_path();
+
 /**
  * @brief Script to run ipython
  *
@@ -84,6 +87,17 @@ if not cur_path.startswith(sysprefix):
 
 namespace shambindings {
 
+    std::string get_pylib_path(bool do_print) {
+
+        std::string ret = std::string(configure_time_pylib_path());
+
+        if (do_print) {
+            shambase::println("using pylib path : " + ret);
+        }
+
+        return ret;
+    }
+
     void setpypath(std::string path) { runtime_set_pypath = path; }
 
     void setpypath_from_binary(std::string binary_path) {
@@ -108,6 +122,10 @@ namespace shambindings {
         std::string modify_path = std::string("paths = ") + get_pypath() + "\n";
         modify_path += R"(import sys;sys.path = paths)";
         py::exec(modify_path);
+
+        std::string pylib_path      = get_pylib_path(do_print);
+        std::string modify_path_lib = std::string("sys.path.insert(0, \"") + pylib_path + "\")\n";
+        py::exec(modify_path_lib);
     }
 
     void start_ipython(bool do_print) {
