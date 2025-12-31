@@ -95,12 +95,12 @@ namespace shambindings {
     std::string get_pylib_path(bool do_print) {
 
         // Get the path to the current binary
-        std::filesystem::path binary_path     = std::filesystem::read_symlink("/proc/self/exe");
-        std::filesystem::path binary_dir      = binary_path.parent_path();
-        std::filesystem::path pyshamrock_path = binary_dir / ".." / "pyshamrock";
+        // std::filesystem::path binary_path     = std::filesystem::read_symlink("/proc/self/exe");
+        // std::filesystem::path binary_dir      = binary_path.parent_path();
+        // std::filesystem::path pyshamrock_path = binary_dir / ".." / "pyshamrock";
 
         std::vector<std::string> possible_paths
-            = {"pyshamrock", pyshamrock_path.string(), std::string(configure_time_pylib_path())};
+            = {"pyshamrock", std::string(configure_time_pylib_path())};
 
         if (pylib_path_env_var.has_value()) {
             possible_paths.push_back(pylib_path_env_var.value());
