@@ -271,6 +271,12 @@ jobs:
           LD_LIBRARY_PATH=$(pwd)/lib:$LD_LIBRARY_PATH \
           python3 /tmp/test_rscript.py
 
+      - name: Rm CMake cache
+        if: matrix.runtestpy
+        run: |
+          cd build
+          rm -rf CMakeCache.txt
+
       - name: Try pip install Shamrock
         if: matrix.runtestpy
         run: |
