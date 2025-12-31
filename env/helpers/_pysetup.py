@@ -50,51 +50,20 @@ class ShamEnvBuild(build_ext):
         print(f"### {activate_build_dir=}")
         print(f"### {cwd_is_build=}")
 
-        print("-- Activating env")
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                "source ./activate",
-            ],
-            check=True,
-        )
-
-        print("-- Configure")
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                "source ./activate && shamconfigure",
-            ],
-            check=True,
-        )
-
-        print("-- Compile")
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                "source ./activate && shammake shamrock shamrock_pylib",
-            ],
-            check=True,
-        )
-
         print("-- mkdir output dir")
         print(f" -> mkdir -p {extdir}")
         subprocess.run(["bash", "-c", f"mkdir -p {extdir}"], check=True)
 
-        print("-- Copy lib&exe to output dir")
-        subprocess.run(["bash", "-c", f"ls {activate_build_dir}"], check=True)
+        install_steps = [
+            "source ./activate",
+            "shamconfigure",
+            f"cmake . -DCMAKE_INSTALL_PREFIX={extdir} -DCMAKE_INSTALL_PYTHONDIR={extdir}",
+            "shammake install",
+        ]
 
-        if not cwd_is_build:
-            subprocess.run(
-                ["bash", "-c", f" cp -v {activate_build_dir}/*.so {activate_build_dir}/shamrock ."],
-                check=True,
-            )
-
-        subprocess.run(["bash", "-c", f"ls {activate_build_dir}"], check=True)
-        subprocess.run(["bash", "-c", f"cp -v {activate_build_dir}/*.so {extdir}"], check=True)
+        cmd = " && ".join(install_steps)
+        print(f"-- Run install: {cmd}")
+        subprocess.run(["bash", "-c", cmd], check=True)
 
 
 # The information here can also be placed in setup.cfg - better separation of
@@ -106,7 +75,7 @@ setup(
     author_email="tim.shamrock@proton.me",
     description="SHAMROCK Code for astrophysics",
     long_description="",
-    ext_modules=[ShamEnvExtension("shamrock")],
+    ext_modules=[ShamEnvExtension("shamrock.pyshamrock")],
     data_files=[("bin", ["shamrock"])],
     cmdclass={"build_ext": ShamEnvBuild},
     zip_safe=False,
