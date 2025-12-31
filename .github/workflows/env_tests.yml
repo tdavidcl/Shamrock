@@ -241,7 +241,8 @@ jobs:
           print("Shamrock version:", shamrock.version_string())
           print("Git info:", shamrock.get_git_info())
           shamrock.change_loglevel(125)
-          shamrock.sys.init('0:0')
+          if not shamrock.sys.is_initialized():
+            shamrock.sys.init('0:0')
           EOF
           cat /tmp/test_rscript.py
 
