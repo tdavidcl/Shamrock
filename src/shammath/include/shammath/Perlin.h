@@ -89,8 +89,7 @@ namespace shammath {
 
         inline int fastfloor(double x) { return x > 0 ? (int) x : (int) x - 1; }
 
-
-		public:
+        public:
         inline double noise(double xin, double yin) {
             double n0, n1, n2;
 

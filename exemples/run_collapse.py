@@ -12,7 +12,7 @@ si = shamrock.UnitSystem()
 sicte = shamrock.Constants(si)
 codeu = shamrock.UnitSystem(
     unit_time=sicte.year(),
-    unit_length=sicte.au(),
+    unit_length=sicte.parsec(),
     unit_mass=sicte.sol_mass(),
 )
 ucte = shamrock.Constants(codeu)
@@ -23,7 +23,7 @@ kg_m3_codeu = codeu.get("kg") * codeu.get("m", power=-3)
 print(f"m_s_codeu: {kg_m3_codeu}")
 
 cs = 190.0  # m/s
-rho_g = kg_m3_codeu*1e-15
+rho_g = kg_m3_codeu * 2e-17
 initial_u = 1.0
 
 sim_radius = 0.5
@@ -40,7 +40,30 @@ rho_c1 = 1.92e-13 * 1000 * kg_m3_codeu  # g/cm^3 -> kg/m^3
 rho_c2 = 3.84e-8 * 1000 * kg_m3_codeu  # g/cm^3 -> kg/m^3
 rho_c3 = 1.92e-3 * 1000 * kg_m3_codeu  # g/cm^3 -> kg/m^3
 
-Npart = 5e5
+sim_directory = "collapse"
+import os
+
+os.makedirs(sim_directory, exist_ok=True)
+
+
+tsound = sim_radius / cs
+tff = shamrock.phys.free_fall_time(rho_g, codeu)
+
+P_init, _cs_init, T_init = shamrock.phys.eos.eos_Machida06(
+    cs=cs, rho=rho_g, rho_c1=rho_c1, rho_c2=rho_c2, rho_c3=rho_c3, mu=mu, mh=mh, kb=kb
+)
+
+print("---------------------------------------------------")
+print(f"rho                           : {rho_g / kg_m3_codeu:.3e} [kg/m^3]")
+print(f"P                             : {P_init / codeu.get("Pa"):.3e} [Pa]")
+print(f"T                             : {T_init:.3e} [K]")
+print(f"cs                            : {cs / m_s_codeu:.3e} [m/s]")
+print(f"tsound (= R/cs)               : {tsound:9.1f} [years]")
+print(f"tff (= sqrt(3*pi/(32*G*rho))) : {tff:9.1f} [years]")
+print(f"tff/tsound                    : {tff/tsound:.4f} (<1 = collapse)")
+print("---------------------------------------------------")
+
+Npart = 1e5
 
 bmin = (-sim_radius, -sim_radius, -sim_radius)
 bmax = (sim_radius, sim_radius, sim_radius)
@@ -112,20 +135,68 @@ model.set_cfl_cour(0.1)
 model.set_cfl_force(0.1)
 
 
-ampl = 0.5
-eng = shamrock.algs.gen_seed(111)
-def vel_func(r):
-    global eng
-    x, y, z = shamrock.algs.mock_gaussian_f64_3(eng)
-    return (x * ampl, y * ampl, z * ampl)
+def setup_particles():
+    eng = shamrock.algs.gen_seed(11)
 
-model.set_field_value_lambda_f64_3("vxyz", vel_func)
+    o_xx, o_xy, o_xz = shamrock.algs.mock_gaussian_f64_3(eng)
+    o_yx, o_yy, o_yz = shamrock.algs.mock_gaussian_f64_3(eng)
+    o_zx, o_zy, o_zz = shamrock.algs.mock_gaussian_f64_3(eng)
 
-model.timestep()
+    o_xx *= 1000
+    o_xy *= 1000
+    o_xz *= 1000
+    o_yx *= 1000
+    o_yy *= 1000
+    o_yz *= 1000
+    o_zx *= 1000
+    o_zy *= 1000
+    o_zz *= 1000
+
+    print(f"o_xx: {o_xx}, o_xy: {o_xy}, o_xz: {o_xz}")
+    print(f"o_yx: {o_yx}, o_yy: {o_yy}, o_yz: {o_yz}")
+    print(f"o_zx: {o_zx}, o_zy: {o_zy}, o_zz: {o_zz}")
+
+    perlin = shamrock.math.PerlinNoise()
+
+    def noise_func(x, y, z):
+
+        x *= 3
+        y *= 3
+        z *= 3
+
+        x = perlin.noise_3d(x + o_xx, y + o_xy, z + o_xz)
+        y = perlin.noise_3d(x + o_yx, y + o_yy, z + o_yz)
+        z = perlin.noise_3d(x + o_zx, y + o_zy, z + o_zz)
+        return (x, y, z)
+
+    ampl = 30.0 * cs
+
+    def vel_func(r):
+        global eng, perlin
+        x, y, z = r
+        vx, vy, vz = 0.0, 0.0, 0.0
+
+        for i in range(15):
+            tx, ty, tz = noise_func(
+                x * (i + 1) + i * o_xx * 10,
+                y * (i + 1) + i * o_xy * 10,
+                z * (i + 1) + i * o_xz * 10,
+            )
+            vx += tx / (i + 1.0)
+            vy += ty / (i + 1.0)
+            vz += tz / (i + 1.0)
+        return (vx * ampl, vy * ampl, vz * ampl)
+
+    model.set_field_value_lambda_f64_3("vxyz", vel_func)
+
+    model.timestep()
+
+
+setup_particles()
 
 
 def analysis(i):
-    ext = sim_radius/1.5
+    ext = sim_radius / 1.5
     arr_rho2 = model.render_cartesian_column_integ(
         "rho",
         "f64",
@@ -136,11 +207,13 @@ def analysis(i):
         ny=1000,
     )
 
+    arr_rho2 /= kg_m3_codeu
+
     dpi = 200
     plt.figure(num=1, clear=True, dpi=dpi)
     import copy
 
-    my_cmap = copy.copy(matplotlib.colormaps.get_cmap("gist_heat"))  # copy the default cmap
+    my_cmap = copy.copy(matplotlib.colormaps.get_cmap("inferno"))  # copy the default cmap
     my_cmap.set_bad(color="black")
 
     res = plt.imshow(
@@ -148,31 +221,103 @@ def analysis(i):
         cmap=my_cmap,
         origin="lower",
         extent=[-ext, ext, -ext, ext],
-        #norm="log",
-        #vmin=1e0,
-        #vmax=1e3,
+        norm="log",
+        # vmin=1e0,
+        # vmax=1e3,
     )
 
-    plt.xlabel("x")
-    plt.ylabel("y")
+    plt.xlabel("x [pc]")
+    plt.ylabel("y [pc]")
     plt.title("t = {:0.3f} [year]".format(model.get_time()))
 
-
-    plt.colorbar()
+    cbar = plt.colorbar()
+    cbar.set_label("rho [kg/m^3]")
     plt.savefig(f"collapse/rho_{i:04}.png")
+    plt.close()
+
+    dat = ctx.collect_data()
+
+    # get index with max rho
+    max_rho_index = np.argmin(dat["hpart"])
+    hpart_min = dat["hpart"][max_rho_index]
+    max_rho = pmass * (model.get_hfact() / hpart_min) ** 3
+
+    max_rho_x = dat["xyz"][max_rho_index, 0]
+    max_rho_y = dat["xyz"][max_rho_index, 1]
+    max_rho_z = dat["xyz"][max_rho_index, 2]
+    print(f"max rho: {max_rho:.3e} at ({max_rho_x:.3e}, {max_rho_y:.3e}, {max_rho_z:.3e})")
+
+    # render around max rho
+    ext_loc = 0.1
+    arr_rho = model.render_cartesian_column_integ(
+        "rho",
+        "f64",
+        center=(max_rho_x, max_rho_y, max_rho_z),
+        delta_x=(ext_loc * 2, 0, 0.0),
+        delta_y=(0.0, ext_loc * 2, 0.0),
+        nx=1000,
+        ny=1000,
+    )
+    arr_rho /= kg_m3_codeu
+    plt.figure(num=3, clear=True, dpi=dpi)
+    plt.imshow(
+        arr_rho,
+        cmap=my_cmap,
+        origin="lower",
+        extent=[max_rho_x - ext_loc, max_rho_x + ext_loc, max_rho_y - ext_loc, max_rho_y + ext_loc],
+        norm="log",
+    )
+    plt.xlabel("x [pc]")
+    plt.ylabel("y [pc]")
+    plt.title("t = {:0.3f} [year]".format(model.get_time()))
+    cbar = plt.colorbar(extend="both")
+    cbar.set_label("rho [kg/m^3]")
+    plt.savefig(f"collapse/centered_rho_{i:04}.png")
+    plt.close()
+
+    arr_vxyz = model.render_cartesian_column_integ(
+        "vxyz",
+        "f64_3",
+        center=(0.0, 0.0, 0.0),
+        delta_x=(ext * 2, 0, 0.0),
+        delta_y=(0.0, ext * 2, 0.0),
+        nx=1000,
+        ny=1000,
+    )
+
+    arr_vxyz /= cs
+
+    v_plot = arr_vxyz[:, :, 0]
+    max_v = np.max(np.abs(v_plot))
+
+    my_cmap = copy.copy(matplotlib.colormaps.get_cmap("seismic"))  # copy the default cmap
+    my_cmap.set_bad(color="black")
+
+    plt.figure(num=2, clear=True, dpi=dpi)
+    plt.imshow(
+        v_plot, cmap=my_cmap, origin="lower", vmin=-max_v, vmax=max_v, extent=[-ext, ext, -ext, ext]
+    )
+    plt.xlabel("x [pc]")
+    plt.ylabel("y [pc]")
+    plt.title("t = {:0.3f} [year]".format(model.get_time()))
+    cbar = plt.colorbar(extend="both")
+    cbar.set_label("v/cs")
+    plt.savefig(f"collapse/vxyz_{i:04}.png")
     plt.close()
 
 
 i = 0
-t = 0
+next_t = 0
 while True:
+
+    model.evolve_until(next_t, niter_max=50)
+
+    next_t = model.get_time() + tff * 0.1
+
     analysis(i)
-    
-    model.evolve_until(t, niter_max=50)
 
     i += 1
-    t = model.get_time() + 1.e-1
-    
-    if i> 200:
+
+    if i > 200:
         analysis(i)
         break
