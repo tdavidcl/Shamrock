@@ -246,7 +246,7 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces()
     using namespace shamrock;
     using namespace shamrock::patch;
 
-    PatchDataLayerLayout &pdl = scheduler().pdl_old ();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
     const u32 iaxyz     = pdl.get_field_idx<Tvec>("axyz");
     const u32 ivxyz     = pdl.get_field_idx<Tvec>("vxyz");

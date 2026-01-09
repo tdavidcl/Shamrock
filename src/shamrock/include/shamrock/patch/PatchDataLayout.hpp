@@ -17,8 +17,8 @@
 
 #include "shambase/memory.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
+#include <unordered_map>
 #include <memory>
-#include <vector>
 
 namespace shamrock::patch {
 
@@ -28,28 +28,24 @@ namespace shamrock::patch {
      */
     class PatchDataLayout {
         public:
-        std::vector<std::shared_ptr<shamrock::patch::PatchDataLayerLayout>> layer_layouts;
+        std::unordered_map<std::string, std::shared_ptr<shamrock::patch::PatchDataLayerLayout>>
+            layer_layouts;
 
         PatchDataLayout() = default;
 
-        PatchDataLayout(u32 nlayers) {
-            for (size_t idx = 0; idx < nlayers; idx++) {
-                layer_layouts.push_back(std::make_shared<shamrock::patch::PatchDataLayerLayout>());
-            }
-        }
-
         size_t get_layer_count() const { return layer_layouts.size(); }
 
-        inline std::shared_ptr<PatchDataLayerLayout> &get_layer_ptr(size_t idx = 0) {
-            return layer_layouts.at(idx);
+        inline std::shared_ptr<PatchDataLayerLayout> &get_layer_ptr(const std::string &name) {
+            return layer_layouts.at(name);
         }
 
-        inline const std::shared_ptr<PatchDataLayerLayout> &get_layer_ptr(size_t idx = 0) const {
-            return layer_layouts.at(idx);
+        inline const std::shared_ptr<PatchDataLayerLayout> &get_layer_ptr(
+            const std::string &name) const {
+            return layer_layouts.at(name);
         }
 
-        inline PatchDataLayerLayout &get_layer_ref(size_t idx = 0) {
-            return shambase::get_check_ref(layer_layouts.at(idx));
+        inline PatchDataLayerLayout &get_layer_ref(const std::string &name) {
+            return shambase::get_check_ref(layer_layouts.at(name));
         }
     };
 
@@ -64,16 +60,16 @@ namespace shamrock::patch {
      */
     inline void to_json(nlohmann::json &j, const PatchDataLayout &p) {
         using json = nlohmann::json;
-        std::vector<json> layer_entries;
-        
-        for (const auto &layer_ptr : p.layer_layouts) {
+        json layer_entries;
+
+        for (const auto &[name, layer_ptr] : p.layer_layouts) {
             if (layer_ptr) {
                 json layer_json;
                 to_json(layer_json, *layer_ptr);
-                layer_entries.push_back(layer_json);
+                layer_entries[name] = layer_json;
             }
         }
-        
+
         j = layer_entries;
     }
 
@@ -88,11 +84,11 @@ namespace shamrock::patch {
      */
     inline void from_json(const nlohmann::json &j, PatchDataLayout &p) {
         p.layer_layouts.clear();
-        
-        for (const auto &layer_json : j) {
+
+        for (const auto &[name, layer_json] : j.items()) {
             auto layer_ptr = std::make_shared<PatchDataLayerLayout>();
             from_json(layer_json, *layer_ptr);
-            p.layer_layouts.push_back(layer_ptr);
+            p.layer_layouts.emplace(name, std::move(layer_ptr));
         }
     }
 

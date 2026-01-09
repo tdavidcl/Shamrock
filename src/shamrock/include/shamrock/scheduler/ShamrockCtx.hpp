@@ -48,7 +48,9 @@ class ShamrockCtx {
         if (sched) {
             throw ShamAPIException("cannot modify patch data layout while the scheduler is on");
         }
-        pdl = std::make_shared<shamrock::patch::PatchDataLayout>(1);
+        pdl = std::make_shared<shamrock::patch::PatchDataLayout>();
+        pdl->layer_layouts.emplace(
+            "main", std::make_shared<shamrock::patch::PatchDataLayerLayout>());
     }
 
     // inline void pdata_layout_do_double_prec_mode(){
@@ -77,21 +79,21 @@ class ShamrockCtx {
         if (sched) {
             throw ShamAPIException("cannot modify patch data layout while the scheduler is on");
         }
-        shambase::get_check_ref(pdl).get_layer_ref(0).add_field<T>(fname, nvar);
+        shambase::get_check_ref(pdl).get_layer_ref("main").add_field<T>(fname, nvar);
     }
 
     inline void pdata_layout_add_field_t(std::string fname, u32 nvar, std::string type) {
         if (sched) {
             throw ShamAPIException("cannot modify patch data layout while the scheduler is on");
         }
-        shambase::get_check_ref(pdl).get_layer_ref(0).add_field_t(fname, nvar, type);
+        shambase::get_check_ref(pdl).get_layer_ref("main").add_field_t(fname, nvar, type);
     }
 
     inline void pdata_layout_print() {
         if (!pdl) {
             throw ShamAPIException("patch data layout is not initialized");
         }
-        std::cout << shambase::get_check_ref(pdl).get_layer_ref(0).get_description_str()
+        std::cout << shambase::get_check_ref(pdl).get_layer_ref("main").get_description_str()
                   << std::endl;
     }
 
@@ -155,13 +157,13 @@ class ShamrockCtx {
             throw ShamAPIException("scheduler is not initialized");
         }
 
-        if (pdl->get_layer_count() != 1) {
+        if (pdl->get_layer_count() > 1) {
             throw ShamAPIException("set_coord_domain_bound is not supported for multiple layers");
         }
 
         auto [a, b] = box;
 
-        if (pdl->get_layer_ref(0).check_main_field_type<f32_3>()) {
+        if (pdl->get_layer_ref("main").check_main_field_type<f32_3>()) {
             auto conv_vec = [](f64_3 v) -> f32_3 {
                 return {v.x(), v.y(), v.z()};
             };
@@ -170,7 +172,7 @@ class ShamrockCtx {
             f32_3 vec1 = conv_vec(b);
 
             sched->set_coord_domain_bound<f32_3>(vec0, vec1);
-        } else if (pdl->get_layer_ref(0).check_main_field_type<f64_3>()) {
+        } else if (pdl->get_layer_ref("main").check_main_field_type<f64_3>()) {
 
             sched->set_coord_domain_bound<f64_3>(a, b);
         } else {

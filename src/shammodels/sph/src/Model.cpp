@@ -310,8 +310,9 @@ void shammodels::sph::Model<Tvec, SPHKernel>::push_particle(
         tmp.fields_raz();
 
         {
-            u32 len                 = vec_acc.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
+            u32 len = vec_acc.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
             sycl::buffer<Tvec> buf(vec_acc.data(), len);
             f.override(buf, len);
         }
@@ -405,8 +406,9 @@ void shammodels::sph::Model<Tvec, SPHKernel>::push_particle_mhd(
         tmp.fields_raz();
 
         {
-            u32 len                 = vec_acc.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
+            u32 len = vec_acc.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
             sycl::buffer<Tvec> buf(vec_acc.data(), len);
             f.override(buf, len);
         }
@@ -428,8 +430,9 @@ void shammodels::sph::Model<Tvec, SPHKernel>::push_particle_mhd(
         }
 
         {
-            u32 len                 = vec_acc.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("B/rho"));
+            u32 len = vec_acc.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("B/rho"));
             sycl::buffer<Tvec> buf(B_on_rho_acc.data(), len);
             f.override(buf, len);
         }
@@ -632,8 +635,9 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_hcp_3d_v2(
         tmp.fields_raz();
 
         {
-            u32 len                 = pos_data.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
+            u32 len = pos_data.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
             // sycl::buffer<Tvec> buf(pos_data.data(), len);
             f.override(pos_data, len);
         }

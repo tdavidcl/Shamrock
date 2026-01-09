@@ -132,15 +132,17 @@ shamrock::patch::PatchDataLayer shammodels::sph::modules::GeneratorMCDisc<Tvec, 
         tmp.fields_raz();
 
         {
-            u32 len                 = pos_data.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
+            u32 len = pos_data.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
             sycl::buffer<Tvec> buf(vec_pos.data(), len);
             f.override(buf, len);
         }
 
         {
-            u32 len                 = pos_data.size();
-            PatchDataField<Tvec> &f = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("vxyz"));
+            u32 len = pos_data.size();
+            PatchDataField<Tvec> &f
+                = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("vxyz"));
             sycl::buffer<Tvec> buf(vec_vel.data(), len);
             f.override(buf, len);
         }
