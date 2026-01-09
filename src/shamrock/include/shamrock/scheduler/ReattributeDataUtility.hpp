@@ -141,7 +141,7 @@ namespace shamrock {
                                     part_exchange.add_obj(
                                         current_pid,
                                         new_pid,
-                                        PatchDataLayer(sched.get_layout_ptr()));
+                                        PatchDataLayer(sched.get_layout_ptr_old()));
                                 }
 
                                 part_exchange.for_each(
@@ -175,7 +175,7 @@ namespace shamrock {
 
                             if (!part_exchange.has_key(current_pid, new_pid)) {
                                 part_exchange.add_obj(
-                                    current_pid, new_pid, PatchDataLayer(sched.get_layout_ptr()));
+                                    current_pid, new_pid, PatchDataLayer(sched.get_layout_ptr_old()));
                             }
 
                             part_exchange.for_each(
@@ -217,7 +217,7 @@ namespace shamrock {
             using namespace shambase;
             using namespace shamrock::patch;
 
-            u32 ipos = sched.pdl().get_field_idx<T>(position_field);
+            u32 ipos = sched.pdl_old().get_field_idx<T>(position_field);
 
             DistributedData<sycl::buffer<u64>> new_pid = compute_new_pid(sptree, ipos);
 
@@ -247,7 +247,7 @@ namespace shamrock {
                     shamalgs::SerializeHelper ser(
                         shamsys::instance::get_compute_scheduler_ptr(),
                         std::forward<sham::DeviceBuffer<u8>>(buf));
-                    return PatchDataLayer::deserialize_buf(ser, sched.get_layout_ptr());
+                    return PatchDataLayer::deserialize_buf(ser, sched.get_layout_ptr_old());
                 });
 
             recv_dat.for_each([&](u64 sender, u64 receiver, PatchDataLayer &pdat) {

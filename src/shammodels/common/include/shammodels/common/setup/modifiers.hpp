@@ -34,9 +34,9 @@ namespace generic::setup::modifiers {
         sched.patch_data.for_each_patchdata([&](u64 patch_id,
                                                 shamrock::patch::PatchDataLayer &pdat) {
             PatchDataField<vec> &xyz
-                = pdat.template get_field<vec>(sched.pdl().get_field_idx<vec>("xyz"));
+                = pdat.template get_field<vec>(sched.pdl_old().get_field_idx<vec>("xyz"));
 
-            PatchDataField<T> &f = pdat.template get_field<T>(sched.pdl().get_field_idx<T>(name));
+            PatchDataField<T> &f = pdat.template get_field<T>(sched.pdl_old().get_field_idx<T>(name));
 
             {
                 auto &buf = f.get_buf();
@@ -70,9 +70,9 @@ namespace generic::setup::modifiers {
         sched.patch_data.for_each_patchdata([&](u64 patch_id,
                                                 shamrock::patch::PatchDataLayer &pdat) {
             PatchDataField<vec> &xyz
-                = pdat.template get_field<vec>(sched.pdl().get_field_idx<vec>("xyz"));
+                = pdat.template get_field<vec>(sched.pdl_old().get_field_idx<vec>("xyz"));
 
-            PatchDataField<T> &f = pdat.template get_field<T>(sched.pdl().get_field_idx<T>(name));
+            PatchDataField<T> &f = pdat.template get_field<T>(sched.pdl_old().get_field_idx<T>(name));
 
             flt r2 = radius * radius;
             {
@@ -107,9 +107,9 @@ namespace generic::setup::modifiers {
         sched.patch_data.for_each_patchdata(
             [&](u64 patch_id, shamrock::patch::PatchDataLayer &pdat) {
                 PatchDataField<vec> &xyz
-                    = pdat.template get_field<vec>(sched.pdl().get_field_idx<vec>("xyz"));
+                    = pdat.template get_field<vec>(sched.pdl_old().get_field_idx<vec>("xyz"));
                 PatchDataField<vec> &vxyz
-                    = pdat.template get_field<vec>(sched.pdl().get_field_idx<vec>("vxyz"));
+                    = pdat.template get_field<vec>(sched.pdl_old().get_field_idx<vec>("vxyz"));
 
                 flt ampl = std::get<1>(ampls);
 
@@ -143,7 +143,7 @@ namespace generic::setup::modifiers {
         StackEntry stack_loc{};
         sched.patch_data.for_each_patchdata([&](u64 patch_id,
                                                 shamrock::patch::PatchDataLayer &pdat) {
-            PatchDataField<T> &xyz = pdat.template get_field<T>(sched.pdl().get_field_idx<T>(name));
+            PatchDataField<T> &xyz = pdat.template get_field<T>(sched.pdl_old().get_field_idx<T>(name));
 
             sum += xyz.compute_sum();
         });
