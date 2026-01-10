@@ -163,6 +163,11 @@ namespace shamrock {
 
         StackEntry stack_loc{};
 
+        if (shambase::get_check_ref(ctx.pdl).get_layer_count() > 1) {
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "load_shamrock_dump is not supported for multiple layers");
+        }
+
         u64 head_ptr = 0;
         MPI_File mfile{};
 
@@ -247,7 +252,7 @@ namespace shamrock {
                 shamsys::instance::get_compute_scheduler_ptr(), std::move(out));
 
             patch::PatchDataLayer pdat = patch::PatchDataLayer::deserialize_buf(
-                ser, shambase::get_check_ref(ctx.pdl).get_layer_ptr("main"));
+                ser, shambase::get_check_ref(ctx.pdl).get_layer_ptr(0));
 
             sched.patch_data.owned_data.add_obj(pid, std::move(pdat));
         }

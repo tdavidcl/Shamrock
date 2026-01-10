@@ -212,8 +212,13 @@ PatchScheduler::PatchScheduler(
     u64 crit_merge)
     : pdl_ptr(pdl_ptr),
       patch_data(
-          pdl_ptr->get_layer_ptr("main"),
+          pdl_ptr->get_layer_ptr(0),
           {{0, 0, 0}, {max_axis_patch_coord, max_axis_patch_coord, max_axis_patch_coord}}) {
+
+    if (pdl_ptr->get_layer_count() > 1) {
+        throw shambase::make_except_with_loc<std::runtime_error>(
+            "PatchScheduler is not supported for multiple layers");
+    }
 
     crit_patch_split = crit_split;
     crit_patch_merge = crit_merge;

@@ -91,7 +91,7 @@ class PatchScheduler {
             throw shambase::make_except_with_loc<std::invalid_argument>(
                 "pdl_old is not supported for multiple layers");
         }
-        return ref.get_layer_ref("main");
+        return ref.get_layer_ref(0);
     }
 
     inline std::shared_ptr<shamrock::patch::PatchDataLayerLayout> get_layout_ptr_old() const {
@@ -100,7 +100,7 @@ class PatchScheduler {
             throw shambase::make_except_with_loc<std::invalid_argument>(
                 "get_layout_ptr_old is not supported for multiple layers");
         }
-        return ref.get_layer_ptr("main");
+        return ref.get_layer_ptr(0);
     }
 
     /**

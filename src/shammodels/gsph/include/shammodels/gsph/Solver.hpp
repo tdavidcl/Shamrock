@@ -87,7 +87,7 @@ namespace shammodels::gsph {
         sph::SolverLog solve_logs;
 
         inline void init_required_fields() {
-            solver_config.set_layout(context.get_pdl_write().get_layer_ref("main"));
+            solver_config.set_layout(context.get_pdl_write().get_layer_ref(0));
         }
 
         // Serial patch tree control

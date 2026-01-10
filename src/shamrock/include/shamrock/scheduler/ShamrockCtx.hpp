@@ -48,9 +48,7 @@ class ShamrockCtx {
         if (sched) {
             throw ShamAPIException("cannot modify patch data layout while the scheduler is on");
         }
-        pdl = std::make_shared<shamrock::patch::PatchDataLayout>();
-        pdl->layer_layouts.emplace(
-            "main", std::make_shared<shamrock::patch::PatchDataLayerLayout>());
+        pdl = std::make_shared<shamrock::patch::PatchDataLayout>(std::vector<std::string>{"main"});
     }
 
     // inline void pdata_layout_do_double_prec_mode(){
