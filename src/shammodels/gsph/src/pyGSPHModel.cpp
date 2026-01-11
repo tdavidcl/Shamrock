@@ -104,7 +104,7 @@ void add_gsph_instance(py::module &m, std::string name_config, std::string name_
             },
             py::arg("gamma"),
             R"==(
-    Set adiabatic equation of state: P = (\gamma-1) × \rho × u
+    Set adiabatic equation of state: P = (\gamma-1)  \rho  u
 
     Parameters
     ----------
@@ -118,7 +118,7 @@ void add_gsph_instance(py::module &m, std::string name_config, std::string name_
             },
             py::arg("cs"),
             R"==(
-    Set isothermal equation of state: P = cs^2 × \rho
+    Set isothermal equation of state: P = cs^2  \rho
 
     Parameters
     ----------
