@@ -40,8 +40,8 @@ namespace shamrock::patch {
             std::vector<json> layer_entries = j.get<std::vector<json>>();
 
             for (const auto &layer_entry : layer_entries) {
-                std::string name            = layer_entry["name"].get<std::string>();
-                PatchDataLayerLayout layout = layer_entry["layout"].get<PatchDataLayerLayout>();
+                std::string name            = layer_entry.at("name").get<std::string>();
+                PatchDataLayerLayout layout = layer_entry.at("layout").get<PatchDataLayerLayout>();
                 p.layer_layouts.push_back(
                     PatchDataLayout::LayerEntry{
                         std::make_shared<PatchDataLayerLayout>(layout), name});
