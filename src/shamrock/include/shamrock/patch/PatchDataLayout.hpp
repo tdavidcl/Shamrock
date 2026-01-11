@@ -33,6 +33,12 @@ namespace shamrock::patch {
         struct LayerEntry {
             std::shared_ptr<shamrock::patch::PatchDataLayerLayout> layout;
             std::string name;
+
+            inline friend bool operator==(const LayerEntry &lhs, const LayerEntry &rhs) {
+                return lhs.name == rhs.name
+                       && shambase::get_check_ref(lhs.layout)
+                              == shambase::get_check_ref(rhs.layout);
+            }
         };
 
         std::vector<LayerEntry> layer_layouts;
@@ -86,6 +92,10 @@ namespace shamrock::patch {
         inline PatchDataLayerLayout &get_layer_ref(const std::string &name) {
             return get_layer_ref(get_layer_index(name));
         }
+
+        inline friend bool operator==(const PatchDataLayout &lhs, const PatchDataLayout &rhs) {
+            return lhs.layer_layouts == rhs.layer_layouts;
+        }
     };
 
     /**
@@ -97,19 +107,7 @@ namespace shamrock::patch {
      * @param j The JSON object to serialize the PatchDataLayout object to
      * @param p The PatchDataLayout object to serialize
      */
-    inline void to_json(nlohmann::json &j, const PatchDataLayout &p) {
-        using json = nlohmann::json;
-        std::vector<json> layer_entries;
-
-        for (const auto &layer_entry : p.layer_layouts) {
-
-            json layer_json;
-            to_json(layer_json, shambase::get_check_ref(layer_entry.layout));
-            layer_entries.push_back(json{{"name", layer_entry.name}, {"layout", layer_json}});
-        }
-
-        j = layer_entries;
-    }
+    void to_json(nlohmann::json &j, const PatchDataLayout &p);
 
     /**
      * @brief Deserialize a PatchDataLayout object from a JSON object
@@ -120,10 +118,6 @@ namespace shamrock::patch {
      * @param j The JSON object to deserialize the PatchDataLayout object from
      * @param p The PatchDataLayout object to deserialize
      */
-    inline void from_json(const nlohmann::json &j, PatchDataLayout &p) {
-        p.layer_layouts.clear();
-
-        logger::raw_ln(j.dump(4));
-    }
+    void from_json(const nlohmann::json &j, PatchDataLayout &p);
 
 } // namespace shamrock::patch
