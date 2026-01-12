@@ -27,6 +27,7 @@ set(as_subproject
   shammodels_zeus
   shammodels_ramses
   shammodels_sph
+  shammodels_gsph
   )
 
 # This macro originates from Daniel Pfeifer's talk at C++Now 2017:
@@ -57,6 +58,7 @@ add_subdirectory(shammodels/nbody)
 add_subdirectory(shammodels/zeus)
 add_subdirectory(shammodels/ramses)
 add_subdirectory(shammodels/sph)
+add_subdirectory(shammodels/gsph)
 
 
 
@@ -115,7 +117,7 @@ install(TARGETS shamrock_exe ${as_subproject}
 if(CMAKE_INSTALL_PYTHONDIR)
 
   # For python, we only install the bindings and the __init__.py file
-  # running `̀import shamrock` in python will load the __init__.py file
+  # running `import shamrock` in python will load the __init__.py file
   # which in turn will load shamrock_pylib
   # Two options there
   # 1 - The shamrock libraries `${as_subproject}` are not in path and you get

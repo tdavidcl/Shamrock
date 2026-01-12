@@ -114,8 +114,8 @@ namespace syclinit {
         sched_compute = std::make_shared<sham::DeviceScheduler>(ctx_compute);
         sched_alt     = std::make_shared<sham::DeviceScheduler>(ctx_alt);
 
-        sched_compute->test();
-        sched_alt->test();
+        test_device_scheduler(sched_compute);
+        test_device_scheduler(sched_alt);
 
         // logger::raw_ln("--- Compute ---");
         // sched_compute->print_info();
@@ -263,7 +263,7 @@ namespace shamsys::instance {
         shamlog_debug_ln(
             "Sys",
             shambase::format(
-                "[{:03}]: \x1B[32mMPI_Init : node n°{:03} | world size : {} | name = {}\033[0m",
+                "[{:03}]: \x1B[32mMPI_Init : node n {:03} | world size : {} | name = {}\033[0m",
                 shamcomm::world_rank(),
                 shamcomm::world_rank(),
                 shamcomm::world_size(),
