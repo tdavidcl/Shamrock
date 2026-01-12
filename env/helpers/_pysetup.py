@@ -21,8 +21,7 @@ class ShamEnvExtension(Extension):
 
 
 class ShamEnvBuild(build_ext):
-
-    def init_editable_mode(self) -> bool:
+    def is_editable_mode(self) -> bool:
         # Detect editable mode
         editable_mode = False
 
@@ -35,37 +34,28 @@ class ShamEnvBuild(build_ext):
             editable_mode = True
         return editable_mode
 
-    def build_extension(self, ext: ShamEnvExtension) -> None:
-        editable_mode = self.init_editable_mode()
-        print(f"-- Editable mode: {editable_mode}")
-
+    def get_extdir(self, ext: ShamEnvExtension):
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)  # type: ignore[no-untyped-call]
         extdir = ext_fullpath.parent.resolve()
 
-        cmake_lib_out = f"{extdir}{os.sep}"
+        # we get the parent since the package is named shamrock.shamrock
+        # in order for the .so to be shamrock/shamrock.cpython-313-x86_64-linux-gnu.so
+        # and the package is shamrock
+        return extdir.parent.resolve()
+
+    def build_extension(self, ext: ShamEnvExtension) -> None:
+        if self.is_editable_mode():
+            raise Exception(
+                "Editable mode not supported for this config:\n"
+                "  -> both the executable and the pylib are called shamrock\n"
+                "  -> so there is a name conflict in editable mode since\n"
+                "  -> the pylib will be copied to a shamrock folder which is the executable ..."
+            )
+
+        extdir = self.get_extdir(ext)
 
         print("-- Installing shamrock lib")
-        print(f"### {ext_fullpath=}\n### {extdir=}\n### {cmake_lib_out=}")
-
-        print("-- Modify builddir in local env")
-
-        activate_build_dir = None
-        with open(Path.cwd() / "activate", "r") as f:
-            for line in f:
-                if line.startswith("export BUILD_DIR="):
-                    activate_build_dir = line.split("=")[1].strip()
-                    break
-
-        if activate_build_dir is None:
-            raise Exception("BUILD_DIR not found in local env")
-
-        cwd = os.getcwd()
-        cwd_is_build = cwd == activate_build_dir
-
-        print(f"### {cwd=}")
-        print(f"### {activate_build_dir=}")
-        print(f"### {cwd_is_build=}")
 
         print("-- mkdir output dir")
         print(f" -> mkdir -p {extdir}")
@@ -74,7 +64,7 @@ class ShamEnvBuild(build_ext):
         install_steps = [
             "source ./activate",
             "shamconfigure",
-            f"cmake . -DCMAKE_INSTALL_PREFIX={extdir} -DCMAKE_INSTALL_PYTHONDIR={extdir}",
+            f"cmake . -DCMAKE_INSTALL_PREFIX={sys.prefix} -DCMAKE_INSTALL_PYTHONDIR={extdir} -DSHAMROCK_PATCH_LIB_RPATH=On",
             "shammake install",
         ]
 
@@ -82,6 +72,8 @@ class ShamEnvBuild(build_ext):
         print(f"-- Run install: {cmd}")
         subprocess.run(["bash", "-c", cmd], check=True)
 
+
+# start allow utf-8
 
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
@@ -99,3 +91,5 @@ setup(
     extras_require={},
     python_requires=">=3.7",
 )
+
+# end allow utf-8
