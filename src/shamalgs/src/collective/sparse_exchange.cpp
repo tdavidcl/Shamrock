@@ -140,7 +140,7 @@ namespace shamalgs::collective {
             auto message_info = message_all[i];
             if (message_info.rank_sender == shamcomm::world_rank()) {
 
-                // the sender shoudl have set the offset for all messages, otherwise throw
+                // the sender should have set the offset for all messages, otherwise throw
                 auto expected_offset = shambase::get_check_ref(
                     messages_send.at(send_idx).message_bytebuf_offset_send);
 
@@ -185,7 +185,7 @@ namespace shamalgs::collective {
         u32 SHAM_SPARSE_COMM_INFLIGHT_LIM = 128; // TODO: use the env variable
 
         RequestList rqs;
-        for (u32 i = 0; i < comm_table.message_all.size(); i++) {
+        for (size_t i = 0; i < comm_table.message_all.size(); i++) {
 
             auto message_info = comm_table.message_all[i];
 
@@ -229,7 +229,13 @@ namespace shamalgs::collective {
 
         __shamrock_stack_entry();
 
-        if (comm_table.send_total_size < bytebuffer_send.get_size()) {
+        if (&bytebuffer_send == &bytebuffer_recv) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(
+                "In-place sparse_exchange is not supported. Send and receive buffers must be "
+                "distinct.");
+        }
+
+        if (comm_table.send_total_size > bytebuffer_send.get_size()) {
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                 "The send total size is greater than the send buffer size\n"
                 "    send_total_size = {}, send_buffer_size = {}",
@@ -237,7 +243,7 @@ namespace shamalgs::collective {
                 bytebuffer_send.get_size()));
         }
 
-        if (comm_table.recv_total_size < bytebuffer_recv.get_size()) {
+        if (comm_table.recv_total_size > bytebuffer_recv.get_size()) {
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                 "The recv total size is greater than the recv buffer size\n"
                 "    recv_total_size = {}, recv_buffer_size = {}",

@@ -117,7 +117,7 @@ install(TARGETS shamrock_exe ${as_subproject}
 if(CMAKE_INSTALL_PYTHONDIR)
 
   # For python, we only install the bindings and the __init__.py file
-  # running `̀import shamrock` in python will load the __init__.py file
+  # running `import shamrock` in python will load the __init__.py file
   # which in turn will load shamrock_pylib
   # Two options there
   # 1 - The shamrock libraries `${as_subproject}` are not in path and you get
@@ -136,9 +136,14 @@ if(CMAKE_INSTALL_PYTHONDIR)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/__init__.py"
           DESTINATION "${SHAMROCK_PYTHON_INSTALL_DIR}")
 
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/math/__init__.py" "from ..shamrock.math import *\n")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/math/__init__.py"
+          DESTINATION "${SHAMROCK_PYTHON_INSTALL_DIR}/math")
+
   # Install the Python module shared library
   install(TARGETS shamrock_pylib
           LIBRARY DESTINATION "${SHAMROCK_PYTHON_INSTALL_DIR}")
+
 endif()
 
 ########################################################################################
