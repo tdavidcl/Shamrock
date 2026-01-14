@@ -198,7 +198,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::merge_position_ghost() {
         = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.xyzh_ghost_layout);
 
     storage.merged_xyzh.set(storage.ghost_handler.get().build_comm_merge_positions(
-        storage.ghost_patch_cache.get(), exchange_gz_node));
+        storage.ghost_patch_cache.get()));
 
     // Get field indices from xyzh_ghost_layout
     const u32 ixyz_ghost   = storage.xyzh_ghost_layout->template get_field_idx<Tvec>("xyz");
@@ -749,7 +749,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
 
     // Communicate ghost data across MPI ranks
     shambase::DistributedDataShared<PatchDataLayer> interf_pdat
-        = ghost_handle.communicate_pdat(ghost_layout_ptr, std::move(pdat_interf), exchange_gz_node);
+        = ghost_handle.communicate_pdat(ghost_layout_ptr, std::move(pdat_interf));
 
     // Count total ghost particles per patch
     std::map<u64, u64> sz_interf_map;

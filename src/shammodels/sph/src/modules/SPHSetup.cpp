@@ -535,6 +535,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
     f64 total_time_rank_getter = 0;
     f64 max_time_rank_getter   = 0;
 
+    shamalgs::collective::DDSCommCache comm_cache;
     u32 step_count = 0;
     while (!shamalgs::collective::are_all_rank_true(to_insert.is_empty(), MPI_COMM_WORLD)) {
 
