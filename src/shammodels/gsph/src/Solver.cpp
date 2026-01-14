@@ -197,8 +197,8 @@ void shammodels::gsph::Solver<Tvec, Kern>::merge_position_ghost() {
     std::shared_ptr<shamrock::solvergraph::ExchangeGhostLayer> exchange_gz_node
         = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.xyzh_ghost_layout);
 
-    storage.merged_xyzh.set(storage.ghost_handler.get().build_comm_merge_positions(
-        storage.ghost_patch_cache.get()));
+    storage.merged_xyzh.set(
+        storage.ghost_handler.get().build_comm_merge_positions(storage.ghost_patch_cache.get()));
 
     // Get field indices from xyzh_ghost_layout
     const u32 ixyz_ghost   = storage.xyzh_ghost_layout->template get_field_idx<Tvec>("xyz");
