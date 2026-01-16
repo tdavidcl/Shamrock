@@ -20,6 +20,7 @@
 #include "shambindings/pybindings.hpp"
 #include "shambindings/start_python.hpp"
 #include <pybind11/embed.h>
+#include <pybind11/stl.h>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -109,10 +110,16 @@ namespace shambindings {
         py::exec(modify_path);
     }
 
-    void start_ipython(bool do_print) {
+    void set_sys_argv(int argc, char *argv[]) {
+        std::vector<std::string> cpp_argv(argv, argv + argc);
+        py::module_::import("sys").attr("argv") = py::cast(cpp_argv);
+    }
+
+    void start_ipython(bool do_print, int argc, char *argv[]) {
 
         py::scoped_interpreter guard{};
         modify_py_sys_path(do_print);
+        set_sys_argv(argc, argv);
 
         if (do_print) {
             shambase::println("--------------------------------------------");
@@ -127,9 +134,10 @@ namespace shambindings {
         }
     }
 
-    void run_py_file(std::string file_path, bool do_print) {
+    void run_py_file(std::string file_path, bool do_print, int argc, char *argv[]) {
         py::scoped_interpreter guard{};
         modify_py_sys_path(do_print);
+        set_sys_argv(argc, argv);
 
         if (do_print) {
             shambase::println("-----------------------------------");
