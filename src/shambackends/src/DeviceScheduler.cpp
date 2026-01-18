@@ -119,9 +119,9 @@ namespace sham {
             } catch (std::runtime_error &e) {
                 logger::warn_ln(
                     "Backends",
-                    "[Alloc testing] name = ",
+                    " name = ",
                     dev.dev.get_info<sycl::info::device::name>(),
-                    " -> large device allocation not working !");
+                    " -> large device allocation (>2GB) not working !");
                 dev.prop.max_mem_alloc_size_dev = i32_max;
             }
 
@@ -132,9 +132,9 @@ namespace sham {
             } catch (std::runtime_error &e) {
                 logger::warn_ln(
                     "Backends",
-                    "[Alloc testing] name = ",
+                    " name = ",
                     dev.dev.get_info<sycl::info::device::name>(),
-                    " -> large host allocation not working !");
+                    " -> large host allocation (>2GB) not working !");
                 dev.prop.max_mem_alloc_size_host = i32_max;
             }
         }
