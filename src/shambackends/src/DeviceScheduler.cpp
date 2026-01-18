@@ -116,20 +116,26 @@ namespace sham {
                 USMPtrHolder<sham::device> ptr2G_dev
                     = USMPtrHolder<sham::device>::create(2 * GBval + 1024, dev_sched, 8);
                 ptr2G_dev.free_ptr();
-                USMPtrHolder<sham::host> ptr2G_host
-                    = USMPtrHolder<sham::host>::create(2 * GBval + 1024, dev_sched, 8);
-                ptr2G_host.free_ptr();
-
-                dev.prop.large_device_alloc = true;
-                dev.prop.large_host_alloc   = true;
             } catch (std::runtime_error &e) {
                 logger::debug_ln(
                     "Backends",
                     "[Alloc testing] name = ",
                     dev.dev.get_info<sycl::info::device::name>(),
-                    " -> large allocation not working !");
-                dev.prop.large_device_alloc = false;
-                dev.prop.large_host_alloc   = false;
+                    " -> large device allocation not working !");
+                dev.prop.max_mem_alloc_size_dev = i32_max;
+            }
+
+            try {
+                USMPtrHolder<sham::host> ptr2G_host
+                    = USMPtrHolder<sham::host>::create(2 * GBval + 1024, dev_sched, 8);
+                ptr2G_host.free_ptr();
+            } catch (std::runtime_error &e) {
+                logger::debug_ln(
+                    "Backends",
+                    "[Alloc testing] name = ",
+                    dev.dev.get_info<sycl::info::device::name>(),
+                    " -> large host allocation not working !");
+                dev.prop.max_mem_alloc_size_host = i32_max;
             }
         }
 

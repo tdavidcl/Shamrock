@@ -107,7 +107,10 @@ namespace sham {
         uint32_t max_compute_units;
 
         /// The maximum size of memory that can be allocated on the device in bytes
-        uint64_t max_mem_alloc_size;
+        uint64_t max_mem_alloc_size_dev;
+
+        /// The maximum size of memory that can be allocated on the host in bytes
+        uint64_t max_mem_alloc_size_host;
 
         /// The maximum alignment of memory that can be allocated on the device in bytes
         uint32_t mem_base_addr_align;
@@ -117,12 +120,6 @@ namespace sham {
 
         /// Default work group size
         uint32_t default_work_group_size;
-
-        /// Whether the device can allocate large host memory (>2GB)
-        bool large_host_alloc;
-
-        /// Whether the device can allocate large device memory (>2GB)
-        bool large_device_alloc;
     };
 
     struct DeviceMPIProperties {

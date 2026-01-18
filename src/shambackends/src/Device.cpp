@@ -260,11 +260,10 @@ namespace sham {
             shambase::get_check_ref(local_mem_size),
             shambase::get_check_ref(max_compute_units),
             shambase::get_check_ref(max_mem_alloc_size),
+            i64_max,
             shambase::get_check_ref(mem_base_addr_align),
             shambase::get_check_ref(sub_group_sizes),
-            default_work_group_size,
-            false,
-            false};
+            default_work_group_size};
     }
 
     /**
