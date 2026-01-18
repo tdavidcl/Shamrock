@@ -20,9 +20,13 @@
 #include "shambase/numeric_limits.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/sysinfo.hpp"
+#include "shamcmdopt/env.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpiInfo.hpp"
 #include <fmt/ranges.h>
+
+auto SHAM_MAX_ALLOC_SIZE
+    = shamcmdopt::getenv_str_register("SHAM_MAX_ALLOC_SIZE", "shamrock max alloc size if set");
 
 namespace sham {
 
@@ -251,6 +255,13 @@ namespace sham {
         }
         default_work_group_size = shambase::get_check_ref(sub_group_sizes)[0];
 
+        size_t max_alloc_dev  = shambase::get_check_ref(max_mem_alloc_size);
+        size_t max_alloc_host = ((physmem) ? *physmem : i64_max);
+        if (SHAM_MAX_ALLOC_SIZE) {
+            max_alloc_dev  = std::stoull(SHAM_MAX_ALLOC_SIZE.value());
+            max_alloc_host = std::stoull(SHAM_MAX_ALLOC_SIZE.value());
+        }
+
         return DeviceProperties{
             Vendor::UNKNOWN,         // We cannot determine the vendor
             get_device_backend(dev), // Query the backend based on the platform name
@@ -260,8 +271,8 @@ namespace sham {
             shambase::get_check_ref(global_mem_cache_size),
             shambase::get_check_ref(local_mem_size),
             shambase::get_check_ref(max_compute_units),
-            shambase::get_check_ref(max_mem_alloc_size),
-            ((physmem) ? *physmem : i64_max),
+            max_alloc_dev,
+            max_alloc_host,
             shambase::get_check_ref(mem_base_addr_align),
             shambase::get_check_ref(sub_group_sizes),
             default_work_group_size};
