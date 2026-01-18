@@ -258,8 +258,19 @@ namespace sham {
         size_t max_alloc_dev  = shambase::get_check_ref(max_mem_alloc_size);
         size_t max_alloc_host = ((physmem) ? *physmem : i64_max);
         if (SHAM_MAX_ALLOC_SIZE) {
-            max_alloc_dev  = std::stoull(SHAM_MAX_ALLOC_SIZE.value());
-            max_alloc_host = std::stoull(SHAM_MAX_ALLOC_SIZE.value());
+            try {
+                const auto max_alloc = std::stoull(SHAM_MAX_ALLOC_SIZE.value());
+                max_alloc_dev        = max_alloc;
+                max_alloc_host       = max_alloc;
+            } catch (const std::exception &e) {
+                logger::warn_ln(
+                    "Backends",
+                    shambase::format(
+                        "Could not parse SHAM_MAX_ALLOC_SIZE value '{}'. Error: {}. "
+                        "Ignoring override.",
+                        SHAM_MAX_ALLOC_SIZE.value(),
+                        e.what()));
+            }
         }
 
         return DeviceProperties{
