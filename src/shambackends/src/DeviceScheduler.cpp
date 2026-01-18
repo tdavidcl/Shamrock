@@ -117,7 +117,7 @@ namespace sham {
                     = USMPtrHolder<sham::device>::create(2 * GBval + 1024, dev_sched, 8);
                 ptr2G_dev.free_ptr();
             } catch (std::runtime_error &e) {
-                logger::debug_ln(
+                logger::warn_ln(
                     "Backends",
                     "[Alloc testing] name = ",
                     dev.dev.get_info<sycl::info::device::name>(),
@@ -130,7 +130,7 @@ namespace sham {
                     = USMPtrHolder<sham::host>::create(2 * GBval + 1024, dev_sched, 8);
                 ptr2G_host.free_ptr();
             } catch (std::runtime_error &e) {
-                logger::debug_ln(
+                logger::warn_ln(
                     "Backends",
                     "[Alloc testing] name = ",
                     dev.dev.get_info<sycl::info::device::name>(),
