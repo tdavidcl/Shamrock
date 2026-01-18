@@ -262,7 +262,9 @@ namespace sham {
             shambase::get_check_ref(max_mem_alloc_size),
             shambase::get_check_ref(mem_base_addr_align),
             shambase::get_check_ref(sub_group_sizes),
-            default_work_group_size};
+            default_work_group_size,
+            false,
+            false};
     }
 
     /**

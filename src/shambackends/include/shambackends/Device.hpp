@@ -117,6 +117,12 @@ namespace sham {
 
         /// Default work group size
         uint32_t default_work_group_size;
+
+        /// Whether the device can allocate large host memory (>2GB)
+        bool large_host_alloc;
+
+        /// Whether the device can allocate large device memory (>2GB)
+        bool large_device_alloc;
     };
 
     struct DeviceMPIProperties {

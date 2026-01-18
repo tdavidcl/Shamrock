@@ -107,15 +107,20 @@ namespace sham {
             = USMPtrHolder<sham::host>::create(1024, dev_sched, 8);
         ptr1024_host.free_ptr();
 
+        auto &dev = shambase::get_check_ref(ctxref.device);
+
         size_t GBval = 1024 * 1024 * 1024;
         // avoid <8GB card, they won't run at that scale anyway
-        if (ctxref.device->prop.global_mem_size > usize(8 * GBval * 1.1)) {
+        if (dev.prop.global_mem_size > usize(3 * GBval)) {
             USMPtrHolder<sham::device> ptr2G_dev
                 = USMPtrHolder<sham::device>::create(2 * GBval + 1024, dev_sched, 8);
             ptr2G_dev.free_ptr();
             USMPtrHolder<sham::host> ptr2G_host
                 = USMPtrHolder<sham::host>::create(2 * GBval + 1024, dev_sched, 8);
             ptr2G_host.free_ptr();
+
+            dev.prop.large_device_alloc = true;
+            dev.prop.large_host_alloc   = true;
         }
 
         logger::debug_ln("Backends", "[Alloc testing] done !");
