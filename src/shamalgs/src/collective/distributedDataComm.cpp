@@ -148,34 +148,32 @@ namespace shamalgs::collective {
         }
 
         if (comm_table2.messages_send.size() != data_send.size()) {
-            std::vector<size_t> tmp1 {};
-            for(size_t i = 0; i < data_send.size(); i++) {
+            std::vector<size_t> tmp1{};
+            for (size_t i = 0; i < data_send.size(); i++) {
                 tmp1.push_back(comm_table2.messages_send[i].message_size);
             }
 
-            std::vector<size_t> tmp2 {};
-            for(size_t i = 0; i < data_send.size(); i++) {
+            std::vector<size_t> tmp2{};
+            for (size_t i = 0; i < data_send.size(); i++) {
                 tmp2.push_back(data_send[i]->get_size());
             }
 
-            throw make_except_with_loc<std::runtime_error>(shambase::format(
-                "message send mismatch : {} != {}",
-                tmp1, tmp2));
+            throw make_except_with_loc<std::runtime_error>(
+                shambase::format("message send mismatch : {} != {}", tmp1, tmp2));
         }
 
         if (comm_table2.messages_send.size() != messages_send.size()) {
-            std::vector<size_t> tmp1 {};
-            for(size_t i = 0; i < comm_table2.messages_send.size(); i++) {
+            std::vector<size_t> tmp1{};
+            for (size_t i = 0; i < comm_table2.messages_send.size(); i++) {
                 tmp1.push_back(comm_table2.messages_send[i].message_size);
             }
 
-            std::vector<size_t> tmp2 {};
-            for(size_t i = 0; i < messages_send.size(); i++) {
+            std::vector<size_t> tmp2{};
+            for (size_t i = 0; i < messages_send.size(); i++) {
                 tmp2.push_back(messages_send[i].message_size);
             }
-            throw make_except_with_loc<std::runtime_error>(shambase::format(
-                "message send mismatch : {} != {}",
-                tmp1, tmp2));
+            throw make_except_with_loc<std::runtime_error>(
+                shambase::format("message send mismatch : {} != {}", tmp1, tmp2));
         }
 
         for (size_t i = 0; i < comm_table2.messages_send.size(); i++) {
