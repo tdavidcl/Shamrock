@@ -16,6 +16,7 @@
  */
 
 #include "shambase/string.hpp"
+#include "shamalgs/collective/distributedDataComm.hpp"
 #include "shamalgs/memory.hpp"
 #include "shambackends/comm/details/CommunicationBufferImpl.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
