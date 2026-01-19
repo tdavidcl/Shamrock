@@ -66,15 +66,28 @@ namespace shamalgs::collective {
             }
         }
 
-        inline void write_buf_at(size_t buf_id, size_t offset, const sham::DeviceBuffer<u8> &buf) {
+        inline void send_cache_write_buf_at(
+            size_t buf_id, size_t offset, const sham::DeviceBuffer<u8> &buf) {
             buf.copy_range_offset(
                 0, buf.get_size(), shambase::get_check_ref(cache1[buf_id]), offset);
         }
 
-        inline void read_buf_at(
+        inline void send_cache_read_buf_at(
             size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
             buf.resize(size);
             shambase::get_check_ref(cache1[buf_id]).copy_range(offset, offset + size, buf);
+        }
+
+        inline void recv_cache_write_buf_at(
+            size_t buf_id, size_t offset, const sham::DeviceBuffer<u8> &buf) {
+            buf.copy_range_offset(
+                0, buf.get_size(), shambase::get_check_ref(cache2[buf_id]), offset);
+        }
+
+        inline void recv_cache_read_buf_at(
+            size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
+            buf.resize(size);
+            shambase::get_check_ref(cache2[buf_id]).copy_range(offset, offset + size, buf);
         }
     };
 
@@ -105,19 +118,38 @@ namespace shamalgs::collective {
                 dev_sched, sizes_cache1, sizes_cache2);
         }
 
-        inline void write_buf_at(size_t buf_id, size_t offset, sham::DeviceBuffer<u8> &buf) {
+        inline void send_cache_write_buf_at(
+            size_t buf_id, size_t offset, sham::DeviceBuffer<u8> &buf) {
             std::visit(
                 [&](auto &cache) {
-                    cache.write_buf_at(buf_id, offset, buf);
+                    cache.send_cache_write_buf_at(buf_id, offset, buf);
                 },
                 cache);
         }
 
-        inline void read_buf_at(
+        inline void send_cache_read_buf_at(
             size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
             std::visit(
                 [&](auto &cache) {
-                    cache.read_buf_at(buf_id, offset, size, buf);
+                    cache.send_cache_read_buf_at(buf_id, offset, size, buf);
+                },
+                cache);
+        }
+
+        inline void recv_cache_write_buf_at(
+            size_t buf_id, size_t offset, sham::DeviceBuffer<u8> &buf) {
+            std::visit(
+                [&](auto &cache) {
+                    cache.recv_cache_write_buf_at(buf_id, offset, buf);
+                },
+                cache);
+        }
+
+        inline void recv_cache_read_buf_at(
+            size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
+            std::visit(
+                [&](auto &cache) {
+                    cache.recv_cache_read_buf_at(buf_id, offset, size, buf);
                 },
                 cache);
         }

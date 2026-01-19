@@ -147,6 +147,9 @@ namespace shamalgs::collective {
                 dev_sched, comm_table2.send_total_sizes, comm_table2.recv_total_sizes);
         }
 
+        SHAM_ASSERT(comm_table2.send_total_sizes.size() == data_send.size());
+        SHAM_ASSERT(comm_table2.send_total_sizes.size() == messages_send.size());
+
         for (size_t i = 0; i < comm_table2.messages_send.size(); i++) {
             auto &msg_info   = comm_table2.messages_send[i];
             auto offset_info = shambase::get_check_ref(msg_info.message_bytebuf_offset_send);
@@ -154,7 +157,18 @@ namespace shamalgs::collective {
 
             SHAM_ASSERT(buf_src.get_size() == msg_info.message_size);
 
-            cache.write_buf_at(offset_info.buf_id, offset_info.data_offset, buf_src);
+            cache.send_cache_write_buf_at(offset_info.buf_id, offset_info.data_offset, buf_src);
+            // logger::info_ln(
+            //     "distributed data sparse comm",
+            //     "rank :",
+            //     shamcomm::world_rank(),
+            //     "sender :", msg_info.rank_sender,
+            //     "receiver :", msg_info.rank_receiver,
+            //     "write buf at :",
+            //     offset_info.buf_id,
+            //     "offset :",
+            //     offset_info.data_offset,
+            //     "size :", buf_src.get_size());
         }
 
         if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
@@ -229,7 +243,17 @@ namespace shamalgs::collective {
             auto offset_info = shambase::get_check_ref(msg.message_bytebuf_offset_recv);
 
             sham::DeviceBuffer<u8> recov(size, dev_sched);
-            cache.read_buf_at(offset_info.buf_id, offset_info.data_offset, size, recov);
+            cache.recv_cache_read_buf_at(offset_info.buf_id, offset_info.data_offset, size, recov);
+
+            // logger::info_ln(
+            //     "distributed data sparse comm",
+            //     "rank :",
+            //     shamcomm::world_rank(),
+            //     "sender :", sender,
+            //     "receiver :", receiver,
+            //     "read buf at :",
+            //     offset_info.buf_id,
+            //     "offset :", offset_info.data_offset, "size :", size);
 
             recv_payload_bufs.push_back(
                 RecvPayloadSer{sender, SerializeHelper(dev_sched, std::move(recov))});
@@ -248,12 +272,24 @@ namespace shamalgs::collective {
                     recv.ser.load(receiver);
                     recv.ser.load(length);
 
+                    // logger::info_ln(
+                    //     "distributed data sparse comm",
+                    //     "rank :",
+                    //     shamcomm::world_rank(),
+                    //     "load obj :",
+                    //     sender,
+                    //     "->",
+                    //     receiver,
+                    //     "size :", length);
+
                     { // check correctness ranks
                         i32 supposed_sender_rank = rank_getter(sender);
                         i32 real_sender_rank     = recv.sender_ranks;
                         if (supposed_sender_rank != real_sender_rank) {
-                            throw make_except_with_loc<std::runtime_error>(
-                                "the rank do not matches");
+                            throw make_except_with_loc<std::runtime_error>(shambase::format(
+                                "the rank do not matches {} != {}",
+                                supposed_sender_rank,
+                                real_sender_rank));
                         }
                     }
 

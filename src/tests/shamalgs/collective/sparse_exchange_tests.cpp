@@ -84,6 +84,7 @@ void test_sparse_exchange(std::vector<TestElement> test_elements, size_t max_all
                 }
 
                 total_send_sizes.at(send_buf_id) += test_elements[i].size;
+                send_offset += test_elements[i].size;
             }
             if (test_elements[i].receiver == shamcomm::world_rank()) {
                 if (recv_offset + test_elements[i].size > max_alloc_size) {
@@ -93,6 +94,7 @@ void test_sparse_exchange(std::vector<TestElement> test_elements, size_t max_all
                 }
 
                 total_recv_sizes.at(recv_buf_id) += test_elements[i].size;
+                recv_offset += test_elements[i].size;
             }
         }
     }
