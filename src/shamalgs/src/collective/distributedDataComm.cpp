@@ -147,14 +147,18 @@ namespace shamalgs::collective {
                 dev_sched, comm_table2.send_total_sizes, comm_table2.recv_total_sizes);
         }
 
-        if(comm_table2.send_total_sizes.size() != data_send.size()) {
+        if (comm_table2.send_total_sizes.size() != data_send.size()) {
             throw make_except_with_loc<std::runtime_error>(shambase::format(
-                "send total sizes size : {} != data send size : {}", comm_table2.send_total_sizes.size(), data_send.size()));
+                "send total sizes size : {} != data send size : {}",
+                comm_table2.send_total_sizes.size(),
+                data_send.size()));
         }
 
-        if(comm_table2.send_total_sizes.size() != messages_send.size()) {
+        if (comm_table2.send_total_sizes.size() != messages_send.size()) {
             throw make_except_with_loc<std::runtime_error>(shambase::format(
-                "send total sizes size : {} != messages send size : {}", comm_table2.send_total_sizes.size(), messages_send.size()));
+                "send total sizes size : {} != messages send size : {}",
+                comm_table2.send_total_sizes.size(),
+                messages_send.size()));
         }
 
         for (size_t i = 0; i < comm_table2.messages_send.size(); i++) {

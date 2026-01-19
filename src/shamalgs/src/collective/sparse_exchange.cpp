@@ -151,7 +151,7 @@ namespace shamalgs::collective {
                                 max_alloc_size));
                     }
 
-                    if(send_buf_sizes.size() == 0){
+                    if (send_buf_sizes.size() == 0) {
                         send_buf_sizes.push_back(0);
                     }
 
@@ -178,8 +178,8 @@ namespace shamalgs::collective {
                                 message_info.message_size,
                                 max_alloc_size));
                     }
-                    
-                    if(recv_buf_sizes.size() == 0){
+
+                    if (recv_buf_sizes.size() == 0) {
                         recv_buf_sizes.push_back(0);
                     }
 
