@@ -53,7 +53,8 @@ namespace shamalgs::collective {
             std::nullopt};
     };
 
-    CommTable build_sparse_exchange_table(const std::vector<CommMessageInfo> &messages_send) {
+    CommTable build_sparse_exchange_table(
+        const std::vector<CommMessageInfo> &messages_send, size_t max_alloc_size) {
         __shamrock_stack_entry();
 
         ////////////////////////////////////////////////////////////
@@ -89,38 +90,67 @@ namespace shamalgs::collective {
         std::vector<CommMessageInfo> message_all(global_data.size());
 
         std::vector<i32> tag_map(shamcomm::world_size(), 0);
+        std::vector<size_t> send_buf_sizes{0};
+        std::vector<size_t> recv_buf_sizes{0};
 
         u32 send_idx = 0;
         u32 recv_idx = 0;
+        {
+            size_t tmp_recv_offset = 0;
+            size_t tmp_send_offset = 0;
+            size_t send_buf_id     = 0;
+            size_t recv_buf_id     = 0;
+            for (u64 i = 0; i < global_data.size(); i++) {
+                auto message_info = unpack(global_data[i]);
 
-        size_t recv_offset = 0;
-        size_t send_offset = 0;
-        for (u64 i = 0; i < global_data.size(); i++) {
-            auto message_info = unpack(global_data[i]);
+                auto sender   = message_info.rank_sender;
+                auto receiver = message_info.rank_receiver;
 
-            auto sender   = message_info.rank_sender;
-            auto receiver = message_info.rank_receiver;
+                // tagging logic
+                i32 &tag_map_ref = tag_map[static_cast<size_t>(sender)];
+                i32 tag          = tag_map_ref;
+                tag_map_ref++;
 
-            i32 &tag_map_ref = tag_map[static_cast<size_t>(sender)];
+                message_info.message_tag = tag;
 
-            i32 tag = tag_map_ref;
-            tag_map_ref++;
+                // offset logic (& buffer selection)
+                if (sender == shamcomm::world_rank()) {
+                    if (message_info.message_size > max_alloc_size) {
+                        throw ""; // TODO
+                    }
 
-            message_info.message_tag = tag;
+                    if (tmp_send_offset + message_info.message_size > max_alloc_size) {
+                        send_buf_id++;
+                        tmp_send_offset = 0;
+                    }
 
-            if (sender == shamcomm::world_rank()) {
-                message_info.message_bytebuf_offset_send = send_offset;
-                send_offset += message_info.message_size;
-                send_idx++;
+                    message_info.message_bytebuf_offset_send = {send_buf_id, tmp_send_offset};
+                    tmp_send_offset += message_info.message_size;
+                    send_buf_sizes.at(send_buf_id) += message_info.message_size;
+
+                    send_idx++;
+                }
+
+                if (receiver == shamcomm::world_rank()) {
+
+                    if (message_info.message_size > max_alloc_size) {
+                        throw ""; // TODO
+                    }
+
+                    if (tmp_recv_offset + message_info.message_size > max_alloc_size) {
+                        recv_buf_id++;
+                        tmp_recv_offset = 0;
+                    }
+
+                    message_info.message_bytebuf_offset_recv = {recv_buf_id, tmp_recv_offset};
+                    tmp_recv_offset += message_info.message_size;
+                    recv_buf_sizes.at(recv_buf_id) += message_info.message_size;
+
+                    recv_idx++;
+                }
+
+                message_all[i] = message_info;
             }
-
-            if (receiver == shamcomm::world_rank()) {
-                message_info.message_bytebuf_offset_recv = recv_offset;
-                recv_offset += message_info.message_size;
-                recv_idx++;
-            }
-
-            message_all[i] = message_info;
         }
 
         ////////////////////////////////////////////////////////////
@@ -144,13 +174,18 @@ namespace shamalgs::collective {
                 auto expected_offset = shambase::get_check_ref(
                     messages_send.at(send_idx).message_bytebuf_offset_send);
 
+                auto actual_offset
+                    = shambase::get_check_ref(message_info.message_bytebuf_offset_send);
+
                 // check that the send offset match for good measure
-                if (message_info.message_bytebuf_offset_send != expected_offset) {
+                if (actual_offset != expected_offset) {
                     throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                         "The sender has not set the offset for all messages, otherwise throw\n"
-                        "    expected_offset = {}, actual_offset = {}",
-                        expected_offset,
-                        message_info.message_bytebuf_offset_send.value()));
+                        "    expected_offset = ({}, {}), actual_offset = ({}, {})",
+                        expected_offset.buf_id,
+                        expected_offset.data_offset,
+                        actual_offset.buf_id,
+                        actual_offset.data_offset));
                 }
 
                 ret_message_send[send_idx]        = message_info;
@@ -170,14 +205,14 @@ namespace shamalgs::collective {
             ret_message_recv,
             send_message_global_ids,
             recv_message_global_ids,
-            send_offset,
-            recv_offset};
+            send_buf_sizes,
+            recv_buf_sizes};
     }
 
     void sparse_exchange(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        const u8 *bytebuffer_send,
-        u8 *bytebuffer_recv,
+        const std::vector<const u8 *> &bytebuffer_send,
+        const std::vector<u8 *> &bytebuffer_recv,
         const CommTable &comm_table) {
 
         __shamrock_stack_entry();
@@ -190,10 +225,11 @@ namespace shamalgs::collective {
             auto message_info = comm_table.message_all[i];
 
             if (message_info.rank_sender == shamcomm::world_rank()) {
-                auto &rq = rqs.new_request();
+                auto off_info = shambase::get_check_ref(message_info.message_bytebuf_offset_send);
+                auto ptr      = bytebuffer_send.at(off_info.buf_id) + off_info.data_offset;
+                auto &rq      = rqs.new_request();
                 shamcomm::mpi::Isend(
-                    bytebuffer_send
-                        + shambase::get_check_ref(message_info.message_bytebuf_offset_send),
+                    ptr,
                     shambase::narrow_or_throw<i32>(message_info.message_size),
                     MPI_BYTE,
                     message_info.rank_receiver,
@@ -203,10 +239,11 @@ namespace shamalgs::collective {
             }
 
             if (message_info.rank_receiver == shamcomm::world_rank()) {
-                auto &rq = rqs.new_request();
+                auto off_info = shambase::get_check_ref(message_info.message_bytebuf_offset_recv);
+                auto ptr      = bytebuffer_recv.at(off_info.buf_id) + off_info.data_offset;
+                auto &rq      = rqs.new_request();
                 shamcomm::mpi::Irecv(
-                    bytebuffer_recv
-                        + shambase::get_check_ref(message_info.message_bytebuf_offset_recv),
+                    ptr,
                     shambase::narrow_or_throw<i32>(message_info.message_size),
                     MPI_BYTE,
                     message_info.rank_sender,
@@ -223,8 +260,8 @@ namespace shamalgs::collective {
     template<sham::USMKindTarget target>
     void sparse_exchange(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        sham::DeviceBuffer<u8, target> &bytebuffer_send,
-        sham::DeviceBuffer<u8, target> &bytebuffer_recv,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> &bytebuffer_send,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> &bytebuffer_recv,
         const CommTable &comm_table) {
 
         __shamrock_stack_entry();
@@ -235,52 +272,90 @@ namespace shamalgs::collective {
                 "distinct.");
         }
 
-        if (comm_table.send_total_size > bytebuffer_send.get_size()) {
+        if (comm_table.send_total_sizes.size() != bytebuffer_send.size()) {
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                 "The send total size is greater than the send buffer size\n"
-                "    send_total_size = {}, send_buffer_size = {}",
-                comm_table.send_total_size,
-                bytebuffer_send.get_size()));
+                "    send_total_sizes = {}, send_buffer_size = {}",
+                comm_table.send_total_sizes.size(),
+                bytebuffer_send.size()));
         }
 
-        if (comm_table.recv_total_size > bytebuffer_recv.get_size()) {
+        if (comm_table.recv_total_sizes.size() != bytebuffer_recv.size()) {
             throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
                 "The recv total size is greater than the recv buffer size\n"
-                "    recv_total_size = {}, recv_buffer_size = {}",
-                comm_table.recv_total_size,
-                bytebuffer_recv.get_size()));
+                "    recv_total_sizes = {}, recv_buffer_size = {}",
+                comm_table.recv_total_sizes.size(),
+                bytebuffer_recv.size()));
+        }
+
+        for (size_t i = 0; i < comm_table.send_total_sizes.size(); i++) {
+            if (comm_table.send_total_sizes[i] > bytebuffer_send[i]->get_size()) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                    "The send total size is greater than the send buffer size\n"
+                    "    send_total_sizes = {}, send_buffer_size = {}, buf_id = {}",
+                    comm_table.send_total_sizes[i],
+                    bytebuffer_send[i]->get_size(),
+                    i));
+            }
+        }
+
+        for (size_t i = 0; i < comm_table.recv_total_sizes.size(); i++) {
+            if (comm_table.recv_total_sizes[i] > bytebuffer_recv[i]->get_size()) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                    "The recv total size is greater than the recv buffer size\n"
+                    "    recv_total_sizes = {}, recv_buffer_size = {}, buf_id = {}",
+                    comm_table.recv_total_sizes[i],
+                    bytebuffer_recv[i]->get_size(),
+                    i));
+            }
         }
 
         bool direct_gpu_capable = dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable;
 
         if (!direct_gpu_capable && target == sham::device) {
             throw shambase::make_except_with_loc<std::invalid_argument>(
-                "You are trying to use a device buffer on the device but the device is not direct "
+                "You are trying to use a device buffer on the device but the device is not "
+                "direct "
                 "GPU capable");
         }
 
+        std::vector<const u8 *> send_ptrs(bytebuffer_send.size());
+        std::vector<u8 *> recv_ptrs(bytebuffer_recv.size());
+
         sham::EventList depends_list;
-        const u8 *send_ptr = bytebuffer_send.get_read_access(depends_list);
-        u8 *recv_ptr       = bytebuffer_recv.get_write_access(depends_list);
+        for (size_t i = 0; i < bytebuffer_send.size(); i++) {
+            send_ptrs[i]
+                = shambase::get_check_ref(bytebuffer_send[i]).get_read_access(depends_list);
+        }
+
+        for (size_t i = 0; i < bytebuffer_recv.size(); i++) {
+            recv_ptrs[i]
+                = shambase::get_check_ref(bytebuffer_recv[i]).get_write_access(depends_list);
+        }
         depends_list.wait();
 
-        sparse_exchange(dev_sched, send_ptr, recv_ptr, comm_table);
+        sparse_exchange(dev_sched, send_ptrs, recv_ptrs, comm_table);
 
-        bytebuffer_send.complete_event_state(sycl::event{});
-        bytebuffer_recv.complete_event_state(sycl::event{});
+        for (size_t i = 0; i < bytebuffer_send.size(); i++) {
+            shambase::get_check_ref(bytebuffer_send[i]).complete_event_state(sycl::event{});
+        }
+
+        for (size_t i = 0; i < bytebuffer_recv.size(); i++) {
+            shambase::get_check_ref(bytebuffer_recv[i]).complete_event_state(sycl::event{});
+        }
     }
 
     // template instantiations
     template void sparse_exchange<sham::device>(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        sham::DeviceBuffer<u8, sham::device> &bytebuffer_send,
-        sham::DeviceBuffer<u8, sham::device> &bytebuffer_recv,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, sham::device>>> &bytebuffer_send,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, sham::device>>> &bytebuffer_recv,
         const CommTable &comm_table);
 
     template void sparse_exchange<sham::host>(
         std::shared_ptr<sham::DeviceScheduler> dev_sched,
-        sham::DeviceBuffer<u8, sham::host> &bytebuffer_send,
-        sham::DeviceBuffer<u8, sham::host> &bytebuffer_recv,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, sham::host>>> &bytebuffer_send,
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, sham::host>>> &bytebuffer_recv,
         const CommTable &comm_table);
 
 } // namespace shamalgs::collective
