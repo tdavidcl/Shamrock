@@ -108,10 +108,9 @@ namespace shamalgs::collective {
             }
         }
 
-        sham::DeviceBuffer<u8> send_buf(0, dev_sched);
         std::vector<shamalgs::collective::CommMessageInfo> messages_send;
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8>>> data_send;
 
-        size_t sender_offset = 0;
         for (auto &[key, buf] : send_bufs) {
 
             auto [sender, receiver] = key;
@@ -123,61 +122,53 @@ namespace shamalgs::collective {
                     sender,
                     receiver,
                     std::nullopt,
-                    sender_offset,
+                    std::nullopt,
                     std::nullopt,
                 });
 
-            send_buf.append(*buf);
-            sender_offset += size;
+            data_send.push_back(std::move(buf));
+        }
+
+        size_t max_alloc_size;
+        if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
+            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_dev;
+        } else {
+            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_host;
         }
 
         shamalgs::collective::CommTable comm_table2
-            = shamalgs::collective::build_sparse_exchange_table(messages_send);
+            = shamalgs::collective::build_sparse_exchange_table(messages_send, max_alloc_size);
 
-        sham::DeviceBuffer<u8> recv_buf(comm_table2.recv_total_size, dev_sched);
+        if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
+            cache.set_sizes<sham::device>(
+                dev_sched, comm_table2.send_total_sizes, comm_table2.recv_total_sizes);
+        } else {
+            cache.set_sizes<sham::host>(
+                dev_sched, comm_table2.send_total_sizes, comm_table2.recv_total_sizes);
+        }
+
+        for (size_t i = 0; i < comm_table2.messages_send.size(); i++) {
+            auto &msg_info   = comm_table2.messages_send[i];
+            auto offset_info = shambase::get_check_ref(msg_info.message_bytebuf_offset_send);
+            auto &buf_src    = shambase::get_check_ref(data_send.at(i));
+
+            SHAM_ASSERT(buf_src.get_size() == msg_info.message_size);
+
+            cache.write_buf_at(offset_info.buf_id, offset_info.data_offset, buf_src);
+        }
 
         if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
             shamalgs::collective::sparse_exchange<sham::device>(
-                dev_sched, send_buf, recv_buf, comm_table2);
+                dev_sched,
+                cache.get_cache1<sham::device>(),
+                cache.get_cache2<sham::device>(),
+                comm_table2);
         } else {
-            if (!cache.cache1) {
-                // logger::info_ln("ddcomm", "alloc cache1", shambase::fmt_callstack());
-                cache.cache1 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
-                    send_buf.get_size(), dev_sched);
-            } else {
-                // logger::info_ln(
-                //     "ddcomm",
-                //     shambase::format(
-                //     "resize cache1 from {} to {} (cache1 ptr = {})",
-                //     cache.cache1->get_size(),
-                //     send_buf.get_size(),
-                //     static_cast<void*>(cache.cache1.get())),
-                //     shambase::fmt_callstack());
-                cache.cache1->resize(send_buf.get_size());
-            }
-            cache.cache1->copy_from(send_buf);
-            sham::DeviceBuffer<u8, sham::host> &send_buf_host = *cache.cache1;
-
-            if (!cache.cache2) {
-                // logger::info_ln("ddcomm", "alloc cache2", shambase::fmt_callstack());
-                cache.cache2 = std::make_unique<sham::DeviceBuffer<u8, sham::host>>(
-                    comm_table2.recv_total_size, dev_sched);
-            } else {
-                // logger::info_ln(
-                //     "ddcomm",
-                //     shambase::format(
-                //     "resize cache2 from {} to {} (cache2 ptr = {})",
-                //     cache.cache2->get_size(),
-                //     comm_table2.recv_total_size,
-                //     static_cast<void*>(cache.cache2.get())),
-                //     shambase::fmt_callstack());
-                cache.cache2->resize(comm_table2.recv_total_size);
-            }
-            sham::DeviceBuffer<u8, sham::host> &recv_buf_host = *cache.cache2;
-
             shamalgs::collective::sparse_exchange<sham::host>(
-                dev_sched, send_buf_host, recv_buf_host, comm_table2);
-            recv_buf.copy_from(recv_buf_host);
+                dev_sched,
+                cache.get_cache1<sham::host>(),
+                cache.get_cache2<sham::host>(),
+                comm_table2);
         }
 
 #ifdef false
@@ -234,12 +225,12 @@ namespace shamalgs::collective {
             u64 size     = msg.message_size;
             i32 sender   = msg.rank_sender;
             i32 receiver = msg.rank_receiver;
-            size_t begin = shambase::get_check_ref(msg.message_bytebuf_offset_recv);
-            size_t end   = begin + size;
+
+            auto offset_info = shambase::get_check_ref(msg.message_bytebuf_offset_recv);
 
             sham::DeviceBuffer<u8> recov(size, dev_sched);
+            cache.read_buf_at(offset_info.buf_id, offset_info.data_offset, size, recov);
 
-            recv_buf.copy_range(begin, end, recov);
             recv_payload_bufs.push_back(
                 RecvPayloadSer{sender, SerializeHelper(dev_sched, std::move(recov))});
         }

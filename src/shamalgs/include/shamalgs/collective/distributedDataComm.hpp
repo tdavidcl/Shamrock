@@ -34,9 +34,94 @@ namespace shamalgs::collective {
 
     using SerializedDDataComm = shambase::DistributedDataShared<sham::DeviceBuffer<u8>>;
 
+    template<sham::USMKindTarget target>
+    struct DDSCommCacheTarget {
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> cache1;
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> cache2;
+
+        void set_sizes(
+            sham::DeviceScheduler_ptr dev_sched,
+            std::vector<size_t> sizes_cache1,
+            std::vector<size_t> sizes_cache2) {
+            // ensure correct length
+            cache1.resize(sizes_cache1.size());
+            cache2.resize(sizes_cache2.size());
+
+            // if size is different, resize
+            for (size_t i = 0; i < sizes_cache1.size(); i++) {
+                if (cache1[i]) {
+                    cache1[i]->resize(sizes_cache1[i]);
+                } else {
+                    cache1[i] = std::make_unique<sham::DeviceBuffer<u8, target>>(
+                        sizes_cache1[i], dev_sched);
+                }
+            }
+            for (size_t i = 0; i < sizes_cache2.size(); i++) {
+                if (cache2[i]) {
+                    cache2[i]->resize(sizes_cache2[i]);
+                } else {
+                    cache2[i] = std::make_unique<sham::DeviceBuffer<u8, target>>(
+                        sizes_cache2[i], dev_sched);
+                }
+            }
+        }
+
+        inline void write_buf_at(size_t buf_id, size_t offset, const sham::DeviceBuffer<u8> &buf) {
+            buf.copy_range_offset(
+                0, buf.get_size(), shambase::get_check_ref(cache1[buf_id]), offset);
+        }
+
+        inline void read_buf_at(
+            size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
+            buf.resize(size);
+            shambase::get_check_ref(cache1[buf_id])
+                .copy_range(offset, offset + size, buf);
+        }
+    };
+
     struct DDSCommCache {
-        std::unique_ptr<sham::DeviceBuffer<u8, sham::host>> cache1;
-        std::unique_ptr<sham::DeviceBuffer<u8, sham::host>> cache2;
+        std::variant<DDSCommCacheTarget<sham::device>, DDSCommCacheTarget<sham::host>> cache;
+
+        template<sham::USMKindTarget target>
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> & get_cache1() {
+            return shambase::get_check_ref(std::get_if<DDSCommCacheTarget<target>>(&cache)).cache1;
+        }
+
+        template<sham::USMKindTarget target>
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> & get_cache2() {
+            return shambase::get_check_ref(std::get_if<DDSCommCacheTarget<target>>(&cache)).cache2;
+            }
+
+        template<sham::USMKindTarget target>
+        void set_sizes(
+            sham::DeviceScheduler_ptr dev_sched,
+            std::vector<size_t> sizes_cache1,
+            std::vector<size_t> sizes_cache2) {
+            // init if not there
+            if (std::get_if<DDSCommCacheTarget<target>>(&cache) == nullptr) {
+                cache = DDSCommCacheTarget<target>{};
+            }
+
+            std::get<DDSCommCacheTarget<target>>(cache).set_sizes(
+                dev_sched, sizes_cache1, sizes_cache2);
+        }
+
+        inline void write_buf_at(size_t buf_id, size_t offset, sham::DeviceBuffer<u8> &buf) {
+            std::visit(
+                [&](auto &cache) {
+                    cache.write_buf_at(buf_id, offset, buf);
+                },
+                cache);
+        }
+
+        inline void read_buf_at(
+            size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
+            std::visit(
+                [&](auto &cache) {
+                    cache.read_buf_at(buf_id, offset, size, buf);
+                },
+                cache);
+        }
     };
 
     void distributed_data_sparse_comm(
