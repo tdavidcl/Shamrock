@@ -22,11 +22,11 @@
 #include "shamalgs/collective/RequestList.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shambackends/USMPtrHolder.hpp"
+#include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shambackends/math.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include <stdexcept>
-
 namespace shamalgs::collective {
 
     CommMessageInfo unpack(u64_2 comm_info) {
@@ -53,13 +53,9 @@ namespace shamalgs::collective {
             std::nullopt};
     };
 
-    CommTable build_sparse_exchange_table(
-        const std::vector<CommMessageInfo> &messages_send, size_t max_alloc_size) {
-        __shamrock_stack_entry();
-
-        ////////////////////////////////////////////////////////////
-        // Pack the local data then allgatherv to get the global data
-        ////////////////////////////////////////////////////////////
+    /// fetch u64_2 from global message data
+    std::vector<u64_2> fetch_global_message_data(
+        const std::vector<CommMessageInfo> &messages_send) {
 
         std::vector<u64_2> local_data = std::vector<u64_2>(messages_send.size());
 
@@ -83,13 +79,51 @@ namespace shamalgs::collective {
         std::vector<u64_2> global_data;
         vector_allgatherv(local_data, global_data, MPI_COMM_WORLD);
 
-        ////////////////////////////////////////////////////////////
-        // Unpack the global data and build the global message list
-        ////////////////////////////////////////////////////////////
+        return global_data; // there should be return value optimisation here
+    }
 
+    /// decode message to get message
+    std::vector<CommMessageInfo> decode_all_message(const std::vector<u64_2> &global_data) {
         std::vector<CommMessageInfo> message_all(global_data.size());
+        for (u64 i = 0; i < global_data.size(); i++) {
+            message_all[i] = unpack(global_data[i]);
+        }
+
+        return message_all;
+    }
+
+    /// compute message tags
+    void compute_tags(std::vector<CommMessageInfo> &message_all) {
 
         std::vector<i32> tag_map(shamcomm::world_size(), 0);
+
+        for (u64 i = 0; i < message_all.size(); i++) {
+            auto &message_info = message_all[i];
+            auto sender        = message_info.rank_sender;
+
+            // tagging logic
+            i32 &tag_map_ref = tag_map[static_cast<size_t>(sender)];
+            i32 tag          = tag_map_ref;
+            tag_map_ref++;
+
+            message_info.message_tag = tag;
+        }
+    }
+
+    CommTable build_sparse_exchange_table(
+        const std::vector<CommMessageInfo> &messages_send, size_t max_alloc_size) {
+        __shamrock_stack_entry();
+
+        std::vector<u64_2> global_data = fetch_global_message_data(messages_send);
+
+        std::vector<CommMessageInfo> message_all = decode_all_message(global_data);
+
+        compute_tags(message_all);
+
+        ////////////////////////////////////////////////////////////
+        // Compute offsets
+        ////////////////////////////////////////////////////////////
+
         std::vector<size_t> send_buf_sizes{0};
         std::vector<size_t> recv_buf_sizes{0};
 
@@ -100,28 +134,27 @@ namespace shamalgs::collective {
             size_t tmp_send_offset = 0;
             size_t send_buf_id     = 0;
             size_t recv_buf_id     = 0;
-            for (u64 i = 0; i < global_data.size(); i++) {
-                auto message_info = unpack(global_data[i]);
+            for (u64 i = 0; i < message_all.size(); i++) {
+                auto &message_info = message_all[i];
 
                 auto sender   = message_info.rank_sender;
                 auto receiver = message_info.rank_receiver;
 
-                // tagging logic
-                i32 &tag_map_ref = tag_map[static_cast<size_t>(sender)];
-                i32 tag          = tag_map_ref;
-                tag_map_ref++;
-
-                message_info.message_tag = tag;
-
                 // offset logic (& buffer selection)
                 if (sender == shamcomm::world_rank()) {
                     if (message_info.message_size > max_alloc_size) {
-                        throw ""; // TODO
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            shambase::format(
+                                "Message size is greater than the max alloc size\n"
+                                "    message_size = {}, max_alloc_size = {}",
+                                message_info.message_size,
+                                max_alloc_size));
                     }
 
                     if (tmp_send_offset + message_info.message_size > max_alloc_size) {
                         send_buf_id++;
                         tmp_send_offset = 0;
+                        send_buf_sizes.push_back(0);
                     }
 
                     message_info.message_bytebuf_offset_send = {send_buf_id, tmp_send_offset};
@@ -134,12 +167,18 @@ namespace shamalgs::collective {
                 if (receiver == shamcomm::world_rank()) {
 
                     if (message_info.message_size > max_alloc_size) {
-                        throw ""; // TODO
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            shambase::format(
+                                "Message size is greater than the max alloc size\n"
+                                "    message_size = {}, max_alloc_size = {}",
+                                message_info.message_size,
+                                max_alloc_size));
                     }
 
                     if (tmp_recv_offset + message_info.message_size > max_alloc_size) {
                         recv_buf_id++;
                         tmp_recv_offset = 0;
+                        recv_buf_sizes.push_back(0);
                     }
 
                     message_info.message_bytebuf_offset_recv = {recv_buf_id, tmp_recv_offset};
@@ -169,25 +208,6 @@ namespace shamalgs::collective {
         for (size_t i = 0; i < message_all.size(); i++) {
             auto message_info = message_all[i];
             if (message_info.rank_sender == shamcomm::world_rank()) {
-
-                // the sender should have set the offset for all messages, otherwise throw
-                auto expected_offset = shambase::get_check_ref(
-                    messages_send.at(send_idx).message_bytebuf_offset_send);
-
-                auto actual_offset
-                    = shambase::get_check_ref(message_info.message_bytebuf_offset_send);
-
-                // check that the send offset match for good measure
-                if (actual_offset != expected_offset) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
-                        "The sender has not set the offset for all messages, otherwise throw\n"
-                        "    expected_offset = ({}, {}), actual_offset = ({}, {})",
-                        expected_offset.buf_id,
-                        expected_offset.data_offset,
-                        actual_offset.buf_id,
-                        actual_offset.data_offset));
-                }
-
                 ret_message_send[send_idx]        = message_info;
                 send_message_global_ids[send_idx] = i;
                 send_idx++;
