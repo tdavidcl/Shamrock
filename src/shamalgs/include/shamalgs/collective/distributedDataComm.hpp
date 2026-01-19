@@ -74,8 +74,7 @@ namespace shamalgs::collective {
         inline void read_buf_at(
             size_t buf_id, size_t offset, size_t size, sham::DeviceBuffer<u8> &buf) {
             buf.resize(size);
-            shambase::get_check_ref(cache1[buf_id])
-                .copy_range(offset, offset + size, buf);
+            shambase::get_check_ref(cache1[buf_id]).copy_range(offset, offset + size, buf);
         }
     };
 
@@ -83,14 +82,14 @@ namespace shamalgs::collective {
         std::variant<DDSCommCacheTarget<sham::device>, DDSCommCacheTarget<sham::host>> cache;
 
         template<sham::USMKindTarget target>
-        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> & get_cache1() {
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> &get_cache1() {
             return shambase::get_check_ref(std::get_if<DDSCommCacheTarget<target>>(&cache)).cache1;
         }
 
         template<sham::USMKindTarget target>
-        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> & get_cache2() {
+        std::vector<std::unique_ptr<sham::DeviceBuffer<u8, target>>> &get_cache2() {
             return shambase::get_check_ref(std::get_if<DDSCommCacheTarget<target>>(&cache)).cache2;
-            }
+        }
 
         template<sham::USMKindTarget target>
         void set_sizes(
