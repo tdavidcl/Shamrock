@@ -224,7 +224,7 @@ namespace shamalgs::collective {
                 dev_sched, send_distrib_data, recv_distrib_data, rank_getter, comm_table);
         }
 
-        StackEntry stack_loc{};
+        __shamrock_stack_entry();
 
         using namespace shambase;
         using DataTmp = details::DataTmp;
@@ -277,6 +277,7 @@ namespace shamalgs::collective {
         } else {
             max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_host;
         }
+        max_alloc_size *= 0.95; // keep 5% of the max alloc size for safety
 
         shamalgs::collective::CommTable comm_table2
             = shamalgs::collective::build_sparse_exchange_table(messages_send, max_alloc_size);

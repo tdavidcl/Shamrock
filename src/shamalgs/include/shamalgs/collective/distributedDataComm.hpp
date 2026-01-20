@@ -43,6 +43,9 @@ namespace shamalgs::collective {
             sham::DeviceScheduler_ptr dev_sched,
             std::vector<size_t> sizes_cache1,
             std::vector<size_t> sizes_cache2) {
+
+            __shamrock_stack_entry();
+
             // ensure correct length
             cache1.resize(sizes_cache1.size());
             cache2.resize(sizes_cache2.size());
@@ -109,6 +112,9 @@ namespace shamalgs::collective {
             sham::DeviceScheduler_ptr dev_sched,
             std::vector<size_t> sizes_cache1,
             std::vector<size_t> sizes_cache2) {
+
+            __shamrock_stack_entry();
+
             // init if not there
             if (std::get_if<DDSCommCacheTarget<target>>(&cache) == nullptr) {
                 cache = DDSCommCacheTarget<target>{};
