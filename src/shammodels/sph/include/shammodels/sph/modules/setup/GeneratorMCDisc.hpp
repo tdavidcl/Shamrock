@@ -56,7 +56,7 @@ namespace shammodels::sph::modules {
             std::function<Tscal(Tscal)> H_profile,
             std::function<Tscal(Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
-            std::mt19937 eng) {
+            std::mt19937_64 eng) {
             return DiscIterator(
                 part_mass,
                 disc_mass,
@@ -81,7 +81,7 @@ namespace shammodels::sph::modules {
             std::function<Tscal(Tscal)> H_profile,
             std::function<Tscal(Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
-            std::mt19937 eng,
+            std::mt19937_64 eng,
             Tscal init_h_factor)
             : context(context), solver_config(solver_config), generator(make_generator(
                                                                   part_mass,
@@ -122,7 +122,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
     std::function<Tscal(Tscal)> rot_profile;
     std::function<Tscal(Tscal)> cs_profile;
 
-    std::mt19937 eng;
+    std::mt19937_64 eng;
 
     static constexpr Tscal _2pi = 2 * shambase::constants::pi<Tscal>;
 
@@ -138,7 +138,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
         std::function<Tscal(Tscal)> H_profile,
         std::function<Tscal(Tscal)> rot_profile,
         std::function<Tscal(Tscal)> cs_profile,
-        std::mt19937 eng)
+        std::mt19937_64 eng)
         : part_mass(part_mass), disc_mass(disc_mass), Npart(disc_mass / part_mass), r_in(r_in),
           r_out(r_out), sigma_profile(sigma_profile), H_profile(H_profile),
           rot_profile(rot_profile), cs_profile(cs_profile), eng(eng), current_index(0) {
