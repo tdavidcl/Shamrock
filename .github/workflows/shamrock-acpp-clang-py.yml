@@ -12,7 +12,7 @@ jobs:
 
   shamrock_acpp:
     name: AdaptiveCpp clang-${{ matrix.clang }} ${{ matrix.backend }}:${{matrix.arch}} ${{matrix.label}} (pylib)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted,  docker-runner]
 
     container:
       image: ${{ matrix.container }}
