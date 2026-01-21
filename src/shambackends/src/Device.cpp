@@ -110,19 +110,17 @@ namespace sham {
         }                                                                                          \
     }();
 
-        /// Fetches a property of a SYCL device (for cases where multiple prop would have the same name)
-#define FETCH_PROPN_FULL(info_, info_type, n)                                                           \
-std::optional<info_type> n = [&]() -> std::optional<info_type> {                               \
-    try {                                                                                      \
-        return {dev.get_info<info_>()};                                    \
-    } catch (...) {                                                                            \
-        logger::warn_ln(                                                                       \
-            "Device",                                                                          \
-            "dev.get_info<" #info_ ">() raised an exception for device",   \
-            name);                                                                             \
-        return {};                                                                             \
-    }                                                                                          \
-}();
+    /// Fetches a property of a SYCL device (for cases where multiple prop would have the same name)
+#define FETCH_PROPN_FULL(info_, info_type, n)                                                      \
+    std::optional<info_type> n = [&]() -> std::optional<info_type> {                               \
+        try {                                                                                      \
+            return {dev.get_info<info_>()};                                                        \
+        } catch (...) {                                                                            \
+            logger::warn_ln(                                                                       \
+                "Device", "dev.get_info<" #info_ ">() raised an exception for device", name);      \
+            return {};                                                                             \
+        }                                                                                          \
+    }();
 
     /**
      * @brief Fetches the properties of a SYCL device.
@@ -287,28 +285,31 @@ std::optional<info_type> n = [&]() -> std::optional<info_type> {                
             }
         }
 
-        {// PCI id infos
-            #if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
+        DeviceProperties ret
+            = {Vendor::UNKNOWN,         // We cannot determine the vendor
+               get_device_backend(dev), // Query the backend based on the platform name
+               get_device_type(dev),
+               shambase::get_check_ref(global_mem_size),
+               shambase::get_check_ref(global_mem_cache_line_size),
+               shambase::get_check_ref(global_mem_cache_size),
+               shambase::get_check_ref(local_mem_size),
+               shambase::get_check_ref(max_compute_units),
+               max_alloc_dev,
+               max_alloc_host,
+               shambase::get_check_ref(mem_base_addr_align),
+               shambase::get_check_ref(sub_group_sizes),
+               default_work_group_size};
+
+        { // PCI id infos
+#if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
             FETCH_PROPN_FULL(sycl::ext::intel::info::device::pci_address, std::string, pci_address)
-            logger::raw_ln("pci address :", pci_address.value());
-        #endif
+            if (pci_address) {
+                ret.pci_address = *pci_address;
+            }
+#endif
         }
 
-
-        return DeviceProperties{
-            Vendor::UNKNOWN,         // We cannot determine the vendor
-            get_device_backend(dev), // Query the backend based on the platform name
-            get_device_type(dev),
-            shambase::get_check_ref(global_mem_size),
-            shambase::get_check_ref(global_mem_cache_line_size),
-            shambase::get_check_ref(global_mem_cache_size),
-            shambase::get_check_ref(local_mem_size),
-            shambase::get_check_ref(max_compute_units),
-            max_alloc_dev,
-            max_alloc_host,
-            shambase::get_check_ref(mem_base_addr_align),
-            shambase::get_check_ref(sub_group_sizes),
-            default_work_group_size};
+        return ret;
     }
 
     /**
