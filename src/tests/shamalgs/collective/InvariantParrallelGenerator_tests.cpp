@@ -16,7 +16,7 @@
 
 using Gen = shamalgs::collective::InvariantParrallelGenerator<std::mt19937_64>;
 
-void test_next_case(Gen &generator, Gen &generator_ref, u64 count_test_per_rank) {
+std::vector<u64> test_next_case(Gen &generator, Gen &generator_ref, u64 count_test_per_rank) {
     std::vector<u64> ref_datased
         = generator_ref.next_n(count_test_per_rank * u64(shamcomm::world_size()), true);
     std::vector<u64> test_data = generator.next_n(count_test_per_rank, false);
@@ -29,6 +29,8 @@ void test_next_case(Gen &generator, Gen &generator_ref, u64 count_test_per_rank)
 
     REQUIRE(generator.all_ranks_are_in_sync());
     REQUIRE(generator_ref.all_ranks_are_in_sync());
+
+    return collected_data;
 }
 
 std::vector<u64> benchmark(u64 nval_max, u64 step_size) {
@@ -64,6 +66,13 @@ TestStart(
 
     REQUIRE(generator.is_done());
     REQUIRE(generator_ref.is_done());
+
+    // asking more than max count
+    shamalgs::collective::InvariantParrallelGenerator generator_ref2(seed, count_test);
+    shamalgs::collective::InvariantParrallelGenerator generator2(seed, count_test);
+    auto res = test_next_case(
+        generator2, generator_ref2, u64(shamcomm::world_size() + 2) * count_test_per_rank_all);
+    REQUIRE_EQUAL(res.size(), count_test);
 }
 
 TestStart(
