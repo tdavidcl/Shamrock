@@ -1040,7 +1040,10 @@ namespace sham {
                 size_t min_size_new_alloc    = alloc_request_size_fct(new_size, dev_sched);
                 size_t wanted_size_new_alloc = alloc_request_size_fct(new_size * 1.5, dev_sched);
 
-                size_t new_storage_size = sycl::min(min_size_new_alloc, wanted_size_new_alloc);
+                size_t new_storage_size = wanted_size_new_alloc;
+                if (new_storage_size > get_max_alloc_size()) {
+                    new_storage_size = sycl::max(get_max_alloc_size(), min_size_new_alloc);
+                }
 
                 if (new_storage_size > get_max_alloc_size()) {
                     shambase::throw_with_loc<std::runtime_error>(shambase::format(
