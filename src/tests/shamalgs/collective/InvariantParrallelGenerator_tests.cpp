@@ -88,3 +88,5 @@ TestStart(
 // core ultra 9 285K
 // 1rank -> Info: time 0.1386704975 rate 72113392.39624493
 // 2ranks -> time 0.1672155935 rate 119606070.11211546
+// 4ranks -> Info: time 0.18985734683333336 rate 210684499.00500336
+// 8ranks -> time 0.2366780588 rate 338011898.5495076
