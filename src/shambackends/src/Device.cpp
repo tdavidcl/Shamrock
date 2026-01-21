@@ -275,10 +275,11 @@ namespace sham {
 
         {// PCI id infos
             #if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
-            FETCH_PROP(pci_address,  sycl::ext::intel::info::pci_address)
+            FETCH_PROPN(sycl::ext::intel::info::device::pci_address, u32, pci_address)
             logger::raw_ln("pci address :", pci_address.value());
         #endif
         }
+
 
         return DeviceProperties{
             Vendor::UNKNOWN,         // We cannot determine the vendor
