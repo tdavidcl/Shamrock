@@ -275,7 +275,7 @@ namespace sham {
 
         {// PCI id infos
             #if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
-            FETCH_PROPN(sycl::ext::intel::info::device::pci_address, u32, pci_address)
+            FETCH_PROPN(sycl::ext::intel::info::device::pci_address, std::string, pci_address)
             logger::raw_ln("pci address :", pci_address.value());
         #endif
         }
