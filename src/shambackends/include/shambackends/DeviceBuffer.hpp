@@ -1001,24 +1001,19 @@ namespace sham {
         ///////////////////////////////////////////////////////////////////////
 
         inline size_t get_max_alloc_size() const {
-            size_t max_alloc_size;
-
             auto &dev_prop = hold.get_dev_scheduler().get_queue().get_device_prop();
 
             if constexpr (target == device) {
-                max_alloc_size = dev_prop.max_mem_alloc_size_dev;
+                return dev_prop.max_mem_alloc_size_dev;
             } else if constexpr (target == host) {
-                max_alloc_size = dev_prop.max_mem_alloc_size_host;
+                return dev_prop.max_mem_alloc_size_host;
             } else if constexpr (target == shared) {
-                max_alloc_size
-                    = sycl::min(dev_prop.max_mem_alloc_size_dev, dev_prop.max_mem_alloc_size_host);
+                return sycl::min(dev_prop.max_mem_alloc_size_dev, dev_prop.max_mem_alloc_size_host);
             } else {
                 static_assert(
                     shambase::always_false_v<decltype(target)>,
                     "get_max_alloc_size: invalid target");
             }
-
-            return max_alloc_size;
         }
 
         /**
@@ -1040,8 +1035,9 @@ namespace sham {
                 size_t max_alloc_size           = get_max_alloc_size();
                 std::optional<size_t> alignment = get_alignment(dev_sched);
                 size_t min_size_new_alloc       = alloc_request_size_fct(new_size, dev_sched);
-                size_t wanted_size_new_alloc    = alloc_request_size_fct(new_size * 1.5, dev_sched);
-                size_t max_possible_alloc       = max_alloc_size;
+                size_t wanted_size_new_alloc
+                    = alloc_request_size_fct(new_size + new_size / 2, dev_sched);
+                size_t max_possible_alloc = max_alloc_size;
 
                 if (alignment) {
                     max_possible_alloc = max_possible_alloc - (max_possible_alloc % *alignment);
@@ -1054,13 +1050,13 @@ namespace sham {
 
                 if (new_storage_size > max_alloc_size) {
                     shambase::throw_with_loc<std::runtime_error>(shambase::format(
-                        "new_storage_size > get_max_alloc_size()\n"
+                        "new_storage_size > max_alloc_size\n"
                         "  new_storage_size      = {}\n"
-                        "  get_max_alloc_size()  = {}\n"
+                        "  max_alloc_size  = {}\n"
                         "  min_size_new_alloc    = {}\n"
                         "  wanted_size_new_alloc = {}",
                         new_storage_size,
-                        get_max_alloc_size(),
+                        max_alloc_size,
                         min_size_new_alloc,
                         wanted_size_new_alloc));
                 }
