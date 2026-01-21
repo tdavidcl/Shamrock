@@ -53,7 +53,7 @@ namespace shamalgs::collective {
             // if size is different, resize
             for (size_t i = 0; i < sizes_cache1.size(); i++) {
                 if (cache1[i]) {
-                    cache1[i]->resize(sizes_cache1[i]);
+                    cache1[i]->resize(sizes_cache1[i], false);
                 } else {
                     cache1[i] = std::make_unique<sham::DeviceBuffer<u8, target>>(
                         sizes_cache1[i], dev_sched);
@@ -61,7 +61,7 @@ namespace shamalgs::collective {
             }
             for (size_t i = 0; i < sizes_cache2.size(); i++) {
                 if (cache2[i]) {
-                    cache2[i]->resize(sizes_cache2[i]);
+                    cache2[i]->resize(sizes_cache2[i], false);
                 } else {
                     cache2[i] = std::make_unique<sham::DeviceBuffer<u8, target>>(
                         sizes_cache2[i], dev_sched);
