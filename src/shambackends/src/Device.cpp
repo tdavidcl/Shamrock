@@ -110,6 +110,20 @@ namespace sham {
         }                                                                                          \
     }();
 
+        /// Fetches a property of a SYCL device (for cases where multiple prop would have the same name)
+#define FETCH_PROPN_FULL(info_, info_type, n)                                                           \
+std::optional<info_type> n = [&]() -> std::optional<info_type> {                               \
+    try {                                                                                      \
+        return {dev.get_info<info_>()};                                    \
+    } catch (...) {                                                                            \
+        logger::warn_ln(                                                                       \
+            "Device",                                                                          \
+            "dev.get_info<" #info_ ">() raised an exception for device",   \
+            name);                                                                             \
+        return {};                                                                             \
+    }                                                                                          \
+}();
+
     /**
      * @brief Fetches the properties of a SYCL device.
      *
@@ -275,7 +289,7 @@ namespace sham {
 
         {// PCI id infos
             #if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
-            FETCH_PROPN(sycl::ext::intel::info::device::pci_address, std::string, pci_address)
+            FETCH_PROPN_FULL(sycl::ext::intel::info::device::pci_address, std::string, pci_address)
             logger::raw_ln("pci address :", pci_address.value());
         #endif
         }
