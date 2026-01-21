@@ -1037,11 +1037,15 @@ namespace sham {
             if (alloc_request_size_fct(new_size, dev_sched) > hold.get_bytesize()) {
                 // expand storage
 
-                size_t max_alloc_size        = get_max_alloc_size();
-                size_t alignment             = get_alignment(dev_sched);
-                size_t min_size_new_alloc    = alloc_request_size_fct(new_size, dev_sched);
-                size_t wanted_size_new_alloc = alloc_request_size_fct(new_size * 1.5, dev_sched);
-                size_t max_possible_alloc    = max_alloc_size - (max_alloc_size % alignment);
+                size_t max_alloc_size           = get_max_alloc_size();
+                std::optional<size_t> alignment = get_alignment(dev_sched);
+                size_t min_size_new_alloc       = alloc_request_size_fct(new_size, dev_sched);
+                size_t wanted_size_new_alloc    = alloc_request_size_fct(new_size * 1.5, dev_sched);
+                size_t max_possible_alloc       = max_alloc_size;
+
+                if (alignment) {
+                    max_possible_alloc = max_possible_alloc - (max_possible_alloc % *alignment);
+                }
 
                 size_t new_storage_size = wanted_size_new_alloc;
                 if (new_storage_size > max_alloc_size) {
