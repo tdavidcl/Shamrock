@@ -42,12 +42,12 @@ namespace shamalgs::collective {
         }
 
         std::vector<u64> next_n_sequential(u64 val_count) {
-            std::vector<u64> ret(val_count);
+            std::vector<u64> ret{};
             for (u64 i = 0; i < val_count; i++) {
                 if (is_done()) {
                     break;
                 }
-                ret[i] = eng_global();
+                ret.push_back(eng_global());
 
                 // increase counter + check if finished
                 nval_current++;
@@ -55,7 +55,6 @@ namespace shamalgs::collective {
                     done = true;
                 }
             }
-
             return ret;
         }
 
@@ -90,7 +89,7 @@ namespace shamalgs::collective {
 
         public:
         InvariantParrallelGenerator(Engine eng, u64 nval_max)
-            : eng_global(eng), nval_max(nval_max), nval_current(0) {
+            : eng_global(eng), nval_max(nval_max), nval_current(0), done(false) {
             if (nval_max == 0) {
                 done = true;
             }
