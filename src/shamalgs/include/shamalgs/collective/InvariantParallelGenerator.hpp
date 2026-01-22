@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file InvariantParrallelGenerator.hpp
+ * @file InvariantParallelGenerator.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -25,7 +25,7 @@ namespace shamalgs::collective {
 
     /// A parralel generator that will spit the same sequence regardless of the number of ranks.
     template<class Engine = std::mt19937_64>
-    class InvariantParrallelGenerator {
+    class InvariantParallelGenerator {
         Engine eng_global;
         u64 nval_max;
         u64 nval_current;
@@ -50,62 +50,56 @@ namespace shamalgs::collective {
 
             u64 to_generate = std::min(val_count, nval_max - nval_current);
 
-            std::vector<u64> ret{};
-            ret.reserve(to_generate);
+            std::vector<u64> ret(to_generate);
             for (u64 i = 0; i < to_generate; i++) {
-                if (is_done()) {
-                    break;
-                }
-                ret.push_back(eng_global());
+                ret[i] = eng_global();
+            }
 
-                // increase counter + check if finished
-                nval_current++;
-                if (nval_current == nval_max) {
-                    done = true;
-                }
+            nval_current += to_generate;
+            if (nval_current == nval_max) {
+                done = true;
             }
             return ret;
         }
 
         std::vector<u64> next_n_parallel(u64 val_count) {
 
-            if (!is_done()) {
-                u64 loc_gen_count = val_count;
-
-                auto gen_info = shamalgs::collective::fetch_view(loc_gen_count);
-
-                u64 skip_start = gen_info.head_offset;
-                u64 gen_cnt    = loc_gen_count;
-                u64 skip_end   = gen_info.total_byte_count - loc_gen_count - gen_info.head_offset;
-
-                shamlog_debug_ln(
-                    "InvariantParrallelGenerator",
-                    "generate : ",
-                    skip_start,
-                    gen_cnt,
-                    skip_end,
-                    "total",
-                    skip_start + gen_cnt + skip_end);
-
-                skip(skip_start);
-                std::vector<u64> ret = next_n_sequential(gen_cnt);
-                skip(skip_end);
-                return ret;
+            if (is_done()) {
+                return {};
             }
 
-            return {};
+            auto gen_info = shamalgs::collective::fetch_view(val_count);
+
+            // here i keep the temp variable for clarity
+            u64 skip_start = gen_info.head_offset;
+            u64 gen_cnt    = val_count;
+            u64 skip_end   = gen_info.total_byte_count - val_count - gen_info.head_offset;
+
+            shamlog_debug_ln(
+                "InvariantParallelGenerator",
+                "generate : ",
+                skip_start,
+                gen_cnt,
+                skip_end,
+                "total",
+                skip_start + gen_cnt + skip_end);
+
+            skip(skip_start);
+            std::vector<u64> ret = next_n_sequential(gen_cnt);
+            skip(skip_end);
+            return ret;
         }
 
         public:
-        InvariantParrallelGenerator(Engine eng, u64 nval_max)
+        InvariantParallelGenerator(Engine eng, u64 nval_max)
             : eng_global(eng), nval_max(nval_max), nval_current(0), done(false) {
             if (nval_max == 0) {
                 done = true;
             }
         }
 
-        InvariantParrallelGenerator(u64 seed, u64 nval_max)
-            : InvariantParrallelGenerator(Engine(seed), nval_max) {}
+        InvariantParallelGenerator(u64 seed, u64 nval_max)
+            : InvariantParallelGenerator(Engine(seed), nval_max) {}
 
         /**
          * @brief Generate the next `val_count` values

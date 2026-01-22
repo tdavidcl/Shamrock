@@ -8,22 +8,22 @@
 // -------------------------------------------------------//
 
 #include "shambase/time.hpp"
-#include "shamalgs/collective/InvariantParrallelGenerator.hpp"
+#include "shamalgs/collective/InvariantParallelGenerator.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
 #include <array>
 
-using Gen = shamalgs::collective::InvariantParrallelGenerator<std::mt19937_64>;
+using Gen = shamalgs::collective::InvariantParallelGenerator<std::mt19937_64>;
 
 std::vector<u64> test_next_case(Gen &generator, Gen &generator_ref, u64 count_test_per_rank) {
-    std::vector<u64> ref_datased = generator_ref.next_n(count_test_per_rank, true);
+    std::vector<u64> ref_dataset = generator_ref.next_n(count_test_per_rank, true);
     std::vector<u64> test_data   = generator.next_n(count_test_per_rank, false);
 
     std::vector<u64> collected_data{};
     shamalgs::collective::vector_allgatherv(test_data, collected_data, MPI_COMM_WORLD);
 
-    REQUIRE_EQUAL(ref_datased, collected_data);
+    REQUIRE_EQUAL(ref_dataset, collected_data);
     REQUIRE_EQUAL(generator.is_done(), generator_ref.is_done());
 
     REQUIRE(generator.all_ranks_are_in_sync());
@@ -46,7 +46,7 @@ std::vector<u64> benchmark(u64 nval_max, u64 step_size) {
 
 TestStart(
     Unittest,
-    "shamalgs/collective/InvariantParrallelGenerator",
+    "shamalgs/collective/InvariantParallelGenerator",
     test_invariant_parrallel_generator,
     -1) {
 
@@ -55,8 +55,8 @@ TestStart(
 
     u64 seed = 42;
 
-    shamalgs::collective::InvariantParrallelGenerator generator_ref(seed, count_test);
-    shamalgs::collective::InvariantParrallelGenerator generator(seed, count_test);
+    shamalgs::collective::InvariantParallelGenerator generator_ref(seed, count_test);
+    shamalgs::collective::InvariantParallelGenerator generator(seed, count_test);
 
     u64 count_test_per_rank = 10_u64; // 10 steps
     for (u64 i = 0; i < count_test_per_rank_all; i += count_test_per_rank) {
@@ -67,8 +67,8 @@ TestStart(
     REQUIRE(generator_ref.is_done());
 
     // asking more than max count
-    shamalgs::collective::InvariantParrallelGenerator generator_ref2(seed, count_test);
-    shamalgs::collective::InvariantParrallelGenerator generator2(seed, count_test);
+    shamalgs::collective::InvariantParallelGenerator generator_ref2(seed, count_test);
+    shamalgs::collective::InvariantParallelGenerator generator2(seed, count_test);
     auto res = test_next_case(
         generator2, generator_ref2, u64(shamcomm::world_size() + 2) * count_test_per_rank_all);
     REQUIRE_EQUAL(res.size(), count_test);
@@ -76,7 +76,7 @@ TestStart(
 
 TestStart(
     Benchmark,
-    "shamalgs/collective/InvariantParrallelGenerator_benchmark",
+    "shamalgs/collective/InvariantParallelGenerator_benchmark",
     benchmark_invariant_parrallel_generator,
     -1) {
 
@@ -86,7 +86,7 @@ TestStart(
     });
 
     logger::info_ln(
-        "InvariantParrallelGenerator_benchmark",
+        "InvariantParallelGenerator_benchmark",
         "time",
         time,
         "rate",
