@@ -2,4 +2,4 @@
 Shamrock utility library.
 """
 
-from . import plot
+from . import phantom, plot
