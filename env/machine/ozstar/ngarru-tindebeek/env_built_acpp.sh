@@ -4,6 +4,7 @@ export ACPP_APPDB_DIR=/tmp/acpp-appdb # otherwise it would we in the $HOME/.acpp
 export ACPP_GIT_DIR=$BUILD_DIR/.env/acpp-git
 export ACPP_BUILD_DIR=$BUILD_DIR/.env/acpp-builddir
 export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
+export SHAMROCK_CXX_FLAGS=" --acpp-targets='omp;cuda:sm_80'"
 
 export NINJA_STATUS="[%f/%t j=%r] "
 
