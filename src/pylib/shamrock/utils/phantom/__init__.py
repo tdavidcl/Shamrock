@@ -111,7 +111,7 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
         print(f" - Initializing from phantom dump (setup file: {is_setup_file})")
 
     if is_setup_file:
-        model.init_from_phantom_dump(dump, 0.5)
+        model.init_from_phantom_dump(dump, 0.05)
     else:
         model.init_from_phantom_dump(dump, 1.0)
 
