@@ -62,31 +62,6 @@ def parse_in_file(in_file):
     return params
 
 
-def in_dump_to_config(model, simulation_path, in_file_name, dump_file_name, do_print=True):
-    """
-    Convert a Phantom .in file and a Phantom dump file to a Shamrock config.
-    """
-    in_params = parse_in_file(os.path.join(simulation_path, in_file_name))
-
-    dump = shamrock.load_phantom_dump(os.path.join(simulation_path, dump_file_name))
-
-    cfg = model.gen_config_from_phantom_dump(dump)
-    # Set the solver config to be the one stored in cfg
-    model.set_solver_config(cfg)
-
-    # Print the solver config
-    if do_print and shamrock.sys.world_rank() == 0:
-        print("Solver config:")
-        model.get_current_config().print_status()
-        print("In file parameters:")
-        for key, value in in_params.items():
-            print(f"{key}: {value}")
-        print("Dump state:")
-        dump.print_state()
-
-    return cfg, dump
-
-
 def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print=True):
     """
     Load a Phantom simulation into a Shamrock model.
