@@ -8,8 +8,8 @@ import utils.envscript
 import utils.sysinfo
 from utils.setuparg import *
 
-NAME = "Ngarru Tindebeek (AdaptiveCpp) A100"
-PATH = "machine/aussie/ngarru-tindebeek"
+NAME = "OzStart Ngarru Tindebeek (AdaptiveCpp) A100"
+PATH = "machine/ozstar/ngarru-tindebeek"
 
 
 def setup(arg: SetupArg, envgen: EnvGen):
