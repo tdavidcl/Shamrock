@@ -122,6 +122,20 @@ namespace shammodels::sph {
         f64 utime  = phdump.read_header_float<f64>("utime");
         f64 umagfd = phdump.read_header_float<f64>("umagfd");
 
+        if (udist == 1.0 || umass == 1.0 || utime == 1.0 || umagfd == 3.54491) {
+            logger::warn_ln("SPH", "phantom dump units are not set, defaulting to SI");
+            logger::warn_ln("SPH", "udist =", udist);
+            logger::warn_ln("SPH", "umass =", umass);
+            logger::warn_ln("SPH", "utime =", utime);
+            logger::warn_ln("SPH", "umagfd =", umagfd);
+
+            return shamunits::UnitSystem<Tscal>();
+        }
+
+        // convert from CGS to SI
+        udist /= 100.0;
+        umass /= 1000.0;
+
         return shamunits::UnitSystem<Tscal>(
             utime, udist, umass
             // unit_current = 1 ,
