@@ -62,7 +62,7 @@ def parse_in_file(in_file):
     return params
 
 
-def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print=True):
+def load_simulation(simulation_path, dump_file_name=None, in_file_name=None, do_print=True):
     """
     Load a Phantom simulation into a Shamrock model.
     """
@@ -72,19 +72,26 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
         print("----------------   Phantom dump loading   -----------------")
         print("-----------------------------------------------------------")
 
-    # setup = dump finish with .tmp
-    is_setup_file = dump_file_name.endswith(".tmp")
-
-    dump_path = os.path.join(simulation_path, dump_file_name)
-
     if in_file_name is not None:
         in_file_path = os.path.join(simulation_path, in_file_name)
         in_params = parse_in_file(in_file_path)
     else:
         in_params = None
 
+    if dump_file_name is None:
+        if in_file_name is not None:
+            dump_file_name = in_params["dumpfile"]
+
+        else:
+            raise ValueError("Either dump_file_name or in_file_name must be provided")
+
+    dump_path = os.path.join(simulation_path, dump_file_name)
+
     if do_print and shamrock.sys.world_rank() == 0:
         print(" - Loading phantom dump from: ", dump_path)
+
+    # setup = dump finish with .tmp
+    is_setup_file = dump_file_name.endswith(".tmp")
 
     # Open the phantom dump
     dump = shamrock.load_phantom_dump(dump_path)
@@ -128,4 +135,78 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
         # print("Dump state:")
         # dump.print_state()
 
-    return ctx, model
+    return ctx, model, in_params
+
+
+def run_phantom_simulation(simulation_folder, sim_name):
+    """
+    Run a Phantom simulation in Shamrock.
+    """
+
+    input_file_name = sim_name + ".in"
+
+    ctx, model, in_params = shamrock.utils.phantom.load_simulation(
+        simulation_folder, in_file_name=input_file_name
+    )
+
+    dump_file_name = in_params["dumpfile"]
+
+    # phantom dumps are 00000.tmp if before start and then sim_name_{:05d}
+    # parse the dump number
+    dump_number = int(dump_file_name.split("_")[1].split(".")[0])
+    print(f"Dump number: {dump_number}")
+
+    dtmax = float(in_params["dtmax"])
+    tmax = float(in_params["tmax"])
+
+    def get_ph_dump_file_name(dump_number):
+        return f"{sim_name}_{dump_number:05d}"
+
+    def get_ph_dump_name(dump_number):
+        return os.path.join(simulation_folder, get_ph_dump_file_name(dump_number))
+
+    def do_dump(dump_number):
+        if shamrock.sys.world_rank() == 0:
+            print("-----------------------------------------------------------")
+            print("----------------   Phantom dump saving   -----------------")
+            print("-----------------------------------------------------------")
+            print(f" - Saving dump {dump_number} to {get_ph_dump_name(dump_number)}")
+        dump = model.make_phantom_dump()
+        dump.save_dump(get_ph_dump_name(dump_number))
+
+        # replace dumpfile in the input file
+        lines = []
+        with open(os.path.join(simulation_folder, f"{sim_name}.in"), "r") as f:
+            lines = f.readlines()
+        with open(os.path.join(simulation_folder, f"{sim_name}.in"), "w") as f:
+            for line in lines:
+                if "dumpfile" in line:
+                    line = f"            dumpfile = {get_ph_dump_file_name(dump_number)}  ! dump file to start from\n"
+                f.write(line)
+
+        # if .tmp is there remove it
+        if (
+            os.path.exists(os.path.join(simulation_folder, f"{sim_name}_00000.tmp"))
+            and shamrock.sys.world_rank() == 0
+        ):
+            os.remove(os.path.join(simulation_folder, f"{sim_name}_00000.tmp"))
+
+    do_dump(dump_number)
+
+    dump_number += 1
+
+    # evolve until tmax in increments of dtmax
+    last_step = False
+    while not last_step:
+        next_time = model.get_time() + dtmax
+
+        if next_time > tmax:
+            next_time = tmax
+            last_step = True
+
+        last_step = model.evolve_until(next_time)
+
+        do_dump(dump_number)
+        dump_number += 1
+
+    return ctx, model, in_params
