@@ -21,8 +21,7 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     parser = argparse.ArgumentParser(prog=PATH, description=NAME + " env for Shamrock")
 
-
-    args = parser.parse_args(argv)    
+    args = parser.parse_args(argv)
     args.gen = "ninja"
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
