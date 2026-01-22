@@ -154,9 +154,10 @@ namespace shammodels::sph {
             dump.table_header_f64.add("umass", units->kg_inv);
             dump.table_header_f64.add("utime", units->s_inv);
 
-            f64 umass = units->template to<shamunits::units::kg>();
+            // Back to freakin CGS (worst units system ever, well no ... there is imperial)
+            f64 umass = units->template to<shamunits::units::kg>() / 1000.0;
             f64 utime = units->template to<shamunits::units::s>();
-            f64 udist = units->template to<shamunits::units::m>();
+            f64 udist = units->template to<shamunits::units::m>() / 100.0;
 
             shamunits::Constants<Tscal> ctes{*units};
             f64 ccst    = ctes.c();
