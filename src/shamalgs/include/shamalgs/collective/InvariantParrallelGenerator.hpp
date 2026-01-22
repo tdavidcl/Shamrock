@@ -43,8 +43,16 @@ namespace shamalgs::collective {
         }
 
         std::vector<u64> next_n_sequential(u64 val_count) {
+
+            if (is_done()) {
+                return {};
+            }
+
+            u64 to_generate = std::min(val_count, nval_max - nval_current);
+
             std::vector<u64> ret{};
-            for (u64 i = 0; i < val_count; i++) {
+            ret.reserve(to_generate);
+            for (u64 i = 0; i < to_generate; i++) {
                 if (is_done()) {
                     break;
                 }
