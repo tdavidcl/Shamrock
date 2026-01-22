@@ -87,15 +87,18 @@ def in_dump_to_config(model, simulation_path, in_file_name, dump_file_name, do_p
     return cfg, dump
 
 
-def load_simulation(simulation_path, in_file_name, dump_file_name, do_print=True):
+def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print=True):
     """
     Load a Phantom simulation into a Shamrock model.
     """
 
     dump_path = os.path.join(simulation_path, dump_file_name)
-    in_file_path = os.path.join(simulation_path, in_file_name)
 
-    in_params = parse_in_file(os.path.join(simulation_path, in_file_name))
+    if in_file_name is not None:
+        in_file_path = os.path.join(simulation_path, in_file_name)
+        in_params = parse_in_file(in_file_path)
+    else:
+        in_params = None
 
     # setup = dump finish with .tmp
     is_setup_file = dump_file_name.endswith(".tmp")
@@ -117,9 +120,12 @@ def load_simulation(simulation_path, in_file_name, dump_file_name, do_print=True
         print(f"Is setup file: {is_setup_file}")
         print("Solver config:")
         model.get_current_config().print_status()
-        print("In file parameters:")
-        for key, value in in_params.items():
-            print(f"{key}: {value}")
+
+        if in_params is not None:
+            print("In file parameters:")
+            for key, value in in_params.items():
+                print(f"{key}: {value}")
+
         print("Dump state:")
         dump.print_state()
 
