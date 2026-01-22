@@ -5,6 +5,8 @@ export ACPP_GIT_DIR=$BUILD_DIR/.env/acpp-git
 export ACPP_BUILD_DIR=$BUILD_DIR/.env/acpp-builddir
 export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
 
+export NINJA_STATUS="[%f/%t j=%r] "
+
 module load \
     gcc/13.2.0 \
     openmpi/4.1.6 \
