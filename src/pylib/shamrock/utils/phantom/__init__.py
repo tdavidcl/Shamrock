@@ -67,6 +67,14 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
     Load a Phantom simulation into a Shamrock model.
     """
 
+    if do_print and shamrock.sys.world_rank() == 0:
+        print("-----------------------------------------------------------")
+        print("----------------   Phantom dump loading   -----------------")
+        print("-----------------------------------------------------------")
+
+    # setup = dump finish with .tmp
+    is_setup_file = dump_file_name.endswith(".tmp")
+
     dump_path = os.path.join(simulation_path, dump_file_name)
 
     if in_file_name is not None:
@@ -75,8 +83,8 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
     else:
         in_params = None
 
-    # setup = dump finish with .tmp
-    is_setup_file = dump_file_name.endswith(".tmp")
+    if do_print and shamrock.sys.world_rank() == 0:
+        print(" - Loading phantom dump from: ", dump_path)
 
     # Open the phantom dump
     dump = shamrock.load_phantom_dump(dump_path)
@@ -86,29 +94,38 @@ def load_simulation(simulation_path, dump_file_name, in_file_name=None, do_print
     ctx.pdata_layout_new()
     model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M4")
 
+    if do_print and shamrock.sys.world_rank() == 0:
+        print(" - Generating Shamrock solver config from phantom dump")
     cfg = model.gen_config_from_phantom_dump(dump)
+    if do_print and shamrock.sys.world_rank() == 0:
+        print(" - Setting Shamrock solver config")
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
 
-    # Print infos
     if do_print and shamrock.sys.world_rank() == 0:
-        print(f"Is setup file: {is_setup_file}")
-        print("Solver config:")
-        model.get_current_config().print_status()
-
-        if in_params is not None:
-            print("In file parameters:")
-            for key, value in in_params.items():
-                print(f"{key}: {value}")
-
-        print("Dump state:")
-        dump.print_state()
+        print(" - Initializing domain scheduler")
 
     model.init_scheduler(int(1e8), 1)
+
+    if do_print and shamrock.sys.world_rank() == 0:
+        print(f" - Initializing from phantom dump (setup file: {is_setup_file})")
 
     if is_setup_file:
         model.init_from_phantom_dump(dump, 0.5)
     else:
         model.init_from_phantom_dump(dump, 1.0)
+
+    # Print infos
+    if do_print and shamrock.sys.world_rank() == 0:
+        print(" - Shamrock solver config:")
+        model.get_current_config().print_status()
+
+        if in_params is not None:
+            print(" - Phantom input file parameters:")
+            for key, value in in_params.items():
+                print(f"{key}: {value}")
+
+        # print("Dump state:")
+        # dump.print_state()
 
     return ctx, model
