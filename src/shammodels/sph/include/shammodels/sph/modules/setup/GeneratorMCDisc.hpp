@@ -17,7 +17,7 @@
  */
 
 #include "shambase/constants.hpp"
-#include "shamalgs/collective/InvariantParrallelGenerator.hpp"
+#include "shamalgs/collective/InvariantParallelGenerator.hpp"
 #include "shamalgs/collective/indexing.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/modules/setup/ISPHSetupNode.hpp"
@@ -124,7 +124,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
     std::function<Tscal(Tscal)> rot_profile;
     std::function<Tscal(Tscal)> cs_profile;
 
-    shamalgs::collective::InvariantParrallelGenerator<std::mt19937_64> generator;
+    shamalgs::collective::InvariantParallelGenerator<std::mt19937_64> generator;
 
     static constexpr Tscal _2pi = 2 * shambase::constants::pi<Tscal>;
 
