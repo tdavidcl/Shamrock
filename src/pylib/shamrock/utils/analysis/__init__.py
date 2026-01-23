@@ -7,6 +7,7 @@ import shamrock.sys
 
 try:
     import matplotlib
+    import matplotlib.animation as animation
     import matplotlib.pyplot as plt
 
     _HAS_MATPLOTLIB = True
@@ -148,7 +149,7 @@ class perf_history:
                 label="Used compute time",
             )
             plt.xlabel("t [code unit] (simulation)")
-            plt.ylabel("$\sum_{processes} t$ [h] (real time)")
+            plt.ylabel(r"$\sum_{processes} t$ [h] (real time)")
 
             ax1 = plt.gca()
 
@@ -214,3 +215,192 @@ class perf_history:
             plt.savefig(self.plot_filename + "_rate.png")
             if close_plots:
                 plt.close()
+
+
+class column_density_plot:
+    def __init__(self, model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix):
+        self.model = model
+        self.ext_r = ext_r
+        self.nx = nx
+        self.ny = ny
+        self.ex = ex
+        self.ey = ey
+        self.center = center
+        self.aspect = float(self.nx) / float(self.ny)
+
+        self.analysis_prefix = os.path.join(analysis_folder, analysis_prefix) + "_"
+        self.plot_prefix = os.path.join(analysis_folder, "plot_" + analysis_prefix) + "_"
+
+        self.npy_data_filename = self.analysis_prefix + "{:07}.npy"
+        self.json_data_filename = self.analysis_prefix + "{:07}.json"
+        self.plot_filename = self.plot_prefix + "{:07}.png"
+        self.glob_str_plot = self.plot_prefix + "*.png"
+        self.glob_str_data = self.analysis_prefix + "*.json"  # json is writen in last
+
+    def compute_rho_xy(self):
+        ext_x = 2 * self.ext_r * self.aspect
+        ext_y = 2 * self.ext_r
+
+        dx = (self.ex[0] * ext_x, self.ex[1] * ext_x, self.ex[2] * ext_x)
+        dy = (self.ey[0] * ext_y, self.ey[1] * ext_y, self.ey[2] * ext_y)
+
+        arr_rho_xy = self.model.render_cartesian_column_integ(
+            "rho",
+            "f64",
+            center=(self.center[0], self.center[1], self.center[2]),
+            delta_x=dx,
+            delta_y=dy,
+            nx=self.nx,
+            ny=self.ny,
+        )
+
+        # Convert to kg/m^2
+        codeu = self.model.get_units()
+        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-2)
+        arr_rho_xy /= kg_m2_codeu
+
+        print(np.max(arr_rho_xy), np.min(arr_rho_xy))
+
+        return arr_rho_xy
+
+    def analysis_save(self, iplot):
+        arr_rho_xy = self.compute_rho_xy()
+        if shamrock.sys.world_rank() == 0:
+            x_e_x = (
+                self.ex[0] * self.center[0]
+                + self.ex[1] * self.center[1]
+                + self.ex[2] * self.center[2]
+            )
+            y_e_y = (
+                self.ey[0] * self.center[0]
+                + self.ey[1] * self.center[1]
+                + self.ey[2] * self.center[2]
+            )
+
+            metadata = {
+                "extent": [
+                    -self.ext_r * self.aspect + x_e_x,
+                    self.ext_r * self.aspect + x_e_x,
+                    -self.ext_r + y_e_y,
+                    self.ext_r + y_e_y,
+                ],
+                "time": self.model.get_time(),
+                "sinks": self.model.get_sinks(),
+            }
+            print(f"Saving data to {self.npy_data_filename.format(iplot)}")
+            np.save(self.npy_data_filename.format(iplot), arr_rho_xy)
+
+            with open(self.json_data_filename.format(iplot), "w") as fp:
+                print(f"Saving metadata to {self.json_data_filename.format(iplot)}")
+                json.dump(metadata, fp)
+
+    def get_list_analysis_id(self):
+        import glob
+
+        list_files = glob.glob(self.glob_str_data)
+        list_files.sort()
+        list_analysis_id = []
+        for f in list_files:
+            list_analysis_id.append(int(f.split("_")[-1].split(".")[0]))
+        return list_analysis_id
+
+    def load_analysis(self, iplot):
+        with open(self.json_data_filename.format(iplot), "r") as fp:
+            metadata = json.load(fp)
+        return np.load(self.npy_data_filename.format(iplot)), metadata
+
+    def plot_rho_xy(self, iplot, holywood_mode=False, **kwargs):
+        if shamrock.sys.world_rank() == 0:
+            arr_rho_xy, metadata = self.load_analysis(iplot)
+
+            # Reset the figure using the same memory as the last one
+            figsize = (self.aspect * 6, 1.0 * 6)
+
+            if not holywood_mode:
+                fx, fy = figsize
+                figsize = (fx + 1, fy)
+
+            dpi = 200
+            plt.figure(figsize=figsize, num=1, clear=True, dpi=dpi)
+
+            if holywood_mode:
+                plt.gca().set_position((0, 0, 1, 1))
+                plt.gcf().set_size_inches(self.nx / dpi, self.ny / dpi)
+                plt.axis("off")
+
+            import copy
+
+            my_cmap = matplotlib.colormaps["magma"].copy()  # copy the default cmap
+            my_cmap.set_bad(color="black")
+
+            res = plt.imshow(
+                arr_rho_xy, cmap=my_cmap, origin="lower", extent=metadata["extent"], **kwargs
+            )
+
+            ax = plt.gca()
+
+            output_list = []
+            for s in metadata["sinks"]:
+                print(s)
+                x, y, z = s["pos"]
+
+                x_e_x = self.ex[0] * x + self.ex[1] * y + self.ex[2] * z
+                y_e_y = self.ey[0] * x + self.ey[1] * y + self.ey[2] * z
+
+                output_list.append(
+                    plt.Circle(
+                        (x_e_x, y_e_y),
+                        s["accretion_radius"] * 5,
+                        linewidth=0.5,
+                        color="blue",
+                        fill=False,
+                    )
+                )
+            for circle in output_list:
+                ax.add_artist(circle)
+
+            plt.xlabel("x [au]")
+            plt.ylabel("y [au]")
+            text = "t = {:0.3f} [Year]".format(metadata["time"])
+
+            if holywood_mode:
+                from matplotlib.offsetbox import AnchoredText
+
+                anchored_text = AnchoredText(text, loc=2)
+                plt.gca().add_artist(anchored_text)
+            else:
+                plt.title(text)
+
+            if holywood_mode:
+                axins = plt.gca().inset_axes([0.73, 0.1, 0.25, 0.025])
+                cbar = plt.colorbar(res, cax=axins, orientation="horizontal", extend="both")
+                cbar.set_label(r"$\int \rho \, \mathrm{d} z$ [code unit]", color="white")
+
+                # Set colorbar elements to white
+                cbar.outline.set_edgecolor("white")
+                # cbar.ax.yaxis.set_tick_params(color='white')
+                plt.setp(cbar.ax.get_yticklabels(), color="white")
+                plt.setp(cbar.ax.get_xticklabels(), color="white")
+                cbar.ax.tick_params(color="white", labelcolor="white", length=6, width=1)
+
+            else:
+                cbar = plt.colorbar(res, extend="both")
+                cbar.set_label(r"$\int \rho \, \mathrm{d} z$ [code unit]")
+
+            print(f"Saving plot to {self.plot_filename.format(iplot)}")
+            plt.savefig(self.plot_filename.format(iplot))
+            plt.close()
+
+    def render_all(self, holywood_mode=False, **kwargs):
+        for iplot in self.get_list_analysis_id():
+            self.plot_rho_xy(iplot, holywood_mode, **kwargs)
+
+    def render_gif(self, save_animation=False, show_animation=False):
+        if shamrock.sys.world_rank() == 0:
+            ani = shamrock.utils.plot.show_image_sequence(self.glob_str_plot, render_gif=True)
+            if save_animation:
+                # To save the animation using Pillow as a gif
+                writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+                ani.save(self.analysis_prefix + "rho_integ.gif", writer=writer)
+            if show_animation:
+                plt.show()

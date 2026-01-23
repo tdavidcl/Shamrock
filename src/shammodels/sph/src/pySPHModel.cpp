@@ -268,6 +268,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("q"))
         .def("set_units", &TConfig::set_units)
         .def(
+            "get_units",
+            [](TConfig &self) {
+                return self.unit_sys;
+            })
+        .def(
             "set_cfl_cour",
             [](TConfig &self, Tscal cfl_cour) {
                 self.cfl_config.cfl_cour = cfl_cour;
@@ -775,6 +780,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 }
 
                 return list_out;
+            })
+        .def(
+            "get_units",
+            [](T &self) {
+                return self.solver.solver_config.unit_sys;
             })
         .def(
             "render_slice",
