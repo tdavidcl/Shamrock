@@ -30,7 +30,7 @@ if not shamrock.sys.is_initialized():
     shamrock.change_loglevel(1)
     shamrock.sys.init("0:0")
 
-ctx, model = shamrock.utils.phantom.load_simulation(
+ctx, model, in_params = shamrock.utils.phantom.load_simulation(
     dump_folder, dump_file_name="blast_00010", in_file_name=None
 )
 
