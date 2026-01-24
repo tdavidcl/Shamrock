@@ -377,7 +377,7 @@ from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
-    v_z_slice_plot,
+    SliceVzPlot,
 )
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
@@ -403,7 +403,7 @@ vertical_density_plot = SliceDensityPlot(
     analysis_folder=analysis_folder,
     analysis_prefix="rho_slice",
 )
-v_z_slice_plot = v_z_slice_plot(
+v_z_slice_plot = SliceVzPlot(
     model,
     ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,
