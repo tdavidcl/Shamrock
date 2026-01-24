@@ -245,7 +245,7 @@ else:
     cfg = model.gen_default_config()
     cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
-
+    # cfg.set_eos_locally_isothermalFA2014_extended(cs0=cs0, q=q, r0=r0, n_sinks=1)
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
     cfg.set_units(codeu)

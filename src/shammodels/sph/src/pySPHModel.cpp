@@ -97,6 +97,16 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("h_over_r"))
         .def(
+            "set_eos_locally_isothermalFA2014_extended",
+            [](TConfig &self, Tscal cs0, Tscal q, Tscal r0, u32 n_sinks) {
+                self.set_eos_locally_isothermalFA2014_extended(cs0, q, r0, n_sinks);
+            },
+            py::kw_only(),
+            py::arg("cs0"),
+            py::arg("q"),
+            py::arg("r0"),
+            py::arg("n_sinks"))
+        .def(
             "set_eos_fermi",
             [](TConfig &self, Tscal mu_e) {
                 self.set_eos_fermi(mu_e);
