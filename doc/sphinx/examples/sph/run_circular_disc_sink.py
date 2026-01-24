@@ -377,8 +377,8 @@ from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
-    SliceRelativeAzyVelocityPlot,
     SliceVzPlot,
+    SliceRelativeAzyVelocityPlot,
 )
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
@@ -423,14 +423,13 @@ relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
     ny=1080,
     ex=(1, 0, 0),
     ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    center=((rin + rout)/2, 0, 0),
     analysis_folder=analysis_folder,
     analysis_prefix="relative_azy_velocity_slice",
     velocity_profile=kep_profile,
     do_normalization=True,
     min_normalization=1e-9,
 )
-
 
 def analysis(ianalysis):
     ext = rout * 1.5
@@ -549,6 +548,7 @@ v_z_slice_plot.render_all(vmin=-100, vmax=100)
 
 if render_gif and shamrock.sys.world_rank() == 0:
     v_z_slice_plot.render_gif(save_animation=True, show_animation=True)
+
 
 
 relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
