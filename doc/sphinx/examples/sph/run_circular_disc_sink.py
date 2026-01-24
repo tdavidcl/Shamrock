@@ -375,12 +375,12 @@ def save_analysis_data(filename, key, value, ianalysis):
 
 from shamrock.utils.analysis import (
     column_density_plot,
-    perf_history,
+    PerfHistory,
     slice_density_plot,
     v_z_slice_plot,
 )
 
-perf_analysis = perf_history(model, analysis_folder, "perf_history")
+perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 column_density_plot = column_density_plot(
     model,
     ext_r=rout * 1.5,
