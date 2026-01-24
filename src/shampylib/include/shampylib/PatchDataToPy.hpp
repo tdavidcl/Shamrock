@@ -158,7 +158,10 @@ namespace shamrock {
     };
 
     template<class T>
-    void append_to_map(std::string key, shamrock::patch::PatchDataLayer &pdat, py::dict &dic_out) {
+    void append_to_map(
+        std::string key,
+        std::vector<std::reference_wrapper<shamrock::patch::PatchDataLayer>> ref_lst,
+        py::dict &dic_out) {
 
         std::vector<T> vec;
 
@@ -178,10 +181,13 @@ namespace shamrock {
             }
         };
 
-        if (pdat.get_obj_cnt() > 0) {
-            pdat.for_each_field<T>([&](auto &field) {
-                appender(field);
-            });
+        for (auto &pdat_ref : ref_lst) {
+            auto &pdat = pdat_ref.get();
+            if (pdat.get_obj_cnt() > 0) {
+                pdat.for_each_field<T>([&](auto &field) {
+                    appender(field);
+                });
+            }
         }
 
         if (!vec.empty()) {
@@ -190,7 +196,7 @@ namespace shamrock {
             logger::debug_ln("PatchDataToPy", "adding -> ", key);
 
             if (dic_out.contains(key.c_str())) {
-                dic_out[key.c_str()].attr("append")(arr);
+                throw shambase::make_except_with_loc<std::runtime_error>("the key already exists");
             } else {
                 dic_out[key.c_str()] = arr;
             }
@@ -203,36 +209,41 @@ namespace shamrock {
         std::vector<std::unique_ptr<shamrock::patch::PatchDataLayer>> &lst,
         py::dict &dic_out) {
 
+        std::vector<std::reference_wrapper<shamrock::patch::PatchDataLayer>> ref_lst;
         for (auto &pdat : lst) {
             if (pdat) {
-                append_to_map<T>(key, *pdat, dic_out);
+                ref_lst.push_back(*pdat);
             }
         }
+
+        append_to_map<T>(key, ref_lst, dic_out);
     }
 
     inline py::dict pdat_to_dic(shamrock::patch::PatchDataLayer &pdat) {
         py::dict dic_out;
 
+        std::reference_wrapper<shamrock::patch::PatchDataLayer> ref_pdat = pdat;
+
         using namespace shamrock;
 
         for (auto fname : pdat.pdl().get_field_names()) {
-            append_to_map<f32>(fname, pdat, dic_out);
-            append_to_map<f32_2>(fname, pdat, dic_out);
-            append_to_map<f32_3>(fname, pdat, dic_out);
-            append_to_map<f32_4>(fname, pdat, dic_out);
-            append_to_map<f32_8>(fname, pdat, dic_out);
-            append_to_map<f32_16>(fname, pdat, dic_out);
-            append_to_map<f64>(fname, pdat, dic_out);
-            append_to_map<f64_2>(fname, pdat, dic_out);
-            append_to_map<f64_3>(fname, pdat, dic_out);
-            append_to_map<f64_4>(fname, pdat, dic_out);
-            append_to_map<f64_8>(fname, pdat, dic_out);
-            append_to_map<f64_16>(fname, pdat, dic_out);
-            append_to_map<u32>(fname, pdat, dic_out);
-            append_to_map<u64>(fname, pdat, dic_out);
-            append_to_map<u32_3>(fname, pdat, dic_out);
-            append_to_map<u64_3>(fname, pdat, dic_out);
-            append_to_map<i64_3>(fname, pdat, dic_out);
+            append_to_map<f32>(fname, {ref_pdat}, dic_out);
+            append_to_map<f32_2>(fname, {ref_pdat}, dic_out);
+            append_to_map<f32_3>(fname, {ref_pdat}, dic_out);
+            append_to_map<f32_4>(fname, {ref_pdat}, dic_out);
+            append_to_map<f32_8>(fname, {ref_pdat}, dic_out);
+            append_to_map<f32_16>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64_2>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64_3>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64_4>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64_8>(fname, {ref_pdat}, dic_out);
+            append_to_map<f64_16>(fname, {ref_pdat}, dic_out);
+            append_to_map<u32>(fname, {ref_pdat}, dic_out);
+            append_to_map<u64>(fname, {ref_pdat}, dic_out);
+            append_to_map<u32_3>(fname, {ref_pdat}, dic_out);
+            append_to_map<u64_3>(fname, {ref_pdat}, dic_out);
+            append_to_map<i64_3>(fname, {ref_pdat}, dic_out);
         }
 
         return dic_out;
