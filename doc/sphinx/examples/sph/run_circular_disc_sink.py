@@ -82,8 +82,8 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-dt_stop = 0.01
-nstop = 5
+dt_stop = 0.05
+nstop = 20
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -377,6 +377,7 @@ from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
+    SliceRelativeAzyVelocityPlot,
     SliceVzPlot,
 )
 
@@ -415,6 +416,20 @@ v_z_slice_plot = SliceVzPlot(
     analysis_prefix="v_z_slice",
     do_normalization=True,
 )
+relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="relative_azy_velocity_slice",
+    velocity_profile=kep_profile,
+    do_normalization=True,
+    min_normalization=1e-9,
+)
 
 
 def analysis(ianalysis):
@@ -425,7 +440,7 @@ def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
     vertical_density_plot.analysis_save(ianalysis)
     v_z_slice_plot.analysis_save(ianalysis)
-
+    relative_azy_velocity_slice_plot.analysis_save(ianalysis)
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
     total_momentum = shamrock.model_sph.analysisTotalMomentum(model=model).get_total_momentum()
@@ -534,6 +549,15 @@ v_z_slice_plot.render_all(vmin=-100, vmax=100)
 
 if render_gif and shamrock.sys.world_rank() == 0:
     v_z_slice_plot.render_gif(save_animation=True, show_animation=True)
+
+
+relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
+
+# %%
+# Make a gif from the plots
+
+if render_gif and shamrock.sys.world_rank() == 0:
+    relative_azy_velocity_slice_plot.render_gif(save_animation=True, show_animation=True)
 
 
 # %%

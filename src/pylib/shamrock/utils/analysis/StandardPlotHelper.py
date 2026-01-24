@@ -65,6 +65,7 @@ class StandardPlotHelper:
         do_normalization=True,
         min_normalization=1e-9,
         field_transform=None,
+        custom_getter=None,
     ):
         dx, dy = self.get_dx_dy()
         arr_field_data = self.model.render_cartesian_slice(
@@ -75,6 +76,7 @@ class StandardPlotHelper:
             delta_y=dy,
             nx=self.nx,
             ny=self.ny,
+            custom_getter=custom_getter,
         )
 
         if field_transform is not None:
