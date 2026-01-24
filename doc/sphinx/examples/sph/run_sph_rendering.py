@@ -402,9 +402,9 @@ def custom_getter(index, dic_out):
     x, y, z = dic_out["xyz"][index]
     vx, vy, vz = dic_out["vxyz"][index]
 
-    e_theta = (-y, x, 0)
-    e_theta /= np.linalg.norm(e_theta)
-    v_theta = np.dot(e_theta, (vx, vy, vz))
+    e_theta = np.array([-y, x, 0])
+    e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
+    v_theta = np.dot(e_theta, np.array([vx, vy, vz]))
 
     if x > 0.2:
         return 0.0  # To show that we have full control on the rendering
