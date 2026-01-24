@@ -14,14 +14,11 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
-from .ColumnDensityPlot import ColumnDensityPlot
-from .PerfHistory import PerfHistory
-from .SliceDensityPlot import SliceDensityPlot
 from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
 
-class v_z_slice_plot:
+class SliceDensityPlot:
     def __init__(
         self,
         model,
@@ -43,24 +40,21 @@ class v_z_slice_plot:
         self.do_normalization = do_normalization
         self.min_normalization = min_normalization
 
-    def compute_v_z(self):
-        def keep_only_v_z(arr_v):
-            return arr_v[:, :, 2]
-
-        arr_v = self.helper.slice_render(
-            "vxyz", "f64_3", self.do_normalization, self.min_normalization, keep_only_v_z
+    def compute_rho_xy(self):
+        arr_rho_xy = self.helper.slice_render(
+            "rho", "f64", self.do_normalization, self.min_normalization
         )
 
         # Convert to kg/m^2
         codeu = self.model.get_units()
-        m_s_codeu = codeu.get("m") * codeu.get("s", power=-1)
-        arr_v /= m_s_codeu
+        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-3)
+        arr_rho_xy /= kg_m2_codeu
 
-        return arr_v
+        return arr_rho_xy
 
     def analysis_save(self, iplot):
-        arr_v_z = self.compute_v_z()
-        self.helper.analysis_save(iplot, arr_v_z)
+        arr_rho_xy = self.compute_rho_xy()
+        self.helper.analysis_save(iplot, arr_rho_xy)
 
     def load_analysis(self, iplot):
         return self.helper.load_analysis(iplot)
@@ -68,19 +62,19 @@ class v_z_slice_plot:
     def get_list_analysis_id(self):
         return self.helper.get_list_analysis_id()
 
-    def plot_v_z(self, iplot, holywood_mode=False, **kwargs):
+    def plot_rho_xy(self, iplot, holywood_mode=False, **kwargs):
         if shamrock.sys.world_rank() == 0:
-            arr_v_z, metadata = self.load_analysis(iplot)
+            arr_rho_xy, metadata = self.load_analysis(iplot)
 
             self.helper.figure_init(holywood_mode)
 
             import copy
 
-            my_cmap = matplotlib.colormaps["seismic"].copy()  # copy the default cmap
-            my_cmap.set_bad(color="white")
+            my_cmap = matplotlib.colormaps["magma"].copy()  # copy the default cmap
+            my_cmap.set_bad(color="black")
 
             res = plt.imshow(
-                arr_v_z, cmap=my_cmap, origin="lower", extent=metadata["extent"], **kwargs
+                arr_rho_xy, cmap=my_cmap, origin="lower", extent=metadata["extent"], **kwargs
             )
 
             ax = plt.gca()
@@ -93,7 +87,7 @@ class v_z_slice_plot:
             text = "t = {:0.3f} [Year]".format(metadata["time"])
             self.helper.figure_add_time_info(text, holywood_mode)
 
-            cmap_label = r"$v_z$ [code unit]"
+            cmap_label = r"$\rho$ [code unit]"
             self.helper.figure_add_colorbar(res, cmap_label, holywood_mode)
 
             print(f"Saving plot to {self.helper.plot_filename.format(iplot)}")
@@ -102,7 +96,7 @@ class v_z_slice_plot:
 
     def render_all(self, holywood_mode=False, **kwargs):
         for iplot in self.get_list_analysis_id():
-            self.plot_v_z(iplot, holywood_mode, **kwargs)
+            self.plot_rho_xy(iplot, holywood_mode, **kwargs)
 
     def render_gif(self, save_animation=False, show_animation=False):
         if shamrock.sys.world_rank() == 0:
@@ -112,6 +106,6 @@ class v_z_slice_plot:
             if save_animation:
                 # To save the animation using Pillow as a gif
                 writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-                ani.save(self.helper.analysis_prefix + "v_z_slice_plot.gif", writer=writer)
+                ani.save(self.helper.analysis_prefix + "rho_slice.gif", writer=writer)
             if show_animation:
                 plt.show()

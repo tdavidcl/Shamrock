@@ -376,7 +376,7 @@ def save_analysis_data(filename, key, value, ianalysis):
 from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
-    slice_density_plot,
+    SliceDensityPlot,
     v_z_slice_plot,
 )
 
@@ -392,7 +392,7 @@ column_density_plot = ColumnDensityPlot(
     analysis_folder=analysis_folder,
     analysis_prefix="rho_integ",
 )
-vertical_density_plot = slice_density_plot(
+vertical_density_plot = SliceDensityPlot(
     model,
     ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,

@@ -18,7 +18,6 @@ from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
 
-
 class ColumnDensityPlot:
     def __init__(self, model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix):
         self.model = model
