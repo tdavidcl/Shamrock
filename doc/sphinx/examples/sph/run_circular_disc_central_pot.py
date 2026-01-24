@@ -371,7 +371,7 @@ def save_analysis_data(filename, key, value, ianalysis):
             json.dump(data, fp, indent=4)
 
 
-from shamrock.utils.analysis import column_density_plot, PerfHistory
+from shamrock.utils.analysis import PerfHistory, column_density_plot
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 column_density_plot = column_density_plot(

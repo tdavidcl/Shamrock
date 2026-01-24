@@ -374,8 +374,8 @@ def save_analysis_data(filename, key, value, ianalysis):
 
 
 from shamrock.utils.analysis import (
-    column_density_plot,
     PerfHistory,
+    column_density_plot,
     slice_density_plot,
     v_z_slice_plot,
 )
