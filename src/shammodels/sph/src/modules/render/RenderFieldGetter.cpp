@@ -68,6 +68,20 @@ namespace shammodels::sph::modules {
                 };
 
                 return lambda(field_source_getter);
+            } else if (field_name == "unity" && std::is_same_v<Tscal, Tfield>) {
+                using namespace shamrock;
+                using namespace shamrock::patch;
+                shamrock::SchedulerUtility utility(scheduler());
+                shamrock::ComputeField<Tscal> unity
+                    = utility.make_compute_field<Tscal>("unity", 1, 1.0);
+
+                auto field_source_getter
+                    = [&](const shamrock::patch::Patch cur_p, shamrock::patch::PatchDataLayer &pdat)
+                    -> const sham::DeviceBuffer<Tfield> & {
+                    return unity.get_buf(cur_p.id_patch);
+                };
+
+                return lambda(field_source_getter);
             }
         }
 
