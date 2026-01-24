@@ -800,7 +800,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 }
 
                 throw shambase::make_except_with_loc<std::runtime_error>("unknown field type");
-            })
+            },
+            py::arg("name"),
+            py::arg("field_type"),
+            py::arg("positions"),
+            py::arg("custom_getter") = std::nullopt)
         .def(
             "render_column_integ",
             [](T &self,
@@ -829,7 +833,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 }
 
                 throw shambase::make_except_with_loc<std::runtime_error>("unknown field type");
-            })
+            },
+            py::arg("name"),
+            py::arg("field_type"),
+            py::arg("rays"),
+            py::arg("custom_getter") = std::nullopt)
         .def(
             "render_cartesian_slice",
             [](T &self,
