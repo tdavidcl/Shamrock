@@ -402,10 +402,10 @@ def save_analysis_data(filename, key, value, ianalysis):
             json.dump(data, fp, indent=4)
 
 
-from shamrock.utils.analysis import PerfHistory, column_density_plot
+from shamrock.utils.analysis import ColumnDensityPlot, PerfHistory
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
-column_density_plot = column_density_plot(
+column_density_plot = ColumnDensityPlot(
     model,
     ext_r=rout * 1.5,
     nx=1024,

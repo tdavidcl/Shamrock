@@ -32,27 +32,27 @@ def plot_codeu_to_unit(unit_system, name):
 
     # Surface densities
     elif name == "kg.m^-2":
-        return "[$\\mathrm{{kg}} \\cdot \mathrm{{m}}^{-2}$]", unit_system.to("kg") * unit_system.to(
-            "m", power=-2
-        )
+        return "[$\\mathrm{{kg}} \\cdot \\mathrm{{m}}^{-2}$]", unit_system.to(
+            "kg"
+        ) * unit_system.to("m", power=-2)
     elif name == "g.cm^-2":
-        return "[$\\mathrm{{g}} \\cdot \mathrm{{cm}}^{-2}$]", unit_system.to(
+        return "[$\\mathrm{{g}} \\cdot \\mathrm{{cm}}^{-2}$]", unit_system.to(
             "kg", pref="m"
         ) * unit_system.to("m", power=-2, pref="c")
 
     # Density
     elif name == "kg.m^-3":
-        return "[$\\mathrm{{kg}} \\cdot \mathrm{{m}}^{-3}$]", unit_system.to("kg") * unit_system.to(
-            "m", power=-3
-        )
+        return "[$\\mathrm{{kg}} \\cdot \\mathrm{{m}}^{-3}$]", unit_system.to(
+            "kg"
+        ) * unit_system.to("m", power=-3)
     elif name == "g.cm^-3":
-        return "[$\\mathrm{{g}} \\cdot \mathrm{{cm}}^{-3}$]", unit_system.to(
+        return "[$\\mathrm{{g}} \\cdot \\mathrm{{cm}}^{-3}$]", unit_system.to(
             "kg", pref="m"
         ) * unit_system.to("m", power=-3, pref="c")
 
     # Velocity
     elif name == "m.s^-1":
-        return "[$\\mathrm{{m}} \\cdot \mathrm{{s}}^{-1}$]", unit_system.to("m") * unit_system.to(
+        return "[$\\mathrm{{m}} \\cdot \\mathrm{{s}}^{-1}$]", unit_system.to("m") * unit_system.to(
             "s", power=-1
         )
 

@@ -374,14 +374,14 @@ def save_analysis_data(filename, key, value, ianalysis):
 
 
 from shamrock.utils.analysis import (
+    ColumnDensityPlot,
     PerfHistory,
-    column_density_plot,
     slice_density_plot,
     v_z_slice_plot,
 )
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
-column_density_plot = column_density_plot(
+column_density_plot = ColumnDensityPlot(
     model,
     ext_r=rout * 1.5,
     nx=1024,
@@ -497,7 +497,7 @@ import matplotlib.pyplot as plt
 
 render_gif = True
 
-column_density_plot.render_all(surface_density_unit="g.cm^-2", vmin=1, vmax=1e4, norm="log")
+column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
 
 # %%
 # Make a gif from the plots
