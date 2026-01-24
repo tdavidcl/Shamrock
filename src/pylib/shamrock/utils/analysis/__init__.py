@@ -16,6 +16,7 @@ except ImportError:
 
 from .PerfHistory import PerfHistory
 from .StandardPlotHelper import StandardPlotHelper
+from .UnitHelper import plot_codeu_to_unit
 
 
 class column_density_plot:
@@ -27,11 +28,6 @@ class column_density_plot:
 
     def compute_rho_xy(self):
         arr_rho_xy = self.helper.column_integ_render("rho", "f64")
-
-        # Convert to kg/m^2
-        codeu = self.model.get_units()
-        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-2)
-        arr_rho_xy /= kg_m2_codeu
 
         return arr_rho_xy
 
@@ -45,9 +41,28 @@ class column_density_plot:
     def get_list_analysis_id(self):
         return self.helper.get_list_analysis_id()
 
-    def plot_rho_xy(self, iplot, holywood_mode=False, **kwargs):
+    def plot_rho_xy(
+        self,
+        iplot,
+        holywood_mode=False,
+        dist_unit="au",
+        time_unit="year",
+        surface_density_unit="kg.m^-2",
+        **kwargs,
+    ):
         if shamrock.sys.world_rank() == 0:
             arr_rho_xy, metadata = self.load_analysis(iplot)
+
+            dist_label, dist_conv = plot_codeu_to_unit(self.model.get_units(), dist_unit)
+            metadata["extent"] = [metadata["extent"][i] * dist_conv for i in range(4)]
+
+            time_label, time_conv = plot_codeu_to_unit(self.model.get_units(), time_unit)
+            metadata["time"] *= time_conv
+
+            surface_density_label, surface_density_conv = plot_codeu_to_unit(
+                self.model.get_units(), surface_density_unit
+            )
+            arr_rho_xy *= surface_density_conv
 
             self.helper.figure_init(holywood_mode)
 
@@ -64,13 +79,13 @@ class column_density_plot:
 
             self.helper.figure_render_sinks(metadata, ax)
 
-            plt.xlabel("x [au]")
-            plt.ylabel("y [au]")
+            plt.xlabel(f"x {dist_label}")
+            plt.ylabel(f"y {dist_label}")
 
-            text = "t = {:0.3f} [Year]".format(metadata["time"])
+            text = f"t = {metadata['time']:0.3f} {time_label}"
             self.helper.figure_add_time_info(text, holywood_mode)
 
-            cmap_label = r"$\int \rho \, \mathrm{d} z$ [code unit]"
+            cmap_label = f"$\int \\rho \\, \\mathrm{{d}} z$ {surface_density_label}"
             self.helper.figure_add_colorbar(res, cmap_label, holywood_mode)
 
             print(f"Saving plot to {self.helper.plot_filename.format(iplot)}")
@@ -81,15 +96,24 @@ class column_density_plot:
         for iplot in self.get_list_analysis_id():
             self.plot_rho_xy(iplot, holywood_mode, **kwargs)
 
-    def render_gif(self, save_animation=False, show_animation=False):
+    def render_gif(
+        self,
+        save_animation=False,
+        show_animation=False,
+        fps=15,
+        bitrate=1800,
+        gif_filename="rho_integ.gif",
+    ):
         if shamrock.sys.world_rank() == 0:
             ani = shamrock.utils.plot.show_image_sequence(
                 self.helper.glob_str_plot, render_gif=True
             )
             if save_animation:
                 # To save the animation using Pillow as a gif
-                writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-                ani.save(self.helper.analysis_prefix + "rho_integ.gif", writer=writer)
+                writer = animation.PillowWriter(
+                    fps=fps, metadata=dict(artist="Me"), bitrate=bitrate
+                )
+                ani.save(self.helper.analysis_prefix + gif_filename, writer=writer)
             if show_animation:
                 plt.show()
 

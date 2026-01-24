@@ -497,7 +497,7 @@ import matplotlib.pyplot as plt
 
 render_gif = True
 
-column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
+column_density_plot.render_all(surface_density_unit="g.cm^-2", vmin=1, vmax=1e4, norm="log")
 
 # %%
 # Make a gif from the plots
