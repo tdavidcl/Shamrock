@@ -83,7 +83,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 0.01
-nstop = 30
+nstop = 5
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -373,7 +373,12 @@ def save_analysis_data(filename, key, value, ianalysis):
             json.dump(data, fp, indent=4)
 
 
-from shamrock.utils.analysis import column_density_plot, perf_history
+from shamrock.utils.analysis import (
+    column_density_plot,
+    perf_history,
+    slice_density_plot,
+    v_z_slice_plot,
+)
 
 perf_analysis = perf_history(model, analysis_folder, "perf_history")
 column_density_plot = column_density_plot(
@@ -387,6 +392,29 @@ column_density_plot = column_density_plot(
     analysis_folder=analysis_folder,
     analysis_prefix="rho_integ",
 )
+vertical_density_plot = slice_density_plot(
+    model,
+    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_slice",
+)
+v_z_slice_plot = v_z_slice_plot(
+    model,
+    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="v_z_slice",
+    do_normalization=True,
+)
 
 
 def analysis(ianalysis):
@@ -395,6 +423,8 @@ def analysis(ianalysis):
     ny = 1024
 
     column_density_plot.analysis_save(ianalysis)
+    vertical_density_plot.analysis_save(ianalysis)
+    v_z_slice_plot.analysis_save(ianalysis)
 
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
@@ -486,6 +516,24 @@ column_density_plot.render_all(holywood_mode=True, vmin=1, vmax=1e4, norm="log")
 
 if render_gif and shamrock.sys.world_rank() == 0:
     column_density_plot.render_gif(save_animation=True, show_animation=True)
+
+
+vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
+
+# %%
+# Make a gif from the plots
+
+if render_gif and shamrock.sys.world_rank() == 0:
+    vertical_density_plot.render_gif(save_animation=True, show_animation=True)
+
+
+v_z_slice_plot.render_all(vmin=-100, vmax=100)
+
+# %%
+# Make a gif from the plots
+
+if render_gif and shamrock.sys.world_rank() == 0:
+    v_z_slice_plot.render_gif(save_animation=True, show_animation=True)
 
 
 # %%
