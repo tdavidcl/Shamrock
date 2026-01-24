@@ -45,11 +45,6 @@ class SliceDensityPlot:
             "rho", "f64", self.do_normalization, self.min_normalization
         )
 
-        # Convert to kg/m^2
-        codeu = self.model.get_units()
-        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-3)
-        arr_rho_xy /= kg_m2_codeu
-
         return arr_rho_xy
 
     def analysis_save(self, iplot):
@@ -62,9 +57,26 @@ class SliceDensityPlot:
     def get_list_analysis_id(self):
         return self.helper.get_list_analysis_id()
 
-    def plot_rho_xy(self, iplot, holywood_mode=False, **kwargs):
+    def plot_rho_xy(
+        self,
+        iplot,
+        holywood_mode=False,
+        dist_unit="au",
+        time_unit="year",
+        density_unit="kg.m^-3",
+        **kwargs,
+    ):
         if shamrock.sys.world_rank() == 0:
             arr_rho_xy, metadata = self.load_analysis(iplot)
+
+            dist_label, dist_conv = plot_codeu_to_unit(self.model.get_units(), dist_unit)
+            metadata["extent"] = [metadata["extent"][i] * dist_conv for i in range(4)]
+
+            time_label, time_conv = plot_codeu_to_unit(self.model.get_units(), time_unit)
+            metadata["time"] *= time_conv
+
+            density_label, density_conv = plot_codeu_to_unit(self.model.get_units(), density_unit)
+            arr_rho_xy *= density_conv
 
             self.helper.figure_init(holywood_mode)
 
@@ -81,13 +93,13 @@ class SliceDensityPlot:
 
             self.helper.figure_render_sinks(metadata, ax)
 
-            plt.xlabel("x [au]")
-            plt.ylabel("y [au]")
+            plt.xlabel(f"x {dist_label}")
+            plt.ylabel(f"y {dist_label}")
 
-            text = "t = {:0.3f} [Year]".format(metadata["time"])
+            text = f"t = {metadata['time']:0.3f} {time_label}"
             self.helper.figure_add_time_info(text, holywood_mode)
 
-            cmap_label = r"$\rho$ [code unit]"
+            cmap_label = f"$\\rho$ {density_label}"
             self.helper.figure_add_colorbar(res, cmap_label, holywood_mode)
 
             print(f"Saving plot to {self.helper.plot_filename.format(iplot)}")
