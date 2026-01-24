@@ -217,7 +217,7 @@ class perf_history:
                 plt.close()
 
 
-class column_density_plot:
+class standard_plot_analysis_helper:
     def __init__(self, model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix):
         self.model = model
         self.ext_r = ext_r
@@ -237,16 +237,20 @@ class column_density_plot:
         self.glob_str_plot = self.plot_prefix + "*.png"
         self.glob_str_data = self.analysis_prefix + "*.json"  # json is writen in last
 
-    def compute_rho_xy(self):
+    def get_dx_dy(self):
         ext_x = 2 * self.ext_r * self.aspect
         ext_y = 2 * self.ext_r
 
         dx = (self.ex[0] * ext_x, self.ex[1] * ext_x, self.ex[2] * ext_x)
         dy = (self.ey[0] * ext_y, self.ey[1] * ext_y, self.ey[2] * ext_y)
 
-        arr_rho_xy = self.model.render_cartesian_column_integ(
-            "rho",
-            "f64",
+        return dx, dy
+
+    def column_integ_render(self, field_name, field_type):
+        dx, dy = self.get_dx_dy()
+        arr_field = self.model.render_cartesian_column_integ(
+            field_name,
+            field_type,
             center=(self.center[0], self.center[1], self.center[2]),
             delta_x=dx,
             delta_y=dy,
@@ -254,17 +258,40 @@ class column_density_plot:
             ny=self.ny,
         )
 
-        # Convert to kg/m^2
-        codeu = self.model.get_units()
-        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-2)
-        arr_rho_xy /= kg_m2_codeu
+        return arr_field
 
-        print(np.max(arr_rho_xy), np.min(arr_rho_xy))
+    def slice_render(self, field_name, field_type, do_normalization=True, min_normalization=1e-9):
+        dx, dy = self.get_dx_dy()
+        arr_field_data = self.model.render_cartesian_slice(
+            field_name,
+            field_type,
+            center=(self.center[0], self.center[1], self.center[2]),
+            delta_x=dx,
+            delta_y=dy,
+            nx=self.nx,
+            ny=self.ny,
+        )
 
-        return arr_rho_xy
+        if not do_normalization:
+            return arr_field_data
 
-    def analysis_save(self, iplot):
-        arr_rho_xy = self.compute_rho_xy()
+        arr_field_normalization = self.model.render_cartesian_slice(
+            "unity",
+            "f64",
+            center=(self.center[0], self.center[1], self.center[2]),
+            delta_x=dx,
+            delta_y=dy,
+            nx=self.nx,
+            ny=self.ny,
+        )
+        ret = arr_field_data / arr_field_normalization
+
+        # set to nan below min_normalization
+        ret[ret < min_normalization] = np.nan
+
+        return ret
+
+    def analysis_save(self, iplot, data):
         if shamrock.sys.world_rank() == 0:
             x_e_x = (
                 self.ex[0] * self.center[0]
@@ -288,11 +315,16 @@ class column_density_plot:
                 "sinks": self.model.get_sinks(),
             }
             print(f"Saving data to {self.npy_data_filename.format(iplot)}")
-            np.save(self.npy_data_filename.format(iplot), arr_rho_xy)
+            np.save(self.npy_data_filename.format(iplot), data)
 
             with open(self.json_data_filename.format(iplot), "w") as fp:
                 print(f"Saving metadata to {self.json_data_filename.format(iplot)}")
                 json.dump(metadata, fp)
+
+    def load_analysis(self, iplot):
+        with open(self.json_data_filename.format(iplot), "r") as fp:
+            metadata = json.load(fp)
+        return np.load(self.npy_data_filename.format(iplot)), metadata
 
     def get_list_analysis_id(self):
         import glob
@@ -304,17 +336,52 @@ class column_density_plot:
             list_analysis_id.append(int(f.split("_")[-1].split(".")[0]))
         return list_analysis_id
 
+    def metadata_to_screen_sink_pos(self, metadata):
+        output_list = []
+        for s in metadata["sinks"]:
+            # print(s)
+            x, y, z = s["pos"]
+
+            x_e_x = self.ex[0] * x + self.ex[1] * y + self.ex[2] * z
+            y_e_y = self.ey[0] * x + self.ey[1] * y + self.ey[2] * z
+
+            output_list.append((x_e_x, y_e_y, s))
+        return output_list
+
+
+class column_density_plot:
+    def __init__(self, model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix):
+        self.model = model
+        self.helper = standard_plot_analysis_helper(
+            model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix
+        )
+
+    def compute_rho_xy(self):
+        arr_rho_xy = self.helper.column_integ_render("rho", "f64")
+
+        # Convert to kg/m^2
+        codeu = self.model.get_units()
+        kg_m2_codeu = codeu.get("kg") * codeu.get("m", power=-2)
+        arr_rho_xy /= kg_m2_codeu
+
+        return arr_rho_xy
+
+    def analysis_save(self, iplot):
+        arr_rho_xy = self.compute_rho_xy()
+        self.helper.analysis_save(iplot, arr_rho_xy)
+
     def load_analysis(self, iplot):
-        with open(self.json_data_filename.format(iplot), "r") as fp:
-            metadata = json.load(fp)
-        return np.load(self.npy_data_filename.format(iplot)), metadata
+        return self.helper.load_analysis(iplot)
+
+    def get_list_analysis_id(self):
+        return self.helper.get_list_analysis_id()
 
     def plot_rho_xy(self, iplot, holywood_mode=False, **kwargs):
         if shamrock.sys.world_rank() == 0:
             arr_rho_xy, metadata = self.load_analysis(iplot)
 
             # Reset the figure using the same memory as the last one
-            figsize = (self.aspect * 6, 1.0 * 6)
+            figsize = (self.helper.aspect * 6, 1.0 * 6)
 
             if not holywood_mode:
                 fx, fy = figsize
@@ -325,7 +392,7 @@ class column_density_plot:
 
             if holywood_mode:
                 plt.gca().set_position((0, 0, 1, 1))
-                plt.gcf().set_size_inches(self.nx / dpi, self.ny / dpi)
+                plt.gcf().set_size_inches(self.helper.nx / dpi, self.helper.ny / dpi)
                 plt.axis("off")
 
             import copy
@@ -339,17 +406,12 @@ class column_density_plot:
 
             ax = plt.gca()
 
+            sink_list_plot = self.helper.metadata_to_screen_sink_pos(metadata)
             output_list = []
-            for s in metadata["sinks"]:
-                print(s)
-                x, y, z = s["pos"]
-
-                x_e_x = self.ex[0] * x + self.ex[1] * y + self.ex[2] * z
-                y_e_y = self.ey[0] * x + self.ey[1] * y + self.ey[2] * z
-
+            for x, y, s in sink_list_plot:
                 output_list.append(
                     plt.Circle(
-                        (x_e_x, y_e_y),
+                        (x, y),
                         s["accretion_radius"] * 5,
                         linewidth=0.5,
                         color="blue",
@@ -387,8 +449,8 @@ class column_density_plot:
                 cbar = plt.colorbar(res, extend="both")
                 cbar.set_label(r"$\int \rho \, \mathrm{d} z$ [code unit]")
 
-            print(f"Saving plot to {self.plot_filename.format(iplot)}")
-            plt.savefig(self.plot_filename.format(iplot))
+            print(f"Saving plot to {self.helper.plot_filename.format(iplot)}")
+            plt.savefig(self.helper.plot_filename.format(iplot))
             plt.close()
 
     def render_all(self, holywood_mode=False, **kwargs):
@@ -397,10 +459,12 @@ class column_density_plot:
 
     def render_gif(self, save_animation=False, show_animation=False):
         if shamrock.sys.world_rank() == 0:
-            ani = shamrock.utils.plot.show_image_sequence(self.glob_str_plot, render_gif=True)
+            ani = shamrock.utils.plot.show_image_sequence(
+                self.helper.glob_str_plot, render_gif=True
+            )
             if save_animation:
                 # To save the animation using Pillow as a gif
                 writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-                ani.save(self.analysis_prefix + "rho_integ.gif", writer=writer)
+                ani.save(self.helper.analysis_prefix + "rho_integ.gif", writer=writer)
             if show_animation:
                 plt.show()
