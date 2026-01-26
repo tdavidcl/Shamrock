@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -16,6 +16,7 @@
  * @date 2023-07-31
  */
 
+#include "shambase/stacktrace.hpp"
 #include "shamrock/solvergraph/IEdge.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include <functional>
@@ -73,7 +74,10 @@ namespace shamrock::solvergraph {
          * Applies the custom function to the connected read-write edge.
          * This is where the actual modification of the edge takes place.
          */
-        inline void _impl_evaluate_internal() { set_edge(get_rw_edge<Tedge>(0)); }
+        inline void _impl_evaluate_internal() {
+            __shamrock_stack_entry();
+            set_edge(get_rw_edge<Tedge>(0));
+        }
 
         /**
          * @brief Get the label of the node

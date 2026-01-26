@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -117,7 +117,13 @@ TestStart(
     REQUIRE_EQUAL(b1.size(), b2.size());
     REQUIRE_EQUAL(b.get_size(), b1.size());
 
-    REQUIRE(shamalgs::primitives::equals(q, b1, b2));
+    if (b1.size() == b2.size() && b.get_size() == b1.size()) {
+        sycl::host_accessor acc1(b1, sycl::read_only);
+        sycl::host_accessor acc2(b2, sycl::read_only);
+        for (size_t i = 0; i < b1.size(); ++i) {
+            REQUIRE_EQUAL(acc1[i], acc2[i]);
+        }
+    }
 }
 
 TestStart(Unittest, "shambackends/DeviceBuffer:fill", DeviceBuffer_fill1, 1) {

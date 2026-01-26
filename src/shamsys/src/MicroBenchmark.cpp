@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -151,6 +151,9 @@ void shamsys::microbench::p2p_latency(u32 wr1, u32 wr2) {
     shamcomm::CommunicationBuffer buf_recv{length, instance::get_compute_scheduler_ptr()};
     shamcomm::CommunicationBuffer buf_send{length, instance::get_compute_scheduler_ptr()};
 
+    shambase::Timer bench_timer;
+    bench_timer.start();
+
     f64 t        = 0;
     u64 loops    = 0;
     bool is_used = false;
@@ -180,7 +183,9 @@ void shamsys::microbench::p2p_latency(u32 wr1, u32 wr2) {
         f64 t_end = MPI_Wtime();
         t += t_end - t_start;
 
-    } while (shamalgs::collective::allreduce_min(t) < 1);
+        bench_timer.end();
+
+    } while (shamalgs::collective::allreduce_min(bench_timer.elasped_sec()) < 1);
 
     if (shamcomm::world_rank() == 0) {
         logger::raw_ln(

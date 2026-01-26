@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -12,7 +12,8 @@
 /**
  * @file CopyPatchDataFieldFromLayer.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Defines the CopyPatchDataLayerFields class for copying fields between patch data layers.
+ * @brief Defines the CopyPatchDataFieldFromLayer class for copying fields between patch data
+ * layers.
  *
  */
 
@@ -63,6 +64,8 @@ namespace shamrock::solvergraph {
         }
 
         inline void _impl_evaluate_internal() {
+
+            __shamrock_stack_entry();
 
             auto edges = get_edges();
 
