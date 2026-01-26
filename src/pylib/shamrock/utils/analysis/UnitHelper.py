@@ -30,6 +30,12 @@ def plot_codeu_to_unit(unit_system, name):
     elif name == "Gyr":
         return "[Gyr]", unit_system.to("yr", pref="G")
 
+    # Inverse times
+    elif name == "s^-1":
+        return "[s$^{-1}$]", unit_system.to("s", power=-1)
+    elif name == "yr^-1":
+        return "[yr$^{-1}$]", unit_system.to("yr", power=-1)
+
     # Surface densities
     elif name == "kg.m^-2":
         return "[$\\mathrm{{kg}} \\cdot \\mathrm{{m}}^{-2}$]", unit_system.to(
