@@ -26,8 +26,8 @@ class StandardPlotHelper:
         self.center = center
         self.aspect = float(self.nx) / float(self.ny)
 
-        self.analysis_prefix = os.path.join(analysis_folder,"plots", analysis_prefix) + "_"
-        self.plot_prefix = os.path.join(analysis_folder, "plots","plot_" + analysis_prefix) + "_"
+        self.analysis_prefix = os.path.join(analysis_folder, "plots", analysis_prefix) + "_"
+        self.plot_prefix = os.path.join(analysis_folder, "plots", "plot_" + analysis_prefix) + "_"
 
         self.npy_data_filename = self.analysis_prefix + "{:07}.npy"
         self.json_data_filename = self.analysis_prefix + "{:07}.json"

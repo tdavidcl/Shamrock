@@ -83,7 +83,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 0.05
-nstop = int(1000./dt_stop)
+nstop = int(1000.0 / dt_stop)
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -471,12 +471,18 @@ def analysis(ianalysis):
     perf_analysis.analysis_save(ianalysis)
 
     column_density_plot.plot_rho_xy(iplot=ianalysis, vmin=10, vmax=3e3, norm="log")
-    column_density_plot_hollywood.plot_rho_xy(iplot=ianalysis, vmin=10, vmax=3e3, norm="log", holywood_mode=True)
+    column_density_plot_hollywood.plot_rho_xy(
+        iplot=ianalysis, vmin=10, vmax=3e3, norm="log", holywood_mode=True
+    )
     vertical_density_plot.plot_rho_xy(iplot=ianalysis, vmin=1e-11, vmax=1e-8, norm="log")
     v_z_slice_plot.plot_v_z(iplot=ianalysis, vmin=-300, vmax=300)
-    relative_azy_velocity_slice_plot.plot_relative_azy_velocity(iplot=ianalysis, vmin=0.94, vmax=1.02)
-    vertical_shear_gradient_slice_plot.plot_vertical_shear_gradient(iplot=ianalysis, vmin=-0.1, vmax=0.1)
-    
+    relative_azy_velocity_slice_plot.plot_relative_azy_velocity(
+        iplot=ianalysis, vmin=0.94, vmax=1.02
+    )
+    vertical_shear_gradient_slice_plot.plot_vertical_shear_gradient(
+        iplot=ianalysis, vmin=-0.1, vmax=0.1
+    )
+
     if iplot > 0:
         perf_analysis.plot_perf_history()
 
