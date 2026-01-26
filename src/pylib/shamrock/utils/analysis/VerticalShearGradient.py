@@ -14,6 +14,13 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
+try:
+    from numba import njit
+
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+
 from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
@@ -41,15 +48,22 @@ class VerticalShearGradient:
         self.min_normalization = min_normalization
 
     def compute_vertical_shear_gradient(self):
-        def custom_getter(index, dic_out):
-            x, y, z = dic_out["xyz"][index]
-            vx, vy, vz = dic_out["vxyz"][index]
-
+        def internal(x: float, y: float, vx: float, vy: float, vz: float) -> float:
             e_theta = np.array([-y, x, 0])
             e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
             v_theta = np.dot(e_theta, np.array([vx, vy, vz]))
 
             return v_theta
+
+        if _HAS_NUMBA:
+            if shamrock.sys.world_rank() == 0:
+                print("Using numba for custom getter in VerticalShearGradient")
+            internal = njit(internal)
+
+        def custom_getter(index: int, dic_out: dict) -> float:
+            x, y, z = dic_out["xyz"][index]
+            vx, vy, vz = dic_out["vxyz"][index]
+            return internal(x, y, vx, vy, vz)
 
         arr_v_theta = self.helper.slice_render(
             "custom",

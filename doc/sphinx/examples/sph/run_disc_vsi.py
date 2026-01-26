@@ -125,7 +125,7 @@ def sigma_profile(r):
     return sigma_0 * (r / r0) ** (-p)
 
 
-def kep_profile(r):
+def kep_profile(r: float) -> float:
     return (G * center_mass / r) ** 0.5
 
 
@@ -392,9 +392,9 @@ from shamrock.utils.analysis import (
 )
 
 outter_render_radius = rout * 1.1
-face_on_resolution = 2048
+face_on_resolution = 128
 
-wide_resol = [3840, 2160]
+wide_resol = [128, 128]
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 

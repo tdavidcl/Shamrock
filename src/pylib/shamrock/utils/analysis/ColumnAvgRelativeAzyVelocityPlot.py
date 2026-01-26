@@ -14,6 +14,13 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
+try:
+    from numba import njit
+
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+
 from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
@@ -43,17 +50,31 @@ class ColumnAvgRelativeAzyVelocityPlot:
         self.min_normalization = min_normalization
 
     def compute_relative_azy_velocity(self):
-        def custom_getter(index, dic_out):
-            x, y, z = dic_out["xyz"][index]
-            vx, vy, vz = dic_out["vxyz"][index]
+        if _HAS_NUMBA:
+            if shamrock.sys.world_rank() == 0:
+                print("Using numba for velocity profile in SliceRelativeAzyVelocityPlot")
+            vel_profile_jit = njit(self.velocity_profile)
+        else:
+            vel_profile_jit = self.velocity_profile
 
+        def internal(x: float, y: float, vx: float, vy: float, vz: float) -> float:
             e_theta = np.array([-y, x, 0])
             e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
             v_theta = np.dot(e_theta, np.array([vx, vy, vz]))
 
-            v_relative = v_theta / self.velocity_profile(np.sqrt(x**2 + y**2))
+            v_relative = v_theta / vel_profile_jit(np.sqrt(x**2 + y**2))
 
             return v_relative
+
+        if _HAS_NUMBA:
+            if shamrock.sys.world_rank() == 0:
+                print("Using numba for custom getter in SliceRelativeAzyVelocityPlot")
+            internal = njit(internal)
+
+        def custom_getter(index: int, dic_out: dict) -> float:
+            x, y, z = dic_out["xyz"][index]
+            vx, vy, vz = dic_out["vxyz"][index]
+            return internal(x, y, vx, vy, vz)
 
         if self.do_normalization:
             arr_v = self.helper.column_average_render(

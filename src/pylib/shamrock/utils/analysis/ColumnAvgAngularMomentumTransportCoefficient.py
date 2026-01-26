@@ -14,6 +14,13 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
+try:
+    from numba import njit
+
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+
 from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
@@ -46,13 +53,18 @@ class ColumnAvgAngularMomentumTransportCoefficient:
         pmass = self.model.get_particle_mass()
         hfact = self.model.get_hfact()
 
-        def custom_getter(index, dic_out):
-            x, y, z = dic_out["xyz"][index]
-            vx, vy, vz = dic_out["vxyz"][index]
+        if _HAS_NUMBA:
+            if shamrock.sys.world_rank() == 0:
+                print("Using numba for velocity profile in SliceRelativeAzyVelocityPlot")
+            vel_profile_jit = njit(self.velocity_profile)
+        else:
+            vel_profile_jit = self.velocity_profile
 
-            hpart = dic_out["hpart"][index]
+        def internal(
+            x: float, y: float, z: float, vx: float, vy: float, vz: float, hpart: float, cs: float
+        ) -> float:
             rho = pmass * (hfact / hpart) ** 3
-            P = dic_out["soundspeed"][index] ** 2 * rho  # TODO: use true pressure
+            P = cs**2 * rho  # TODO: use true pressure
 
             e_theta = np.array([-y, x, 0])
             e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
@@ -63,10 +75,25 @@ class ColumnAvgAngularMomentumTransportCoefficient:
             v_r = np.dot(e_r, np.array([vx, vy, vz]))
             v_theta = np.dot(e_theta, np.array([vx, vy, vz]))
 
-            delta_vtheta = v_theta - self.velocity_profile(np.sqrt(x**2 + y**2))
+            delta_vtheta = v_theta - vel_profile_jit(np.sqrt(x**2 + y**2))
             alpha = rho * v_r * delta_vtheta / P
 
             return alpha
+
+        if _HAS_NUMBA:
+            if shamrock.sys.world_rank() == 0:
+                print(
+                    "Using numba for custom getter in ColumnAvgAngularMomentumTransportCoefficient"
+                )
+            internal = njit(internal)
+
+        def custom_getter(index: int, dic_out: dict) -> float:
+            x, y, z = dic_out["xyz"][index]
+            vx, vy, vz = dic_out["vxyz"][index]
+
+            hpart = dic_out["hpart"][index]
+            cs = dic_out["soundspeed"][index]
+            return internal(x, y, z, vx, vy, vz, hpart, cs)
 
         arr_v = self.helper.column_average_render(
             "custom",
