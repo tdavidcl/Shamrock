@@ -377,8 +377,8 @@ from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
-    SliceVzPlot,
     SliceRelativeAzyVelocityPlot,
+    SliceVzPlot,
 )
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
@@ -391,7 +391,8 @@ column_density_plot = ColumnDensityPlot(
     ey=(0, 1, 0),
     center=(0, 0, 0),
     analysis_folder=analysis_folder,
-
+    analysis_prefix="rho_integ_normal",
+)
 
 column_density_plot_hollywood = ColumnDensityPlot(
     model,
@@ -435,13 +436,14 @@ relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
     ny=1080,
     ex=(1, 0, 0),
     ey=(0, 0, 1),
-    center=((rin + rout)/2, 0, 0),
+    center=((rin + rout) / 2, 0, 0),
     analysis_folder=analysis_folder,
     analysis_prefix="relative_azy_velocity_slice",
     velocity_profile=kep_profile,
     do_normalization=True,
     min_normalization=1e-9,
 )
+
 
 def analysis(ianalysis):
     ext = rout * 1.5
@@ -527,12 +529,9 @@ render_gif = True
 
 column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
 column_density_plot_hollywood.render_all(vmin=1, vmax=1e4, norm="log", holywood_mode=True)
-
-# %%
-# Make a gif from the plots
-
-if render_gif and shamrock.sys.world_rank() == 0:
-    column_density_plot.render_gif(save_animation=True, show_animation=True)
+vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
+v_z_slice_plot.render_all(vmin=-100, vmax=100)
+relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
 
 
 # %%
@@ -548,37 +547,36 @@ if render_gif:
 # Same but in hollywood
 
 if render_gif:
-    ani = column_density_plot_hollywood.render_gif(save_animation=True)
+    ani = ani = column_density_plot_hollywood.render_gif(save_animation=True)
     if ani is not None:
         plt.show()
 
 
-vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
+# %%
+# Make a gif from the plots
+
+if render_gif and shamrock.sys.world_rank() == 0:
+    ani = vertical_density_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
 
 # %%
 # Make a gif from the plots
 
 if render_gif and shamrock.sys.world_rank() == 0:
-    vertical_density_plot.render_gif(save_animation=True, show_animation=True)
+    ani = v_z_slice_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
 
-
-v_z_slice_plot.render_all(vmin=-100, vmax=100)
 
 # %%
 # Make a gif from the plots
 
 if render_gif and shamrock.sys.world_rank() == 0:
-    v_z_slice_plot.render_gif(save_animation=True, show_animation=True)
-
-
-
-relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
-
-# %%
-# Make a gif from the plots
-
-if render_gif and shamrock.sys.world_rank() == 0:
-    relative_azy_velocity_slice_plot.render_gif(save_animation=True, show_animation=True)
+    ani = relative_azy_velocity_slice_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
 
 
 # %%

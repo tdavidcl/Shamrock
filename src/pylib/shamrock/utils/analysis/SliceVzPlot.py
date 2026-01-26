@@ -115,7 +115,7 @@ class SliceVzPlot:
         for iplot in self.get_list_analysis_id():
             self.plot_v_z(iplot, holywood_mode, **kwargs)
 
-    def render_gif(self, save_animation=False, show_animation=False):
+    def render_gif(self, save_animation=False):
         if shamrock.sys.world_rank() == 0:
             ani = shamrock.utils.plot.show_image_sequence(
                 self.helper.glob_str_plot, render_gif=True
@@ -124,5 +124,5 @@ class SliceVzPlot:
                 # To save the animation using Pillow as a gif
                 writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
                 ani.save(self.helper.analysis_prefix + "v_z_slice_plot.gif", writer=writer)
-            if show_animation:
-                plt.show()
+            return ani
+        return None

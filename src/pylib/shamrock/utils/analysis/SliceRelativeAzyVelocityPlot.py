@@ -129,7 +129,7 @@ class SliceRelativeAzyVelocityPlot:
         for iplot in self.get_list_analysis_id():
             self.plot_relative_azy_velocity(iplot, holywood_mode, **kwargs)
 
-    def render_gif(self, save_animation=False, show_animation=False):
+    def render_gif(self, save_animation=False):
         if shamrock.sys.world_rank() == 0:
             ani = shamrock.utils.plot.show_image_sequence(
                 self.helper.glob_str_plot, render_gif=True
@@ -141,5 +141,5 @@ class SliceRelativeAzyVelocityPlot:
                     self.helper.analysis_prefix + "relative_azy_velocity_slice_plot.gif",
                     writer=writer,
                 )
-            if show_animation:
-                plt.show()
+            return ani
+        return None
