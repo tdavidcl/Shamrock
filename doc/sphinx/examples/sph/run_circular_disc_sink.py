@@ -391,8 +391,20 @@ column_density_plot = ColumnDensityPlot(
     ey=(0, 1, 0),
     center=(0, 0, 0),
     analysis_folder=analysis_folder,
-    analysis_prefix="rho_integ",
+
+
+column_density_plot_hollywood = ColumnDensityPlot(
+    model,
+    ext_r=rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_hollywood",
 )
+
 vertical_density_plot = SliceDensityPlot(
     model,
     ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
@@ -437,9 +449,11 @@ def analysis(ianalysis):
     ny = 1024
 
     column_density_plot.analysis_save(ianalysis)
+    column_density_plot_hollywood.analysis_save(ianalysis)
     vertical_density_plot.analysis_save(ianalysis)
     v_z_slice_plot.analysis_save(ianalysis)
     relative_azy_velocity_slice_plot.analysis_save(ianalysis)
+
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
     total_momentum = shamrock.model_sph.analysisTotalMomentum(model=model).get_total_momentum()
@@ -497,7 +511,7 @@ for ttarg in t_stop:
     istop += 1
 
 # %%
-# Plot generation (make_plots.py)
+# Plot generation
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # Load the on-the-fly analysis after the run to make the plots
 # (everything in this section can be in another file)
@@ -512,6 +526,7 @@ import matplotlib.pyplot as plt
 render_gif = True
 
 column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
+column_density_plot_hollywood.render_all(vmin=1, vmax=1e4, norm="log", holywood_mode=True)
 
 # %%
 # Make a gif from the plots
@@ -521,15 +536,21 @@ if render_gif and shamrock.sys.world_rank() == 0:
 
 
 # %%
-# The same one but in holywood mode
+# Do it for rho integ
 
-column_density_plot.render_all(holywood_mode=True, vmin=1, vmax=1e4, norm="log")
+if render_gif:
+    ani = column_density_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
 
 # %%
-# Make a gif from the plots
+# Same but in hollywood
 
-if render_gif and shamrock.sys.world_rank() == 0:
-    column_density_plot.render_gif(save_animation=True, show_animation=True)
+if render_gif:
+    ani = column_density_plot_hollywood.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
 
 
 vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")

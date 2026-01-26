@@ -386,9 +386,34 @@ column_density_plot = ColumnDensityPlot(
     analysis_prefix="rho_integ",
 )
 
+column_density_plot = ColumnDensityPlot(
+    model,
+    ext_r=rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_normal",
+)
+
+column_density_plot_hollywood = ColumnDensityPlot(
+    model,
+    ext_r=rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_hollywood",
+)
+
 
 def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
+    column_density_plot_hollywood.analysis_save(ianalysis)
 
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
@@ -444,7 +469,7 @@ for ttarg in t_stop:
     istop += 1
 
 # %%
-# Plot generation (make_plots.py)
+# Plot generation
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # Load the on-the-fly analysis after the run to make the plots
 # (everything in this section can be in another file)
@@ -452,27 +477,31 @@ for ttarg in t_stop:
 import matplotlib
 import matplotlib.pyplot as plt
 
-render_gif = True
-
 column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
-
-# %%
-# Make a gif from the plots
-
-if render_gif and shamrock.sys.world_rank() == 0:
-    column_density_plot.render_gif(save_animation=True, show_animation=True)
-
+column_density_plot_hollywood.render_all(vmin=1, vmax=1e4, norm="log", holywood_mode=True)
 
 # %%
 # The same one but in holywood mode
 
-column_density_plot.render_all(holywood_mode=True, vmin=1, vmax=1e4, norm="log")
+
+render_gif = True
 
 # %%
-# Make a gif from the plots
+# Do it for rho integ
 
-if render_gif and shamrock.sys.world_rank() == 0:
-    column_density_plot.render_gif(save_animation=True, show_animation=True)
+if render_gif:
+    ani = column_density_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+
+# %%
+# Same but in hollywood
+
+if render_gif:
+    ani = column_density_plot_hollywood.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
 
 
 # %%

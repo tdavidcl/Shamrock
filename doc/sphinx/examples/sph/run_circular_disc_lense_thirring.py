@@ -417,6 +417,30 @@ column_density_plot = ColumnDensityPlot(
     analysis_prefix="rho_integ",
 )
 
+column_density_plot = ColumnDensityPlot(
+    model,
+    ext_r=rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_normal",
+)
+
+column_density_plot_hollywood = ColumnDensityPlot(
+    model,
+    ext_r=rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_hollywood",
+)
+
 
 def analysis(ianalysis):
     ext = rout * 1.5
@@ -424,6 +448,7 @@ def analysis(ianalysis):
     ny = 1024
 
     column_density_plot.analysis_save(ianalysis)
+    column_density_plot_hollywood.analysis_save(ianalysis)
 
     arr_vxyz = model.render_cartesian_column_integ(
         "vxyz",
@@ -504,17 +529,10 @@ import matplotlib.pyplot as plt
 # dump_folder += "/"
 
 
-# sphinx_gallery_multi_image = "single"
-
-render_gif = True
-
-column_density_plot.render_all(vmin=1, vmax=1e7, norm="log")
-
-# %%
-# Make a gif from the plots
-
-if render_gif and shamrock.sys.world_rank() == 0:
-    column_density_plot.render_gif(save_animation=True, show_animation=True)
+column_density_plot.render_all(vmin=1, vmax=1e7, norm="log", time_unit="second")
+column_density_plot_hollywood.render_all(
+    vmin=1, vmax=1e7, norm="log", holywood_mode=True, time_unit="second"
+)
 
 
 def plot_vz_integ(metadata, arr_vz, iplot):
@@ -542,7 +560,7 @@ def plot_vz_integ(metadata, arr_vz, iplot):
 def get_list_dumps_id():
     import glob
 
-    list_files = glob.glob(plot_folder + "rho_integ_*.npy")
+    list_files = glob.glob(plot_folder + "vxyz_integ_*.npy")
     list_files.sort()
     list_dumps_id = []
     for f in list_files:
@@ -564,6 +582,25 @@ if shamrock.sys.world_rank() == 0:
 
 import matplotlib.animation as animation
 from shamrock.utils.plot import show_image_sequence
+
+render_gif = True
+
+# %%
+# Do it for rho integ
+
+if render_gif:
+    ani = column_density_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+
+# %%
+# Same but in hollywood
+
+if render_gif:
+    ani = column_density_plot_hollywood.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
 
 # %%
 # Do it for rho integ
