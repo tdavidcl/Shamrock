@@ -97,8 +97,8 @@ class SliceRelativeAzyVelocityPlot:
 
             import copy
 
-            my_cmap = matplotlib.colormaps["seismic"].copy()  # copy the default cmap
-            my_cmap.set_bad(color="white")
+            my_cmap = matplotlib.colormaps["magma"].copy()  # copy the default cmap
+            my_cmap.set_bad(color="black")
 
             res = plt.imshow(
                 arr_relative_azy_velocity,

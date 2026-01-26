@@ -26,8 +26,8 @@ class StandardPlotHelper:
         self.center = center
         self.aspect = float(self.nx) / float(self.ny)
 
-        self.analysis_prefix = os.path.join(analysis_folder, analysis_prefix) + "_"
-        self.plot_prefix = os.path.join(analysis_folder, "plot_" + analysis_prefix) + "_"
+        self.analysis_prefix = os.path.join(analysis_folder,"plots", analysis_prefix) + "_"
+        self.plot_prefix = os.path.join(analysis_folder, "plots","plot_" + analysis_prefix) + "_"
 
         self.npy_data_filename = self.analysis_prefix + "{:07}.npy"
         self.json_data_filename = self.analysis_prefix + "{:07}.json"
@@ -175,7 +175,7 @@ class StandardPlotHelper:
             plt.axis("off")
 
     def figure_render_sinks(
-        self, metadata, ax, scale_factor=5, color="green", linewidth=1, fill=False
+        self, metadata, ax, scale_factor=1, color="green", linewidth=1, fill=False
     ):
         sink_list_plot = self.metadata_to_screen_sink_pos(metadata)
         output_list = []
