@@ -392,7 +392,9 @@ from shamrock.utils.analysis import (
 )
 
 outter_render_radius = rout * 1.1
-face_on_resolution = 1024
+face_on_resolution = 2048
+
+wide_resol = [3840, 2160]
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 
@@ -413,8 +415,8 @@ tsqrt2 = 2 / np.sqrt(2)
 column_density_plot_hollywood = ColumnDensityPlot(
     model,
     ext_r=outter_render_radius / 1.5,
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, tsqrt2, tsqrt2),
     center=(0, 0, 0),
@@ -425,8 +427,8 @@ column_density_plot_hollywood = ColumnDensityPlot(
 vertical_density_plot = SliceDensityPlot(
     model,
     ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=(0, 0, 0),
@@ -436,8 +438,8 @@ vertical_density_plot = SliceDensityPlot(
 v_z_slice_plot = SliceVzPlot(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=((rin + rout) / 2, 0, 0),
@@ -448,8 +450,8 @@ v_z_slice_plot = SliceVzPlot(
 relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=((rin + rout) / 2, 0, 0),
@@ -463,8 +465,8 @@ relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
 vertical_shear_gradient_slice_plot = VerticalShearGradient(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=((rin + rout) / 2, 0, 0),
@@ -477,8 +479,8 @@ vertical_shear_gradient_slice_plot = VerticalShearGradient(
 angular_momentum_transport_coefficient_slice_plot = AngularMomentumTransportCoefficient(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=((rin + rout) / 2, 0, 0),
@@ -492,8 +494,8 @@ angular_momentum_transport_coefficient_slice_plot = AngularMomentumTransportCoef
 vertical_alpha_AV_slice_plot = SliceAlphaAVPlot(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, 0, 1),
     center=((rin + rout) / 2, 0, 0),
@@ -531,8 +533,8 @@ column_avg_angular_momentum_transport_coefficient_plot = (
 column_avg_relative_azy_velocity_plot = ColumnAvgRelativeAzyVelocityPlot(
     model,
     ext_r=outter_render_radius / 1.5,
-    nx=1920,
-    ny=1080,
+    nx=wide_resol[0],
+    ny=wide_resol[1],
     ex=(1, 0, 0),
     ey=(0, tsqrt2, tsqrt2),
     center=(0, 0, 0),
