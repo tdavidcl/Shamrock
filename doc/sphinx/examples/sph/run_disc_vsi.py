@@ -72,7 +72,10 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = 100000
+Npart = int(float(os.getenv("NPART")))
+
+if shamrock.sys.world_rank() == 0:
+    print(f"Npart: {Npart}")
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -82,7 +85,7 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-dt_stop = 0.05
+dt_stop = 0.25
 nstop = int(1000.0 / dt_stop)
 
 # The list of times at which the simulation will pause for analysis / dumping
@@ -102,10 +105,6 @@ q = 0.5
 p = 3.0 / 2.0
 r0 = 1.0
 
-# Viscosity parameter
-alpha_AV = 1.0e-3 / 0.08
-alpha_u = 1.0
-beta_AV = 2.0
 
 # Integrator parameters
 C_cour = 0.3
@@ -243,7 +242,12 @@ if idump_last_dump is not None:
 else:
     # Generate the default config
     cfg = model.gen_default_config()
-    cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
+
+    cfg.set_artif_viscosity_VaryingCD10(
+        alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
+    )
+
+    # cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
@@ -258,12 +262,12 @@ else:
     # cfg.set_show_neigh_stats(True)
 
     # Standard way to set the smoothing length (e.g. Price et al. 2018)
-    cfg.set_smoothing_length_density_based()
+    # cfg.set_smoothing_length_density_based()
 
     # Standard density based smoothing lenght but with a neighbor count limit
     # Use it if you have large slowdowns due to giant particles
     # I recommend to use it if you have a circumbinary discs as the issue is very likely to happen
-    # cfg.set_smoothing_length_density_based_neigh_lim(500)
+    cfg.set_smoothing_length_density_based_neigh_lim(500)
 
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
@@ -374,21 +378,29 @@ def save_analysis_data(filename, key, value, ianalysis):
 
 
 from shamrock.utils.analysis import (
+    AngularMomentumTransportCoefficient,
+    ColumnAvgAlphaAVPlot,
+    ColumnAvgAngularMomentumTransportCoefficient,
+    ColumnAvgRelativeAzyVelocityPlot,
     ColumnDensityPlot,
     PerfHistory,
+    SliceAlphaAVPlot,
     SliceDensityPlot,
     SliceRelativeAzyVelocityPlot,
     SliceVzPlot,
     VerticalShearGradient,
 )
 
+outter_render_radius = rout * 1.1
+face_on_resolution = 1024
+
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 
 column_density_plot = ColumnDensityPlot(
     model,
-    ext_r=rout * 1.5,
-    nx=1024,
-    ny=1024,
+    ext_r=outter_render_radius,
+    nx=face_on_resolution,
+    ny=face_on_resolution,
     ex=(1, 0, 0),
     ey=(0, 1, 0),
     center=(0, 0, 0),
@@ -396,13 +408,15 @@ column_density_plot = ColumnDensityPlot(
     analysis_prefix="rho_integ_normal",
 )
 
+tsqrt2 = 2 / np.sqrt(2)
+
 column_density_plot_hollywood = ColumnDensityPlot(
     model,
-    ext_r=rout * 1.5,
-    nx=1024,
-    ny=1024,
+    ext_r=outter_render_radius / 1.5,
+    nx=1920,
+    ny=1080,
     ex=(1, 0, 0),
-    ey=(0, 1, 0),
+    ey=(0, tsqrt2, tsqrt2),
     center=(0, 0, 0),
     analysis_folder=analysis_folder,
     analysis_prefix="rho_integ_hollywood",
@@ -460,6 +474,74 @@ vertical_shear_gradient_slice_plot = VerticalShearGradient(
     min_normalization=1e-9,
 )
 
+angular_momentum_transport_coefficient_slice_plot = AngularMomentumTransportCoefficient(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="angular_momentum_transport_coefficient_slice",
+    velocity_profile=kep_profile,
+    do_normalization=True,
+    min_normalization=1e-9,
+)
+
+vertical_alpha_AV_slice_plot = SliceAlphaAVPlot(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="vertical_alpha_AV_slice",
+)
+
+column_avg_alpha_AV_plot = ColumnAvgAlphaAVPlot(
+    model,
+    ext_r=outter_render_radius,
+    nx=face_on_resolution,
+    ny=face_on_resolution,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="column_avg_alpha_AV_plot",
+)
+
+column_avg_angular_momentum_transport_coefficient_plot = (
+    ColumnAvgAngularMomentumTransportCoefficient(
+        model,
+        ext_r=outter_render_radius,
+        nx=face_on_resolution,
+        ny=face_on_resolution,
+        ex=(1, 0, 0),
+        ey=(0, 1, 0),
+        center=(0, 0, 0),
+        analysis_folder=analysis_folder,
+        analysis_prefix="column_avg_angular_momentum_transport_coefficient_plot",
+        velocity_profile=kep_profile,
+    )
+)
+
+column_avg_relative_azy_velocity_plot = ColumnAvgRelativeAzyVelocityPlot(
+    model,
+    ext_r=outter_render_radius / 1.5,
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, tsqrt2, tsqrt2),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    do_normalization=False,
+    analysis_prefix="column_avg_relative_azy_velocity_plot",
+    velocity_profile=kep_profile,
+)
+
 
 def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
@@ -468,6 +550,11 @@ def analysis(ianalysis):
     v_z_slice_plot.analysis_save(ianalysis)
     relative_azy_velocity_slice_plot.analysis_save(ianalysis)
     vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
+    angular_momentum_transport_coefficient_slice_plot.analysis_save(ianalysis)
+    vertical_alpha_AV_slice_plot.analysis_save(ianalysis)
+    column_avg_alpha_AV_plot.analysis_save(ianalysis)
+    column_avg_angular_momentum_transport_coefficient_plot.analysis_save(ianalysis)
+    column_avg_relative_azy_velocity_plot.analysis_save(ianalysis)
     perf_analysis.analysis_save(ianalysis)
 
     column_density_plot.plot_rho_xy(iplot=ianalysis, vmin=10, vmax=3e3, norm="log")
@@ -482,6 +569,17 @@ def analysis(ianalysis):
     vertical_shear_gradient_slice_plot.plot_vertical_shear_gradient(
         iplot=ianalysis, vmin=-0.1, vmax=0.1
     )
+
+    angular_momentum_transport_coefficient_slice_plot.plot(
+        iplot=ianalysis, vmin=1e-4, vmax=1e-1, norm="log"
+    )
+    column_avg_angular_momentum_transport_coefficient_plot.plot(
+        iplot=ianalysis, vmin=1e-4, vmax=1e-1, norm="log"
+    )
+
+    vertical_alpha_AV_slice_plot.plot(iplot=ianalysis, vmin=1e-4, vmax=1.0, norm="log")
+    column_avg_alpha_AV_plot.plot(iplot=ianalysis, vmin=1e-4, vmax=1.0, norm="log")
+    column_avg_relative_azy_velocity_plot.plot(iplot=ianalysis, vmin=0, vmax=7, holywood_mode=True)
 
     if iplot > 0:
         perf_analysis.plot_perf_history()

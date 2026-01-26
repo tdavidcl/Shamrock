@@ -305,6 +305,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 self.gpart_mass = gpart_mass;
             })
         .def(
+            "get_particle_mass",
+            [](TConfig &self) {
+                return self.gpart_mass;
+            })
+        .def(
             "add_kill_sphere",
             [](TConfig &self, const Tvec &center, Tscal radius) {
                 self.particle_killing.add_kill_sphere(center, radius);
