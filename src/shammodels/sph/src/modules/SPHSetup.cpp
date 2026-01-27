@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -65,7 +65,7 @@ inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph:
         std::function<Tscal(Tscal)> H_profile,
         std::function<Tscal(Tscal)> rot_profile,
         std::function<Tscal(Tscal)> cs_profile,
-        std::mt19937 eng,
+        std::mt19937_64 eng,
         Tscal init_h_factor) {
     return std::shared_ptr<ISPHSetupNode>(new GeneratorMCDisc<Tvec, SPHKernel>(
         context,
@@ -532,6 +532,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
     f64 total_time_rank_getter = 0;
     f64 max_time_rank_getter   = 0;
 
+    shamalgs::collective::DDSCommCache comm_cache;
     u32 step_count = 0;
     while (!shamalgs::collective::are_all_rank_true(to_insert.is_empty(), MPI_COMM_WORLD)) {
 

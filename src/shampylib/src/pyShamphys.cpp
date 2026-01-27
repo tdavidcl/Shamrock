@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -9,6 +9,7 @@
 
 /**
  * @file pyShamphys.cpp
+ * @author David Fang (david.fang@ikmail.com)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  */
@@ -459,4 +460,14 @@ Register_pymod(shamphyslibinit) {
         py::arg("mu"),
         py::arg("mh"),
         py::arg("kb"));
+
+    eos_module.def(
+        "eos_Fermi",
+        [](f64 mu_e, f64 rho) {
+            auto P_cs = shamphys::EOS_Fermi<f64>::pressure_and_soundspeed(mu_e, rho);
+            return std::tuple<f64, f64>{P_cs.pressure, P_cs.soundspeed};
+        },
+        py::kw_only(),
+        py::arg("mu_e"),
+        py::arg("rho"));
 }

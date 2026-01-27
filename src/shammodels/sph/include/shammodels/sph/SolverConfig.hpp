@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -185,6 +185,13 @@ namespace shammodels::sph {
 
     struct SelfGravConfig {
 
+        struct SFMM {
+            u32 order;
+            f64 opening_angle;
+            bool leaf_lowering;
+            u32 reduction_level;
+        };
+
         struct FMM {
             u32 order;
             f64 opening_angle;
@@ -203,7 +210,7 @@ namespace shammodels::sph {
 
         struct None {};
 
-        using mode = std::variant<FMM, MM, Direct, None>;
+        using mode = std::variant<SFMM, FMM, MM, Direct, None>;
 
         mode config = None{};
 
@@ -215,11 +222,15 @@ namespace shammodels::sph {
         void set_fmm(u32 order, f64 opening_angle, u32 reduction_level) {
             config = FMM{order, opening_angle, reduction_level};
         }
+        void set_sfmm(u32 order, f64 opening_angle, bool leaf_lowering, u32 reduction_level) {
+            config = SFMM{order, opening_angle, leaf_lowering, reduction_level};
+        }
 
         bool is_none() const { return std::holds_alternative<None>(config); }
         bool is_direct() const { return std::holds_alternative<Direct>(config); }
         bool is_mm() const { return std::holds_alternative<MM>(config); }
         bool is_fmm() const { return std::holds_alternative<FMM>(config); }
+        bool is_sfmm() const { return std::holds_alternative<SFMM>(config); }
 
         bool is_sg_on() const { return !is_none(); }
         bool is_sg_off() const { return is_none(); }
@@ -497,7 +508,7 @@ struct shammodels::sph::SolverConfig {
         return bool(std::get_if<T>(&eos_config.config));
     }
 
-    /// Check if the EOS is an polytropic equation of state
+    /// Check if the EOS is a polytropic equation of state
     inline bool is_eos_polytropic() {
         using T = typename EOSConfig::Polytropic;
         return bool(std::get_if<T>(&eos_config.config));
@@ -506,6 +517,12 @@ struct shammodels::sph::SolverConfig {
     /// Check if the EOS is an isothermal equation of state
     inline bool is_eos_isothermal() {
         using T = typename EOSConfig::Isothermal;
+        return bool(std::get_if<T>(&eos_config.config));
+    }
+
+    /// Check if the EOS is a Fermi equation of state
+    inline bool is_eos_fermi() {
+        using T = typename EOSConfig::Fermi;
         return bool(std::get_if<T>(&eos_config.config));
     }
 
@@ -557,6 +574,27 @@ struct shammodels::sph::SolverConfig {
     inline void set_eos_locally_isothermalFA2014(Tscal h_over_r) {
         eos_config.set_locally_isothermalFA2014(h_over_r);
     }
+
+    /**
+     * @brief Set the EOS configuration to a locally isothermal equation of state from Farris 2014
+     * extended to q != 1/2
+     *
+     * @param cs0 Soundspeed at the reference radius
+     * @param q Power exponent of the soundspeed profile
+     * @param r0 Reference radius
+     * @param n_sinks Number of sinks to consider for the equation of state
+     */
+    inline void set_eos_locally_isothermalFA2014_extended(
+        Tscal cs0, Tscal q, Tscal r0, u32 n_sinks) {
+        eos_config.set_locally_isothermalFA2014_extended(cs0, q, r0, n_sinks);
+    }
+
+    /**
+     * @brief Set the EOS configuration to a Fermi equation of state
+     *
+     * @param mu_e The mean molecular weight
+     */
+    inline void set_eos_fermi(Tscal mu_e) { eos_config.set_fermi(mu_e); }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // EOS Config (END)
@@ -808,6 +846,10 @@ struct shammodels::sph::SolverConfig {
     /// @brief Whether the solver has a field for dt divB
     inline bool has_field_dtdivB() { return mhd_config.has_dtdivB_field(); }
 
+    /// @brief Whether to store luminosity
+    bool compute_luminosity = false;
+    inline void use_luminosity(bool enable) { compute_luminosity = enable; }
+
     /// Print the current status of the solver config
     inline void print_status() {
         if (shamcomm::world_rank() != 0) {
@@ -973,7 +1015,15 @@ namespace shammodels::sph {
 
     /// JSON serialization for SelfGravConfig
     inline void to_json(nlohmann::json &j, const SelfGravConfig &p) {
-        if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
+        if (const SelfGravConfig::SFMM *conf = std::get_if<SelfGravConfig::SFMM>(&p.config)) {
+            j = {
+                {"type", "sfmm"},
+                {"order", conf->order},
+                {"opening_angle", conf->opening_angle},
+                {"reduction_level", conf->reduction_level},
+                {"leaf_lowering", conf->leaf_lowering},
+            };
+        } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
             j = {
                 {"type", "fmm"},
                 {"order", conf->order},
@@ -1011,7 +1061,13 @@ namespace shammodels::sph {
 
     /// JSON deserialization for SelfGravConfig
     inline void from_json(const nlohmann::json &j, SelfGravConfig &p) {
-        if (j.at("type").get<std::string>() == "fmm") {
+        if (j.at("type").get<std::string>() == "sfmm") {
+            p.config = SelfGravConfig::SFMM{
+                j.at("order").get<u32>(),
+                j.at("opening_angle").get<f64>(),
+                j.at("leaf_lowering").get<bool>(),
+                j.at("reduction_level").get<u32>()};
+        } else if (j.at("type").get<std::string>() == "fmm") {
             p.config = SelfGravConfig::FMM{
                 j.at("order").get<u32>(),
                 j.at("opening_angle").get<f64>(),

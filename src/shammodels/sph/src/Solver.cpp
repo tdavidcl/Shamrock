@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -46,6 +46,7 @@
 #include "shammodels/sph/modules/BuildTrees.hpp"
 #include "shammodels/sph/modules/ComputeEos.hpp"
 #include "shammodels/sph/modules/ComputeLoadBalanceValue.hpp"
+#include "shammodels/sph/modules/ComputeLuminosity.hpp"
 #include "shammodels/sph/modules/ComputeNeighStats.hpp"
 #include "shammodels/sph/modules/ComputeOmega.hpp"
 #include "shammodels/sph/modules/ConservativeCheck.hpp"
@@ -66,6 +67,7 @@
 #include "shammodels/sph/modules/self_gravity/SGDirectPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGFMMPlummer.hpp"
 #include "shammodels/sph/modules/self_gravity/SGMMPlummer.hpp"
+#include "shammodels/sph/modules/self_gravity/SGSFMMPlummer.hpp"
 #include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamphys/mhd.hpp"
 #include "shamrock/patch/Patch.hpp"
@@ -525,6 +527,13 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
     storage.pressure = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "pressure", "P");
     storage.soundspeed
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "soundspeed", "c_s");
+
+    storage.exchange_gz_alpha
+        = std::make_shared<shamrock::solvergraph::ExchangeGhostField<Tscal>>();
+    storage.exchange_gz_node
+        = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.ghost_layout);
+    storage.exchange_gz_positions
+        = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.xyzh_ghost_layout);
 }
 
 template<class Tvec, template<class> class Kern>
@@ -777,8 +786,8 @@ void shammodels::sph::Solver<Tvec, Kern>::merge_position_ghost() {
 
     StackEntry stack_loc{};
 
-    storage.merged_xyzh.set(
-        storage.ghost_handler.get().build_comm_merge_positions(storage.ghost_patch_cache.get()));
+    storage.merged_xyzh.set(storage.ghost_handler.get().build_comm_merge_positions(
+        storage.ghost_patch_cache.get(), storage.exchange_gz_positions));
 
     { // set element counts
         shambase::get_check_ref(storage.part_counts).indexes
@@ -1380,8 +1389,8 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
             }
         });
 
-    shambase::DistributedDataShared<PatchDataLayer> interf_pdat
-        = ghost_handle.communicate_pdat(ghost_layout_ptr, std::move(pdat_interf));
+    shambase::DistributedDataShared<PatchDataLayer> interf_pdat = ghost_handle.communicate_pdat(
+        ghost_layout_ptr, std::move(pdat_interf), storage.exchange_gz_node);
 
     std::map<u64, u64> sz_interf_map;
     interf_pdat.for_each([&](u64 s, u64 r, PatchDataLayer &pdat_interf) {
@@ -1772,24 +1781,50 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         } else if (solver_config.self_grav_config.is_fmm()) {
 
-            SelfGravConfig::FMM &mm_config = shambase::get_check_ref(
+            SelfGravConfig::FMM &fmm_config = shambase::get_check_ref(
                 std::get_if<SelfGravConfig::FMM>(&solver_config.self_grav_config.config));
 
-            auto run_sg_fmm = [&](auto mm_order_tag) {
-                constexpr u32 order = decltype(mm_order_tag)::value;
+            auto run_sg_fmm = [&](auto fmm_order_tag) {
+                constexpr u32 order = decltype(fmm_order_tag)::value;
                 modules::SGFMMPlummer<Tvec, order> self_gravity_mm_node(
-                    eps_grav, mm_config.opening_angle, mm_config.reduction_level);
+                    eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
                 self_gravity_mm_node.evaluate();
             };
 
-            switch (mm_config.order) {
+            switch (fmm_config.order) {
             case 1 : run_sg_fmm(std::integral_constant<u32, 1>{}); break;
             case 2 : run_sg_fmm(std::integral_constant<u32, 2>{}); break;
             case 3 : run_sg_fmm(std::integral_constant<u32, 3>{}); break;
             case 4 : run_sg_fmm(std::integral_constant<u32, 4>{}); break;
             case 5 : run_sg_fmm(std::integral_constant<u32, 5>{}); break;
+            default: shambase::throw_unimplemented();
+            }
+
+        } else if (solver_config.self_grav_config.is_sfmm()) {
+
+            SelfGravConfig::SFMM &sfmm_config = shambase::get_check_ref(
+                std::get_if<SelfGravConfig::SFMM>(&solver_config.self_grav_config.config));
+
+            auto run_sg_sfmm = [&](auto sfmm_order_tag) {
+                constexpr u32 order = decltype(sfmm_order_tag)::value;
+                modules::SGSFMMPlummer<Tvec, order> self_gravity_mm_node(
+                    eps_grav,
+                    sfmm_config.opening_angle,
+                    sfmm_config.leaf_lowering,
+                    sfmm_config.reduction_level);
+                self_gravity_mm_node.set_edges(
+                    sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
+                self_gravity_mm_node.evaluate();
+            };
+
+            switch (sfmm_config.order) {
+            case 1 : run_sg_sfmm(std::integral_constant<u32, 1>{}); break;
+            case 2 : run_sg_sfmm(std::integral_constant<u32, 2>{}); break;
+            case 3 : run_sg_sfmm(std::integral_constant<u32, 3>{}); break;
+            case 4 : run_sg_sfmm(std::integral_constant<u32, 4>{}); break;
+            case 5 : run_sg_sfmm(std::integral_constant<u32, 5>{}); break;
             default: shambase::throw_unimplemented();
             }
 
@@ -1923,7 +1958,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 });
 
             shambase::DistributedDataShared<PatchDataField<Tscal>> interf_pdat
-                = ghost_handle.communicate_pdatfield(std::move(field_interf), 1);
+                = ghost_handle.communicate_pdatfield(
+                    std::move(field_interf), 1, storage.exchange_gz_alpha);
 
             shambase::DistributedData<PatchDataField<Tscal>> merged_field
                 = ghost_handle.template merge_native<PatchDataField<Tscal>, PatchDataField<Tscal>>(
@@ -1989,6 +2025,92 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         prepare_corrector();
 
         update_derivs();
+
+        bool has_luminosity = solver_config.compute_luminosity;
+
+        if (has_luminosity) {
+            const u32 iluminosity = pdl.get_field_idx<Tscal>("luminosity");
+
+            shambase::get_check_ref(storage.hpart_with_ghosts)
+                .set_refs(storage.merged_xyzh.get()
+                              .template map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                                  [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                                      return std::ref(mpdat.get_field<Tscal>(
+                                          1)); // hpart is at index 1 in merged_xyzh
+                                  }));
+
+            auto uint_with_ghost = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+
+            shambase::get_check_ref(storage.hpart_with_ghosts)
+                .set_refs(storage.merged_xyzh.get()
+                              .template map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                                  [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                                      return std::ref(mpdat.get_field<Tscal>(1));
+                                  }));
+
+            shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>>
+                set_uint_with_ghost_refs(
+                    [&](shamrock::solvergraph::FieldRefs<Tscal> &field_uint_with_ghost_edge) {
+                        shambase::DistributedData<PatchDataLayer> &mpdats
+                            = storage.merged_patchdata_ghost.get();
+
+                        shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_uint_with_ghost_refs
+                            = {};
+
+                        scheduler().for_each_patchdata_nonempty(
+                            [&](const Patch p, PatchDataLayer &pdat) {
+                                PatchDataLayer &mpdat = mpdats.get(p.id_patch);
+
+                                auto &field = mpdat.get_field<Tscal>(iuint_interf);
+                                field_uint_with_ghost_refs.add_obj(p.id_patch, std::ref(field));
+                            });
+
+                        field_uint_with_ghost_edge.set_refs(field_uint_with_ghost_refs);
+                    });
+
+            set_uint_with_ghost_refs.set_edges(uint_with_ghost);
+
+            auto luminosity = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+
+            shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>>
+                set_luminosity_refs(
+                    [&](shamrock::solvergraph::FieldRefs<Tscal> &field_luminosity_edge) {
+                        shambase::DistributedData<PatchDataLayer> &mpdats
+                            = storage.merged_patchdata_ghost.get();
+
+                        shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_luminosity_refs
+                            = {};
+
+                        scheduler().for_each_patchdata_nonempty(
+                            [&](const Patch p, PatchDataLayer &pdat) {
+                                auto &field = pdat.get_field<Tscal>(iluminosity);
+                                field_luminosity_refs.add_obj(p.id_patch, std::ref(field));
+                            });
+                        field_luminosity_edge.set_refs(field_luminosity_refs);
+                    });
+
+            set_luminosity_refs.set_edges(luminosity);
+
+            set_uint_with_ghost_refs.evaluate();
+            set_luminosity_refs.evaluate();
+
+            Tscal alpha_u = solver_config.artif_viscosity.get_alpha_u().value();
+
+            modules::NodeComputeLuminosity<Tvec, Kern> compute_luminosity{
+                solver_config.gpart_mass, alpha_u};
+
+            compute_luminosity.set_edges(
+                storage.part_counts_with_ghost,
+                storage.neigh_cache,
+                storage.positions_with_ghosts,
+                storage.hpart_with_ghosts,
+                storage.omega,
+                uint_with_ghost,
+                storage.pressure,
+                luminosity);
+
+            compute_luminosity.evaluate();
+        }
 
         modules::ConservativeCheck<Tvec, Kern> cv_check(context, solver_config, storage);
         cv_check.check_conservation();

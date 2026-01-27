@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -74,7 +74,7 @@ namespace shammodels::sph::modules {
             std::function<Tscal(Tscal)> H_profile,
             std::function<Tscal(Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
-            std::mt19937 eng,
+            std::mt19937_64 eng,
             Tscal init_h_factor);
 
         std::shared_ptr<ISPHSetupNode> make_combiner_add(

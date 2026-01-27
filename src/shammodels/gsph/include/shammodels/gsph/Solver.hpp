@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -130,6 +130,15 @@ namespace shammodels::gsph {
         void compute_omega();
         void compute_eos_fields();
         void reset_eos_fields();
+
+        /**
+         * @brief Copy EOS fields from solvergraph to patchdata for persistence
+         *
+         * Copies density, pressure, and soundspeed from the temporary solvergraph
+         * fields to the persistent patchdata layout. This ensures thermodynamic
+         * state is preserved across simulation restarts and available for VTK output.
+         */
+        void copy_eos_to_patchdata();
 
         /**
          * @brief Compute gradients for MUSCL reconstruction
