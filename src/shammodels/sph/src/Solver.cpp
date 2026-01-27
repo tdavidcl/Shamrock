@@ -2488,6 +2488,37 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             Tscal rank_dt = cfl_dt.compute_rank_min();
 
+            if (solver_config.should_save_dt_to_fields()) {
+
+                const u32 idt_part = pdl.get_field_idx<Tscal>("dt_part");
+
+                scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+                    sham::DeviceBuffer<Tscal> &buf_dt_part
+                        = pdat.get_field_buf_ref<Tscal>(idt_part);
+                    sham::DeviceBuffer<Tscal> &buf_dt = cfl_dt.get_buf_check(cur_p.id_patch);
+
+                    sycl::range range_npart{pdat.get_obj_cnt()};
+
+                    /////////////////////////////////////////////
+
+                    auto &q = shamsys::instance::get_compute_scheduler().get_queue();
+                    sham::EventList depends_list;
+
+                    auto dt      = buf_dt.get_read_access(depends_list);
+                    auto dt_part = buf_dt_part.get_write_access(depends_list);
+
+                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                        cgh.parallel_for(
+                            sycl::range<1>{pdat.get_obj_cnt()}, [=](sycl::item<1> item) {
+                                dt_part[item] = dt[item];
+                            });
+                    });
+
+                    buf_dt.complete_event_state(e);
+                    buf_dt_part.complete_event_state(e);
+                });
+            }
+
             Tscal sink_sink_cfl = shambase::get_infty<Tscal>();
             if (!storage.sinks.is_empty()) {
                 // sink sink CFL

@@ -482,6 +482,10 @@ struct shammodels::sph::SolverConfig {
         particle_reordering_step_freq = freq;
     }
 
+    bool save_dt_to_fields = false;
+    inline void set_save_dt_to_fields(bool enable) { save_dt_to_fields = enable; }
+    inline bool should_save_dt_to_fields() const { return save_dt_to_fields; }
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Solver behavior config (END)
     //////////////////////////////////////////////////////////////////////////////////////////////

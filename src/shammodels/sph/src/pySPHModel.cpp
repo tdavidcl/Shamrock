@@ -76,6 +76,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_enable_particle_reordering", &TConfig::set_enable_particle_reordering)
         .def("set_particle_reordering_step_freq", &TConfig::set_particle_reordering_step_freq)
         .def("use_luminosity", &TConfig::use_luminosity)
+        .def("set_save_dt_to_fields", &TConfig::set_save_dt_to_fields)
+        .def("should_save_dt_to_fields", &TConfig::should_save_dt_to_fields)
         .def("set_eos_isothermal", &TConfig::set_eos_isothermal)
         .def("set_eos_adiabatic", &TConfig::set_eos_adiabatic)
         .def("set_eos_polytropic", &TConfig::set_eos_polytropic)
