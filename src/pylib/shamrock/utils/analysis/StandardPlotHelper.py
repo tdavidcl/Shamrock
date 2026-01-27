@@ -101,26 +101,24 @@ class StandardPlotHelper:
 
         return ret
 
+    def get_extent(self):
+        x_e_x = (
+            self.ex[0] * self.center[0] + self.ex[1] * self.center[1] + self.ex[2] * self.center[2]
+        )
+        y_e_y = (
+            self.ey[0] * self.center[0] + self.ey[1] * self.center[1] + self.ey[2] * self.center[2]
+        )
+        return [
+            -self.ext_r * self.aspect + x_e_x,
+            self.ext_r * self.aspect + x_e_x,
+            -self.ext_r + y_e_y,
+            self.ext_r + y_e_y,
+        ]
+
     def analysis_save(self, iplot, data):
         if shamrock.sys.world_rank() == 0:
-            x_e_x = (
-                self.ex[0] * self.center[0]
-                + self.ex[1] * self.center[1]
-                + self.ex[2] * self.center[2]
-            )
-            y_e_y = (
-                self.ey[0] * self.center[0]
-                + self.ey[1] * self.center[1]
-                + self.ey[2] * self.center[2]
-            )
-
             metadata = {
-                "extent": [
-                    -self.ext_r * self.aspect + x_e_x,
-                    self.ext_r * self.aspect + x_e_x,
-                    -self.ext_r + y_e_y,
-                    self.ext_r + y_e_y,
-                ],
+                "extent": self.get_extent(),
                 "time": self.model.get_time(),
                 "sinks": self.model.get_sinks(),
             }

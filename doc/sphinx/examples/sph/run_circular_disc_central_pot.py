@@ -375,6 +375,9 @@ from shamrock.utils.analysis import (
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
+    SliceRelativeAzyVelocityPlot,
+    SliceVzPlot,
+    VerticalShearGradient,
 )
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
@@ -403,6 +406,60 @@ column_density_plot_hollywood = ColumnDensityPlot(
     analysis_prefix="rho_integ_hollywood",
 )
 
+vertical_density_plot = SliceDensityPlot(
+    model,
+    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_slice",
+)
+
+v_z_slice_plot = SliceVzPlot(
+    model,
+    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="v_z_slice",
+    do_normalization=True,
+)
+
+relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="relative_azy_velocity_slice",
+    velocity_profile=kep_profile,
+    do_normalization=True,
+    min_normalization=1e-9,
+)
+
+vertical_shear_gradient_slice_plot = VerticalShearGradient(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="vertical_shear_gradient_slice",
+    do_normalization=True,
+    min_normalization=1e-9,
+)
+
 
 vertical_density_plot = SliceDensityPlot(
     model,
@@ -421,6 +478,9 @@ def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
     column_density_plot_hollywood.analysis_save(ianalysis)
     vertical_density_plot.analysis_save(ianalysis)
+    v_z_slice_plot.analysis_save(ianalysis)
+    relative_azy_velocity_slice_plot.analysis_save(ianalysis)
+    vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
 
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
@@ -487,6 +547,9 @@ import matplotlib.pyplot as plt
 column_density_plot.render_all(vmin=1, vmax=1e4, norm="log")
 column_density_plot_hollywood.render_all(vmin=1, vmax=1e4, norm="log", holywood_mode=True)
 vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
+v_z_slice_plot.render_all(vmin=-300, vmax=300)
+relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
+vertical_shear_gradient_slice_plot.render_all(vmin=-1, vmax=1)
 
 # %%
 # Make gif for the doc (plot_to_gif.py)
@@ -500,7 +563,6 @@ render_gif = True
 
 # %%
 # Do it for rho integ
-
 if render_gif:
     ani = column_density_plot.render_gif(save_animation=True)
     if ani is not None:
@@ -509,7 +571,6 @@ if render_gif:
 
 # %%
 # Same but in hollywood
-
 if render_gif:
     ani = column_density_plot_hollywood.render_gif(save_animation=True)
     if ani is not None:
@@ -519,6 +580,29 @@ if render_gif:
 # For the vertical density plot
 if render_gif and shamrock.sys.world_rank() == 0:
     ani = vertical_density_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+
+# %%
+# Make a gif from the plots
+if render_gif and shamrock.sys.world_rank() == 0:
+    ani = v_z_slice_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+
+# %%
+# Make a gif from the plots
+if render_gif and shamrock.sys.world_rank() == 0:
+    ani = relative_azy_velocity_slice_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+# %%
+# Make a gif from the plots
+if render_gif and shamrock.sys.world_rank() == 0:
+    ani = vertical_shear_gradient_slice_plot.render_gif(save_animation=True)
     if ani is not None:
         plt.show()
 

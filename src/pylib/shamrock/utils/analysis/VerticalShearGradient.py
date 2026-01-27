@@ -18,7 +18,7 @@ from .StandardPlotHelper import StandardPlotHelper
 from .UnitHelper import plot_codeu_to_unit
 
 
-class SliceDensityPlot:
+class VerticalShearGradient:
     def __init__(
         self,
         model,
@@ -40,16 +40,35 @@ class SliceDensityPlot:
         self.do_normalization = do_normalization
         self.min_normalization = min_normalization
 
-    def compute_rho_xy(self):
-        arr_rho_xy = self.helper.slice_render(
-            "rho", "f64", self.do_normalization, self.min_normalization
+    def compute_vertical_shear_gradient(self):
+        def custom_getter(index, dic_out):
+            x, y, z = dic_out["xyz"][index]
+            vx, vy, vz = dic_out["vxyz"][index]
+
+            e_theta = np.array([-y, x, 0])
+            e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
+            v_theta = np.dot(e_theta, np.array([vx, vy, vz]))
+
+            return v_theta
+
+        arr_v_theta = self.helper.slice_render(
+            "custom",
+            "f64",
+            self.do_normalization,
+            self.min_normalization,
+            custom_getter=custom_getter,
         )
 
-        return arr_rho_xy
+        extent = self.helper.get_extent()
+        dy = (extent[3] - extent[2]) / self.helper.ny
+
+        vert_shear_gradient = np.gradient(arr_v_theta, dy, axis=0)  # / dy
+
+        return vert_shear_gradient
 
     def analysis_save(self, iplot):
-        arr_rho_xy = self.compute_rho_xy()
-        self.helper.analysis_save(iplot, arr_rho_xy)
+        vert_shear_gradient = self.compute_vertical_shear_gradient()
+        self.helper.analysis_save(iplot, vert_shear_gradient)
 
     def load_analysis(self, iplot):
         return self.helper.load_analysis(iplot)
@@ -63,11 +82,10 @@ class SliceDensityPlot:
         holywood_mode=False,
         dist_unit="au",
         time_unit="year",
-        density_unit="kg.m^-3",
         **kwargs,
     ):
         if shamrock.sys.world_rank() == 0:
-            arr_rho_xy, metadata = self.load_analysis(iplot)
+            vert_shear_gradient, metadata = self.load_analysis(iplot)
 
             dist_label, dist_conv = plot_codeu_to_unit(self.model.get_units(), dist_unit)
             metadata["extent"] = [metadata["extent"][i] * dist_conv for i in range(4)]
@@ -75,18 +93,24 @@ class SliceDensityPlot:
             time_label, time_conv = plot_codeu_to_unit(self.model.get_units(), time_unit)
             metadata["time"] *= time_conv
 
-            density_label, density_conv = plot_codeu_to_unit(self.model.get_units(), density_unit)
-            arr_rho_xy *= density_conv
+            vert_shear_gradient_label, vert_shear_gradient_conv = plot_codeu_to_unit(
+                self.model.get_units(), "yr^-1"
+            )
+            vert_shear_gradient *= vert_shear_gradient_conv
 
             self.helper.figure_init(holywood_mode)
 
             import copy
 
-            my_cmap = matplotlib.colormaps["magma"].copy()  # copy the default cmap
-            my_cmap.set_bad(color="black")
+            my_cmap = matplotlib.colormaps["seismic"].copy()  # copy the default cmap
+            my_cmap.set_bad(color="white")
 
             res = plt.imshow(
-                arr_rho_xy, cmap=my_cmap, origin="lower", extent=metadata["extent"], **kwargs
+                vert_shear_gradient,
+                cmap=my_cmap,
+                origin="lower",
+                extent=metadata["extent"],
+                **kwargs,
             )
 
             ax = plt.gca()
@@ -99,7 +123,7 @@ class SliceDensityPlot:
             text = f"t = {metadata['time']:0.3f} {time_label}"
             self.helper.figure_add_time_info(text, holywood_mode)
 
-            cmap_label = f"$\\rho$ {density_label}"
+            cmap_label = f"${{\\partial R \\Omega}}/{{\\partial z}}$ {vert_shear_gradient_label}"
             self.helper.figure_add_colorbar(res, cmap_label, holywood_mode)
 
             print(f"Saving plot to {self.helper.plot_filename.format(iplot)}")
@@ -110,7 +134,13 @@ class SliceDensityPlot:
         for iplot in self.get_list_analysis_id():
             self.plot(iplot, holywood_mode, **kwargs)
 
-    def render_gif(self, save_animation=False, fps=15, bitrate=1800, gif_filename="rho_slice.gif"):
+    def render_gif(
+        self,
+        save_animation=False,
+        fps=15,
+        bitrate=1800,
+        gif_filename="vertical_shear_gradient_slice.gif",
+    ):
         if shamrock.sys.world_rank() == 0:
             ani = shamrock.utils.plot.show_image_sequence(
                 self.helper.glob_str_plot, render_gif=True
@@ -120,6 +150,9 @@ class SliceDensityPlot:
                 writer = animation.PillowWriter(
                     fps=fps, metadata=dict(artist="Me"), bitrate=bitrate
                 )
-                ani.save(self.helper.analysis_prefix + gif_filename, writer=writer)
+                ani.save(
+                    self.helper.analysis_prefix + gif_filename,
+                    writer=writer,
+                )
             return ani
         return None
