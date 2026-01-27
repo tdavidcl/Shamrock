@@ -148,16 +148,24 @@ class VerticalShearGradient:
         for iplot in self.get_list_analysis_id():
             self.plot_vertical_shear_gradient(iplot, holywood_mode, **kwargs)
 
-    def render_gif(self, save_animation=False):
+    def render_gif(
+        self,
+        save_animation=False,
+        fps=15,
+        bitrate=1800,
+        gif_filename="vertical_shear_gradient_slice.gif",
+    ):
         if shamrock.sys.world_rank() == 0:
             ani = shamrock.utils.plot.show_image_sequence(
                 self.helper.glob_str_plot, render_gif=True
             )
             if save_animation:
                 # To save the animation using Pillow as a gif
-                writer = animation.PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+                writer = animation.PillowWriter(
+                    fps=fps, metadata=dict(artist="Me"), bitrate=bitrate
+                )
                 ani.save(
-                    self.helper.analysis_prefix + "vertical_shear_gradient_slice_plot.gif",
+                    self.helper.analysis_prefix + gif_filename,
                     writer=writer,
                 )
             return ani
