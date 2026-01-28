@@ -41,7 +41,7 @@ class SliceDtPart:
         self.min_normalization = min_normalization
 
     def compute_dt_part(self):
-        if not self.model.get_solver_config().should_save_dt_to_fields():
+        if not self.model.get_current_config().should_save_dt_to_fields():
             raise ValueError("dt_part is not saved to fields")
 
         arr_dt_part = self.helper.slice_render(
@@ -69,7 +69,7 @@ class SliceDtPart:
         holywood_mode=False,
         dist_unit="au",
         time_unit="year",
-        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+        contour_list=None,
         **kwargs,
     ):
         if shamrock.sys.world_rank() == 0:
@@ -81,7 +81,7 @@ class SliceDtPart:
             time_label, time_conv = plot_codeu_to_unit(self.model.get_units(), time_unit)
             metadata["time"] *= time_conv
 
-            dt_part_label, dt_part_conv = plot_codeu_to_unit(self.model.get_units(), "year")
+            dt_part_label, dt_part_conv = plot_codeu_to_unit(self.model.get_units(), time_unit)
             arr_dt_part *= dt_part_conv
 
             self.helper.figure_init(holywood_mode)

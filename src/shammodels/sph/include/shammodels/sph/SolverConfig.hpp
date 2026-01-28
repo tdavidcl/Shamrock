@@ -1148,6 +1148,8 @@ namespace shammodels::sph {
             {"enable_particle_reordering", p.enable_particle_reordering},
             {"particle_reordering_step_freq", p.particle_reordering_step_freq},
 
+            {"save_dt_to_fields", p.save_dt_to_fields},
+
             {"eos_config", p.eos_config},
 
             {"artif_viscosity", p.artif_viscosity},
@@ -1274,6 +1276,15 @@ namespace shammodels::sph {
                 "SPHConfig",
                 "particle_reordering_step_freq not found when deserializing, defaulting to ",
                 p.particle_reordering_step_freq);
+        }
+
+        if (j.contains("save_dt_to_fields")) {
+            j.at("save_dt_to_fields").get_to(p.save_dt_to_fields);
+        } else {
+            logger::warn_ln(
+                "SPHConfig",
+                "save_dt_to_fields not found when deserializing, defaulting to ",
+                p.save_dt_to_fields);
         }
 
         j.at("eos_config").get_to(p.eos_config);

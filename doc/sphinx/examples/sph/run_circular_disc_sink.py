@@ -267,6 +267,8 @@ else:
     # I recommend to use it if you have a circumbinary discs as the issue is very likely to happen
     # cfg.set_smoothing_length_density_based_neigh_lim(500)
 
+    cfg.set_save_dt_to_fields(True)
+
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
 
@@ -556,7 +558,9 @@ vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
 v_z_slice_plot.render_all(vmin=-300, vmax=300)
 relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
 vertical_shear_gradient_slice_plot.render_all(vmin=-1, vmax=1)
-dt_part_slice_plot.render_all(vmin=1e-4, vmax=1, norm="log")
+dt_part_slice_plot.render_all(
+    vmin=1e-4, vmax=1, norm="log", contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1]
+)
 
 # %%
 # Make gif for the doc (plot_to_gif.py)
