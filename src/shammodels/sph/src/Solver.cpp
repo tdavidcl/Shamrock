@@ -2497,25 +2497,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         = pdat.get_field_buf_ref<Tscal>(idt_part);
                     sham::DeviceBuffer<Tscal> &buf_dt = cfl_dt.get_buf_check(cur_p.id_patch);
 
-                    sycl::range range_npart{pdat.get_obj_cnt()};
-
-                    /////////////////////////////////////////////
-
-                    auto &q = shamsys::instance::get_compute_scheduler().get_queue();
-                    sham::EventList depends_list;
-
-                    auto dt      = buf_dt.get_read_access(depends_list);
-                    auto dt_part = buf_dt_part.get_write_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        cgh.parallel_for(
-                            sycl::range<1>{pdat.get_obj_cnt()}, [=](sycl::item<1> item) {
-                                dt_part[item] = dt[item];
-                            });
-                    });
-
-                    buf_dt.complete_event_state(e);
-                    buf_dt_part.complete_event_state(e);
+                    buf_dt_part.copy_from(buf_dt, pdat.get_obj_cnt());
                 });
             }
 
