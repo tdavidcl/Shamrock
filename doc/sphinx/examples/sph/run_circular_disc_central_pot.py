@@ -266,6 +266,8 @@ else:
     # I recommend to use it if you have a circumbinary discs as the issue is very likely to happen
     # cfg.set_smoothing_length_density_based_neigh_lim(500)
 
+    cfg.set_save_dt_to_fields(True)
+
     # Set the solver config to be the one stored in cfg
     model.set_solver_config(cfg)
 
