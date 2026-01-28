@@ -485,7 +485,7 @@ struct shammodels::sph::SolverConfig {
     bool save_dt_to_fields = false;
     inline void set_save_dt_to_fields(bool enable) { save_dt_to_fields = enable; }
     inline bool should_save_dt_to_fields() const { return save_dt_to_fields; }
-    
+
     bool show_ghost_zone_graph = false;
     inline void set_show_ghost_zone_graph(bool enable) { show_ghost_zone_graph = enable; }
 
@@ -1290,7 +1290,7 @@ namespace shammodels::sph {
                 "save_dt_to_fields not found when deserializing, defaulting to ",
                 p.save_dt_to_fields);
         }
-        
+
         if (j.contains("show_ghost_zone_graph")) {
             j.at("show_ghost_zone_graph").get_to(p.show_ghost_zone_graph);
         } else {
