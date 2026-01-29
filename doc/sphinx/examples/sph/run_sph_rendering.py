@@ -557,7 +557,9 @@ def plot_rho_integ_azymuthal(metadata, arr_rho_azymuthal):
 
     arr_rho_azymuthal = np.array(arr_rho_azymuthal).reshape(nr, nz)
 
-    res = plt.imshow(arr_rho_azymuthal, cmap=my_cmap, origin="lower", extent=ext, norm="log")
+    res = plt.imshow(
+        arr_rho_azymuthal, cmap=my_cmap, origin="lower", extent=ext, norm="log", vmin=1e-5, vmax=1
+    )
     plt.xlabel("r")
     plt.ylabel("z")
     plt.title(f"t = {metadata['time']:0.3f} [seconds]")
@@ -573,7 +575,15 @@ def plot_rho_slice_azymuthal(metadata, arr_rho_slice_azymuthal):
 
     arr_rho_slice_azymuthal = np.array(arr_rho_slice_azymuthal).reshape(nr, nz)
 
-    res = plt.imshow(arr_rho_slice_azymuthal, cmap=my_cmap, origin="lower", extent=ext, norm="log")
+    res = plt.imshow(
+        arr_rho_slice_azymuthal,
+        cmap=my_cmap,
+        origin="lower",
+        extent=ext,
+        norm="log",
+        vmin=1e-5,
+        vmax=1,
+    )
     plt.xlabel("r")
     plt.ylabel("z")
     plt.title(f"t = {metadata['time']:0.3f} [seconds]")
