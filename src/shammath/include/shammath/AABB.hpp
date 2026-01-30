@@ -58,7 +58,7 @@ namespace shammath {
     /**
      * @brief Ring ray representation for intersection testing
      *
-     * A = {center + e_x * cos(theta) + e_y * sin(theta) | theta in [0, 2*pi]}
+     * A = {center + radius * (e_x * cos(theta) + e_y * sin(theta)) | theta in [0, 2*pi]}
      *
      * @tparam T Vector type for coordinates
      */
