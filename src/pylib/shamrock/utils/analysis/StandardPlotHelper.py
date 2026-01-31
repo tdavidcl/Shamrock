@@ -137,6 +137,15 @@ def figure_add_time_info(text, holywood_mode=False):
         plt.title(text)
 
 
+def reshape_array_to_2d(arr, nx, ny, field_type):
+    if field_type == "f64":
+        return np.array(arr).reshape(ny, nx)
+    elif field_type == "f64_3":
+        return np.array(arr).reshape(ny, nx, 3)
+    else:
+        raise ValueError(f"Unsupported field type: {field_type}")
+
+
 def init_analysis_plot_paths(obj, analysis_folder, analysis_prefix):
     plots_dir = os.path.join(analysis_folder, "plots")
     os.makedirs(plots_dir, exist_ok=True)
@@ -301,6 +310,147 @@ class StandardPlotHelper:
     def figure_render_sinks(self, metadata, ax, scale_factor, color, linewidth, fill):
         sink_list_plot = self.metadata_to_screen_sink_pos(metadata)
         figure_render_sinks(sink_list_plot, ax, scale_factor, color, linewidth, fill)
+
+    def figure_add_time_info(self, text, holywood_mode=False):
+        figure_add_time_info(text, holywood_mode)
+
+    def figure_add_colorbar(self, imshow_result, label, holywood_mode=False):
+        figure_add_colorbar(imshow_result, label, holywood_mode)
+
+
+class DiscSlicePlotHelper:
+    def init_ring_rays(self):
+        r_pts_list = np.linspace(0.0, self.ext_r, self.nr)
+        z_r_pts_list = np.linspace(-self.z_r_max, self.z_r_max, self.nz)
+        z_pts_list = np.linspace(-self.z_r_max, self.z_r_max, self.nz) * self.ext_r
+
+        r_grid_deproj, z_r_grid_deproj = np.meshgrid(r_pts_list, z_r_pts_list)
+        r_grid, z_grid = np.meshgrid(r_pts_list, z_pts_list)
+
+        cx, cy, cz = self.center
+
+        if self.deproject:
+            self.extent = [0, self.ext_r, -self.z_r_max, self.z_r_max]
+
+            base_pos = np.column_stack([r_grid_deproj.ravel(), z_r_grid_deproj.ravel()])
+
+            self.ring_rays = [
+                shamrock.math.RingRay_f64_3(
+                    (cx, cy, cz + pos[1] * pos[0]), pos[0], (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+                )
+                for pos in base_pos
+            ]
+            self.pos = [(cx + pos[0], cy, cz + pos[1] * pos[0]) for pos in base_pos]
+        else:
+            self.extent = [0, self.ext_r, -self.z_r_max * self.ext_r, self.z_r_max * self.ext_r]
+
+            base_pos = np.column_stack([r_grid.ravel(), z_grid.ravel()])
+
+            self.ring_rays = [
+                shamrock.math.RingRay_f64_3(
+                    (cx, cy, cz + pos[1]), pos[0], (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+                )
+                for pos in base_pos
+            ]
+            self.pos = [(cx + pos[0], cy, cz + pos[1]) for pos in base_pos]
+
+    def __init__(
+        self, model, ext_r, z_r_max, nr, nz, center, analysis_folder, analysis_prefix, deproject
+    ):
+        self.model = model
+        self.ext_r = ext_r
+        self.z_r_max = z_r_max
+        self.nr = nr
+        self.nz = nz
+        self.center = center
+        self.deproject = deproject
+
+        init_analysis_plot_paths(self, analysis_folder, analysis_prefix)
+
+        self.init_ring_rays()
+
+    def azymuthal_average_render_explicit(
+        self,
+        field_name,
+        field_type,
+        do_normalization=True,
+        min_normalization=1e-9,
+        custom_getter=None,
+    ):
+        arr_field = self.model.render_azymuthal_integ(
+            field_name,
+            field_type,
+            ring_rays=self.ring_rays,
+            custom_getter=custom_getter,
+        )
+
+        arr_field = reshape_array_to_2d(arr_field, self.nr, self.nz, field_type)
+
+        if not do_normalization:
+            return arr_field
+
+        normalisation = self.model.render_azymuthal_integ(
+            "unity",
+            "f64",
+            ring_rays=self.ring_rays,
+        )
+
+        normalisation = reshape_array_to_2d(normalisation, self.nr, self.nz, "f64")
+
+        return field_normalize(arr_field, normalisation, min_normalization)
+
+    def vertical_slice_render(
+        self,
+        field_name,
+        field_type,
+        do_normalization=True,
+        min_normalization=1e-9,
+        custom_getter=None,
+    ):
+        arr_field = self.model.render_slice(
+            field_name,
+            field_type,
+            self.pos,
+            custom_getter=custom_getter,
+        )
+
+        arr_field = reshape_array_to_2d(arr_field, self.nr, self.nz, field_type)
+
+        if not do_normalization:
+            return arr_field
+
+        normalisation = self.model.render_slice(
+            "unity",
+            "f64",
+            ring_rays=self.pos,
+        )
+
+        normalisation = reshape_array_to_2d(normalisation, self.nr, self.nz, "f64")
+
+        return field_normalize(arr_field, normalisation, min_normalization)
+
+    def get_extent(self):
+        return self.extent
+
+    def analysis_save(self, iplot, data):
+        metadata = {
+            "extent": self.get_extent(),
+            "time": self.model.get_time(),
+            "sinks": self.model.get_sinks(),
+        }
+
+        analysis_save(iplot, data, metadata, self.npy_data_filename, self.json_data_filename)
+
+    def load_analysis(self, iplot):
+        return load_analysis(iplot, self.json_data_filename, self.npy_data_filename)
+
+    def get_list_analysis_id(self):
+        return get_list_analysis_id(self.glob_str_data)
+
+    def figure_init(self, holywood_mode=False, dpi=200):
+        figure_init(
+            float(self.nr) / float(self.nz), holywood_mode, dpi, base_size=6, nx=self.nr, ny=self.nz
+        )
 
     def figure_add_time_info(self, text, holywood_mode=False):
         figure_add_time_info(text, holywood_mode)

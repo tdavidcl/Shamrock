@@ -72,7 +72,7 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = 100000
+Npart = 10000
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -83,7 +83,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 0.01
-nstop = 30
+nstop = 2
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -208,7 +208,10 @@ def setup_model():
 
     # Generate the default config
     cfg = model.gen_default_config()
-    cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
+    # cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
+    cfg.set_artif_viscosity_VaryingCD10(
+        alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
+    )
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
     cfg.add_ext_force_point_mass(center_mass, center_racc)
@@ -344,6 +347,7 @@ def save_analysis_data(filename, key, value, ianalysis):
 from shamrock.utils.analysis import (
     ColumnDensityPlot,
     ColumnParticleCount,
+    DiscPlotVzCs,
     PerfHistory,
     SliceDensityPlot,
     SliceDtPart,
@@ -469,6 +473,20 @@ column_particle_count_plot = ColumnParticleCount(
     analysis_prefix="particle_count",
 )
 
+azymuthal_integr_vz_cs_plot = DiscPlotVzCs(
+    model,
+    ext_r=rout,
+    z_r_max=H_r_0 * 6,
+    nr=192,
+    nz=100,
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="azymuthal_integr_vz_cs",
+    do_normalization=True,
+    min_normalization=1e-9,
+    deproject=True,
+)
+
 
 def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
@@ -479,6 +497,7 @@ def analysis(ianalysis):
     vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
     dt_part_slice_plot.analysis_save(ianalysis)
     column_particle_count_plot.analysis_save(ianalysis)
+    azymuthal_integr_vz_cs_plot.analysis_save(ianalysis)
 
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
@@ -550,7 +569,7 @@ dt_part_slice_plot.render_all(
     vmin=1e-4, vmax=1, norm="log", contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1]
 )
 column_particle_count_plot.render_all(vmin=1, vmax=1e2, norm="log")
-
+azymuthal_integr_vz_cs_plot.render_all(vmin=-1, vmax=1)
 # %%
 # Make gif for the doc (plot_to_gif.py)
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -617,6 +636,13 @@ if render_gif and shamrock.sys.world_rank() == 0:
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
     ani = column_particle_count_plot.render_gif(save_animation=True)
+    if ani is not None:
+        plt.show()
+
+# %%
+# Make a gif from the plots
+if render_gif and shamrock.sys.world_rank() == 0:
+    ani = azymuthal_integr_vz_cs_plot.render_gif(save_animation=True)
     if ani is not None:
         plt.show()
 
