@@ -137,6 +137,20 @@ def figure_add_time_info(text, holywood_mode=False):
         plt.title(text)
 
 
+def init_analysis_plot_paths(obj, analysis_folder, analysis_prefix):
+    plots_dir = os.path.join(analysis_folder, "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+
+    obj.analysis_prefix = os.path.join(plots_dir, analysis_prefix) + "_"
+    obj.plot_prefix = os.path.join(plots_dir, "plot_" + analysis_prefix) + "_"
+
+    obj.npy_data_filename = obj.analysis_prefix + "{:07}.npy"
+    obj.json_data_filename = obj.analysis_prefix + "{:07}.json"
+    obj.plot_filename = obj.plot_prefix + "{:07}.png"
+    obj.glob_str_plot = obj.plot_prefix + "*.png"
+    obj.glob_str_data = obj.analysis_prefix + "*.json"
+
+
 class StandardPlotHelper:
     def __init__(self, model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix):
         self.model = model
@@ -148,16 +162,7 @@ class StandardPlotHelper:
         self.center = center
         self.aspect = float(self.nx) / float(self.ny)
 
-        self.analysis_prefix = os.path.join(analysis_folder, "plots", analysis_prefix) + "_"
-        self.plot_prefix = os.path.join(analysis_folder, "plots", "plot_" + analysis_prefix) + "_"
-
-        os.makedirs(os.path.join(analysis_folder, "plots"), exist_ok=True)
-
-        self.npy_data_filename = self.analysis_prefix + "{:07}.npy"
-        self.json_data_filename = self.analysis_prefix + "{:07}.json"
-        self.plot_filename = self.plot_prefix + "{:07}.png"
-        self.glob_str_plot = self.plot_prefix + "*.png"
-        self.glob_str_data = self.analysis_prefix + "*.json"  # json is writen in last
+        init_analysis_plot_paths(self, analysis_folder, analysis_prefix)
 
     def get_dx_dy(self):
         ext_x = 2 * self.ext_r * self.aspect
