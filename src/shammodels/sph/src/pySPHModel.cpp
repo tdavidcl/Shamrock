@@ -862,6 +862,39 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("rays"),
             py::arg("custom_getter") = std::nullopt)
         .def(
+            "render_azymuthal_integ",
+            [](T &self,
+                std::string name,
+                std::string field_type,
+                std::vector<shammath::RingRay<Tvec>> ring_rays,
+                std::optional<std::function<pybind11::array_t<f64>(size_t,pybind11::dict&)>> custom_getter )
+                -> std::variant<std::vector<f64>, std::vector<f64_3>> {
+
+                    if(custom_getter.has_value()) {
+                        if(!( name == "custom" && field_type == "f64")) {
+                            throw shambase::make_except_with_loc<std::invalid_argument>("custom_getter only available for name=custom and field_type=f64");
+                        }
+                    }
+
+                if (field_type == "f64") {
+                    modules::CartesianRender<Tvec, f64, SPHKernel> render(
+                        self.ctx, self.solver.solver_config, self.solver.storage);
+                    return render.compute_azymuthal_integ(name, ring_rays, custom_getter).copy_to_stdvec();
+                }
+
+                if (field_type == "f64_3") {
+                    modules::CartesianRender<Tvec, f64_3, SPHKernel> render(
+                        self.ctx, self.solver.solver_config, self.solver.storage);
+                    return render.compute_azymuthal_integ(name, ring_rays, std::nullopt).copy_to_stdvec();
+                }
+
+                throw shambase::make_except_with_loc<std::runtime_error>("unknown field type");
+            },
+            py::arg("name"),
+            py::arg("field_type"),
+            py::arg("ring_rays"),
+            py::arg("custom_getter") = std::nullopt)
+        .def(
             "render_cartesian_slice",
             [](T &self,
                std::string name,
