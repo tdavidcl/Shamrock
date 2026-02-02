@@ -334,7 +334,7 @@ namespace shamalgs::collective {
         } else {
             max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_host;
         }
-        max_alloc_size -= 1; // keep 5% of the max alloc size for safety
+        max_alloc_size -= 1; // keep a bit of space for safety
 
         // prepare map
         std::map<std::pair<i32, i32>, std::vector<DataTmp>> send_data;
