@@ -97,6 +97,104 @@ namespace shamalgs::collective {
             return serializers;
         }
 
+        class PrepareCommUtil {
+            public:
+            i32 sender_rank, receiver_rank;
+            SerializeSize sz;
+            std::vector<std::reference_wrapper<DataTmp>> sources;
+            std::unique_ptr<SerializeHelper> serializer      = {};
+            std::unique_ptr<sham::DeviceBuffer<u8>> send_buf = {};
+
+            void allocate_serializer(std::shared_ptr<sham::DeviceScheduler> dev_sched) {
+                serializer = std::make_unique<SerializeHelper>(dev_sched);
+                serializer->allocate(sz);
+            }
+
+            void write_sources() {
+                SerializeHelper &ser = shambase::get_check_ref(serializer);
+                ser.write<u64>(sources.size());
+                for (DataTmp &d : sources) {
+                    ser.write(d.sender);
+                    ser.write(d.receiver);
+                    ser.write(d.length);
+                    ser.write_buf(d.data, d.length);
+                }
+            }
+
+            void finalize_serializer() {
+                SerializeHelper &ser = shambase::get_check_ref(serializer);
+                send_buf             = std::make_unique<sham::DeviceBuffer<u8>>(ser.finalize());
+            }
+        };
+
+        auto serialize_group_data_max_size(
+            std::shared_ptr<sham::DeviceScheduler> dev_sched,
+            std::map<std::pair<i32, i32>, std::vector<DataTmp>> &send_data,
+            u64 max_comm_size) -> std::vector<PrepareCommUtil> {
+
+            StackEntry stack_loc{};
+
+            std::vector<PrepareCommUtil> ret;
+
+            auto add_to_ret = [&](std::pair<i32, i32> key,
+                                  SerializeSize &byte_sz,
+                                  std::vector<std::reference_wrapper<DataTmp>> &sources) {
+                if (byte_sz.get_total_size() > max_comm_size) {
+                    throw shambase::make_except_with_loc<std::runtime_error>(
+                        shambase::format("comm size too large: {}", byte_sz.get_total_size()));
+                }
+
+                auto [sender_rank, receiver_rank] = key;
+
+                if (sources.size() > 0) {
+                    PrepareCommUtil next{sender_rank, receiver_rank, byte_sz, sources};
+                    ret.push_back(std::move(next));
+                }
+
+                byte_sz = SerializeHelper::serialize_byte_size<u64>(); // vec length
+                sources = {};
+            };
+
+            for (auto &[key, vect] : send_data) {
+                SerializeSize byte_sz = SerializeHelper::serialize_byte_size<u64>(); // vec length
+                std::vector<std::reference_wrapper<DataTmp>> sources = {};
+
+                for (DataTmp &d : vect) {
+                    std::reference_wrapper<DataTmp> d_ref = d;
+                    auto dbyte_sz                         = d.get_ser_sz();
+
+                    if ((dbyte_sz + byte_sz).get_total_size() > max_comm_size) {
+                        add_to_ret(key, byte_sz, sources);
+                        logger::raw_ln("comm split at", d.sender, d.receiver, d.length);
+                    }
+
+                    logger::raw_ln(
+                        "add to sources", dbyte_sz.get_total_size(), byte_sz.get_total_size());
+
+                    byte_sz += d.get_ser_sz();
+                    sources.push_back(d_ref);
+                }
+
+                add_to_ret(key, byte_sz, sources);
+            }
+
+            for (auto &c : ret) {
+                logger::raw_ln(
+                    "allocate serializer", c.sender_rank, c.receiver_rank, c.sz.get_total_size());
+                c.allocate_serializer(dev_sched);
+            }
+
+            for (auto &c : ret) {
+                c.write_sources();
+            }
+
+            for (auto &c : ret) {
+                c.finalize_serializer();
+            }
+
+            return ret;
+        }
+
     } // namespace details
 
     void distributed_data_sparse_comm_old(
@@ -213,7 +311,8 @@ namespace shamalgs::collective {
         SerializedDDataComm &recv_distrib_data,
         std::function<i32(u64)> rank_getter,
         DDSCommCache &cache,
-        std::optional<SparseCommTable> comm_table) {
+        std::optional<SparseCommTable> comm_table,
+        u64 max_comm_size) {
 
         if (use_old_sparse_comm_mode) {
             if (shamcomm::world_rank() == 0 && !warning_printed) {
@@ -237,26 +336,17 @@ namespace shamalgs::collective {
             send_data[key].push_back(DataTmp{sender, receiver, buf.get_size(), buf});
         });
 
-        // serialize together similar communications
-        std::map<std::pair<i32, i32>, SerializeHelper> serializers
-            = details::serialize_group_data(dev_sched, send_data);
-
-        // recover bufs from serializers
-        std::map<std::pair<i32, i32>, std::unique_ptr<sham::DeviceBuffer<u8>>> send_bufs;
-        {
-            NamedStackEntry stack_loc2{"recover bufs"};
-            for (auto &[key, ser] : serializers) {
-                send_bufs[key] = std::make_unique<sham::DeviceBuffer<u8>>(ser.finalize());
-            }
-        }
+        std::vector<details::PrepareCommUtil> prepared_comms
+            = details::serialize_group_data_max_size(dev_sched, send_data, max_comm_size);
 
         std::vector<shamalgs::collective::CommMessageInfo> messages_send;
         std::vector<std::unique_ptr<sham::DeviceBuffer<u8>>> data_send;
 
-        for (auto &[key, buf] : send_bufs) {
+        for (auto &cms : prepared_comms) {
 
-            auto [sender, receiver] = key;
-            u64 size                = buf->get_size();
+            auto sender   = cms.sender_rank;
+            auto receiver = cms.receiver_rank;
+            auto size     = shambase::get_check_ref(cms.send_buf).get_size();
 
             messages_send.push_back(
                 shamalgs::collective::CommMessageInfo{
@@ -268,7 +358,7 @@ namespace shamalgs::collective {
                     std::nullopt,
                 });
 
-            data_send.push_back(std::move(buf));
+            data_send.push_back(std::move(cms.send_buf));
         }
 
         size_t max_alloc_size;
