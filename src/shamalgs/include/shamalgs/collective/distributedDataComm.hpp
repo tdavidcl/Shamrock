@@ -168,7 +168,7 @@ namespace shamalgs::collective {
         std::function<i32(u64)> rank_getter,
         DDSCommCache &cache,
         std::optional<SparseCommTable> comm_table = {},
-        u64 max_comm_size                         = i32_max - 1); // MPI msg size limit
+        size_t max_comm_size                      = i32_max - 1); // MPI msg size limit
 
     template<class T>
     inline void serialize_sparse_comm(

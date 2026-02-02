@@ -312,7 +312,7 @@ namespace shamalgs::collective {
         std::function<i32(u64)> rank_getter,
         DDSCommCache &cache,
         std::optional<SparseCommTable> comm_table,
-        u64 max_comm_size) {
+        size_t max_comm_size) {
 
         if (use_old_sparse_comm_mode) {
             if (shamcomm::world_rank() == 0 && !warning_printed) {
@@ -336,6 +336,10 @@ namespace shamalgs::collective {
         }
         max_alloc_size -= 1; // keep a bit of space for safety
 
+        if (max_alloc_size > max_comm_size) {
+            max_alloc_size = max_comm_size;
+        }
+
         // prepare map
         std::map<std::pair<i32, i32>, std::vector<DataTmp>> send_data;
         send_distrib_data.for_each([&](u64 sender, u64 receiver, sham::DeviceBuffer<u8> &buf) {
@@ -345,7 +349,7 @@ namespace shamalgs::collective {
         });
 
         std::vector<details::PrepareCommUtil> prepared_comms
-            = details::serialize_group_data_max_size(dev_sched, send_data, max_alloc_size);
+            = details::serialize_group_data_max_size(dev_sched, send_data, max_comm_size);
 
         std::vector<shamalgs::collective::CommMessageInfo> messages_send;
         std::vector<std::unique_ptr<sham::DeviceBuffer<u8>>> data_send;
