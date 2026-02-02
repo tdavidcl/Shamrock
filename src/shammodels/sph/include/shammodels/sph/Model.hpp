@@ -788,8 +788,8 @@ namespace shammodels::sph {
         //     sconfig.switch_internal_energy_mode(name);
         // }
 
-        inline void set_solver_config(typename Solver::Config cfg) {
-            if (ctx.is_scheduler_initialized()) {
+        inline void set_solver_config(typename Solver::Config cfg, bool allow_change = false) {
+            if (ctx.is_scheduler_initialized() && !allow_change) {
                 shambase::throw_with_loc<std::runtime_error>(
                     "Cannot change solver config after scheduler is initialized");
             }

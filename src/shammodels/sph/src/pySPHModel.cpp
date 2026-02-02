@@ -773,7 +773,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](T &self) {
                 return self.solver.solver_config;
             })
-        .def("set_solver_config", &T::set_solver_config)
+        .def("set_solver_config", &T::set_solver_config, py::arg("cfg"), py::arg("allow_change") = false)
         .def("add_sink", &T::add_sink)
         .def(
             "get_sinks",
