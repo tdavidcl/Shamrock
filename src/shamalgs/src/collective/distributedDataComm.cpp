@@ -328,6 +328,14 @@ namespace shamalgs::collective {
         using namespace shambase;
         using DataTmp = details::DataTmp;
 
+        size_t max_alloc_size;
+        if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
+            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_dev;
+        } else {
+            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_host;
+        }
+        max_alloc_size -= 1; // keep 5% of the max alloc size for safety
+
         // prepare map
         std::map<std::pair<i32, i32>, std::vector<DataTmp>> send_data;
         send_distrib_data.for_each([&](u64 sender, u64 receiver, sham::DeviceBuffer<u8> &buf) {
@@ -337,7 +345,7 @@ namespace shamalgs::collective {
         });
 
         std::vector<details::PrepareCommUtil> prepared_comms
-            = details::serialize_group_data_max_size(dev_sched, send_data, max_comm_size);
+            = details::serialize_group_data_max_size(dev_sched, send_data, max_alloc_size);
 
         std::vector<shamalgs::collective::CommMessageInfo> messages_send;
         std::vector<std::unique_ptr<sham::DeviceBuffer<u8>>> data_send;
@@ -360,14 +368,6 @@ namespace shamalgs::collective {
 
             data_send.push_back(std::move(cms.send_buf));
         }
-
-        size_t max_alloc_size;
-        if (dev_sched->ctx->device->mpi_prop.is_mpi_direct_capable) {
-            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_dev;
-        } else {
-            max_alloc_size = dev_sched->ctx->device->prop.max_mem_alloc_size_host;
-        }
-        max_alloc_size *= 0.95; // keep 5% of the max alloc size for safety
 
         shamalgs::collective::CommTable comm_table2
             = shamalgs::collective::build_sparse_exchange_table(messages_send, max_alloc_size);
