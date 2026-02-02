@@ -165,11 +165,11 @@ namespace shamalgs::collective {
 
                     if ((dbyte_sz + byte_sz).get_total_size() > max_comm_size) {
                         add_to_ret(key, byte_sz, sources);
-                        logger::raw_ln("comm split at", d.sender, d.receiver, d.length);
+                        //  logger::raw_ln("comm split at", d.sender, d.receiver, d.length);
                     }
 
-                    logger::raw_ln(
-                        "add to sources", dbyte_sz.get_total_size(), byte_sz.get_total_size());
+                    //   logger::raw_ln(
+                    //       "add to sources", dbyte_sz.get_total_size(), byte_sz.get_total_size());
 
                     byte_sz += d.get_ser_sz();
                     sources.push_back(d_ref);
@@ -179,8 +179,9 @@ namespace shamalgs::collective {
             }
 
             for (auto &c : ret) {
-                logger::raw_ln(
-                    "allocate serializer", c.sender_rank, c.receiver_rank, c.sz.get_total_size());
+                //    logger::raw_ln(
+                //        "allocate serializer", c.sender_rank, c.receiver_rank,
+                //        c.sz.get_total_size());
                 c.allocate_serializer(dev_sched);
             }
 
