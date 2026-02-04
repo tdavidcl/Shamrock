@@ -65,7 +65,9 @@ def ColumnAverageVzPlot(
         def custom_getter(size: int, dic_out: dict) -> np.array:
             return dic_out["vxyz"][:, 2]
 
-        arr_v = helper.column_average_render("custom", "f64", min_normalization, custom_getter=custom_getter)
+        arr_v = helper.column_average_render(
+            "custom", "f64", min_normalization, custom_getter=custom_getter
+        )
 
         return arr_v
 

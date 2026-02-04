@@ -630,6 +630,7 @@ if render_gif and shamrock.sys.world_rank() == 0:
     if ani is not None:
         plt.show()
 
+
 # %%
 # helper function to load data from JSON files
 def load_data_from_json(filename, key):
