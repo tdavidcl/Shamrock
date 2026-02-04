@@ -470,7 +470,10 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("filter"))
         .def(
             "make_modifier_split_part",
-            [](TSPHSetup &self, shammodels::sph::modules::SetupNodePtr parent, u64 n_split, u64 seed) {
+            [](TSPHSetup &self,
+               shammodels::sph::modules::SetupNodePtr parent,
+               u64 n_split,
+               u64 seed) {
                 return self.make_modifier_split_part(parent, n_split, seed);
             },
             py::kw_only(),
