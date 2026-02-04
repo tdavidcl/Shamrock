@@ -343,7 +343,7 @@ def ColumnAverageAngularMomentumTransportCoefficientPlot(
             custom_getter=custom_getter,
         )
         return arr_v
-        
+
     return StandardPlotHelper(
         model,
         ext_r,
