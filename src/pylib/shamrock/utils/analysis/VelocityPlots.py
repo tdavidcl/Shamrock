@@ -49,6 +49,42 @@ def SliceVzPlot(
     )
 
 
+def ColumnAverageVzPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    min_normalization=1e-9,
+):
+    def compute_v_z_slice(helper):
+        def custom_getter(size: int, dic_out: dict) -> np.array:
+            return dic_out["vxyz"][:, 2]
+
+        arr_v = helper.column_average_render(
+            "custom", "f64", min_normalization, custom_getter=custom_getter
+        )
+
+        return arr_v
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_v_z_slice,
+    )
+
+
 def SliceDiffVthetaProfile(
     model,
     ext_r,
