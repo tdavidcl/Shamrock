@@ -46,7 +46,15 @@ namespace shammodels::sph::modules {
                 });
         }
 
-        bool is_done() { return data_other.is_empty(); }
+        bool is_done() {
+            bool ret = true;
+            data_other.for_each([&](u64 id_patch, shamrock::patch::PatchDataLayer &pdat) {
+                if (pdat.get_obj_cnt() > 0) {
+                    ret = false;
+                }
+            });
+            return ret;
+        }
 
         shamrock::patch::PatchDataLayer next_n(u32 nmax) {
             StackEntry stack_loc{};
@@ -60,14 +68,21 @@ namespace shammodels::sph::modules {
 
             data_other.for_each([&](u64 id_patch, shamrock::patch::PatchDataLayer &pdat) {
                 if (pdat.get_obj_cnt() > 0 && tmp.get_obj_cnt() < nmax) {
+
                     u32 remain_to_gen = nmax - tmp.get_obj_cnt();
+                    remain_to_gen     = std::min(remain_to_gen, pdat.get_obj_cnt());
+
+                    if (remain_to_gen == 0) {
+                        return;
+                    }
+
                     sham::DeviceBuffer<u32> indices(remain_to_gen, dev_sched);
 
                     indices.fill_lambda([&](u32 i) {
                         return i;
                     });
 
-                    tmp.extract_elements(indices, pdat);
+                    pdat.extract_elements(indices, tmp);
                 }
             });
 

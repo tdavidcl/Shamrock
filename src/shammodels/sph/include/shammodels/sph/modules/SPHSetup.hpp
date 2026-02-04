@@ -77,6 +77,8 @@ namespace shammodels::sph::modules {
             std::mt19937_64 eng,
             Tscal init_h_factor);
 
+        std::shared_ptr<ISPHSetupNode> make_generator_from_context(ShamrockCtx &context_other);
+
         std::shared_ptr<ISPHSetupNode> make_combiner_add(
             SetupNodePtr parent1, SetupNodePtr parent2);
 
