@@ -71,18 +71,16 @@ def SliceDiffVthetaProfile(
         if _HAS_NUMBA:
             vel_profile_jit = njit(velocity_profile)
         else:
-            vel_profile_jit = velocity_profile
+            vel_profile_jit = np.vectorize(velocity_profile)
 
         def internal(
             size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
         ) -> np.array:
-            v_relative = np.zeros(size)
-            for i in range(size):
-                e_theta = np.array([-y[i], x[i], 0])
-                e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
-                v_theta = np.dot(e_theta, np.array([vx[i], vy[i], vz[i]]))
-                v_relative[i] = v_theta - vel_profile_jit(np.sqrt(x[i] ** 2 + y[i] ** 2))
-            return v_relative
+            r = np.sqrt(x**2 + y**2)  
+            r_safe = r + 1e-9  
+            v_theta = (-y * vx + x * vy) / r_safe  
+            v_relative = v_theta - vel_profile_jit(r)  
+            return v_relative  
 
         if _HAS_NUMBA:
             internal = njit(internal)
@@ -142,11 +140,12 @@ def VerticalShearGradient(
         def internal(
             size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
         ) -> np.array:
-            v_theta = np.zeros(size)
-            for i in range(size):
-                e_theta = np.array([-y[i], x[i], 0])
-                e_theta /= np.linalg.norm(e_theta) + 1e-9  # Avoid division by zero
-                v_theta[i] = np.dot(e_theta, np.array([vx[i], vy[i], vz[i]]))
+            r = np.sqrt(x**2 + y**2)
+            # A small epsilon to avoid division by zero for particles at the center.
+            r_safe = r + 1e-9
+
+            # Calculate azimuthal velocity component
+            v_theta = (-y * vx + x * vy) / r_safe
             return v_theta
 
         if _HAS_NUMBA:
