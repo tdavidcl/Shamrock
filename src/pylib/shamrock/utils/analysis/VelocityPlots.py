@@ -76,11 +76,11 @@ def SliceDiffVthetaProfile(
         def internal(
             size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
         ) -> np.array:
-            r = np.sqrt(x**2 + y**2)  
-            r_safe = r + 1e-9  
-            v_theta = (-y * vx + x * vy) / r_safe  
-            v_relative = v_theta - vel_profile_jit(r)  
-            return v_relative  
+            r = np.sqrt(x**2 + y**2)
+            r_safe = r + 1e-9
+            v_theta = (-y * vx + x * vy) / r_safe
+            v_relative = v_theta - vel_profile_jit(r)
+            return v_relative
 
         if _HAS_NUMBA:
             internal = njit(internal)
@@ -141,10 +141,7 @@ def VerticalShearGradient(
             size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
         ) -> np.array:
             r = np.sqrt(x**2 + y**2)
-            # A small epsilon to avoid division by zero for particles at the center.
             r_safe = r + 1e-9
-
-            # Calculate azimuthal velocity component
             v_theta = (-y * vx + x * vy) / r_safe
             return v_theta
 
