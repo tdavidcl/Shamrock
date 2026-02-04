@@ -346,8 +346,8 @@ from shamrock.utils.analysis import (
     ColumnParticleCount,
     PerfHistory,
     SliceDensityPlot,
+    SliceDiffVthetaProfile,
     SliceDtPart,
-    SliceRelativeAzyVelocityPlot,
     SliceVzPlot,
     VerticalShearGradient,
 )
@@ -403,7 +403,7 @@ v_z_slice_plot = SliceVzPlot(
     do_normalization=True,
 )
 
-relative_azy_velocity_slice_plot = SliceRelativeAzyVelocityPlot(
+relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,
@@ -430,19 +430,6 @@ vertical_shear_gradient_slice_plot = VerticalShearGradient(
     analysis_prefix="vertical_shear_gradient_slice",
     do_normalization=True,
     min_normalization=1e-9,
-)
-
-
-vertical_density_plot = SliceDensityPlot(
-    model,
-    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=(0, 0, 0),
-    analysis_folder=analysis_folder,
-    analysis_prefix="rho_slice",
 )
 
 dt_part_slice_plot = SliceDtPart(
@@ -567,14 +554,64 @@ column_density_plot_hollywood.render_all(
     holywood_mode=True,
 )
 
-vertical_density_plot.render_all(vmin=1e-10, vmax=1e-6, norm="log")
-v_z_slice_plot.render_all(vmin=-300, vmax=300)
-relative_azy_velocity_slice_plot.render_all(vmin=0.95, vmax=1.05)
-vertical_shear_gradient_slice_plot.render_all(vmin=-1, vmax=1)
-dt_part_slice_plot.render_all(
-    vmin=1e-4, vmax=1, norm="log", contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1]
+vertical_density_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="kg.m^-3",
+    field_label="$\\rho$",
+    vmin=1e-10,
+    vmax=1e-6,
+    norm="log",
 )
-column_particle_count_plot.render_all(vmin=1, vmax=1e2, norm="log")
+
+v_z_slice_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="m.s^-1",
+    field_label="$\\mathrm{v}_z$",
+    cmap="seismic",
+    cmap_bad_color="white",
+    vmin=-300,
+    vmax=300,
+)
+
+relative_azy_velocity_slice_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="m.s^-1",
+    field_label="$\\mathrm{v}_{\\theta} - v_k$",
+    cmap="seismic",
+    cmap_bad_color="white",
+    vmin=-300,
+    vmax=300,
+)
+
+vertical_shear_gradient_slice_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="yr^-1",
+    field_label="${{\\partial R \\Omega}}/{{\\partial z}}$",
+    cmap="seismic",
+    cmap_bad_color="white",
+    vmin=-1,
+    vmax=1,
+)
+
+dt_part_slice_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="year",
+    field_label="$\\Delta t$",
+    vmin=1e-4,
+    vmax=1,
+    norm="log",
+    contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+)
+
+column_particle_count_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit=None,
+    field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
+    vmin=1,
+    vmax=1e2,
+    norm="log",
+    contour_list=[1, 10, 100, 1000],
+)
 
 # %%
 # Make gif for the doc (plot_to_gif.py)
@@ -606,7 +643,7 @@ if render_gif:
 # %%
 # For the vertical density plot
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = vertical_density_plot.render_gif(save_animation=True)
+    ani = vertical_density_plot.render_gif(gif_filename="rho_slice.gif", save_animation=True)
     if ani is not None:
         plt.show()
 
@@ -614,7 +651,7 @@ if render_gif and shamrock.sys.world_rank() == 0:
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = v_z_slice_plot.render_gif(save_animation=True)
+    ani = v_z_slice_plot.render_gif(gif_filename="v_z_slice.gif", save_animation=True)
     if ani is not None:
         plt.show()
 
@@ -622,28 +659,34 @@ if render_gif and shamrock.sys.world_rank() == 0:
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = relative_azy_velocity_slice_plot.render_gif(save_animation=True)
+    ani = relative_azy_velocity_slice_plot.render_gif(
+        gif_filename="relative_azy_velocity_slice.gif", save_animation=True
+    )
     if ani is not None:
         plt.show()
 
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = vertical_shear_gradient_slice_plot.render_gif(save_animation=True)
+    ani = vertical_shear_gradient_slice_plot.render_gif(
+        gif_filename="vertical_shear_gradient_slice.gif", save_animation=True
+    )
     if ani is not None:
         plt.show()
 
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = dt_part_slice_plot.render_gif(save_animation=True)
+    ani = dt_part_slice_plot.render_gif(gif_filename="dt_part_slice.gif", save_animation=True)
     if ani is not None:
         plt.show()
 
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = column_particle_count_plot.render_gif(save_animation=True)
+    ani = column_particle_count_plot.render_gif(
+        gif_filename="particle_count.gif", save_animation=True
+    )
     if ani is not None:
         plt.show()
 

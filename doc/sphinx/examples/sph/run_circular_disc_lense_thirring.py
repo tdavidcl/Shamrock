@@ -520,7 +520,7 @@ import matplotlib.pyplot as plt
 face_on_render_kwargs = {
     "x_unit": "au",
     "y_unit": "au",
-    "time_unit": "year",
+    "time_unit": "second",
     "x_label": "x",
     "y_label": "y",
 }
@@ -544,9 +544,23 @@ column_density_plot_hollywood.render_all(
     holywood_mode=True,
 )
 
-vertical_density_plot.render_all(vmin=1e-5, vmax=1e-2, norm="log", time_unit="second")
+vertical_density_plot.render_all(
+    **face_on_render_kwargs,
+    field_unit="kg.m^-3",
+    field_label="$\\rho$",
+    vmin=1e-5,
+    vmax=1e-2,
+    norm="log",
+)
+
 dt_part_slice_plot.render_all(
-    vmin=1e-2, vmax=1e2, norm="log", time_unit="second", contour_list=[1e-2, 1e-1, 1, 1e1, 1e2]
+    **face_on_render_kwargs,
+    field_unit="second",
+    field_label="$\\Delta t$",
+    vmin=1e-2,
+    vmax=1e2,
+    norm="log",
+    contour_list=[1e-2, 1e-1, 1, 1e1, 1e2],
 )
 
 
@@ -633,14 +647,14 @@ if render_gif:
 # %%
 # For the vertical density plot
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = vertical_density_plot.render_gif(save_animation=True)
+    ani = vertical_density_plot.render_gif(gif_filename="rho_slice.gif", save_animation=True)
     if ani is not None:
         plt.show()
 
 # %%
 # Make a gif from the plots
 if render_gif and shamrock.sys.world_rank() == 0:
-    ani = dt_part_slice_plot.render_gif(save_animation=True)
+    ani = dt_part_slice_plot.render_gif(gif_filename="dt_part_slice.gif", save_animation=True)
     if ani is not None:
         plt.show()
 
