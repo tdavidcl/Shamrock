@@ -105,7 +105,9 @@ model.dump("init.sham")
 # here we can dump and load it into another context i we want like so
 ctx_data_source = shamrock.Context()
 ctx_data_source.pdata_layout_new()
-model_data_source = shamrock.get_Model_SPH(context=ctx_data_source, vector_type="f64_3", sph_kernel="M4")
+model_data_source = shamrock.get_Model_SPH(
+    context=ctx_data_source, vector_type="f64_3", sph_kernel="M4"
+)
 model_data_source.load_from_dump("init.sham")
 
 # trigger rebalancing
