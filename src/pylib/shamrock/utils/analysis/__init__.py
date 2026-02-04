@@ -11,6 +11,8 @@ from .VelocityPlots import (
     SliceDiffVthetaProfile,
     VerticalShearGradient,
     ColumnAverageVzPlot,
+    SliceAngularMomentumTransportCoefficientPlot,
+    ColumnAverageAngularMomentumTransportCoefficientPlot,
 )
 
 # Performance analysis
