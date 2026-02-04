@@ -340,6 +340,8 @@ class StandardPlotHelper:
         field_label=None,
         holywood_mode=False,
         cmap="magma",
+        cmap_bad_color="black",
+        contour_list=None,
         add_sinks=True,
         sink_scale_factor=1,
         sink_color="green",
@@ -370,7 +372,21 @@ class StandardPlotHelper:
             import copy
 
             my_cmap = matplotlib.colormaps[cmap].copy()  # copy the default cmap
-            my_cmap.set_bad(color="black")
+            my_cmap.set_bad(color=cmap_bad_color)
+
+            # Draw contours and add labels
+            if contour_list is not None:
+                # Create coordinate arrays matching the extent for contour alignment
+                ny, nx = field_render.shape
+                x = np.linspace(metadata["extent"][0], metadata["extent"][1], nx)
+                y = np.linspace(metadata["extent"][2], metadata["extent"][3], ny)
+                X, Y = np.meshgrid(x, y)
+
+                contour_set = plt.contour(
+                    X, Y, field_render, levels=contour_list, colors="white", linewidths=0.5
+                )
+
+                plt.clabel(contour_set, inline=True, fontsize=8, fmt="%g")
 
             res = plt.imshow(
                 field_render, cmap=my_cmap, origin="lower", extent=metadata["extent"], **kwargs
