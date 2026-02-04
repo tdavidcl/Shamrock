@@ -564,6 +564,7 @@ vertical_density_plot.render_all(
 )
 
 v_z_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="m.s^-1",
     field_label="$\\mathrm{v}_z$",
     cmap="seismic",
@@ -573,6 +574,7 @@ v_z_slice_plot.render_all(
 )
 
 relative_azy_velocity_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="m.s^-1",
     field_label="$\\mathrm{v}_{\\theta} - v_k$",
     cmap="seismic",
@@ -582,6 +584,7 @@ relative_azy_velocity_slice_plot.render_all(
 )
 
 vertical_shear_gradient_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="yr^-1",
     field_label="${{\\partial R \\Omega}}/{{\\partial z}}$",
     cmap="seismic",

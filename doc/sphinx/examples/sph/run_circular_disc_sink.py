@@ -542,6 +542,13 @@ face_on_render_kwargs = {
     "y_label": "y",
 }
 
+sink_params = {
+    "sink_scale_factor": 5,
+    "sink_color": "green",
+    "sink_linewidth": 1,
+    "sink_fill": False,
+}
+
 column_density_plot.render_all(
     **face_on_render_kwargs,
     field_unit="kg.m^-2",
@@ -549,6 +556,7 @@ column_density_plot.render_all(
     vmin=1,
     vmax=1e4,
     norm="log",
+    **sink_params,
 )
 
 column_density_plot_hollywood.render_all(
@@ -559,6 +567,7 @@ column_density_plot_hollywood.render_all(
     vmax=1e4,
     norm="log",
     holywood_mode=True,
+    **sink_params,
 )
 
 vertical_density_plot.render_all(
@@ -568,33 +577,40 @@ vertical_density_plot.render_all(
     vmin=1e-10,
     vmax=1e-6,
     norm="log",
+    **sink_params,
 )
 
 v_z_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="m.s^-1",
     field_label="$\\mathrm{v}_z$",
     cmap="seismic",
     cmap_bad_color="white",
     vmin=-300,
     vmax=300,
+    **sink_params,
 )
 
 relative_azy_velocity_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="m.s^-1",
     field_label="$\\mathrm{v}_{\\theta} - v_k$",
     cmap="seismic",
     cmap_bad_color="white",
     vmin=-300,
     vmax=300,
+    **sink_params,
 )
 
 vertical_shear_gradient_slice_plot.render_all(
+    **face_on_render_kwargs,
     field_unit="yr^-1",
     field_label="${{\\partial R \\Omega}}/{{\\partial z}}$",
     cmap="seismic",
     cmap_bad_color="white",
     vmin=-1,
     vmax=1,
+    **sink_params,
 )
 
 dt_part_slice_plot.render_all(
@@ -605,6 +621,7 @@ dt_part_slice_plot.render_all(
     vmax=1,
     norm="log",
     contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+    **sink_params,
 )
 
 column_particle_count_plot.render_all(
@@ -615,6 +632,7 @@ column_particle_count_plot.render_all(
     vmax=1e2,
     norm="log",
     contour_list=[1, 10, 100, 1000],
+    **sink_params,
 )
 # %%
 # Make gif for the doc (plot_to_gif.py)
