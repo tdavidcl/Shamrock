@@ -22,15 +22,20 @@ def SliceVzPlot(
     center,
     analysis_folder,
     analysis_prefix,
+    div_by_cs=False,
     do_normalization=True,
     min_normalization=1e-9,
 ):
     def compute_v_z_slice(helper):
-        def keep_only_v_z(arr_v):
-            return arr_v[:, :, 2]
+        def custom_getter(size: int, dic_out: dict) -> np.array:
+            if div_by_cs:
+                cs = dic_out["soundspeed"]
+            else:
+                cs = 1.0
+            return dic_out["vxyz"][:, 2] / cs
 
         arr_v = helper.slice_render(
-            "vxyz", "f64_3", do_normalization, min_normalization, keep_only_v_z
+            "custom", "f64", do_normalization, min_normalization, custom_getter=custom_getter
         )
 
         return arr_v
@@ -59,11 +64,16 @@ def ColumnAverageVzPlot(
     center,
     analysis_folder,
     analysis_prefix,
+    div_by_cs=False,
     min_normalization=1e-9,
 ):
     def compute_v_z_slice(helper):
         def custom_getter(size: int, dic_out: dict) -> np.array:
-            return dic_out["vxyz"][:, 2]
+            if div_by_cs:
+                cs = dic_out["soundspeed"]
+            else:
+                cs = 1.0
+            return dic_out["vxyz"][:, 2] / cs
 
         arr_v = helper.column_average_render(
             "custom", "f64", min_normalization, custom_getter=custom_getter
@@ -96,6 +106,7 @@ def SliceDiffVthetaProfile(
     analysis_folder,
     analysis_prefix,
     velocity_profile,
+    div_by_cs=False,
     do_normalization=True,
     min_normalization=1e-9,
 ):
@@ -110,18 +121,28 @@ def SliceDiffVthetaProfile(
             vel_profile_jit = np.vectorize(velocity_profile)
 
         def internal(
-            size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
+            size: int,
+            x: np.array,
+            y: np.array,
+            vx: np.array,
+            vy: np.array,
+            vz: np.array,
+            cs: np.array,
         ) -> np.array:
             r = np.sqrt(x**2 + y**2)
             r_safe = r + 1e-9
             v_theta = (-y * vx + x * vy) / r_safe
             v_relative = v_theta - vel_profile_jit(r)
-            return v_relative
+            return v_relative / cs
 
         if _HAS_NUMBA:
             internal = njit(internal)
 
         def custom_getter(size: int, dic_out: dict) -> np.array:
+            if div_by_cs:
+                cs = dic_out["soundspeed"]
+            else:
+                cs = np.ones(size)
             return internal(
                 size,
                 dic_out["xyz"][:, 0],
@@ -129,6 +150,7 @@ def SliceDiffVthetaProfile(
                 dic_out["vxyz"][:, 0],
                 dic_out["vxyz"][:, 1],
                 dic_out["vxyz"][:, 2],
+                cs,
             )
 
         arr_v = helper.slice_render(
@@ -343,7 +365,7 @@ def ColumnAverageAngularMomentumTransportCoefficientPlot(
             custom_getter=custom_getter,
         )
         return arr_v
-        
+
     return StandardPlotHelper(
         model,
         ext_r,
