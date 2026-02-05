@@ -61,6 +61,9 @@ class PerfHistory:
                 print(f"Saving perf history to {self.json_data_filename}")
                 json.dump(perf_hist, fp, indent=4)
 
+    def has_analysis(self):
+        return os.path.exists(self.json_data_filename)
+
     def load_analysis(self):
         with open(self.json_data_filename, "r") as fp:
             perf_hist = json.load(fp)

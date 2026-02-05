@@ -72,19 +72,28 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = 100000
-Kernel = "M4"
+Npart = int(float(os.environ.get("NPART")))
+Kernel = os.environ.get("KERNEL")
+UpscaleFrom = os.environ.get("UPSCALE_FROM", None)
+UpscaleFactor = int(os.environ.get("UPSCALE_FACTOR", 1))
+
+if shamrock.sys.world_rank() == 0:
+    print(f"Npart = {Npart}")
+    print(f"Kernel = {Kernel}")
+    print(f"UpscaleFrom = {UpscaleFrom}")
+    print(f"UpscaleFactor = {UpscaleFactor}")
+
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-dump_freq_stop = 2
+dump_freq_stop = 4
 plot_freq_stop = 1
 
-dt_stop = 0.01
-nstop = 5
+dt_stop = 0.1
+nstop = 20
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -149,7 +158,7 @@ if shamrock.sys.world_rank() == 0:
 # Deduced quantities
 pmass = disc_mass / Npart
 
-bsize = rout * 2
+bsize = rout * 1.3
 bmin = (-bsize, -bsize, -bsize)
 bmax = (bsize, bsize, bsize)
 
@@ -304,41 +313,56 @@ def setup_model():
     model.change_htolerances(coarse=1.1, fine=1.1)
 
 
-dump_helper.load_last_dump_or(setup_model)
+def setup_upscale():
+    source_path = UpscaleFrom
+
+    # here we can dump and load it into another context i we want like so
+    ctx_data_source = shamrock.Context()
+    ctx_data_source.pdata_layout_new()
+    model_data_source = shamrock.get_Model_SPH(
+        context=ctx_data_source, vector_type="f64_3", sph_kernel=Kernel
+    )
+    model_data_source.load_from_dump(source_path)
+
+    # trigger rebalancing
+    model_data_source.set_dt(0.0)
+    model_data_source.timestep()
+
+    # reset dt to 0 for the init of the next simulation
+    model_data_source.set_dt(0.0)
+
+    cfg = model_data_source.get_current_config()
+    cfg.print_status()
+
+    model.set_solver_config(cfg)
+    model.init_scheduler(scheduler_split_val, scheduler_merge_val)
+    model.resize_simulation_box(bmin, bmax)
+
+    setup = model.get_setup()
+    gen = setup.make_generator_from_context(ctx_data_source)
+    split_part = setup.make_modifier_split_part(parent=gen, n_split=UpscaleFactor, seed=42)
+    setup.apply_setup(split_part, insert_step=scheduler_split_val)
+
+    model.change_htolerances(coarse=1.3, fine=1.1)
+    model.timestep()
+    model.change_htolerances(coarse=1.1, fine=1.1)
+
+
+if UpscaleFrom is not None:
+    dump_helper.load_last_dump_or(setup_upscale)
+else:
+    dump_helper.load_last_dump_or(setup_model)
 
 
 # %%
 # On the fly analysis
-def save_rho_integ(ext, arr_rho, iplot):
-    if shamrock.sys.world_rank() == 0:
-        metadata = {"extent": [-ext, ext, -ext, ext], "time": model.get_time()}
-        np.save(plot_folder + f"rho_integ_{iplot:07}.npy", arr_rho)
-
-        with open(plot_folder + f"rho_integ_{iplot:07}.json", "w") as fp:
-            json.dump(metadata, fp)
-
-
-def save_analysis_data(filename, key, value, ianalysis):
-    """Helper to save analysis data to a JSON file."""
-    if shamrock.sys.world_rank() == 0:
-        filepath = os.path.join(analysis_folder, filename)
-        try:
-            with open(filepath, "r") as fp:
-                data = json.load(fp)
-        except (FileNotFoundError, json.JSONDecodeError):
-            data = {key: []}
-        data[key] = data[key][:ianalysis]
-        data[key].append({"t": model.get_time(), key: value})
-        with open(filepath, "w") as fp:
-            json.dump(data, fp, indent=4)
-
-
 from shamrock.utils.analysis import (
     ColumnAverageAngularMomentumTransportCoefficientPlot,
     ColumnAverageVzPlot,
     ColumnDensityPlot,
     ColumnParticleCount,
     PerfHistory,
+    SliceAlphaAV,
     SliceAngularMomentumTransportCoefficientPlot,
     SliceDensityPlot,
     SliceDiffVthetaProfile,
@@ -442,6 +466,16 @@ dt_part_slice_plot = SliceDtPart(
     analysis_prefix="dt_part_slice",
 )
 
+alpha_av_slice_plot = SliceAlphaAV(
+    model,
+    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    nx=1920,
+    ny=1080,
+    ex=(1, 0, 0),
+    ey=(0, 0, 1),
+    center=((rin + rout) / 2, 0, 0),
+)
+
 column_particle_count_plot = ColumnParticleCount(
     model,
     ext_r=rout * 1.5,
@@ -483,6 +517,142 @@ angular_momentum_transport_coefficient_column_plot = (
 )
 
 
+def make_plots(ianalysis):
+    face_on_render_kwargs = {
+        "x_unit": "au",
+        "y_unit": "au",
+        "time_unit": "year",
+        "x_label": "x",
+        "y_label": "y",
+    }
+
+    vz_delta = 0.2
+
+    column_density_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="kg.m^-2",
+        field_label="$\\int \\rho \\, \\mathrm{{d}} z$",
+        vmin=1,
+        vmax=1e4,
+        norm="log",
+    )
+
+    vertical_density_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="kg.m^-3",
+        field_label="$\\rho$",
+        vmin=1e-10,
+        vmax=1e-6,
+        norm="log",
+    )
+
+    v_z_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$\\mathrm{v}_z / c_s$",
+        cmap="seismic",
+        cmap_bad_color="white",
+        vmin=-vz_delta,
+        vmax=vz_delta,
+    )
+
+    relative_azy_velocity_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$(\\mathrm{v}_{\\theta} - v_k) / c_s$",
+        cmap="seismic",
+        cmap_bad_color="white",
+        vmin=-0.5,
+        vmax=0.5,
+    )
+
+    vertical_shear_gradient_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="yr^-1",
+        field_label="${{\\partial R \\Omega}}/{{\\partial z}}$",
+        cmap="seismic",
+        cmap_bad_color="white",
+        vmin=-1,
+        vmax=1,
+    )
+
+    dt_part_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="year",
+        field_label="$\\Delta t$",
+        vmin=1e-5,
+        vmax=1,
+        norm="log",
+        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+    )
+
+    alpha_av_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$\\alpha_\\mathrm{AV}$",
+        vmin=1e-6,
+        vmax=1,
+        norm="log",
+        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+    )
+
+    column_particle_count_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit=None,
+        field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
+        vmin=1,
+        vmax=1e3,
+        norm="log",
+        contour_list=[1, 10, 100, 1000],
+    )
+
+    angular_momentum_transport_coefficient_slice_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$\\alpha$",
+        vmin=1e-6,
+        vmax=1,
+        norm="log",
+        contour_list=[
+            1e-4,
+        ],
+    )
+
+    angular_momentum_transport_coefficient_column_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$\\alpha$",
+        vmin=1e-3,
+        vmax=1,
+        norm="log",
+        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+    )
+
+    v_z_column_plot.make_plot(
+        ianalysis,
+        **face_on_render_kwargs,
+        field_unit="unitless",
+        field_label="$\\mathrm{v}_z / c_s$",
+        cmap="seismic",
+        cmap_bad_color="white",
+        vmin=-vz_delta,
+        vmax=vz_delta,
+    )
+
+    if perf_analysis.has_analysis():
+        perf_analysis.plot_perf_history(close_plots=True)
+
+
 def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
     vertical_density_plot.analysis_save(ianalysis)
@@ -491,27 +661,14 @@ def analysis(ianalysis):
     relative_azy_velocity_slice_plot.analysis_save(ianalysis)
     vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
     dt_part_slice_plot.analysis_save(ianalysis)
+    alpha_av_slice_plot.analysis_save(ianalysis)
     column_particle_count_plot.analysis_save(ianalysis)
     angular_momentum_transport_coefficient_slice_plot.analysis_save(ianalysis)
     angular_momentum_transport_coefficient_column_plot.analysis_save(ianalysis)
 
-    barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
-
-    total_momentum = shamrock.model_sph.analysisTotalMomentum(model=model).get_total_momentum()
-
-    potential_energy = shamrock.model_sph.analysisEnergyPotential(
-        model=model
-    ).get_potential_energy()
-
-    kinetic_energy = shamrock.model_sph.analysisEnergyKinetic(model=model).get_kinetic_energy()
-
-    save_analysis_data("barycenter.json", "barycenter", barycenter, ianalysis)
-    save_analysis_data("disc_mass.json", "disc_mass", disc_mass, ianalysis)
-    save_analysis_data("total_momentum.json", "total_momentum", total_momentum, ianalysis)
-    save_analysis_data("potential_energy.json", "potential_energy", potential_energy, ianalysis)
-    save_analysis_data("kinetic_energy.json", "kinetic_energy", kinetic_energy, ianalysis)
-
     perf_analysis.analysis_save(ianalysis)
+
+    make_plots(ianalysis)
 
 
 # %%
@@ -521,7 +678,6 @@ model.solver_logs_reset_step_count()
 
 t_start = model.get_time()
 
-idump = 0
 iplot = 0
 istop = 0
 for ttarg in t_stop:
@@ -529,217 +685,14 @@ for ttarg in t_stop:
         model.evolve_until(ttarg)
 
         if istop % dump_freq_stop == 0:
-            model.do_vtk_dump(get_vtk_dump_name(idump), True)
-            dump_helper.write_dump(idump, purge_old_dumps=True, keep_first=1, keep_last=3)
+            model.do_vtk_dump(get_vtk_dump_name(istop), True)
 
-            # dump = model.make_phantom_dump()
-            # dump.save_dump(get_ph_dump_name(idump))
+        dump_helper.write_dump(istop, purge_old_dumps=False)
 
         if istop % plot_freq_stop == 0:
             analysis(iplot)
-
-    if istop % dump_freq_stop == 0:
-        idump += 1
 
     if istop % plot_freq_stop == 0:
         iplot += 1
 
     istop += 1
-
-# %%
-# Plot generation
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-# Load the on-the-fly analysis after the run to make the plots
-# (everything in this section can be in another file)
-
-import matplotlib
-import matplotlib.pyplot as plt
-
-face_on_render_kwargs = {
-    "x_unit": "au",
-    "y_unit": "au",
-    "time_unit": "year",
-    "x_label": "x",
-    "y_label": "y",
-}
-
-vz_delta = 0.2
-
-column_density_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="kg.m^-2",
-    field_label="$\\int \\rho \\, \\mathrm{{d}} z$",
-    vmin=1,
-    vmax=1e4,
-    norm="log",
-)
-
-
-vertical_density_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="kg.m^-3",
-    field_label="$\\rho$",
-    vmin=1e-10,
-    vmax=1e-6,
-    norm="log",
-)
-
-v_z_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="unitless",
-    field_label="$\\mathrm{v}_z / c_s$",
-    cmap="seismic",
-    cmap_bad_color="white",
-    vmin=-vz_delta,
-    vmax=vz_delta,
-)
-
-relative_azy_velocity_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="unitless",
-    field_label="$(\\mathrm{v}_{\\theta} - v_k) / c_s$",
-    cmap="seismic",
-    cmap_bad_color="white",
-    vmin=-0.5,
-    vmax=0.5,
-)
-
-vertical_shear_gradient_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="yr^-1",
-    field_label="${{\\partial R \\Omega}}/{{\\partial z}}$",
-    cmap="seismic",
-    cmap_bad_color="white",
-    vmin=-1,
-    vmax=1,
-)
-
-dt_part_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="year",
-    field_label="$\\Delta t$",
-    vmin=1e-4,
-    vmax=1,
-    norm="log",
-    contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
-)
-
-column_particle_count_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit=None,
-    field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
-    vmin=1,
-    vmax=1e2,
-    norm="log",
-    contour_list=[1, 10, 100, 1000],
-)
-
-angular_momentum_transport_coefficient_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="unitless",
-    field_label="$\\alpha$",
-    vmin=1e-3,
-    vmax=1,
-    norm="log",
-)
-
-angular_momentum_transport_coefficient_column_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="unitless",
-    field_label="$\\alpha$",
-    vmin=1e-3,
-    vmax=1,
-    norm="log",
-)
-
-v_z_column_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="unitless",
-    field_label="$\\mathrm{v}_z / c_s$",
-    cmap="seismic",
-    cmap_bad_color="white",
-    vmin=-vz_delta,
-    vmax=vz_delta,
-)
-
-
-# %%
-# helper function to load data from JSON files
-def load_data_from_json(filename, key):
-    filepath = os.path.join(analysis_folder, filename)
-    with open(filepath, "r") as fp:
-        data = json.load(fp)[key]
-    t = [d["t"] for d in data]
-    values = [d[key] for d in data]
-    return t, values
-
-
-# %%
-# load the json file for barycenter
-t, barycenter = load_data_from_json("barycenter.json", "barycenter")
-barycenter_x = [d[0] for d in barycenter]
-barycenter_y = [d[1] for d in barycenter]
-barycenter_z = [d[2] for d in barycenter]
-
-plt.figure(figsize=(8, 5), dpi=200)
-
-plt.plot(t, barycenter_x)
-plt.plot(t, barycenter_y)
-plt.plot(t, barycenter_z)
-plt.xlabel("t")
-plt.ylabel("barycenter")
-plt.legend(["x", "y", "z"])
-plt.savefig(analysis_folder + "barycenter.png")
-plt.show()
-
-# %%
-# load the json file for disc_mass
-t, disc_mass = load_data_from_json("disc_mass.json", "disc_mass")
-
-plt.figure(figsize=(8, 5), dpi=200)
-
-plt.plot(t, disc_mass)
-plt.xlabel("t")
-plt.ylabel("disc_mass")
-plt.savefig(analysis_folder + "disc_mass.png")
-plt.show()
-
-# %%
-# load the json file for total_momentum
-t, total_momentum = load_data_from_json("total_momentum.json", "total_momentum")
-total_momentum_x = [d[0] for d in total_momentum]
-total_momentum_y = [d[1] for d in total_momentum]
-total_momentum_z = [d[2] for d in total_momentum]
-
-plt.figure(figsize=(8, 5), dpi=200)
-
-plt.plot(t, total_momentum_x)
-plt.plot(t, total_momentum_y)
-plt.plot(t, total_momentum_z)
-plt.xlabel("t")
-plt.ylabel("total_momentum")
-plt.legend(["x", "y", "z"])
-plt.savefig(analysis_folder + "total_momentum.png")
-plt.show()
-
-# %%
-# load the json file for energies
-t, potential_energy = load_data_from_json("potential_energy.json", "potential_energy")
-_, kinetic_energy = load_data_from_json("kinetic_energy.json", "kinetic_energy")
-
-total_energy = [p + k for p, k in zip(potential_energy, kinetic_energy)]
-
-plt.figure(figsize=(8, 5), dpi=200)
-plt.plot(t, potential_energy)
-plt.plot(t, kinetic_energy)
-plt.plot(t, total_energy)
-plt.xlabel("t")
-plt.ylabel("energy")
-plt.legend(["potential_energy", "kinetic_energy", "total_energy"])
-plt.savefig(analysis_folder + "energies.png")
-plt.show()
-
-# %%
-# Plot the performance history (Switch close_plots to True if doing a long run)
-perf_analysis.plot_perf_history(close_plots=False)
-plt.show()
