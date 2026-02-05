@@ -29,6 +29,7 @@
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/modules/SPHSetup.hpp"
 #include "shammodels/sph/modules/setup/CombinerAdd.hpp"
+#include "shammodels/sph/modules/setup/GeneratorFromOtherContext.hpp"
 #include "shammodels/sph/modules/setup/GeneratorLatticeCubic.hpp"
 #include "shammodels/sph/modules/setup/GeneratorLatticeHCP.hpp"
 #include "shammodels/sph/modules/setup/GeneratorMCDisc.hpp"
@@ -80,6 +81,13 @@ inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph:
         cs_profile,
         eng,
         init_h_factor));
+}
+
+template<class Tvec, template<class> class SPHKernel>
+inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph::modules::
+    SPHSetup<Tvec, SPHKernel>::make_generator_from_context(ShamrockCtx &context_other) {
+    return std::shared_ptr<ISPHSetupNode>(
+        new GeneratorFromOtherContext<Tvec>(context, context_other));
 }
 
 template<class Tvec, template<class> class SPHKernel>

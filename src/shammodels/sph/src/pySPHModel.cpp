@@ -405,6 +405,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("random_seed"),
             py::arg("init_h_factor") = 0.8)
         .def(
+            "make_generator_from_context",
+            [](TSPHSetup &self, ShamrockCtx &context_other) {
+                return self.make_generator_from_context(context_other);
+            })
+        .def(
             "make_combiner_add",
             [](TSPHSetup &self,
                shammodels::sph::modules::SetupNodePtr parent1,
@@ -545,6 +550,9 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("target_time"),
             py::kw_only(),
             py::arg("niter_max") = -1)
+        .def("set_dt", [](T &self, f64 dt) {
+            self.solver.solver_config.set_next_dt(dt);
+        })
         .def("timestep", &T::timestep)
         .def("set_cfl_cour", &T::set_cfl_cour, py::arg("cfl_cour"))
         .def("set_cfl_force", &T::set_cfl_force, py::arg("cfl_force"))
