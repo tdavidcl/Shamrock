@@ -127,6 +127,15 @@ namespace shammodels::sph {
         inline void set_monofluid_tvi(u32 nvar) { current_mode = MonofluidTVI{nvar}; }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
+        inline bool is_monofluid_tvi() { return bool(std::get_if<MonofluidTVI>(&current_mode)); }
+        inline bool is_monofluid_complete() {
+            return bool(std::get_if<MonofluidComplete>(&current_mode));
+        }
+
+        inline bool has_Sj_field() {
+            return is_monofluid_tvi(); // S_j = sqrt(\rho \epsilon_j)
+        }
+
         inline bool has_epsilon_field() {
             return bool(std::get_if<MonofluidTVI>(&current_mode))
                    || bool(std::get_if<MonofluidComplete>(&current_mode));

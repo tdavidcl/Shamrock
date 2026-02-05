@@ -111,6 +111,11 @@ namespace shammodels::sph {
         if (should_save_dt_to_fields()) {
             pdl.add_field<Tscal>("dt_part", 1);
         }
+
+        if (dust_config.has_Sj_field()) {
+            u32 ndust = dust_config.get_dust_nvar();
+            pdl.add_field<Tscal>("Sj", ndust);
+        }
     }
 
     template<class Tvec, template<class> class SPHKernel>
