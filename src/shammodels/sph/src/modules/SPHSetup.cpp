@@ -65,7 +65,7 @@ inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph:
         Tscal r_out,
         std::function<Tscal(Tscal)> sigma_profile,
         std::function<Tscal(Tscal)> H_profile,
-        std::function<Tscal(Tscal)> rot_profile,
+        std::function<Tscal(Tscal, Tscal)> rot_profile,
         std::function<Tscal(Tscal)> cs_profile,
         std::mt19937_64 eng,
         Tscal init_h_factor) {

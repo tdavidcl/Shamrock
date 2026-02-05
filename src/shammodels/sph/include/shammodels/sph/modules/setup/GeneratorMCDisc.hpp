@@ -56,7 +56,7 @@ namespace shammodels::sph::modules {
             Tscal r_out,
             std::function<Tscal(Tscal)> sigma_profile,
             std::function<Tscal(Tscal)> H_profile,
-            std::function<Tscal(Tscal)> rot_profile,
+            std::function<Tscal(Tscal, Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
             std::mt19937_64 eng) {
             return DiscIterator(
@@ -81,7 +81,7 @@ namespace shammodels::sph::modules {
             Tscal r_out,
             std::function<Tscal(Tscal)> sigma_profile,
             std::function<Tscal(Tscal)> H_profile,
-            std::function<Tscal(Tscal)> rot_profile,
+            std::function<Tscal(Tscal, Tscal)> rot_profile,
             std::function<Tscal(Tscal)> cs_profile,
             std::mt19937_64 eng,
             Tscal init_h_factor)
@@ -121,7 +121,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
     Tscal r_out;
     std::function<Tscal(Tscal)> sigma_profile;
     std::function<Tscal(Tscal)> H_profile;
-    std::function<Tscal(Tscal)> rot_profile;
+    std::function<Tscal(Tscal, Tscal)> rot_profile;
     std::function<Tscal(Tscal)> cs_profile;
 
     shamalgs::collective::InvariantParallelGenerator<std::mt19937_64> generator;
@@ -140,7 +140,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
         Tscal r_out,
         std::function<Tscal(Tscal)> sigma_profile,
         std::function<Tscal(Tscal)> H_profile,
-        std::function<Tscal(Tscal)> rot_profile,
+        std::function<Tscal(Tscal, Tscal)> rot_profile,
         std::function<Tscal(Tscal)> cs_profile,
         std::mt19937_64 eng)
         : DiscIterator(
@@ -162,7 +162,7 @@ class shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator {
         Tscal r_out,
         std::function<Tscal(Tscal)> sigma_profile,
         std::function<Tscal(Tscal)> H_profile,
-        std::function<Tscal(Tscal)> rot_profile,
+        std::function<Tscal(Tscal, Tscal)> rot_profile,
         std::function<Tscal(Tscal)> cs_profile,
         std::mt19937_64 eng,
         u64 Npart)

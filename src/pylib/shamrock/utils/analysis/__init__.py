@@ -6,6 +6,7 @@ from .UnitHelper import plot_codeu_to_unit  # noqa: I001
 from .DensityPlots import ColumnDensityPlot, SliceDensityPlot
 from .ColumnParticleCount import ColumnParticleCount
 from .ParticlesDt import SliceDtPart
+from .ParticlesAlpha import SliceAlphaAV
 from .VelocityPlots import (
     SliceVzPlot,
     SliceDiffVthetaProfile,

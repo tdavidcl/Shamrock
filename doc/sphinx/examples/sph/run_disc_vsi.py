@@ -92,8 +92,8 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 4
 plot_freq_stop = 1
 
-dt_stop = 0.1
-nstop = 20
+dt_stop = 0.25
+nstop = 4*30
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -101,7 +101,7 @@ t_stop = [i * dt_stop for i in range(nstop + 1)]
 
 # Sink parameters
 center_mass = 1.0
-center_racc = 0.1
+center_racc = 0.7
 
 # Disc parameter
 disc_mass = 0.001  # sol mass
@@ -165,8 +165,9 @@ bmax = (bsize, bsize, bsize)
 cs0 = cs_profile(r0)
 
 
-def rot_profile(r):
-    return ((kep_profile(r) ** 2) - (2 * p + q) * cs_profile(r) ** 2) ** 0.5
+def rot_profile(r,z):
+    term_vk = r**3 / (r**2 + z**2)**(3./2.)
+    return ((kep_profile(r) ** 2)*term_vk - (2 * p + q) * cs_profile(r) ** 2) ** 0.5
 
 
 def H_profile(r):
@@ -219,7 +220,6 @@ def setup_model():
     )
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
-    cfg.add_ext_force_point_mass(center_mass, center_racc)
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
     cfg.set_units(codeu)
@@ -300,6 +300,10 @@ def setup_model():
     if not np.allclose(barycenter, 0.0):
         raise RuntimeError("disc barycenter is not 0")
 
+    # now that the barycenter & momentum are 0, we can add the sink
+    model.add_sink(center_mass, (0, 0, 0), (0, 0, 0), center_racc)
+
+
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
     # Smoothing length iterations, increasing it affect the performance negatively but increse the
@@ -340,8 +344,12 @@ def setup_upscale():
 
     setup = model.get_setup()
     gen = setup.make_generator_from_context(ctx_data_source)
-    split_part = setup.make_modifier_split_part(parent=gen, n_split=UpscaleFactor, seed=42)
+    split_part = setup.make_modifier_split_part(parent=gen, n_split=UpscaleFactor, seed=42,h_scaling=0.5)
     setup.apply_setup(split_part, insert_step=scheduler_split_val)
+
+    print(model_data_source.get_sinks())
+    for s in model_data_source.get_sinks():
+        model.add_sink(s["mass"], s["pos"], s["velocity"], s["accretion_radius"])
 
     model.change_htolerances(coarse=1.3, fine=1.1)
     model.timestep()
@@ -371,40 +379,43 @@ from shamrock.utils.analysis import (
     VerticalShearGradient,
 )
 
+param_slice_kwargs = {
+    "ext_r": rout * 0.6 / (16.0 / 9.0),  # aspect ratio of 16:9
+    "nx": 1920,
+    "ny": 1080,
+    "ex": (1, 0, 0),
+    "ey": (0, 0, 1),
+    "center": ((rin + rout) / 2, 0, 0),
+}
+
+param_column_kwargs = {
+    "ext_r": rout * 1.05,
+    "nx": 1024,
+    "ny": 1024,
+    "ex": (1, 0, 0),
+    "ey": (0, 1, 0),
+    "center": (0, 0, 0),
+}
+
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 
 column_density_plot = ColumnDensityPlot(
     model,
-    ext_r=rout * 1.5,
-    nx=1024,
-    ny=1024,
-    ex=(1, 0, 0),
-    ey=(0, 1, 0),
-    center=(0, 0, 0),
+    **param_column_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="rho_integ_normal",
 )
 
 vertical_density_plot = SliceDensityPlot(
     model,
-    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=(0, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="rho_slice",
 )
 
 v_z_slice_plot = SliceVzPlot(
     model,
-    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=(0, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="v_z_slice",
     do_normalization=True,
@@ -413,12 +424,7 @@ v_z_slice_plot = SliceVzPlot(
 
 v_z_column_plot = ColumnAverageVzPlot(
     model,
-    ext_r=rout * 1.5,
-    nx=1024,
-    ny=1024,
-    ex=(1, 0, 0),
-    ey=(0, 1, 0),
-    center=(0, 0, 0),
+    **param_column_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="v_z_column",
     div_by_cs=True,
@@ -426,12 +432,7 @@ v_z_column_plot = ColumnAverageVzPlot(
 
 relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="relative_azy_velocity_slice",
     velocity_profile=kep_profile,
@@ -442,12 +443,7 @@ relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
 
 vertical_shear_gradient_slice_plot = VerticalShearGradient(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="vertical_shear_gradient_slice",
     do_normalization=True,
@@ -456,65 +452,41 @@ vertical_shear_gradient_slice_plot = VerticalShearGradient(
 
 dt_part_slice_plot = SliceDtPart(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="dt_part_slice",
 )
 
 alpha_av_slice_plot = SliceAlphaAV(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    **param_slice_kwargs,
+    analysis_folder=analysis_folder,
+    analysis_prefix="alpha_av_slice",
 )
 
 column_particle_count_plot = ColumnParticleCount(
     model,
-    ext_r=rout * 1.5,
-    nx=1024,
-    ny=1024,
-    ex=(1, 0, 0),
-    ey=(0, 1, 0),
-    center=(0, 0, 0),
+    **param_column_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="particle_count",
 )
 
 angular_momentum_transport_coefficient_slice_plot = SliceAngularMomentumTransportCoefficientPlot(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    **param_slice_kwargs,
     analysis_folder=analysis_folder,
     analysis_prefix="angular_momentum_transport_coefficient_slice",
     velocity_profile=kep_profile,
 )
 
-angular_momentum_transport_coefficient_column_plot = (
-    ColumnAverageAngularMomentumTransportCoefficientPlot(
-        model,
-        ext_r=rout * 1.5,
-        nx=1024,
-        ny=1024,
-        ex=(1, 0, 0),
-        ey=(0, 1, 0),
-        center=(0, 0, 0),
-        analysis_folder=analysis_folder,
-        analysis_prefix="angular_momentum_transport_coefficient_column",
-        velocity_profile=kep_profile,
-    )
+angular_momentum_transport_coefficient_column_plot = ColumnAverageAngularMomentumTransportCoefficientPlot(
+    model,
+    **param_column_kwargs,
+    analysis_folder=analysis_folder,
+    analysis_prefix="angular_momentum_transport_coefficient_column",
+    velocity_profile=kep_profile,
 )
+
 
 
 def make_plots(ianalysis):
@@ -543,7 +515,7 @@ def make_plots(ianalysis):
         **face_on_render_kwargs,
         field_unit="kg.m^-3",
         field_label="$\\rho$",
-        vmin=1e-10,
+        vmin=1e-12,
         vmax=1e-6,
         norm="log",
     )

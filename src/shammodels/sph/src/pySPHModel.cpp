@@ -377,7 +377,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal r_out,
                std::function<Tscal(Tscal)> sigma_profile,
                std::function<Tscal(Tscal)> H_profile,
-               std::function<Tscal(Tscal)> rot_profile,
+               std::function<Tscal(Tscal, Tscal)> rot_profile,
                std::function<Tscal(Tscal)> cs_profile,
                u64 random_seed,
                Tscal init_h_factor) {
