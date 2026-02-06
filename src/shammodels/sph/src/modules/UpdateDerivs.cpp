@@ -521,12 +521,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         sham::DeviceBuffer<Tscal> &buf_hpart = mpdat.get_field_buf_ref<Tscal>(ihpart_interf);
         sham::DeviceBuffer<Tscal> &buf_omega = mpdat.get_field_buf_ref<Tscal>(iomega_interf);
         sham::DeviceBuffer<Tscal> &buf_uint  = mpdat.get_field_buf_ref<Tscal>(iuint_interf);
-        sham::DeviceBuffer<Tscal> &buf_pressure
-            = shambase::get_check_ref(storage.pressure).get_field(cur_p.id_patch).get_buf();
         sham::DeviceBuffer<Tscal> &buf_alpha_AV
             = storage.alpha_av_ghost.get().get(cur_p.id_patch).get_buf();
-        sham::DeviceBuffer<Tscal> &buf_cs
-            = shambase::get_check_ref(storage.soundspeed).get_field(cur_p.id_patch).get_buf();
+        PatchDataFieldSpanPointer<Tscal> &buf_pressure
+            = shambase::get_check_ref(storage.pressure).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_cs
+            = shambase::get_check_ref(storage.soundspeed).get_spans().get(cur_p.id_patch);
 
         sycl::range range_npart{shambase::get_check_ref(part_counts).indexes.get(cur_p.id_patch)};
 
