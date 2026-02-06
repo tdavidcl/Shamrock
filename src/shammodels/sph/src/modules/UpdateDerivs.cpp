@@ -519,7 +519,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         sycl::range range_npart{pdat.get_obj_cnt()};
 
         tree::ObjectCache &pcache
-            = shambase::get_check_ref(storage.neigh_cache).get_cache(cur_p.id_patch);
+            = shambase::get_check_ref(storage.neigh_cache).get(cur_p.id_patch);
 
         /////////////////////////////////////////////
 
