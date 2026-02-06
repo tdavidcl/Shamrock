@@ -510,19 +510,99 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
     auto &part_counts            = storage.part_counts;
     auto &part_counts_with_ghost = storage.part_counts_with_ghost;
+    auto &xyz_refs               = storage.positions_with_ghosts;
+    auto &pressure_field         = storage.pressure;
+    auto &soundspeed_field       = storage.soundspeed;
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> uint_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+
+    { // Attach spans to block coords
+        shambase::get_check_ref(uint_refs).set_refs(
+            mpdats.map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                    return std::ref(mpdat.get_field<Tscal>(iuint_interf));
+                }));
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> vxyz_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("", "");
+    { // Attach spans to block coords
+        shambase::get_check_ref(vxyz_refs).set_refs(
+            mpdats.map<std::reference_wrapper<PatchDataField<Tvec>>>(
+                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                    return std::ref(mpdat.get_field<Tvec>(ivxyz_interf));
+                }));
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> hpart_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+    { // if was just reset before this call
+        shambase::get_check_ref(hpart_refs)
+            .set_refs(mpdats.map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                    return std::ref(mpdat.get_field<Tscal>(ihpart_interf));
+                }));
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> omega_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+    { // Attach spans to block coords
+        shambase::get_check_ref(omega_refs)
+            .set_refs(mpdats.map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                    return std::ref(mpdat.get_field<Tscal>(iomega_interf));
+                }));
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> alpha_av_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+    { // Attach spans to block coords
+        shambase::DistributedData<std::reference_wrapper<PatchDataField<Tscal>>> refs{};
+        scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+            refs.add_obj(
+                cur_p.id_patch, std::ref(storage.alpha_av_ghost.get().get(cur_p.id_patch)));
+        });
+        shambase::get_check_ref(alpha_av_refs).set_refs(refs);
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> axyz_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("", "");
+    { // Attach spans to block coords
+        shambase::DistributedData<std::reference_wrapper<PatchDataField<Tvec>>> refs{};
+        scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+            refs.add_obj(cur_p.id_patch, std::ref(pdat.get_field<Tvec>(iaxyz)));
+        });
+        shambase::get_check_ref(axyz_refs).set_refs(refs);
+    }
+
+    std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> duint_refs
+        = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("", "");
+    { // Attach spans to block coords
+        shambase::DistributedData<std::reference_wrapper<PatchDataField<Tscal>>> refs{};
+        scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+            refs.add_obj(cur_p.id_patch, std::ref(pdat.get_field<Tscal>(iduint)));
+        });
+        shambase::get_check_ref(duint_refs).set_refs(refs);
+    }
 
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
-        PatchDataLayer &mpdat = mpdats.get(cur_p.id_patch);
-        sham::DeviceBuffer<Tvec> &buf_xyz
-            = merged_xyzh.get(cur_p.id_patch).template get_field_buf_ref<Tvec>(0);
-        sham::DeviceBuffer<Tvec> &buf_axyz   = pdat.get_field_buf_ref<Tvec>(iaxyz);
-        sham::DeviceBuffer<Tscal> &buf_duint = pdat.get_field_buf_ref<Tscal>(iduint);
-        sham::DeviceBuffer<Tvec> &buf_vxyz   = mpdat.get_field_buf_ref<Tvec>(ivxyz_interf);
-        sham::DeviceBuffer<Tscal> &buf_hpart = mpdat.get_field_buf_ref<Tscal>(ihpart_interf);
-        sham::DeviceBuffer<Tscal> &buf_omega = mpdat.get_field_buf_ref<Tscal>(iomega_interf);
-        sham::DeviceBuffer<Tscal> &buf_uint  = mpdat.get_field_buf_ref<Tscal>(iuint_interf);
-        sham::DeviceBuffer<Tscal> &buf_alpha_AV
-            = storage.alpha_av_ghost.get().get(cur_p.id_patch).get_buf();
+        PatchDataFieldSpanPointer<Tvec> &buf_xyz
+            = shambase::get_check_ref(xyz_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tvec> &buf_axyz
+            = shambase::get_check_ref(axyz_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_duint
+            = shambase::get_check_ref(duint_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tvec> &buf_vxyz
+            = shambase::get_check_ref(vxyz_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_hpart
+            = shambase::get_check_ref(hpart_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_omega
+            = shambase::get_check_ref(omega_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_uint
+            = shambase::get_check_ref(uint_refs).get_spans().get(cur_p.id_patch);
+        PatchDataFieldSpanPointer<Tscal> &buf_alpha_AV
+            = shambase::get_check_ref(alpha_av_refs).get_spans().get(cur_p.id_patch);
         PatchDataFieldSpanPointer<Tscal> &buf_pressure
             = shambase::get_check_ref(storage.pressure).get_spans().get(cur_p.id_patch);
         PatchDataFieldSpanPointer<Tscal> &buf_cs
