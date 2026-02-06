@@ -15,14 +15,23 @@
  *
  */
 
-#include "shammodels/sph/modules/UpdateDerivs.hpp"
+#include "shambase/DistributedData.hpp"
+#include "shambase/memory.hpp"
+#include "shambackends/kernel_call.hpp"
+#include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/math.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
 #include "shammodels/sph/math/mhd.hpp"
 #include "shammodels/sph/math/q_ab.hpp"
+#include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shamphys/mhd.hpp"
+#include "shamrock/patch/PatchDataFieldSpan.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
+#include "shamrock/solvergraph/IFieldSpan.hpp"
+#include "shamrock/solvergraph/Indexes.hpp"
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
@@ -499,6 +508,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
     shamrock::solvergraph::Field<Tscal> &omega        = shambase::get_check_ref(storage.omega);
     shambase::DistributedData<PatchDataLayer> &mpdats = storage.merged_patchdata_ghost.get();
 
+    auto &part_counts            = storage.part_counts;
+    auto &part_counts_with_ghost = storage.part_counts_with_ghost;
+
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
         PatchDataLayer &mpdat = mpdats.get(cur_p.id_patch);
         sham::DeviceBuffer<Tvec> &buf_xyz
@@ -516,7 +528,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         sham::DeviceBuffer<Tscal> &buf_cs
             = shambase::get_check_ref(storage.soundspeed).get_field(cur_p.id_patch).get_buf();
 
-        sycl::range range_npart{pdat.get_obj_cnt()};
+        sycl::range range_npart{shambase::get_check_ref(part_counts).indexes.get(cur_p.id_patch)};
 
         tree::ObjectCache &pcache
             = shambase::get_check_ref(storage.neigh_cache).get(cur_p.id_patch);
