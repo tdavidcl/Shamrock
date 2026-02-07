@@ -44,13 +44,13 @@ auto shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator::n
 
     Tscal r = find_r();
 
-    Tscal cs        = cs_profile(r);
-    Tscal sigma     = sigma_profile(r);
-    Tscal H         = H_profile(r);
+    Tscal cs    = cs_profile(r);
+    Tscal sigma = sigma_profile(r);
+    Tscal H     = H_profile(r);
 
     Tscal z = H * Gauss;
 
-    Tscal rot_speed = rot_profile(r,z);
+    Tscal rot_speed = rot_profile(r, z);
 
     auto pos = sycl::vec<Tscal, 3>{r * sycl::cos(theta), r * sycl::sin(theta), z};
 

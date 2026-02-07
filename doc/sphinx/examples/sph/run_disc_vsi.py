@@ -92,8 +92,8 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 4
 plot_freq_stop = 1
 
-dt_stop = 0.25
-nstop = 4*30
+dt_stop = 0.1
+nstop = 4 * 30
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -128,6 +128,8 @@ dump_prefix = dump_folder + "dump_"
 # Disc profiles
 def sigma_profile(r):
     sigma_0 = 1.0  # We do not care as it will be renormalized
+    # disc tapering at inner edge
+    sigma_0 *= 1 - (rin / r) ** 0.5
     return sigma_0 * (r / r0) ** (-p)
 
 
@@ -165,9 +167,12 @@ bmax = (bsize, bsize, bsize)
 cs0 = cs_profile(r0)
 
 
-def rot_profile(r,z):
-    term_vk = r**3 / (r**2 + z**2)**(3./2.)
-    return ((kep_profile(r) ** 2)*term_vk - (2 * p + q) * cs_profile(r) ** 2) ** 0.5
+def rot_profile(r, z):
+    gm_r = kep_profile(r) ** 2
+    term2 = -(p + q + 3.0 / 2.0) * cs_profile(r) ** 2
+    r2z2_sqrt = (r**2 + z**2) ** 0.5
+    term3 = -gm_r * r * (2 * q) * (1 / r - 1 / r2z2_sqrt)
+    return (gm_r + term2 + term3) ** 0.5
 
 
 def H_profile(r):
@@ -303,7 +308,6 @@ def setup_model():
     # now that the barycenter & momentum are 0, we can add the sink
     model.add_sink(center_mass, (0, 0, 0), (0, 0, 0), center_racc)
 
-
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
     # Smoothing length iterations, increasing it affect the performance negatively but increse the
@@ -344,7 +348,9 @@ def setup_upscale():
 
     setup = model.get_setup()
     gen = setup.make_generator_from_context(ctx_data_source)
-    split_part = setup.make_modifier_split_part(parent=gen, n_split=UpscaleFactor, seed=42,h_scaling=0.5)
+    split_part = setup.make_modifier_split_part(
+        parent=gen, n_split=UpscaleFactor, seed=42, h_scaling=0.5
+    )
     setup.apply_setup(split_part, insert_step=scheduler_split_val)
 
     print(model_data_source.get_sinks())
@@ -479,14 +485,15 @@ angular_momentum_transport_coefficient_slice_plot = SliceAngularMomentumTranspor
     velocity_profile=kep_profile,
 )
 
-angular_momentum_transport_coefficient_column_plot = ColumnAverageAngularMomentumTransportCoefficientPlot(
-    model,
-    **param_column_kwargs,
-    analysis_folder=analysis_folder,
-    analysis_prefix="angular_momentum_transport_coefficient_column",
-    velocity_profile=kep_profile,
+angular_momentum_transport_coefficient_column_plot = (
+    ColumnAverageAngularMomentumTransportCoefficientPlot(
+        model,
+        **param_column_kwargs,
+        analysis_folder=analysis_folder,
+        analysis_prefix="angular_momentum_transport_coefficient_column",
+        velocity_profile=kep_profile,
+    )
 )
-
 
 
 def make_plots(ianalysis):
