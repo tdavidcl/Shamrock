@@ -221,7 +221,7 @@ namespace shambase {
     std::string _callstack_process_identifier;
 
     void set_callstack_process_identifier(std::string identifier) {
-        _callstack_process_identifier = identifier;
+        _callstack_process_identifier = std::move(identifier);
     }
 
     /**
