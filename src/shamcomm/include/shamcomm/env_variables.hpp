@@ -10,20 +10,16 @@
 #pragma once
 
 /**
- * @file EnvVariables.hpp
+ * @file io.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
+ *
  */
-
-#include "shambase/string.hpp"
+ 
+#include "shambase/aliases_int.hpp"
 #include "shamcmdopt/env.hpp"
-#include "shamsys/legacy/log.hpp"
-#include <cstdlib>
-#include <optional>
-#include <string>
 
-namespace shamsys::env {
-
+namespace shamcomm {
     // rank related env variable
     const std::optional<std::string> MV2_COMM_WORLD_LOCAL_RANK
         = shamcmdopt::getenv_str("MV2_COMM_WORLD_LOCAL_RANK");
@@ -65,5 +61,4 @@ namespace shamsys::env {
     }
 
     const std::optional<std::string> PSM2_CUDA = shamcmdopt::getenv_str("PSM2_CUDA");
-
-} // namespace shamsys::env
+}
