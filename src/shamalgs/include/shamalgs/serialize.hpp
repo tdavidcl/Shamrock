@@ -406,13 +406,32 @@ namespace shamalgs {
 
         template<class T>
         inline void load_buf(sham::DeviceBuffer<T> &buf, u64 len) {
-            StackEntry stack_loc{false};
+
+            std::string info = shambase::format(
+                "load_buf: len={}, buf.get_size()={} head_device={}",
+                len,
+                buf.get_size(),
+                head_device);
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
 
             using Helper     = details::SerializeHelperMember<T>;
             u64 current_head = head_device;
 
             u64 offset = align_repr(len * Helper::szrepr);
             check_head_move_device<T>(offset, len);
+
+            info = shambase::format(
+                "load_buf: len={}, buf.get_size()={}, current_head={}, offset={} head_device={}",
+                len,
+                buf.get_size(),
+                current_head,
+                offset,
+                head_device);
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
 
             if (buf.get_size() < len) {
                 shambase::throw_with_loc<std::invalid_argument>(shambase::format(
@@ -426,6 +445,21 @@ namespace shamalgs {
             T *accbuf       = buf.get_write_access(depends_list);
             auto accbufbyte = storage.get_read_access(depends_list);
 
+            info = shambase::format(
+                "load_buf: len={}, buf.get_size()={}, current_head={}, offset={}, "
+                "depends_list.size()={}, accbuf={}, accbufbyte={} head_device={}",
+                len,
+                buf.get_size(),
+                current_head,
+                offset,
+                depends_list.get_events().size(),
+                static_cast<void *>(accbuf),
+                static_cast<const void *>(accbufbyte),
+                head_device);
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
+
             auto e = dev_sched->get_queue().submit(
                 depends_list, [&, current_head](sycl::handler &cgh) {
                     cgh.parallel_for(sycl::range<1>{len}, [=](sycl::item<1> id) {
@@ -434,10 +468,28 @@ namespace shamalgs {
                     });
                 });
 
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
+
             buf.complete_event_state(e);
             storage.complete_event_state(e);
 
             head_device += offset;
+
+            info = shambase::format(
+                "load_buf: len={}, buf.get_size()={}, current_head={}, offset={}, "
+                "depends_list.size()={}, accbuf={}, accbufbyte={} head_device={}",
+                len,
+                buf.get_size(),
+                current_head,
+                offset,
+                depends_list.get_events().size(),
+                static_cast<void *>(accbuf),
+                static_cast<const void *>(accbufbyte),
+                head_device);
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
         }
     };
 
