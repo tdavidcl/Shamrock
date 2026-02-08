@@ -150,17 +150,13 @@ namespace sham {
 
             __shamrock_stack_entry();
 
-            {
-                __shamrock_stack_entry();
-                q.wait_and_throw();
-            }
+            q.wait_and_throw();
 
             __shamrock_stack_entry();
 
-            {
-                __shamrock_stack_entry();
-                elist.wait_and_throw();
-            }
+            elist.wait_and_throw();
+
+            __shamrock_stack_entry();
 
             elist.consumed = true;
 
@@ -169,10 +165,13 @@ namespace sham {
                 fct(h);
             });
 
+            __shamrock_stack_entry();
+
             if (wait_after_submit) {
-                __shamrock_stack_entry();
                 e.wait_and_throw();
             }
+
+            __shamrock_stack_entry();
 
             return e;
         }
