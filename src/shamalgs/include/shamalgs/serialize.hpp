@@ -356,12 +356,30 @@ namespace shamalgs {
             u64 offset = align_repr(len * Helper::szrepr);
             check_head_move_device<T>(offset, len);
 
+            info = shambase::format(
+                "write_buf: len={}, buf.get_size()={}, current_head={}, offset={}",
+                len,
+                buf.get_size(),
+                current_head,
+                offset);
+
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
 
             sham::EventList depends_list;
             const T *accbuf = buf.get_read_access(depends_list);
             auto accbufbyte = storage.get_write_access(depends_list);
+
+            info = shambase::format(
+                "write_buf: len={}, buf.get_size()={}, current_head={}, offset={}, "
+                "depends_list.size()={}, accbuf={}, accbufbyte={}",
+                len,
+                buf.get_size(),
+                current_head,
+                offset,
+                depends_list.get_events().size(),
+                static_cast<const void*>(accbuf),
+                static_cast<void*>(accbufbyte));
 
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
@@ -385,6 +403,7 @@ namespace shamalgs {
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
 
+            shambase::throw_unimplemented();
         }
 
         template<class T>
