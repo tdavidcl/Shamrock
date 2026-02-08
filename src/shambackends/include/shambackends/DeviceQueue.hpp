@@ -148,6 +148,20 @@ namespace sham {
         template<class Fct>
         sycl::event submit(EventList &elist, Fct &&fct) {
 
+            __shamrock_stack_entry();
+
+            {
+                __shamrock_stack_entry();
+                q.wait_and_throw();
+            }
+
+            __shamrock_stack_entry();
+
+            {
+                __shamrock_stack_entry();
+                elist.wait_and_throw();
+            }
+
             elist.consumed = true;
 
             auto e = q.submit([&](sycl::handler &h) {
@@ -156,6 +170,7 @@ namespace sham {
             });
 
             if (wait_after_submit) {
+                __shamrock_stack_entry();
                 e.wait_and_throw();
             }
 
