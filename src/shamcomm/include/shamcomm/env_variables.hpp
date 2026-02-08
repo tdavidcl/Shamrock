@@ -18,6 +18,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shamcmdopt/env.hpp"
+#include <cstdlib>
 
 namespace shamcomm {
     // rank related env variable
