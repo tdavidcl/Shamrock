@@ -234,7 +234,6 @@ namespace shambase {
 
         std::vector<std::string> lines;
 
-
         while (!cpy.empty()) {
             SourceLocation l = cpy.top();
             lines.push_back(l.format_one_line_func());

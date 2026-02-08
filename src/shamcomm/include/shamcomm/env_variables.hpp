@@ -10,12 +10,12 @@
 #pragma once
 
 /**
- * @file io.hpp
+ * @file env_variables.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
  */
- 
+
 #include "shambase/aliases_int.hpp"
 #include "shamcmdopt/env.hpp"
 
@@ -61,4 +61,4 @@ namespace shamcomm {
     }
 
     const std::optional<std::string> PSM2_CUDA = shamcmdopt::getenv_str("PSM2_CUDA");
-}
+} // namespace shamcomm
