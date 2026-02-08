@@ -343,7 +343,12 @@ namespace shamalgs {
 
         template<class T>
         inline void write_buf(sham::DeviceBuffer<T> &buf, u64 len) {
-            StackEntry stack_loc{false};
+
+            std::string info
+                = shambase::format("write_buf: len={}, buf.get_size()={}", len, buf.get_size());
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
 
             using Helper     = details::SerializeHelperMember<T>;
             u64 current_head = head_device;
@@ -351,9 +356,15 @@ namespace shamalgs {
             u64 offset = align_repr(len * Helper::szrepr);
             check_head_move_device<T>(offset, len);
 
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
+
             sham::EventList depends_list;
             const T *accbuf = buf.get_read_access(depends_list);
             auto accbufbyte = storage.get_write_access(depends_list);
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
 
             auto e = dev_sched->get_queue().submit(
                 depends_list, [&, current_head](sycl::handler &cgh) {
@@ -363,10 +374,17 @@ namespace shamalgs {
                     });
                 });
 
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
+
             buf.complete_event_state(e);
             storage.complete_event_state(e);
 
             head_device += offset;
+
+            [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
+                false, SourceLocation{info}};
+
         }
 
         template<class T>
