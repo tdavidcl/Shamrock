@@ -403,7 +403,6 @@ namespace shamalgs {
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
 
-            shambase::throw_unimplemented();
         }
 
         template<class T>
