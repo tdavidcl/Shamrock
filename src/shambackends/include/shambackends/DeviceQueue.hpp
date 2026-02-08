@@ -100,11 +100,21 @@ namespace sham {
         template<class Fct>
         sycl::event submit(Fct &&fct) {
 
+            __shamrock_stack_entry();
+
+            {
+                __shamrock_stack_entry();
+                q.wait_and_throw();
+            }
+
+            __shamrock_stack_entry();
+
             auto e = q.submit([&](sycl::handler &h) {
                 fct(h);
             });
 
             if (wait_after_submit) {
+                __shamrock_stack_entry();
                 e.wait_and_throw();
             }
 

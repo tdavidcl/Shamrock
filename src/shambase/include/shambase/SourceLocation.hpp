@@ -35,7 +35,9 @@ struct SourceLocation {
     srcloc loc;
     std::optional<std::string> message;
 
-    inline explicit SourceLocation(std::optional<std::string> _message = std::nullopt,srcloc _loc = srcloc::current()) : loc(_loc), message(_message) {}
+    inline explicit SourceLocation(
+        std::optional<std::string> _message = std::nullopt, srcloc _loc = srcloc::current())
+        : loc(_loc), message(_message) {}
 
     /**
      * @brief format the location in multiple lines

@@ -378,8 +378,8 @@ namespace shamalgs {
                 current_head,
                 offset,
                 depends_list.get_events().size(),
-                static_cast<const void*>(accbuf),
-                static_cast<void*>(accbufbyte));
+                static_cast<const void *>(accbuf),
+                static_cast<void *>(accbufbyte));
 
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
@@ -402,7 +402,6 @@ namespace shamalgs {
 
             [[maybe_unused]] StackEntry __shamrock_unique_name(stack_loc_){
                 false, SourceLocation{info}};
-
         }
 
         template<class T>

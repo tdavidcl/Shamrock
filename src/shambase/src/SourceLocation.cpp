@@ -56,11 +56,15 @@ std::string SourceLocation::format_one_line() const {
 }
 
 std::string SourceLocation::format_one_line_func() const {
-    if(message.has_value()) {
+    if (message.has_value()) {
         return fmt::format(
-            "{} ({}:{}:{}) info={}", loc.function_name(), loc.file_name(), loc.line(), loc.column(), message.value());
-    }
-    else {
+            "{} ({}:{}:{}) info={}",
+            loc.function_name(),
+            loc.file_name(),
+            loc.line(),
+            loc.column(),
+            message.value());
+    } else {
         return fmt::format(
             "{} ({}:{}:{})", loc.function_name(), loc.file_name(), loc.line(), loc.column());
     }
