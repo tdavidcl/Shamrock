@@ -102,12 +102,7 @@ namespace sham {
 
             __shamrock_stack_entry();
 
-            {
-                __shamrock_stack_entry();
-                q.wait_and_throw();
-            }
-
-            __shamrock_stack_entry();
+            wait_and_throw();
 
             auto e = q.submit([&](sycl::handler &h) {
                 fct(h);
@@ -119,6 +114,16 @@ namespace sham {
             }
 
             return e;
+        }
+
+        /**
+         * @brief Wait for the queue to finish and throw an exception if one has occurred
+         *
+         * This function waits for the queue to finish and throws an exception if one has occurred.
+         */
+        void wait_and_throw() {
+            __shamrock_stack_entry();
+            q.wait_and_throw();
         }
 
         /**
@@ -150,28 +155,18 @@ namespace sham {
 
             __shamrock_stack_entry();
 
-            q.wait_and_throw();
-
-            __shamrock_stack_entry();
-
-            elist.wait_and_throw();
-
-            __shamrock_stack_entry();
+            wait_and_throw();
 
             elist.consumed = true;
-
-            auto e = q.submit([&](sycl::handler &h) {
+            auto e         = q.submit([&](sycl::handler &h) {
                 elist.apply_dependancy(h);
                 fct(h);
             });
 
-            __shamrock_stack_entry();
-
             if (wait_after_submit) {
+                __shamrock_stack_entry();
                 e.wait_and_throw();
             }
-
-            __shamrock_stack_entry();
 
             return e;
         }
