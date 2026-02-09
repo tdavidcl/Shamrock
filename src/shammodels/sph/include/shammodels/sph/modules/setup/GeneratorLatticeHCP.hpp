@@ -25,6 +25,22 @@
 
 namespace shammodels::sph::modules {
 
+    namespace {
+        void sync_point(SourceLocation loc = SourceLocation{}) {
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+            q.wait_and_throw();
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
+
+            if (shamcomm::world_rank() == 0) {
+                logger::raw_ln("sync point", loc.format_one_line());
+            }
+
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
+        }
+    } // namespace
+
     template<class Tvec>
     class GeneratorLatticeHCP : public ISPHSetupNode {
         using Tscal              = shambase::VecComponent<Tvec>;
@@ -78,9 +94,14 @@ namespace shammodels::sph::modules {
                     "total",
                     skip_start + gen_cnt + skip_end);
 
+                sync_point();
+
                 generator.skip(skip_start);
+                sync_point();
                 auto tmp = generator.next_n(gen_cnt);
+                sync_point();
                 generator.skip(skip_end);
+                sync_point();
 
                 for (Tvec r : tmp) {
                     if (Patch::is_in_patch_converted(r, box.lower, box.upper)) {
@@ -109,6 +130,9 @@ namespace shammodels::sph::modules {
                     f.override(dr);
                 }
             }
+
+            sync_point();
+
             return tmp;
         }
 
