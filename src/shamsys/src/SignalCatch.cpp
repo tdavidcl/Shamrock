@@ -72,10 +72,6 @@ namespace shamsys {
             shambase::throw_with_loc<std::runtime_error>(
                 "Failed to register SIGSEGV signal handler");
         }
-        if (sigaction(SIGKILL, &sa, NULL) != 0) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Failed to register SIGKILL signal handler");
-        }
         if (sigaction(SIGIOT, &sa, NULL) != 0) {
             shambase::throw_with_loc<std::runtime_error>(
                 "Failed to register SIGIOT signal handler");
