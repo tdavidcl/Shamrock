@@ -916,6 +916,8 @@ namespace sham {
                     get_size()));
             }
 
+            logger::info_ln("DeviceBuffer", "fill", "start_index =", start_index, "idx_count =", idx_count, "get_size() =", get_size());
+
             sham::EventList depends_list;
             T *ptr = get_write_access(depends_list);
 
