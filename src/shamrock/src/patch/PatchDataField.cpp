@@ -229,28 +229,8 @@ void PatchDataField<T>::insert(const PatchDataField<T> &f2) {
     if (f2_len > 0) {
         shamlog_debug_sycl_ln("PatchDataField", "expand field buf by N =", f2_len);
 
-        const u32 old_val_cnt = get_val_cnt(); // field_data.size();
-        expand(f2.obj_cnt);
-
-        auto sptr = shamsys::instance::get_compute_scheduler_ptr();
-        auto &q   = sptr->get_queue();
-
-        sham::EventList depends_list;
-        T *acc          = get_buf().get_write_access(depends_list);
-        const T *acc_f2 = f2.get_buf().get_read_access(depends_list);
-
-        shamlog_debug_sycl_ln("PatchDataField", "write values");
-        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            const u32 idx_st = old_val_cnt;
-
-            cgh.parallel_for<PdatField_insert<T>>(
-                sycl::range<1>{f2.get_val_cnt()}, [=](sycl::id<1> idx) {
-                    acc[idx_st + idx] = acc_f2[idx];
-                });
-        });
-
-        get_buf().complete_event_state(e);
-        f2.get_buf().complete_event_state(e);
+        get_buf().append(f2.get_buf());
+        obj_cnt += f2_len;
 
     } else {
         shamlog_debug_sycl_ln("PatchDataField", "expand field buf (skip f2 is empty)");

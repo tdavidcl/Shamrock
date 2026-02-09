@@ -38,7 +38,8 @@ namespace sham {
         sham::EventList events;
 
         for (size_t i = 0; i < count; i += max_copy_len) {
-            i32 copy_len  = shambase::narrow_or_throw<i32>(std::min(max_copy_len, count - i));
+            i32 copy_len
+                = shambase::narrow_or_throw<i32>(std::min<size_t>(max_copy_len, count - i));
             sycl::event e = q.submit(depends_list, [&](sycl::handler &cgh) {
                 cgh.copy(src + i, dest + i, copy_len);
             });
@@ -682,7 +683,7 @@ namespace sham {
             if (size > 0) {
 
                 shambase::narrow_or_throw<i32>(size);
-                
+
                 sham::EventList depends_list;
                 const T *ptr = get_read_access(depends_list);
 
