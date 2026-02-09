@@ -225,8 +225,6 @@ void shamsys::microbench::saxpy() {
             = std::min<size_t>(dev.prop.max_mem_alloc_size_dev, dev.prop.global_mem_size);
         double max_size = double(max_alloc) / (vec4_size * 4); // there is 2 allocations so /4
 
-        max_size = std::min<double>(max_size, i32_max - 1); // keep something that fits in a int32_t
-
         auto result = bench_step(N);
 
         for (; N <= (1 << 30) && N <= u32(max_size); N *= 2) {
