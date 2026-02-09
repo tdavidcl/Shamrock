@@ -106,6 +106,13 @@ namespace syclinit {
     std::shared_ptr<sham::DeviceScheduler> sched_compute;
     std::shared_ptr<sham::DeviceScheduler> sched_alt;
 
+    std::string callback_mem_perf_info() {
+        // in principle we should do it for both sched_compute and sched_alt
+        // but for now we only do one since it will return the same info
+        return "Memory usage & performance info:\n"
+               + sham::details::log_mem_perf_info(sched_compute);
+    }
+
     void init_device_scheduling() {
         StackEntry stack_loc{false};
         ctx_compute = std::make_shared<sham::DeviceContext>(device_compute);
@@ -116,6 +123,8 @@ namespace syclinit {
 
         test_device_scheduler(sched_compute);
         test_device_scheduler(sched_alt);
+
+        shambase::add_callstack_gen_info_generator(callback_mem_perf_info);
 
         // logger::raw_ln("--- Compute ---");
         // sched_compute->print_info();
