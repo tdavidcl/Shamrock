@@ -933,7 +933,7 @@ namespace sham {
 
             sycl::event e1 = get_queue().submit(depends_list, [&](sycl::handler &cgh) {
                 cgh.parallel_for(
-                    sycl::range<1>(idx_count), [start_index, value](sycl::item<1> gid) {
+                    sycl::range<1>(idx_count), [ptr,start_index, value](sycl::item<1> gid) {
                         ptr[start_index + gid.get_linear_id()] = value;
                     });
             });
