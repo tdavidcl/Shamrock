@@ -916,16 +916,6 @@ namespace sham {
                     get_size()));
             }
 
-            logger::info_ln(
-                "DeviceBuffer",
-                "fill",
-                "start_index =",
-                start_index,
-                "idx_count =",
-                idx_count,
-                "get_size() =",
-                get_size());
-
             shambase::narrow_or_throw<i32>(idx_count);
 
             sham::EventList depends_list;
