@@ -926,15 +926,17 @@ namespace sham {
                 "get_size() =",
                 get_size());
 
+            shambase::narrow_or_throw<i32>(idx_count);
+
             sham::EventList depends_list;
             T *ptr = get_write_access(depends_list);
 
-            sycl::event e1 = get_queue().submit(
-                depends_list, [&, ptr, value, start_index, idx_count](sycl::handler &cgh) {
-                    shambase::parallel_for(cgh, idx_count, "fill field", [=](u32 gid) {
-                        ptr[start_index + gid] = value;
+            sycl::event e1 = get_queue().submit(depends_list, [&](sycl::handler &cgh) {
+                cgh.parallel_for(
+                    sycl::range<1>(idx_count), [start_index, value](sycl::item<1> gid) {
+                        ptr[start_index + gid.get_linear_id()] = value;
                     });
-                });
+            });
 
             complete_event_state(e1);
         }
