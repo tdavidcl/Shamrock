@@ -112,23 +112,29 @@ namespace shammodels::sph::modules {
 
             // Make a patchdata from pos_data
             PatchDataLayer tmp(sched.get_layout_ptr());
+            sync_point();
             if (!pos_data.empty()) {
                 tmp.resize(pos_data.size());
+            }
+            sync_point();
+            if (!pos_data.empty()) {
                 tmp.fields_raz();
+            }
+            sync_point();
 
-                {
-                    u32 len = pos_data.size();
-                    PatchDataField<Tvec> &f
-                        = tmp.get_field<Tvec>(sched.pdl().get_field_idx<Tvec>("xyz"));
-                    // sycl::buffer<Tvec> buf(pos_data.data(), len);
-                    f.override(pos_data, len);
-                }
+            if (!pos_data.empty()) {
+                u32 len = pos_data.size();
+                PatchDataField<Tvec> &f
+                    = tmp.get_field<Tvec>(sched.pdl().get_field_idx<Tvec>("xyz"));
+                // sycl::buffer<Tvec> buf(pos_data.data(), len);
+                f.override(pos_data, len);
+            }
+            sync_point();
 
-                {
-                    PatchDataField<Tscal> &f
-                        = tmp.get_field<Tscal>(sched.pdl().get_field_idx<Tscal>("hpart"));
-                    f.override(dr);
-                }
+            if (!pos_data.empty()) {
+                PatchDataField<Tscal> &f
+                    = tmp.get_field<Tscal>(sched.pdl().get_field_idx<Tscal>("hpart"));
+                f.override(dr);
             }
 
             sync_point();
