@@ -27,6 +27,7 @@ namespace shamsys::details {
         switch (signum) {
         case SIGTERM: signame = "SIGTERM"; break;
         case SIGINT : signame = "SIGINT"; break;
+        case SIGIOT : signame = "SIGIOT"; break;
         case SIGSEGV: signame = "SIGSEGV"; break;
         default     : signame = "UNKNOWN"; break;
         }
