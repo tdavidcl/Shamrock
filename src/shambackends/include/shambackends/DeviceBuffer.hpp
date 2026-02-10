@@ -49,6 +49,50 @@ namespace sham {
         return events;
     }
 
+    template<class T>
+    inline sham::EventList safe_fill(
+        sham::DeviceQueue &q, sham::EventList &depends_list, T *dest, size_t count, T value) {
+        __shamrock_stack_entry();
+        u64 max_copy_len = (1 << 30) / sizeof(T); // 1GB
+
+        sham::EventList events;
+
+        for (size_t i = 0; i < count; i += max_copy_len) {
+            i32 copy_len
+                = shambase::narrow_or_throw<i32>(std::min<size_t>(max_copy_len, count - i));
+            sycl::event e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                cgh.parallel_for(sycl::range<1>(copy_len), [dest, i, value](sycl::item<1> gid) {
+                    dest[i + gid.get_linear_id()] = value;
+                });
+            });
+            events.add_event(e);
+        }
+
+        return events;
+    }
+
+    template<class T, class Fct>
+    inline sham::EventList safe_fill_lambda(
+        sham::DeviceQueue &q, sham::EventList &depends_list, T *dest, size_t count, Fct &&fct) {
+        __shamrock_stack_entry();
+        u64 max_copy_len = (1 << 30) / sizeof(T); // 1GB
+
+        sham::EventList events;
+
+        for (size_t i = 0; i < count; i += max_copy_len) {
+            i32 copy_len
+                = shambase::narrow_or_throw<i32>(std::min<size_t>(max_copy_len, count - i));
+            sycl::event e = q.submit(depends_list, [&](sycl::handler &cgh) {
+                cgh.parallel_for(sycl::range<1>(copy_len), [dest, i, fct](sycl::item<1> gid) {
+                    dest[i + gid.get_linear_id()] = fct(gid.get_linear_id());
+                });
+            });
+            events.add_event(e);
+        }
+
+        return events;
+    }
+
     template<class T, USMKindTarget target = host, USMKindTarget orgin_target = device>
     class BufferMirror;
 
@@ -921,14 +965,10 @@ namespace sham {
             sham::EventList depends_list;
             T *ptr = get_write_access(depends_list);
 
-            sycl::event e1 = get_queue().submit(depends_list, [&](sycl::handler &cgh) {
-                cgh.parallel_for(
-                    sycl::range<1>(idx_count), [ptr,start_index, value](sycl::item<1> gid) {
-                        ptr[start_index + gid.get_linear_id()] = value;
-                    });
-            });
+            sham::EventList events
+                = safe_fill(get_queue(), depends_list, ptr + start_index, idx_count, value);
 
-            complete_event_state(e1);
+            complete_event_state(events);
         }
 
         /**
@@ -963,13 +1003,10 @@ namespace sham {
             sham::EventList depends_list;
             T *__restrict ptr = get_write_access(depends_list);
 
-            sycl::event e1 = get_queue().submit(depends_list, [&, ptr, fct](sycl::handler &cgh) {
-                shambase::parallel_for(cgh, get_size(), "fill field", [=](u32 gid) {
-                    ptr[gid] = fct(gid);
-                });
-            });
+            sham::EventList events
+                = safe_fill_lambda(get_queue(), depends_list, ptr, get_size(), fct);
 
-            complete_event_state(e1);
+            complete_event_state(events);
         }
 
         ///////////////////////////////////////////////////////////////////////
