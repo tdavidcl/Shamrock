@@ -79,7 +79,7 @@ if [ ! -f "$ACPP_INSTALL_DIR/bin/acpp" ]; then
 fi
 
 function shamconfigure {
-    cmake --debug-find-var=MPI\
+    cmake -DCMAKE_FIND_DEBUG_MODE=TRUE \
         -S $SHAMROCK_DIR \
         -B $BUILD_DIR \
         ${CCACHE_CMAKE_ARG} \
