@@ -119,7 +119,8 @@ jobs:
         if: matrix.container == 'archlinux/archlinux:base-devel'
         run: |
           sudo pacman -Sy --noconfirm base-devel git python python-pip cmake boost ninja openmp openmpi doxygen llvm19 clang19 lld
-          ls /usr/lib
+          ls /usr/lib | grep mpi
+          ls /usr/include | grep mpi
 
       # if macos container
       - name : Install macos dependencies
