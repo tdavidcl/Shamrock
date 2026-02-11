@@ -87,8 +87,6 @@ function shamconfigure {
         -DSYCL_IMPLEMENTATION=ACPPDirect \
         -DCMAKE_C_COMPILER="${LLVM_INSTALL_DIR}/bin/clang" \
         -DCMAKE_CXX_COMPILER="${ACPP_INSTALL_DIR}/bin/acpp" \
-        -DMPI_C_COMPILER="${LLVM_INSTALL_DIR}/bin/clang" \
-        -DMPI_CXX_COMPILER="${LLVM_INSTALL_DIR}/bin/clang++" \
         -DCMAKE_CXX_FLAGS="${SHAMROCK_CXX_FLAGS}" \
         -DACPP_PATH="${ACPP_INSTALL_DIR}" \
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
