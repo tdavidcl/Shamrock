@@ -3,6 +3,16 @@ Sod tube test in RAMSES solver
 =============================================
 
 Compare Sod tube with all slope limiters & Riemann solvers
+Toro 3rd initial condition
+
+rho_l = 1
+rho_r = 1
+
+v_l = -2
+v_r = 2
+
+P_l = 0.4
+P_r = 0.4
 """
 
 import os
