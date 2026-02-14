@@ -1,8 +1,8 @@
 """
-Advection test in RAMSES solver
+Sod tube test in RAMSES solver
 =============================================
 
-Compare advection with all slope limiters & Riemann solvers
+Compare Sod tube with all slope limiters & Riemann solvers
 """
 
 import os
@@ -65,7 +65,6 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
     model.init_scheduler(int(1e7), 1)
     model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
-    
     def rho_map(rmin, rmax):
         x, y, z = rmin
         if x < 1:
@@ -73,10 +72,8 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
         else:
             return 0.125
 
-
     etot_L = 1.0 / (gamma - 1)
     etot_R = 0.1 / (gamma - 1)
-
 
     def rhoetot_map(rmin, rmax):
         rho = rho_map(rmin, rmax)
@@ -86,7 +83,6 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
             return etot_L
         else:
             return etot_R
-
 
     def rhovel_map(rmin, rmax):
         rho = rho_map(rmin, rmax)
@@ -104,8 +100,7 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
         rhov_vals = model.render_slice("rhovel", "f64_3", positions)
         rhoetot_vals = model.render_slice("rhoetot", "f64", positions)
 
-
-        vx = np.array(rhov_vals)[:,0] / np.array(rho_vals)
+        vx = np.array(rhov_vals)[:, 0] / np.array(rho_vals)
         P = (np.array(rhoetot_vals) - 0.5 * np.array(rho_vals) * vx**2) * (gamma - 1)
         results_dic = {
             "rho": np.array(rho_vals),
@@ -139,7 +134,7 @@ data["minmod_hllc"] = run_advect("minmod", "hllc", only_last_step=False)
 # %%
 # Plot 1: Comparison against analytical solution
 riemann_solvers = ["rusanov", "hll", "hllc"]
-slope_limiters = ["none",  "minmod"]
+slope_limiters = ["none", "minmod"]
 
 xref = 1.0
 xrange = 0.5
@@ -156,7 +151,7 @@ for i in range(len(arr_x)):
     x_ = arr_x[i] - xref
 
     _rho, _vx, _P = sod.get_value(tmax, x_)
-    #print(x_,_rho, _vx, _P)
+    # print(x_,_rho, _vx, _P)
     arr_rho.append(_rho)
     arr_vx.append(_vx)
     arr_P.append(_P)
@@ -201,7 +196,7 @@ for limiter in slope_limiters:
             ax1.plot(arr_x, delta_rho, label=f"{limiter} {solver} (rho)", linewidth=1)
             ax2.plot(arr_x, delta_vx, label=f"{limiter} {solver} (vx)", linewidth=1)
             ax3.plot(arr_x, delta_P, label=f"{limiter} {solver} (P)", linewidth=1)
-            
+
 
 ax1.legend()
 ax2.legend()
