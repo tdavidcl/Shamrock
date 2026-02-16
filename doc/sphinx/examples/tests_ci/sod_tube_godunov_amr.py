@@ -42,6 +42,9 @@ cfg.set_slope_lim_minmod()
 cfg.set_face_time_interpolation(True)
 mass_crit = 0.0000001 * 5 * 2 * 1.2
 cfg.set_amr_mode_density_based(crit_mass=mass_crit)
+
+cfg_json = cfg.to_json()
+print(cfg_json)
 model.set_solver_config(cfg)
 
 

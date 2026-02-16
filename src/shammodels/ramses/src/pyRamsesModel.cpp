@@ -42,6 +42,8 @@ namespace shammodels::basegodunov {
         shamlog_debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
 
         py::class_<TConfig>(m, name_config.c_str())
+            .def("to_json", &TConfig::to_json_string)
+            .def("from_json", &TConfig::from_json_string)
             .def(
                 "set_scale_factor",
                 [](TConfig &self, Tscal scale_factor) {
