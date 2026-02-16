@@ -35,13 +35,65 @@ namespace shammodels::basegodunov {
 
     enum RiemmanSolverMode { Rusanov = 0, HLL = 1, HLLC = 2 };
 
-    enum SlopeMode {
-        None        = 0,
-        VanLeer_f   = 1,
-        VanLeer_std = 2,
-        VanLeer_sym = 3,
-        Minmod      = 4,
+    struct SlopeLimConfig {
+
+        enum SlopeMode {
+            None        = 0,
+            VanLeer_f   = 1,
+            VanLeer_std = 2,
+            VanLeer_sym = 3,
+            Minmod      = 4,
+        };
+
+        inline static const std::map<std::string, SlopeMode> slope_mode_string_map = {
+            {"none", None},
+            {"vanleer_f", VanLeer_f},
+            {"vanleer_std", VanLeer_std},
+            {"vanleer_sym", VanLeer_sym},
+            {"minmod", Minmod},
+        };
+
+        inline static const std::vector<std::string> get_valid_slope_modes() {
+            std::vector<std::string> valid_slope_modes;
+            for (const auto &[key, value] : slope_mode_string_map) {
+                valid_slope_modes.push_back(key);
+            }
+            return valid_slope_modes;
+        }
+
+        SlopeMode mode;
     };
+
+    inline void to_json(nlohmann::json &j, const SlopeLimConfig &p) {
+
+        for (const auto &[key, value] : SlopeLimConfig::slope_mode_string_map) {
+            if (value == p.mode) {
+                j = nlohmann::json{
+                    {"slope_mode", key},
+                };
+                return;
+            }
+        }
+
+        throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+            "Unsupported slope mode: {} (expected one of: {})",
+            p.mode,
+            SlopeLimConfig::get_valid_slope_modes()));
+    }
+
+    inline void from_json(const nlohmann::json &j, SlopeLimConfig &p) {
+        std::string slope_mode = j.at("slope_mode").get<std::string>();
+
+        try {
+            p.mode = SlopeLimConfig::slope_mode_string_map.at(slope_mode);
+        } catch (const std::out_of_range &e) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                "Unsupported slope mode: {} (expected one of: {})\n current json: {}",
+                slope_mode,
+                SlopeLimConfig::get_valid_slope_modes(),
+                j.dump(4)));
+        }
+    }
 
     enum DustRiemannSolverMode {
         NoDust = 0,
@@ -180,35 +232,9 @@ struct shammodels::basegodunov::SolverConfig {
     inline void set_eos_gamma(Tscal gamma) { eos_gamma = gamma; }
 
     RiemmanSolverMode riemman_config = HLL;
-    SlopeMode slope_config           = VanLeer_sym;
+    SlopeLimConfig slope_config      = SlopeLimConfig{SlopeLimConfig::VanLeer_sym};
 
-    inline static const std::map<std::string, SlopeMode> slope_mode_string_map = {
-        {"none", None},
-        {"vanleer_f", VanLeer_f},
-        {"vanleer_std", VanLeer_std},
-        {"vanleer_sym", VanLeer_sym},
-        {"minmod", Minmod},
-    };
-
-    inline static const std::vector<std::string> get_valid_slope_modes() {
-        std::vector<std::string> valid_slope_modes;
-        for (const auto &[key, value] : slope_mode_string_map) {
-            valid_slope_modes.push_back(key);
-        }
-        return valid_slope_modes;
-    }
-
-    inline void set_slope_limiter(std::string slope_mode) {
-        auto it = slope_mode_string_map.find(slope_mode);
-        if (it != slope_mode_string_map.end()) {
-            slope_config = it->second;
-        } else {
-            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
-                "Unsupported slope mode: {} (expected one of: {})",
-                slope_mode,
-                get_valid_slope_modes()));
-        }
-    }
+    void set_slope_limiter(const nlohmann::json &j) { j.get_to<SlopeLimConfig>(slope_config); }
 
     bool face_half_time_interpolation = true;
 
