@@ -319,24 +319,6 @@ struct shammodels::basegodunov::SolverConfig {
             }
         }
     }
-
-    inline static SolverConfig from_json(const nlohmann::json &j) {
-        SolverConfig config;
-        j.get_to(config);
-        return config;
-    }
-
-    inline void to_json(nlohmann::json &j) const { j = *this; }
-
-    inline static SolverConfig from_json_string(const std::string &j) {
-        return nlohmann::json::parse(j).get<SolverConfig>();
-    }
-
-    inline std::string to_json_string() const {
-        nlohmann::json j;
-        to_json(j);
-        return j.dump(4);
-    }
 };
 
 namespace shammodels::basegodunov {
