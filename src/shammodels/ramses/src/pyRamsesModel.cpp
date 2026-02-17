@@ -45,16 +45,19 @@ namespace shammodels::basegodunov {
             .def(
                 "to_json",
                 [](TConfig &self) {
-                    std::string json_str = nlohmann::json{self}.dump();
-                    return py::module_::import("json").attr("loads")(json_str);
-                })
+                    auto json_loads  = py::module_::import("json").attr("loads");
+                    nlohmann::json j = self;
+                    return json_loads(j.dump());
+                },
+                "Converts the config to a json like dictionary")
             .def(
                 "from_json",
                 [](TConfig &self, py::object json_data) {
                     auto json_dumps = py::module_::import("json").attr("dumps");
                     std::string j   = json_dumps(json_data).cast<std::string>();
                     return nlohmann::json::parse(j).get<TConfig>();
-                })
+                },
+                "Converts a json like dictionary to a config")
             .def(
                 "set_scale_factor",
                 [](TConfig &self, Tscal scale_factor) {
