@@ -22,6 +22,7 @@
 #include "shambindings/pytypealias.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/common/shamrock_json_to_py_json.hpp"
 #include "shammodels/sph/Model.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/AnalysisBarycenter.hpp"
@@ -54,24 +55,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
     shamlog_debug_ln("[Py]", "registering class :", name_config, typeid(T).name());
     shamlog_debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
 
-    py::class_<TConfig>(m, name_config.c_str())
-        .def(
-            "to_json",
-            [](TConfig &self) {
-                auto json_loads  = py::module_::import("json").attr("loads");
-                nlohmann::json j = self;
-                return json_loads(j.dump());
-            },
-            "Converts the config to a json like dictionary")
-        .def(
-            "from_json",
-            [](TConfig &self, py::object json_data) {
-                auto json_dumps = py::module_::import("json").attr("dumps");
-                std::string j   = json_dumps(json_data).cast<std::string>();
-                return nlohmann::json::parse(j).get<TConfig>();
-            },
-            "Converts a json like dictionary to a config")
-        .def("print_status", &TConfig::print_status)
+    py::class_<TConfig> config_cls(m, name_config.c_str());
+
+    shammodels::common::add_json_defs<TConfig>(config_cls);
+
+    config_cls.def("print_status", &TConfig::print_status)
         .def("set_particle_tracking", &TConfig::set_particle_tracking)
         .def("set_tree_reduction_level", &TConfig::set_tree_reduction_level)
         .def("set_two_stage_search", &TConfig::set_two_stage_search)
@@ -133,11 +121,6 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("mu_e"))
         .def("set_artif_viscosity_None", &TConfig::set_artif_viscosity_None)
-        .def(
-            "to_json",
-            [](TConfig &self) {
-                return nlohmann::json{self}.dump(4);
-            })
         .def(
             "set_artif_viscosity_Constant",
             [](TConfig &self, Tscal alpha_u, Tscal alpha_AV, Tscal beta_AV) {
