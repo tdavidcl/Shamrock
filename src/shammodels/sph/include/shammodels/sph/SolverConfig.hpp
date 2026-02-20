@@ -1221,6 +1221,10 @@ namespace shammodels::sph {
                           if (j.contains(fallback)) {
                               j.at(fallback).get_to(value);
                               has_updated_config = true;
+                              logger::warn_ln(
+                                  "SPH::SolverConfig",
+                                  "Updating old key [" + fallback + "] to new key [" + key
+                                      + "] in from_json");
                               return;
                           }
                       }
