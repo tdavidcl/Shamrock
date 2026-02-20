@@ -1212,6 +1212,22 @@ namespace shammodels::sph {
             }
         };
 
+        auto get_to_if_contains_fallbacks
+            = [&](const std::string &key, auto &value, const std::vector<std::string> &fallbacks) {
+                  if (j.contains(key)) {
+                      j.at(key).get_to(value);
+                  } else {
+                      for (const std::string &fallback : fallbacks) {
+                          if (j.contains(fallback)) {
+                              j.at(fallback).get_to(value);
+                              has_updated_config = true;
+                              return;
+                          }
+                      }
+                      has_used_defaults = true;
+                  }
+              };
+
         // actual data stored in the json
         get_to_if_contains("gpart_mass", p.gpart_mass);
         get_to_if_contains("cfl_config", p.cfl_config);
@@ -1225,19 +1241,9 @@ namespace shammodels::sph {
         get_to_if_contains("combined_dtdiv_divcurlv_compute", p.combined_dtdiv_divcurlv_compute);
 
         // Try new names first, fall back to old names for backward compatibility
-        if (j.contains("htol_up_coarse_cycle")) {
-            j.at("htol_up_coarse_cycle").get_to(p.htol_up_coarse_cycle);
-        } else {
-            j.at("htol_up_tol").get_to(p.htol_up_coarse_cycle);
-            has_updated_config = true;
-        }
-
-        if (j.contains("htol_up_fine_cycle")) {
-            j.at("htol_up_fine_cycle").get_to(p.htol_up_fine_cycle);
-        } else {
-            j.at("htol_up_iter").get_to(p.htol_up_fine_cycle);
-            has_updated_config = true;
-        }
+        get_to_if_contains_fallbacks(
+            "htol_up_coarse_cycle", p.htol_up_coarse_cycle, {"htol_up_tol"});
+        get_to_if_contains_fallbacks("htol_up_fine_cycle", p.htol_up_fine_cycle, {"htol_up_iter"});
 
         get_to_if_contains("epsilon_h", p.epsilon_h);
         get_to_if_contains("smoothing_length_config", p.smoothing_length_config);
