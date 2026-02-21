@@ -359,28 +359,24 @@ namespace shammodels::basegodunov {
         bool has_used_defaults  = false;
         bool has_updated_config = false;
 
-        auto get_to_if_contains = [&](const std::string &key, auto &value) {
-            if (j.contains(key)) {
-                j.at(key).get_to(value);
-            } else {
-                has_used_defaults = true;
-            }
+        auto _get_to_if_contains = [&](const std::string &key, auto &value) {
+            shamrock::get_to_if_contains(j, key, value, has_used_defaults);
         };
 
         // actual data stored in the json
-        get_to_if_contains("courant_safety_factor", p.Csafe);
-        get_to_if_contains("dust_riemann_solver", p.dust_config.dust_riemann_config);
-        get_to_if_contains("eos_gamma", p.eos_gamma);
-        get_to_if_contains("face_half_time_interpolation", p.face_half_time_interpolation);
-        get_to_if_contains("gravity_solver", p.gravity_config.gravity_mode);
-        get_to_if_contains("grid_coord_to_pos_fact", p.grid_coord_to_pos_fact);
-        get_to_if_contains("hydro_riemann_solver", p.riemann_config);
-        get_to_if_contains("passive_scalar_mode", p.npscal_gas_config.npscal_gas);
-        get_to_if_contains("slope_limiter", p.slope_config);
-        get_to_if_contains("time_state", p.time_state);
-        get_to_if_contains("unit_sys", p.unit_sys);
+        _get_to_if_contains("courant_safety_factor", p.Csafe);
+        _get_to_if_contains("dust_riemann_solver", p.dust_config.dust_riemann_config);
+        _get_to_if_contains("eos_gamma", p.eos_gamma);
+        _get_to_if_contains("face_half_time_interpolation", p.face_half_time_interpolation);
+        _get_to_if_contains("gravity_solver", p.gravity_config.gravity_mode);
+        _get_to_if_contains("grid_coord_to_pos_fact", p.grid_coord_to_pos_fact);
+        _get_to_if_contains("hydro_riemann_solver", p.riemann_config);
+        _get_to_if_contains("passive_scalar_mode", p.npscal_gas_config.npscal_gas);
+        _get_to_if_contains("slope_limiter", p.slope_config);
+        _get_to_if_contains("time_state", p.time_state);
+        _get_to_if_contains("unit_sys", p.unit_sys);
 
-        if (has_used_defaults) {
+        if (has_used_defaults || has_updated_config) {
             if (shamcomm::world_rank() == 0) {
                 logger::info_ln(
                     "Ramses::SolverConfig",

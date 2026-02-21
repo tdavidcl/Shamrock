@@ -16,6 +16,8 @@
  *
  */
 
+#include "shamcomm/logs.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include "shamrock/io/json_print_diff.hpp"
 
 namespace shamrock {
@@ -26,6 +28,45 @@ namespace shamrock {
         const nlohmann::json &j,
         bool has_used_defaults,
         bool has_updated_config);
+
+    template<class T>
+    inline void get_to_if_contains(
+        const nlohmann::json &j, const std::string &key, T &value, bool &has_used_defaults) {
+        if (j.contains(key)) {
+            j.at(key).get_to(value);
+        } else {
+            has_used_defaults = true;
+        }
+    }
+
+    template<class T>
+    inline void get_to_if_contains_fallbacks(
+        const nlohmann::json &j,
+        const std::string &key,
+        T &value,
+        std::initializer_list<const char *> fallbacks,
+        bool &has_used_defaults,
+        bool &has_updated_config) {
+
+        if (j.contains(key)) {
+            j.at(key).get_to(value);
+        } else {
+            for (const char *fallback : fallbacks) {
+                if (j.contains(fallback)) {
+                    j.at(fallback).get_to(value);
+                    has_updated_config = true;
+                    if (shamcomm::world_rank() == 0) {
+                        shamcomm::logs::warn_ln(
+                            "SPH::SolverConfig",
+                            "Updating old key [" + std::string(fallback) + "] to new key [" + key
+                                + "] in from_json");
+                    }
+                    return;
+                }
+            }
+            has_used_defaults = true;
+        }
+    }
 
 } // namespace shamrock
 
