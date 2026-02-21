@@ -11,9 +11,9 @@
 
 /**
  * @file ComputeCoordinates.hpp
- * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Adnan-Ali Ahmad (adnan-ali.ahmad@cnrs.fr) --no git blame--
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr) --no git blame--
  * @author Noé Brucy (noe.brucy@ens-lyon.fr)
- * @author Adnan-Ali Ahmad (adnan-ali.ahmad@cnrs.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
 
  * @brief Computes the coordinates of each cell
