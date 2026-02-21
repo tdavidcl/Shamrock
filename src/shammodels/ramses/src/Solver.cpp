@@ -10,6 +10,7 @@
 /**
  * @file Solver.cpp
  * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Noé Brucy (noe.brucy@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -26,6 +27,7 @@
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
 #include "shammodels/ramses/modules/ComputeCellAABB.hpp"
+#include "shammodels/ramses/modules/ComputeCoordinates.hpp"
 #include "shammodels/ramses/modules/ComputeLevel0CellSize.hpp"
 #include "shammodels/ramses/modules/ComputeMass.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
@@ -408,6 +410,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         1, "block_cell_sizes", "s_{\\rm cell}");
     storage.cell0block_aabb_lower = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         1, "cell0block_aabb_lower", "\\mathbf{s}_{\\rm inf,block}");
+
+    if (solver_config.is_coordinate_field_required()) {
+        // will be filled by NodeComputeCoordinates
+        storage.coordinates = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "coordinates", "\\mathbf{xyz}");
+    }
 
     if (solver_config.amr_mode.need_level_zero_compute()) {
         // get blocks at level0 sizes for all patches
@@ -928,6 +936,24 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
     }
 
+    if (solver_config.is_coordinate_field_required()) { // Compute coordinates
+
+        modules::NodeComputeCoordinates<Tvec, TgridVec> node_coordinates{
+            AMRBlock::block_size,
+            AMRBlock::Nside,
+            solver_config.grid_coord_to_pos_fact,
+        };
+
+        node_coordinates.set_edges(
+            storage.block_counts,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.coordinates);
+
+        solver_sequence.push_back(
+            std::make_shared<decltype(node_coordinates)>(std::move(node_coordinates)));
+    }
+
     if (solver_config.amr_mode.need_level_zero_compute()) { // compute level0 sizes in patch (to be
                                                             // enabled later when needed)
         modules::ComputeLevel0CellSize<TgridVec> node_level0_sizes{};
@@ -1178,7 +1204,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> flux_sequence;
 
-        if (solver_config.riemman_config == Rusanov) {
+        if (solver_config.riemann_config == Rusanov) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::Rusanov>
                 node(
                     "Gas flux compute",
@@ -1221,7 +1247,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                     storage.flux_rhoe_face_zp,
                     storage.flux_rhoe_face_zm);
             flux_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        } else if (solver_config.riemman_config == HLL) {
+        } else if (solver_config.riemann_config == HLL) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLL> node(
                 "Gas flux compute",
                 solver_config.eos_gamma,
@@ -1263,7 +1289,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.flux_rhoe_face_zp,
                 storage.flux_rhoe_face_zm);
             flux_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        } else if (solver_config.riemman_config == HLLC) {
+        } else if (solver_config.riemann_config == HLLC) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLLC> node(
                 "Gas flux compute",
                 solver_config.eos_gamma,
