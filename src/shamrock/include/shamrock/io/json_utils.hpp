@@ -29,6 +29,8 @@ namespace shamrock {
         bool has_used_defaults,
         bool has_updated_config);
 
+    /// Get a value from a JSON object if it contains the key, otherwise keep the value as is and
+    /// set has_used_defaults to true
     template<class T>
     inline void get_to_if_contains(
         const nlohmann::json &j, const std::string &key, T &value, bool &has_used_defaults) {
@@ -39,6 +41,9 @@ namespace shamrock {
         }
     }
 
+    /// Get a value from a JSON object if it contains the key, otherwise try the fallback names (set
+    /// has_updated_config to true if found) and if it is still not found, keep the value as is and
+    /// set has_used_defaults to true
     template<class T>
     inline void get_to_if_contains_fallbacks(
         const nlohmann::json &j,
