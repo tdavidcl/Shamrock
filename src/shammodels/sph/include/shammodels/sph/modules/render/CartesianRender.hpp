@@ -54,6 +54,10 @@ namespace shammodels::sph::modules {
             std::function<field_getter_t> field_getter,
             const sham::DeviceBuffer<shammath::Ray<Tvec>> &rays);
 
+        sham::DeviceBuffer<Tfield> compute_azymuthal_integ(
+            std::function<field_getter_t> field_getter,
+            const sham::DeviceBuffer<shammath::RingRay<Tvec>> &ring_rays);
+
         sham::DeviceBuffer<Tfield> compute_slice(
             std::string field_name,
             const sham::DeviceBuffer<Tvec> &positions,
@@ -63,6 +67,12 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tfield> compute_column_integ(
             std::string field_name,
             const sham::DeviceBuffer<shammath::Ray<Tvec>> &rays,
+            std::optional<std::function<pybind11::array_t<Tfield>(size_t, pybind11::dict &)>>
+                custom_getter);
+
+        sham::DeviceBuffer<Tfield> compute_azymuthal_integ(
+            std::string field_name,
+            const sham::DeviceBuffer<shammath::RingRay<Tvec>> &ring_rays,
             std::optional<std::function<pybind11::array_t<Tfield>(size_t, pybind11::dict &)>>
                 custom_getter);
 
@@ -122,6 +132,17 @@ namespace shammodels::sph::modules {
                 rays.size(), shamsys::instance::get_compute_scheduler_ptr()};
             rays_buf.copy_from_stdvec(rays);
             return compute_column_integ(field_name, rays_buf, custom_getter);
+        }
+
+        inline sham::DeviceBuffer<Tfield> compute_azymuthal_integ(
+            std::string field_name,
+            const std::vector<shammath::RingRay<Tvec>> &ring_rays,
+            std::optional<std::function<pybind11::array_t<Tfield>(size_t, pybind11::dict &)>>
+                custom_getter) {
+            sham::DeviceBuffer<shammath::RingRay<Tvec>> ring_rays_buf{
+                ring_rays.size(), shamsys::instance::get_compute_scheduler_ptr()};
+            ring_rays_buf.copy_from_stdvec(ring_rays);
+            return compute_azymuthal_integ(field_name, ring_rays_buf, custom_getter);
         }
 
         private:
