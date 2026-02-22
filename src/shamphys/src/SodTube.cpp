@@ -14,7 +14,6 @@
  */
 
 #include "shamphys/SodTube.hpp"
-#include "shamcomm/logs.hpp"
 #include "shammath/derivatives.hpp"
 #include "shammath/solve.hpp"
 #include <cmath>

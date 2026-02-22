@@ -5,6 +5,7 @@ Sod tube test in RAMSES solver
 Compare Sod tube with all slope limiters & Riemann solvers
 """
 
+import json
 import os
 
 import matplotlib.pyplot as plt
@@ -33,33 +34,19 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
     model = shamrock.get_Model_Ramses(context=ctx, vector_type="f64_3", grid_repr="i64_3")
 
     cfg = model.gen_default_config()
-    scale_fact = 2 / (sz * base * multx)
-    cfg.set_scale_factor(scale_fact)
-    cfg.set_eos_gamma(gamma)
 
-    if slope_limiter == "none":
-        cfg.set_slope_lim_none()
-    elif slope_limiter == "vanleer":
-        cfg.set_slope_lim_vanleer_f()
-    elif slope_limiter == "vanleer_std":
-        cfg.set_slope_lim_vanleer_std()
-    elif slope_limiter == "vanleer_sym":
-        cfg.set_slope_lim_vanleer_sym()
-    elif slope_limiter == "minmod":
-        cfg.set_slope_lim_minmod()
-    else:
-        raise ValueError(f"Invalid slope limiter: {slope_limiter}")
+    cfg.from_json(
+        {
+            "hydro_riemann_solver": riemann_solver,
+            "slope_limiter": slope_limiter,
+            "eos_gamma": gamma,
+            "face_half_time_interpolation": True,
+            "grid_coord_to_pos_fact": 2 / (sz * base * multx),
+        }
+    )
 
-    if riemann_solver == "rusanov":
-        cfg.set_riemann_solver_rusanov()
-    elif riemann_solver == "hll":
-        cfg.set_riemann_solver_hll()
-    elif riemann_solver == "hllc":
-        cfg.set_riemann_solver_hllc()
-    else:
-        raise ValueError(f"Invalid Riemann solver: {riemann_solver}")
+    print("used config:\n" + json.dumps(cfg.to_json(), indent=4))
 
-    cfg.set_face_time_interpolation(True)
     model.set_solver_config(cfg)
 
     model.init_scheduler(int(1e7), 1)
@@ -96,16 +83,16 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
     results = []
 
     def analysis(iplot: int):
-        rho_vals = model.render_slice("rho", "f64", positions)
-        rhov_vals = model.render_slice("rhovel", "f64_3", positions)
-        rhoetot_vals = model.render_slice("rhoetot", "f64", positions)
+        rho_vals = np.array(model.render_slice("rho", "f64", positions))
+        rhov_vals = np.array(model.render_slice("rhovel", "f64_3", positions))
+        rhoetot_vals = np.array(model.render_slice("rhoetot", "f64", positions))
 
-        vx = np.array(rhov_vals)[:, 0] / np.array(rho_vals)
-        P = (np.array(rhoetot_vals) - 0.5 * np.array(rho_vals) * vx**2) * (gamma - 1)
+        vx = rhov_vals[:, 0] / rho_vals
+        P = (rhoetot_vals - 0.5 * rho_vals * vx**2) * (gamma - 1)
         results_dic = {
-            "rho": np.array(rho_vals),
-            "vx": np.array(vx),
-            "P": np.array(P),
+            "rho": rho_vals,
+            "vx": vx,
+            "P": P,
         }
         results.append(results_dic)
 
@@ -132,7 +119,7 @@ data["minmod_hll"] = run_advect("minmod", "hll")
 data["minmod_hllc"] = run_advect("minmod", "hllc", only_last_step=False)
 
 # %%
-# Plot 1: Comparison against analytical solution
+# Prepare data to be plotted
 riemann_solvers = ["rusanov", "hll", "hllc"]
 slope_limiters = ["none", "minmod"]
 
@@ -140,26 +127,36 @@ xref = 1.0
 xrange = 0.5
 sod = shamrock.phys.SodTube(gamma=gamma, rho_1=1, P_1=1, rho_5=0.125, P_5=0.1)
 
-#### add analytical soluce
 arr_x = [x[0] for x in positions]
 
-arr_rho = []
-arr_P = []
-arr_vx = []
 
-for i in range(len(arr_x)):
-    x_ = arr_x[i] - xref
+def get_data_analytic(frame: int):
+    t = tmax * frame / timestamps
 
-    _rho, _vx, _P = sod.get_value(tmax, x_)
-    # print(x_,_rho, _vx, _P)
-    arr_rho.append(_rho)
-    arr_vx.append(_vx)
-    arr_P.append(_P)
+    arr_rho = []
+    arr_P = []
+    arr_vx = []
 
-arr_rho = np.array(arr_rho)
-arr_vx = np.array(arr_vx)
-arr_P = np.array(arr_P)
+    for i in range(len(arr_x)):
+        x_ = arr_x[i] - xref
 
+        _rho, _vx, _P = sod.get_value(t, x_)
+        arr_rho.append(_rho)
+        arr_vx.append(_vx)
+        arr_P.append(_P)
+
+    return {
+        "rho": arr_rho,
+        "vx": arr_vx,
+        "P": arr_P,
+    }
+
+
+data_analytic = [get_data_analytic(i) for i in range(timestamps + 1)]
+
+
+# %%
+# Plot 1: Comparison against analytical solution
 fig, axes = plt.subplots(3, 1, figsize=(6, 15))
 fig.suptitle(f"t={tmax} (Last Step)", fontsize=14)
 
@@ -170,18 +167,16 @@ for i in range(3):
 
 ax1, ax2, ax3 = axes
 ax1.set_xlabel("$x$")
-ax1.set_ylabel("$\\rho$")
+ax1.set_ylabel("$\\delta \\rho$")
 
 ax2.set_xlabel("$x$")
-ax2.set_ylabel("$v_x$")
+ax2.set_ylabel("$\\delta v_x$")
 
 ax3.set_xlabel("$x$")
-ax3.set_ylabel("$P$")
+ax3.set_ylabel("$\\delta P$")
 
 
-# ax1.plot(arr_x, arr_rho, color="black", label="analytic")
-# ax2.plot(arr_x, arr_vx, color="black", label="analytic")
-# ax3.plot(arr_x, arr_P, color="black", label="analytic")
+last_analytic = data_analytic[-1]
 
 
 for limiter in slope_limiters:
@@ -189,9 +184,9 @@ for limiter in slope_limiters:
         key = f"{limiter}_{solver}"
         if key in data:
             # Get the last timestep
-            delta_rho = np.abs(data[key][-1]["rho"] - arr_rho)
-            delta_vx = np.abs(data[key][-1]["vx"] - arr_vx)
-            delta_P = np.abs(data[key][-1]["P"] - arr_P)
+            delta_rho = np.abs(data[key][-1]["rho"] - last_analytic["rho"])
+            delta_vx = np.abs(data[key][-1]["vx"] - last_analytic["vx"])
+            delta_P = np.abs(data[key][-1]["P"] - last_analytic["P"])
 
             ax1.plot(arr_x, delta_rho, label=f"{limiter} {solver} (rho)", linewidth=1)
             ax2.plot(arr_x, delta_vx, label=f"{limiter} {solver} (vx)", linewidth=1)
@@ -219,6 +214,15 @@ ax2.set_ylim(-0.1, 1.1)
 ax2.set_xlim(0.5, 1.5)
 ax2.grid(True, alpha=0.3)
 
+(line_analytic_rho,) = ax2.plot(
+    arr_x, data_analytic[0]["rho"], color="black", label="analytic", linewidth=2
+)
+(line_analytic_vx,) = ax2.plot(
+    arr_x, data_analytic[0]["vx"], color="black", label="analytic", linewidth=2
+)
+(line_analytic_P,) = ax2.plot(
+    arr_x, data_analytic[0]["P"], color="black", label="analytic", linewidth=2
+)
 (line_rho,) = ax2.plot(arr_x, data["minmod_hllc"][0]["rho"], label="rho", linewidth=2)
 (line_vx,) = ax2.plot(arr_x, data["minmod_hllc"][0]["vx"], label="vx", linewidth=2)
 (line_P,) = ax2.plot(arr_x, data["minmod_hllc"][0]["P"], label="P", linewidth=2)
@@ -232,8 +236,11 @@ def animate(frame):
     line_rho.set_ydata(data["minmod_hllc"][frame]["rho"])
     line_vx.set_ydata(data["minmod_hllc"][frame]["vx"])
     line_P.set_ydata(data["minmod_hllc"][frame]["P"])
+    line_analytic_rho.set_ydata(data_analytic[frame]["rho"])
+    line_analytic_vx.set_ydata(data_analytic[frame]["vx"])
+    line_analytic_P.set_ydata(data_analytic[frame]["P"])
     ax2.set_title(f"minmod_hllc - t = {t:.3f} s")
-    return (line_rho, line_vx, line_P)
+    return (line_rho, line_vx, line_P, line_analytic_rho, line_analytic_vx, line_analytic_P)
 
 
 anim = FuncAnimation(fig2, animate, frames=timestamps + 1, interval=50, blit=False, repeat=True)
