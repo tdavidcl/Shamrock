@@ -703,7 +703,8 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
                 // serializer
                 shamalgs::SerializeHelper ser(dev_sched, std::forward<sham::DeviceBuffer<u8>>(buf));
                 return PatchDataLayer::deserialize_buf(ser, sched.get_layout_ptr_old());
-            });
+            },
+            comm_cache);
 
         // insert the data into the data to be inserted
         recv_dat.for_each([&](u64 sender, u64 receiver, PatchDataLayer &pdat) {

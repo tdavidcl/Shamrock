@@ -1226,7 +1226,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::copy_eos_to_patchdata() {
     // Copy density, pressure, and soundspeed from solvergraph fields to patchdata
     // This ensures the values persist across restarts and can be read by VTKDump
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     u32 idensity              = pdl.get_field_idx<Tscal>(names::newtonian::density);
     u32 ipressure             = pdl.get_field_idx<Tscal>(names::newtonian::pressure);
     u32 isoundspeed           = pdl.get_field_idx<Tscal>(names::newtonian::soundspeed);

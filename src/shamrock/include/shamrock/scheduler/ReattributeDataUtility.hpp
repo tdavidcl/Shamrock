@@ -253,7 +253,8 @@ namespace shamrock {
                         shamsys::instance::get_compute_scheduler_ptr(),
                         std::forward<sham::DeviceBuffer<u8>>(buf));
                     return PatchDataLayer::deserialize_buf(ser, sched.get_layout_ptr_old());
-                });
+                },
+                cache);
 
             recv_dat.for_each([&](u64 sender, u64 receiver, PatchDataLayer &pdat) {
                 shamlog_debug_ln("Part Exchanges", format("send = {} recv = {}", sender, receiver));

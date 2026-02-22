@@ -1030,7 +1030,7 @@ nlohmann::json PatchScheduler::serialize_patch_metadata() {
     return {
         {"patchtree", patch_tree},
         {"patchlist", patch_list},
-        {"patchdata_layout", pdl()},
+        {"patchdata_layout", pdl_old()},
         {"sim_box", jsim_box},
         {"crit_patch_split", crit_patch_split},
         {"crit_patch_merge", crit_patch_merge}};
