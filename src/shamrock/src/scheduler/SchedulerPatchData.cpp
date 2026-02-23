@@ -15,6 +15,7 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/narrowing.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shamcomm/logs.hpp"
@@ -61,7 +62,7 @@ namespace shamrock::scheduler {
 
             shamcomm::mpi::Isend(
                 msg.buf->get_ptr(),
-                lcount,
+                shambase::narrow_or_throw<i32>(lcount),
                 get_mpi_type<u64>(),
                 msg.rank,
                 msg.tag,
@@ -87,7 +88,7 @@ namespace shamrock::scheduler {
 
             shamcomm::mpi::Irecv(
                 msg.buf->get_ptr(),
-                cnt,
+                shambase::narrow_or_throw<i32>(cnt),
                 get_mpi_type<u64>(),
                 msg.rank,
                 msg.tag,
