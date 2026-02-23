@@ -17,6 +17,7 @@
 #include "shambase/exception.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
@@ -81,7 +82,7 @@ namespace shamrock::scheduler {
             shamcomm::mpi::Probe(msg.rank, msg.tag, MPI_COMM_WORLD, &st);
             shamcomm::mpi::Get_count(&st, get_mpi_type<u64>(), &cnt);
 
-            logger::raw_ln(shambase::format("recv probe messages from rank {} with tag {} and count {}", msg.rank, msg.tag, cnt));
+            logger::info_ln("SchedulerPatchData", shambase::format("recv probe messages from rank {} with tag {} and count {}", msg.rank, msg.tag, cnt));
 
             msg.buf = std::make_unique<shamcomm::CommunicationBuffer>(
                 cnt * 8, shamsys::instance::get_compute_scheduler_ptr());
