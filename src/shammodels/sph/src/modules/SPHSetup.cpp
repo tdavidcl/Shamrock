@@ -547,6 +547,12 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
                 err_id_in_newid = err_id_in_newid || (err);
 
                 i32 rank = sched.get_patch_rank_owner(patch_id);
+
+                if(rank >= shamcomm::world_size() || rank < 0){
+                    throw shambase::make_except_with_loc<std::runtime_error>(
+                        shambase::format("rank is out of bounds: rank = {}, world size = {}", rank, shamcomm::world_size()));
+                }
+                
                 index_per_ranks[rank].push_back(i);
             }
         }
@@ -657,11 +663,20 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
 
             __shamrock_stack_entry();
 
-            bool msg_count_limit_not_reached = msg_count_rank[receiver_rank] < msg_limit
-                                               && msg_count_rank[sender_rank] < msg_limit;
+            if(receiver_rank >= shamcomm::world_size() || receiver_rank < 0){
+                throw shambase::make_except_with_loc<std::runtime_error>(
+                    shambase::format("receiver rank is out of bounds: rank = {}, world size = {}", receiver_rank, shamcomm::world_size()));
+            }
+            if(sender_rank >= shamcomm::world_size() || sender_rank < 0){
+                throw shambase::make_except_with_loc<std::runtime_error>(
+                    shambase::format("sender rank is out of bounds: rank = {}, world size = {}", sender_rank, shamcomm::world_size()));
+            }
 
-            bool recv_size_limit_not_reached = comm_size_rank[receiver_rank] < data_count_limit
-                                               && comm_size_rank[sender_rank] < data_count_limit;
+            bool msg_count_limit_not_reached = msg_count_rank.at(receiver_rank) < msg_limit
+                                               && msg_count_rank.at(sender_rank) < msg_limit;
+
+            bool recv_size_limit_not_reached = comm_size_rank.at(receiver_rank) < data_count_limit
+                                               && comm_size_rank.at(sender_rank) < data_count_limit;
 
             was_count_limited = was_count_limited || !msg_count_limit_not_reached;
             was_size_limited  = was_size_limited || !recv_size_limit_not_reached;
@@ -682,10 +697,10 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
                 }
             }
 
-            msg_count_rank[receiver_rank] += 1;
-            msg_count_rank[sender_rank] += 1;
-            comm_size_rank[receiver_rank] += msg_size;
-            comm_size_rank[sender_rank] += msg_size;
+            msg_count_rank.at(receiver_rank) += 1;
+            msg_count_rank.at(sender_rank) += 1;
+            comm_size_rank.at(receiver_rank) += msg_size;
+            comm_size_rank.at(sender_rank) += msg_size;
         }
 
         __shamrock_stack_entry();
