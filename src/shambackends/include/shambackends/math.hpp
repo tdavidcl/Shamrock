@@ -874,8 +874,8 @@ namespace sham {
 
     namespace details {
         template<class Tdest, class Tsource>
-        inline Tsource convert_internal(Tdest coord) {
-            return static_cast<Tsource>(coord);
+        inline Tdest convert_internal(Tsource coord) {
+            return static_cast<Tdest>(coord);
         }
 
         template<class Tdest, class Tsource, int N>
