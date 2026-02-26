@@ -65,17 +65,17 @@ namespace shammodels::basegodunov {
             .def(
                 "set_riemann_solver_hll",
                 [](TConfig &self) {
-                    self.riemman_config = HLL;
+                    self.riemann_config = HLL;
                 })
             .def(
                 "set_riemann_solver_hllc",
                 [](TConfig &self) {
-                    self.riemman_config = HLLC;
+                    self.riemann_config = HLLC;
                 })
             .def(
                 "set_riemann_solver_rusanov",
                 [](TConfig &self) {
-                    self.riemman_config = Rusanov;
+                    self.riemann_config = Rusanov;
                 })
             .def(
                 "set_slope_lim_none",
@@ -332,7 +332,25 @@ namespace shammodels::basegodunov {
                     }
 
                     throw shambase::make_except_with_loc<std::runtime_error>("unknown field type");
-                });
+                })
+            .def(
+                "get_time",
+                [](T &self) {
+                    return self.solver.solver_config.get_time();
+                })
+            .def(
+                "get_dt",
+                [](T &self) {
+                    return self.solver.solver_config.get_dt();
+                })
+            .def(
+                "set_time",
+                [](T &self, Tscal t) {
+                    return self.solver.solver_config.set_time(t);
+                })
+            .def("set_next_dt", [](T &self, Tscal dt) {
+                return self.solver.solver_config.set_next_dt(dt);
+            });
     }
 } // namespace shammodels::basegodunov
 
