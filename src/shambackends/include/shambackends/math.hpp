@@ -872,4 +872,26 @@ namespace sham {
         return (v != T{0} && v == v) ? T{1.} / v : satval;
     }
 
+    namespace details {
+        template<class Tdest, class Tsource>
+        inline Tdest convert_internal(Tsource coord) {
+            return static_cast<Tdest>(coord);
+        }
+
+        template<class Tdest, class Tsource, int N>
+        inline sycl::vec<Tdest, N> convert_internal(sycl::vec<Tsource, N> coord) {
+            sycl::vec<Tdest, N> result;
+            for (int i = 0; i < N; ++i) {
+                result[i] = static_cast<Tdest>(coord[i]);
+            }
+            return result;
+        }
+    } // namespace details
+
+    /// Helper to avoid differences between SYCL implementations of convert, it always static cast
+    template<class Tdest, class Tsource>
+    inline Tdest convert(Tsource coord) {
+        return details::convert_internal<shambase::VecComponent<Tdest>>(coord);
+    }
+
 } // namespace sham
