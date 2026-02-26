@@ -33,7 +33,7 @@ namespace sham {
     inline sham::EventList safe_copy(
         sham::DeviceQueue &q, sham::EventList &depends_list, const T *src, T *dest, size_t count) {
         __shamrock_stack_entry();
-        u64 max_copy_len = (1 << 30) / sizeof(T); // 1GB
+        u64 max_copy_len = (1 << 30) / sizeof(T); // 1GB to avoid memcpy above i32_max bytes
 
         sham::EventList events;
 
@@ -53,7 +53,7 @@ namespace sham {
     inline sham::EventList safe_fill(
         sham::DeviceQueue &q, sham::EventList &depends_list, T *dest, size_t count, T value) {
         __shamrock_stack_entry();
-        u64 max_copy_len = (1 << 30) / sizeof(T); // 1GB
+        u64 max_copy_len = (1 << 30); // 1G elements, this garanteee indexing below i32_max
 
         sham::EventList events;
 
@@ -84,7 +84,7 @@ namespace sham {
                 = shambase::narrow_or_throw<i32>(std::min<size_t>(max_copy_len, count - i));
             sycl::event e = q.submit(depends_list, [&](sycl::handler &cgh) {
                 cgh.parallel_for(sycl::range<1>(copy_len), [dest, i, fct](sycl::item<1> gid) {
-                    dest[i + gid.get_linear_id()] = fct(gid.get_linear_id());
+                    dest[i + gid.get_linear_id()] = fct(i + gid.get_linear_id());
                 });
             });
             events.add_event(e);
