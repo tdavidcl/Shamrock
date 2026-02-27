@@ -621,24 +621,25 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
 
             // build the vector of structs
             std::vector<tmp> tmp_vec;
+            tmp_vec.reserve(send_msg.size() / 2);
             for (u64 i = 0; i < send_msg.size(); i += 2) {
                 tmp_vec.push_back({send_msg[i], send_msg[i + 1]});
             }
 
             // shuffle the messages infos
-            std::mt19937 eng_local_msg(
-                u64(golden_number * 1000 * step_count + shamcomm::world_rank()));
+            u64 local_seed = u64(golden_number * 1000 * step_count + shamcomm::world_rank());
+            std::mt19937_64 eng_local_msg(local_seed);
             std::shuffle(tmp_vec.begin(), tmp_vec.end(), eng_local_msg);
 
             // build the new send_msg
             std::vector<u64> send_msg_new;
+            send_msg_new.reserve(max_send);
             for (auto &t : tmp_vec) {
-                send_msg_new.push_back(t.ranks);
-                send_msg_new.push_back(t.size);
-
-                if (send_msg_new.size() > max_send) {
+                if (send_msg_new.size() >= max_send) {
                     break;
                 }
+                send_msg_new.push_back(t.ranks);
+                send_msg_new.push_back(t.size);
             }
 
             send_msg     = send_msg_new;
@@ -702,21 +703,6 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
         bool was_msg_size_limited = false;
 
         for (auto &[sender_rank, receiver_rank, indices_size] : msg_list) {
-
-            __shamrock_stack_entry();
-
-            if (receiver_rank >= shamcomm::world_size() || receiver_rank < 0) {
-                throw shambase::make_except_with_loc<std::runtime_error>(shambase::format(
-                    "receiver rank is out of bounds: rank = {}, world size = {}",
-                    receiver_rank,
-                    shamcomm::world_size()));
-            }
-            if (sender_rank >= shamcomm::world_size() || sender_rank < 0) {
-                throw shambase::make_except_with_loc<std::runtime_error>(shambase::format(
-                    "sender rank is out of bounds: rank = {}, world size = {}",
-                    sender_rank,
-                    shamcomm::world_size()));
-            }
 
             bool msg_count_limit_not_reached = msg_count_rank.at(receiver_rank) < msg_limit
                                                && msg_count_rank.at(sender_rank) < msg_limit;

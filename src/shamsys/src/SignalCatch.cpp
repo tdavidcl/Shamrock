@@ -30,6 +30,7 @@ namespace shamsys::details {
         case SIGIOT : signame = "SIGIOT"; break;
         case SIGKILL: signame = "SIGKILL"; break;
         case SIGSEGV: signame = "SIGSEGV"; break;
+        case SIGIOT : signame = "SIGIOT"; break;
         default     : signame = "UNKNOWN"; break;
         }
 
