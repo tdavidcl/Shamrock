@@ -20,6 +20,23 @@
 #include <csignal>
 #include <stdexcept>
 
+/*
+feature test for strsignal()
+
+strsignal():
+    Since glibc 2.10:
+    _XOPEN_SOURCE >= 700 || _POSIX_C_SOURCE >= 200809L
+    Before glibc 2.10:
+    _GNU_SOURCE
+
+*/
+#if defined(_XOPEN_SOURCE) && defined(_POSIX_C_SOURCE) && _XOPEN_SOURCE >= 700                     \
+    && _POSIX_C_SOURCE >= 200809L
+    #define HAVE_STRSIGNAL
+#elif defined(_GNU_SOURCE)
+    #define HAVE_STRSIGNAL
+#endif
+
 namespace shamsys::details {
 
     /**
@@ -29,60 +46,14 @@ namespace shamsys::details {
      * @return const char* The name of the signal
      */
     const char *get_signal_name(int signum) {
-        const char *signame = nullptr;
-        switch (signum) {
-
-        // ISO C99 signals.
-        case SIGINT : signame = "SIGINT"; break;
-        case SIGILL : signame = "SIGILL"; break;
-        case SIGABRT: signame = "SIGABRT"; break;
-        case SIGFPE : signame = "SIGFPE"; break;
-        case SIGSEGV: signame = "SIGSEGV"; break;
-        case SIGTERM: signame = "SIGTERM"; break;
-
-        // Historical signals specified by POSIX.
-        case SIGHUP : signame = "SIGHUP"; break;
-        case SIGQUIT: signame = "SIGQUIT"; break;
-        case SIGTRAP: signame = "SIGTRAP"; break;
-        case SIGKILL: signame = "SIGKILL"; break;
-        case SIGPIPE: signame = "SIGPIPE"; break;
-        case SIGALRM:
-            signame = "SIGALRM";
-            break;
-
-// Adjustments and additions to the signal number constants for  most Linux systems.
-#ifdef __linux__
-        case SIGSTKFLT: signame = "SIGSTKFLT"; break;
-        case SIGPWR   : signame = "SIGPWR"; break;
-#endif
-
-        // Historical signals specified by POSIX.
-        case SIGBUS: signame = "SIGBUS"; break;
-        case SIGSYS: signame = "SIGSYS"; break;
-
-        // New(er) POSIX signals (1003.1-2008, 1003.1-2013).
-        case SIGURG : signame = "SIGURG"; break;
-        case SIGSTOP: signame = "SIGSTOP"; break;
-        case SIGTSTP: signame = "SIGTSTP"; break;
-        case SIGCONT: signame = "SIGCONT"; break;
-        case SIGCHLD: signame = "SIGCHLD"; break;
-        case SIGTTIN: signame = "SIGTTIN"; break;
-        case SIGTTOU: signame = "SIGTTOU"; break;
-#ifdef SIGPOLL
-        case SIGPOLL: signame = "SIGPOLL"; break;
-#endif
-        case SIGXFSZ  : signame = "SIGXFSZ"; break;
-        case SIGXCPU  : signame = "SIGXCPU"; break;
-        case SIGVTALRM: signame = "SIGVTALRM"; break;
-        case SIGPROF  : signame = "SIGPROF"; break;
-        case SIGUSR1  : signame = "SIGUSR1"; break;
-        case SIGUSR2  : signame = "SIGUSR2"; break;
-
-        // Nonstandard signals found in all modern POSIX systems (including both BSD and Linux).
-        case SIGWINCH: signame = "SIGWINCH"; break;
-
-        default: signame = "UNKNOWN"; break;
+        const char *signame = "UNKNOWN";
+#ifdef HAVE_STRSIGNAL
+        // on some systems NSIG is 65 but we get a core dump
+        // source : https://stackoverflow.com/questions/16509614/signal-number-to-name
+        if (signum < NSIG && signum < 32) {
+            signame = strsignal(signum);
         }
+#endif
         return signame;
     }
 
