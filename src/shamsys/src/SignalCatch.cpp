@@ -46,25 +46,31 @@ namespace shamsys::details {
         case SIGTRAP: signame = "SIGTRAP"; break;
         case SIGKILL: signame = "SIGKILL"; break;
         case SIGPIPE: signame = "SIGPIPE"; break;
-        case SIGALRM: signame = "SIGALRM"; break;
+        case SIGALRM:
+            signame = "SIGALRM";
+            break;
 
-        // Adjustments and additions to the signal number constants for  most Linux systems.
+// Adjustments and additions to the signal number constants for  most Linux systems.
+#ifdef __linux__
         case SIGSTKFLT: signame = "SIGSTKFLT"; break;
         case SIGPWR   : signame = "SIGPWR"; break;
+#endif
 
         // Historical signals specified by POSIX.
         case SIGBUS: signame = "SIGBUS"; break;
         case SIGSYS: signame = "SIGSYS"; break;
 
         // New(er) POSIX signals (1003.1-2008, 1003.1-2013).
-        case SIGURG   : signame = "SIGURG"; break;
-        case SIGSTOP  : signame = "SIGSTOP"; break;
-        case SIGTSTP  : signame = "SIGTSTP"; break;
-        case SIGCONT  : signame = "SIGCONT"; break;
-        case SIGCHLD  : signame = "SIGCHLD"; break;
-        case SIGTTIN  : signame = "SIGTTIN"; break;
-        case SIGTTOU  : signame = "SIGTTOU"; break;
-        case SIGPOLL  : signame = "SIGPOLL"; break;
+        case SIGURG : signame = "SIGURG"; break;
+        case SIGSTOP: signame = "SIGSTOP"; break;
+        case SIGTSTP: signame = "SIGTSTP"; break;
+        case SIGCONT: signame = "SIGCONT"; break;
+        case SIGCHLD: signame = "SIGCHLD"; break;
+        case SIGTTIN: signame = "SIGTTIN"; break;
+        case SIGTTOU: signame = "SIGTTOU"; break;
+#ifdef SIGPOLL
+        case SIGPOLL: signame = "SIGPOLL"; break;
+#endif
         case SIGXFSZ  : signame = "SIGXFSZ"; break;
         case SIGXCPU  : signame = "SIGXCPU"; break;
         case SIGVTALRM: signame = "SIGVTALRM"; break;
