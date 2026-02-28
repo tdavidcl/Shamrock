@@ -46,13 +46,10 @@ namespace shamsys::details {
      * @return const char* The name of the signal
      */
     const char *get_signal_name(int signum) {
-        const char *signame = "UNKNOWN";
 #ifdef HAVE_STRSIGNAL
-        // on some systems NSIG is 65 but we get a core dump
-        // source : https://stackoverflow.com/questions/16509614/signal-number-to-name
-        if (signum < NSIG && signum < 32) {
-            signame = strsignal(signum);
-        }
+        const char *signame = strsignal(signum);
+#else
+        const char *signame = "UNKNOWN";
 #endif
         return signame;
     }
