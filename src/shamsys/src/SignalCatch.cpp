@@ -83,21 +83,12 @@ namespace shamsys {
         // SA_RESETHAND resets the signal action to the default before calling the handler.
         sa.sa_flags = SA_RESETHAND;
 
-        if (sigaction(SIGTERM, &sa, NULL) != 0) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Failed to register SIGTERM signal handler");
-        }
-        if (sigaction(SIGINT, &sa, NULL) != 0) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Failed to register SIGINT signal handler");
-        }
-        if (sigaction(SIGSEGV, &sa, NULL) != 0) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Failed to register SIGSEGV signal handler");
-        }
-        if (sigaction(SIGIOT, &sa, NULL) != 0) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Failed to register SIGIOT signal handler");
+        std::array catched_signals = {SIGTERM, SIGINT, SIGSEGV, SIGIOT};
+        for (auto signum : catched_signals) {
+            if (sigaction(signum, &sa, NULL) != 0) {
+                shambase::throw_with_loc<std::runtime_error>(fmt::format(
+                    "Failed to register {} signal handler", details::get_signal_name(signum)));
+            }
         }
     }
 } // namespace shamsys
