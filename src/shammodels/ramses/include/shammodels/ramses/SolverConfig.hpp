@@ -46,7 +46,7 @@ namespace shammodels::basegodunov {
      */
     struct DragConfig {
         DragSolverMode drag_solver_config = NoDrag;
-        std::vector<f32> alphas;
+        std::vector<f64> alphas;
         bool enable_frictional_heating
             = false; // 0 to turn off and 1 when all dissipation is deposited to the gas
     };
@@ -104,7 +104,9 @@ namespace shammodels::basegodunov {
         mode config = None{};
         void set_refine_none() { config = None{}; }
         void set_refine_density_based(Tscal crit_mass) { config = DensityBased{crit_mass}; }
+
         bool need_level_zero_compute() { return false; }
+        bool need_amr_level_compute() { return false; }
     };
 
     struct BCConfig {
