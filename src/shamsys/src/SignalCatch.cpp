@@ -59,15 +59,13 @@ namespace shamsys::details {
 
     void signal_callback_handler(int signum) {
 
-        const char *signame = get_signal_name(signum);
-
         // ensure that we print in one block to avoid interleaving
         std::string log = fmt::format(
             "!!! Received signal : {} (code {}) from world rank {}\n"
             "Current stacktrace : \n"
             "{}\n"
             "exiting ...",
-            signame,
+            get_signal_name(signum),
             signum,
             shamcomm::world_rank(),
             shambase::fmt_callstack());
