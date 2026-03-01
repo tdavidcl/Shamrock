@@ -43,6 +43,15 @@ strsignal():
     #define HAVE_STRSIGNAL
 #endif
 
+// replace rules
+static const std::vector<std::pair<std::string, std::string>> replace_rules = {
+#ifdef SYCL_COMP_ACPP
+    {"hipsycl::sycl::vec<long, 3, hipsycl::sycl::detail::vec_storage<long, 3> >", "i64_3"},
+    {"hipsycl::sycl::vec<double, 3, hipsycl::sycl::detail::vec_storage<double, 3> >", "f64_3"},
+    {"hipsycl::sycl::", "sycl::"},
+#endif
+};
+
 namespace shamsys::details {
 
     /**
@@ -61,29 +70,23 @@ namespace shamsys::details {
     }
 
     void signal_callback_handler(int signum) {
-
-        bool colors_enabled = shamcmdopt::is_a_tty() && shambase::term_colors::colors_enabled();
+#ifdef SHAMROCK_USE_CPPTRACE
+        bool colors_enabled = shambase::term_colors::colors_enabled();
         auto color_mode     = colors_enabled ? cpptrace::formatter::color_mode::always
                                              : cpptrace::formatter::color_mode::none;
 
         auto formatter = cpptrace::formatter{}
                              .transform([](cpptrace::stacktrace_frame frame) {
-                                 shambase::replace_all(
-                                     frame.symbol,
-                                     "hipsycl::sycl::vec<long, 3, "
-                                     "hipsycl::sycl::detail::vec_storage<long, 3> >",
-                                     "i64_3");
-                                 shambase::replace_all(
-                                     frame.symbol,
-                                     "hipsycl::sycl::vec<double, 3, "
-                                     "hipsycl::sycl::detail::vec_storage<double, 3> >",
-                                     "f64_3");
+                                 for (const auto &[pattern, replacement] : replace_rules) {
+                                     shambase::replace_all(frame.symbol, pattern, replacement);
+                                 }
                                  return frame;
                              })
                              .symbols(cpptrace::formatter::symbol_mode::pretty)
                              .colors(color_mode)
                              .break_before_filename()
                              .snippets(false);
+#endif
 
         // ensure that we print in one block to avoid interleaving
         std::string log = fmt::format(
@@ -94,7 +97,7 @@ namespace shamsys::details {
             "Current cpptrace stacktrace : \n"
             "{}\n"
             "exiting ...",
-            signame,
+            get_signal_name(signum),
             signum,
             shamcomm::world_rank(),
             shambase::fmt_callstack(),
