@@ -23,4 +23,7 @@ namespace shambase {
     /// @brief Run a command and return the output
     std::string popen_fetch_output(const char *command);
 
+    /// @brief Run a command and return the output, noexcept version
+    std::string popen_fetch_output_noexcept(const char *command, bool &success) noexcept;
+
 } // namespace shambase

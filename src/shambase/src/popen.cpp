@@ -52,4 +52,25 @@ namespace shambase {
         return result;
     }
 
+    std::string popen_fetch_output_noexcept(const char *command, bool &success) noexcept {
+        std::string r;
+
+        // try to call the command
+        if (FILE *ps = popen(command, "r")) {
+            success = true; // if we are here, the command was called successfully
+
+            // read the output
+            char print_buff[512];
+            while (fgets(print_buff, sizeof(print_buff), ps)) {
+                r += print_buff;
+            }
+
+            // close the pipe
+            pclose(ps);
+        } else {
+            success = false;
+        }
+
+        return std::move(r);
+    }
 } // namespace shambase
