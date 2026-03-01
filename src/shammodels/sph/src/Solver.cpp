@@ -98,7 +98,6 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
-#include <csignal>
 #include <memory>
 #include <stdexcept>
 #include <vector>
