@@ -23,6 +23,7 @@
 
 #ifdef SHAMROCK_USE_CPPTRACE
     #include <cpptrace/cpptrace.hpp>
+    #include <cpptrace/formatting.hpp>
 #endif
 
 namespace shamsys::details {
@@ -37,6 +38,29 @@ namespace shamsys::details {
         default     : signame = "UNKNOWN"; break;
         }
 
+        bool colors_enabled = shamcmdopt::is_a_tty() && shambase::term_colors::colors_enabled();
+        auto color_mode     = colors_enabled ? cpptrace::formatter::color_mode::always
+                                             : cpptrace::formatter::color_mode::none;
+
+        auto formatter = cpptrace::formatter{}
+                             .transform([](cpptrace::stacktrace_frame frame) {
+                                 shambase::replace_all(
+                                     frame.symbol,
+                                     "hipsycl::sycl::vec<long, 3, "
+                                     "hipsycl::sycl::detail::vec_storage<long, 3> >",
+                                     "i64_3");
+                                 shambase::replace_all(
+                                     frame.symbol,
+                                     "hipsycl::sycl::vec<double, 3, "
+                                     "hipsycl::sycl::detail::vec_storage<double, 3> >",
+                                     "f64_3");
+                                 return frame;
+                             })
+                             .symbols(cpptrace::formatter::symbol_mode::pretty)
+                             .colors(color_mode)
+                             .break_before_filename()
+                             .snippets(false);
+
         // ensure that we print in one block to avoid interleaving
         std::string log = fmt::format(
             "!!! Received signal : {} (code {}) from world rank {}\n"
@@ -50,7 +74,7 @@ namespace shamsys::details {
             signum,
             shamcomm::world_rank(),
             shambase::fmt_callstack(),
-            cpptrace::generate_trace().to_string(shamcmdopt::is_a_tty()));
+            formatter.format(cpptrace::generate_trace()));
 #else
             "Current stacktrace : \n"
             "{}\n"

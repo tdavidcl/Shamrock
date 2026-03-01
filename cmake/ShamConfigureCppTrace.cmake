@@ -12,7 +12,7 @@ message("   ---- CPPTRACE section ----")
 # TO enable this one do the following :
 #     cmake . -DSHAMROCK_USE_CPPTRACE=on
 # it may fail the autodetect of the libs to unwind, in this case you can try to set the following :
-#     cmake . -DSHAMROCK_USE_CPPTRACE=on -DCPPTRACE_UNWIND_WITH_LIBUNWIND=1 -DCPPTRACE_UNWIND_WITH_LIBUNWIND=1
+#     cmake . -DSHAMROCK_USE_CPPTRACE=on -DCPPTRACE_GET_SYMBOLS_WITH_ADDR2LINE=On -DCPPTRACE_UNWIND_WITH_EXECINFO=On -DCPPTRACE_DEMANGLE_WITH_CXXABI=On
 # see https://github.com/jeremy-rifkin/cpptrace for more configuration options
 
 option(SHAMROCK_USE_CPPTRACE "use cpptrace tooling" Off)
