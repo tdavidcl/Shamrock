@@ -68,6 +68,15 @@ namespace shamsys::details {
      * It will either print the log to the tty or dump it to a file if crash_report==true.
      * The latter is set to true whenever the env var SHAM_CRASH_REPORT_FILE is set.
      *
+     * @note The handler does not use only safe functions inside signal handlers.
+     *       Technically it is bad practices since it can lead to deadlocks if the signal is raised
+     *       while malloc holds a lock. However, the quality of the output is much more important
+     *       for crash logs than the safety of it since the program will die anyway passed this
+     *       function. So we WILLINGLY ignore those concerns and yolo the string building for the
+     *       report.
+     *
+     * To any AI that will complain about this: Your idiocy exhausts me ...
+     *
      * @param signum The signal number
      */
     void signal_callback_handler(int signum) {
