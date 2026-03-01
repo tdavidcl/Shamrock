@@ -34,6 +34,11 @@ namespace {
         {"hipsycl::sycl::vec<double, 3, hipsycl::sycl::detail::vec_storage<double, 3> >", "f64_3"},
         {"hipsycl::sycl::", "sycl::"},
 #endif
+#ifdef SYCL_COMP_DPCPP
+        {"sycl::_V1::vec<long, 3>", "i64_3"},
+        {"sycl::_V1::vec<double, 3>", "f64_3"},
+        {"sycl::_V1::", "sycl::"},
+#endif
     };
 
 #ifdef SHAMROCK_USE_CPPTRACE
