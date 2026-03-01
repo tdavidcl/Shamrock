@@ -145,9 +145,9 @@ namespace shamsys {
         struct sigaction sa = {};
 
         if (SHAM_CRASH_REPORT_FILE != "") {
-            crash_report          = true;
-            crash_report_filename = fmt::format(
-                "{}_{}_rank_{}.txt", SHAM_CRASH_REPORT_FILE, getpid(), shamcomm::world_rank());
+            crash_report = true;
+            crash_report_filename
+                = fmt::format("{}_rank_{}.txt", SHAM_CRASH_REPORT_FILE, shamcomm::world_rank());
         }
 
         sa.sa_handler = details::signal_callback_handler;
