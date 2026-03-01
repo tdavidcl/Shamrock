@@ -21,6 +21,7 @@ set(Sources
         src/shamrock_smi.cpp
         src/legacy/sycl_handler.cpp
         src/legacy/sycl_mpi_interop.cpp
+        src/stacktrace_log.cpp
     )
 
 if(SHAMROCK_USE_SHARED_LIB)

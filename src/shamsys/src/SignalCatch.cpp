@@ -19,13 +19,9 @@
 #include "shamcmdopt/tty.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include "shamsys/stacktrace_log.hpp"
 #include <csignal>
 #include <stdexcept>
-
-#ifdef SHAMROCK_USE_CPPTRACE
-    #include <cpptrace/cpptrace.hpp>
-    #include <cpptrace/formatting.hpp>
-#endif
 
 /*
 feature test for strsignal()
@@ -43,15 +39,6 @@ strsignal():
 #elif defined(_GNU_SOURCE)
     #define HAVE_STRSIGNAL
 #endif
-
-// replace rules
-static const std::vector<std::pair<std::string, std::string>> replace_rules = {
-#ifdef SYCL_COMP_ACPP
-    {"hipsycl::sycl::vec<long, 3, hipsycl::sycl::detail::vec_storage<long, 3> >", "i64_3"},
-    {"hipsycl::sycl::vec<double, 3, hipsycl::sycl::detail::vec_storage<double, 3> >", "f64_3"},
-    {"hipsycl::sycl::", "sycl::"},
-#endif
-};
 
 std::string SHAM_CRASH_REPORT_FILE = shamcmdopt::getenv_str_default("SHAM_CRASH_REPORT_FILE", "");
 
@@ -75,63 +62,41 @@ namespace shamsys::details {
         return signame;
     }
 
+    /**
+     * @brief The handler that will be called when a signal is catched.
+     *
+     * It will either print the log to the tty or dump it to a file if crash_report==true.
+     * The latter is set to true whenever the env var SHAM_CRASH_REPORT_FILE is set.
+     *
+     * @param signum The signal number
+     */
     void signal_callback_handler(int signum) {
-#ifdef SHAMROCK_USE_CPPTRACE
-        bool colors_enabled = shambase::term_colors::colors_enabled() && !crash_report;
-        auto color_mode     = colors_enabled ? cpptrace::formatter::color_mode::always
-                                             : cpptrace::formatter::color_mode::none;
 
-        auto formatter = cpptrace::formatter{}
-                             .transform([](cpptrace::stacktrace_frame frame) {
-                                 for (const auto &[pattern, replacement] : replace_rules) {
-                                     shambase::replace_all(frame.symbol, pattern, replacement);
-                                 }
-                                 return frame;
-                             })
-                             .symbols(cpptrace::formatter::symbol_mode::pretty)
-                             .colors(color_mode)
-                             .break_before_filename()
-                             .snippets(false);
-#endif
-
-        // ensure that we print in one block to avoid interleaving
-        std::string log = fmt::format(
-            "!!! Received signal : {} (code {}) from world rank {}\n"
-#ifdef SHAMROCK_USE_CPPTRACE
-            "Current stacktrace : \n"
-            "{}\n"
-            "Current cpptrace stacktrace : \n"
-            "{}\n"
-            "exiting ...",
+        std::string log_start = fmt::format(
+            "!!! Received signal : {} (code {}) from world rank {}\n",
             get_signal_name(signum),
             signum,
-            shamcomm::world_rank(),
-            shambase::fmt_callstack(),
-            formatter.format(cpptrace::generate_trace()));
-#else
-            "Current stacktrace : \n"
-            "{}\n"
-            "exiting ...",
-            get_signal_name(signum),
-            signum,
-            shamcomm::world_rank(),
-            shambase::fmt_callstack());
-#endif
+            shamcomm::world_rank());
+
+        std::string report = crash_report_backtrace();
+
+        std::string log_end = "exiting ...";
 
         if (crash_report) {
             std::ofstream outfile(crash_report_filename);
-            outfile << log << std::endl;
+            outfile << log_start << std::endl;
+            outfile << report << std::endl;
+            outfile << log_end << std::endl;
             outfile.close();
             std::cout << shambase::format(
-                "!!! Received signal : {} (code {}) from world rank {}\n"
+                "{}"
                 "Crash report written to {}",
-                get_signal_name(signum),
-                signum,
-                shamcomm::world_rank(),
+                log_start,
                 crash_report_filename)
                       << std::endl;
         } else {
-            std::cout << log << std::endl;
+            std::string merged_log = log_start + report + log_end;
+            std::cout << merged_log << std::endl;
         }
 
         // raise signal again since the handler was reset to the default (see SA_RESETHAND)
@@ -142,7 +107,6 @@ namespace shamsys::details {
 
 namespace shamsys {
     void register_signals() {
-        struct sigaction sa = {};
 
         if (SHAM_CRASH_REPORT_FILE != "") {
             crash_report = true;
@@ -150,7 +114,10 @@ namespace shamsys {
                 = fmt::format("{}_rank_{}.txt", SHAM_CRASH_REPORT_FILE, shamcomm::world_rank());
         }
 
-        sa.sa_handler = details::signal_callback_handler;
+        init_backtrace_utilities(shambase::term_colors::colors_enabled() && !crash_report);
+
+        struct sigaction sa = {};
+        sa.sa_handler       = details::signal_callback_handler;
         sigemptyset(&sa.sa_mask);
         // SA_RESETHAND resets the signal action to the default before calling the handler.
         sa.sa_flags = SA_RESETHAND;
