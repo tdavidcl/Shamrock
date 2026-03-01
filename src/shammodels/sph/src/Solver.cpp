@@ -1693,8 +1693,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     sph_prestep(t_current, dt);
 
-    raise(SIGSEGV);
-
     using RTree = shamtree::CompressedLeafBVH<u_morton, Tvec, 3>;
 
     // Here we will add self grav to the external forces indep of vel (this will be moved into a
