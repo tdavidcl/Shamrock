@@ -228,8 +228,6 @@ namespace {
     }
 } // namespace
 
-
-
 namespace shamsys::details {
 
     /**
