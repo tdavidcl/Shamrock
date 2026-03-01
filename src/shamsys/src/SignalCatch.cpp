@@ -15,6 +15,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shamcmdopt/env.hpp"
 #include "shamcmdopt/tty.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -52,6 +53,11 @@ static const std::vector<std::pair<std::string, std::string>> replace_rules = {
 #endif
 };
 
+std::string SHAM_CRASH_REPORT_FILE = shamcmdopt::getenv_str_default("SHAM_CRASH_REPORT_FILE", "");
+
+bool crash_report                 = false;
+std::string crash_report_filename = "";
+
 namespace shamsys::details {
 
     /**
@@ -71,7 +77,7 @@ namespace shamsys::details {
 
     void signal_callback_handler(int signum) {
 #ifdef SHAMROCK_USE_CPPTRACE
-        bool colors_enabled = shambase::term_colors::colors_enabled();
+        bool colors_enabled = shambase::term_colors::colors_enabled() && !crash_report;
         auto color_mode     = colors_enabled ? cpptrace::formatter::color_mode::always
                                              : cpptrace::formatter::color_mode::none;
 
@@ -112,7 +118,21 @@ namespace shamsys::details {
             shambase::fmt_callstack());
 #endif
 
-        std::cout << log << std::endl;
+        if (crash_report) {
+            std::ofstream outfile(crash_report_filename);
+            outfile << log << std::endl;
+            outfile.close();
+            std::cout << shambase::format(
+                "!!! Received signal : {} (code {}) from world rank {}\n"
+                "Crash report written to {}",
+                get_signal_name(signum),
+                signum,
+                shamcomm::world_rank(),
+                crash_report_filename)
+                      << std::endl;
+        } else {
+            std::cout << log << std::endl;
+        }
 
         // raise signal again since the handler was reset to the default (see SA_RESETHAND)
         raise(signum);
@@ -123,6 +143,12 @@ namespace shamsys::details {
 namespace shamsys {
     void register_signals() {
         struct sigaction sa = {};
+
+        if (SHAM_CRASH_REPORT_FILE != "") {
+            crash_report          = true;
+            crash_report_filename = fmt::format(
+                "{}_{}_rank_{}.txt", SHAM_CRASH_REPORT_FILE, getpid(), shamcomm::world_rank());
+        }
 
         sa.sa_handler = details::signal_callback_handler;
         sigemptyset(&sa.sa_mask);

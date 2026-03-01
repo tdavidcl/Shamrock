@@ -98,6 +98,7 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
+#include <csignal>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -1692,6 +1693,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     }
 
     sph_prestep(t_current, dt);
+
+    raise(SIGSEGV);
 
     using RTree = shamtree::CompressedLeafBVH<u_morton, Tvec, 3>;
 
