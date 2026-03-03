@@ -123,6 +123,9 @@ namespace sham {
 
         /// PCI address of the device
         std::optional<std::string> pci_address;
+
+        /// Warnings emitted during property fetching
+        std::vector<std::string> warnings;
     };
 
     struct DeviceMPIProperties {
