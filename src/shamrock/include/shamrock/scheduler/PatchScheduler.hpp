@@ -27,6 +27,7 @@
 #include "shamrock/legacy/patch/utility/patch_field.hpp"
 #include "shamrock/solvergraph/NodeSetEdge.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
+#include "shamrock/solvergraph/SolverGraph.hpp"
 #include <nlohmann/json.hpp>
 #include <unordered_set>
 #include <fstream>
@@ -47,7 +48,30 @@
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
 #include "shamrock/scheduler/PatchTree.hpp"
 #include "shamrock/scheduler/SchedulerPatchData.hpp"
+#include "shamrock/solvergraph/IEdgeNamed.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
+
+struct JSonSerializable {
+    /// TDB
+    virtual ~JSonSerializable() {};
+};
+
+inline auto json_serializable_edge_constraint
+    = [](const std::shared_ptr<shamrock::solvergraph::IEdge> &edge) {
+          // check thaat the edge can be cross-casted to JSonSerializable
+          return bool(std::dynamic_pointer_cast<JSonSerializable>(edge));
+      };
+
+inline auto no_node_constraint = [](const std::shared_ptr<shamrock::solvergraph::INode> &node) {
+    return false;
+};
+
+/// Data stored within the scheduler that are garanteed to be in sink across all ranks
+struct SyncrhonizedData {
+    shamrock::solvergraph::SolverGraph container
+        = shamrock::solvergraph::SolverGraph::with_constraint(
+            no_node_constraint, json_serializable_edge_constraint);
+};
 
 /**
  * @brief The MPI scheduler
@@ -72,6 +96,7 @@ class PatchScheduler {
     SchedulerPatchList patch_list; ///< handle the list of the patches of the scheduler
     SchedulerPatchData patch_data; ///< handle the data of the patches of the scheduler
     PatchTree patch_tree;          ///< handle the tree structure of the patches
+    SyncrhonizedData synchronized_data;
 
     // using unordered set is not an issue since we use the find command after
     std::unordered_set<u64> owned_patch_id; ///< list of owned patch ids updated with
