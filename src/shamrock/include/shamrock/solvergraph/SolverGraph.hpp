@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 namespace shamrock::solvergraph {
 
@@ -387,6 +388,24 @@ namespace shamrock::solvergraph {
         template<class T>
         inline const T &get_edge_ref(const std::string &name) const {
             return shambase::get_check_ref(get_edge_ptr<T>(name));
+        }
+
+        std::vector<std::string> get_edge_names() {
+            std::vector<std::string> ret{};
+
+            for (auto &[k, e] : edges) {
+                ret.push_back(k);
+            }
+            return ret;
+        }
+
+        std::vector<std::string> get_node_names() {
+            std::vector<std::string> ret{};
+
+            for (auto &[k, n] : nodes) {
+                ret.push_back(k);
+            }
+            return ret;
         }
     };
 
