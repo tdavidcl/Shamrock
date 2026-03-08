@@ -48,7 +48,7 @@ namespace shamrock::solvergraph {
 
             if (type != type_name()) {
                 throw shambase::make_except_with_loc<std::runtime_error>(shambase::format(
-                    "error when deserializeing ScalarEdgeSerializable, expected type info "
+                    "error when deserializing ScalarEdgeSerializable, expected type info "
                     "\"{}\" but got \"{}\"",
                     type_name(),
                     type));
