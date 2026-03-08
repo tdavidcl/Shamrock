@@ -58,8 +58,8 @@ inline std::unordered_map<
     std::function<std::shared_ptr<shamrock::solvergraph::IEdge>(const nlohmann::json &j)>>
     deser_map = {};
 
-struct JSonSerializable {
-    virtual ~JSonSerializable() {};
+struct JsonSerializable {
+    virtual ~JsonSerializable() {};
 
     virtual void to_json(nlohmann::json &j)         = 0;
     virtual void from_json(const nlohmann::json &j) = 0;
@@ -69,8 +69,8 @@ struct JSonSerializable {
 
 inline auto json_serializable_edge_constraint
     = [](const std::shared_ptr<shamrock::solvergraph::IEdge> &edge) {
-          // check thaat the edge can be cross-casted to JSonSerializable
-          return bool(std::dynamic_pointer_cast<JSonSerializable>(edge));
+          // check that the edge can be cross-casted to JsonSerializable
+          return bool(std::dynamic_pointer_cast<JsonSerializable>(edge));
       };
 
 inline auto no_node_constraint = [](const std::shared_ptr<shamrock::solvergraph::INode> &node) {

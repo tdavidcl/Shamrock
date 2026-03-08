@@ -30,7 +30,7 @@
 namespace shamrock::solvergraph {
 
     template<class T>
-    class ScalarEdgeSerializable : public ScalarEdge<T>, public JSonSerializable {
+    class ScalarEdgeSerializable : public ScalarEdge<T>, public JsonSerializable {
         public:
         using ScalarEdge<T>::ScalarEdge;
         using ScalarEdge<T>::value;

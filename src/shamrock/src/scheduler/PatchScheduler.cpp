@@ -1039,7 +1039,7 @@ nlohmann::json SynchronizedData::to_json() {
     nlohmann::json edges{};
 
     for (const std::string &edgen : container.get_edge_names()) {
-        container.get_edge_ref<JSonSerializable>(edgen).to_json(edges[edgen]);
+        container.get_edge_ref<JsonSerializable>(edgen).to_json(edges[edgen]);
     }
 
     return {{"edges", edges}};
