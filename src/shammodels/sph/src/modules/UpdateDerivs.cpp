@@ -1143,7 +1143,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
     std::shared_ptr<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>> input_t_j
         = std::make_shared<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>>("", "");
-    input_t_j->value = std::vector<Tscal>(ndust, Tscal{0});
+    input_t_j->value = cfg.stopping_times;
 
     std::shared_ptr<SetDustStoppingTimeConstant<Tvec, SPHKernel>> node_set_tj
         = std::make_shared<SetDustStoppingTimeConstant<Tvec, SPHKernel>>(ndust);

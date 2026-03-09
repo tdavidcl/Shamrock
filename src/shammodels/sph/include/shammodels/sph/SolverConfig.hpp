@@ -121,6 +121,8 @@ namespace shammodels::sph {
             u32 ndust;
         };
 
+        std::vector<Tscal> stopping_times;
+
         /// Variant type to store the EOS configuration
         using Variant = std::variant<None, MonofluidTVI, MonofluidComplete>;
 
@@ -175,6 +177,10 @@ namespace shammodels::sph {
                         logger::warn_ln(
                             "SPH::config",
                             "Dust config != None is work in progress, use it at your own risk"));
+                }
+
+                if (get_dust_nvar() != stopping_times.size()) {
+                    throw "";
                 }
             }
         }
