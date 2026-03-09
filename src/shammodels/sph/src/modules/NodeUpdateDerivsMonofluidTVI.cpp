@@ -33,6 +33,7 @@ struct KernelUpdateDerivsMonofluidTVI {
 
     inline void operator()(
         u32 thread_id,
+        // input
         const Tvec *__restrict xyz,
         const Tscal *__restrict hpart,
         const Tvec *__restrict vxyz,
@@ -41,10 +42,11 @@ struct KernelUpdateDerivsMonofluidTVI {
         const Tscal *__restrict s_j,
         const Tscal *__restrict Ttilde_sj,
         shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+        // output
         Tscal *__restrict ds_j_dt) const {
 
-        u32 id_a  = (u32) thread_id / ndust;
-        u32 jdust = (u32) thread_id % ndust;
+        u32 id_a  = thread_id / ndust;
+        u32 jdust = thread_id % ndust;
 
         Tscal h_a         = hpart[id_a];
         Tvec xyz_a        = xyz[id_a];
@@ -73,10 +75,9 @@ struct KernelUpdateDerivsMonofluidTVI {
                 return;
             }
 
-            Tvec vxyz_b   = vxyz[id_b];
-            Tscal P_b     = pressure[id_b];
-            Tscal omega_b = omega[id_b];
-
+            Tvec vxyz_b       = vxyz[id_b];
+            Tscal P_b         = pressure[id_b];
+            Tscal omega_b     = omega[id_b];
             Tscal s_j_b       = s_j[id_b * ndust + jdust];
             Tscal Ttilde_sj_b = Ttilde_sj[id_b * ndust + jdust];
 
@@ -100,9 +101,7 @@ struct KernelUpdateDerivsMonofluidTVI {
         });
 
         // eq 51, Hutchison 2018
-        Tscal ds_j_dt_a = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
-
-        ds_j_dt[thread_id] = ds_j_dt_a;
+        ds_j_dt[thread_id] = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
     }
 };
 
