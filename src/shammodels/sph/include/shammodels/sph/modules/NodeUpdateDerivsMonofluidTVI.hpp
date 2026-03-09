@@ -26,8 +26,6 @@
 #define NODE_UPDATE_DERIVS_MONOFLUID_TVI_EDGES(X_RO, X_RW)                                         \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
-    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, alpha_u)                                        \
-    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, beta_AV)                                        \
                                                                                                    \
     /* counts */                                                                                   \
     X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
@@ -39,7 +37,6 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, vxyz)                                            \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, omega)                                          \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, pressure)                                       \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, cs)                                             \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, Ttilde_sj)                                      \
                                                                                                    \

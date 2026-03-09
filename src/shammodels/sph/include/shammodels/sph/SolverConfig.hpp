@@ -135,7 +135,7 @@ namespace shammodels::sph {
             return bool(std::get_if<MonofluidComplete>(&current_mode));
         }
 
-        inline bool has_Sj_field() {
+        inline bool has_s_j_field() {
             return is_monofluid_tvi(); // S_j = sqrt(\rho \epsilon_j)
         }
 

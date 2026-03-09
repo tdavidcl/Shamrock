@@ -112,7 +112,7 @@ namespace shammodels::sph {
             pdl.add_field<Tscal>("dt_part", 1);
         }
 
-        if (dust_config.has_Sj_field()) {
+        if (dust_config.has_s_j_field()) {
             u32 ndust = dust_config.get_dust_nvar();
             pdl.add_field<Tscal>("s_j", ndust);
             pdl.add_field<Tscal>("ds_j_dt", ndust);
@@ -158,7 +158,7 @@ namespace shammodels::sph {
             ghost_layout.add_field<Tvec>("deltav", ndust);
         }
 
-        if (dust_config.has_Sj_field()) {
+        if (dust_config.has_s_j_field()) {
             u32 ndust = dust_config.get_dust_nvar();
             ghost_layout.add_field<Tscal>("s_j", ndust);
         }
