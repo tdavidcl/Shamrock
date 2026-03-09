@@ -80,3 +80,18 @@ print("Current part mass :", pmass)
 
 model.set_cfl_cour(0.1)
 model.set_cfl_force(0.1)
+
+dic = ctx.collect_data()
+
+print(dic["xyz"].shape)
+
+x = dic["xyz"][:,0]
+y = dic["xyz"][:,1]
+z = dic["xyz"][:,2]
+
+r = np.sqrt(x*x + y*y + z*z)
+
+hpart = dic["hpart"]
+
+plt.scatter(r,hpart)
+plt.show()
