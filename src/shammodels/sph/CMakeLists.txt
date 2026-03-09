@@ -50,18 +50,19 @@ set(Sources
     src/modules/IterateSmoothingLengthDensityNeighLim.cpp
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/ComputeNeighStats.cpp
+    src/modules/NodeUpdateDerivsVaryingAlphaAV.cpp
     src/modules/setup/GeneratorMCDisc.cpp
     src/modules/setup/ModifierApplyDiscWarp.cpp
     src/modules/setup/ModifierApplyCustomWarp.cpp
     src/modules/setup/ModifierOffset.cpp
     src/modules/setup/ModifierFilter.cpp
+    src/modules/setup/ModifierSplitPart.cpp
     src/modules/self_gravity/SGDirectPlummer.cpp
     src/modules/self_gravity/SGMMPlummer.cpp
     src/modules/self_gravity/SGFMMPlummer.cpp
     src/modules/self_gravity/SGSFMMPlummer.cpp
     src/modules/render/CartesianRender.cpp
     src/modules/render/RenderFieldGetter.cpp
-
     src/modules/io/VTKDump.cpp
 )
 

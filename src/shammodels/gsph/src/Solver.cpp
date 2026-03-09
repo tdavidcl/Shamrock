@@ -87,6 +87,10 @@ void shammodels::gsph::Solver<Tvec, Kern>::init_solver_graph() {
     storage.neigh_cache
         = std::make_shared<shammodels::sph::solvergraph::NeighCache>(edges::neigh_cache, "neigh");
 
+    // Register ghost handler in solvergraph for explicit data dependency tracking
+    storage.ghost_handler = storage.solver_graph.register_edge(
+        "ghost_handler", solvergraph::GhostHandlerEdge<Tvec>("ghost_handler", "\\mathcal{G}"));
+
     storage.omega    = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "omega", "\\Omega");
     storage.density  = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "density", "\\rho");
     storage.pressure = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "pressure", "P");
@@ -142,26 +146,32 @@ void shammodels::gsph::Solver<Tvec, Kern>::gen_ghost_handler(Tscal time_val) {
     // Boundary condition selection - similar to SPH solver
     // Note: Wall boundaries use Periodic with dynamic wall particles
     if (SolverBCFree *c = std::get_if<SolverBCFree>(&solver_config.boundary_config.config)) {
-        storage.ghost_handler.set(
-            GhostHandle{
-                scheduler(), BCFree{}, storage.patch_rank_owner, storage.xyzh_ghost_layout});
+        shambase::get_check_ref(storage.ghost_handler)
+            .set(
+                GhostHandle{
+                    scheduler(), BCFree{}, storage.patch_rank_owner, storage.xyzh_ghost_layout});
     } else if (
         SolverBCPeriodic *c
         = std::get_if<SolverBCPeriodic>(&solver_config.boundary_config.config)) {
-        storage.ghost_handler.set(
-            GhostHandle{
-                scheduler(), BCPeriodic{}, storage.patch_rank_owner, storage.xyzh_ghost_layout});
+        shambase::get_check_ref(storage.ghost_handler)
+            .set(
+                GhostHandle{
+                    scheduler(),
+                    BCPeriodic{},
+                    storage.patch_rank_owner,
+                    storage.xyzh_ghost_layout});
     } else if (
         SolverBCShearingPeriodic *c
         = std::get_if<SolverBCShearingPeriodic>(&solver_config.boundary_config.config)) {
         // Shearing periodic boundaries (Stone 2010) - reuse SPH implementation
-        storage.ghost_handler.set(
-            GhostHandle{
-                scheduler(),
-                BCShearingPeriodic{
-                    c->shear_base, c->shear_dir, c->shear_speed * time_val, c->shear_speed},
-                storage.patch_rank_owner,
-                storage.xyzh_ghost_layout});
+        shambase::get_check_ref(storage.ghost_handler)
+            .set(
+                GhostHandle{
+                    scheduler(),
+                    BCShearingPeriodic{
+                        c->shear_base, c->shear_dir, c->shear_speed * time_val, c->shear_speed},
+                    storage.patch_rank_owner,
+                    storage.xyzh_ghost_layout});
     } else {
         shambase::throw_with_loc<std::runtime_error>("GSPH: Unsupported boundary condition type.");
     }
@@ -175,7 +185,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::build_ghost_cache() {
     GSPHUtils gsph_utils(scheduler());
 
     storage.ghost_patch_cache.set(gsph_utils.build_interf_cache(
-        storage.ghost_handler.get(),
+        shambase::get_check_ref(storage.ghost_handler).get(),
         storage.serial_patch_tree.get(),
         solver_config.htol_up_coarse_cycle));
 }
@@ -191,7 +201,9 @@ void shammodels::gsph::Solver<Tvec, Kern>::merge_position_ghost() {
     StackEntry stack_loc{};
 
     storage.merged_xyzh.set(
-        storage.ghost_handler.get().build_comm_merge_positions(storage.ghost_patch_cache.get()));
+        shambase::get_check_ref(storage.ghost_handler)
+            .get()
+            .build_comm_merge_positions(storage.ghost_patch_cache.get()));
 
     // Get field indices from xyzh_ghost_layout
     const u32 ixyz_ghost
@@ -506,7 +518,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::apply_position_boundary(Tscal time_va
     shamrock::SchedulerUtility integrators(sched);
     shamrock::ReattributeDataUtility reatrib(sched);
 
-    auto &pdl         = sched.pdl();
+    auto &pdl         = sched.pdl_old();
     const u32 ixyz    = pdl.get_field_idx<Tvec>(gsph::names::common::xyz);
     const u32 ivxyz   = pdl.get_field_idx<Tvec>(gsph::names::newtonian::vxyz);
     auto [bmin, bmax] = sched.get_box_volume<Tvec>();
@@ -548,7 +560,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::do_predictor_leapfrog(Tscal dt) {
     StackEntry stack_loc{};
     using namespace shamrock::patch;
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ixyz            = pdl.get_field_idx<Tvec>(gsph::names::common::xyz);
     const u32 ivxyz           = pdl.get_field_idx<Tvec>(gsph::names::newtonian::vxyz);
     const u32 iaxyz           = pdl.get_field_idx<Tvec>(gsph::names::newtonian::axyz);
@@ -633,7 +645,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
     using namespace shamrock;
     using namespace shamrock::patch;
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ixyz            = pdl.get_field_idx<Tvec>(gsph::names::common::xyz);
     const u32 ivxyz           = pdl.get_field_idx<Tvec>(gsph::names::newtonian::vxyz);
     const u32 ihpart          = pdl.get_field_idx<Tscal>(gsph::names::common::hpart);
@@ -665,7 +677,8 @@ void shammodels::gsph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
 
     using InterfaceBuildInfos = typename gsph::GSPHGhostHandler<Tvec>::InterfaceBuildInfos;
 
-    gsph::GSPHGhostHandler<Tvec> &ghost_handle   = storage.ghost_handler.get();
+    gsph::GSPHGhostHandler<Tvec> &ghost_handle
+        = shambase::get_check_ref(storage.ghost_handler).get();
     shamrock::solvergraph::Field<Tscal> &omega   = shambase::get_check_ref(storage.omega);
     shamrock::solvergraph::Field<Tscal> &density = shambase::get_check_ref(storage.density);
 
@@ -837,7 +850,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::compute_omega() {
     density_field.ensure_sizes(sizes->indexes);
 
     // Get patchdata layout for hpart field
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ihpart          = pdl.get_field_idx<Tscal>(gsph::names::common::hpart);
 
     // =========================================================================
@@ -1213,7 +1226,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::copy_eos_to_patchdata() {
     // Copy density, pressure, and soundspeed from solvergraph fields to patchdata
     // This ensures the values persist across restarts and can be read by VTKDump
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     u32 idensity              = pdl.get_field_idx<Tscal>(names::newtonian::density);
     u32 ipressure             = pdl.get_field_idx<Tscal>(names::newtonian::pressure);
     u32 isoundspeed           = pdl.get_field_idx<Tscal>(names::newtonian::soundspeed);
@@ -1282,7 +1295,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::compute_gradients() {
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ihpart          = pdl.get_field_idx<Tscal>(gsph::names::common::hpart);
     const u32 ivxyz           = pdl.get_field_idx<Tvec>(gsph::names::newtonian::vxyz);
     const bool has_uint       = solver_config.has_field_uint();
@@ -1453,7 +1466,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::prepare_corrector() {
     StackEntry stack_loc{};
 
     shamrock::SchedulerUtility utility(scheduler());
-    shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl();
+    shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
     const u32 iaxyz = pdl.get_field_idx<Tvec>(gsph::names::newtonian::axyz);
 
@@ -1530,7 +1543,7 @@ typename shammodels::gsph::Solver<Tvec, Kern>::Tscal shammodels::gsph::Solver<Tv
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ihpart          = pdl.get_field_idx<Tscal>(gsph::names::common::hpart);
     const u32 iaxyz           = pdl.get_field_idx<Tvec>(gsph::names::newtonian::axyz);
 
@@ -1628,7 +1641,7 @@ template<class Tvec, template<class> class Kern>
 bool shammodels::gsph::Solver<Tvec, Kern>::apply_corrector(Tscal dt, u64 Npart_all) {
     StackEntry stack_loc{};
 
-    shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl();
+    shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
     const u32 ivxyz = pdl.get_field_idx<Tvec>(gsph::names::newtonian::vxyz);
     const u32 iaxyz = pdl.get_field_idx<Tvec>(gsph::names::newtonian::axyz);

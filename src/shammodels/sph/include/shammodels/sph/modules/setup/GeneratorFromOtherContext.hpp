@@ -64,7 +64,7 @@ namespace shammodels::sph::modules {
             auto dev_sched        = shamsys::instance::get_compute_scheduler_ptr();
 
             // Make a patchdata to receive the data from the other context
-            PatchDataLayer tmp(sched.get_layout_ptr());
+            PatchDataLayer tmp(sched.get_layout_ptr_old());
 
             data_other.for_each([&](u64 id_patch, shamrock::patch::PatchDataLayer &pdat) {
                 if (pdat.get_obj_cnt() > 0 && tmp.get_obj_cnt() < nmax) {
@@ -89,7 +89,7 @@ namespace shammodels::sph::modules {
             return tmp;
         }
 
-        std::string get_name() { return "GeneratorLatticeCubic"; }
+        std::string get_name() { return "GeneratorFromOtherContext"; }
         ISPHSetupNode_Dot get_dot_subgraph() { return ISPHSetupNode_Dot{get_name(), 0, {}}; }
     };
 
