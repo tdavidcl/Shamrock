@@ -29,6 +29,7 @@
 #include "shammodels/sph/modules/ComputeDustTtilde.hpp"
 #include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
 #include "shammodels/sph/modules/NodeUpdateDerivsVaryingAlphaAV.hpp"
+#include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shamphys/mhd.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
@@ -36,6 +37,8 @@
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
+#include <memory>
+#include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
@@ -1137,7 +1140,17 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
     std::shared_ptr<shamrock::solvergraph::Field<Tscal>> t_j_field
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "t_j", "t_j");
-    // TODO: fill the field with the correct values
+
+    std::shared_ptr<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>> input_t_j
+        = std::make_shared<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>>("", "");
+    input_t_j->value = std::vector<Tscal>(ndust, Tscal{0});
+
+    std::shared_ptr<SetDustStoppingTimeConstant<Tvec, SPHKernel>> node_set_tj
+        = std::make_shared<SetDustStoppingTimeConstant<Tvec, SPHKernel>>(ndust);
+    {
+        node_set_tj->set_edges(input_t_j, part_counts_with_ghost, t_j_field);
+    }
+    node_set_tj->evaluate();
 
     std::shared_ptr<shamrock::solvergraph::Field<Tscal>> Ttilde_sj_field
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "Ttilde_sj", "Ttilde_sj");

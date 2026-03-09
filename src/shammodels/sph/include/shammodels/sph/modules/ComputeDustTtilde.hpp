@@ -19,11 +19,11 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/math/density.hpp"
-#include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
+#include "shamsys/NodeInstance.hpp"
 
 #define NODE_COMPUTE_DUST_TTILDE_EDGES(X_RO, X_RW)                                                 \
     /* scalars */                                                                                  \
@@ -97,7 +97,7 @@ namespace shammodels::sph::modules {
                     Tscal tj_a = t_j[thread_id];
 
                     using namespace shamrock::sph;
-                    Tscal rho_a = rho_h(pmass, hpart, Kernel::hfactd);
+                    Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
 
                     auto epsilon = [&](Tscal sj) {
                         return sj * sj / rho_a;
