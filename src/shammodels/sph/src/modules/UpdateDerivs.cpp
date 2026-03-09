@@ -26,6 +26,7 @@
 #include "shammodels/sph/math/forces.hpp"
 #include "shammodels/sph/math/mhd.hpp"
 #include "shammodels/sph/math/q_ab.hpp"
+#include "shammodels/sph/modules/ComputeDustTtilde.hpp"
 #include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
 #include "shammodels/sph/modules/NodeUpdateDerivsVaryingAlphaAV.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
@@ -1134,9 +1135,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
                 }));
     }
 
+    std::shared_ptr<shamrock::solvergraph::Field<Tscal>> t_j_field
+        = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "t_j", "t_j");
+    // TODO: fill the field with the correct values
+
     std::shared_ptr<shamrock::solvergraph::Field<Tscal>> Ttilde_sj_field
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "Ttilde_sj", "Ttilde_sj");
-    // TODO: fill the field with the correct values
 
     shamrock::solvergraph::SolverGraph &solver_graph = storage.solver_graph;
     auto ds_j_dt_refs
@@ -1144,6 +1148,14 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
     auto gpart_mass
         = solver_graph.get_edge_ptr<shamrock::solvergraph::ScalarEdge<Tscal>>("gpart_mass");
+
+    std::shared_ptr<ComputeDustTtilde<Tvec, SPHKernel>> node_tj
+        = std::make_shared<ComputeDustTtilde<Tvec, SPHKernel>>(ndust);
+    {
+        node_tj->set_edges(
+            gpart_mass, part_counts_with_ghost, hpart_refs, s_j_refs, t_j_field, Ttilde_sj_field);
+    }
+    node_tj->evaluate();
 
     std::shared_ptr<NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>> node
         = std::make_shared<NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>>(ndust);
