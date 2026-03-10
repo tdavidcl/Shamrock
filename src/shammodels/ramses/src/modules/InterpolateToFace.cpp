@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -15,7 +15,10 @@
  */
 
 #include "shambase/assert.hpp"
+#include "shammath/AABB.hpp"
+#include "shammodels/common/amr/AMRBlock.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
+#include "shamrock/patch/PatchDataField.hpp"
 
 namespace {
 
@@ -363,6 +366,9 @@ namespace {
 
                 Tscal P_face_a = P_a + sycl::dot(grad_P_a, shift_a) + dtP_cell_a * dt_interp;
                 Tscal P_face_b = P_b + sycl::dot(grad_P_b, shift_b) + dtP_cell_b * dt_interp;
+
+                SHAM_ASSERT(P_face_a >= 0.0);
+                SHAM_ASSERT(P_face_b >= 0.0);
 
                 return {P_face_a, P_face_b};
             }

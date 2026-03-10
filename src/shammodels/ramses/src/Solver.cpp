@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -10,6 +10,7 @@
 /**
  * @file Solver.cpp
  * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
+ * @author Noé Brucy (noe.brucy@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -24,11 +25,13 @@
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
+#include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
 #include "shammodels/ramses/modules/ComputeCellAABB.hpp"
+#include "shammodels/ramses/modules/ComputeCoordinates.hpp"
+#include "shammodels/ramses/modules/ComputeLevel0CellSize.hpp"
 #include "shammodels/ramses/modules/ComputeMass.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
-#include "shammodels/ramses/modules/ComputeTimeDerivative.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
@@ -39,6 +42,8 @@
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
+#include "shammodels/ramses/modules/SumFluxDust.hpp"
+#include "shammodels/ramses/modules/SumFluxHydro.hpp"
 #include "shammodels/ramses/modules/TimeIntegrator.hpp"
 #include "shammodels/ramses/modules/TransformGhostLayer.hpp"
 #include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
@@ -408,6 +413,18 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.cell0block_aabb_lower = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         1, "cell0block_aabb_lower", "\\mathbf{s}_{\\rm inf,block}");
 
+    if (solver_config.is_coordinate_field_required()) {
+        // will be filled by NodeComputeCoordinates
+        storage.coordinates = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "coordinates", "\\mathbf{xyz}");
+    }
+
+    if (solver_config.amr_mode.need_level_zero_compute()) {
+        // get blocks at level0 sizes for all patches
+        storage.level0_size = std::make_shared<shamrock::solvergraph::ScalarsEdge<TgridVec>>(
+            "level0_amr", "level0_amr");
+    }
+
     storage.grad_rho = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "grad_rho", "\\nabla \\rho");
     storage.dx_v = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
@@ -729,7 +746,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         auto &ghost_layout_ptr = storage.ghost_layout;
         {
             auto copy_fields = std::make_shared<shamrock::solvergraph::CopyPatchDataLayerFields>(
-                scheduler().get_layout_ptr(), ghost_layout_ptr);
+                scheduler().get_layout_ptr_old(), ghost_layout_ptr);
 
             copy_fields->set_edges(storage.source_patches, storage.merged_patchdata_ghost);
             gz_xchg_sequence.push_back(std::move(copy_fields));
@@ -919,6 +936,47 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             storage.block_cell_sizes,
             storage.cell0block_aabb_lower);
         solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    if (solver_config.is_coordinate_field_required()) { // Compute coordinates
+
+        modules::NodeComputeCoordinates<Tvec, TgridVec> node_coordinates{
+            AMRBlock::block_size,
+            AMRBlock::Nside,
+            solver_config.grid_coord_to_pos_fact,
+        };
+
+        node_coordinates.set_edges(
+            storage.block_counts,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.coordinates);
+
+        solver_sequence.push_back(
+            std::make_shared<decltype(node_coordinates)>(std::move(node_coordinates)));
+    }
+
+    if (solver_config.amr_mode.need_level_zero_compute()) { // compute level0 sizes in patch (to be
+                                                            // enabled later when needed)
+        modules::ComputeLevel0CellSize<TgridVec> node_level0_sizes{};
+        node_level0_sizes.set_edges(
+            graph.get_edge_ptr<ScalarsEdge<shammath::AABB<TgridVec>>>("global_patch_boxes"),
+            storage.source_patches,
+            storage.level0_size);
+        solver_sequence.push_back(
+            std::make_shared<decltype(node_level0_sizes)>(std::move(node_level0_sizes)));
+    }
+
+    if (solver_config.amr_mode.need_amr_level_compute()) { // compute block amr level in patch
+        modules::ComputeAMRLevel<TgridVec> node_amr_level{};
+        node_amr_level.set_edges(
+            storage.block_counts,
+            storage.level0_size,
+            storage.refs_block_min,
+            storage.refs_block_max,
+            storage.amr_block_levels);
+        solver_sequence.push_back(
+            std::make_shared<decltype(node_amr_level)>(std::move(node_amr_level)));
     }
 
     if (solver_config.should_compute_rho_mean()) {
@@ -1160,7 +1218,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> flux_sequence;
 
-        if (solver_config.riemman_config == Rusanov) {
+        if (solver_config.riemann_config == Rusanov) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::Rusanov>
                 node(
                     "Gas flux compute",
@@ -1203,7 +1261,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                     storage.flux_rhoe_face_zp,
                     storage.flux_rhoe_face_zm);
             flux_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        } else if (solver_config.riemman_config == HLL) {
+        } else if (solver_config.riemann_config == HLL) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLL> node(
                 "Gas flux compute",
                 solver_config.eos_gamma,
@@ -1245,7 +1303,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.flux_rhoe_face_zp,
                 storage.flux_rhoe_face_zm);
             flux_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        } else if (solver_config.riemman_config == HLLC) {
+        } else if (solver_config.riemann_config == HLLC) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLLC> node(
                 "Gas flux compute",
                 solver_config.eos_gamma,
@@ -1365,6 +1423,62 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
 
+    {
+        modules::NodeSumFluxHydro<Tvec, TgridVec> node{AMRBlock::block_size};
+        node.set_edges(
+            storage.block_counts,
+            storage.cell_graph_edge,
+            storage.block_cell_sizes,
+            storage.cell0block_aabb_lower,
+            storage.flux_rho_face_xp,
+            storage.flux_rho_face_xm,
+            storage.flux_rho_face_yp,
+            storage.flux_rho_face_ym,
+            storage.flux_rho_face_zp,
+            storage.flux_rho_face_zm,
+            storage.flux_rhov_face_xp,
+            storage.flux_rhov_face_xm,
+            storage.flux_rhov_face_yp,
+            storage.flux_rhov_face_ym,
+            storage.flux_rhov_face_zp,
+            storage.flux_rhov_face_zm,
+            storage.flux_rhoe_face_xp,
+            storage.flux_rhoe_face_xm,
+            storage.flux_rhoe_face_yp,
+            storage.flux_rhoe_face_ym,
+            storage.flux_rhoe_face_zp,
+            storage.flux_rhoe_face_zm,
+            storage.dtrho,
+            storage.dtrhov,
+            storage.dtrhoe);
+        solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    if (solver_config.is_dust_on()) {
+        modules::NodeSumFluxDust<Tvec, TgridVec> node{
+            AMRBlock::block_size, solver_config.dust_config.ndust};
+        node.set_edges(
+            storage.block_counts,
+            storage.cell_graph_edge,
+            storage.block_cell_sizes,
+            storage.cell0block_aabb_lower,
+            storage.flux_rho_dust_face_xp,
+            storage.flux_rho_dust_face_xm,
+            storage.flux_rho_dust_face_yp,
+            storage.flux_rho_dust_face_ym,
+            storage.flux_rho_dust_face_zp,
+            storage.flux_rho_dust_face_zm,
+            storage.flux_rhov_dust_face_xp,
+            storage.flux_rhov_dust_face_xm,
+            storage.flux_rhov_dust_face_yp,
+            storage.flux_rhov_dust_face_ym,
+            storage.flux_rhov_dust_face_zp,
+            storage.flux_rhov_dust_face_zm,
+            storage.dtrho_dust,
+            storage.dtrhov_dust);
+        solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
@@ -1482,13 +1596,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     // Solvergraph evaluation
     {
         shambase::get_check_ref(storage.solver_sequence).evaluate();
-    }
-
-    // compute dt fields
-    modules::ComputeTimeDerivative dt_compute(context, solver_config, storage);
-    dt_compute.compute_dt_fields();
-    if (solver_config.is_dust_on()) {
-        dt_compute.compute_dt_dust_fields();
     }
 
     // RK2 + flux lim

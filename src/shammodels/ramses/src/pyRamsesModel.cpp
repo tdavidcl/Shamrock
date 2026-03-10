@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -19,6 +19,7 @@
 
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pytypealias.hpp"
+#include "shammodels/common/shamrock_json_to_py_json.hpp"
 #include "shammodels/ramses/Model.hpp"
 #include "shammodels/ramses/Solver.hpp"
 #include "shammodels/ramses/modules/AnalysisSodTube.hpp"
@@ -41,7 +42,11 @@ namespace shammodels::basegodunov {
         shamlog_debug_ln("[Py]", "registering class :", name_config, typeid(T).name());
         shamlog_debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
 
-        py::class_<TConfig>(m, name_config.c_str())
+        py::class_<TConfig> config_cls(m, name_config.c_str());
+
+        shammodels::common::add_json_defs<TConfig>(config_cls);
+
+        config_cls
             .def(
                 "set_scale_factor",
                 [](TConfig &self, Tscal scale_factor) {
@@ -60,17 +65,17 @@ namespace shammodels::basegodunov {
             .def(
                 "set_riemann_solver_hll",
                 [](TConfig &self) {
-                    self.riemman_config = HLL;
+                    self.riemann_config = HLL;
                 })
             .def(
                 "set_riemann_solver_hllc",
                 [](TConfig &self) {
-                    self.riemman_config = HLLC;
+                    self.riemann_config = HLLC;
                 })
             .def(
                 "set_riemann_solver_rusanov",
                 [](TConfig &self) {
-                    self.riemman_config = Rusanov;
+                    self.riemann_config = Rusanov;
                 })
             .def(
                 "set_slope_lim_none",
@@ -327,7 +332,25 @@ namespace shammodels::basegodunov {
                     }
 
                     throw shambase::make_except_with_loc<std::runtime_error>("unknown field type");
-                });
+                })
+            .def(
+                "get_time",
+                [](T &self) {
+                    return self.solver.solver_config.get_time();
+                })
+            .def(
+                "get_dt",
+                [](T &self) {
+                    return self.solver.solver_config.get_dt();
+                })
+            .def(
+                "set_time",
+                [](T &self, Tscal t) {
+                    return self.solver.solver_config.set_time(t);
+                })
+            .def("set_next_dt", [](T &self, Tscal dt) {
+                return self.solver.solver_config.set_next_dt(dt);
+            });
     }
 } // namespace shammodels::basegodunov
 

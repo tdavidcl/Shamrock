@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -27,7 +27,8 @@
 #include "shambase/StorageComponent.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambackends/vec.hpp"
-#include "shammodels/sph/BasicSPHGhosts.hpp"
+#include "shammodels/gsph/modules/GSPHGhostHandler.hpp"
+#include "shammodels/gsph/solvergraph/GhostHandlerEdge.hpp"
 #include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
@@ -35,6 +36,7 @@
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
+#include "shamrock/solvergraph/SolverGraph.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
@@ -64,11 +66,13 @@ namespace shammodels::gsph {
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
-        // Reuse SPH ghost handler - the mechanism is the same
-        using GhostHandle      = sph::BasicSPHGhostHandler<Tvec>;
+        // Use GSPH ghost handler with Newtonian field names
+        using GhostHandle      = gsph::GSPHGhostHandler<Tvec>;
         using GhostHandleCache = typename GhostHandle::CacheMap;
 
         using RTree = shamtree::CompressedLeafBVH<Tmorton, Tvec, 3>;
+
+        shamrock::solvergraph::SolverGraph solver_graph;
 
         /// Particle counts per patch
         std::shared_ptr<shamrock::solvergraph::Indexes<u32>> part_counts;
@@ -88,7 +92,7 @@ namespace shammodels::gsph {
         Component<SerialPatchTree<Tvec>> serial_patch_tree;
 
         /// Ghost handler for boundary particles
-        Component<GhostHandle> ghost_handler;
+        std::shared_ptr<solvergraph::GhostHandlerEdge<Tvec>> ghost_handler;
         Component<GhostHandleCache> ghost_patch_cache;
 
         /// Merged position-h data for neighbor search
@@ -103,7 +107,8 @@ namespace shammodels::gsph {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> omega;
 
         /// Ghost data layout and merged data
-        Component<std::shared_ptr<shamrock::patch::PatchDataLayerLayout>> ghost_layout;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> xyzh_ghost_layout;
+        std::shared_ptr<shamrock::patch::PatchDataLayerLayout> ghost_layout;
         Component<shambase::DistributedData<shamrock::patch::PatchDataLayer>>
             merged_patchdata_ghost;
 
@@ -114,10 +119,17 @@ namespace shammodels::gsph {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> pressure;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> soundspeed;
 
-        /// Minimum h/v_sig for CFL timestep calculation (signal velocity from Riemann solver)
-        /// v_sig = c_i + c_j - 3.0 * (v_ij · r_ij) / r  (Monaghan convention)
-        /// This accounts for relative particle motion in the CFL condition.
-        Tscal h_per_v_sig = std::numeric_limits<Tscal>::max();
+        /// Gradient fields for MUSCL reconstruction (2nd order)
+        /// These are computed when ReconstructConfig::is_muscl() is true
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_density;  ///< \nabla \rho
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_pressure; ///< \nabla P
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_vx;       ///< \nabla v_x
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_vy;       ///< \nabla v_y
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_vz;       ///< \nabla v_z
+
+        /// Minimum h/c_s for CFL timestep calculation
+        /// For pure GSPH hydrodynamics: dt_CFL = C_cour * h / c_s
+        Tscal h_per_cs_min = std::numeric_limits<Tscal>::max();
 
         /// Old derivatives for predictor-corrector integration
         Component<shamrock::ComputeField<Tvec>> old_axyz;

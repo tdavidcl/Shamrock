@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -18,6 +18,7 @@
 
 #include "shambase/WithUUID.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shamrock/solvergraph/IEdge.hpp"
 #include <memory>
 #include <vector>
@@ -234,3 +235,34 @@ namespace shamrock::solvergraph {
     }
 
 } // namespace shamrock::solvergraph
+
+#define INODE_DECL_RO(type, name) const type &name;
+#define INODE_DECL_RW(type, name) type & name;
+#define INODE_PARAM_RO(type, name) std::shared_ptr<type> name,
+#define INODE_PARAM_RW(type, name) std::shared_ptr<type> name,
+#define INODE_PUSH_RO1(type, name) name,
+#define INODE_PUSH_RW1(type, name)
+#define INODE_PUSH_RO2(type, name)
+#define INODE_PUSH_RW2(type, name) name,
+#define INODE_GET_RO(type, name) get_ro_edge<type>(ro++),
+#define INODE_GET_RW(type, name) get_rw_edge<type>(rw++),
+
+#define EXPAND_NODE_EDGES(EDGES)                                                                   \
+                                                                                                   \
+    struct Edges {                                                                                 \
+        EDGES(INODE_DECL_RO, INODE_DECL_RW)                                                        \
+    };                                                                                             \
+                                                                                                   \
+    inline void set_edges(                                                                         \
+        EDGES(INODE_PARAM_RO, INODE_PARAM_RW) SourceLocation loc = SourceLocation{}) {             \
+        __shamrock_log_callsite(loc);                                                              \
+                                                                                                   \
+        __internal_set_ro_edges({EDGES(INODE_PUSH_RO1, INODE_PUSH_RW1)});                          \
+        __internal_set_rw_edges({EDGES(INODE_PUSH_RO2, INODE_PUSH_RW2)});                          \
+    }                                                                                              \
+                                                                                                   \
+    inline Edges get_edges() {                                                                     \
+        int ro = 0;                                                                                \
+        int rw = 0;                                                                                \
+        return Edges{EDGES(INODE_GET_RO, INODE_GET_RW)};                                           \
+    }

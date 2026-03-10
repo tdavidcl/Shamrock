@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -38,6 +38,8 @@
 #include "shammodels/gsph/config/ReconstructConfig.hpp"
 #include "shammodels/gsph/config/RiemannConfig.hpp"
 #include "shammodels/sph/config/BCConfig.hpp" // Reuse boundary conditions from SPH
+#include "shamrock/io/json_std_optional.hpp"
+#include "shamrock/io/json_utils.hpp"
 #include "shamrock/io/units_json.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamsys/NodeInstance.hpp"
@@ -101,8 +103,7 @@ struct shammodels::gsph::SolverConfig {
 
     static constexpr Tscal Rkern = Kernel::Rkern;
 
-    Tscal gpart_mass{0};      ///< The mass of each gas particle (must be set before use)
-    Tscal gamma = Tscal{1.4}; ///< Adiabatic index (for ideal gas EOS)
+    Tscal gpart_mass{0}; ///< The mass of each gas particle (must be set before use)
 
     CFLConfig<Tscal> cfl_config; ///< CFL configuration
 
@@ -200,10 +201,23 @@ struct shammodels::gsph::SolverConfig {
         return bool(std::get_if<T>(&eos_config.config));
     }
 
-    inline void set_eos_adiabatic(Tscal _gamma) {
-        gamma = _gamma;
-        eos_config.set_adiabatic(_gamma);
+    /**
+     * @brief Get the adiabatic index (gamma) from the EOS config
+     *
+     * @return The adiabatic index from Adiabatic or Polytropic EOS, or 1.4 as default
+     */
+    inline Tscal get_eos_gamma() const {
+        using Adiabatic  = typename EOSConfig::Adiabatic;
+        using Polytropic = typename EOSConfig::Polytropic;
+        if (const auto *eos = std::get_if<Adiabatic>(&eos_config.config)) {
+            return eos->gamma;
+        } else if (const auto *eos = std::get_if<Polytropic>(&eos_config.config)) {
+            return eos->gamma;
+        }
+        return Tscal{1.4}; // Default for non-gamma EOS types
     }
+
+    inline void set_eos_adiabatic(Tscal gamma) { eos_config.set_adiabatic(gamma); }
 
     inline void set_eos_isothermal(Tscal cs) { eos_config.set_isothermal(cs); }
 
@@ -220,6 +234,20 @@ struct shammodels::gsph::SolverConfig {
 
     inline void set_boundary_free() { boundary_config.set_free(); }
     inline void set_boundary_periodic() { boundary_config.set_periodic(); }
+
+    /**
+     * @brief Set shearing periodic boundary conditions
+     *
+     * Implements shearing box boundaries (Stone 2010) for simulations
+     * of differentially rotating systems (e.g., accretion disks).
+     *
+     * @param shear_base Base vector for shear periodicity count
+     * @param shear_dir Direction of the shear velocity shift
+     * @param speed Shear velocity magnitude
+     */
+    inline void set_boundary_shearing_periodic(i32_3 shear_base, i32_3 shear_dir, Tscal speed) {
+        boundary_config.set_shearing_periodic(shear_base, shear_dir, speed);
+    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Boundary Config (END)
@@ -276,7 +304,6 @@ struct shammodels::gsph::SolverConfig {
         }
         logger::raw_ln("----- GSPH Solver configuration -----");
         logger::raw_ln("gpart_mass  =", gpart_mass);
-        logger::raw_ln("gamma       =", gamma);
         riemann_config.print_status();
         reconstruct_config.print_status();
         eos_config.print_status();
@@ -285,8 +312,9 @@ struct shammodels::gsph::SolverConfig {
 
     inline void check_config() const {
         // Validate configuration (gpart_mass checked later at runtime)
-        if (gamma <= 1) {
-            shambase::throw_with_loc<std::runtime_error>("gamma must be > 1 for ideal gas");
+        // Only check gamma for adiabatic EOS types
+        if (is_eos_adiabatic() && get_eos_gamma() <= 1) {
+            shambase::throw_with_loc<std::runtime_error>("gamma must be > 1 for adiabatic gas");
         }
     }
 
@@ -342,17 +370,13 @@ namespace shammodels::gsph {
         std::string kernel_id = shambase::get_type_name<Tkernel>();
         std::string type_id   = shambase::get_type_name<Tvec>();
 
-        nlohmann::json junit;
-        to_json_optional(junit, p.unit_sys);
-
         j = nlohmann::json{
             {"solver_type", "gsph"},
             {"kernel_id", kernel_id},
             {"type_id", type_id},
             {"gpart_mass", p.gpart_mass},
-            {"gamma", p.gamma},
             {"cfl_config", p.cfl_config},
-            {"unit_sys", junit},
+            {"unit_sys", p.unit_sys},
             {"time_state", p.time_state},
             {"riemann_config", p.riemann_config},
             {"reconstruct_config", p.reconstruct_config},
@@ -387,22 +411,36 @@ namespace shammodels::gsph {
                 + type_id);
         }
 
-        j.at("gpart_mass").get_to(p.gpart_mass);
-        j.at("gamma").get_to(p.gamma);
-        j.at("cfl_config").get_to(p.cfl_config);
-        from_json_optional(j.at("unit_sys"), p.unit_sys);
-        j.at("time_state").get_to(p.time_state);
-        j.at("riemann_config").get_to(p.riemann_config);
-        j.at("reconstruct_config").get_to(p.reconstruct_config);
-        j.at("eos_config").get_to(p.eos_config);
-        j.at("boundary_config").get_to(p.boundary_config);
-        j.at("tree_reduction_level").get_to(p.tree_reduction_level);
-        j.at("use_two_stage_search").get_to(p.use_two_stage_search);
-        j.at("htol_up_coarse_cycle").get_to(p.htol_up_coarse_cycle);
-        j.at("htol_up_fine_cycle").get_to(p.htol_up_fine_cycle);
-        j.at("epsilon_h").get_to(p.epsilon_h);
-        j.at("h_iter_per_subcycles").get_to(p.h_iter_per_subcycles);
-        j.at("h_max_subcycles_count").get_to(p.h_max_subcycles_count);
+        bool has_used_defaults  = false;
+        bool has_updated_config = false;
+
+        auto _get_to_if_contains = [&](const std::string &key, auto &value) {
+            shamrock::get_to_if_contains(j, key, value, has_used_defaults);
+        };
+
+        _get_to_if_contains("gpart_mass", p.gpart_mass);
+        _get_to_if_contains("cfl_config", p.cfl_config);
+        _get_to_if_contains("unit_sys", p.unit_sys);
+        _get_to_if_contains("time_state", p.time_state);
+        _get_to_if_contains("riemann_config", p.riemann_config);
+        _get_to_if_contains("reconstruct_config", p.reconstruct_config);
+        _get_to_if_contains("eos_config", p.eos_config);
+        _get_to_if_contains("boundary_config", p.boundary_config);
+        _get_to_if_contains("tree_reduction_level", p.tree_reduction_level);
+        _get_to_if_contains("use_two_stage_search", p.use_two_stage_search);
+        _get_to_if_contains("htol_up_coarse_cycle", p.htol_up_coarse_cycle);
+        _get_to_if_contains("htol_up_fine_cycle", p.htol_up_fine_cycle);
+        _get_to_if_contains("epsilon_h", p.epsilon_h);
+        _get_to_if_contains("h_iter_per_subcycles", p.h_iter_per_subcycles);
+        _get_to_if_contains("h_max_subcycles_count", p.h_max_subcycles_count);
+
+        if (has_used_defaults || has_updated_config) {
+            if (shamcomm::world_rank() == 0) {
+                logger::info_ln(
+                    "GSPH::SolverConfig",
+                    shamrock::log_json_changes(p, j, has_used_defaults, has_updated_config));
+            }
+        }
     }
 
 } // namespace shammodels::gsph

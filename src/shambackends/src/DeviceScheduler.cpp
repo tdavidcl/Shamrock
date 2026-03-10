@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -15,6 +15,7 @@
 
 #include "shambackends/DeviceScheduler.hpp"
 #include "shambase/exception.hpp"
+#include "shambase/memory.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
@@ -69,7 +70,7 @@ namespace sham {
 
     bool DeviceScheduler::use_direct_comm() { return ctx->use_direct_comm(); }
 
-    void test_device_scheduler(sham::DeviceScheduler_ptr dev_sched) {
+    void test_device_scheduler(const sham::DeviceScheduler_ptr &dev_sched) {
         for (auto &q : dev_sched->queues) {
 
             sham::DeviceQueue &qref     = shambase::get_check_ref(q);
@@ -93,5 +94,57 @@ namespace sham {
                 std::rethrow_exception(eptr);
             }
         }
+
+        logger::debug_ln("Backends", "[Alloc testing] starting...");
+
+        sham::DeviceQueue &qref     = shambase::get_check_ref(dev_sched).get_queue();
+        sham::DeviceContext &ctxref = shambase::get_check_ref(qref.ctx);
+
+        u32 align = shambase::get_check_ref(ctxref.device).prop.mem_base_addr_align;
+        USMPtrHolder<sham::device> ptr1024_dev
+            = USMPtrHolder<sham::device>::create(1024, dev_sched, align);
+        ptr1024_dev.free_ptr();
+        USMPtrHolder<sham::host> ptr1024_host
+            = USMPtrHolder<sham::host>::create(1024, dev_sched, align);
+        ptr1024_host.free_ptr();
+
+        auto &dev = shambase::get_check_ref(ctxref.device);
+
+        size_t GBval = 1024 * 1024 * 1024;
+        // avoid <8GB card, they won't run at that scale anyway
+        if (dev.prop.global_mem_size > usize(3 * GBval)) {
+
+            if (dev.prop.max_mem_alloc_size_dev > 2 * GBval) {
+                try {
+                    USMPtrHolder<sham::device> ptr2G_dev
+                        = USMPtrHolder<sham::device>::create(2 * GBval + 1024, dev_sched, align);
+                    ptr2G_dev.free_ptr();
+                } catch (std::runtime_error &e) {
+                    logger::warn_ln(
+                        "Backends",
+                        " name = ",
+                        dev.dev.get_info<sycl::info::device::name>(),
+                        " -> large device allocation (>2GB) not working !");
+                    dev.prop.max_mem_alloc_size_dev = i32_max;
+                }
+            }
+
+            if (dev.prop.max_mem_alloc_size_host > 2 * GBval) {
+                try {
+                    USMPtrHolder<sham::host> ptr2G_host
+                        = USMPtrHolder<sham::host>::create(2 * GBval + 1024, dev_sched, align);
+                    ptr2G_host.free_ptr();
+                } catch (std::runtime_error &e) {
+                    logger::warn_ln(
+                        "Backends",
+                        " name = ",
+                        dev.dev.get_info<sycl::info::device::name>(),
+                        " -> large host allocation (>2GB) not working !");
+                    dev.prop.max_mem_alloc_size_host = i32_max;
+                }
+            }
+        }
+
+        logger::debug_ln("Backends", "[Alloc testing] done !");
     }
 } // namespace sham

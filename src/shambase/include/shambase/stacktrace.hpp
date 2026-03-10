@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -60,7 +60,7 @@ namespace shambase::details {
      * @param process_prefix The prefix of the process name.
      * @param world_rank The rank of the process.
      */
-    void dump_profilings(std::string process_prefix, u32 world_rank);
+    void dump_profilings(const std::string &process_prefix, u32 world_rank);
 
     /**
      * @brief Dump the profiling data in a Chrome Tracing format.
@@ -68,7 +68,7 @@ namespace shambase::details {
      * @param process_prefix The prefix of the process name.
      * @param world_rank The rank of the process.
      */
-    void dump_profilings_chrome(std::string process_prefix, u32 world_rank);
+    void dump_profilings_chrome(const std::string &process_prefix, u32 world_rank);
 
     /**
      * @brief Clear the profiling data. (should be done in large run to avoid out-of-memory)
@@ -227,6 +227,10 @@ namespace shambase {
      * @return The formatted call stack as a string.
      */
     std::string fmt_callstack();
+
+    void set_callstack_process_identifier(std::string identifier);
+
+    void add_callstack_gen_info_generator(std::string (*generator)());
 
 } // namespace shambase
 

@@ -1,7 +1,7 @@
 // -------------------------------------------------------//
 //
 // SHAMROCK code for hydrodynamics
-// Copyright (c) 2021-2025 Timothée David--Cléris <tim.shamrock@proton.me>
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
 // SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
 // Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
@@ -132,10 +132,10 @@ struct sham::VectorProperties<shammath::mat<T, m, n>> {
     static constexpr bool is_uint_based = std::is_same<T, u8>::value || std::is_same<T, u16>::value
                                           || std::is_same<T, u32>::value
                                           || std::is_same<T, u64>::value;
-    static constexpr bool is_int_based = std::is_same<T, i8>::value || std::is_same<T, i16>::value
-                                         || std::is_same<T, i32>::value
-                                         || std::is_same<T, i64>::value;
-    static constexpr bool has_info = is_float_based || is_int_based || is_uint_based;
+    static constexpr bool is_int_based  = std::is_same<T, i8>::value || std::is_same<T, i16>::value
+                                          || std::is_same<T, i32>::value
+                                          || std::is_same<T, i64>::value;
+    static constexpr bool has_info      = is_float_based || is_int_based || is_uint_based;
 
     static constexpr shammath::mat<T, m, n> get_min() {
         constexpr T min = shambase::get_min<T>();
