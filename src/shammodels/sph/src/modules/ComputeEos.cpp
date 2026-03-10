@@ -115,8 +115,6 @@ struct RhoGetterSJ {
                 epsilon_sum += s_j * s_j / rho;
             }
 
-            logger::raw_ln(i, rho, epsilon_sum, rho * (1 - epsilon_sum));
-
             return rho * (1 - epsilon_sum);
         }
     };
