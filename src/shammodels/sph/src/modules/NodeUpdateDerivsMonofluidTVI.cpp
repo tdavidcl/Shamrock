@@ -102,6 +102,7 @@ struct KernelUpdateDerivsMonofluidTVI {
 
         // eq 51, Hutchison 2018
         ds_j_dt[thread_id] = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
+
     }
 };
 
@@ -132,6 +133,10 @@ void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>::
 
     using ComputeKernel = KernelUpdateDerivsMonofluidTVI<Tvec, SPHKernel>;
 
+    auto total_specie_count = part_counts.template map<u32>([&](u64 id, u32 count) {
+        return count * ndust;
+    });
+
     // call the kernel for each patches with part_counts.get(id_patch) threads of patch id_patch
     sham::distributed_data_kernel_call(
         shamsys::instance::get_compute_scheduler_ptr(),
@@ -145,7 +150,7 @@ void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>::
             edges.Ttilde_sj.get_spans(),
             edges.neigh_cache},
         sham::DDMultiRef{edges.ds_j_dt.get_spans()},
-        part_counts,
+        total_specie_count,
         ComputeKernel{pmass, ndust});
 }
 

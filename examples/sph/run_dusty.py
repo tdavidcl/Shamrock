@@ -46,7 +46,7 @@ def uint_g(r):
 
 
 ndust = 3
-rc = 0.3
+rc = 0.6
 stopping_times = [1e-4, 1e-3, 1e-2]
 
 
