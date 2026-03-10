@@ -16,6 +16,7 @@
 
 #include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
@@ -96,13 +97,14 @@ struct KernelUpdateDerivsMonofluidTVI {
             Tscal delta_P     = P_a - P_b;
             Tscal Ts_weighted = (Ttilde_sj_a / rho_a + Ttilde_sj_b / rho_b);
 
+            // logger::raw_ln("Ts_weighted", Ts_weighted);
+
             term1 += (pmass * s_j_b / rho_b) * Ts_weighted * delta_P * F_ab_bar;
             term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
         });
 
         // eq 51, Hutchison 2018
         ds_j_dt[thread_id] = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
-
     }
 };
 

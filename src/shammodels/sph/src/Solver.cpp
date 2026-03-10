@@ -439,8 +439,9 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             }
 
             if (has_s_j_field) {
+                u32 ndust          = solver_config.dust_config.get_dust_nvar();
                 auto half_step_s_j = solver_graph.register_node(
-                    prefix + "_s_j", shammodels::common::modules::ForwardEuler<Tscal>{});
+                    prefix + "_s_j", shammodels::common::modules::ForwardEuler<Tscal>(ndust));
                 shambase::get_check_ref(half_step_s_j)
                     .set_edges(
                         solver_graph.get_edge_ptr<IDataEdge<Tscal>>("dt_half"),
@@ -2514,8 +2515,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 auto cfl_dt = cfl_dt_buf.get_write_access(depends_list);
 
                 auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                    Tscal C_cour  = solver_config.cfl_config.cfl_cour
-                                    * solver_config.time_state.cfl_multiplier;
+                    Tscal C_cour = solver_config.cfl_config.cfl_cour
+                                   * solver_config.time_state.cfl_multiplier;
                     Tscal C_force = solver_config.cfl_config.cfl_force
                                     * solver_config.time_state.cfl_multiplier;
 

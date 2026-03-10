@@ -78,7 +78,7 @@ namespace shammodels::sph::modules {
                     q,
                     sham::MultiRef{t_j_0},
                     sham::MultiRef{edges.t_j.get_spans().get(id)},
-                    part_counts.get(id),
+                    part_counts.get(id) * ndust,
                     [ndust
                      = ndust](u32 thread_id, const Tscal *__restrict t_j_0, Tscal *__restrict t_j) {
                         u32 jdust      = thread_id % ndust;

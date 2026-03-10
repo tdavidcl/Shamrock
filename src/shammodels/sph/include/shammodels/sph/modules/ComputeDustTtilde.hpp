@@ -18,6 +18,7 @@
 
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
@@ -75,6 +76,10 @@ namespace shammodels::sph::modules {
 
             const Tscal pmass = edges.gpart_mass.value;
 
+            auto total_specie_count = part_counts.template map<u32>([&](u64 id, u32 count) {
+                return count * ndust;
+            });
+
             // call the kernel for each patches with part_counts.get(id_patch) threads of patch
             // id_patch
             sham::distributed_data_kernel_call(
@@ -82,7 +87,7 @@ namespace shammodels::sph::modules {
                 sham::DDMultiRef{
                     edges.hpart.get_spans(), edges.s_j.get_spans(), edges.t_j.get_spans()},
                 sham::DDMultiRef{edges.Ttilde_sj.get_spans()},
-                part_counts,
+                total_specie_count,
                 [pmass, ndust = ndust](
                     u32 thread_id,
                     const Tscal *__restrict hpart,
@@ -117,6 +122,8 @@ namespace shammodels::sph::modules {
                         Tscal eps_k_a = epsilon(sk_a);
                         Ttilde_sj_a -= eps_k_a * eps_k_a * tk_a;
                     }
+
+                    // logger::raw_ln("Ttilde_sj_a", jdust, Ttilde_sj_a, eps_j_a, tj_a);
 
                     Ttilde_sj[thread_id] = Ttilde_sj_a;
                 });

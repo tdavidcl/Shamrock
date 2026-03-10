@@ -13,20 +13,52 @@ shamrock.enable_experimental_features()
 import numpy as np
 
 gamma = 1.4
-rho = 1
+rho_i = 1
+central_mass = 1
+R0 = 1
+H_r_0 = 0.05
 
+si = shamrock.UnitSystem()
+sicte = shamrock.Constants(si)
+codeu = shamrock.UnitSystem(
+    unit_time=3600 * 24 * 365,
+    unit_length=sicte.au(),
+    unit_mass=sicte.sol_mass(),
+)
+ucte = shamrock.Constants(codeu)
+G = ucte.G()
+
+def kep_profile(r):
+    return (G * central_mass / r) ** 0.5
+
+
+def omega_k(r):
+    return kep_profile(r) / r
+
+H = H_r_0 * R0
+cs = H * omega_k(R0)
+box = 8*H
+
+print(f"cs = {cs}")
+print(f"H = {H}")
+
+
+def scaling_rho(r):
+    x,y,z = r
+
+    loc_h = H/1.44
+    gaussian = np.exp(-(y**2) / (2*loc_h*loc_h)) / (loc_h * np.sqrt(2 * np.pi))
+    return gaussian
 
 def func_rho_t(r):
-    return rho
-
+    return rho_i * scaling_rho(r)
 
 def func_rho_d_j(r, idust):
-    r_ = np.sqrt(r[0] ** 2 + r[1] ** 2 + r[2] ** 2)
-    return (0.1 / ndust) * max(1 - (r_ / rc) ** 2, 0)
+    return (0.1 / ndust) * rho_i * scaling_rho(r)
 
 
 def func_rho_g(r):
-    return rho - sum([func_rho_d_j(r, i) for i in range(ndust)])
+    return rho_i*scaling_rho(r) - sum([func_rho_d_j(r, i) for i in range(ndust)])
 
 
 def func_s_j(r, idust):
@@ -45,15 +77,15 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 1
+ndust = 4
 rc = 0.25
-stopping_times = [ 1e-1]
+stopping_times = np.logspace(-4,-1,ndust)*omega_k(R0)
+from scipy.special import erfinv
 
+bmin = (-box/4, -box, -box/4)
+bmax = (box/4, box, box/4)
 
-bmin = (-0.6, -0.6, -0.6)
-bmax = (0.6, 0.6, 0.6)
-
-N_target = 1e4
+N_target = 1e5
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -84,8 +116,10 @@ cfg.set_artif_viscosity_VaryingCD10(
 )
 cfg.set_dust_mode_monofluid_tvi(ndust)
 cfg.set_dust_stopping_times(stopping_times)
+cfg.add_ext_force_vertical_disc_potential(central_mass = 1, R0 = 1)
 cfg.set_boundary_periodic()
-cfg.set_eos_isothermal(1)
+cfg.set_units(codeu)
+cfg.set_eos_isothermal(cs)
 cfg.print_status()
 model.set_solver_config(cfg)
 
@@ -102,6 +136,37 @@ setup = model.get_setup()
 gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
 setup.apply_setup(gen, insert_step=scheduler_split_val)
 
+vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+totmass = rho_i * vol_b
+print("Total mass :", totmass)
+
+pmass = model.total_mass_to_part_mass(totmass)
+model.set_particle_mass(pmass)
+print("Current part mass :", pmass)
+
+# Correct the barycenter
+analysis_barycenter = shamrock.model_sph.analysisBarycenter(model=model)
+barycenter, disc_mass = analysis_barycenter.get_barycenter()
+
+if shamrock.sys.world_rank() == 0:
+    print(f"disc barycenter = {barycenter}")
+
+model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
+
+def f_remap(r):
+    x,y,z = r
+
+    rn = max(abs(yM),abs(ym))
+    print(y,H, H*erfinv(y/rn) )
+    y = H*erfinv(y/rn)
+
+    y = min(y,yM)
+    y = max(y,ym)
+    return (x,y,z)
+
+model.remap_positions(f_remap)
+
+
 for i in range(ndust):
 
     def func_s(r):
@@ -111,13 +176,6 @@ for i in range(ndust):
 
 model.set_field_value_lambda_f64("uint", uint_g)
 
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
-totmass = rho * vol_b
-print("Total mass :", totmass)
-
-pmass = model.total_mass_to_part_mass(totmass)
-model.set_particle_mass(pmass)
-print("Current part mass :", pmass)
 
 
 model.set_cfl_cour(0.1)
@@ -126,9 +184,9 @@ model.set_cfl_force(0.1)
 model.timestep()
 
 tnext = 0
-for j in range(10):
+for j in range(1000):
     if j > 0:
-        tnext += 0.1
+        tnext += 0.02
         model.evolve_until(tnext)
 
     dic = ctx.collect_data()
@@ -145,26 +203,33 @@ for j in range(10):
 
     print(s_j)
 
-    r = np.sqrt(x * x + y * y + z * z)
+    r = y
 
     hpart = dic["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
+    print("compute original rho")
+    estimated_rho = [func_rho_t(dic["xyz"][kk]) for kk in range(len(dic["xyz"]))]
+
+    sz = 2
+
     fig, axs = plt.subplots(nrows=1, ncols=4, figsize=(15, 5))
-    axs[0].scatter(r, rho, label="rho")
+    axs[0].scatter(y, rho, label="rho",s=sz)
+    for i in range(ndust):
+        axs[0].scatter(y, s_j[:, i] ** 2, label=f"rho_j_{i}",s=sz)
+    #axs[0].scatter(y,estimated_rho)
+
     axs[0].legend()
     for i in range(ndust):
-        axs[1].scatter(r, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}")
+        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}",s=sz)
     axs[1].legend()
 
-    axs[2].scatter(r, cs, label="soundspeed")
+    axs[2].scatter(y, cs, label="soundspeed",s=sz)
     axs[2].legend()
 
     for i in range(ndust):
-        axs[3].scatter(r, ds_j_dt[:, i], label=f"ds_j_dt_{i}")
+        axs[3].scatter(y, ds_j_dt[:, i], label=f"ds_j_dt_{i}",s=sz)
     axs[3].legend()
 
-    for k in range(4):
-        axs[k].set_xlim(-0.1,1.1)
     plt.savefig(f"mono_{j}.png")
     plt.close()
