@@ -222,17 +222,17 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::compute_ext_forc
                 });
             set_R0.set_edges(R0);
 
-            common::modules::AddForceVerticalDiscPotential<Tvec> add_force_central_grav_potential;
-            add_force_central_grav_potential.set_edges(
+            common::modules::AddForceVerticalDiscPotential<Tvec> add_force_vertical_disc_potential;
+            add_force_vertical_disc_potential.set_edges(
                 constant_G, central_mass, R0, field_xyz, sizes, field_axyz_ext);
 
             add_ext_forces_seq.push_back(
                 std::make_shared<shamrock::solvergraph::OperationSequence>(
-                    "Point mass",
+                    "Vertical disc potential",
                     std::vector<std::shared_ptr<shamrock::solvergraph::INode>>{
                         shambase::to_shared(std::move(set_R0)),
                         shambase::to_shared(std::move(set_central_mass)),
-                        shambase::to_shared(std::move(add_force_central_grav_potential))}));
+                        shambase::to_shared(std::move(add_force_vertical_disc_potential))}));
 
         } else {
             shambase::throw_unimplemented("this force is not handled, yet ...");
