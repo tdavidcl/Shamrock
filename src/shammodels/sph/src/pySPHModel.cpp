@@ -297,6 +297,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("eta"),
             py::arg("q"))
         .def(
+<<<<<<< patch-2026-02-05-15-21
             "add_ext_force_velocity_dissipation",
             [](TConfig &self, Tscal eta) {
                 self.ext_force_config.add_velocity_dissipation(eta);
@@ -304,6 +305,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("eta"))
         .def(
+=======
+>>>>>>> main
             "add_ext_force_vertical_disc_potential",
             [](TConfig &self, Tscal central_mass, Tscal R0) {
                 self.ext_force_config.add_vertical_disc_potential(central_mass, R0);
