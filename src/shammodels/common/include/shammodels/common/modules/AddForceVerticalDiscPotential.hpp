@@ -12,7 +12,7 @@
 /**
  * @file AddForceVerticalDiscPotential.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Adds the acceleration from a central gravitational potential (point mass).
+ * @brief Adds the acceleration from a vertical disc potential.
  *
  */
 
@@ -83,7 +83,7 @@ namespace shammodels::common::modules {
                 edges.sizes.indexes,
                 [mGM = -cmass * G, R02 = R0 * R0](u32 gid, const Tvec *xyz, Tvec *axyz_ext) {
                     Tscal y_a = xyz[gid].y();
-                    axyz_ext[gid] += mGM * y_a / sycl::sqrt(R02 + y_a * y_a);
+                    axyz_ext[gid].y() += mGM * y_a / sycl::sqrt(R02 + y_a * y_a);
                 });
         }
 
