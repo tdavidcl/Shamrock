@@ -47,7 +47,7 @@ def uint_g(r):
 
 ndust = 1
 rc = 0.25
-stopping_times = [ 1e-1]
+stopping_times = [1e-1]
 
 
 bmin = (-0.6, -0.6, -0.6)
@@ -165,6 +165,6 @@ for j in range(10):
     axs[3].legend()
 
     for k in range(4):
-        axs[k].set_xlim(-0.1,1.1)
+        axs[k].set_xlim(-0.1, 1.1)
     plt.savefig(f"mono_{j}.png")
     plt.close()

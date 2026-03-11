@@ -28,6 +28,7 @@ codeu = shamrock.UnitSystem(
 ucte = shamrock.Constants(codeu)
 G = ucte.G()
 
+
 def kep_profile(r):
     return (G * central_mass / r) ** 0.5
 
@@ -35,30 +36,33 @@ def kep_profile(r):
 def omega_k(r):
     return kep_profile(r) / r
 
+
 H = H_r_0 * R0
 cs = H * omega_k(R0)
-box = 8*H
+box = 8 * H
 
 print(f"cs = {cs}")
 print(f"H = {H}")
 
 
 def scaling_rho(r):
-    x,y,z = r
+    x, y, z = r
 
-    loc_h = H/1.44
-    gaussian = np.exp(-(y**2) / (2*loc_h*loc_h)) / (loc_h * np.sqrt(2 * np.pi))
+    loc_h = H / (2**0.5)
+    gaussian = np.exp(-(y**2) / (2 * loc_h * loc_h)) / (loc_h * np.sqrt(2 * np.pi))
     return gaussian
+
 
 def func_rho_t(r):
     return rho_i * scaling_rho(r)
+
 
 def func_rho_d_j(r, idust):
     return (0.1 / ndust) * rho_i * scaling_rho(r)
 
 
 def func_rho_g(r):
-    return rho_i*scaling_rho(r) - sum([func_rho_d_j(r, i) for i in range(ndust)])
+    return rho_i * scaling_rho(r) - sum([func_rho_d_j(r, i) for i in range(ndust)])
 
 
 def func_s_j(r, idust):
@@ -79,11 +83,11 @@ def uint_g(r):
 
 ndust = 4
 rc = 0.25
-stopping_times = np.logspace(-4,-1,ndust)*omega_k(R0)
+stopping_times = np.logspace(-4, -1, ndust) * omega_k(R0)
 from scipy.special import erfinv
 
-bmin = (-box/4, -box, -box/4)
-bmax = (box/4, box, box/4)
+bmin = (-box / 4, -box, -box / 4)
+bmax = (box / 4, box, box / 4)
 
 N_target = 1e5
 scheduler_split_val = int(2e7)
@@ -116,7 +120,7 @@ cfg.set_artif_viscosity_VaryingCD10(
 )
 cfg.set_dust_mode_monofluid_tvi(ndust)
 cfg.set_dust_stopping_times(stopping_times)
-cfg.add_ext_force_vertical_disc_potential(central_mass = 1, R0 = 1)
+cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.set_boundary_periodic()
 cfg.set_units(codeu)
 cfg.set_eos_isothermal(cs)
@@ -153,16 +157,18 @@ if shamrock.sys.world_rank() == 0:
 
 model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
 
+
 def f_remap(r):
-    x,y,z = r
+    x, y, z = r
 
-    rn = max(abs(yM),abs(ym))
-    print(y,H, H*erfinv(y/rn) )
-    y = H*erfinv(y/rn)
+    rn = max(abs(yM), abs(ym))
+    print(y, H, H * erfinv(y / rn))
+    y = H * erfinv(y / rn)
 
-    y = min(y,yM)
-    y = max(y,ym)
-    return (x,y,z)
+    y = min(y, yM)
+    y = max(y, ym)
+    return (x, y, z)
+
 
 model.remap_positions(f_remap)
 
@@ -177,14 +183,13 @@ for i in range(ndust):
 model.set_field_value_lambda_f64("uint", uint_g)
 
 
-
 model.set_cfl_cour(0.1)
 model.set_cfl_force(0.1)
 
 model.timestep()
 
 
-#TODO: add function to modify fields e.g. get rho and do stuff according to it
+# TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 tnext = 0
 for j in range(1000):
@@ -217,21 +222,21 @@ for j in range(1000):
     sz = 2
 
     fig, axs = plt.subplots(nrows=1, ncols=4, figsize=(15, 5))
-    axs[0].scatter(y, rho, label="rho",s=sz)
+    axs[0].scatter(y, rho, label="rho", s=sz)
     for i in range(ndust):
-        axs[0].scatter(y, s_j[:, i] ** 2, label=f"rho_j_{i}",s=sz)
-    #axs[0].scatter(y,estimated_rho)
+        axs[0].scatter(y, s_j[:, i] ** 2, label=f"rho_j_{i}", s=sz)
+    # axs[0].scatter(y,estimated_rho)
 
     axs[0].legend()
     for i in range(ndust):
-        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}",s=sz)
+        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}", s=sz)
     axs[1].legend()
 
-    axs[2].scatter(y, cs, label="soundspeed",s=sz)
+    axs[2].scatter(y, cs, label="soundspeed", s=sz)
     axs[2].legend()
 
     for i in range(ndust):
-        axs[3].scatter(y, ds_j_dt[:, i], label=f"ds_j_dt_{i}",s=sz)
+        axs[3].scatter(y, ds_j_dt[:, i], label=f"ds_j_dt_{i}", s=sz)
     axs[3].legend()
 
     plt.savefig(f"mono_{j}.png")
