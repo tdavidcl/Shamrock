@@ -121,6 +121,7 @@ cfg.set_artif_viscosity_VaryingCD10(
 cfg.set_dust_mode_monofluid_tvi(ndust)
 cfg.set_dust_stopping_times(stopping_times)
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
+cfg.add_ext_force_velocity_dissipation(eta=10)
 cfg.set_boundary_periodic()
 cfg.set_units(codeu)
 cfg.set_eos_isothermal(cs)
@@ -240,4 +241,5 @@ for j in range(1000):
     axs[3].legend()
 
     plt.savefig(f"mono_{j}.png")
+    model.do_vtk_dump(f"dump_stratif_{j}.vtk", True)
     plt.close()
