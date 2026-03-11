@@ -183,6 +183,9 @@ model.set_cfl_force(0.1)
 
 model.timestep()
 
+
+#TODO: add function to modify fields e.g. get rho and do stuff according to it
+
 tnext = 0
 for j in range(1000):
     if j > 0:
