@@ -297,7 +297,6 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("eta"),
             py::arg("q"))
         .def(
-<<<<<<< patch-2026-02-05-15-21
             "add_ext_force_velocity_dissipation",
             [](TConfig &self, Tscal eta) {
                 self.ext_force_config.add_velocity_dissipation(eta);
@@ -305,8 +304,6 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("eta"))
         .def(
-=======
->>>>>>> main
             "add_ext_force_vertical_disc_potential",
             [](TConfig &self, Tscal central_mass, Tscal R0) {
                 self.ext_force_config.add_vertical_disc_potential(central_mass, R0);
@@ -800,6 +797,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("field_name"),
             py::arg("pos_to_val"),
             py::arg("offset") = 0)
+        .def("overwrite_field_value_f64", &T::template overwrite_field_value<f64>)
+        .def("overwrite_field_value_f64_3", &T::template overwrite_field_value<f64_3>)
         .def("remap_positions", &T::remap_positions)
         //.def("set_field_value_lambda_f64_3",[](T&self,std::string field_name, const
         // std::function<f64_3 (Tscal, Tscal , Tscal)> pos_to_val){

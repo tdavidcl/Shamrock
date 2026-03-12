@@ -24,10 +24,7 @@
 #include "shammodels/common/modules/AddForceLenseThirring.hpp"
 #include "shammodels/common/modules/AddForceShearingBoxInertialPart.hpp"
 #include "shammodels/common/modules/AddForceShearingBoxNonInertial.hpp"
-<<<<<<< patch-2026-02-05-15-21
 #include "shammodels/common/modules/AddForceVelocityDissipation.hpp"
-=======
->>>>>>> main
 #include "shammodels/common/modules/AddForceVerticalDiscPotential.hpp"
 #include "shammodels/sph/modules/ExternalForces.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
@@ -238,13 +235,10 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::compute_ext_forc
                         shambase::to_shared(std::move(set_central_mass)),
                         shambase::to_shared(std::move(add_force_vertical_disc_potential))}));
 
-<<<<<<< patch-2026-02-05-15-21
         } else if (
             EF_VelocityDissipation *ext_force
             = std::get_if<EF_VelocityDissipation>(&var_force.val)) {
 
-=======
->>>>>>> main
         } else {
             shambase::throw_unimplemented("this force is not handled, yet ...");
         }

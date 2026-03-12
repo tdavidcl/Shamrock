@@ -31,6 +31,7 @@
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/modules/ComputeLoadBalanceValue.hpp"
 #include "shammodels/sph/modules/SPHSetup.hpp"
+#include "shampylib/PatchDataToPy.hpp"
 #include "shamrock/io/ShamrockDump.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/ReattributeDataUtility.hpp"
@@ -207,6 +208,44 @@ namespace shammodels::sph {
 
                     for (u32 i = 0; i < pdat.get_obj_cnt(); i++) {
                         acc[i * f_nvar + offset] = pos_to_val(acc_xyz[i]);
+                    }
+
+                    logger::raw_ln(acc);
+
+                    f.get_buf().copy_from_stdvec(acc);
+                });
+        }
+
+        template<class T>
+        inline void overwrite_field_value(
+            std::string field_name,
+            const std::function<std::vector<T>(py::dict)> field_compute,
+            const i32 offset) {
+
+            StackEntry stack_loc{};
+
+            PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
+
+            u32 ifield = sched.pdl_old().get_field_idx<T>(field_name);
+
+            sched.patch_data.for_each_patchdata(
+                [&](u64 patch_id, shamrock::patch::PatchDataLayer &pdat) {
+                    PatchDataField<T> &f = pdat.template get_field<T>(ifield);
+
+                    auto result = field_compute(shamrock::pdat_to_dic(pdat));
+
+                    if (result.size() != f.get_obj_cnt()) {
+                        throw shambase::make_except_with_loc<std::runtime_error>(shambase::format(
+                            "result.size() != f.get_obj_cnt() ({} != {})",
+                            result.size(),
+                            f.get_obj_cnt()));
+                    }
+
+                    auto f_nvar = f.get_nvar();
+                    auto acc    = f.get_buf().copy_to_stdvec();
+
+                    for (u32 i = 0; i < pdat.get_obj_cnt(); i++) {
+                        acc[i * f_nvar + offset] = result[i];
                     }
 
                     logger::raw_ln(acc);
@@ -942,9 +981,9 @@ namespace shammodels::sph {
                         * (1.
                            + sycl::sin(shambase::constants::pi<Tscal> / (2. * Hwarp) * (R - Rwarp)))
                         * sycl::sin(incl_rad));
-                    psi          = shambase::constants::pi<Tscal>
-                                   * Rwarp / (4. * Hwarp) * sycl::sin(incl_rad)
-                                   / sycl::sqrt(1. - (0.5 * sycl::pow(sycl::sin(incl_rad), 2)));
+                    psi = shambase::constants::pi<Tscal>
+                          * Rwarp / (4. * Hwarp) * sycl::sin(incl_rad)
+                          / sycl::sqrt(1. - (0.5 * sycl::pow(sycl::sin(incl_rad), 2)));
                     Tscal psimax = sycl::max(psimax, psi);
                     Tscal x      = pos[i].x();
                     Tscal y      = pos[i].y();

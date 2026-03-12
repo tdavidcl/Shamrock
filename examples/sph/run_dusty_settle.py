@@ -65,13 +65,6 @@ def func_rho_g(r):
     return rho_i * scaling_rho(r) - sum([func_rho_d_j(r, i) for i in range(ndust)])
 
 
-def func_s_j(r, idust):
-    rho_t = func_rho_t(r)
-    rho_d_j = [func_rho_d_j(r, i) for i in range(ndust)]
-    eps_j = rho_d_j[idust] / rho_t
-    return np.sqrt(rho_t * eps_j)
-
-
 cs_g = 1
 
 
@@ -83,7 +76,7 @@ def uint_g(r):
 
 ndust = 4
 rc = 0.25
-stopping_times = np.logspace(-4, -1, ndust) * omega_k(R0)
+stopping_times = np.logspace(-2, -1, ndust) * omega_k(R0)
 from scipy.special import erfinv
 
 bmin = (-box / 4, -box, -box / 4)
@@ -172,15 +165,6 @@ def f_remap(r):
 
 
 model.remap_positions(f_remap)
-
-
-for i in range(ndust):
-
-    def func_s(r):
-        return func_s_j(r, i)
-
-    model.set_field_value_lambda_f64("s_j", func_s, i)
-
 model.set_field_value_lambda_f64("uint", uint_g)
 
 
@@ -188,6 +172,19 @@ model.set_cfl_cour(0.1)
 model.set_cfl_force(0.1)
 
 model.timestep()
+
+def compute_sj_new(patchdata):
+    hpart = patchdata["hpart"]
+    rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
+
+    epsilon_target = 0.1 / ndust
+    s = np.sqrt(rho * epsilon_target)
+
+    return s
+
+
+
+
 
 
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
@@ -197,6 +194,10 @@ for j in range(1000):
     if j > 0:
         tnext += 0.02
         model.evolve_until(tnext)
+
+        if(j == 70):
+            for k in range(ndust):
+                model.overwrite_field_value_f64("s_j",compute_sj_new,k)
 
     dic = ctx.collect_data()
     print(dic["s_j"])
