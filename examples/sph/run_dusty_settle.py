@@ -76,13 +76,14 @@ def uint_g(r):
 
 ndust = 4
 rc = 0.25
-stopping_times = np.logspace(-2, -1, ndust) * omega_k(R0)
+stopping_times = np.logspace(-3, 0, ndust) * omega_k(R0) 
+print(stopping_times, omega_k(R0))
 from scipy.special import erfinv
 
 bmin = (-box / 4, -box, -box / 4)
 bmax = (box / 4, box, box / 4)
 
-N_target = 1e5
+N_target = 1e4
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -195,7 +196,7 @@ for j in range(1000):
         tnext += 0.02
         model.evolve_until(tnext)
 
-        if(j == 70):
+        if(j == 100):
             for k in range(ndust):
                 model.overwrite_field_value_f64("s_j",compute_sj_new,k)
 
@@ -229,6 +230,7 @@ for j in range(1000):
         axs[0].scatter(y, s_j[:, i] ** 2, label=f"rho_j_{i}", s=sz)
     # axs[0].scatter(y,estimated_rho)
 
+    axs[0].set_yscale('log')
     axs[0].legend()
     for i in range(ndust):
         axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}", s=sz)
