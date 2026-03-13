@@ -48,9 +48,9 @@ namespace shamcomm {
         return {};
     }
 
-    bool is_main_node_rank() {
+    bool is_main_node_rank(u32 main_local_rank_id) {
         auto loc_r = node_local_rank();
-        return (loc_r) ? *loc_r == 0 : true;
+        return (loc_r) ? *loc_r == main_local_rank_id : true;
     }
 
 } // namespace shamcomm
