@@ -24,7 +24,7 @@ namespace shamcomm {
     // fetch the current MPI rank within the current node
     std::optional<u32> node_local_rank();
 
-    // return node_local_rank() == main_local_rank_id if available true otherwise
+    // returns true if node_local_rank() is not available, or if it matches main_local_rank_id
     bool is_main_node_rank(u32 main_local_rank_id = 0);
 
 } // namespace shamcomm
