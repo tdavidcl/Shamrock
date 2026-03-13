@@ -76,14 +76,15 @@ def uint_g(r):
 
 ndust = 4
 rc = 0.25
-stopping_times = np.logspace(-3, 0, ndust) * omega_k(R0) 
+stokes = np.logspace(-3, 0, ndust)
+stopping_times = stokes / omega_k(R0) 
 print(stopping_times, omega_k(R0))
 from scipy.special import erfinv
 
 bmin = (-box / 4, -box, -box / 4)
 bmax = (box / 4, box, box / 4)
 
-N_target = 1e4
+N_target = 1e5
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -193,10 +194,10 @@ def compute_sj_new(patchdata):
 tnext = 0
 for j in range(1000):
     if j > 0:
-        tnext += 0.02
+        tnext += 0.1
         model.evolve_until(tnext)
 
-        if(j == 100):
+        if(j == 20):
             for k in range(ndust):
                 model.overwrite_field_value_f64("s_j",compute_sj_new,k)
 
@@ -224,24 +225,32 @@ for j in range(1000):
 
     sz = 2
 
-    fig, axs = plt.subplots(nrows=1, ncols=4, figsize=(15, 5))
-    axs[0].scatter(y, rho, label="rho", s=sz)
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5))
+    time = model.get_time()
+    fig.suptitle(f"t = {time:.2f}")
+
+    fig.subplots_adjust(left=0.07, right=0.98, wspace=0.4)
+
+    axs[0].scatter(y, rho, label="gas", s=sz)
     for i in range(ndust):
-        axs[0].scatter(y, s_j[:, i] ** 2, label=f"rho_j_{i}", s=sz)
+        axs[0].scatter(y, s_j[:, i] ** 2, label=f"dust {i} ts = {stopping_times[i]:.2f}", s=sz)
     # axs[0].scatter(y,estimated_rho)
+    axs[0].set_ylabel(r"$\rho$")
+    axs[0].set_xlabel(r"$y$")
 
     axs[0].set_yscale('log')
     axs[0].legend()
     for i in range(ndust):
-        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"eps_j_{i}", s=sz)
+        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"dust {i} ts = {stopping_times[i]:.2f}", s=sz)
+    axs[1].set_ylabel(r"$\epsilon_j$")
+    axs[1].set_xlabel(r"$y$")
     axs[1].legend()
 
-    axs[2].scatter(y, cs, label="soundspeed", s=sz)
-    axs[2].legend()
-
     for i in range(ndust):
-        axs[3].scatter(y, ds_j_dt[:, i], label=f"ds_j_dt_{i}", s=sz)
-    axs[3].legend()
+        axs[2].scatter(y, ds_j_dt[:, i], label=f"dust {i} ts = {stopping_times[i]:.2f}", s=sz)
+    axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
+    axs[2].set_xlabel(r"$y$")
+    axs[2].legend()
 
     plt.savefig(f"mono_{j}.png")
     model.do_vtk_dump(f"dump_stratif_{j}.vtk", True)
