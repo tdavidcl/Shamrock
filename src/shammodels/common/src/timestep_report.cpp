@@ -18,6 +18,7 @@
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
 #include "shambase/numeric_limits.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambase/tabulate.hpp"
 #include "shamalgs/collective/reduction.hpp"
@@ -40,6 +41,8 @@ std::string shammodels::report_perf_timestep(
     size_t max_mem_device,
     size_t max_mem_host,
     std::optional<f64> rank_energy_consummed) {
+
+    __shamrock_stack_entry();
 
     std::vector<f64> rate_all_ranks              = shamalgs::collective::gather(rate);
     std::vector<u64> nobj_all_ranks              = shamalgs::collective::gather(nobj);
@@ -87,9 +90,9 @@ std::string shammodels::report_perf_timestep(
 
     static constexpr u32 cols_count = 10;
 
-    using Table = shambase::table<cols_count>;
+    using Table = shambase::table;
 
-    Table table;
+    Table table(cols_count);
 
     table.add_double_rule();
     table.add_data(
@@ -124,7 +127,16 @@ std::string shammodels::report_perf_timestep(
     }
     if (shamcomm::world_size() > 1) {
         table.add_rulled_data(
-            {"", "<sum N/max t>", "<sum>", "<sum>", "<max>", "<avg>", "<avg>", "<sum>", "<sum>"});
+            {"",
+             "<sum N/max t>",
+             "<sum>",
+             "<sum>",
+             "<max>",
+             "<avg>",
+             "<avg>",
+             "<sum>",
+             "<sum>",
+             "<sum>"});
         table.add_data(
             {"all",
              shambase::format("{:.4e}", f64(obj_total) / max_t),
