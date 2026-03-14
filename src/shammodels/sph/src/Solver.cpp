@@ -2693,7 +2693,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
          rank_count,             // u64 rank_count;
          rate,                   // f64 rate;
          tstep.elasped_sec(),    // f64 elasped_sec;
-         shambase::details::get_wtime()});
+         shambase::details::get_wtime(),
+         system_metrics_delta});
 
     storage.timings_details.reset();
 
