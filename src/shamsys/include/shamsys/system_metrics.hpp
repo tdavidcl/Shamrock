@@ -25,8 +25,8 @@
 #include <memory>
 #include <optional>
 
-std::optional<std::string> SHAMSYS_SYSTEM_METRICS_REPORTER_NAME = shamcmdopt::getenv_str_register(
-    "SHAMSYS_SYSTEM_METRICS_REPORTER_NAME", "The name of the system metrics reporter to use");
+std::optional<std::string> SHAM_SYSTEM_METRICS_REPORTER = shamcmdopt::getenv_str_register(
+    "SHAM_SYSTEM_METRICS_REPORTER", "The name of the system metrics reporter to use");
 
 namespace shamsys {
 
@@ -97,8 +97,8 @@ namespace shamsys {
     }
 
     inline std::unique_ptr<ISystemMetricReporter> make_reporter() {
-        if (SHAMSYS_SYSTEM_METRICS_REPORTER_NAME) {
-            return make_reporter(*SHAMSYS_SYSTEM_METRICS_REPORTER_NAME);
+        if (SHAM_SYSTEM_METRICS_REPORTER) {
+            return make_reporter(*SHAM_SYSTEM_METRICS_REPORTER);
         }
         return std::make_unique<NoopSystemMetricReporter>();
     }

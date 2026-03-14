@@ -29,6 +29,7 @@
 #include <numeric>
 #include <string>
 #include <variant>
+#include <vector>
 
 std::string shammodels::report_perf_timestep(
     f64 rate,
@@ -40,7 +41,8 @@ std::string shammodels::report_perf_timestep(
     f64 alloc_time_host,
     size_t max_mem_device,
     size_t max_mem_host,
-    std::optional<f64> rank_energy_consummed) {
+    std::optional<f64> rank_energy_consummed,
+    bool report_power_usage) {
 
     __shamrock_stack_entry();
 
@@ -53,8 +55,11 @@ std::string shammodels::report_perf_timestep(
     std::vector<f64> alloc_time_host_all_ranks   = shamalgs::collective::gather(alloc_time_host);
     std::vector<size_t> max_mem_device_all_ranks = shamalgs::collective::gather(max_mem_device);
     std::vector<size_t> max_mem_host_all_ranks   = shamalgs::collective::gather(max_mem_host);
-    std::vector<f64> rank_energy_consummed_all_ranks = shamalgs::collective::gather(
-        (rank_energy_consummed) ? rank_energy_consummed.value() : 0._f64);
+    std::vector<f64> rank_energy_consummed_all_ranks
+        = (report_power_usage)
+              ? shamalgs::collective::gather(
+                    (rank_energy_consummed) ? rank_energy_consummed.value() : 0._f64)
+              : std::vector<f64>{};
 
     if (shamcomm::world_rank() != 0) {
         return "";
@@ -75,83 +80,89 @@ std::string shammodels::report_perf_timestep(
     size_t sum_mem_host_total
         = std::accumulate(max_mem_host_all_ranks.begin(), max_mem_host_all_ranks.end(), 0_u64);
 
-    std::vector<std::string> rank_power_step_all_ranks = {};
-    for (u32 i = 0; i < shamcomm::world_size(); i++) {
-        if (rank_energy_consummed_all_ranks[i] > 0._f64) {
-            rank_power_step_all_ranks.push_back(
-                shambase::format("{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / max_t));
-        } else {
-            rank_power_step_all_ranks.push_back("N/A");
+    std::vector<std::string> rank_power_step_all_ranks;
+    std::string sum_power_step;
+    if (report_power_usage) {
+        for (u32 i = 0; i < shamcomm::world_size(); i++) {
+            if (rank_energy_consummed_all_ranks[i] > 0._f64) {
+                rank_power_step_all_ranks.push_back(shambase::format(
+                    "{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / max_t));
+            } else {
+                rank_power_step_all_ranks.push_back("N/A");
+            }
         }
+        f64 sum_rank_energy_consummed = std::accumulate(
+            rank_energy_consummed_all_ranks.begin(), rank_energy_consummed_all_ranks.end(), 0._f64);
+        sum_power_step = shambase::format("{:.1e} W", sum_rank_energy_consummed / max_t);
     }
-    f64 sum_rank_energy_consummed = std::accumulate(
-        rank_energy_consummed_all_ranks.begin(), rank_energy_consummed_all_ranks.end(), 0._f64);
-    std::string sum_power_step = shambase::format("{:.1e} W", sum_rank_energy_consummed / max_t);
 
-    static constexpr u32 cols_count = 10;
+    u32 cols_count = report_power_usage ? 10_u32 : 9_u32;
 
     using Table = shambase::table;
 
     Table table(cols_count);
 
+    std::vector<std::string> header = {"rank",
+        "rate (N/s)",
+        "Nobj",
+        "Npatch",
+        "tstep",
+        "MPI",
+        "alloc d% h%",
+        "mem (max) d",
+        "mem (max) h"};
+    if (report_power_usage) {
+        header.push_back("power");
+    }
+
     table.add_double_rule();
-    table.add_data(
-        {"rank",
-         "rate (N/s)",
-         "Nobj",
-         "Npatch",
-         "tstep",
-         "MPI",
-         "alloc d% h%",
-         "mem (max) d",
-         "mem (max) h",
-         "power"},
-        Table::center);
+    table.add_data(header, Table::center);
     table.add_double_rule();
     for (u32 i = 0; i < shamcomm::world_size(); i++) {
-        table.add_data(
-            {shambase::format("{:<4}", i),
-             shambase::format("{:.4e}", rate_all_ranks[i]),
-             shambase::format("{:}", nobj_all_ranks[i]),
-             shambase::format("{:}", npatch_all_ranks[i]),
-             shambase::format("{:.3e}", tcompute_all_ranks[i]),
-             shambase::format("{:.1f}%", 100 * (mpi_timer_all_ranks[i] / tcompute_all_ranks[i])),
-             shambase::format(
-                 "{:>.1f}% {:<.1f}%",
-                 100 * (alloc_time_device_all_ranks[i] / tcompute_all_ranks[i]),
-                 100 * (alloc_time_host_all_ranks[i] / tcompute_all_ranks[i])),
-             shambase::format("{}", shambase::readable_sizeof(max_mem_device_all_ranks[i])),
-             shambase::format("{}", shambase::readable_sizeof(max_mem_host_all_ranks[i])),
-             rank_power_step_all_ranks[i]},
-            Table::right);
+        std::vector<std::string> row = {
+            shambase::format("{:<4}", i),
+            shambase::format("{:.4e}", rate_all_ranks[i]),
+            shambase::format("{:}", nobj_all_ranks[i]),
+            shambase::format("{:}", npatch_all_ranks[i]),
+            shambase::format("{:.3e}", tcompute_all_ranks[i]),
+            shambase::format("{:.1f}%", 100 * (mpi_timer_all_ranks[i] / tcompute_all_ranks[i])),
+            shambase::format(
+                "{:>.1f}% {:<.1f}%",
+                100 * (alloc_time_device_all_ranks[i] / tcompute_all_ranks[i]),
+                100 * (alloc_time_host_all_ranks[i] / tcompute_all_ranks[i])),
+            shambase::format("{}", shambase::readable_sizeof(max_mem_device_all_ranks[i])),
+            shambase::format("{}", shambase::readable_sizeof(max_mem_host_all_ranks[i])),
+        };
+        if (report_power_usage) {
+            row.push_back(rank_power_step_all_ranks[i]);
+        }
+        table.add_data(row, Table::right);
     }
     if (shamcomm::world_size() > 1) {
-        table.add_rulled_data(
-            {"",
-             "<sum N/max t>",
-             "<sum>",
-             "<sum>",
-             "<max>",
-             "<avg>",
-             "<avg>",
-             "<sum>",
-             "<sum>",
-             "<sum>"});
-        table.add_data(
-            {"all",
-             shambase::format("{:.4e}", f64(obj_total) / max_t),
-             shambase::format("{:}", obj_total),
-             shambase::format("{:}", npatch_total),
-             shambase::format("{:.3e}", max_t),
-             shambase::format("{:.1f}%", 100 * (sum_mpi / sum_t)),
-             shambase::format(
-                 "{:>.1f}% {:<.1f}%",
-                 100 * (sum_alloc_device / sum_t),
-                 100 * (sum_alloc_host / sum_t)),
-             shambase::format("{}", shambase::readable_sizeof(sum_mem_device_total)),
-             shambase::format("{}", shambase::readable_sizeof(sum_mem_host_total)),
-             sum_power_step},
-            Table::right);
+        std::vector<std::string> ruled = {"", "<sum N/max t>", "<sum>", "<sum>", "<max>", "<avg>",
+            "<avg>", "<sum>", "<sum>"};
+        if (report_power_usage) {
+            ruled.push_back("<sum>");
+        }
+        table.add_rulled_data(ruled);
+        std::vector<std::string> all_row = {
+            "all",
+            shambase::format("{:.4e}", f64(obj_total) / max_t),
+            shambase::format("{:}", obj_total),
+            shambase::format("{:}", npatch_total),
+            shambase::format("{:.3e}", max_t),
+            shambase::format("{:.1f}%", 100 * (sum_mpi / sum_t)),
+            shambase::format(
+                "{:>.1f}% {:<.1f}%",
+                100 * (sum_alloc_device / sum_t),
+                100 * (sum_alloc_host / sum_t)),
+            shambase::format("{}", shambase::readable_sizeof(sum_mem_device_total)),
+            shambase::format("{}", shambase::readable_sizeof(sum_mem_host_total)),
+        };
+        if (report_power_usage) {
+            all_row.push_back(sum_power_step);
+        }
+        table.add_data(all_row, Table::right);
     }
     table.add_rule();
 
