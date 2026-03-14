@@ -15,8 +15,8 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambase/popen.hpp"
-#include "shamsys/system_metrics.hpp"
 #include "shamcomm/local_rank.hpp"
+#include "shamsys/system_metrics.hpp"
 #include <cstdlib>
 
 namespace shamsys {
