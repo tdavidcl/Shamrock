@@ -43,6 +43,9 @@ namespace shamsys {
         return shambase::get_check_ref(current_reporter()).get_rank_energy_consummed();
     }
 
+    // Returns true if the current reporter is not a NoopSystemMetricReporter (defined below).
+    bool has_reporter();
+
 } // namespace shamsys
 
 namespace shamsys {
@@ -75,6 +78,15 @@ namespace shamsys {
         std::optional<f64> get_rank_energy_consummed() override { return std::nullopt; }
     };
 
+    inline bool has_reporter() {
+        auto &reporter = current_reporter();
+        if (!reporter) {
+            return false;
+        }
+        // dynamic_cast returns nullptr if the cast fails, so we check for that
+        return dynamic_cast<NoopSystemMetricReporter *>(reporter.get()) == nullptr;
+    }
+
     inline std::unique_ptr<ISystemMetricReporter> make_reporter(std::string_view reporter_name) {
         if (reporter_name == "aurora") {
             return std::make_unique<AuroraSystemMetricReporter>();
@@ -91,10 +103,16 @@ namespace shamsys {
         return std::make_unique<NoopSystemMetricReporter>();
     }
 
+    /// test that there is no crashes
+    inline void test_reporter(std::unique_ptr<ISystemMetricReporter> &reporter) {
+        shambase::get_check_ref(reporter).get_rank_energy_consummed();
+    }
+
     inline std::unique_ptr<ISystemMetricReporter> &current_reporter() {
         static std::unique_ptr<ISystemMetricReporter> reporter = nullptr;
         if (!reporter) {
             reporter = make_reporter();
+            test_reporter(reporter);
         }
         return reporter;
     }
