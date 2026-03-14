@@ -96,6 +96,7 @@
 #include "shamrock/solvergraph/SolverGraph.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include "shamsys/system_metrics.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
 #include <memory>
@@ -1580,6 +1581,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     sham::MemPerfInfos mem_perf_infos_start = sham::details::get_mem_perf_info();
     f64 mpi_timer_start                     = shamcomm::mpi::get_timer("total");
+    std::optional<u64> rank_energy_consummed_start
+        = shambase::get_check_ref(shamsys::current_reporter()).get_rank_energy_consummed();
 
     Tscal t_current = solver_config.get_time();
     Tscal dt        = solver_config.get_dt_sph();
@@ -2647,6 +2650,13 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     tstep.end();
 
     sham::MemPerfInfos mem_perf_infos_end = sham::details::get_mem_perf_info();
+    std::optional<u64> rank_energy_consummed_end
+        = shambase::get_check_ref(shamsys::current_reporter()).get_rank_energy_consummed();
+    std::optional<u64> rank_energy_consummed_delta = {};
+    if (rank_energy_consummed_end && rank_energy_consummed_start) {
+        rank_energy_consummed_delta
+            = rank_energy_consummed_end.value() - rank_energy_consummed_start.value();
+    }
 
     f64 delta_mpi_timer = shamcomm::mpi::get_timer("total") - mpi_timer_start;
     f64 t_dev_alloc
@@ -2671,7 +2681,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         t_dev_alloc,
         t_host_alloc,
         mem_perf_infos_end.max_allocated_byte_device,
-        mem_perf_infos_end.max_allocated_byte_host);
+        mem_perf_infos_end.max_allocated_byte_host,
+        rank_energy_consummed_delta);
 
     if (shamcomm::world_rank() == 0) {
         logger::info_ln("sph::Model", log_step);

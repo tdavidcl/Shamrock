@@ -31,6 +31,7 @@ namespace shammodels {
         f64 alloc_time_device,
         f64 alloc_time_host,
         size_t max_mem_device,
-        size_t max_mem_host);
+        size_t max_mem_host,
+        std::optional<u64> rank_energy_consummed = std::nullopt);
 
 } // namespace shammodels
