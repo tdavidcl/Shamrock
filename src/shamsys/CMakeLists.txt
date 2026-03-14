@@ -22,14 +22,15 @@ set(Sources
         src/legacy/sycl_handler.cpp
         src/legacy/sycl_mpi_interop.cpp
         src/stacktrace_log.cpp
+        src/system_metrics.cpp
     )
 
 if(SHAMROCK_USE_SHARED_LIB)
-message("-- adding shamsys target (Shared lib)")
-add_library(shamsys SHARED ${Sources})
+    message("-- adding shamsys target (Shared lib)")
+    add_library(shamsys SHARED ${Sources})
 else()
-message("-- adding shamsys target (object lib)")
-add_library(shamsys OBJECT ${Sources})
+    message("-- adding shamsys target (object lib)")
+    add_library(shamsys OBJECT ${Sources})
 endif()
 
 add_library(shamsys::shamsys ALIAS shamsys)
