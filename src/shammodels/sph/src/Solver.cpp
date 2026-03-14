@@ -1579,10 +1579,9 @@ void shammodels::sph::Solver<Tvec, Kern>::update_sync_load_values() {
 template<class Tvec, template<class> class Kern>
 shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() {
 
-    sham::MemPerfInfos mem_perf_infos_start = sham::details::get_mem_perf_info();
-    f64 mpi_timer_start                     = shamcomm::mpi::get_timer("total");
-    std::optional<u64> rank_energy_consummed_start
-        = shambase::get_check_ref(shamsys::current_reporter()).get_rank_energy_consummed();
+    sham::MemPerfInfos mem_perf_infos_start        = sham::details::get_mem_perf_info();
+    f64 mpi_timer_start                            = shamcomm::mpi::get_timer("total");
+    std::optional<u64> rank_energy_consummed_start = shamsys::get_rank_energy_consummed();
 
     Tscal t_current = solver_config.get_time();
     Tscal dt        = solver_config.get_dt_sph();
@@ -2649,9 +2648,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     tstep.end();
 
-    sham::MemPerfInfos mem_perf_infos_end = sham::details::get_mem_perf_info();
-    std::optional<u64> rank_energy_consummed_end
-        = shambase::get_check_ref(shamsys::current_reporter()).get_rank_energy_consummed();
+    sham::MemPerfInfos mem_perf_infos_end          = sham::details::get_mem_perf_info();
+    std::optional<u64> rank_energy_consummed_end   = shamsys::get_rank_energy_consummed();
     std::optional<u64> rank_energy_consummed_delta = {};
     if (rank_energy_consummed_end && rank_energy_consummed_start) {
         rank_energy_consummed_delta

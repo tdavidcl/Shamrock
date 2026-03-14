@@ -16,6 +16,7 @@
  */
 
 #include "shambase/aliases_int.hpp"
+#include "shambase/memory.hpp"
 #include "shambase/popen.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcomm/local_rank.hpp"
@@ -35,6 +36,10 @@ namespace shamsys {
     };
 
     std::unique_ptr<ISystemMetricReporter> &current_reporter();
+
+    inline std::optional<u64> get_rank_energy_consummed() {
+        return shambase::get_check_ref(current_reporter()).get_rank_energy_consummed();
+    }
 
 } // namespace shamsys
 
