@@ -41,7 +41,7 @@ std::string shammodels::report_perf_timestep(
     f64 alloc_time_host,
     size_t max_mem_device,
     size_t max_mem_host,
-    std::optional<f64> rank_energy_consummed,
+    shamsys::SystemMetrics system_metrics,
     bool report_power_usage) {
 
     __shamrock_stack_entry();
@@ -55,11 +55,20 @@ std::string shammodels::report_perf_timestep(
     std::vector<f64> alloc_time_host_all_ranks   = shamalgs::collective::gather(alloc_time_host);
     std::vector<size_t> max_mem_device_all_ranks = shamalgs::collective::gather(max_mem_device);
     std::vector<size_t> max_mem_host_all_ranks   = shamalgs::collective::gather(max_mem_host);
+
+    auto optional_gather_power = [&](const std::optional<f64> &value) -> std::vector<f64> {
+        return (report_power_usage) ? shamalgs::collective::gather(value ? value.value() : 0._f64)
+                                    : std::vector<f64>{};
+    };
+
     std::vector<f64> rank_energy_consummed_all_ranks
-        = (report_power_usage)
-              ? shamalgs::collective::gather(
-                    (rank_energy_consummed) ? rank_energy_consummed.value() : 0._f64)
-              : std::vector<f64>{};
+        = optional_gather_power(system_metrics.rank_energy_consummed);
+    std::vector<f64> gpu_energy_consummed_all_ranks
+        = optional_gather_power(system_metrics.gpu_energy_consummed);
+    std::vector<f64> cpu_energy_consummed_all_ranks
+        = optional_gather_power(system_metrics.cpu_energy_consummed);
+    std::vector<f64> dram_energy_consummed_all_ranks
+        = optional_gather_power(system_metrics.dram_energy_consummed);
 
     if (shamcomm::world_rank() != 0) {
         return "";
@@ -81,38 +90,100 @@ std::string shammodels::report_perf_timestep(
         = std::accumulate(max_mem_host_all_ranks.begin(), max_mem_host_all_ranks.end(), 0_u64);
 
     std::vector<std::string> rank_power_step_all_ranks;
+    std::vector<std::string> rank_gpu_power_step_all_ranks;
+    std::vector<std::string> rank_cpu_power_step_all_ranks;
+    std::vector<std::string> rank_dram_power_step_all_ranks;
     std::string sum_power_step;
+    std::string sum_gpu_power_step;
+    std::string sum_cpu_power_step;
+    std::string sum_dram_power_step;
     if (report_power_usage) {
         for (u32 i = 0; i < shamcomm::world_size(); i++) {
             if (rank_energy_consummed_all_ranks[i] > 0._f64) {
-                rank_power_step_all_ranks.push_back(shambase::format(
-                    "{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / max_t));
+                rank_power_step_all_ranks.push_back(
+                    shambase::format("{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / max_t));
             } else {
                 rank_power_step_all_ranks.push_back("N/A");
+            }
+
+            if (gpu_energy_consummed_all_ranks[i] > 0._f64) {
+                rank_gpu_power_step_all_ranks.push_back(
+                    shambase::format("{:.1f} W", f64(gpu_energy_consummed_all_ranks[i]) / max_t));
+            } else {
+                rank_gpu_power_step_all_ranks.push_back("N/A");
+            }
+
+            if (cpu_energy_consummed_all_ranks[i] > 0._f64) {
+                rank_cpu_power_step_all_ranks.push_back(
+                    shambase::format("{:.1f} W", f64(cpu_energy_consummed_all_ranks[i]) / max_t));
+            } else {
+                rank_cpu_power_step_all_ranks.push_back("N/A");
+            }
+
+            if (dram_energy_consummed_all_ranks[i] > 0._f64) {
+                rank_dram_power_step_all_ranks.push_back(
+                    shambase::format("{:.1f} W", f64(dram_energy_consummed_all_ranks[i]) / max_t));
+            } else {
+                rank_dram_power_step_all_ranks.push_back("N/A");
             }
         }
         f64 sum_rank_energy_consummed = std::accumulate(
             rank_energy_consummed_all_ranks.begin(), rank_energy_consummed_all_ranks.end(), 0._f64);
-        sum_power_step = shambase::format("{:.1e} W", sum_rank_energy_consummed / max_t);
+        f64 sum_gpu_energy_consummed = std::accumulate(
+            gpu_energy_consummed_all_ranks.begin(), gpu_energy_consummed_all_ranks.end(), 0._f64);
+        f64 sum_cpu_energy_consummed = std::accumulate(
+            cpu_energy_consummed_all_ranks.begin(), cpu_energy_consummed_all_ranks.end(), 0._f64);
+        f64 sum_dram_energy_consummed = std::accumulate(
+            dram_energy_consummed_all_ranks.begin(), dram_energy_consummed_all_ranks.end(), 0._f64);
+        sum_power_step      = shambase::format("{:.1e} W", sum_rank_energy_consummed / max_t);
+        sum_gpu_power_step  = shambase::format("{:.1e} W", sum_gpu_energy_consummed / max_t);
+        sum_cpu_power_step  = shambase::format("{:.1e} W", sum_cpu_energy_consummed / max_t);
+        sum_dram_power_step = shambase::format("{:.1e} W", sum_dram_energy_consummed / max_t);
     }
 
-    u32 cols_count = report_power_usage ? 10_u32 : 9_u32;
+    u32 cols_count = 9_u32;
+    if (report_power_usage) {
+        if (shamsys::support_rank_energy_consummed()) {
+            cols_count += 1_u32;
+        }
+        if (shamsys::support_gpu_energy_consummed()) {
+            cols_count += 1_u32;
+        }
+        if (shamsys::support_cpu_energy_consummed()) {
+            cols_count += 1_u32;
+        }
+        if (shamsys::support_dram_energy_consummed()) {
+            cols_count += 1_u32;
+        }
+    }
 
     using Table = shambase::table;
 
     Table table(cols_count);
 
-    std::vector<std::string> header = {"rank",
-        "rate (N/s)",
-        "Nobj",
-        "Npatch",
-        "tstep",
-        "MPI",
-        "alloc d% h%",
-        "mem (max) d",
-        "mem (max) h"};
+    std::vector<std::string> header
+        = {"rank",
+           "rate (N/s)",
+           "Nobj",
+           "Npatch",
+           "tstep",
+           "MPI",
+           "alloc d% h%",
+           "mem (max) d",
+           "mem (max) h"};
     if (report_power_usage) {
-        header.push_back("power");
+        if (shamsys::support_rank_energy_consummed()) {
+            header.push_back("power");
+        }
+        if (shamsys::support_gpu_energy_consummed()) {
+            header.push_back("gpu power");
+        }
+        if (shamsys::support_cpu_energy_consummed()) {
+            header.push_back("cpu power");
+        }
+        if (shamsys::support_dram_energy_consummed()) {
+            header.push_back("dram power");
+        }
     }
 
     table.add_double_rule();
@@ -134,15 +205,37 @@ std::string shammodels::report_perf_timestep(
             shambase::format("{}", shambase::readable_sizeof(max_mem_host_all_ranks[i])),
         };
         if (report_power_usage) {
-            row.push_back(rank_power_step_all_ranks[i]);
+            if (shamsys::support_rank_energy_consummed()) {
+                row.push_back(rank_power_step_all_ranks[i]);
+            }
+            if (shamsys::support_gpu_energy_consummed()) {
+                row.push_back(rank_gpu_power_step_all_ranks[i]);
+            }
+            if (shamsys::support_cpu_energy_consummed()) {
+                row.push_back(rank_cpu_power_step_all_ranks[i]);
+            }
+            if (shamsys::support_dram_energy_consummed()) {
+                row.push_back(rank_dram_power_step_all_ranks[i]);
+            }
         }
         table.add_data(row, Table::right);
     }
     if (shamcomm::world_size() > 1) {
-        std::vector<std::string> ruled = {"", "<sum N/max t>", "<sum>", "<sum>", "<max>", "<avg>",
-            "<avg>", "<sum>", "<sum>"};
+        std::vector<std::string> ruled
+            = {"", "<sum N/max t>", "<sum>", "<sum>", "<max>", "<avg>", "<avg>", "<sum>", "<sum>"};
         if (report_power_usage) {
-            ruled.push_back("<sum>");
+            if (shamsys::support_rank_energy_consummed()) {
+                ruled.push_back("<sum>");
+            }
+            if (shamsys::support_gpu_energy_consummed()) {
+                ruled.push_back("<sum>");
+            }
+            if (shamsys::support_cpu_energy_consummed()) {
+                ruled.push_back("<sum>");
+            }
+            if (shamsys::support_dram_energy_consummed()) {
+                ruled.push_back("<sum>");
+            }
         }
         table.add_rulled_data(ruled);
         std::vector<std::string> all_row = {
@@ -160,7 +253,18 @@ std::string shammodels::report_perf_timestep(
             shambase::format("{}", shambase::readable_sizeof(sum_mem_host_total)),
         };
         if (report_power_usage) {
-            all_row.push_back(sum_power_step);
+            if (shamsys::support_rank_energy_consummed()) {
+                all_row.push_back(sum_power_step);
+            }
+            if (shamsys::support_gpu_energy_consummed()) {
+                all_row.push_back(sum_gpu_power_step);
+            }
+            if (shamsys::support_cpu_energy_consummed()) {
+                all_row.push_back(sum_cpu_power_step);
+            }
+            if (shamsys::support_dram_energy_consummed()) {
+                all_row.push_back(sum_dram_power_step);
+            }
         }
         table.add_data(all_row, Table::right);
     }

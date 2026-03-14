@@ -1579,9 +1579,9 @@ void shammodels::sph::Solver<Tvec, Kern>::update_sync_load_values() {
 template<class Tvec, template<class> class Kern>
 shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() {
 
-    sham::MemPerfInfos mem_perf_infos_start        = sham::details::get_mem_perf_info();
-    f64 mpi_timer_start                            = shamcomm::mpi::get_timer("total");
-    std::optional<f64> rank_energy_consummed_start = shamsys::get_rank_energy_consummed();
+    sham::MemPerfInfos mem_perf_infos_start     = sham::details::get_mem_perf_info();
+    f64 mpi_timer_start                         = shamcomm::mpi::get_timer("total");
+    shamsys::SystemMetrics system_metrics_start = shamsys::get_system_metrics();
 
     Tscal t_current = solver_config.get_time();
     Tscal dt        = solver_config.get_dt_sph();
@@ -2468,8 +2468,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 auto cfl_dt = cfl_dt_buf.get_write_access(depends_list);
 
                 auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                    Tscal C_cour = solver_config.cfl_config.cfl_cour
-                                   * solver_config.time_state.cfl_multiplier;
+                    Tscal C_cour  = solver_config.cfl_config.cfl_cour
+                                    * solver_config.time_state.cfl_multiplier;
                     Tscal C_force = solver_config.cfl_config.cfl_force
                                     * solver_config.time_state.cfl_multiplier;
 
@@ -2648,13 +2648,10 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     tstep.end();
 
-    sham::MemPerfInfos mem_perf_infos_end          = sham::details::get_mem_perf_info();
-    std::optional<f64> rank_energy_consummed_end   = shamsys::get_rank_energy_consummed();
-    std::optional<f64> rank_energy_consummed_delta = {};
-    if (rank_energy_consummed_end && rank_energy_consummed_start) {
-        rank_energy_consummed_delta
-            = rank_energy_consummed_end.value() - rank_energy_consummed_start.value();
-    }
+    sham::MemPerfInfos mem_perf_infos_end        = sham::details::get_mem_perf_info();
+    std::optional<f64> rank_energy_consummed_end = shamsys::get_rank_energy_consummed();
+    shamsys::SystemMetrics system_metrics_end    = shamsys::get_system_metrics();
+    shamsys::SystemMetrics system_metrics_delta  = system_metrics_end - system_metrics_start;
 
     f64 delta_mpi_timer = shamcomm::mpi::get_timer("total") - mpi_timer_start;
     f64 t_dev_alloc
@@ -2680,7 +2677,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         t_host_alloc,
         mem_perf_infos_end.max_allocated_byte_device,
         mem_perf_infos_end.max_allocated_byte_host,
-        rank_energy_consummed_delta,
+        system_metrics_delta,
         shamsys::has_reporter());
 
     if (shamcomm::world_rank() == 0) {

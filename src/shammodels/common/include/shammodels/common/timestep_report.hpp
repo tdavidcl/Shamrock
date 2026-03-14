@@ -18,6 +18,7 @@
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
+#include "shamsys/system_metrics.hpp"
 #include <optional>
 #include <string>
 
@@ -33,7 +34,7 @@ namespace shammodels {
         f64 alloc_time_host,
         size_t max_mem_device,
         size_t max_mem_host,
-        std::optional<f64> rank_energy_consummed = std::nullopt,
-        bool report_power_usage                  = false);
+        shamsys::SystemMetrics system_metrics = {},
+        bool report_power_usage               = false);
 
 } // namespace shammodels
