@@ -258,7 +258,7 @@ namespace shamsys {
                 f64 consumed_energy       = input.rank_energy_consummed.value();
                 f64 power                 = consumed_energy / input.wall_time;
                 ret.rank_power            = shambase::format("{:.1f} W", power);
-                ret.rank_energy_consummed = shambase::format("{:.1f} W", consumed_energy);
+                ret.rank_energy_consummed = shambase::format("{:.1f} J", consumed_energy);
             } else {
                 ret.rank_power            = "N/A";
                 ret.rank_energy_consummed = "N/A";
@@ -269,7 +269,7 @@ namespace shamsys {
                 f64 consumed_energy      = input.gpu_energy_consummed.value();
                 f64 power                = consumed_energy / input.wall_time;
                 ret.gpu_power            = shambase::format("{:.1f} W", power);
-                ret.gpu_energy_consummed = shambase::format("{:.1f} W", consumed_energy);
+                ret.gpu_energy_consummed = shambase::format("{:.1f} J", consumed_energy);
             } else {
                 ret.gpu_power            = "N/A";
                 ret.gpu_energy_consummed = "N/A";
@@ -280,7 +280,7 @@ namespace shamsys {
                 f64 consumed_energy      = input.cpu_energy_consummed.value();
                 f64 power                = consumed_energy / input.wall_time;
                 ret.cpu_power            = shambase::format("{:.1f} W", power);
-                ret.cpu_energy_consummed = shambase::format("{:.1f} W", consumed_energy);
+                ret.cpu_energy_consummed = shambase::format("{:.1f} J", consumed_energy);
             } else {
                 ret.cpu_power            = "N/A";
                 ret.cpu_energy_consummed = "N/A";
@@ -291,7 +291,7 @@ namespace shamsys {
                 f64 consumed_energy       = input.dram_energy_consummed.value();
                 f64 power                 = consumed_energy / input.wall_time;
                 ret.dram_power            = shambase::format("{:.1f} W", power);
-                ret.dram_energy_consummed = shambase::format("{:.1f} W", consumed_energy);
+                ret.dram_energy_consummed = shambase::format("{:.1f} J", consumed_energy);
             } else {
                 ret.dram_power            = "N/A";
                 ret.dram_energy_consummed = "N/A";
