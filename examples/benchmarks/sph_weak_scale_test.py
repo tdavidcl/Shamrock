@@ -159,13 +159,24 @@ for N_target_base in [32e6]:
         result_text += f"res_cnts = {res_cnts}\n"
         result_text += f"step time = {step_time}\n"
 
+        dic_out = {
+            "world_size": shamrock.sys.world_size(),
+            "rate": res_rate,
+            "cnt": res_cnt,
+            "step_time": step_time,
+        }
+
         # print the system metrics
         result_text += "system metrics:\n"
         for key, value in max_rate_system_metrics.items():
             result_text += f"{key}: {value} J\n"
+            dic_out[key] = value
 
         for key, value in max_rate_system_metrics.items():
             result_text += f"avg power {key} / step time : {value / step_time} W\n"
+            dic_out[f"power_{key}"] = value / step_time
+
+        result_text += f"dic_out = {dic_out}\n"
 
         print("current results:")
         print(result_text)
