@@ -17,7 +17,9 @@
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shamcmdopt/env.hpp"
+#include "shamcomm/wrapper.hpp"
 #include <memory>
 #include <optional>
 
@@ -76,18 +78,27 @@ namespace shamsys {
     }
 
     struct SystemMetrics {
+        f64 wall_time;
         std::optional<f64> rank_energy_consummed;
         std::optional<f64> gpu_energy_consummed;
         std::optional<f64> cpu_energy_consummed;
         std::optional<f64> dram_energy_consummed;
     };
 
-    inline SystemMetrics get_system_metrics() {
-        return SystemMetrics{
+    inline SystemMetrics get_system_metrics(bool barrier = true) {
+        if (barrier) {
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
+        }
+        auto ret = SystemMetrics{
+            shambase::details::get_wtime(),
             get_rank_energy_consummed(),
             get_gpu_energy_consummed(),
             get_cpu_energy_consummed(),
             get_dram_energy_consummed()};
+        if (barrier) {
+            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
+        }
+        return ret;
     }
 
     inline SystemMetrics operator-(const SystemMetrics &lhs, const SystemMetrics &rhs) {
@@ -98,6 +109,7 @@ namespace shamsys {
                        : std::nullopt;
         };
         return SystemMetrics{
+            lhs.wall_time - rhs.wall_time,
             optional_sub(lhs.rank_energy_consummed, rhs.rank_energy_consummed),
             optional_sub(lhs.gpu_energy_consummed, rhs.gpu_energy_consummed),
             optional_sub(lhs.cpu_energy_consummed, rhs.cpu_energy_consummed),

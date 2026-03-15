@@ -69,6 +69,9 @@ std::string shammodels::report_perf_timestep(
         = optional_gather_power(system_metrics.cpu_energy_consummed);
     std::vector<f64> dram_energy_consummed_all_ranks
         = optional_gather_power(system_metrics.dram_energy_consummed);
+    std::vector<f64> metric_time_all_ranks
+        = (report_power_usage) ? shamalgs::collective::gather(system_metrics.wall_time)
+                               : std::vector<f64>{};
 
     if (shamcomm::world_rank() != 0) {
         return "";
@@ -88,6 +91,10 @@ std::string shammodels::report_perf_timestep(
         = std::accumulate(max_mem_device_all_ranks.begin(), max_mem_device_all_ranks.end(), 0_u64);
     size_t sum_mem_host_total
         = std::accumulate(max_mem_host_all_ranks.begin(), max_mem_host_all_ranks.end(), 0_u64);
+    f64 metric_tmax
+        = (report_power_usage)
+              ? *std::max_element(metric_time_all_ranks.begin(), metric_time_all_ranks.end())
+              : 0._f64;
 
     std::vector<std::string> rank_power_step_all_ranks;
     std::vector<std::string> rank_gpu_power_step_all_ranks;
@@ -101,28 +108,32 @@ std::string shammodels::report_perf_timestep(
         for (u32 i = 0; i < shamcomm::world_size(); i++) {
             if (rank_energy_consummed_all_ranks[i] > 0._f64) {
                 rank_power_step_all_ranks.push_back(
-                    shambase::format("{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / max_t));
+                    shambase::format(
+                        "{:.1f} W", f64(rank_energy_consummed_all_ranks[i]) / metric_tmax));
             } else {
                 rank_power_step_all_ranks.push_back("N/A");
             }
 
             if (gpu_energy_consummed_all_ranks[i] > 0._f64) {
                 rank_gpu_power_step_all_ranks.push_back(
-                    shambase::format("{:.1f} W", f64(gpu_energy_consummed_all_ranks[i]) / max_t));
+                    shambase::format(
+                        "{:.1f} W", f64(gpu_energy_consummed_all_ranks[i]) / metric_tmax));
             } else {
                 rank_gpu_power_step_all_ranks.push_back("N/A");
             }
 
             if (cpu_energy_consummed_all_ranks[i] > 0._f64) {
                 rank_cpu_power_step_all_ranks.push_back(
-                    shambase::format("{:.1f} W", f64(cpu_energy_consummed_all_ranks[i]) / max_t));
+                    shambase::format(
+                        "{:.1f} W", f64(cpu_energy_consummed_all_ranks[i]) / metric_tmax));
             } else {
                 rank_cpu_power_step_all_ranks.push_back("N/A");
             }
 
             if (dram_energy_consummed_all_ranks[i] > 0._f64) {
                 rank_dram_power_step_all_ranks.push_back(
-                    shambase::format("{:.1f} W", f64(dram_energy_consummed_all_ranks[i]) / max_t));
+                    shambase::format(
+                        "{:.1f} W", f64(dram_energy_consummed_all_ranks[i]) / metric_tmax));
             } else {
                 rank_dram_power_step_all_ranks.push_back("N/A");
             }
@@ -135,10 +146,10 @@ std::string shammodels::report_perf_timestep(
             cpu_energy_consummed_all_ranks.begin(), cpu_energy_consummed_all_ranks.end(), 0._f64);
         f64 sum_dram_energy_consummed = std::accumulate(
             dram_energy_consummed_all_ranks.begin(), dram_energy_consummed_all_ranks.end(), 0._f64);
-        sum_power_step      = shambase::format("{:.1e} W", sum_rank_energy_consummed / max_t);
-        sum_gpu_power_step  = shambase::format("{:.1e} W", sum_gpu_energy_consummed / max_t);
-        sum_cpu_power_step  = shambase::format("{:.1e} W", sum_cpu_energy_consummed / max_t);
-        sum_dram_power_step = shambase::format("{:.1e} W", sum_dram_energy_consummed / max_t);
+        sum_power_step      = shambase::format("{:.1e} W", sum_rank_energy_consummed / metric_tmax);
+        sum_gpu_power_step  = shambase::format("{:.1e} W", sum_gpu_energy_consummed / metric_tmax);
+        sum_cpu_power_step  = shambase::format("{:.1e} W", sum_cpu_energy_consummed / metric_tmax);
+        sum_dram_power_step = shambase::format("{:.1e} W", sum_dram_energy_consummed / metric_tmax);
     }
 
     u32 cols_count = 9_u32;

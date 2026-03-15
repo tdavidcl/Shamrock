@@ -167,14 +167,17 @@ for N_target_base in [32e6]:
         }
 
         # print the system metrics
+        metrics_duration = max_rate_system_metrics["duration"]
         result_text += "system metrics:\n"
         for key, value in max_rate_system_metrics.items():
-            result_text += f"{key}: {value} J\n"
-            dic_out[key] = value
+            if not key == "duration":
+                result_text += f"{key}: {value} J\n"
+                dic_out[key] = value
 
         for key, value in max_rate_system_metrics.items():
-            result_text += f"avg power {key} / step time : {value / step_time} W\n"
-            dic_out[f"power_{key}"] = value / step_time
+            if not key == "duration":
+                result_text += f"avg power {key} / step time : {value / metrics_duration} W\n"
+                dic_out[f"power_{key}"] = value / metrics_duration
 
         result_text += f"dic_out = {dic_out}\n"
 

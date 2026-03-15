@@ -74,6 +74,8 @@ shamsys::SystemMetrics shammodels::sph::SolverLog::get_last_system_metrics() {
         = optional_gather_power(last_log.system_metrics.cpu_energy_consummed);
     std::vector<f64> dram_energy_consummed_all_ranks
         = optional_gather_power(last_log.system_metrics.dram_energy_consummed);
+    std::vector<f64> metric_time_all_ranks
+        = shamalgs::collective::gather(last_log.system_metrics.wall_time);
 
     f64 sum_rank_energy_consummed = std::accumulate(
         rank_energy_consummed_all_ranks.begin(), rank_energy_consummed_all_ranks.end(), 0._f64);
@@ -83,8 +85,11 @@ shamsys::SystemMetrics shammodels::sph::SolverLog::get_last_system_metrics() {
         cpu_energy_consummed_all_ranks.begin(), cpu_energy_consummed_all_ranks.end(), 0._f64);
     f64 sum_dram_energy_consummed = std::accumulate(
         dram_energy_consummed_all_ranks.begin(), dram_energy_consummed_all_ranks.end(), 0._f64);
+    f64 metric_time_all
+        = *std::max_element(metric_time_all_ranks.begin(), metric_time_all_ranks.end());
 
     shamsys::SystemMetrics system_metrics;
+    system_metrics.wall_time             = metric_time_all;
     system_metrics.rank_energy_consummed = (shamsys::support_rank_energy_consummed())
                                                ? sum_rank_energy_consummed
                                                : std::optional<f64>{};

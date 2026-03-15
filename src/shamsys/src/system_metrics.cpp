@@ -16,7 +16,6 @@
 #include "shambase/aliases_int.hpp"
 #include "shambase/popen.hpp"
 #include "shamcomm/local_rank.hpp"
-#include "shamcomm/wrapper.hpp"
 #include "shamsys/system_metrics.hpp"
 #include <cstdlib>
 
@@ -25,47 +24,35 @@ namespace shamsys {
     class AuroraSystemMetricReporter : public ISystemMetricReporter {
         public:
         std::optional<f64> get_rank_energy_consummed() override {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            std::optional<f64> ret = std::nullopt;
             if (shamcomm::is_main_node_rank()) {
                 std::string output = shambase::popen_fetch_output("geopmread BOARD_ENERGY board 0");
-                ret                = std::stoull(output.c_str());
+                return std::stoull(output.c_str());
             }
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            return ret;
+            return std::nullopt;
         }
 
         std::optional<f64> get_gpu_energy_consummed() override {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            std::optional<f64> ret = std::nullopt;
             if (shamcomm::is_main_node_rank()) {
                 std::string output = shambase::popen_fetch_output("geopmread GPU_ENERGY board 0");
-                ret                = std::stoull(output.c_str());
+                return std::stoull(output.c_str());
             }
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            return ret;
+            return std::nullopt;
         }
 
         std::optional<f64> get_cpu_energy_consummed() override {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            std::optional<f64> ret = std::nullopt;
             if (shamcomm::is_main_node_rank()) {
                 std::string output = shambase::popen_fetch_output("geopmread CPU_ENERGY board 0");
-                ret                = std::stoull(output.c_str());
+                return std::stoull(output.c_str());
             }
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            return ret;
+            return std::nullopt;
         }
 
         std::optional<f64> get_dram_energy_consummed() override {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            std::optional<f64> ret = std::nullopt;
             if (shamcomm::is_main_node_rank()) {
                 std::string output = shambase::popen_fetch_output("geopmread DRAM_ENERGY board 0");
-                ret                = std::stoull(output.c_str());
+                return std::stoull(output.c_str());
             }
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            return ret;
+            return std::nullopt;
         }
 
         bool support_rank_energy_consummed() override { return true; }
@@ -77,15 +64,12 @@ namespace shamsys {
     class IntelRAPLSystemMetricReport : public ISystemMetricReporter {
         public:
         std::optional<f64> get_rank_energy_consummed() override {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            std::optional<f64> ret = std::nullopt;
             if (shamcomm::is_main_node_rank()) {
                 std::string output = shambase::popen_fetch_output(
                     "cat /sys/class/powercap/intel-rapl:0/energy_uj");
-                ret = f64(std::stoull(output.c_str())) * 1e-6;
+                return f64(std::stoull(output.c_str())) * 1e-6;
             }
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-            return ret;
+            return std::nullopt;
         }
 
         std::optional<f64> get_gpu_energy_consummed() override { return std::nullopt; }

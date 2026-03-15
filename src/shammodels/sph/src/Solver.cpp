@@ -2650,12 +2650,14 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     tstep.end();
 
-    sham::MemPerfInfos mem_perf_infos_end        = sham::details::get_mem_perf_info();
+    f64 delta_mpi_timer                   = shamcomm::mpi::get_timer("total") - mpi_timer_start;
+    sham::MemPerfInfos mem_perf_infos_end = sham::details::get_mem_perf_info();
+
+    /// must be after the mpi timer to not count the barrier of the system metrics
     std::optional<f64> rank_energy_consummed_end = shamsys::get_rank_energy_consummed();
     shamsys::SystemMetrics system_metrics_end    = shamsys::get_system_metrics();
     shamsys::SystemMetrics system_metrics_delta  = system_metrics_end - system_metrics_start;
 
-    f64 delta_mpi_timer = shamcomm::mpi::get_timer("total") - mpi_timer_start;
     f64 t_dev_alloc
         = (mem_perf_infos_end.time_alloc_device - mem_perf_infos_start.time_alloc_device)
           + (mem_perf_infos_end.time_free_device - mem_perf_infos_start.time_free_device);
