@@ -17,9 +17,7 @@
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/memory.hpp"
-#include "shambase/stacktrace.hpp"
 #include "shamcmdopt/env.hpp"
-#include "shamcomm/wrapper.hpp"
 #include <memory>
 #include <optional>
 
@@ -85,21 +83,26 @@ namespace shamsys {
         std::optional<f64> dram_energy_consummed;
     };
 
-    inline SystemMetrics get_system_metrics(bool barrier = true) {
-        if (barrier) {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-        }
-        auto ret = SystemMetrics{
-            shambase::details::get_wtime(),
-            get_rank_energy_consummed(),
-            get_gpu_energy_consummed(),
-            get_cpu_energy_consummed(),
-            get_dram_energy_consummed()};
-        if (barrier) {
-            shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-        }
-        return ret;
-    }
+    SystemMetrics get_system_metrics(bool barrier = true);
+
+    std::vector<SystemMetrics> gather_rank_metrics(const SystemMetrics &input);
+
+    SystemMetrics aggregate_rank_metrics(const std::vector<SystemMetrics> &input);
+
+    struct FormattedSystemMetrics {
+        std::string wall_time;
+        std::optional<std::string> rank_energy_consummed;
+        std::optional<std::string> gpu_energy_consummed;
+        std::optional<std::string> cpu_energy_consummed;
+        std::optional<std::string> dram_energy_consummed;
+        std::optional<std::string> rank_power;
+        std::optional<std::string> gpu_power;
+        std::optional<std::string> cpu_power;
+        std::optional<std::string> dram_power;
+    };
+
+    /// Only to be used on deltas, not the raw one
+    FormattedSystemMetrics format_system_metrics(const SystemMetrics &input);
 
     inline SystemMetrics operator-(const SystemMetrics &lhs, const SystemMetrics &rhs) {
         auto optional_sub = [](const std::optional<f64> &lhs,
