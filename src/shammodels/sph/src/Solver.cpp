@@ -1580,10 +1580,7 @@ template<class Tvec, template<class> class Kern>
 shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() {
 
     // has to be first since there is a barrier that may mess the other timers
-    shambase::Timer timer_system_metrics;
-    timer_system_metrics.start();
     shamsys::SystemMetrics system_metrics_start = shamsys::get_system_metrics();
-    timer_system_metrics.end();
 
     sham::MemPerfInfos mem_perf_infos_start = sham::details::get_mem_perf_info();
     f64 mpi_timer_start                     = shamcomm::mpi::get_timer("total");
@@ -2659,7 +2656,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     /// must be after the mpi timer to not count the barrier of the system metrics
     shamsys::SystemMetrics system_metrics_end   = shamsys::get_system_metrics();
     shamsys::SystemMetrics system_metrics_delta = system_metrics_end - system_metrics_start;
-    system_metrics_delta.wall_time -= timer_system_metrics.elasped_sec();
 
     f64 t_dev_alloc
         = (mem_perf_infos_end.time_alloc_device - mem_perf_infos_start.time_alloc_device)
