@@ -14,6 +14,8 @@ import shamrock
 result_text = ""
 
 for N_target_base in [32e6]:
+    shamrock.backends.reset_mem_info_max()
+
     gamma = 5.0 / 3.0
     rho_g = 1
     target_tot_u = 1
@@ -116,6 +118,8 @@ for N_target_base in [32e6]:
 
     model.set_cfl_multipler(1e-4)
     model.set_cfl_mult_stiffness(1e6)
+
+    shamrock.backends.reset_mem_info_max()
 
     # converge smoothing length and compute initial dt
     model.timestep()
