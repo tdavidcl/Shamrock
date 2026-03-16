@@ -153,13 +153,13 @@ namespace shamsys {
         if (barrier) {
             shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         }
-        auto ret = SystemMetrics{
-            0,
+        f64 wall_time = shambase::details::get_wtime();
+        auto ret      = SystemMetrics{
+            wall_time,
             get_rank_energy_consummed(),
             get_gpu_energy_consummed(),
             get_cpu_energy_consummed(),
             get_dram_energy_consummed()};
-        ret.wall_time = shambase::details::get_wtime();
         if (barrier) {
             shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         }
