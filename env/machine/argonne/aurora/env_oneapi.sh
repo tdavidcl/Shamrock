@@ -21,6 +21,7 @@ function shamconfigure {
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DBUILD_TEST=Yes \
         -DSHAMROCK_USE_CPPTRACE=Yes \
+        -DSHAMROCK_USE_GEOPM=Yes \
         "${CMAKE_OPT[@]}"
 }
 
