@@ -13,7 +13,7 @@ import shamrock
 
 result_text = ""
 
-for N_target_base in [1e6]:
+for N_target_base in [32e6]:
     shamrock.backends.reset_mem_info_max()
 
     gamma = 5.0 / 3.0
