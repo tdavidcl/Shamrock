@@ -13,7 +13,7 @@ import shamrock
 
 result_text = ""
 
-for N_target_base in [32e6]:
+for N_target_base in [1e6]:
     shamrock.backends.reset_mem_info_max()
 
     gamma = 5.0 / 3.0
@@ -25,7 +25,7 @@ for N_target_base in [32e6]:
 
     compute_multiplier = shamrock.sys.world_size()
     # compute_multiplier = 12
-    scheduler_split_val = int(2e7)
+    scheduler_split_val = int(1e5)
     scheduler_merge_val = int(1)
 
     N_target = N_target_base * compute_multiplier
@@ -102,7 +102,7 @@ for N_target_base in [32e6]:
 
     model.set_value_in_a_box("uint", "f64", 0, bmin, bmax)
 
-    rinj = 8 * dr
+    rinj = 16 * dr
     u_inj = 1
     model.add_kernel_value("uint", "f64", u_inj, (0, 0, 0), rinj)
 
@@ -116,7 +116,7 @@ for N_target_base in [32e6]:
     model.set_cfl_cour(0.1)
     model.set_cfl_force(0.1)
 
-    model.set_cfl_multipler(1e-4)
+    model.set_cfl_multipler(1e-6)
     model.set_cfl_mult_stiffness(1e6)
 
     shamrock.backends.reset_mem_info_max()
