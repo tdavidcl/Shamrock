@@ -129,7 +129,7 @@ for N_target_base in [32e6]:
     res_cnts = []
     res_system_metrics = []
 
-    for i in range(5):
+    for i in range(10):
         shamrock.sys.mpi_barrier()
         model.timestep()
 
