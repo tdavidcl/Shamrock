@@ -1157,6 +1157,26 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_debug_dump", &T::set_debug_dump)
         .def("solver_logs_last_rate", &T::solver_logs_last_rate)
         .def("solver_logs_last_obj_count", &T::solver_logs_last_obj_count)
+        .def(
+            "solver_logs_last_system_metrics",
+            [&](T &self) {
+                auto system_metrics = self.solver.solve_logs.get_last_system_metrics();
+                py::dict ret;
+                ret["duration"] = system_metrics.wall_time;
+                if (system_metrics.rank_energy_consummed.has_value()) {
+                    ret["rank_energy_consummed"] = system_metrics.rank_energy_consummed.value();
+                }
+                if (system_metrics.gpu_energy_consummed.has_value()) {
+                    ret["gpu_energy_consummed"] = system_metrics.gpu_energy_consummed.value();
+                }
+                if (system_metrics.cpu_energy_consummed.has_value()) {
+                    ret["cpu_energy_consummed"] = system_metrics.cpu_energy_consummed.value();
+                }
+                if (system_metrics.dram_energy_consummed.has_value()) {
+                    ret["dram_energy_consummed"] = system_metrics.dram_energy_consummed.value();
+                }
+                return ret;
+            })
         .def("solver_logs_cumulated_step_time", &T::solver_logs_cumulated_step_time)
         .def("solver_logs_reset_cumulated_step_time", &T::solver_logs_reset_cumulated_step_time)
         .def("solver_logs_step_count", &T::solver_logs_step_count)

@@ -15,5 +15,11 @@ from .VelocityPlots import (
     ColumnAverageAngularMomentumTransportCoefficientPlot,
 )
 
+from .BfieldPlots import (
+    SliceByPlot,
+    SliceBthetaPlot,
+    SliceBVerticalShearGradient,
+)
+
 # Performance analysis
 from .PerfHistory import PerfHistory

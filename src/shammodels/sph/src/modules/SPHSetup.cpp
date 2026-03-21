@@ -823,9 +823,9 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
 
             static constexpr u32 cols_count = 6;
 
-            using Table = shambase::table<cols_count>;
+            using Table = shambase::table;
 
-            Table table;
+            Table table(6);
 
             table.add_double_rule();
             table.add_data(
