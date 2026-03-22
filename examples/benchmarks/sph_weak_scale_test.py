@@ -63,7 +63,6 @@ for N_target_base in [32e6]:
     )
     cfg.set_boundary_periodic()
     cfg.set_eos_adiabatic(gamma)
-    cfg.set_max_neigh_cache_size(int(100e9))
     cfg.print_status()
     model.set_solver_config(cfg)
     model.init_scheduler(scheduler_split_val, scheduler_merge_val)
@@ -116,9 +115,6 @@ for N_target_base in [32e6]:
     model.set_cfl_cour(0.1)
     model.set_cfl_force(0.1)
 
-    model.set_cfl_multipler(1e-6)
-    model.set_cfl_mult_stiffness(1e6)
-
     shamrock.backends.reset_mem_info_max()
 
     # converge smoothing length and compute initial dt
@@ -131,6 +127,9 @@ for N_target_base in [32e6]:
 
     for i in range(10):
         shamrock.sys.mpi_barrier()
+
+        # To replay the same step
+        model.set_next_dt(0.0)
         model.timestep()
 
         tmp_res_rate, tmp_res_cnt, tmp_system_metrics = (
