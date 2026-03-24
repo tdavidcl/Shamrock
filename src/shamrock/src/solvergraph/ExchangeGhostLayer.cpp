@@ -30,6 +30,21 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
     auto &ghost_layer                                   = edges.ghost_layer;
     const shamrock::solvergraph::RankGetter &rank_owner = edges.rank_owner;
 
+    std::unordered_map<u64, u64> msg_sizes_send;
+
+    std::stringstream ss;
+    ss << "Rank " << shamcomm::world_rank() << " is sending "
+       << ghost_layer.patchdatas.get_native().size() << " patches sizes:";
+    for (auto &pdat : ghost_layer.patchdatas.get_native()) {
+        // ss << pdat.first.first << " " << pdat.first.second << " " << pdat.second.get_obj_cnt() <<
+        // "\n";
+        msg_sizes_send[rank_owner.get_rank_owner(pdat.first.first)] += pdat.second.get_obj_cnt();
+    }
+    for (auto &[rank, size] : msg_sizes_send) {
+        ss << "\n" << "msg size to rank " << rank << " is " << size;
+    }
+    shamcomm::logs::raw_ln(ss.str());
+
     shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> recv_dat;
 
     shamalgs::collective::serialize_sparse_comm<shamrock::patch::PatchDataLayer>(
