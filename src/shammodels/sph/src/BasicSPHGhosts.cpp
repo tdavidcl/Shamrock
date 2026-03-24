@@ -152,7 +152,10 @@ int main(){
 */
 
 #include "shambase/exception.hpp"
+#include "shambase/time.hpp"
+#include "shamalgs/collective/reduction.hpp"
 #include "shamcomm/collectives.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include <functional>
 #include <vector>
@@ -286,6 +289,9 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
     using BCPeriodic         = typename CfgClass::Periodic;
     using BCShearingPeriodic = typename CfgClass::ShearingPeriodic;
 
+    shambase::Timer base_timer;
+    base_timer.start();
+
     if (BCPeriodic *cfg = std::get_if<BCPeriodic>(&ghost_config)) {
         sycl::host_accessor acc_tf{
             shambase::get_check_ref(int_range_max_tree.internal_buf), sycl::read_only};
@@ -297,68 +303,82 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
                     // sender translation
                     vec periodic_offset = vec{xoff * bsize.x(), yoff * bsize.y(), zoff * bsize.z()};
 
-                    sched.for_each_local_patch([&](const Patch psender) {
-                        CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
-                        CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
+                    sycl::host_accessor tree{
+                        shambase::get_check_ref(sptree.serial_tree_buf), sycl::read_only};
+                    sycl::host_accessor lpid{
+                        shambase::get_check_ref(sptree.linked_patch_ids_buf), sycl::read_only};
 
-                        flt sender_volume = sender_bsize.get_volume();
+#pragma omp parallel for
+                    for (u32 i = 0; i < sched.patch_list.local.size(); i++) {
+                        const shamrock::patch::Patch &psender = sched.patch_list.local[i];
+                        if (!psender.is_err_mode()) {
+                            CoordRange<vec> sender_bsize = patch_coord_transf.to_obj_coord(psender);
+                            CoordRange<vec> sender_bsize_off
+                                = sender_bsize.add_offset(periodic_offset);
 
-                        flt sender_h_max = int_range_max.get(psender.id_patch);
+                            flt sender_volume = sender_bsize.get_volume();
 
-                        using PtNode = typename SerialPatchTree<vec>::PtNode;
+                            flt sender_h_max = int_range_max.get(psender.id_patch);
 
-                        sptree.host_for_each_leafs(
-                            [&](u64 tree_id, PtNode n) {
+                            using PtNode = typename SerialPatchTree<vec>::PtNode;
+
+                            sptree.host_for_each_leafs_internal(
+                                [&](u64 tree_id, PtNode n) {
 #ifdef NEW_GZ_INTERACT_CRIT
-                                // The ghost interaction was not symmetric before
-                                // now it is since we check for the max of the two h_max
-                                flt receiv_h_max = acc_tf[tree_id];
-                                shammath::AABB<vec> tree_cell{n.box_min, n.box_max};
-                                tree_cell
-                                    = tree_cell.expand_all(sham::max(sender_h_max, receiv_h_max));
+                                    // The ghost interaction was not symmetric before
+                                    // now it is since we check for the max of the two h_max
+                                    flt receiv_h_max = acc_tf[tree_id];
+                                    shammath::AABB<vec> tree_cell{n.box_min, n.box_max};
+                                    tree_cell = tree_cell.expand_all(
+                                        sham::max(sender_h_max, receiv_h_max));
 
-                                return tree_cell
-                                    .get_intersect(
-                                        shammath::AABB<vec>{
-                                            sender_bsize_off.lower, sender_bsize_off.upper})
-                                    .is_not_empty();
+                                    return tree_cell
+                                        .get_intersect(
+                                            shammath::AABB<vec>{
+                                                sender_bsize_off.lower, sender_bsize_off.upper})
+                                        .is_not_empty();
 #else
-                                flt receiv_h_max = acc_tf[tree_id];
-                                CoordRange<vec> receiv_exp{
-                                    n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+                                    flt receiv_h_max = acc_tf[tree_id];
+                                    CoordRange<vec> receiv_exp{
+                                        n.box_min - receiv_h_max, n.box_max + receiv_h_max};
 
-                                return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
+                                    return receiv_exp.get_intersect(sender_bsize_off)
+                                        .is_not_empty();
 #endif
-                            },
-                            [&](u64 id_found, PtNode n) {
-                                if ((id_found == psender.id_patch) && (xoff == 0) && (yoff == 0)
-                                    && (zoff == 0)) {
-                                    return;
-                                }
+                                },
+                                [&](u64 id_found, PtNode n) {
+                                    if ((id_found == psender.id_patch) && (xoff == 0) && (yoff == 0)
+                                        && (zoff == 0)) {
+                                        return;
+                                    }
 
 #ifdef NEW_GZ_INTERACT_CRIT
-                                CoordRange<vec> receiv_exp
-                                    = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
-                                        sham::max(sender_h_max, int_range_max.get(id_found)));
+                                    CoordRange<vec> receiv_exp
+                                        = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
+                                            sham::max(sender_h_max, int_range_max.get(id_found)));
 #else
-                                CoordRange<vec> receiv_exp
-                                    = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
-                                        int_range_max.get(id_found));
+                                    CoordRange<vec> receiv_exp
+                                        = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
+                                            int_range_max.get(id_found));
 #endif
 
-                                CoordRange<vec> interf_volume = sender_bsize.get_intersect(
-                                    receiv_exp.add_offset(-periodic_offset));
+                                    CoordRange<vec> interf_volume = sender_bsize.get_intersect(
+                                        receiv_exp.add_offset(-periodic_offset));
 
-                                interf_map.add_obj(
-                                    psender.id_patch,
-                                    id_found,
-                                    {periodic_offset,
-                                     {0, 0, 0},
-                                     {xoff, yoff, zoff},
-                                     interf_volume,
-                                     interf_volume.get_volume() / sender_volume});
-                            });
-                    });
+#pragma omp critical
+                                    interf_map.add_obj(
+                                        psender.id_patch,
+                                        id_found,
+                                        {periodic_offset,
+                                         {0, 0, 0},
+                                         {xoff, yoff, zoff},
+                                         interf_volume,
+                                         interf_volume.get_volume() / sender_volume});
+                                },
+                                tree,
+                                lpid);
+                        }
+                    }
                 }
             }
         }
@@ -373,9 +393,102 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
 
             vec offset = shift.shift;
 
-            sched.for_each_local_patch([&](const Patch psender) {
+            sycl::host_accessor tree{
+                shambase::get_check_ref(sptree.serial_tree_buf), sycl::read_only};
+            sycl::host_accessor lpid{
+                shambase::get_check_ref(sptree.linked_patch_ids_buf), sycl::read_only};
+
+#pragma omp parallel for
+            for (u32 i = 0; i < sched.patch_list.local.size(); i++) {
+                const shamrock::patch::Patch &psender = sched.patch_list.local[i];
+                if (!psender.is_err_mode()) {
+
+                    CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
+                    CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(offset);
+
+                    flt sender_volume = sender_bsize.get_volume();
+
+                    flt sender_h_max = int_range_max.get(psender.id_patch);
+
+                    using PtNode = typename SerialPatchTree<vec>::PtNode;
+
+                    sptree.host_for_each_leafs_internal(
+                        [&](u64 tree_id, PtNode n) {
+#ifdef NEW_GZ_INTERACT_CRIT
+                            // The ghost interaction was not symmetric before
+                            // now it is since we check for the max of the two h_max
+                            flt receiv_h_max = acc_tf[tree_id];
+                            shammath::AABB<vec> tree_cell{n.box_min, n.box_max};
+                            tree_cell = tree_cell.expand_all(sham::max(sender_h_max, receiv_h_max));
+
+                            return tree_cell
+                                .get_intersect(
+                                    shammath::AABB<vec>{
+                                        sender_bsize_off.lower, sender_bsize_off.upper})
+                                .is_not_empty();
+#else
+                                flt receiv_h_max = acc_tf[tree_id];
+                                CoordRange<vec> receiv_exp{
+                                    n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+
+                                return receiv_exp.get_intersect(sender_bsize_off)
+                                    .is_not_empty();
+#endif
+                        },
+                        [&](u64 id_found, PtNode n) {
+                            if ((id_found == psender.id_patch) && (xoff == 0) && (yoff == 0)
+                                && (zoff == 0)) {
+                                return;
+                            }
+
+#ifdef NEW_GZ_INTERACT_CRIT
+                            CoordRange<vec> receiv_exp
+                                = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
+                                    sham::max(sender_h_max, int_range_max.get(id_found)));
+#else
+                            CoordRange<vec> receiv_exp
+                                = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
+                                    int_range_max.get(id_found));
+#endif
+
+                            CoordRange<vec> interf_volume
+                                = sender_bsize.get_intersect(receiv_exp.add_offset(-offset));
+
+#pragma omp critical
+                            interf_map.add_obj(
+                                psender.id_patch,
+                                id_found,
+                                {offset,
+                                 shift.shift_speed,
+                                 {xoff, yoff, zoff},
+                                 interf_volume,
+                                 interf_volume.get_volume() / sender_volume});
+
+                            // logger::raw_ln("found :",offset, shift.shift_speed, vec{xoff, yoff,
+                            // zoff});
+                        },
+                        tree,
+                        lpid);
+                }
+            }
+        });
+
+    } else {
+        sycl::host_accessor acc_tf{
+            shambase::get_check_ref(int_range_max_tree.internal_buf), sycl::read_only};
+        // sender translation
+        vec periodic_offset = vec{0, 0, 0};
+
+        sycl::host_accessor tree{shambase::get_check_ref(sptree.serial_tree_buf), sycl::read_only};
+        sycl::host_accessor lpid{
+            shambase::get_check_ref(sptree.linked_patch_ids_buf), sycl::read_only};
+
+#pragma omp parallel for
+        for (u32 i = 0; i < sched.patch_list.local.size(); i++) {
+            const shamrock::patch::Patch &psender = sched.patch_list.local[i];
+            if (!psender.is_err_mode()) {
                 CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
-                CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(offset);
+                CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
 
                 flt sender_volume = sender_bsize.get_volume();
 
@@ -383,7 +496,7 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
 
                 using PtNode = typename SerialPatchTree<vec>::PtNode;
 
-                sptree.host_for_each_leafs(
+                sptree.host_for_each_leafs_internal(
                     [&](u64 tree_id, PtNode n) {
 #ifdef NEW_GZ_INTERACT_CRIT
                         // The ghost interaction was not symmetric before
@@ -405,8 +518,7 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
 #endif
                     },
                     [&](u64 id_found, PtNode n) {
-                        if ((id_found == psender.id_patch) && (xoff == 0) && (yoff == 0)
-                            && (zoff == 0)) {
+                        if (id_found == psender.id_patch) {
                             return;
                         }
 
@@ -421,86 +533,25 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
 #endif
 
                         CoordRange<vec> interf_volume
-                            = sender_bsize.get_intersect(receiv_exp.add_offset(-offset));
+                            = sender_bsize.get_intersect(receiv_exp.add_offset(-periodic_offset));
 
+#pragma omp critical
                         interf_map.add_obj(
                             psender.id_patch,
                             id_found,
-                            {offset,
-                             shift.shift_speed,
-                             {xoff, yoff, zoff},
+                            {periodic_offset,
+                             {0, 0, 0},
+                             {0, 0, 0},
                              interf_volume,
                              interf_volume.get_volume() / sender_volume});
-
-                        // logger::raw_ln("found :",offset, shift.shift_speed, vec{xoff, yoff,
-                        // zoff});
-                    });
-            });
-        });
-
-    } else {
-        sycl::host_accessor acc_tf{
-            shambase::get_check_ref(int_range_max_tree.internal_buf), sycl::read_only};
-        // sender translation
-        vec periodic_offset = vec{0, 0, 0};
-
-        sched.for_each_local_patch([&](const Patch psender) {
-            CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
-            CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
-
-            flt sender_volume = sender_bsize.get_volume();
-
-            flt sender_h_max = int_range_max.get(psender.id_patch);
-
-            using PtNode = typename SerialPatchTree<vec>::PtNode;
-
-            sptree.host_for_each_leafs(
-                [&](u64 tree_id, PtNode n) {
-#ifdef NEW_GZ_INTERACT_CRIT
-                    // The ghost interaction was not symmetric before
-                    // now it is since we check for the max of the two h_max
-                    flt receiv_h_max = acc_tf[tree_id];
-                    shammath::AABB<vec> tree_cell{n.box_min, n.box_max};
-                    tree_cell = tree_cell.expand_all(sham::max(sender_h_max, receiv_h_max));
-
-                    return tree_cell
-                        .get_intersect(
-                            shammath::AABB<vec>{sender_bsize_off.lower, sender_bsize_off.upper})
-                        .is_not_empty();
-#else
-                    flt receiv_h_max = acc_tf[tree_id];
-                    CoordRange<vec> receiv_exp{n.box_min - receiv_h_max, n.box_max + receiv_h_max};
-
-                    return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
-#endif
-                },
-                [&](u64 id_found, PtNode n) {
-                    if (id_found == psender.id_patch) {
-                        return;
-                    }
-
-#ifdef NEW_GZ_INTERACT_CRIT
-                    CoordRange<vec> receiv_exp = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
-                        sham::max(sender_h_max, int_range_max.get(id_found)));
-#else
-                    CoordRange<vec> receiv_exp = CoordRange<vec>{n.box_min, n.box_max}.expand_all(
-                        int_range_max.get(id_found));
-#endif
-
-                    CoordRange<vec> interf_volume
-                        = sender_bsize.get_intersect(receiv_exp.add_offset(-periodic_offset));
-
-                    interf_map.add_obj(
-                        psender.id_patch,
-                        id_found,
-                        {periodic_offset,
-                         {0, 0, 0},
-                         {0, 0, 0},
-                         interf_volume,
-                         interf_volume.get_volume() / sender_volume});
-                });
-        });
+                    },
+                    tree,
+                    lpid);
+            }
+        }
     }
+
+    base_timer.end();
 
     if (filter_empty_patch_gz) {
         PatchField<u32> patchdata_obj_cnt = sched.map_owned_to_patch_field_simple<u32>(
@@ -553,6 +604,22 @@ auto BasicSPHGhostHandler<vec>::find_interfaces(
         empty_sender,
         "empty_either:",
         empty_either);
+
+    // f64 worse_time = shamalgs::collective::allreduce_max(base_timer.elasped_sec());
+    //  if (shamcomm::world_rank() == 0) {
+    //      shamlog_info_ln(
+    //          "BasicSPHGhosts",
+    //          "find_interfaces time:",
+    //          base_timer.get_time_str(),
+    //          "worse time:",
+    //          worse_time);
+    //  }
+
+    // interf_map.for_each([](u64 sender, u64 receiver, InterfaceBuildInfos build){
+    //     logger::raw_ln("found interface
+    //     :",sender,"->",receiver,"ratio:",build.volume_ratio,
+    //     "volume:",build.cut_volume.lower,build.cut_volume.upper);
+    // });
 
     return interf_map;
 }

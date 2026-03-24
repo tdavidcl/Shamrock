@@ -73,7 +73,16 @@ namespace shammodels::sph {
         /////// setup function
         ////////////////////////////////////////////////////////////////////////////////////////////
 
-        void init_scheduler(u32 crit_split, u32 crit_merge);
+        /// Initialise the model and all the related data structures (patch scheduler in particular)
+        void init();
+
+        /// Old way of doing it, for backward compatibility it just overrides the values in the
+        /// config before calling init()
+        inline void init_scheduler(u32 crit_split, u32 crit_merge) {
+            solver.solver_config.scheduler_conf.split_load_value = crit_split;
+            solver.solver_config.scheduler_conf.merge_load_value = crit_merge;
+            init();
+        }
 
         template<std::enable_if_t<dim == 3, int> = 0>
         inline Tvec get_box_dim_fcc_3d(Tscal dr, u32 xcnt, u32 ycnt, u32 zcnt) {
@@ -303,7 +312,7 @@ namespace shammodels::sph {
 
             std::string log = "";
 
-            sched.for_each_local_patchdata([&](const Patch ptch, PatchDataLayer &pdat) {
+            sched.for_each_local_patchdata([&](const Patch &ptch, PatchDataLayer &pdat) {
                 PatchCoordTransform<Tvec> ptransf = sched.get_sim_box().get_patch_transform<Tvec>();
 
                 shammath::CoordRange<Tvec> patch_coord = ptransf.to_obj_coord(ptch);
@@ -414,7 +423,7 @@ namespace shammodels::sph {
             sched.scheduler_step(true, true);
 
             log = "";
-            sched.for_each_local_patchdata([&](const Patch p, PatchDataLayer &pdat) {
+            sched.for_each_local_patchdata([&](const Patch &p, PatchDataLayer &pdat) {
                 log += shambase::format(
                     "\n    patch id={}, N={} particles", p.id_patch, pdat.get_obj_cnt());
             });
@@ -466,7 +475,7 @@ namespace shammodels::sph {
 
             std::string log = "";
 
-            sched.for_each_local_patchdata([&](const Patch ptch, PatchDataLayer &pdat) {
+            sched.for_each_local_patchdata([&](const Patch &ptch, PatchDataLayer &pdat) {
                 PatchCoordTransform<Tvec> ptransf = sched.get_sim_box().get_patch_transform<Tvec>();
 
                 shammath::CoordRange<Tvec> patch_coord = ptransf.to_obj_coord(ptch);
@@ -570,7 +579,7 @@ namespace shammodels::sph {
             sched.scheduler_step(true, true);
 
             log = "";
-            sched.for_each_local_patchdata([&](const Patch p, PatchDataLayer &pdat) {
+            sched.for_each_local_patchdata([&](const Patch &p, PatchDataLayer &pdat) {
                 log += shambase::format(
                     "\n    patch id={}, N={} particles", p.id_patch, pdat.get_obj_cnt());
             });

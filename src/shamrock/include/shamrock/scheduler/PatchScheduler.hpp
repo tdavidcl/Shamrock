@@ -49,6 +49,35 @@
 #include "shamrock/scheduler/SchedulerPatchData.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 
+struct PatchSchedulerConfig {
+    u64 split_load_value = 0_u64;
+    u64 merge_load_value = 0_u64;
+};
+
+/**
+ * @brief Converts a PatchSchedulerConfig object to a JSON object.
+ *
+ * @param j The JSON object to be populated.
+ * @param p The PatchSchedulerConfig object to be converted.
+ */
+inline void to_json(nlohmann::json &j, const PatchSchedulerConfig &p) {
+    j = nlohmann::json{
+        {"split_load_value", p.split_load_value},
+        {"merge_load_value", p.merge_load_value},
+    };
+}
+
+/**
+ * @brief Deserializes a PatchSchedulerConfig object from a JSON object.
+ *
+ * @param j The JSON object to deserialize from.
+ * @param p The PatchSchedulerConfig object to populate.
+ */
+inline void from_json(const nlohmann::json &j, PatchSchedulerConfig &p) {
+    j.at("split_load_value").get_to<u64>(p.split_load_value);
+    j.at("merge_load_value").get_to<u64>(p.merge_load_value);
+}
+
 /**
  * @brief The MPI scheduler
  *
@@ -252,16 +281,18 @@ class PatchScheduler {
         });
     }
 
-    inline void for_each_global_patch(std::function<void(const shamrock::patch::Patch)> fct) {
-        for (shamrock::patch::Patch p : patch_list.global) {
+    inline void for_each_global_patch(
+        const std::function<void(const shamrock::patch::Patch &)> &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.global) {
             if (!p.is_err_mode()) {
                 fct(p);
             }
         }
     }
 
-    inline void for_each_local_patch(std::function<void(const shamrock::patch::Patch)> fct) {
-        for (shamrock::patch::Patch p : patch_list.local) {
+    inline void for_each_local_patch(
+        const std::function<void(const shamrock::patch::Patch &)> &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.local) {
             if (!p.is_err_mode()) {
                 fct(p);
             }
@@ -269,8 +300,9 @@ class PatchScheduler {
     }
 
     inline void for_each_local_patchdata(
-        std::function<void(const shamrock::patch::Patch, shamrock::patch::PatchDataLayer &)> fct) {
-        for (shamrock::patch::Patch p : patch_list.local) {
+        const std::function<void(const shamrock::patch::Patch &, shamrock::patch::PatchDataLayer &)>
+            &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.local) {
             if (!p.is_err_mode()) {
                 fct(p, patch_data.get_pdat(p.id_patch));
             }

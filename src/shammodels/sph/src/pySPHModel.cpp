@@ -36,6 +36,7 @@
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include <pybind11/cast.h>
 #include <pybind11/numpy.h>
+#include <pybind11/pytypes.h>
 #include <memory>
 #include <random>
 
@@ -63,6 +64,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
 
     config_cls.def("print_status", &TConfig::print_status)
         .def("set_particle_tracking", &TConfig::set_particle_tracking)
+        .def(
+            "set_scheduler_config",
+            [](TConfig &self, u64 split_crit, u64 merge_crit) {
+                self.scheduler_conf.split_load_value = split_crit;
+                self.scheduler_conf.merge_load_value = merge_crit;
+            },
+            py::kw_only(),
+            py::arg("split_load_value"),
+            py::arg("merge_load_value"))
         .def("set_tree_reduction_level", &TConfig::set_tree_reduction_level)
         .def("set_two_stage_search", &TConfig::set_two_stage_search)
         .def("set_show_neigh_stats", &TConfig::set_show_neigh_stats)
@@ -281,6 +291,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("Omega_0"),
             py::arg("eta"),
             py::arg("q"))
+        .def(
+            "add_ext_force_velocity_dissipation",
+            [](TConfig &self, Tscal eta) {
+                self.ext_force_config.add_velocity_dissipation(eta);
+            },
+            py::kw_only(),
+            py::arg("eta"))
+        .def(
+            "add_ext_force_vertical_disc_potential",
+            [](TConfig &self, Tscal central_mass, Tscal R0) {
+                self.ext_force_config.add_vertical_disc_potential(central_mass, R0);
+            },
+            py::kw_only(),
+            py::arg("central_mass"),
+            py::arg("R0"))
         .def("set_units", &TConfig::set_units)
         .def(
             "get_units",
@@ -550,6 +575,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def(py::init([](ShamrockCtx &ctx) {
             return std::make_unique<T>(ctx);
         }))
+        .def("init", &T::init)
         .def("init_scheduler", &T::init_scheduler)
 
         .def(
@@ -1102,6 +1128,26 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_debug_dump", &T::set_debug_dump)
         .def("solver_logs_last_rate", &T::solver_logs_last_rate)
         .def("solver_logs_last_obj_count", &T::solver_logs_last_obj_count)
+        .def(
+            "solver_logs_last_system_metrics",
+            [&](T &self) {
+                auto system_metrics = self.solver.solve_logs.get_last_system_metrics();
+                py::dict ret;
+                ret["duration"] = system_metrics.wall_time;
+                if (system_metrics.rank_energy_consummed.has_value()) {
+                    ret["rank_energy_consummed"] = system_metrics.rank_energy_consummed.value();
+                }
+                if (system_metrics.gpu_energy_consummed.has_value()) {
+                    ret["gpu_energy_consummed"] = system_metrics.gpu_energy_consummed.value();
+                }
+                if (system_metrics.cpu_energy_consummed.has_value()) {
+                    ret["cpu_energy_consummed"] = system_metrics.cpu_energy_consummed.value();
+                }
+                if (system_metrics.dram_energy_consummed.has_value()) {
+                    ret["dram_energy_consummed"] = system_metrics.dram_energy_consummed.value();
+                }
+                return ret;
+            })
         .def("solver_logs_cumulated_step_time", &T::solver_logs_cumulated_step_time)
         .def("solver_logs_reset_cumulated_step_time", &T::solver_logs_reset_cumulated_step_time)
         .def("solver_logs_step_count", &T::solver_logs_step_count)

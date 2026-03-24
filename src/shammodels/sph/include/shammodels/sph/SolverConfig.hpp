@@ -36,6 +36,7 @@
 #include "shamrock/io/json_utils.hpp"
 #include "shamrock/io/units_json.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
+#include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
@@ -295,6 +296,8 @@ struct shammodels::sph::SolverConfig {
     inline void set_filter_empty_patch_gz(bool state) { filter_empty_patch_gz = state; }
 
     inline bool has_filter_empty_patch_gz() { return filter_empty_patch_gz; }
+
+    PatchSchedulerConfig scheduler_conf = {};
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Units Config
@@ -1131,6 +1134,8 @@ namespace shammodels::sph {
             // used for type checking
             {"kernel_id", kernel_id},
             {"type_id", type_id},
+            // scheduler config
+            {"scheduler_config", p.scheduler_conf},
             // actual data stored in the json
             {"gpart_mass", p.gpart_mass},
             {"cfl_config", p.cfl_config},
@@ -1219,6 +1224,8 @@ namespace shammodels::sph {
             shamrock::get_to_if_contains_fallbacks(
                 j, key, value, fallbacks, has_used_defaults, has_updated_config);
         };
+
+        _get_to_if_contains("scheduler_config", p.scheduler_conf);
 
         // actual data stored in the json
         _get_to_if_contains("gpart_mass", p.gpart_mass);
