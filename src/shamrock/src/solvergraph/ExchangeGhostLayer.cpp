@@ -31,17 +31,22 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
     const shamrock::solvergraph::RankGetter &rank_owner = edges.rank_owner;
 
     std::unordered_map<u64, u64> msg_sizes_send;
+    std::unordered_map<u64, u64> msg_sizes_max_send;
 
     std::stringstream ss;
     ss << "Rank " << shamcomm::world_rank() << " is sending "
        << ghost_layer.patchdatas.get_native().size() << " patches sizes:";
     for (auto &pdat : ghost_layer.patchdatas.get_native()) {
+        u64 key = rank_owner.get_rank_owner(pdat.first.first);
         // ss << pdat.first.first << " " << pdat.first.second << " " << pdat.second.get_obj_cnt() <<
         // "\n";
-        msg_sizes_send[rank_owner.get_rank_owner(pdat.first.first)] += pdat.second.get_obj_cnt();
+        msg_sizes_send[key] += pdat.second.get_obj_cnt();
+        msg_sizes_max_send[key] = std::max(msg_sizes_max_send[key], u64(pdat.second.get_obj_cnt()));
     }
     for (auto &[rank, size] : msg_sizes_send) {
-        ss << "\n" << "msg size to rank " << rank << " is " << size;
+        ss << "\n"
+           << "msg size from rank " << rank << " is " << size << " max is "
+           << msg_sizes_max_send[rank];
     }
     shamcomm::logs::raw_ln(ss.str());
 
