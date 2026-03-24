@@ -30,6 +30,7 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
     auto &ghost_layer                                   = edges.ghost_layer;
     const shamrock::solvergraph::RankGetter &rank_owner = edges.rank_owner;
 
+#if false
     std::unordered_map<u64, u64> msg_sizes_send;
     std::unordered_map<u64, u64> msg_sizes_max_send;
 
@@ -49,6 +50,7 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
            << msg_sizes_max_send[rank];
     }
     shamcomm::logs::raw_ln(ss.str());
+#endif
 
     shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> recv_dat;
 
