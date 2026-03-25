@@ -126,17 +126,28 @@ for N_target_base in [32e6]:
     res_system_metrics = []
     res_mpi_timers = []
 
+    before_mpi_timers, after_mpi_timers = None, None
+
+    def callback_before_mpi_timer():
+        global before_mpi_timers
+        print(shamrock.sys.world_rank(), "register before_mpi_timers")
+        before_mpi_timers = shamrock.comm.get_timers()
+
+    def callback_after_mpi_timer():
+        global after_mpi_timers
+        print(shamrock.sys.world_rank(), "register after_mpi_timers")
+        after_mpi_timers = shamrock.comm.get_timers()
+
+    model.add_timestep_callback(
+        step_begin=callback_before_mpi_timer, step_end=callback_after_mpi_timer
+    )
+
     for i in range(10):
         shamrock.sys.mpi_barrier()
-
-        # per carefull this is still per ranks
-        before_mpi_timers = shamrock.comm.get_timers()
 
         # To replay the same step
         model.set_next_dt(0.0)
         model.timestep()
-
-        after_mpi_timers = shamrock.comm.get_timers()
 
         tmp_res_rate, tmp_res_cnt, tmp_system_metrics = (
             model.solver_logs_last_rate(),
