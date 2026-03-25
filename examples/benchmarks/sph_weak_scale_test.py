@@ -124,13 +124,19 @@ for N_target_base in [32e6]:
     res_rates = []
     res_cnts = []
     res_system_metrics = []
+    res_mpi_timers = []
 
     for i in range(10):
         shamrock.sys.mpi_barrier()
 
+        # per carefull this is still per ranks
+        before_mpi_timers = shamrock.comm.get_timers()
+
         # To replay the same step
         model.set_next_dt(0.0)
         model.timestep()
+
+        after_mpi_timers = shamrock.comm.get_timers()
 
         tmp_res_rate, tmp_res_cnt, tmp_system_metrics = (
             model.solver_logs_last_rate(),
@@ -140,6 +146,7 @@ for N_target_base in [32e6]:
         res_rates.append(tmp_res_rate)
         res_cnts.append(tmp_res_cnt)
         res_system_metrics.append(tmp_system_metrics)
+        res_mpi_timers.append(shamrock.comm.mpi_timers_delta(before_mpi_timers, after_mpi_timers))
 
     # result is the best rate of the 5 steps
     res_rate, res_cnt = max(res_rates), res_cnts[0]
@@ -147,7 +154,7 @@ for N_target_base in [32e6]:
     # index of the max rate
     max_rate_index = res_rates.index(max(res_rates))
     max_rate_system_metrics = res_system_metrics[max_rate_index]
-
+    max_mpi_timers = res_mpi_timers[max_rate_index]
     step_time = res_cnt / res_rate
 
     if shamrock.sys.world_rank() == 0:
@@ -167,6 +174,7 @@ for N_target_base in [32e6]:
             "rate": res_rate,
             "cnt": res_cnt,
             "step_time": step_time,
+            "mpi_timers": max_mpi_timers,
         }
 
         # print the system metrics
