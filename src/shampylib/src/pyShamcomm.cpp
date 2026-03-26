@@ -40,17 +40,9 @@ Register_pymod(shamcommlibinit) {
     shamcomm_module.def(
         "mpi_timers_delta",
         [](std::unordered_map<std::string, f64> start, std::unordered_map<std::string, f64> end) {
-            std::vector<std::string> keys{};
-
-            for (auto &[k, v] : end) {
-                keys.push_back(k);
-            }
-
-            auto key_histo = shamcomm::all_string_histogram(keys);
-
             std::unordered_map<std::string, f64> deltas{};
 
-            for (auto &[k, c] : key_histo) {
+            for (auto &k : shamcomm::mpi::get_possible_keys()) {
                 deltas[k] = shamalgs::collective::allreduce_max(end[k] - start[k]);
             }
 

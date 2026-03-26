@@ -146,11 +146,18 @@ for N_target_base in [32e6]:
     )
 
     for i in range(10):
+        if shamrock.sys.world_rank() == 0:
+            print("running step ", i+1, "/", 10, " ...")
+
         shamrock.sys.mpi_barrier()
 
         # To replay the same step
         model.set_next_dt(0.0)
         model.timestep()
+
+
+        if shamrock.sys.world_rank() == 0:
+            print("collecting results ...")
 
         tmp_res_rate, tmp_res_cnt, tmp_system_metrics = (
             model.solver_logs_last_rate(),
@@ -161,6 +168,16 @@ for N_target_base in [32e6]:
         res_cnts.append(tmp_res_cnt)
         res_system_metrics.append(tmp_system_metrics)
         res_mpi_timers.append(shamrock.comm.mpi_timers_delta(before_mpi_timers, after_mpi_timers))
+
+
+        if shamrock.sys.world_rank() == 0:
+            print("sleeping 1 second ...")
+
+        import time
+        time.sleep(1)
+
+        if shamrock.sys.world_rank() == 0:
+            print("done sleeping 1 second ...")
 
     # result is the best rate of the 5 steps
     res_rate, res_cnt = max(res_rates), res_cnts[0]
