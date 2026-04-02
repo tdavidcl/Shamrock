@@ -31,8 +31,7 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <hipSYCL/sycl/libkernel/builtins/generic_builtins.hpp>
-#include <hipSYCL/sycl/libkernel/builtins/math_builtins.hpp>
+#include <shambackends/sycl.hpp>
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_particles() {
@@ -50,11 +49,49 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
     PatchDataLayerLayout &pdl = scheduler().pdl_old();
     const u32 ixyz            = pdl.get_field_idx<Tvec>("xyz");
     const u32 ivxyz           = pdl.get_field_idx<Tvec>("vxyz");
+    const u32 iaxyz           = pdl.get_field_idx<Tvec>("axyz");
 
     auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
     sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
 
     std::vector<Sink> &sink_parts = storage.sinks.get();
+
+    /* // Uncomment this if you want to compute total momentum to check some stuff
+    auto get_tot_mom = [&]() -> Tvec {
+        Tvec total_momentum = {};
+
+        sham::DeviceBuffer<Tvec> total_momentum_part(0, dev_sched);
+
+        scheduler().for_each_patchdata_nonempty(
+            [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                u32 len = pdat.get_obj_cnt();
+
+                total_momentum_part.resize(len);
+
+                sham::DeviceBuffer<Tvec> &vxyz_buf = pdat.get_field_buf_ref<Tvec>(ivxyz);
+
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{vxyz_buf},
+                    sham::MultiRef{total_momentum_part},
+                    len,
+                    [gpart_mass](
+                        u32 i, const Tvec *__restrict vxyz, Tvec *__restrict total_momentum_part) {
+                        total_momentum_part[i] = gpart_mass * vxyz[i];
+                    });
+
+                total_momentum += shamalgs::primitives::sum(dev_sched, total_momentum_part, 0, len);
+            });
+
+        Tvec tot_total_momentum = shamalgs::collective::allreduce_sum(total_momentum);
+
+        for (auto &sink : sink_parts) {
+            tot_total_momentum += sink.mass * sink.velocity;
+        }
+
+        return tot_total_momentum;
+    };
+*/
 
     u32 sink_id        = 0;
     bool had_accretion = false;
@@ -121,16 +158,15 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         Tscal s_acc_mass = 0;
         Tvec s_acc_mxyz  = {0, 0, 0};
         Tvec s_acc_pxyz  = {0, 0, 0};
+        Tvec s_acc_maxyz = {0, 0, 0};
+        Tvec s_acc_lxyz  = {0, 0, 0};
 
         scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
             u32 Nobj = pdat.get_obj_cnt();
 
             sham::DeviceBuffer<Tvec> &buf_xyz  = pdat.get_field_buf_ref<Tvec>(ixyz);
             sham::DeviceBuffer<Tvec> &buf_vxyz = pdat.get_field_buf_ref<Tvec>(ivxyz);
-
-            sham::DeviceBuffer<u32> &not_accreted
-                = accretion_flag_bufs.get(cur_p.id_patch).not_accreted;
-            sham::DeviceBuffer<u32> &accreted = accretion_flag_bufs.get(cur_p.id_patch).accreted;
+            sham::DeviceBuffer<Tvec> &buf_axyz = pdat.get_field_buf_ref<Tvec>(iaxyz);
 
             sham::DeviceBuffer<u32> &id_list_accrete = bufs_id_list_accrete.get(cur_p.id_patch);
 
@@ -141,50 +177,61 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                 Tscal acc_mass = gpart_mass * Naccrete;
 
                 sham::DeviceBuffer<Tvec> pxyz_acc(Naccrete, dev_sched);
+                sham::DeviceBuffer<Tvec> maxyz_acc(Naccrete, dev_sched);
                 sham::DeviceBuffer<Tvec> mxyz_acc(Naccrete, dev_sched);
+                sham::DeviceBuffer<Tvec> lxyz_acc(Naccrete, dev_sched);
 
                 sham::kernel_call(
                     q,
-                    sham::MultiRef{buf_xyz, buf_vxyz, id_list_accrete},
-                    sham::MultiRef{pxyz_acc, mxyz_acc},
+                    sham::MultiRef{buf_xyz, buf_vxyz, buf_axyz, id_list_accrete},
+                    sham::MultiRef{pxyz_acc, mxyz_acc, maxyz_acc, lxyz_acc},
                     Naccrete,
                     [gpart_mass, r_sink, v_sink](
                         u32 id_a,
                         const Tvec *__restrict xyz,
                         const Tvec *__restrict vxyz,
+                        const Tvec *__restrict axyz,
                         const u32 *__restrict id_acc,
                         Tvec *accretion_p,
-                        Tvec *accretion_mr) {
+                        Tvec *accretion_mr,
+                        Tvec *accretion_ma,
+                        Tvec *accretion_l) {
                         u32 i_a            = id_acc[id_a];
                         Tvec r             = xyz[i_a];
                         Tvec v             = vxyz[i_a];
+                        Tvec a             = axyz[i_a];
                         accretion_p[id_a]  = gpart_mass * v;
                         accretion_mr[id_a] = gpart_mass * r;
+                        accretion_ma[id_a] = gpart_mass * a;
+                        accretion_l[id_a]  = gpart_mass * sycl::cross(r - r_sink, v - v_sink);
                     });
 
-                Tvec acc_pxyz = shamalgs::primitives::sum(dev_sched, pxyz_acc, 0, Naccrete);
-                Tvec acc_mxyz = shamalgs::primitives::sum(dev_sched, mxyz_acc, 0, Naccrete);
+                Tvec acc_pxyz  = shamalgs::primitives::sum(dev_sched, pxyz_acc, 0, Naccrete);
+                Tvec acc_mxyz  = shamalgs::primitives::sum(dev_sched, mxyz_acc, 0, Naccrete);
+                Tvec acc_maxyz = shamalgs::primitives::sum(dev_sched, maxyz_acc, 0, Naccrete);
+                Tvec acc_lxyz  = shamalgs::primitives::sum(dev_sched, lxyz_acc, 0, Naccrete);
 
                 s_acc_mass += acc_mass;
                 s_acc_pxyz += acc_pxyz;
                 s_acc_mxyz += acc_mxyz;
+                s_acc_maxyz += acc_maxyz;
+                s_acc_lxyz += acc_lxyz;
             }
         });
 
         Tscal sum_acc_mass = shamalgs::collective::allreduce_sum(s_acc_mass);
         Tvec sum_acc_pxyz  = shamalgs::collective::allreduce_sum(s_acc_pxyz);
         Tvec sum_acc_mxyz  = shamalgs::collective::allreduce_sum(s_acc_mxyz);
+        Tvec sum_acc_maxyz = shamalgs::collective::allreduce_sum(s_acc_maxyz);
+        Tvec sum_acc_lxyz  = shamalgs::collective::allreduce_sum(s_acc_lxyz);
 
         // compute the new sink values
-        Tscal new_mass = s.mass + sum_acc_mass;
-        Tvec new_pos   = (sum_acc_mxyz + s.pos * s.mass) / (s.mass + sum_acc_mass);
-        Tvec new_vel   = (sum_acc_pxyz + s.velocity * s.mass) / (s.mass + sum_acc_mass);
-
-        // use them to compute the angular_momentum updated
-        Tvec s_acc_lxyz   = {0, 0, 0};
-        Tvec sum_acc_lxyz = shamalgs::collective::allreduce_sum(s_acc_lxyz);
-
-        Tvec new_ang_mom = s.angular_momentum + sum_acc_lxyz;
+        Tscal new_mass   = s.mass + sum_acc_mass;
+        Tvec new_pos     = (sum_acc_mxyz + s.pos * s.mass) / (s.mass + sum_acc_mass);
+        Tvec new_vel     = (sum_acc_pxyz + s.velocity * s.mass) / (s.mass + sum_acc_mass);
+        Tvec new_acc     = (sum_acc_maxyz + s.sph_acceleration * s.mass) / (s.mass + sum_acc_mass);
+        Tvec new_ang_mom = s.angular_momentum + sum_acc_lxyz
+                           - new_mass * sycl::cross(new_pos - s.pos, new_vel - s.velocity);
 
         // write back the updated sink state
         auto new_state             = s;
@@ -192,18 +239,22 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         new_state.pos              = new_pos;
         new_state.velocity         = new_vel;
         new_state.angular_momentum = new_ang_mom;
-
-        s = new_state;
+        new_state.sph_acceleration = new_acc;
 
         if (sum_acc_mass > 0) {
             had_accretion = true;
             log += shambase::format(
-                "\n    id {} mass {} vel {} l {}",
+                "\n    id {} deltas : mass={} r={} v={} l={}",
                 sink_id,
-                sum_acc_mass,
-                sum_acc_pxyz / s.mass,
-                sum_acc_lxyz);
+                new_state.mass - s.mass,
+                new_state.pos - s.pos,
+                new_state.velocity - s.velocity,
+                new_state.angular_momentum - s.angular_momentum);
         }
+
+        // Tvec tot_mom_before = get_tot_mom();
+
+        s = new_state;
 
         // evict accreted particles from patches
         scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
@@ -225,6 +276,25 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
             }
         });
 
+        /*
+        Tvec tot_mom_after = get_tot_mom();
+        Tvec delta         = tot_mom_after - tot_mom_before;
+
+        logger::raw_ln(tot_mom_before, tot_mom_after, tot_mom_after - tot_mom_before);
+        logger::raw_ln(sycl::length(delta), sycl::length(tot_mom_after));
+
+        if (sycl::length(delta) > 1e-12) {
+            throw "";
+        }
+
+        if (sycl::length(tot_mom_after) > 1e-12) {
+            throw "";
+        }
+        */
+    }
+
+    // now time for torque free torque restitution
+    for (Sink &s : sink_parts) {
         if (s.is_torque_free && sham::dot(s.angular_momentum, s.angular_momentum) > 0) {
             // boost particles in a radius of 4 racc to empty the sink angular_momentum
 
