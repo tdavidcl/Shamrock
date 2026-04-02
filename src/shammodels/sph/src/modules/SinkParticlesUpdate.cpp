@@ -34,7 +34,7 @@
 #include <shambackends/sycl.hpp>
 
 template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_particles() {
+void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_particles(Tscal dt) {
     StackEntry stack_loc{};
 
     Tscal gpart_mass = solver_config.gpart_mass;
@@ -92,6 +92,44 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         return tot_total_momentum;
     };
 */
+
+    auto get_ang_mom = [&]() -> Tvec {
+        Tvec angular_momentum = {};
+
+        sham::DeviceBuffer<Tvec> total_momentum_part(0, dev_sched);
+
+        scheduler().for_each_patchdata_nonempty([&](const shamrock::patch::Patch p,
+                                                    shamrock::patch::PatchDataLayer &pdat) {
+            u32 len = pdat.get_obj_cnt();
+
+            total_momentum_part.resize(len);
+
+            sham::DeviceBuffer<Tvec> &xyz_buf  = pdat.get_field_buf_ref<Tvec>(ixyz);
+            sham::DeviceBuffer<Tvec> &vxyz_buf = pdat.get_field_buf_ref<Tvec>(ivxyz);
+            sham::kernel_call(
+                q,
+                sham::MultiRef{xyz_buf, vxyz_buf},
+                sham::MultiRef{total_momentum_part},
+                len,
+                [gpart_mass](
+                    u32 i,
+                    const Tvec *__restrict xyz,
+                    const Tvec *__restrict vxyz,
+                    Tvec *__restrict total_momentum_part) {
+                    total_momentum_part[i] = gpart_mass * sycl::cross(xyz[i], vxyz[i]);
+                });
+
+            angular_momentum += shamalgs::primitives::sum(dev_sched, total_momentum_part, 0, len);
+        });
+
+        Tvec tot_angular_momentum = shamalgs::collective::allreduce_sum(angular_momentum);
+
+        for (auto &sink : sink_parts) {
+            tot_angular_momentum
+                += sink.mass * sycl::cross(sink.pos, sink.velocity) + sink.angular_momentum;
+        }
+        return tot_angular_momentum;
+    };
 
     u32 sink_id        = 0;
     bool had_accretion = false;
@@ -186,7 +224,7 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                     sham::MultiRef{buf_xyz, buf_vxyz, buf_axyz, id_list_accrete},
                     sham::MultiRef{pxyz_acc, mxyz_acc, maxyz_acc, lxyz_acc},
                     Naccrete,
-                    [gpart_mass, r_sink, v_sink](
+                    [gpart_mass, r_sink, v_sink, dt](
                         u32 id_a,
                         const Tvec *__restrict xyz,
                         const Tvec *__restrict vxyz,
@@ -203,7 +241,8 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                         accretion_p[id_a]  = gpart_mass * v;
                         accretion_mr[id_a] = gpart_mass * r;
                         accretion_ma[id_a] = gpart_mass * a;
-                        accretion_l[id_a]  = gpart_mass * sycl::cross(r - r_sink, v - v_sink);
+                        accretion_l[id_a]
+                            = gpart_mass * sycl::cross(r - r_sink, v + ((dt / 2) * a) - v_sink);
                     });
 
                 Tvec acc_pxyz  = shamalgs::primitives::sum(dev_sched, pxyz_acc, 0, Naccrete);
@@ -253,6 +292,7 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         }
 
         // Tvec tot_mom_before = get_tot_mom();
+        Tvec ang_mom_before = get_ang_mom();
 
         s = new_state;
 
@@ -291,6 +331,19 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
             throw "";
         }
         */
+
+        /*
+        Tvec ang_mom_after = get_ang_mom();
+        Tvec delta         = ang_mom_after - ang_mom_before;
+
+        logger::raw_ln(ang_mom_before, ang_mom_after, ang_mom_after - ang_mom_before);
+        logger::raw_ln(sycl::length(delta), sycl::length(ang_mom_after));
+
+        if (sycl::length(delta) > 1e-12) {
+            // throw "";
+        }
+
+        // */
     }
 
     // now time for torque free torque restitution
