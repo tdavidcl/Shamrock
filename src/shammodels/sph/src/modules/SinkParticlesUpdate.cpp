@@ -230,10 +230,10 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                         const Tvec *__restrict vxyz,
                         const Tvec *__restrict axyz,
                         const u32 *__restrict id_acc,
-                        Tvec *accretion_p,
-                        Tvec *accretion_mr,
-                        Tvec *accretion_ma,
-                        Tvec *accretion_l) {
+                        Tvec *__restrict accretion_p,
+                        Tvec *__restrict accretion_mr,
+                        Tvec *__restrict accretion_ma,
+                        Tvec *__restrict accretion_l) {
                         u32 i_a            = id_acc[id_a];
                         Tvec r             = xyz[i_a];
                         Tvec v             = vxyz[i_a];
@@ -241,8 +241,11 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                         accretion_p[id_a]  = gpart_mass * v;
                         accretion_mr[id_a] = gpart_mass * r;
                         accretion_ma[id_a] = gpart_mass * a;
-                        accretion_l[id_a]
-                            = gpart_mass * sycl::cross(r - r_sink, v + ((dt / 2) * a) - v_sink);
+
+                        // dirty trick to account for the residual acceleration in the spin. This
+                        // allows us to maitain a much better angular momentum conservation.
+                        v += a * dt / 2;
+                        accretion_l[id_a] = gpart_mass * sycl::cross(r - r_sink, v - v_sink);
                     });
 
                 Tvec acc_pxyz  = shamalgs::primitives::sum(dev_sched, pxyz_acc, 0, Naccrete);
