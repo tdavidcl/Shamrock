@@ -82,13 +82,8 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-<<<<<<< torque-free-sink
-dt_stop = 0.01
-nstop = 120
-=======
 dt_stop = 0.02
 nstop = 30
->>>>>>> main
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
@@ -467,14 +462,14 @@ column_particle_count_plot = ColumnParticleCount(
 
 
 def analysis(ianalysis):
-    # column_density_plot.analysis_save(ianalysis)
-    # column_density_plot_hollywood.analysis_save(ianalysis)
-    # vertical_density_plot.analysis_save(ianalysis)
-    # v_z_slice_plot.analysis_save(ianalysis)
-    # relative_azy_velocity_slice_plot.analysis_save(ianalysis)
-    # vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
-    # dt_part_slice_plot.analysis_save(ianalysis)
-    # column_particle_count_plot.analysis_save(ianalysis)
+    column_density_plot.analysis_save(ianalysis)
+    column_density_plot_hollywood.analysis_save(ianalysis)
+    vertical_density_plot.analysis_save(ianalysis)
+    v_z_slice_plot.analysis_save(ianalysis)
+    relative_azy_velocity_slice_plot.analysis_save(ianalysis)
+    vertical_shear_gradient_slice_plot.analysis_save(ianalysis)
+    dt_part_slice_plot.analysis_save(ianalysis)
+    column_particle_count_plot.analysis_save(ianalysis)
 
     barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
@@ -543,7 +538,6 @@ for ttarg in t_stop:
 import matplotlib
 import matplotlib.pyplot as plt
 
-"""
 face_on_render_kwargs = {
     "x_unit": "au",
     "y_unit": "au",
@@ -644,7 +638,6 @@ column_particle_count_plot.render_all(
     contour_list=[1, 10, 100, 1000],
     **sink_params,
 )
-"""
 # %%
 # Make gif for the doc (plot_to_gif.py)
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -653,7 +646,7 @@ column_particle_count_plot.render_all(
 # sphinx_gallery_multi_image = "single"
 
 
-render_gif = False
+render_gif = True
 
 # %%
 # Do it for rho integ
@@ -750,6 +743,7 @@ plt.xlabel("t")
 plt.ylabel("barycenter")
 plt.legend(["x", "y", "z"])
 plt.savefig(analysis_folder + "barycenter.png")
+plt.show()
 
 # %%
 # load the json file for disc_mass
@@ -761,6 +755,7 @@ plt.plot(t, disc_mass)
 plt.xlabel("t")
 plt.ylabel("disc_mass")
 plt.savefig(analysis_folder + "disc_mass.png")
+plt.show()
 
 # %%
 # load the json file for total_momentum
@@ -778,24 +773,7 @@ plt.xlabel("t")
 plt.ylabel("total_momentum")
 plt.legend(["x", "y", "z"])
 plt.savefig(analysis_folder + "total_momentum.png")
-
-# %%
-# load the json file for total_momentum
-t, angular_momentum = load_data_from_json("angular_momentum.json", "angular_momentum")
-angular_momentum_x = [d[0] - angular_momentum[0][0] for d in angular_momentum]
-angular_momentum_y = [d[1] - angular_momentum[0][1] for d in angular_momentum]
-angular_momentum_z = [d[2] - angular_momentum[0][2] for d in angular_momentum]
-
-
-plt.figure(figsize=(8, 5), dpi=200)
-
-plt.plot(t, angular_momentum_x)
-plt.plot(t, angular_momentum_y)
-plt.plot(t, angular_momentum_z)
-plt.xlabel("t")
-plt.ylabel("total angular_momentum")
-plt.legend(["x", "y", "z"])
-plt.savefig(analysis_folder + "angular_momentum.png")
+plt.show()
 
 
 # %%
@@ -831,6 +809,7 @@ plt.xlabel("t")
 plt.ylabel("energy")
 plt.legend(["potential_energy", "kinetic_energy", "total_energy"])
 plt.savefig(analysis_folder + "energies.png")
+plt.show()
 
 # %%
 # load the json file for sinks
@@ -848,6 +827,7 @@ plt.xlabel("t")
 plt.ylabel("sink position")
 plt.legend()
 plt.savefig(analysis_folder + "sinks.png")
+plt.show()
 
 # %%
 # Sink angular momentum
@@ -890,24 +870,6 @@ plt.xlabel("t")
 plt.ylabel("sink pos - barycenter pos")
 plt.legend()
 plt.savefig(analysis_folder + "sink_to_barycenter_distance.png")
-
-# %%
-# Sink angular momentum
-t, sinks = load_data_from_json("sinks.json", "sinks")
-
-sinks_lx = np.array([d[0]["angular_momentum"][0] for d in sinks])
-sinks_ly = np.array([d[0]["angular_momentum"][1] for d in sinks])
-sinks_lz = np.array([d[0]["angular_momentum"][2] for d in sinks])
-
-
-plt.figure(figsize=(8, 5), dpi=200)
-plt.plot(t, sinks_lx, label="sink 0 (l_x)")
-plt.plot(t, sinks_ly, label="sink 0 (l_y)")
-plt.plot(t, sinks_lz, label="sink 0 (l_z)")
-plt.xlabel("t")
-plt.ylabel("sink spin")
-plt.legend()
-plt.savefig(analysis_folder + "sink_angmom.png")
 plt.show()
 
 
