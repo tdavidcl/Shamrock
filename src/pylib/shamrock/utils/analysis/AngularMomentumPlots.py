@@ -12,8 +12,6 @@ except ImportError:
     _HAS_NUMBA = False
 
 
-
-
 def SliceAngularMomentum(
     model,
     ext_r,
@@ -26,7 +24,7 @@ def SliceAngularMomentum(
     analysis_prefix,
     do_normalization=True,
     min_normalization=1e-9,
-    Lprojection = [0.,0.,1.]
+    Lprojection=[0.0, 0.0, 1.0],
 ):
     def compute_angular_mom(helper):
         if _HAS_NUMBA:
@@ -38,9 +36,15 @@ def SliceAngularMomentum(
 
         def internal(
             size: int,
-            hpart: np.array, x: np.array, y: np.array, z: np.array, vx: np.array, vy: np.array, vz: np.array
+            hpart: np.array,
+            x: np.array,
+            y: np.array,
+            z: np.array,
+            vx: np.array,
+            vy: np.array,
+            vz: np.array,
         ) -> np.array:
-            
+
             rho = pmass * (hfact / hpart) ** 3
 
             r = np.stack([x, y, z], axis=-1)
@@ -90,6 +94,7 @@ def SliceAngularMomentum(
         compute_function=compute_angular_mom,
     )
 
+
 def ColumnAverageAngularMomentum(
     model,
     ext_r,
@@ -101,7 +106,7 @@ def ColumnAverageAngularMomentum(
     analysis_folder,
     analysis_prefix,
     min_normalization=1e-9,
-    Lprojection = [0.,0.,1.]
+    Lprojection=[0.0, 0.0, 1.0],
 ):
     def compute_angular_mom(helper):
         if _HAS_NUMBA:
@@ -113,9 +118,15 @@ def ColumnAverageAngularMomentum(
 
         def internal(
             size: int,
-            hpart: np.array, x: np.array, y: np.array, z: np.array, vx: np.array, vy: np.array, vz: np.array
+            hpart: np.array,
+            x: np.array,
+            y: np.array,
+            z: np.array,
+            vx: np.array,
+            vy: np.array,
+            vz: np.array,
         ) -> np.array:
-            
+
             rho = pmass * (hfact / hpart) ** 3
 
             r = np.stack([x, y, z], axis=-1)
