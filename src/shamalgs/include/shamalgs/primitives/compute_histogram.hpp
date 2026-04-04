@@ -91,10 +91,10 @@ namespace shamalgs::primitives {
                 nbins,
                 [element_count, functor](
                     u32 ibin,
-                    const Tbins *bin_edge_inf,
-                    const Tbins *bin_edge_sup,
-                    const Targs *...in_data,
-                    T *result) {
+                    const Tbins *__restrict bin_edge_inf,
+                    const Tbins *__restrict bin_edge_sup,
+                    const Targs *__restrict... in_data,
+                    T *__restrict result) {
                     Tbins edge_inf = bin_edge_inf[ibin];
                     Tbins edge_sup = bin_edge_sup[ibin];
 
@@ -120,12 +120,12 @@ namespace shamalgs::primitives {
                 nbins,
                 [element_count, functor](
                     u32 nbins,
-                    const Tbins *bin_edge_inf,
-                    const Tbins *bin_edge_sup,
-                    const Targs *...in_data,
-                    T *result) {
+                    const Tbins *__restrict bin_edge_inf,
+                    const Tbins *__restrict bin_edge_sup,
+                    const Targs *__restrict... in_data,
+                    T *__restrict result) {
                     return [=, in_data = std::tuple{in_data...}](sycl::handler &cgh) {
-                        u32 group_size = 32;
+                        u32 group_size = 128;
                         u32 group_cnt  = shambase::group_count(nbins, group_size);
 
                         group_cnt         = group_cnt + (group_cnt % 4);
@@ -195,7 +195,7 @@ namespace shamalgs::primitives {
 
         } else if (impl == histo_impl::gpu_oversubscribe) {
 
-            u32 group_size = 32;
+            u32 group_size = 256;
             sham::kernel_call_hndl(
                 dev_sched->get_queue(),
                 sham::MultiRef{bin_edge_inf, bin_edge_sup, input_data...},
@@ -203,20 +203,15 @@ namespace shamalgs::primitives {
                 nbins * group_size,
                 [element_count, functor, group_size, nbins](
                     u32 nbins_oversubscribed,
-                    const Tbins *bin_edge_inf,
-                    const Tbins *bin_edge_sup,
-                    const Targs *...in_data,
-                    T *result) {
+                    const Tbins *__restrict bin_edge_inf,
+                    const Tbins *__restrict bin_edge_sup,
+                    const Targs *__restrict... in_data,
+                    T *__restrict result) {
                     return [=, in_data = std::tuple{in_data...}](sycl::handler &cgh) {
                         u32 group_cnt = shambase::group_count(nbins_oversubscribed, group_size);
 
                         group_cnt         = group_cnt + (group_cnt % 4);
                         u32 corrected_len = group_cnt * group_size;
-
-                        auto locals
-                            = sycl::local_accessor<std::tuple<Targs...>, 1>(group_size, cgh);
-
-                        sycl::local_accessor<T, 1> local_sums(group_size, cgh);
 
                         cgh.parallel_for(
                             sycl::nd_range<1>{corrected_len, group_size},
@@ -228,46 +223,42 @@ namespace shamalgs::primitives {
                                 Tbins edge_inf      = is_valid_point ? bin_edge_inf[ibin] : Tbins{};
                                 Tbins edge_sup      = is_valid_point ? bin_edge_sup[ibin] : Tbins{};
 
-                                local_sums[local_id] = 0;
+                                // for each thread this will the sum of all the
+                                // "func(in_data[group_size*i + local_data]) for all i"
+                                T local_sum = 0;
 
                                 for (size_t i = 0; i < element_count; i += group_size) {
 
-                                    item.barrier(sycl::access::fence_space::local_space);
-
                                     if (i + local_id < element_count) {
-                                        std::apply(
+
+                                        bool has_value = false;
+
+                                        // coalesced read of the data and then
+                                        // compute the value to accumulate
+                                        T tmp = std::apply(
                                             [&](auto &...in_data) {
-                                                locals[local_id]
-                                                    = std::tuple{in_data[i + local_id]...};
+                                                return functor(
+                                                    edge_inf,
+                                                    edge_sup,
+                                                    in_data[i + local_id]...,
+                                                    has_value);
                                             },
                                             in_data);
-                                    } else {
-                                        locals[local_id] = {}; // ensure 0
-                                    }
 
-                                    item.barrier(sycl::access::fence_space::local_space);
-
-                                    if (i + local_id < element_count) {
-                                        bool has_value = false;
-                                        T tmp          = std::apply(
-                                            [&](auto &...local_accs) {
-                                                return functor(
-                                                    edge_inf, edge_sup, local_accs..., has_value);
-                                            },
-                                            locals[local_id]);
                                         if (has_value) {
-                                            local_sums[local_id] += tmp;
+                                            // add it to the local sum of this thread
+                                            local_sum += tmp;
                                         }
                                     }
-
                                 }
 
-                                item.barrier(sycl::access::fence_space::local_space);
-                                auto local_sum = sycl::reduce_over_group(
-                                    item.get_group(), local_sums[local_id], sycl::plus<T>{});
+                                // we have all the terms scattered across the threads of the group,
+                                // we can just accumulate the result
+                                auto group_sum = sycl::reduce_over_group(
+                                    item.get_group(), local_sum, sycl::plus<T>{});
 
                                 if (is_valid_point && local_id == 0) {
-                                    result[ibin] = local_sum;
+                                    result[ibin] = group_sum;
                                 }
                             });
                     };

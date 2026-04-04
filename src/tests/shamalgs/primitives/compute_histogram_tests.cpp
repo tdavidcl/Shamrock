@@ -28,11 +28,9 @@ inline bool compare(const std::vector<T> &v1, const std::vector<T> &v2, T tol) {
     bool result = true;
     for (size_t i = 0; i < v1.size(); i++) {
         if (sham::abs(v1[i] - v2[i]) > tol) {
-            std::cout << i << " " 
-                      << f64(v1[i]) << " " 
-                      << f64(v2[i]) << " " 
-                      << f64(v1[i] - v2[i]) << std::endl;
-            //logger::raw_ln(i, f64(v1[i]), f64(v2[i]), f64(v1[i] - v2[i]));
+            std::cout << i << " " << f64(v1[i]) << " " << f64(v2[i]) << " " << f64(v1[i] - v2[i])
+                      << std::endl;
+            // logger::raw_ln(i, f64(v1[i]), f64(v2[i]), f64(v1[i] - v2[i]));
             result = false;
         }
     }
@@ -56,7 +54,7 @@ inline void basic_histogram() {
 
     std::vector<Tscal> positions{};
 
-    size_t N      = 5e5;
+    size_t N      = 6e5;
     size_t Narray = 2048;
 
     std::mt19937_64 eng(0x42);
@@ -122,7 +120,7 @@ inline void basic_histogram_size() {
     std::vector<Tscal> positions{};
     std::vector<Tscal> sizes{};
 
-    size_t N      = 5e5;
+    size_t N      = 2e6;
     size_t Narray = 2048;
 
     std::mt19937_64 eng(0x42);
@@ -185,9 +183,83 @@ inline void basic_histogram_size() {
     }
 }
 
+template<class Tscal>
+inline void basic_histogram_size_non_unif() {
+
+    logger::raw_ln(
+        "testing basic_histogram_size_non_unif Tscal =", shambase::get_type_name<Tscal>());
+
+    std::vector<Tscal> positions{};
+    std::vector<Tscal> sizes{};
+
+    size_t N      = 2e6;
+    size_t Narray = 2048;
+
+    std::mt19937_64 eng(0x42);
+    for (size_t i = 0; i < N; i++) {
+        auto tmp = shamalgs::primitives::mock_value<Tscal>(eng, 0, 1);
+        positions.push_back(tmp * tmp);
+        sizes.push_back(0.05);
+    }
+
+    std::vector<Tscal> arr_pos_inf{};
+    std::vector<Tscal> arr_pos_sup{};
+    for (size_t i = 0; i < Narray; i++) {
+        arr_pos_inf.push_back(Tscal(i) / Tscal(Narray));
+        arr_pos_sup.push_back(Tscal(i + 1) / Tscal(Narray));
+    }
+
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+    sham::DeviceBuffer<Tscal> bin_inf(Narray, dev_sched);
+    sham::DeviceBuffer<Tscal> bin_sup(Narray, dev_sched);
+    sham::DeviceBuffer<Tscal> pos(N, dev_sched);
+    sham::DeviceBuffer<Tscal> szs(N, dev_sched);
+
+    bin_inf.copy_from_stdvec(arr_pos_inf);
+    bin_sup.copy_from_stdvec(arr_pos_sup);
+    pos.copy_from_stdvec(positions);
+    szs.copy_from_stdvec(sizes);
+
+    bin_inf.synchronize();
+    bin_sup.synchronize();
+    pos.synchronize();
+    szs.synchronize();
+
+    std::vector<Tscal> ref_result{};
+
+    for (auto &[impl, name] : impl_list) {
+        shamalgs::primitives::impl = impl;
+
+        shambase::Timer timer;
+        timer.start();
+        sham::DeviceBuffer<Tscal> ret = shamalgs::primitives::compute_histogram<Tscal>(
+            dev_sched,
+            bin_inf,
+            bin_sup,
+            N,
+            [](Tscal edge_inf, Tscal edge_sup, Tscal pos, Tscal sizes, bool &has_value) {
+                has_value = edge_inf - sizes <= pos && pos < edge_sup + sizes;
+                return (has_value) ? 1 : 0;
+            },
+            pos,
+            szs);
+        ret.synchronize();
+        timer.end();
+
+        logger::raw_ln("impl =", name, "time =", timer.get_time_str());
+
+        if (impl == shamalgs::primitives::histo_impl::reference) {
+            ref_result = ret.copy_to_stdvec();
+        } else {
+            REQUIRE(compare<Tscal>(ref_result, ret.copy_to_stdvec(), 1e-12));
+        }
+    }
+}
 TestStart(Unittest, "shamalgs::primitives::compute_histogram", shamalgsprimitivecomputehisto, 1) {
     basic_histogram<f32>();
     basic_histogram<f64>();
     basic_histogram_size<f32>();
     basic_histogram_size<f64>();
+    basic_histogram_size_non_unif<f32>();
+    basic_histogram_size_non_unif<f64>();
 }
