@@ -37,16 +37,16 @@ inline bool compare(const std::vector<T> &v1, const std::vector<T> &v2, T tol) {
 }
 
 template<class Tscal>
-void __attribute__((noinline))  trap_result (const std::vector<Tscal> &result){
+void __attribute__((noinline)) trap_result(const std::vector<Tscal> &result) {
     volatile Tscal tmp = result[0];
-    (void)tmp;
+    (void) tmp;
 }
 
 TestStart(Unittest, "tmp_fast_profile", tmp_fast_profile, 1) {
     using Tscal = f32;
 
-    std::vector<Tscal> positions {};
-    std::vector<Tscal> sizes {};
+    std::vector<Tscal> positions{};
+    std::vector<Tscal> sizes{};
 
     size_t N      = 30e6;
     size_t Narray = 2048;
@@ -58,7 +58,7 @@ TestStart(Unittest, "tmp_fast_profile", tmp_fast_profile, 1) {
         sizes.push_back(0.01);
     }
 
-    std::vector<Tscal> arr_pos {};
+    std::vector<Tscal> arr_pos{};
     for (size_t i = 0; i < Narray; i++) {
         arr_pos.push_back((f64(i) + 0.5) / f64(Narray));
     }
@@ -84,7 +84,6 @@ TestStart(Unittest, "tmp_fast_profile", tmp_fast_profile, 1) {
     logger::raw_ln("reference :", reference);
 
     logger::raw_ln("baseline :", shambase::nanosec_to_time_str(time_baseline * 1e9));
-
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
