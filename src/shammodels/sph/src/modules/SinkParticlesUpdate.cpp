@@ -368,6 +368,10 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
 
                         Tscal w = gpart_mass * weight_func.weight(sycl::sqrt(r_a2));
 
+                        if (w == 0) {
+                            return;
+                        }
+
                         mat I{};
 
                         { // I = w [Id r_a^2 - r_a r_a^T]
