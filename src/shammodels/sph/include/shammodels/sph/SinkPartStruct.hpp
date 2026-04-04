@@ -35,7 +35,7 @@ namespace shammodels::sph {
         Tvec angular_momentum;
         Tscal accretion_radius;
 
-        bool is_torque_free = false;
+        bool is_torque_free;
     };
 
     template<class Tvec>
