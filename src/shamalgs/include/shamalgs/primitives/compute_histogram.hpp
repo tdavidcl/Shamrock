@@ -11,7 +11,6 @@
 
 /**
  * @file compute_histogram.hpp
- * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr) --no git blame--
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -19,6 +18,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/string.hpp"
+#include "shamalgs/ImplControl.hpp"
 #include "shambackends/Device.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
@@ -31,62 +31,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-namespace shamalgs::primitives {
-    class ImplControl {
-        public:
-        virtual ~ImplControl() = default;
-
-        // public API
-        std::string get_alg_name() const { return impl_get_alg_name(); }
-
-        bool was_configured(const sham::DeviceScheduler_ptr &dev_sched) const {
-            return impl_was_configured(dev_sched);
-        }
-
-        std::string get_config(const sham::DeviceScheduler_ptr &dev_sched) {
-            if (!impl_was_configured(dev_sched)) {
-                set_config(dev_sched, get_default_config(dev_sched));
-            }
-            return impl_get_config(dev_sched);
-        }
-
-        void set_config(const sham::DeviceScheduler_ptr &dev_sched, const std::string &cfg) {
-            logger::info_ln(
-                "Algs",
-                shambase::format(
-                    "switching config for alg {} to cfg={}", impl_get_alg_name(), cfg));
-            impl_set_config(dev_sched, cfg);
-        }
-
-        std::string get_default_config(const sham::DeviceScheduler_ptr &dev_sched) {
-            if (auto cfg = impl_autotune(dev_sched)) {
-                return *cfg;
-            } else {
-                return impl_get_default_config(dev_sched);
-            }
-        }
-
-        std::vector<std::string> get_avail_configs(const sham::DeviceScheduler_ptr &dev_sched) {
-            return impl_get_avail_configs(dev_sched);
-        };
-
-        protected:
-        // required overrides
-        virtual std::string impl_get_alg_name() const                                           = 0;
-        virtual bool impl_was_configured(const sham::DeviceScheduler_ptr &) const               = 0;
-        virtual std::string impl_get_config(const sham::DeviceScheduler_ptr &) const            = 0;
-        virtual std::string impl_get_default_config(const sham::DeviceScheduler_ptr &) const    = 0;
-        virtual void impl_set_config(const sham::DeviceScheduler_ptr &, const std::string &cfg) = 0;
-        virtual std::vector<std::string> impl_get_avail_configs(const sham::DeviceScheduler_ptr &)
-            = 0;
-
-        // optional override (with original log)
-        virtual std::optional<std::string> impl_autotune(const sham::DeviceScheduler_ptr &) {
-            logger::info_ln("Algs", "no autotuning registered for", impl_get_alg_name());
-            return std::nullopt;
-        }
-    };
-} // namespace shamalgs::primitives
 
 namespace shamalgs::primitives {
 
@@ -193,7 +137,7 @@ namespace shamalgs::primitives {
 
         template<class T, class Tbins, class... Targs, class Tfunctor>
         inline void compute_histogram_naive_gpu(
-            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceScheduler_ptr &dev_sched,
             const sham::DeviceBuffer<Tbins> &bin_edge_inf,
             const sham::DeviceBuffer<Tbins> &bin_edge_sup,
             size_t nbins,
@@ -232,7 +176,7 @@ namespace shamalgs::primitives {
 
         template<class T, class Tbins, class... Targs, class Tfunctor>
         inline void compute_histogram_gpu_team_fetching(
-            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceScheduler_ptr &dev_sched,
             const sham::DeviceBuffer<Tbins> &bin_edge_inf,
             const sham::DeviceBuffer<Tbins> &bin_edge_sup,
             size_t nbins,
@@ -324,7 +268,8 @@ namespace shamalgs::primitives {
 
         template<class T, class Tbins, class... Targs, class Tfunctor>
         inline void compute_histogram_gpu_oversubscribe(
-            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceScheduler_ptr &dev_sched,
+            u32 group_size,
             const sham::DeviceBuffer<Tbins> &bin_edge_inf,
             const sham::DeviceBuffer<Tbins> &bin_edge_sup,
             size_t nbins,
@@ -333,7 +278,6 @@ namespace shamalgs::primitives {
             sham::DeviceBuffer<T> &result,
             const sham::DeviceBuffer<Targs> &...input_data) {
 
-            u32 group_size = 256;
             sham::kernel_call_hndl(
                 dev_sched->get_queue(),
                 sham::MultiRef{bin_edge_inf, bin_edge_sup, input_data...},
@@ -407,7 +351,7 @@ namespace shamalgs::primitives {
 
     template<class T, class Tbins, class... Targs, class Tfunctor>
     inline sham::DeviceBuffer<T> compute_histogram(
-        sham::DeviceScheduler_ptr dev_sched,
+        const sham::DeviceScheduler_ptr &dev_sched,
         const sham::DeviceBuffer<Tbins> &bin_edge_inf,
         const sham::DeviceBuffer<Tbins> &bin_edge_sup,
         size_t element_count,
@@ -460,6 +404,7 @@ namespace shamalgs::primitives {
         case histo_impl::gpu_oversubscribe:
             compute_histogram_gpu_oversubscribe(
                 dev_sched,
+                256,
                 bin_edge_inf,
                 bin_edge_sup,
                 nbins,
@@ -472,6 +417,27 @@ namespace shamalgs::primitives {
         }
 
         return result;
+    }
+
+    template<class T>
+    inline sham::DeviceBuffer<T> compute_histogram_basic(
+        const sham::DeviceScheduler_ptr &dev_sched,
+        const sham::DeviceBuffer<T> &bin_edge_inf,
+        const sham::DeviceBuffer<T> &bin_edge_sup,
+        const sham::DeviceBuffer<T> &positions) {
+
+        size_t element_count = positions.get_size();
+
+        return compute_histogram<T>(
+            dev_sched,
+            bin_edge_inf,
+            bin_edge_sup,
+            element_count,
+            [](const T &bin_edge_inf, const T &bin_edge_sup, const T &position, bool &has_value) {
+                has_value = position >= bin_edge_inf && position < bin_edge_sup;
+                return has_value ? 1 : 0;
+            },
+            positions);
     }
 
 } // namespace shamalgs::primitives
