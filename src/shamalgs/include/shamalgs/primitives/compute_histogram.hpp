@@ -18,37 +18,145 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/string.hpp"
+#include "shambackends/Device.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shamcomm/logs.hpp"
+#include <nlohmann/json.hpp>
 #include <shambackends/sycl.hpp>
+#include <optional>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 #include <vector>
+namespace shamalgs::primitives {
+    class ImplControl {
+        public:
+        virtual ~ImplControl() = default;
+
+        // public API
+        std::string get_alg_name() const { return impl_get_alg_name(); }
+
+        bool was_configured(const sham::DeviceScheduler_ptr &dev_sched) const {
+            return impl_was_configured(dev_sched);
+        }
+
+        std::string get_config(const sham::DeviceScheduler_ptr &dev_sched) {
+            if (!impl_was_configured(dev_sched)) {
+                set_config(dev_sched, get_default_config(dev_sched));
+            }
+            return impl_get_config(dev_sched);
+        }
+
+        void set_config(const sham::DeviceScheduler_ptr &dev_sched, const std::string &cfg) {
+            logger::info_ln(
+                "Algs",
+                shambase::format(
+                    "switching config for alg {} to cfg={}", impl_get_alg_name(), cfg));
+            impl_set_config(dev_sched, cfg);
+        }
+
+        std::string get_default_config(const sham::DeviceScheduler_ptr &dev_sched) {
+            if (auto cfg = impl_autotune(dev_sched)) {
+                return *cfg;
+            } else {
+                return impl_get_default_config(dev_sched);
+            }
+        }
+
+        std::vector<std::string> get_avail_configs(const sham::DeviceScheduler_ptr &dev_sched) {
+            return impl_get_avail_configs(dev_sched);
+        };
+
+        protected:
+        // required overrides
+        virtual std::string impl_get_alg_name() const                                           = 0;
+        virtual bool impl_was_configured(const sham::DeviceScheduler_ptr &) const               = 0;
+        virtual std::string impl_get_config(const sham::DeviceScheduler_ptr &) const            = 0;
+        virtual std::string impl_get_default_config(const sham::DeviceScheduler_ptr &) const    = 0;
+        virtual void impl_set_config(const sham::DeviceScheduler_ptr &, const std::string &cfg) = 0;
+        virtual std::vector<std::string> impl_get_avail_configs(const sham::DeviceScheduler_ptr &)
+            = 0;
+
+        // optional override (with original log)
+        virtual std::optional<std::string> impl_autotune(const sham::DeviceScheduler_ptr &) {
+            logger::info_ln("Algs", "no autotuning registered for", impl_get_alg_name());
+            return std::nullopt;
+        }
+    };
+} // namespace shamalgs::primitives
 
 namespace shamalgs::primitives {
 
-    enum class histo_impl { reference, naive_gpu, gpu_team_fetching, gpu_oversubscribe };
-    inline histo_impl impl = histo_impl::reference;
+    namespace impl {
+        enum class histo_impl { reference, naive_gpu, gpu_team_fetching, gpu_oversubscribe };
 
-    template<class T, class Tbins, class... Targs, class Tfunctor>
-    inline sham::DeviceBuffer<T> compute_histogram(
-        sham::DeviceScheduler_ptr dev_sched,
-        const sham::DeviceBuffer<Tbins> &bin_edge_inf,
-        const sham::DeviceBuffer<Tbins> &bin_edge_sup,
-        size_t element_count,
-        Tfunctor &&functor,
-        const sham::DeviceBuffer<Targs> &...input_data) {
+        class HistogramImplControl : public ImplControl {
 
-        size_t nbins = bin_edge_inf.get_size();
+            bool was_init   = false;
+            histo_impl impl = histo_impl::reference;
 
-        if (nbins != bin_edge_sup.get_size()) {
-            shambase::make_except_with_loc<std::invalid_argument>("TODO: message");
-        }
+            virtual std::string impl_get_alg_name() const { return "compute_histogram"; }
 
-        sham::DeviceBuffer<T> result(nbins, dev_sched);
+            virtual bool impl_was_configured(const sham::DeviceScheduler_ptr &) const {
+                return was_init;
+            };
 
-        if (impl == histo_impl::reference) {
+            virtual std::string impl_get_config(const sham::DeviceScheduler_ptr &) const {
+                switch (impl) {
+                case histo_impl::reference        : return "reference";
+                case histo_impl::naive_gpu        : return "naive_gpu";
+                case histo_impl::gpu_team_fetching: return "gpu_team_fetching";
+                case histo_impl::gpu_oversubscribe: return "gpu_oversubscribe";
+                }
+            };
+
+            virtual std::string impl_get_default_config(
+                const sham::DeviceScheduler_ptr &dev_sched) const {
+                if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+                    return "gpu_oversubscribe";
+                } else {
+                    return "naive_gpu"; // it is portable and fast everywhere
+                }
+            };
+
+            virtual void impl_set_config(
+                const sham::DeviceScheduler_ptr &, const std::string &config) {
+                if (config == "reference") {
+                    impl = histo_impl::reference;
+                } else if (config == "naive_gpu") {
+                    impl = histo_impl::naive_gpu;
+                } else if (config == "gpu_team_fetching") {
+                    impl = histo_impl::gpu_team_fetching;
+                } else if (config == "gpu_oversubscribe") {
+                    impl = histo_impl::gpu_oversubscribe;
+                } else {
+                    shambase::throw_unimplemented("unknown implementation");
+                }
+            };
+
+            virtual std::vector<std::string> impl_get_avail_configs(
+                const sham::DeviceScheduler_ptr &) {
+                return {"reference", "naive_gpu", "gpu_team_fetching", "gpu_oversubscribe"};
+            }
+
+            public:
+            histo_impl get_impl() const { return impl; }
+        };
+
+        HistogramImplControl compute_histogram_impl_control{};
+
+        template<class T, class Tbins, class... Targs, class Tfunctor>
+        inline void compute_histogram_reference(
+            const sham::DeviceBuffer<Tbins> &bin_edge_inf,
+            const sham::DeviceBuffer<Tbins> &bin_edge_sup,
+            size_t nbins,
+            size_t element_count,
+            Tfunctor &&functor,
+            sham::DeviceBuffer<T> &result,
+            const sham::DeviceBuffer<Targs> &...input_data) {
 
             auto result_vec = result.copy_to_stdvec();
 
@@ -81,8 +189,18 @@ namespace shamalgs::primitives {
                 result_vec);
 
             result.copy_from_stdvec(result_vec);
+        }
 
-        } else if (impl == histo_impl::naive_gpu) {
+        template<class T, class Tbins, class... Targs, class Tfunctor>
+        inline void compute_histogram_naive_gpu(
+            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceBuffer<Tbins> &bin_edge_inf,
+            const sham::DeviceBuffer<Tbins> &bin_edge_sup,
+            size_t nbins,
+            size_t element_count,
+            Tfunctor &&functor,
+            sham::DeviceBuffer<T> &result,
+            const sham::DeviceBuffer<Targs> &...input_data) {
 
             sham::kernel_call(
                 dev_sched->get_queue(),
@@ -110,8 +228,18 @@ namespace shamalgs::primitives {
 
                     result[ibin] = accumulator;
                 });
+        }
 
-        } else if (impl == histo_impl::gpu_team_fetching) {
+        template<class T, class Tbins, class... Targs, class Tfunctor>
+        inline void compute_histogram_gpu_team_fetching(
+            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceBuffer<Tbins> &bin_edge_inf,
+            const sham::DeviceBuffer<Tbins> &bin_edge_sup,
+            size_t nbins,
+            size_t element_count,
+            Tfunctor &&functor,
+            sham::DeviceBuffer<T> &result,
+            const sham::DeviceBuffer<Targs> &...input_data) {
 
             sham::kernel_call_hndl(
                 dev_sched->get_queue(),
@@ -192,8 +320,18 @@ namespace shamalgs::primitives {
                             });
                     };
                 });
+        }
 
-        } else if (impl == histo_impl::gpu_oversubscribe) {
+        template<class T, class Tbins, class... Targs, class Tfunctor>
+        inline void compute_histogram_gpu_oversubscribe(
+            sham::DeviceScheduler_ptr dev_sched,
+            const sham::DeviceBuffer<Tbins> &bin_edge_inf,
+            const sham::DeviceBuffer<Tbins> &bin_edge_sup,
+            size_t nbins,
+            size_t element_count,
+            Tfunctor &&functor,
+            sham::DeviceBuffer<T> &result,
+            const sham::DeviceBuffer<Targs> &...input_data) {
 
             u32 group_size = 256;
             sham::kernel_call_hndl(
@@ -263,8 +401,74 @@ namespace shamalgs::primitives {
                             });
                     };
                 });
-        } else {
-            shambase::throw_unimplemented("unknown implementation");
+        }
+
+    } // namespace impl
+
+    template<class T, class Tbins, class... Targs, class Tfunctor>
+    inline sham::DeviceBuffer<T> compute_histogram(
+        sham::DeviceScheduler_ptr dev_sched,
+        const sham::DeviceBuffer<Tbins> &bin_edge_inf,
+        const sham::DeviceBuffer<Tbins> &bin_edge_sup,
+        size_t element_count,
+        Tfunctor &&functor,
+        const sham::DeviceBuffer<Targs> &...input_data) {
+
+        using namespace impl;
+
+        size_t nbins = bin_edge_inf.get_size();
+
+        if (nbins != bin_edge_sup.get_size()) {
+            shambase::make_except_with_loc<std::invalid_argument>("TODO: message");
+        }
+
+        sham::DeviceBuffer<T> result(nbins, dev_sched);
+
+        switch (compute_histogram_impl_control.get_impl()) {
+        case histo_impl::reference:
+            compute_histogram_reference(
+                bin_edge_inf,
+                bin_edge_sup,
+                nbins,
+                element_count,
+                std::forward<Tfunctor>(functor),
+                result,
+                input_data...);
+            break;
+        case histo_impl::naive_gpu:
+            compute_histogram_naive_gpu(
+                dev_sched,
+                bin_edge_inf,
+                bin_edge_sup,
+                nbins,
+                element_count,
+                std::forward<Tfunctor>(functor),
+                result,
+                input_data...);
+            break;
+        case histo_impl::gpu_team_fetching:
+            compute_histogram_gpu_team_fetching(
+                dev_sched,
+                bin_edge_inf,
+                bin_edge_sup,
+                nbins,
+                element_count,
+                std::forward<Tfunctor>(functor),
+                result,
+                input_data...);
+            break;
+        case histo_impl::gpu_oversubscribe:
+            compute_histogram_gpu_oversubscribe(
+                dev_sched,
+                bin_edge_inf,
+                bin_edge_sup,
+                nbins,
+                element_count,
+                std::forward<Tfunctor>(functor),
+                result,
+                input_data...);
+            break;
+        default: shambase::throw_unimplemented("unknown implementation");
         }
 
         return result;

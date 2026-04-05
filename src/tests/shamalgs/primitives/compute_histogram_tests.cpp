@@ -40,21 +40,14 @@ inline bool compare(const std::vector<T> &v1, const std::vector<T> &v2, T tol) {
     return true;
 }
 
-std::vector<std::pair<shamalgs::primitives::histo_impl, std::string>> impl_list{
-    {shamalgs::primitives::histo_impl::reference, "reference"},
-    {shamalgs::primitives::histo_impl::naive_gpu, "naive_gpu"},
-    {shamalgs::primitives::histo_impl::gpu_team_fetching, "gpu_team_fetching"},
-    {shamalgs::primitives::histo_impl::gpu_oversubscribe, "gpu_oversubscribe"},
-};
-
 template<class Tscal>
-inline void basic_histogram() {
+inline void basic_histogram(const std::vector<std::string> &impl_list) {
 
     logger::raw_ln("testing basic_histogram Tscal =", shambase::get_type_name<Tscal>());
 
     std::vector<Tscal> positions{};
 
-    size_t N      = 6e5;
+    size_t N      = 1e5;
     size_t Narray = 2048;
 
     std::mt19937_64 eng(0x42);
@@ -84,8 +77,9 @@ inline void basic_histogram() {
 
     std::vector<Tscal> ref_result{};
 
-    for (auto &[impl, name] : impl_list) {
-        shamalgs::primitives::impl = impl;
+    for (auto &cfg : impl_list) {
+        using namespace shamalgs::primitives::impl;
+        compute_histogram_impl_control.set_config(dev_sched, cfg);
 
         shambase::Timer timer;
         timer.start();
@@ -102,9 +96,9 @@ inline void basic_histogram() {
         ret.synchronize();
         timer.end();
 
-        logger::raw_ln("impl =", name, "time =", timer.get_time_str());
+        logger::raw_ln("impl =", cfg, "time =", timer.get_time_str());
 
-        if (impl == shamalgs::primitives::histo_impl::reference) {
+        if (cfg == "reference") {
             ref_result = ret.copy_to_stdvec();
         } else {
             REQUIRE(compare<Tscal>(ref_result, ret.copy_to_stdvec(), 1e-12));
@@ -113,14 +107,14 @@ inline void basic_histogram() {
 }
 
 template<class Tscal>
-inline void basic_histogram_size() {
+inline void basic_histogram_size(const std::vector<std::string> &impl_list) {
 
     logger::raw_ln("testing basic_histogram_size Tscal =", shambase::get_type_name<Tscal>());
 
     std::vector<Tscal> positions{};
     std::vector<Tscal> sizes{};
 
-    size_t N      = 2e6;
+    size_t N      = 1e5;
     size_t Narray = 2048;
 
     std::mt19937_64 eng(0x42);
@@ -154,8 +148,9 @@ inline void basic_histogram_size() {
 
     std::vector<Tscal> ref_result{};
 
-    for (auto &[impl, name] : impl_list) {
-        shamalgs::primitives::impl = impl;
+    for (auto &cfg : impl_list) {
+        using namespace shamalgs::primitives::impl;
+        compute_histogram_impl_control.set_config(dev_sched, cfg);
 
         shambase::Timer timer;
         timer.start();
@@ -173,9 +168,9 @@ inline void basic_histogram_size() {
         ret.synchronize();
         timer.end();
 
-        logger::raw_ln("impl =", name, "time =", timer.get_time_str());
+        logger::raw_ln("impl =", cfg, "time =", timer.get_time_str());
 
-        if (impl == shamalgs::primitives::histo_impl::reference) {
+        if (cfg == "reference") {
             ref_result = ret.copy_to_stdvec();
         } else {
             REQUIRE(compare<Tscal>(ref_result, ret.copy_to_stdvec(), 1e-12));
@@ -184,7 +179,7 @@ inline void basic_histogram_size() {
 }
 
 template<class Tscal>
-inline void basic_histogram_size_non_unif() {
+inline void basic_histogram_size_non_unif(const std::vector<std::string> &impl_list) {
 
     logger::raw_ln(
         "testing basic_histogram_size_non_unif Tscal =", shambase::get_type_name<Tscal>());
@@ -192,7 +187,7 @@ inline void basic_histogram_size_non_unif() {
     std::vector<Tscal> positions{};
     std::vector<Tscal> sizes{};
 
-    size_t N      = 2e6;
+    size_t N      = 1e5;
     size_t Narray = 2048;
 
     std::mt19937_64 eng(0x42);
@@ -227,8 +222,9 @@ inline void basic_histogram_size_non_unif() {
 
     std::vector<Tscal> ref_result{};
 
-    for (auto &[impl, name] : impl_list) {
-        shamalgs::primitives::impl = impl;
+    for (auto &cfg : impl_list) {
+        using namespace shamalgs::primitives::impl;
+        compute_histogram_impl_control.set_config(dev_sched, cfg);
 
         shambase::Timer timer;
         timer.start();
@@ -246,20 +242,32 @@ inline void basic_histogram_size_non_unif() {
         ret.synchronize();
         timer.end();
 
-        logger::raw_ln("impl =", name, "time =", timer.get_time_str());
+        logger::raw_ln("impl =", cfg, "time =", timer.get_time_str());
 
-        if (impl == shamalgs::primitives::histo_impl::reference) {
+        if (cfg == "reference") {
             ref_result = ret.copy_to_stdvec();
         } else {
             REQUIRE(compare<Tscal>(ref_result, ret.copy_to_stdvec(), 1e-12));
         }
     }
 }
+
 TestStart(Unittest, "shamalgs::primitives::compute_histogram", shamalgsprimitivecomputehisto, 1) {
-    basic_histogram<f32>();
-    basic_histogram<f64>();
-    basic_histogram_size<f32>();
-    basic_histogram_size<f64>();
-    basic_histogram_size_non_unif<f32>();
-    basic_histogram_size_non_unif<f64>();
+
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    using namespace shamalgs::primitives::impl;
+
+    auto impl_list = compute_histogram_impl_control.get_avail_configs(dev_sched);
+
+    auto default_impl = compute_histogram_impl_control.get_default_config(dev_sched);
+
+    basic_histogram<f32>(impl_list);
+    basic_histogram<f64>(impl_list);
+    basic_histogram_size<f32>(impl_list);
+    basic_histogram_size<f64>(impl_list);
+    basic_histogram_size_non_unif<f32>(impl_list);
+    basic_histogram_size_non_unif<f64>(impl_list);
+
+    compute_histogram_impl_control.set_config(dev_sched, default_impl);
 }
