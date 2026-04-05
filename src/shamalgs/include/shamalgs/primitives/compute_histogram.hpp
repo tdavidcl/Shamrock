@@ -200,7 +200,8 @@ namespace shamalgs::primitives {
                         u32 group_size = 128;
                         u32 group_cnt  = shambase::group_count(nbins, group_size);
 
-                        group_cnt         = group_cnt + (group_cnt % 4);
+                        // roundup to next multiple of 4
+                        group_cnt         = (group_cnt + 3) / 4 * 4;
                         u32 corrected_len = group_cnt * group_size;
 
                         auto locals
@@ -292,7 +293,9 @@ namespace shamalgs::primitives {
                     return [=, in_data = std::tuple{in_data...}](sycl::handler &cgh) {
                         u32 group_cnt = shambase::group_count(nbins_oversubscribed, group_size);
 
-                        group_cnt         = group_cnt + (group_cnt % 4);
+                        // roundup to next multiple of 4
+                        group_cnt = (group_cnt + 3) / 4 * 4;
+
                         u32 corrected_len = group_cnt * group_size;
 
                         cgh.parallel_for(
@@ -363,7 +366,8 @@ namespace shamalgs::primitives {
         size_t nbins = bin_edge_inf.get_size();
 
         if (nbins != bin_edge_sup.get_size()) {
-            shambase::make_except_with_loc<std::invalid_argument>("TODO: message");
+            shambase::make_except_with_loc<std::invalid_argument>(
+                "bin_edge_inf and bin_edge_sup must have the same size");
         }
 
         sham::DeviceBuffer<T> result(nbins, dev_sched);

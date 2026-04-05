@@ -25,19 +25,18 @@ inline bool compare(const std::vector<T> &v1, const std::vector<T> &v2, T tol) {
     if (v1.size() != v2.size()) {
         return false;
     }
+
     bool result = true;
     for (size_t i = 0; i < v1.size(); i++) {
         if (sham::abs(v1[i] - v2[i]) > tol) {
-            std::cout << i << " " << f64(v1[i]) << " " << f64(v2[i]) << " " << f64(v1[i] - v2[i])
-                      << std::endl;
+            // std::cout << i << " " << f64(v1[i]) << " " << f64(v2[i]) << " " << f64(v1[i] - v2[i])
+            //          << std::endl;
             // logger::raw_ln(i, f64(v1[i]), f64(v2[i]), f64(v1[i] - v2[i]));
             result = false;
         }
     }
 
     return result;
-
-    return true;
 }
 
 template<class Tscal>
