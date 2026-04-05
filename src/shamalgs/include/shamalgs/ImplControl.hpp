@@ -70,7 +70,7 @@ namespace shamalgs::primitives {
         virtual std::vector<std::string> impl_get_avail_configs(const sham::DeviceScheduler_ptr &)
             = 0;
 
-        // optional override (with original log)
+        // optional override
         inline virtual std::optional<std::string> impl_autotune(const sham::DeviceScheduler_ptr &) {
             logger::info_ln("Algs", "no autotuning registered for", impl_get_alg_name());
             return std::nullopt;
