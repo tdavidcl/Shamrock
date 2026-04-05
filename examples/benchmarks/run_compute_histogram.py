@@ -39,7 +39,8 @@ print(f"Available configs: {impl_control.get_avail_configs()}")
 bin_edges = np.linspace(0, 1, 2049)
 bin_edge_inf = bin_edges[:-1]
 bin_edge_sup = bin_edges[1:]
-positions = np.random.rand(int(1e6))
+rng = np.random.default_rng()
+positions = rng.random(int(1e6))
 
 bin_edge_inf_f32 = bin_edge_inf.astype(np.float32)
 bin_edge_sup_f32 = bin_edge_sup.astype(np.float32)
