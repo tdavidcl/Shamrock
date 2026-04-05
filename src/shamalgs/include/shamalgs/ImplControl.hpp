@@ -26,20 +26,20 @@ namespace shamalgs::primitives {
         virtual ~ImplControl() = default;
 
         // public API
-        std::string get_alg_name() const { return impl_get_alg_name(); }
+        inline std::string get_alg_name() const { return impl_get_alg_name(); }
 
-        bool was_configured(const sham::DeviceScheduler_ptr &dev_sched) const {
+        inline bool was_configured(const sham::DeviceScheduler_ptr &dev_sched) const {
             return impl_was_configured(dev_sched);
         }
 
-        std::string get_config(const sham::DeviceScheduler_ptr &dev_sched) {
+        inline std::string get_config(const sham::DeviceScheduler_ptr &dev_sched) {
             if (!impl_was_configured(dev_sched)) {
                 set_config(dev_sched, get_default_config(dev_sched));
             }
             return impl_get_config(dev_sched);
         }
 
-        void set_config(const sham::DeviceScheduler_ptr &dev_sched, const std::string &cfg) {
+        inline void set_config(const sham::DeviceScheduler_ptr &dev_sched, const std::string &cfg) {
             logger::info_ln(
                 "Algs",
                 shambase::format(
@@ -47,7 +47,7 @@ namespace shamalgs::primitives {
             impl_set_config(dev_sched, cfg);
         }
 
-        std::string get_default_config(const sham::DeviceScheduler_ptr &dev_sched) {
+        inline std::string get_default_config(const sham::DeviceScheduler_ptr &dev_sched) {
             if (auto cfg = impl_autotune(dev_sched)) {
                 return *cfg;
             } else {
@@ -55,7 +55,8 @@ namespace shamalgs::primitives {
             }
         }
 
-        std::vector<std::string> get_avail_configs(const sham::DeviceScheduler_ptr &dev_sched) {
+        inline std::vector<std::string> get_avail_configs(
+            const sham::DeviceScheduler_ptr &dev_sched) {
             return impl_get_avail_configs(dev_sched);
         };
 
@@ -70,7 +71,7 @@ namespace shamalgs::primitives {
             = 0;
 
         // optional override (with original log)
-        virtual std::optional<std::string> impl_autotune(const sham::DeviceScheduler_ptr &) {
+        inline virtual std::optional<std::string> impl_autotune(const sham::DeviceScheduler_ptr &) {
             logger::info_ln("Algs", "no autotuning registered for", impl_get_alg_name());
             return std::nullopt;
         }

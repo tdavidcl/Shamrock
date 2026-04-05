@@ -90,7 +90,7 @@ namespace shamalgs::primitives {
             histo_impl get_impl() const { return impl; }
         };
 
-        HistogramImplControl compute_histogram_impl_control{};
+        inline HistogramImplControl compute_histogram_impl_control{};
 
         template<class T, class Tbins, class... Targs, class Tfunctor>
         inline void compute_histogram_reference(
