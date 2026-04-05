@@ -75,15 +75,21 @@ results_f32 = {}
 avail_configs = impl_control.get_avail_configs()
 for config in avail_configs:
     impl_control.set_config(config)
-    time_f64 = shamrock.algs.benchmark_compute_histogram_basic_f64(buf_bin_edge_inf, buf_bin_edge_sup, buf_positions)
-    time_f32 = shamrock.algs.benchmark_compute_histogram_basic_f32(buf_bin_edge_inf_f32, buf_bin_edge_sup_f32, buf_positions_f32)
-    print(f"Config: {config}, Time f64: {time_f64*1000}ms, Time f32: {time_f32*1000}ms")
-    results_f64[config] = time_f64*1000
-    results_f32[config] = time_f32*1000
+    time_f64 = shamrock.algs.benchmark_compute_histogram_basic_f64(
+        buf_bin_edge_inf, buf_bin_edge_sup, buf_positions
+    )
+    time_f32 = shamrock.algs.benchmark_compute_histogram_basic_f32(
+        buf_bin_edge_inf_f32, buf_bin_edge_sup_f32, buf_positions_f32
+    )
+    print(f"Config: {config}, Time f64: {time_f64 * 1000}ms, Time f32: {time_f32 * 1000}ms")
+    results_f64[config] = time_f64 * 1000
+    results_f32[config] = time_f32 * 1000
 
 # %%
 # plot the histogram
-result = shamrock.algs.compute_histogram_basic_f64(buf_bin_edge_inf, buf_bin_edge_sup, buf_positions)
+result = shamrock.algs.compute_histogram_basic_f64(
+    buf_bin_edge_inf, buf_bin_edge_sup, buf_positions
+)
 plt.plot(result.copy_to_stdvec())
 plt.show()
 
@@ -93,7 +99,7 @@ plt.plot(list(results_f64.keys()), list(results_f64.values()), "--.", label="f64
 plt.plot(list(results_f32.keys()), list(results_f32.values()), "--.", label="f32")
 plt.xlabel("Config")
 plt.ylabel("Time (ms)")
-plt.ylim(0, max(max(results_f64.values()), max(results_f32.values() ))*1.1)
+plt.ylim(0, max(max(results_f64.values()), max(results_f32.values())) * 1.1)
 plt.title("Compute histogram performance benchmarks")
 plt.legend()
 plt.show()
