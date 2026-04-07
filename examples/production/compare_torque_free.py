@@ -80,7 +80,7 @@ G = ucte.G()
 # List parameters
 
 # Resolution
-Npart = int(os.environ.get("NPART"))
+Npart = int(float(os.environ.get("NPART")))
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
