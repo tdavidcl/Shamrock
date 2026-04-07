@@ -100,7 +100,7 @@ t_stop = [i * dt_stop for i in range(nstop + 1)]
 # Sink parameters
 center_mass = 1.0
 center_racc = float(os.environ.get("CENTER_RACC"))
-center_is_torque_free = bool(os.environ.get("CENTER_IS_TORQUE_FREE"))
+center_is_torque_free = bool(os.environ.get("CENTER_IS_TORQUE_FREE").lower() == "true")
 
 # Disc parameter
 disc_mass = 0.01  # sol mass
@@ -122,6 +122,8 @@ C_force = 0.25
 
 
 sim_folder = f"_to_trash/circular_disc_sink_{center_is_torque_free}_{center_racc}_{Npart}/"
+
+print(sim_folder)
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
