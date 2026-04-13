@@ -145,9 +145,9 @@ struct TestExclScanUSM {
     void check() {
         if constexpr (std::is_same<u32, T>::value) {
 
-            u32 len_test = 1e6;
+            u32 len_test = 32e6;
 
-            std::vector<u32> data = shamalgs::primitives::mock_vector<u32>(0x111 + shambase::details::get_wtime()*100000000, len_test, 0, 10);
+            std::vector<u32> data = shamalgs::primitives::mock_vector<u32>(0x111 + shambase::details::get_wtime()*100000000, len_test, 0, 60);
 
             std::vector<u32> data_buf(data);
 
