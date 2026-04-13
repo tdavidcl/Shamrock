@@ -145,7 +145,7 @@ struct TestExclScanUSM {
     void check() {
         if constexpr (std::is_same<u32, T>::value) {
 
-            u32 len_test = 1e5;
+            u32 len_test = 1e6;
 
             std::vector<u32> data = shamalgs::primitives::mock_vector<u32>(0x111, len_test, 0, 10);
 
@@ -482,7 +482,10 @@ TestStart(
     TestExclScanUSM<u32> test(
         (TestExclScanUSM<u32>::vFunctionCall)
             shamalgs::numeric::details::exclusive_sum_atomic_decoupled_v5_usm<u32, 512>);
-    test.check();
+    
+    for(u32 i = 0; i < 1000; i++) {
+            test.check();
+    }
 }
 #endif
 
