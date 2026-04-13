@@ -153,6 +153,8 @@ struct TestExclScanUSM {
 
             std::exclusive_scan(data.begin(), data.end(), data.begin(), 0);
 
+            std::cout << "total = "<< data[len_test-1] + data_buf[len_test-1] << std::endl;
+
             sham::DeviceBuffer<u32> buf{
                 data_buf.size(), shamsys::instance::get_compute_scheduler_ptr()};
             buf.copy_from_stdvec(data_buf);
