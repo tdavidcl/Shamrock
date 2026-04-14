@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file bytestream.hpp
+ * @file checksum.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *

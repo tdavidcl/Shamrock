@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file algorithm.hpp
+ * @file buf_checksum.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -26,9 +26,10 @@ namespace shamalgs {
     inline u64 buf_checksum(const sham::DeviceBuffer<T> &buf) {
         auto flattened_buf = primitives::flatten_buffer(buf);
 
-        using Tscal = typename shambase::VectorProperties<T>::component_type;
+        using Tscal             = typename shambase::VectorProperties<T>::component_type;
         std::vector<Tscal> data = flattened_buf.copy_to_stdvec();
-        return shambase::fnv1a_hash(reinterpret_cast<const char *>(data.data()), data.size() * sizeof(Tscal));
+        return shambase::fnv1a_hash(
+            reinterpret_cast<const char *>(data.data()), data.size() * sizeof(Tscal));
     }
 
 } // namespace shamalgs
