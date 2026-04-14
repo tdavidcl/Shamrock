@@ -345,23 +345,98 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                     u32 cnt = 0;
 
-                    leaf_looper.rtree_for(
-                        [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                            Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
+                    auto traverse_condition_with_aabb
+                        = [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
+                        Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
-                            Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
-                            Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
+                        Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
+                        Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
 
-                            return BBAA::cella_neigh_b(leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
-                                   || BBAA::cella_neigh_b(
-                                       leaf_a_bmin_ext,
-                                       leaf_a_bmax_ext,
-                                       node_aabb.lower,
-                                       node_aabb.upper);
-                        },
-                        [&](u32 leaf_b) {
-                            cnt++;
-                        });
+                        return BBAA::cella_neigh_b(leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
+                               || BBAA::cella_neigh_b(
+                                   leaf_a_bmin_ext,
+                                   leaf_a_bmax_ext,
+                                   node_aabb.lower,
+                                   node_aabb.upper);
+                    };
+
+                    auto traverse_condition = [&](u32 node_id) -> bool {
+                        return traverse_condition_with_aabb(
+                            node_id,
+                            shammath::AABB<Tvec>{
+                                leaf_looper.aabb_min[node_id], leaf_looper.aabb_max[node_id]});
+                    };
+
+                    auto on_found_leaf = [&](u32 node_id) {
+                        cnt++;
+                    };
+
+                    auto on_excluded_node = [&](u32 node_id) {};
+
+                    static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
+
+                    {
+
+                        auto get_left_child = [&](u32 id) -> u32 {
+                            return leaf_looper.tree_traverser.lchild_id[id]
+                                   + offset_leaf * u32(leaf_looper.tree_traverser.lchild_flag[id]);
+                        };
+
+                        auto get_right_child = [&](u32 id) -> u32 {
+                            return leaf_looper.tree_traverser.rchild_id[id]
+                                   + offset_leaf * u32(leaf_looper.tree_traverser.rchild_flag[id]);
+                        };
+
+                        auto is_id_leaf = [&](u32 id) -> bool {
+                            return id >= leaf_looper.tree_traverser.offset_leaf;
+                        };
+
+                        // On a Karras tree, the root is always 0
+                        u32 root_node = 0;
+
+                        static constexpr u32 _nindex = 4294967295;
+
+                        // Init the stack state
+                        std::array<u32, tree_depth> id_stack;
+
+                        u32 stack_cursor       = tree_depth - 1;
+                        id_stack[stack_cursor] = root_node;
+
+                        // until the stack is empty
+                        while (stack_cursor < tree_depth) {
+
+                            // Pop the top of the stack
+                            u32 current_node_id    = id_stack[stack_cursor];
+                            id_stack[stack_cursor] = _nindex;
+                            stack_cursor++;
+
+                            // check iteraction creteria
+                            bool cur_id_valid = traverse_condition(current_node_id);
+
+                            if (cur_id_valid) { // leaf or cell satisfies the criteria
+
+                                if (is_id_leaf(current_node_id)) { // I found a leaf !!!!!
+
+                                    on_found_leaf(current_node_id);
+
+                                } else { // it can interact & not leaf => stack
+
+                                    u32 lid = get_left_child(current_node_id);
+                                    u32 rid = get_right_child(current_node_id);
+
+                                    id_stack[stack_cursor - 1] = rid;
+                                    stack_cursor--;
+
+                                    id_stack[stack_cursor - 1] = lid;
+                                    stack_cursor--;
+                                }
+                            } else {
+                                // This does not satisfy the criteria => excluded case (gravity for
+                                // ex.)
+                                on_excluded_node(current_node_id);
+                            }
+                        }
+                    }
 
                     neigh_cnt[id_a] = cnt;
                 });
