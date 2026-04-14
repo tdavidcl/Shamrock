@@ -25,7 +25,9 @@
 #include "shamtree/TreeTraversal.hpp"
 #include "shamtree/kernels/geometry_utils.hpp"
 #include "shamunits/Constants.hpp"
-
+#include <fmt/base.h>
+#include "shamalgs/buf_checksum.hpp"
+#include <fstream>
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
 
@@ -262,6 +264,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
         Tscal h_tolerance = solver_config.htol_up_coarse_cycle;
 
+        NamedStackEntry stack_loc1ddddd{"wait queue"};
+
+        shamsys::instance::get_compute_queue().wait_and_throw();
+
         NamedStackEntry stack_loc1{"init cache"};
 
         // start by counting number of leaf neighbours
@@ -269,9 +275,23 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         sham::DeviceBuffer<u32> neigh_count_leaf(
             leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
 
-        shamsys::instance::get_compute_queue().wait_and_throw();
-
         shamlog_debug_sycl_ln("Cache", "generate cache for Nleaf=", leaf_cnt);
+
+        {
+            std::ofstream patch_file(fmt::format("patch_{}_debug.txt", patch_id), std::ios::app);
+            patch_file << fmt::format("patch {} buf_xyz hash={}\n", patch_id, shamalgs::buf_checksum(buf_xyz));
+            patch_file << fmt::format("patch {} buf_hpart hash={}\n", patch_id, shamalgs::buf_checksum(buf_hpart));
+            patch_file << fmt::format("patch {} tree_field_rint hash={}\n", patch_id, shamalgs::buf_checksum(tree_field_rint));
+            patch_file << fmt::format("patch {} neigh_count_leaf hash={}\n", patch_id, shamalgs::buf_checksum(neigh_count_leaf));
+            patch_file << fmt::format("patch {} leaf_it.aabb_min hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.aabb_min));
+            patch_file << fmt::format("patch {} leaf_it.aabb_max hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.aabb_max));
+            patch_file << fmt::format("patch {} leaf_it.tree_traverser.buf_lchild_id hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.tree_traverser.buf_lchild_id));
+            patch_file << fmt::format("patch {} leaf_it.tree_traverser.buf_rchild_id hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.tree_traverser.buf_rchild_id));
+            patch_file << fmt::format("patch {} leaf_it.tree_traverser.buf_lchild_flag hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.tree_traverser.buf_lchild_flag));
+            patch_file << fmt::format("patch {} leaf_it.tree_traverser.buf_rchild_flag hash={}\n", patch_id, shamalgs::buf_checksum(leaf_it.tree_traverser.buf_rchild_flag));
+            patch_file << fmt::format("patch {} leaf_it.tree_traverser.offset_leaf = {}\n", patch_id, leaf_it.tree_traverser.offset_leaf);
+        }
+
 
         {
             sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
@@ -326,6 +346,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             leaf_it.complete_event_state(e);
         }
 
+        NamedStackEntry stack_loc1ccccc{"wait queue"};
+
+        shamsys::instance::get_compute_queue().wait_and_throw();
+
         //{
         //    u32 offset_leaf = intnode_cnt;
         //    sycl::host_accessor neigh_cnt{neigh_count_leaf};
@@ -342,8 +366,14 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         //    }
         //}
 
+        NamedStackEntry stack_loc1bbbb{"prepare cache"};
+
         tree::ObjectCache pleaf_cache
             = tree::prepare_object_cache(std::move(neigh_count_leaf), leaf_cnt);
+
+        NamedStackEntry stack_loc1aaaa{"wait queue"};
+
+        shamsys::instance::get_compute_queue().wait_and_throw();
 
         // fill ids of leaf neighbours
 
