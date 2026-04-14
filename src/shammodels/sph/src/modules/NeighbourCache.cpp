@@ -287,10 +287,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 "patch {} tree_field_rint hash={}\n",
                 patch_id,
                 shamalgs::buf_checksum(tree_field_rint));
-            patch_file << fmt::format(
-                "patch {} neigh_count_leaf hash={}\n",
-                patch_id,
-                shamalgs::buf_checksum(neigh_count_leaf));
+            //patch_file << fmt::format(
+            //    "patch {} neigh_count_leaf hash={}\n",
+            //    patch_id,
+            //    shamalgs::buf_checksum(neigh_count_leaf));
             patch_file << fmt::format(
                 "patch {} leaf_it.aabb_min hash={}\n",
                 patch_id,
@@ -377,6 +377,15 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         NamedStackEntry stack_loc1ccccc{"wait queue"};
 
         shamsys::instance::get_compute_queue().wait_and_throw();
+
+
+        {
+            std::ofstream patch_file(fmt::format("patch_{}_debug.txt", patch_id), std::ios::app);
+            patch_file << fmt::format(
+                "patch {} neigh_count_leaf hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(neigh_count_leaf));
+        }
 
         //{
         //    u32 offset_leaf = intnode_cnt;
