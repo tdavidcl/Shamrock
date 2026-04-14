@@ -185,10 +185,10 @@ namespace shamalgs::numeric::details {
                 id,
                 local_id,
                 group_tile_id,
-                [=]() {
+                [=, this]() {
                     return local_scan_buf[0];
                 },
-                [=](T accum) {
+                [=, this](T accum) {
                     local_sum[0] = accum;
                 },
                 slice_id);
@@ -485,6 +485,10 @@ namespace shamalgs::numeric::details {
 
                                     accum += tile_state.y();
 
+                                    // if it overflows, tile_ptr == 0, but in that case we can only
+                                    // reach this line if the acc_tile_state[0] is in P state.
+                                    // Therefore we will never perform an access again with tile_ptr
+                                    // so it is safe
                                     tile_ptr--;
                                 }
                             }

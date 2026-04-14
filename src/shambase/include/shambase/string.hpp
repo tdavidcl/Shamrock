@@ -18,6 +18,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "exception.hpp"
+#include <fmt/base.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <fmt/printf.h>
@@ -42,6 +43,16 @@ namespace shambase {
     inline std::string format(fmt::format_string<T...> fmt, T &&...args) {
         try {
             return fmt::vformat(fmt, fmt::make_format_args(args...));
+        } catch (const std::exception &e) {
+            throw make_except_with_loc<std::invalid_argument>(
+                "format failed : " + std::string(e.what()));
+        }
+    }
+
+    template<typename... T>
+    inline std::string vformat(std::string_view fmt, fmt::format_args args) {
+        try {
+            return fmt::vformat(fmt, args);
         } catch (const std::exception &e) {
             throw make_except_with_loc<std::invalid_argument>(
                 "format failed : " + std::string(e.what()));
