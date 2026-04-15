@@ -20,6 +20,7 @@
 #include "shambase/memory.hpp"
 #include "shamalgs/buf_checksum.hpp"
 #include "shambackends/DeviceBuffer.hpp"
+#include "shamcmdopt/env.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -28,6 +29,9 @@
 #include "shamunits/Constants.hpp"
 #include <fmt/base.h>
 #include <fstream>
+
+std::string checksum_prefix = shambase::get_check_ref(shamcmdopt::getenv_str("CHECKSUM_PREFIX"));
+
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
 
@@ -277,8 +281,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
         shamlog_debug_sycl_ln("Cache", "generate cache for Nleaf=", leaf_cnt);
 
+        std::string checksum_file_path
+            = checksum_prefix + "/" + fmt::format("patch_{}_debug.txt", patch_id);
+
         {
-            std::ofstream patch_file(fmt::format("patch_{}_debug.txt", patch_id), std::ios::app);
+            std::ofstream patch_file(checksum_file_path, std::ios::app);
             patch_file << fmt::format(
                 "patch {} buf_xyz hash={}\n", patch_id, shamalgs::buf_checksum(buf_xyz));
             patch_file << fmt::format(
@@ -570,7 +577,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         shamsys::instance::get_compute_queue().wait_and_throw();
 
         {
-            std::ofstream patch_file(fmt::format("patch_{}_debug.txt", patch_id), std::ios::app);
+            std::ofstream patch_file(checksum_file_path, std::ios::app);
             patch_file << fmt::format(
                 "patch {} neigh_count_leaf hash={}\n",
                 patch_id,
