@@ -334,12 +334,72 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
 
+                u32 xyz_size                  = buf_xyz.get_size();
+                u32 hpart_size                = buf_hpart.get_size();
+                u32 rint_tree_size            = tree_field_rint.get_size();
+                u32 neigh_count_leaf_size     = neigh_count_leaf.get_size();
+                u32 leaf_looper_aabb_min_size = leaf_it.aabb_min.get_size();
+                u32 leaf_looper_aabb_max_size = leaf_it.aabb_max.get_size();
+                u32 leaf_looper_tree_traverser_lchild_id_size
+                    = leaf_it.tree_traverser.buf_lchild_id.get_size();
+                u32 leaf_looper_tree_traverser_rchild_id_size
+                    = leaf_it.tree_traverser.buf_rchild_id.get_size();
+                u32 leaf_looper_tree_traverser_lchild_flag_size
+                    = leaf_it.tree_traverser.buf_lchild_flag.get_size();
+                u32 leaf_looper_tree_traverser_rchild_flag_size
+                    = leaf_it.tree_traverser.buf_rchild_flag.get_size();
+
                 shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
                     u32 id_a = (u32) gid;
 
-                    Tscal leaf_a_rint    = rint_tree[offset_leaf + gid] * Kernel::Rkern;
-                    Tvec leaf_a_bmin     = leaf_looper.aabb_min[offset_leaf + gid];
-                    Tvec leaf_a_bmax     = leaf_looper.aabb_max[offset_leaf + gid];
+                    static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
+
+                    auto oob_check
+                        = [&](auto acc, u32 idx, u32 buf_size, const char *name) -> auto & {
+                        if (idx < buf_size) {
+                            return acc[idx];
+                        }
+
+#ifdef SYCL_COMP_ACPP
+                        hipsycl::sycl::detail::print(
+                            "OOB access: idx=%d size=%d name=%s\n", idx, buf_size, name);
+#else
+                        sycl::ext::oneapi::experimental::printf("OOB access: idx=%d size=%d name=%s\n", idx, buf_size, name);
+#endif
+
+                        return acc[idx];
+                    };
+
+                    auto oob_check_stack = [&](std::array<u32, tree_depth> &stack,
+                                               u32 idx,
+                                               const char *name) -> u32 & {
+                        if (idx < tree_depth) {
+                            return stack[idx];
+                        }
+
+#ifdef SYCL_COMP_ACPP
+                        hipsycl::sycl::detail::print(
+                            "OOB access: idx=%d size=%d name=%s\n", idx, tree_depth, name);
+#else
+                        sycl::ext::oneapi::experimental::printf("OOB access: idx=%d size=%d name=%s\n", idx, tree_depth, name);
+#endif
+
+                        return stack[idx];
+                    };
+
+                    Tscal leaf_a_rint
+                        = oob_check(rint_tree, offset_leaf + gid, rint_tree_size, "rint_tree")
+                          * Kernel::Rkern;
+                    Tvec leaf_a_bmin = oob_check(
+                        leaf_looper.aabb_min,
+                        offset_leaf + gid,
+                        leaf_looper_aabb_min_size,
+                        "leaf_looper.aabb_min");
+                    Tvec leaf_a_bmax = oob_check(
+                        leaf_looper.aabb_max,
+                        offset_leaf + gid,
+                        leaf_looper_aabb_max_size,
+                        "leaf_looper.aabb_max");
                     Tvec leaf_a_bmin_ext = leaf_a_bmin - leaf_a_rint;
                     Tvec leaf_a_bmax_ext = leaf_a_bmax + leaf_a_rint;
 
@@ -347,7 +407,9 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                     auto traverse_condition_with_aabb
                         = [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                        Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
+                        Tscal int_r_max_cell
+                            = oob_check(rint_tree, node_id, rint_tree_size, "rint_tree")
+                              * Kernel::Rkern;
 
                         Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
                         Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
@@ -364,7 +426,16 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         return traverse_condition_with_aabb(
                             node_id,
                             shammath::AABB<Tvec>{
-                                leaf_looper.aabb_min[node_id], leaf_looper.aabb_max[node_id]});
+                                oob_check(
+                                    leaf_looper.aabb_min,
+                                    node_id,
+                                    leaf_looper_aabb_min_size,
+                                    "leaf_looper.aabb_min"),
+                                oob_check(
+                                    leaf_looper.aabb_max,
+                                    node_id,
+                                    leaf_looper_aabb_max_size,
+                                    "leaf_looper.aabb_max")});
                     };
 
                     auto on_found_leaf = [&](u32 node_id) {
@@ -373,18 +444,34 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                     auto on_excluded_node = [&](u32 node_id) {};
 
-                    static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
-
                     {
 
                         auto get_left_child = [&](u32 id) -> u32 {
-                            return leaf_looper.tree_traverser.lchild_id[id]
-                                   + offset_leaf * u32(leaf_looper.tree_traverser.lchild_flag[id]);
+                            return oob_check(
+                                       leaf_looper.tree_traverser.lchild_id,
+                                       id,
+                                       leaf_looper_tree_traverser_lchild_id_size,
+                                       "leaf_looper.tree_traverser.lchild_id")
+                                   + offset_leaf
+                                         * u32(oob_check(
+                                             leaf_looper.tree_traverser.lchild_flag,
+                                             id,
+                                             leaf_looper_tree_traverser_lchild_flag_size,
+                                             "leaf_looper.tree_traverser.lchild_flag"));
                         };
 
                         auto get_right_child = [&](u32 id) -> u32 {
-                            return leaf_looper.tree_traverser.rchild_id[id]
-                                   + offset_leaf * u32(leaf_looper.tree_traverser.rchild_flag[id]);
+                            return oob_check(
+                                       leaf_looper.tree_traverser.rchild_id,
+                                       id,
+                                       leaf_looper_tree_traverser_rchild_id_size,
+                                       "leaf_looper.tree_traverser.rchild_id")
+                                   + offset_leaf
+                                         * u32(oob_check(
+                                             leaf_looper.tree_traverser.rchild_flag,
+                                             id,
+                                             leaf_looper_tree_traverser_rchild_flag_size,
+                                             "leaf_looper.tree_traverser.rchild_flag"));
                         };
 
                         auto is_id_leaf = [&](u32 id) -> bool {
@@ -399,15 +486,16 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         // Init the stack state
                         std::array<u32, tree_depth> id_stack;
 
-                        u32 stack_cursor       = tree_depth - 1;
-                        id_stack[stack_cursor] = root_node;
+                        u32 stack_cursor                                    = tree_depth - 1;
+                        oob_check_stack(id_stack, stack_cursor, "id_stack") = root_node;
 
                         // until the stack is empty
                         while (stack_cursor < tree_depth) {
 
                             // Pop the top of the stack
-                            u32 current_node_id    = id_stack[stack_cursor];
-                            id_stack[stack_cursor] = _nindex;
+                            u32 current_node_id
+                                = oob_check_stack(id_stack, stack_cursor, "id_stack");
+                            oob_check_stack(id_stack, stack_cursor, "id_stack") = _nindex;
                             stack_cursor++;
 
                             // check iteraction creteria
@@ -424,10 +512,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                                     u32 lid = get_left_child(current_node_id);
                                     u32 rid = get_right_child(current_node_id);
 
-                                    id_stack[stack_cursor - 1] = rid;
+                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = rid;
                                     stack_cursor--;
 
-                                    id_stack[stack_cursor - 1] = lid;
+                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
                                     stack_cursor--;
                                 }
                             } else {
@@ -438,7 +526,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         }
                     }
 
-                    neigh_cnt[id_a] = cnt;
+                    oob_check(neigh_cnt, id_a, neigh_count_leaf_size, "neigh_count_leaf") = cnt;
                 });
             });
 
