@@ -319,6 +319,34 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 "patch {} leaf_it.tree_traverser.offset_leaf = {}\n",
                 patch_id,
                 leaf_it.tree_traverser.offset_leaf);
+
+            // other tree fields
+            auto &tmp1 = tree.structure.buf_endrange;
+            auto &tmp2 = tree.reduced_morton_set.buf_reduc_index_map;
+            auto &tmp3 = tree.reduced_morton_set.reduced_morton_codes;
+            auto &tmp4 = tree.reduced_morton_set.morton_codes_set.sorted_morton_codes;
+            auto &tmp5 = tree.reduced_morton_set.morton_codes_set.map_morton_id_to_obj_id;
+            patch_file << fmt::format(
+                "patch {} tree.structure.buf_endrange hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(tmp1));
+            patch_file << fmt::format(
+                "patch {} tree.reduced_morton_set.buf_reduc_index_map hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(tmp2));
+            patch_file << fmt::format(
+                "patch {} tree.reduced_morton_set.reduced_morton_codes hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(tmp3));
+            patch_file << fmt::format(
+                "patch {} tree.reduced_morton_set.morton_codes_set.sorted_morton_codes hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(tmp4));
+            patch_file << fmt::format(
+                "patch {} tree.reduced_morton_set.morton_codes_set.map_morton_id_to_obj_id "
+                "hash={}\n",
+                patch_id,
+                shamalgs::buf_checksum(tmp5));
         }
 
         {
