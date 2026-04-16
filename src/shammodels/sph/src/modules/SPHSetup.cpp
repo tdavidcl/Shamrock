@@ -16,6 +16,7 @@
  */
 
 #include "shambase/aliases_int.hpp"
+#include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/tabulate.hpp"
 #include "shamalgs/collective/are_all_rank_true.hpp"
@@ -42,6 +43,7 @@
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <mpi.h>
+#include <stdexcept>
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
@@ -318,95 +320,102 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
 
     shamrock::patch::PatchDataLayer to_insert(sched.get_layout_ptr_old());
 
-    if (shamcomm::world_rank() == 0) {
-        logger::normal_ln("SPH setup", "generating particles ...");
-    }
-
-    while (!setup->is_done()) {
-        shambase::Timer timer_gen;
-        timer_gen.start();
-
-        shamrock::patch::PatchDataLayer tmp = setup->next_n(gen_step);
-
-        if (solver_config.track_particles_id) {
-            // This bit set the tracking id of the particles
-            // But be carefull this assume that the particle injection order
-            // is independant from the MPI world size. It should be the case for most setups
-            // but some generator could miss this assumption.
-            // If that is the case please report the issue
-
-            u64 loc_inj = tmp.get_obj_cnt();
-
-            u64 offset_init = 0;
-            shamcomm::mpi::Exscan(
-                &loc_inj, &offset_init, 1, get_mpi_type<u64>(), MPI_SUM, MPI_COMM_WORLD);
-
-            // we must add the number of already injected part such that the
-            // offset start at the right spot.
-            // The only thing that bothers me is that this can not handle the case where multiple
-            // setups of things like that are applied. But in principle no sane person would do such
-            // a thing...
-            offset_init += injected_parts;
-
-            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
-            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
-
-            if (loc_inj > 0) {
-                sham::DeviceBuffer<u64> part_ids(loc_inj, dev_sched);
-
-                sham::kernel_call(
-                    q,
-                    sham::MultiRef{},
-                    sham::MultiRef{part_ids},
-                    loc_inj,
-                    [offset_init](u32 i, u64 *__restrict part_ids) {
-                        part_ids[i] = i + offset_init;
-                    });
-
-                tmp.get_field<u64>(tmp.pdl().get_field_idx<u64>("part_id"))
-                    .overwrite(part_ids, loc_inj);
-            }
-        }
-
-        to_insert.insert_elements(tmp);
-
-        u64 sum_push = shamalgs::collective::allreduce_sum<u64>(tmp.get_obj_cnt());
-        u64 sum_all  = shamalgs::collective::allreduce_sum<u64>(to_insert.get_obj_cnt());
-
-        timer_gen.end();
+    while (1) {
+        to_insert = shamrock::patch::PatchDataLayer(sched.get_layout_ptr_old());
 
         if (shamcomm::world_rank() == 0) {
-            f64 part_per_sec = f64(sum_push) / f64(timer_gen.elasped_sec());
+            logger::normal_ln("SPH setup", "generating particles ...");
+        }
+
+        while (!setup->is_done()) {
+            shambase::Timer timer_gen;
+            timer_gen.start();
+
+            shamrock::patch::PatchDataLayer tmp = setup->next_n(gen_step);
+
+            if (solver_config.track_particles_id) {
+                // This bit set the tracking id of the particles
+                // But be carefull this assume that the particle injection order
+                // is independant from the MPI world size. It should be the case for most setups
+                // but some generator could miss this assumption.
+                // If that is the case please report the issue
+
+                u64 loc_inj = tmp.get_obj_cnt();
+
+                u64 offset_init = 0;
+                shamcomm::mpi::Exscan(
+                    &loc_inj, &offset_init, 1, get_mpi_type<u64>(), MPI_SUM, MPI_COMM_WORLD);
+
+                // we must add the number of already injected part such that the
+                // offset start at the right spot.
+                // The only thing that bothers me is that this can not handle the case where
+                // multiple setups of things like that are applied. But in principle no sane person
+                // would do such a thing...
+                offset_init += injected_parts;
+
+                auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+                auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+                if (loc_inj > 0) {
+                    sham::DeviceBuffer<u64> part_ids(loc_inj, dev_sched);
+
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{},
+                        sham::MultiRef{part_ids},
+                        loc_inj,
+                        [offset_init](u32 i, u64 *__restrict part_ids) {
+                            part_ids[i] = i + offset_init;
+                        });
+
+                    tmp.get_field<u64>(tmp.pdl().get_field_idx<u64>("part_id"))
+                        .overwrite(part_ids, loc_inj);
+                }
+            }
+
+            to_insert.insert_elements(tmp);
+
+            u64 sum_push = shamalgs::collective::allreduce_sum<u64>(tmp.get_obj_cnt());
+            u64 sum_all  = shamalgs::collective::allreduce_sum<u64>(to_insert.get_obj_cnt());
+
+            timer_gen.end();
+
+            if (shamcomm::world_rank() == 0) {
+                f64 part_per_sec = f64(sum_push) / f64(timer_gen.elasped_sec());
+                logger::normal_ln(
+                    "SPH setup",
+                    shambase::format(
+                        "Nstep = {} ( {:.1e} ) Ntotal = {} ( {:.1e} ) rate = {:e} "
+                        "N.s^-1",
+                        sum_push,
+                        f64(sum_push),
+                        sum_all,
+                        f64(sum_all),
+                        part_per_sec));
+            }
+
+            if (setup_log) {
+                setup_log.value().update_count_per_rank(to_insert.get_obj_cnt());
+            }
+
+            injected_parts += sum_push;
+        }
+
+        time_part_gen.end();
+        if (shamcomm::world_rank() == 0) {
             logger::normal_ln(
-                "SPH setup",
-                shambase::format(
-                    "Nstep = {} ( {:.1e} ) Ntotal = {} ( {:.1e} ) rate = {:e} "
-                    "N.s^-1",
-                    sum_push,
-                    f64(sum_push),
-                    sum_all,
-                    f64(sum_all),
-                    part_per_sec));
+                "SPH setup", "the generation step took :", time_part_gen.elasped_sec(), "s");
         }
 
-        if (setup_log) {
-            setup_log.value().update_count_per_rank(to_insert.get_obj_cnt());
+        if (shamcomm::world_rank() == 0) {
+            logger::normal_ln(
+                "SPH setup", "final particle count =", injected_parts, "begining injection ...");
         }
 
-        injected_parts += sum_push;
+        if (injected_parts != 1541786400_u64) {
+            throw shambase::make_except_with_loc<std::runtime_error>("wrong number of particles");
+        }
     }
-
-    time_part_gen.end();
-    if (shamcomm::world_rank() == 0) {
-        logger::normal_ln(
-            "SPH setup", "the generation step took :", time_part_gen.elasped_sec(), "s");
-    }
-
-    if (shamcomm::world_rank() == 0) {
-        logger::normal_ln(
-            "SPH setup", "final particle count =", injected_parts, "begining injection ...");
-    }
-
     sham::MemPerfInfos mem_perf_infos_start = sham::details::get_mem_perf_info();
     f64 mpi_timer_start                     = shamcomm::mpi::get_timer("total");
 
