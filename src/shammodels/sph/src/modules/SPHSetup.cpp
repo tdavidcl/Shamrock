@@ -321,6 +321,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
     shamrock::patch::PatchDataLayer to_insert(sched.get_layout_ptr_old());
 
     while (1) {
+        (*setup).reset();
         to_insert = shamrock::patch::PatchDataLayer(sched.get_layout_ptr_old());
 
         if (shamcomm::world_rank() == 0) {
@@ -412,7 +413,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
                 "SPH setup", "final particle count =", injected_parts, "begining injection ...");
         }
 
-        if (injected_parts != 1541786400_u64) {
+        if (injected_parts == 1541786400_u64) {
             throw shambase::make_except_with_loc<std::runtime_error>("wrong number of particles");
         }
     }

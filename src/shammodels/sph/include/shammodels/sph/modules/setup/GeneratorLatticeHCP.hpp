@@ -51,6 +51,10 @@ namespace shammodels::sph::modules {
 
         bool is_done() { return generator.is_done(); }
 
+        void reset() override {
+generator.reset();
+        }
+
         shamrock::patch::PatchDataLayer next_n(u32 nmax) {
             StackEntry stack_loc{};
 

@@ -328,6 +328,11 @@ namespace shammath {
 
             inline bool is_done() { return done; }
 
+            void reset(){
+                done = false;
+                current_idx = 0;
+            }
+
             inline Tvec next() {
 
                 // std::array<i32, 3> current = {

@@ -80,6 +80,10 @@ namespace shammodels::sph::modules {
          */
         virtual bool is_done() = 0;
 
+       inline  virtual void reset(){
+
+        }
+
         /**
          * @brief This function generate patchdata with at most nmax per MPI ranks
          * This function is always assumed as called by every ranks simultaneously
