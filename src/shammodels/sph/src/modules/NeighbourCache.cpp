@@ -369,199 +369,36 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
 
-                u32 xyz_size                  = buf_xyz.get_size();
-                u32 hpart_size                = buf_hpart.get_size();
-                u32 rint_tree_size            = tree_field_rint.get_size();
-                u32 neigh_count_leaf_size     = neigh_count_leaf.get_size();
-                u32 leaf_looper_aabb_min_size = leaf_it.aabb_min.get_size();
-                u32 leaf_looper_aabb_max_size = leaf_it.aabb_max.get_size();
-                u32 leaf_looper_tree_traverser_lchild_id_size
-                    = leaf_it.tree_traverser.buf_lchild_id.get_size();
-                u32 leaf_looper_tree_traverser_rchild_id_size
-                    = leaf_it.tree_traverser.buf_rchild_id.get_size();
-                u32 leaf_looper_tree_traverser_lchild_flag_size
-                    = leaf_it.tree_traverser.buf_lchild_flag.get_size();
-                u32 leaf_looper_tree_traverser_rchild_flag_size
-                    = leaf_it.tree_traverser.buf_rchild_flag.get_size();
-
                 shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
                     u32 id_a = (u32) gid;
 
-                    static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
-
-                    auto oob_check
-                        = [&](auto acc, u32 idx, u32 buf_size, const char *name) -> auto & {
-                        if (idx < buf_size) {
-                            return acc[idx];
-                        }
-
-#ifdef SYCL_COMP_ACPP
-                        hipsycl::sycl::detail::print(
-                            "OOB access: idx=%d size=%d name=%s\n", idx, buf_size, name);
-#else
-                        sycl::ext::oneapi::experimental::printf("OOB access: idx=%d size=%d name=%s\n", idx, buf_size, name);
-#endif
-
-                        return acc[idx];
-                    };
-
-                    auto oob_check_stack = [&](std::array<u32, tree_depth> &stack,
-                                               u32 idx,
-                                               const char *name) -> u32 & {
-                        if (idx < tree_depth) {
-                            return stack[idx];
-                        }
-
-#ifdef SYCL_COMP_ACPP
-                        hipsycl::sycl::detail::print(
-                            "OOB access: idx=%d size=%d name=%s\n", idx, tree_depth, name);
-#else
-                        sycl::ext::oneapi::experimental::printf("OOB access: idx=%d size=%d name=%s\n", idx, tree_depth, name);
-#endif
-
-                        return stack[idx];
-                    };
-
-                    Tscal leaf_a_rint
-                        = oob_check(rint_tree, offset_leaf + gid, rint_tree_size, "rint_tree")
-                          * Kernel::Rkern;
-                    Tvec leaf_a_bmin = oob_check(
-                        leaf_looper.aabb_min,
-                        offset_leaf + gid,
-                        leaf_looper_aabb_min_size,
-                        "leaf_looper.aabb_min");
-                    Tvec leaf_a_bmax = oob_check(
-                        leaf_looper.aabb_max,
-                        offset_leaf + gid,
-                        leaf_looper_aabb_max_size,
-                        "leaf_looper.aabb_max");
+                    Tscal leaf_a_rint    = rint_tree[offset_leaf + gid] * Kernel::Rkern;
+                    Tvec leaf_a_bmin     = leaf_looper.aabb_min[offset_leaf + gid];
+                    Tvec leaf_a_bmax     = leaf_looper.aabb_max[offset_leaf + gid];
                     Tvec leaf_a_bmin_ext = leaf_a_bmin - leaf_a_rint;
                     Tvec leaf_a_bmax_ext = leaf_a_bmax + leaf_a_rint;
 
                     u32 cnt = 0;
 
-                    auto traverse_condition_with_aabb
-                        = [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                        Tscal int_r_max_cell
-                            = oob_check(rint_tree, node_id, rint_tree_size, "rint_tree")
-                              * Kernel::Rkern;
+                    leaf_looper.rtree_for(
+                        [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
+                            Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
-                        Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
-                        Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
+                            Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
+                            Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
 
-                        return BBAA::cella_neigh_b(leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
-                               || BBAA::cella_neigh_b(
-                                   leaf_a_bmin_ext,
-                                   leaf_a_bmax_ext,
-                                   node_aabb.lower,
-                                   node_aabb.upper);
-                    };
+                            return BBAA::cella_neigh_b(leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
+                                   || BBAA::cella_neigh_b(
+                                       leaf_a_bmin_ext,
+                                       leaf_a_bmax_ext,
+                                       node_aabb.lower,
+                                       node_aabb.upper);
+                        },
+                        [&](u32 leaf_b) {
+                            cnt++;
+                        });
 
-                    auto traverse_condition = [&](u32 node_id) -> bool {
-                        return traverse_condition_with_aabb(
-                            node_id,
-                            shammath::AABB<Tvec>{
-                                oob_check(
-                                    leaf_looper.aabb_min,
-                                    node_id,
-                                    leaf_looper_aabb_min_size,
-                                    "leaf_looper.aabb_min"),
-                                oob_check(
-                                    leaf_looper.aabb_max,
-                                    node_id,
-                                    leaf_looper_aabb_max_size,
-                                    "leaf_looper.aabb_max")});
-                    };
-
-                    auto on_found_leaf = [&](u32 node_id) {
-                        cnt++;
-                    };
-
-                    auto on_excluded_node = [&](u32 node_id) {};
-
-                    {
-
-                        auto get_left_child = [&](u32 id) -> u32 {
-                            return oob_check(
-                                       leaf_looper.tree_traverser.lchild_id,
-                                       id,
-                                       leaf_looper_tree_traverser_lchild_id_size,
-                                       "leaf_looper.tree_traverser.lchild_id")
-                                   + offset_leaf
-                                         * u32(oob_check(
-                                             leaf_looper.tree_traverser.lchild_flag,
-                                             id,
-                                             leaf_looper_tree_traverser_lchild_flag_size,
-                                             "leaf_looper.tree_traverser.lchild_flag"));
-                        };
-
-                        auto get_right_child = [&](u32 id) -> u32 {
-                            return oob_check(
-                                       leaf_looper.tree_traverser.rchild_id,
-                                       id,
-                                       leaf_looper_tree_traverser_rchild_id_size,
-                                       "leaf_looper.tree_traverser.rchild_id")
-                                   + offset_leaf
-                                         * u32(oob_check(
-                                             leaf_looper.tree_traverser.rchild_flag,
-                                             id,
-                                             leaf_looper_tree_traverser_rchild_flag_size,
-                                             "leaf_looper.tree_traverser.rchild_flag"));
-                        };
-
-                        auto is_id_leaf = [&](u32 id) -> bool {
-                            return id >= leaf_looper.tree_traverser.offset_leaf;
-                        };
-
-                        // On a Karras tree, the root is always 0
-                        u32 root_node = 0;
-
-                        static constexpr u32 _nindex = 4294967295;
-
-                        // Init the stack state
-                        std::array<u32, tree_depth> id_stack;
-
-                        u32 stack_cursor                                    = tree_depth - 1;
-                        oob_check_stack(id_stack, stack_cursor, "id_stack") = root_node;
-
-                        // until the stack is empty
-                        while (stack_cursor < tree_depth) {
-
-                            // Pop the top of the stack
-                            u32 current_node_id
-                                = oob_check_stack(id_stack, stack_cursor, "id_stack");
-                            oob_check_stack(id_stack, stack_cursor, "id_stack") = _nindex;
-                            stack_cursor++;
-
-                            // check iteraction creteria
-                            bool cur_id_valid = traverse_condition(current_node_id);
-
-                            if (cur_id_valid) { // leaf or cell satisfies the criteria
-
-                                if (is_id_leaf(current_node_id)) { // I found a leaf !!!!!
-
-                                    on_found_leaf(current_node_id);
-
-                                } else { // it can interact & not leaf => stack
-
-                                    u32 lid = get_left_child(current_node_id);
-                                    u32 rid = get_right_child(current_node_id);
-
-                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = rid;
-                                    stack_cursor--;
-
-                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
-                                    stack_cursor--;
-                                }
-                            } else {
-                                // This does not satisfy the criteria => excluded case (gravity for
-                                // ex.)
-                                on_excluded_node(current_node_id);
-                            }
-                        }
-                    }
-
-                    oob_check(neigh_cnt, id_a, neigh_count_leaf_size, "neigh_count_leaf") = cnt;
+                    neigh_cnt[id_a] = cnt;
                 });
             });
 
