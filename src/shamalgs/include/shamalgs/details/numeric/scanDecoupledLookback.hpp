@@ -83,7 +83,7 @@ namespace shamalgs::numeric::details {
         inline bool is_invalid() { return state.x() == STATE_X; }
     };
 
-    enum DecoupledLoockBackPolicy { Standard, Parralelized };
+    enum DecoupledLoockBackPolicy { Standard, Parallelized };
 
     template<class T, u32 group_size, DecoupledLoockBackPolicy policy, class Tile>
     class ScanDecoupledLoockBack;

@@ -19,7 +19,7 @@ One of the easiest way to get started is to use the Shamrock environments which 
 First start by checking that you have the right packages installed on your system
 
 !!! info end "Installation instruction"
-    To install recommanded package to compile AdaptiveCpp
+    To install recommended package to compile AdaptiveCpp
     === "Linux (debian)"
 
         If you don't have llvm (...) :
@@ -92,7 +92,7 @@ Running env setup for : Debian generic AdaptiveCpp
 ------------------------------------------
 -- setting acpp target to : omp
 -- generator not specified, defaulting to : ninja
--- clonning https://github.com/AdaptiveCpp/AdaptiveCpp.git
+-- cloning https://github.com/AdaptiveCpp/AdaptiveCpp.git
 ```
 And then it will go on configuring & compiling AdaptiveCpp and give you a handy little script ... `activate` available in the build folder.
 
@@ -106,7 +106,7 @@ Activate the workspace, which will define some utility bash functions:
 source ./activate
 ```
 
-For exemple you have access to:
+For example you have access to:
 
  - `setupcompiler` : which setup the compiler
  - `updatecompiler` : which update the compiler then recompile it
