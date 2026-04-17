@@ -413,7 +413,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
                 "SPH setup", "final particle count =", injected_parts, "begining injection ...");
         }
 
-        if (injected_parts == 1541786400_u64) {
+        if (injected_parts != 1541786400_u64) {
             throw shambase::make_except_with_loc<std::runtime_error>("wrong number of particles");
         }
     }
