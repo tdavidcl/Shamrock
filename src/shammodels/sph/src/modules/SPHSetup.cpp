@@ -321,7 +321,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
     shamrock::patch::PatchDataLayer to_insert(sched.get_layout_ptr_old());
 
     while (1) {
-        (*setup).reset();
+        (*setup).reset(); injected_parts=0;
         to_insert = shamrock::patch::PatchDataLayer(sched.get_layout_ptr_old());
 
         if (shamcomm::world_rank() == 0) {
