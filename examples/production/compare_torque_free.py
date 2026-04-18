@@ -110,7 +110,7 @@ for center_is_torque_free in [True, False]:
 
 print(run_params, len(run_params))
 
-run_id = os.environ.get("RUN_ID")
+run_id = int(os.environ.get("RUN_ID"))
 
 # Sink parameters
 center_mass = 1.0
