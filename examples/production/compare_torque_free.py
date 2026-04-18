@@ -91,16 +91,32 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 1
-nstop = 2000
+nstop = 100
 
 # The list of times at which the simulation will pause for analysis / dumping
 t_stop = [i * dt_stop for i in range(nstop + 1)]
 
+run_params = []
+
+for center_is_torque_free in [True, False]:
+    for center_racc in [0.25, 0.5, 0.8]:
+        if center_is_torque_free:
+            for center_torque_boost_radius_fact in [1.5, 2.0, 3.0]:
+                run_params.append(
+                    (center_racc, center_is_torque_free, center_torque_boost_radius_fact)
+                )
+        else:
+            run_params.append((center_racc, center_is_torque_free, 0.0))
+
+print(run_params, len(run_params))
+
+run_id = os.environ.get("RUN_ID")
 
 # Sink parameters
 center_mass = 1.0
-center_racc = float(os.environ.get("CENTER_RACC"))
-center_is_torque_free = bool(os.environ.get("CENTER_IS_TORQUE_FREE").lower() == "true")
+center_racc = run_params[run_id][0]
+center_is_torque_free = run_params[run_id][1]
+center_torque_boost_radius_fact = run_params[run_id][2]
 
 # Disc parameter
 disc_mass = 0.01  # sol mass
@@ -121,7 +137,7 @@ C_cour = 0.3
 C_force = 0.25
 
 
-sim_folder = f"_to_trash/circular_disc_sink_{center_is_torque_free}_{center_racc}_{Npart}/"
+sim_folder = f"_to_trash/circular_disc_sink_{center_is_torque_free}_{center_racc}_{center_torque_boost_radius_fact}_{Npart}/"
 
 print(sim_folder)
 
@@ -314,7 +330,12 @@ def setup_model():
 
     # now that the barycenter & momentum are 0, we can add the sink
     model.add_sink(
-        center_mass, (0, 0, 0), (0, 0, 0), center_racc, is_torque_free=center_is_torque_free
+        center_mass,
+        (0, 0, 0),
+        (0, 0, 0),
+        center_racc,
+        is_torque_free=center_is_torque_free,
+        torque_boost_radius_fact=center_torque_boost_radius_fact,
     )
 
     # Run a single step to init the integrator and smoothing length of the particles

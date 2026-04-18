@@ -33,8 +33,9 @@ cases = {
 
 import json
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from shamrock.utils.analysis import (
     AnalysisHelper,
 )
@@ -55,7 +56,6 @@ def render_rho_profiles(cases):
     profile_list_analysis_id1 = helpers["racc=0.8"]["list_analysis_id"]
 
     for iplot in profile_list_analysis_id1:
-
         ref_key = None
         data = {}
         for k in helpers:
@@ -80,8 +80,8 @@ def render_rho_profiles(cases):
 
         plt.xscale("log")
         plt.yscale("log")
-        #plt.ylim(1e-6, 1e-3)
-        #plt.xlim(0.1, 21)
+        # plt.ylim(1e-6, 1e-3)
+        # plt.xlim(0.1, 21)
         plt.legend(loc="lower left")
         plt.savefig(f"_to_trash/compare_torque_free_sink_rho_profile_{iplot:07}.png")
         plt.close()
@@ -102,7 +102,6 @@ def render_Lz_profiles(cases):
     profile_list_analysis_id1 = helpers["racc=0.8"]["list_analysis_id"]
 
     for iplot in profile_list_analysis_id1:
-
         ref_key = None
         data = {}
         for k in helpers:
@@ -127,8 +126,8 @@ def render_Lz_profiles(cases):
 
         plt.xscale("log")
         plt.yscale("log")
-        #plt.ylim(1e-6, 1e-3)
-        #plt.xlim(0.1, 21)
+        # plt.ylim(1e-6, 1e-3)
+        # plt.xlim(0.1, 21)
         plt.legend(loc="lower left")
         plt.savefig(f"_to_trash/compare_torque_free_sink_Lz_profile_{iplot:07}.png")
         plt.close()
@@ -138,7 +137,7 @@ def compare_acc_rate(cases):
     curves = {}
     for key, case in cases.items():
         disc_mass_filename = os.path.join(cases[key]["path"], "analysis", "disc_mass.json")
-        
+
         ret = {}
         with open(disc_mass_filename, "r") as fp:
             disc_mass_data = json.load(fp)["disc_mass"]
@@ -149,31 +148,30 @@ def compare_acc_rate(cases):
             ret["disc_mass_rate"] = np.diff(ret["disc_mass"]) / np.diff(ret["t"])
         curves[key] = ret
 
-
-    
     plt.figure(dpi=150)
     for k, v in curves.items():
         plt.plot(v["t"], v["disc_mass"], label=k)
 
-    #plt.xscale("log")
-    #plt.yscale("log")
-    #plt.ylim(1e-6, 1e-3)
-    #plt.xlim(0.1, 21)
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.ylim(1e-6, 1e-3)
+    # plt.xlim(0.1, 21)
     plt.legend(loc="lower left")
-    plt.savefig(f"_to_trash/compare_torque_free_sink_acc_rate_disc_mass.png")
+    plt.savefig("_to_trash/compare_torque_free_sink_acc_rate_disc_mass.png")
     plt.close()
-    
+
     plt.figure(dpi=150)
     for k, v in curves.items():
         plt.plot(v["t"][1:], v["disc_mass_rate"], label=k)
 
-    #plt.xscale("log")
-    #plt.yscale("log")
-    #plt.ylim(1e-6, 1e-3)
-    #plt.xlim(0.1, 21)
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.ylim(1e-6, 1e-3)
+    # plt.xlim(0.1, 21)
     plt.legend(loc="lower right")
-    plt.savefig(f"_to_trash/compare_torque_free_sink_acc_rate_diff.png")
+    plt.savefig("_to_trash/compare_torque_free_sink_acc_rate_diff.png")
     plt.close()
+
 
 def compare_dsink_rate(cases):
 
@@ -183,7 +181,7 @@ def compare_dsink_rate(cases):
     curves = {}
     for key, case in cases.items():
         disc_mass_filename = os.path.join(cases[key]["path"], "analysis", "sinks.json")
-        
+
         ret = {}
         with open(disc_mass_filename, "r") as fp:
             sinks_dat = json.load(fp)["sinks"]
@@ -192,21 +190,17 @@ def compare_dsink_rate(cases):
 
         curves[key] = ret
 
-
-    
     plt.figure(dpi=150)
     for k, v in curves.items():
         plt.plot(v["t"], v["r"], label=k)
 
-    #plt.xscale("log")
-    #plt.yscale("log")
-    #plt.ylim(1e-6, 1e-3)
-    #plt.xlim(0.1, 21)
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.ylim(1e-6, 1e-3)
+    # plt.xlim(0.1, 21)
     plt.legend(loc="lower left")
-    plt.savefig(f"_to_trash/compare_torque_free_sink_r.png")
+    plt.savefig("_to_trash/compare_torque_free_sink_r.png")
     plt.close()
-    
-
 
 
 compare_dsink_rate(cases)

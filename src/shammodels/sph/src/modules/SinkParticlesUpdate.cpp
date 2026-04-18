@@ -342,7 +342,8 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                 }
             };
 
-            BoostWeight weight_func{s.accretion_radius * 2};
+            BoostWeight weight_func{
+                s.accretion_radius * s.torque_boost_radius_fact / Kernel::Rkern};
 
             Tvec r_sink = s.pos;
 

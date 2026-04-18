@@ -1438,7 +1438,8 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init_from_phantom_dump(
                     {xsink[i], ysink[i], zsink[i]},
                     {vxsink[i], vysink[i], vzsink[i]},
                     Racc[i],
-                    false);
+                    false,
+                    2.0);
             }
         }
     }

@@ -36,6 +36,7 @@ namespace shammodels::sph {
         Tscal accretion_radius;
 
         bool is_torque_free;
+        Tscal torque_boost_radius_fact;
     };
 
     template<class Tvec>
@@ -53,6 +54,7 @@ namespace shammodels::sph {
             {"angular_momentum", p.angular_momentum},
             {"accretion_radius", p.accretion_radius},
             {"is_torque_free", p.is_torque_free},
+            {"torque_boost_radius_fact", p.torque_boost_radius_fact},
         };
     }
 
@@ -69,6 +71,7 @@ namespace shammodels::sph {
         j.at("angular_momentum").get_to(p.angular_momentum);
         j.at("accretion_radius").get_to(p.accretion_radius);
         j.at("is_torque_free").get_to(p.is_torque_free);
+        j.at("torque_boost_radius_fact").get_to(p.torque_boost_radius_fact);
     }
 
 } // namespace shammodels::sph
