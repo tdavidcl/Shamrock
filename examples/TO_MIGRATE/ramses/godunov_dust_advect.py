@@ -29,7 +29,7 @@ def run_sim(vanleer=True, label="none"):
 
     model.set_solver_config(cfg)
     model.init_scheduler(int(1e7), 1)
-    model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multi, base * multz))
+    model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
     def rho_map(rmin, rmax):
         x, y, z = rmin
