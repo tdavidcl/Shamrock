@@ -10,7 +10,7 @@ def run_sim(vanleer=True, label="none"):
     model = shamrock.get_Model_Ramses(context=ctx, vector_type="f64_3", grid_repr="i64_3")
 
     multx = 1
-    multi = 1
+    multy = 1
     multz = 1
 
     sz = 1 << 1
