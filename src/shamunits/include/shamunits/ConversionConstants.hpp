@@ -43,8 +43,8 @@ namespace shamunits {
 
         static constexpr T litre_to_pint = 0.568;
 
-        /// We first want to thanks E. Lynch for his usefull contribution to the devellopement of
-        ///    numerical methods and new standard of measurement
+        /// We first want to thanks E. Lynch for his useful contribution to the devellopement of
+        ///    numerical methods and new standard of measurment
         /// \verbatim
         /// todo find a more precise measurement of the guiness density (shall be done in ireland)
         /// protocol :
