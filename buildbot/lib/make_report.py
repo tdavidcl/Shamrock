@@ -223,7 +223,7 @@ def make_tex_report(dat):
                 dic_int["world size = " + str(wsz)][dat[config_k]["description"]] = {
                     "results": dic_res,
                     "success_cnt": dic_suc_cnt,
-                    "global_suc_cnt": cnt_success,
+                    "global_suc_cnt": cnt_succes,
                     "global_test_cnt": cnt_test,
                 }
 
