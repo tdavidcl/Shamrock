@@ -6,6 +6,7 @@ This example tests the the performance of the SPH solver for a homogeneous densi
 the resolution is automatically adapted to the available memory and number of processes.
 """
 
+import datetime
 import math
 from statistics import mean, stdev
 
@@ -177,6 +178,7 @@ if shamrock.sys.world_rank() == 0:
     dic_out = {
         "device_properties": device_properties,
         "microbench_results": shamrock.sys.get_microbench_results(),
+        "shamrock_version": shamrock.version_string(),
         "world_size": shamrock.sys.world_size(),
         "rate": res_rate,
         "cnt": res_cnt,

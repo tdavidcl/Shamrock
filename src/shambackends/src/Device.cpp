@@ -33,6 +33,7 @@ auto SHAM_MAX_ALLOC_SIZE
 namespace {
 
     std::optional<std::string> get_cpu_name() {
+        #ifdef __linux__
         std::string lscpu_json = "";
         try {
             lscpu_json = shambase::popen_fetch_output("lscpu -J");
@@ -77,6 +78,9 @@ namespace {
         } catch (const std::exception &e) {
             return std::nullopt;
         }
+        #else
+        return std::nullopt;
+        #endif
     }
 
 } // namespace
