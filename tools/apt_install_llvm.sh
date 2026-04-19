@@ -25,6 +25,7 @@ retry_on_404() {
         # If command failed and output contains 404, continue
         if grep -q 404 "$out"; then
             rm -f "$out"
+            sleep 2
             continue
         fi
 
