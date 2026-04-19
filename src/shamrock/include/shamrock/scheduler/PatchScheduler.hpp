@@ -49,6 +49,35 @@
 #include "shamrock/scheduler/SchedulerPatchData.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 
+struct PatchSchedulerConfig {
+    u64 split_load_value = 0_u64;
+    u64 merge_load_value = 0_u64;
+};
+
+/**
+ * @brief Converts a PatchSchedulerConfig object to a JSON object.
+ *
+ * @param j The JSON object to be populated.
+ * @param p The PatchSchedulerConfig object to be converted.
+ */
+inline void to_json(nlohmann::json &j, const PatchSchedulerConfig &p) {
+    j = nlohmann::json{
+        {"split_load_value", p.split_load_value},
+        {"merge_load_value", p.merge_load_value},
+    };
+}
+
+/**
+ * @brief Deserializes a PatchSchedulerConfig object from a JSON object.
+ *
+ * @param j The JSON object to deserialize from.
+ * @param p The PatchSchedulerConfig object to populate.
+ */
+inline void from_json(const nlohmann::json &j, PatchSchedulerConfig &p) {
+    j.at("split_load_value").get_to<u64>(p.split_load_value);
+    j.at("merge_load_value").get_to<u64>(p.merge_load_value);
+}
+
 /**
  * @brief The MPI scheduler
  *
@@ -77,9 +106,11 @@ class PatchScheduler {
     std::unordered_set<u64> owned_patch_id; ///< list of owned patch ids updated with
     ///< (owned_patch_id = patch_list.build_local())
 
-    inline shamrock::patch::PatchDataLayerLayout &pdl() { return shambase::get_check_ref(pdl_ptr); }
+    inline shamrock::patch::PatchDataLayerLayout &pdl_old() {
+        return shambase::get_check_ref(pdl_ptr);
+    }
 
-    inline std::shared_ptr<shamrock::patch::PatchDataLayerLayout> get_layout_ptr() const {
+    inline std::shared_ptr<shamrock::patch::PatchDataLayerLayout> get_layout_ptr_old() const {
         return pdl_ptr;
     }
 
@@ -130,11 +161,11 @@ class PatchScheduler {
     template<class vectype>
     void set_coord_domain_bound(vectype bmin, vectype bmax) {
 
-        if (!pdl().check_main_field_type<vectype>()) {
+        if (!pdl_old().check_main_field_type<vectype>()) {
             std::invalid_argument(
                 std::string("the main field is not of the correct type to call this function\n")
                 + "fct called : " + __PRETTY_FUNCTION__
-                + "current patch data layout : " + pdl().get_description_str());
+                + "current patch data layout : " + pdl_old().get_description_str());
         }
 
         patch_data.sim_box.set_bounding_box<vectype>({bmin, bmax});
@@ -167,7 +198,7 @@ class PatchScheduler {
 
     std::string format_patch_coord(shamrock::patch::Patch p);
 
-    void check_patchdata_locality_corectness();
+    void check_patchdata_locality_correctness();
 
     [[deprecated]]
     void dump_local_patches(std::string filename);
@@ -211,7 +242,7 @@ class PatchScheduler {
 
     /**
      * @brief for each macro for patchadata
-     * exemple usage
+     * example usage
      * @code{.cpp}
      * sched.for_each_patch_data(
      *     [&](u64 id_patch, Patch cur_p, PatchData &pdat) {
@@ -250,16 +281,18 @@ class PatchScheduler {
         });
     }
 
-    inline void for_each_global_patch(std::function<void(const shamrock::patch::Patch)> fct) {
-        for (shamrock::patch::Patch p : patch_list.global) {
+    inline void for_each_global_patch(
+        const std::function<void(const shamrock::patch::Patch &)> &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.global) {
             if (!p.is_err_mode()) {
                 fct(p);
             }
         }
     }
 
-    inline void for_each_local_patch(std::function<void(const shamrock::patch::Patch)> fct) {
-        for (shamrock::patch::Patch p : patch_list.local) {
+    inline void for_each_local_patch(
+        const std::function<void(const shamrock::patch::Patch &)> &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.local) {
             if (!p.is_err_mode()) {
                 fct(p);
             }
@@ -267,8 +300,9 @@ class PatchScheduler {
     }
 
     inline void for_each_local_patchdata(
-        std::function<void(const shamrock::patch::Patch, shamrock::patch::PatchDataLayer &)> fct) {
-        for (shamrock::patch::Patch p : patch_list.local) {
+        const std::function<void(const shamrock::patch::Patch &, shamrock::patch::PatchDataLayer &)>
+            &fct) {
+        for (const shamrock::patch::Patch &p : patch_list.local) {
             if (!p.is_err_mode()) {
                 fct(p, patch_data.get_pdat(p.id_patch));
             }
@@ -402,7 +436,7 @@ class PatchScheduler {
         StackEntry stack_loc{};
         std::unique_ptr<sycl::buffer<T>> ret;
 
-        auto fd  = pdl().get_field<T>(field_idx);
+        auto fd  = pdl_old().get_field<T>(field_idx);
         u64 nvar = fd.nvar;
 
         u64 num_obj = get_rank_count();

@@ -67,7 +67,7 @@ namespace shammodels::zeus::modules {
                     TgridVec periodic_offset
                         = TgridVec{xoff * bsize.x(), yoff * bsize.y(), zoff * bsize.z()};
 
-                    sched.for_each_local_patch([&](const Patch psender) {
+                    sched.for_each_local_patch([&](const Patch &psender) {
                         CoordRange<TgridVec> sender_bsize
                             = patch_coord_transf.to_obj_coord(psender);
                         CoordRange<TgridVec> sender_bsize_off
@@ -338,7 +338,7 @@ void shammodels::zeus::modules::GhostZones<Tvec, TgridVec>::exchange_ghost() {
     u32 ivel_interf      = ghost_layout.get_field_idx<Tvec>("vel");
 
     // load layout info
-    PatchDataLayerLayout &pdl = scheduler().pdl();
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
     const u32 icell_min = pdl.get_field_idx<TgridVec>("cell_min");
     const u32 icell_max = pdl.get_field_idx<TgridVec>("cell_max");

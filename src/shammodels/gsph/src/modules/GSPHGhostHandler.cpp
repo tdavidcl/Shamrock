@@ -143,7 +143,7 @@ auto GSPHGhostHandler<vec>::find_interfaces(
                     // sender translation
                     vec periodic_offset = vec{xoff * bsize.x(), yoff * bsize.y(), zoff * bsize.z()};
 
-                    sched.for_each_local_patch([&](const Patch psender) {
+                    sched.for_each_local_patch([&](const Patch &psender) {
                         CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
                         CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
 
@@ -198,7 +198,7 @@ auto GSPHGhostHandler<vec>::find_interfaces(
 
             vec offset = shift.shift;
 
-            sched.for_each_local_patch([&](const Patch psender) {
+            sched.for_each_local_patch([&](const Patch &psender) {
                 CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
                 CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(offset);
 
@@ -247,7 +247,7 @@ auto GSPHGhostHandler<vec>::find_interfaces(
         // sender translation
         vec periodic_offset = vec{0, 0, 0};
 
-        sched.for_each_local_patch([&](const Patch psender) {
+        sched.for_each_local_patch([&](const Patch &psender) {
             CoordRange<vec> sender_bsize     = patch_coord_transf.to_obj_coord(psender);
             CoordRange<vec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
 
@@ -300,7 +300,7 @@ auto GSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
 
     std::map<u64, f64> send_count_stats;
 
-    const u32 ixyz = sched.pdl().template get_field_idx<vec>("xyz");
+    const u32 ixyz = sched.pdl_old().template get_field_idx<vec>("xyz");
 
     gen.for_each([&](u64 sender, u64 receiver, InterfaceBuildInfos &build) {
         shamrock::patch::PatchDataLayer &src = sched.patch_data.get_pdat(sender);

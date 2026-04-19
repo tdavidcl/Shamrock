@@ -32,7 +32,9 @@ namespace sham::details {
      */
     template<USMKindTarget target>
     void *internal_alloc(
-        size_t sz, std::shared_ptr<DeviceScheduler> dev_sched, std::optional<size_t> alignment);
+        size_t sz,
+        const std::shared_ptr<DeviceScheduler> &dev_sched,
+        std::optional<size_t> alignment);
 
     /**
      * @brief Free a USM pointer.
@@ -42,11 +44,13 @@ namespace sham::details {
      * @param dev_sched The SYCL queue used to free the USM pointer.
      */
     template<USMKindTarget target>
-    void internal_free(void *usm_ptr, size_t sz, std::shared_ptr<DeviceScheduler> dev_sched);
+    void internal_free(void *usm_ptr, size_t sz, const std::shared_ptr<DeviceScheduler> &dev_sched);
 
     /// @brief Retrieve the memory performance information.
     /// @return A MemPerfInfos object containing the memory performance data.
     MemPerfInfos get_mem_perf_info();
+
+    std::string log_mem_perf_info(const std::shared_ptr<DeviceScheduler> &dev_sched);
 
     /// @brief Reset the memory information for the maximum allocated bytes.
     void reset_mem_info_max();

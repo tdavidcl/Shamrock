@@ -188,7 +188,7 @@ def get_succes_count_data(dt):
     return out_dic
 
 
-def make_tex_repport(dat):
+def make_tex_report(dat):
     dic_int = {}
 
     for config_k in dat.keys():
@@ -222,7 +222,7 @@ def make_tex_repport(dat):
 
                 dic_int["world size = " + str(wsz)][dat[config_k]["description"]] = {
                     "results": dic_res,
-                    "succes_cnt": dic_suc_cnt,
+                    "success_cnt": dic_suc_cnt,
                     "global_suc_cnt": cnt_succes,
                     "global_test_cnt": cnt_test,
                 }
@@ -254,7 +254,7 @@ def make_tex_repport(dat):
     tabl_world_sz_res += r""" \begin{center}
         \begin{tabular}{|c|c|c|}
         \hline
-        World size & Status & Succesfull config / total number of config \\  \hline \hline
+        World size & Status & Successful config / total number of config \\  \hline \hline
     """
     for kworldsz in dic_int.keys():
         config_suc_cnt = dic_suc_cnt_global[kworldsz]["global_suc_cnt"]
@@ -293,7 +293,7 @@ def make_tex_repport(dat):
         str_file += r"""
             \begin{tabular}{|c|c|c|}
             \hline
-            Config & Status & Succesfull tests / total number of tests \\  \hline \hline
+            Config & Status & Successful tests / total number of tests \\  \hline \hline
         """
         for kconfig in dic_int[kworldsz].keys():
             test_suc_cnt = dic_int[kworldsz][kconfig]["global_suc_cnt"]
@@ -327,11 +327,11 @@ def make_tex_repport(dat):
             \begin{center}
                 \begin{tabular}{|c|c|c|}
                 \hline
-                Test name & Status & Succesfull asserts / total number of asserts \\  \hline \hline
+                Test name & Status & Successful asserts / total number of asserts \\  \hline \hline
             """
-            for ktest in dic_int[kworldsz][kconfig]["succes_cnt"].keys():
-                assert_suc_cnt = dic_int[kworldsz][kconfig]["succes_cnt"][ktest]["suc_cnt"]
-                assert_cnt = dic_int[kworldsz][kconfig]["succes_cnt"][ktest]["assert_cnt"]
+            for ktest in dic_int[kworldsz][kconfig]["success_cnt"].keys():
+                assert_suc_cnt = dic_int[kworldsz][kconfig]["success_cnt"][ktest]["suc_cnt"]
+                assert_cnt = dic_int[kworldsz][kconfig]["success_cnt"][ktest]["assert_cnt"]
 
                 succes = assert_suc_cnt == assert_cnt
 
@@ -354,7 +354,7 @@ def make_tex_repport(dat):
 
     print(out_tex)
 
-    out_file = open("test_repport.tex", "w")
+    out_file = open("test_report.tex", "w")
     out_file.write(out_tex)
     out_file.close()
 
@@ -367,7 +367,7 @@ def make_report(format, out_res_map_file):
     # print(data)
 
     if format == ReportFormat.Tex:
-        make_tex_repport(data)
+        make_tex_report(data)
 
 
 if __name__ == "__main__":
