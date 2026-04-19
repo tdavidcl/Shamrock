@@ -33,7 +33,7 @@ auto SHAM_MAX_ALLOC_SIZE
 namespace {
 
     std::optional<std::string> get_cpu_name() {
-        #ifdef __linux__
+#ifdef __linux__
         std::string lscpu_json = "";
         try {
             lscpu_json = shambase::popen_fetch_output("lscpu -J");
@@ -78,7 +78,7 @@ namespace {
         } catch (const std::exception &e) {
             return std::nullopt;
         }
-        #elif defined(__APPLE__)
+#elif defined(__APPLE__)
         // in that case the command is simply sysctl -n machdep.cpu.brand_string
         std::string brand_string = "";
         try {
@@ -89,9 +89,9 @@ namespace {
             return std::nullopt;
         }
         return brand_string;
-        #else
+#else
         return std::nullopt;
-        #endif
+#endif
     }
 
 } // namespace

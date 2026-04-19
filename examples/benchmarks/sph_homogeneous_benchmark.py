@@ -140,19 +140,20 @@ Here we insert callbacks to measure solver MPI usage by fetching the timers twic
 """
 before_mpi_timers, after_mpi_timers = None, None
 
+
 def callback_before_mpi_timer():
     global before_mpi_timers
     # print(shamrock.sys.world_rank(), "register before_mpi_timers")
     before_mpi_timers = shamrock.comm.get_timers()
+
 
 def callback_after_mpi_timer():
     global after_mpi_timers
     # print(shamrock.sys.world_rank(), "register after_mpi_timers")
     after_mpi_timers = shamrock.comm.get_timers()
 
-model.add_timestep_callback(
-    step_begin=callback_before_mpi_timer, step_end=callback_after_mpi_timer
-)
+
+model.add_timestep_callback(step_begin=callback_before_mpi_timer, step_end=callback_after_mpi_timer)
 
 for i in range(10):
     if shamrock.sys.world_rank() == 0:
