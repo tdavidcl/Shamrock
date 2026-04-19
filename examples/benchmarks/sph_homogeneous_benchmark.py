@@ -197,6 +197,7 @@ max_mpi_timers = res_mpi_timers[max_rate_index]
 step_time = res_cnt / res_rate
 
 if shamrock.sys.world_rank() == 0:
+    result_text = ""
     result_text += f"--- final score for N_target_base={N_target_base} ---"
     result_text += f"world size  : {shamrock.sys.world_size()}\n"
     result_text += f"result rate : {res_rate}\n"
