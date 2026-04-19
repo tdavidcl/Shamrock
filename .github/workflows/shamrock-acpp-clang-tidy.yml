@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - clang: 20
+          - clang: 21
             container: ghcr.io/shamrock-code/shamrock-ci:ubuntu-latest
     #if: false
 
