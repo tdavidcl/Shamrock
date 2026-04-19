@@ -443,7 +443,8 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                         weighted_intertia_sum.data,
                         I_inv.data));
 
-                delta_w = {};
+                delta_w     = {};
+                vec_delta_w = {delta_w.data[0], delta_w.data[1], delta_w[2]};
             }
 
             logger::raw_ln("delta l =", delta_l.data[0], delta_l.data[1], delta_l.data[2]);
