@@ -44,7 +44,7 @@ LLVM_VERSION=$1
 echo "-> Installing LLVM: $LLVM_VERSION"
 
 echo "-> Downloading LLVM script"
-wget https://apt.llvm.org/llvm.sh
+retry_on_404 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
 
 echo "-> sudo ./llvm.sh $LLVM_VERSION"
