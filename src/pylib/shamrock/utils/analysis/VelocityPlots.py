@@ -245,60 +245,9 @@ def VerticalShearGradient(
     )
 
 
-def gen_angular_momt_custom_getter(model, velocity_profile):
-    pmass = model.get_particle_mass()
-    hfact = model.get_hfact()
-
-    if _HAS_NUMBA:
-        if shamrock.sys.world_rank() == 0:
-            print(
-                "Using numba for velocity profile in SliceAngularMomentumTransportCoefficientPlot"
-            )
-        vel_profile_jit = njit(velocity_profile)
-    else:
-        vel_profile_jit = np.vectorize(velocity_profile)
-
-    def internal(
-        x: np.array,
-        y: np.array,
-        z: np.array,
-        vx: np.array,
-        vy: np.array,
-        vz: np.array,
-        hpart: np.array,
-        cs: np.array,
-    ) -> np.array:
-        rho = pmass * (hfact / hpart) ** 3
-        P = cs**2 * rho  # TODO: use true pressure
-
-        r = np.sqrt(x**2 + y**2)
-        r_safe = r + 1e-9
-        v_r = (x * vx + y * vy) / r_safe
-        v_theta = (-y * vx + x * vy) / r_safe
-
-        delta_vtheta = v_theta - vel_profile_jit(r)
-        alpha = rho * v_r * delta_vtheta / P
-
-        return alpha
-
-    if _HAS_NUMBA:
-        if shamrock.sys.world_rank() == 0:
-            print("Using numba for custom getter in SliceAngularMomentumTransportCoefficientPlot")
-        internal = njit(internal)
-
-    def custom_getter(size: int, dic_out: dict) -> np.array:
-        return internal(
-            dic_out["xyz"][:, 0],
-            dic_out["xyz"][:, 1],
-            dic_out["xyz"][:, 2],
-            dic_out["vxyz"][:, 0],
-            dic_out["vxyz"][:, 1],
-            dic_out["vxyz"][:, 2],
-            dic_out["hpart"],
-            dic_out["soundspeed"],
-        )
-
-    return custom_getter
+from src.pylib.shamrock.utils.sph.custom_getter_ang_mom_transport import (
+    gen_angular_mom_transport_custom_getter,
+)
 
 
 def SliceAngularMomentumTransportCoefficientPlot(
@@ -316,7 +265,7 @@ def SliceAngularMomentumTransportCoefficientPlot(
     velocity_profile=None,
 ):
     def compute_angular_momentum_transport_coefficient(helper):
-        custom_getter = gen_angular_momt_custom_getter(model, velocity_profile)
+        custom_getter = gen_angular_mom_transport_custom_getter(model, velocity_profile)
 
         arr_v = helper.slice_render(
             "custom",
@@ -356,7 +305,7 @@ def ColumnAverageAngularMomentumTransportCoefficientPlot(
     velocity_profile=None,
 ):
     def compute_angular_momentum_transport_coefficient(helper):
-        custom_getter = gen_angular_momt_custom_getter(model, velocity_profile)
+        custom_getter = gen_angular_mom_transport_custom_getter(model, velocity_profile)
 
         arr_v = helper.column_average_render(
             "custom",
