@@ -19,7 +19,9 @@
 #include "shamcmdopt/cmdopt.hpp"
 #include "shamcomm/mpiInfo.hpp"
 #include "shamcomm/wrapper.hpp"
+#include "shamsys/MicroBenchmark.hpp"
 #include "shamsys/NodeInstance.hpp"
+#include <pybind11/stl.h>
 
 namespace shamsys::instance {
     void register_pymodules(py::module &m) {
@@ -121,5 +123,14 @@ namespace shamsys::instance {
             R"pbdoc(
         Get the properties of the compute device
     )pbdoc");
+
+        m.def(
+            "get_microbench_results",
+            []() {
+                return shamsys::get_microbench_results();
+            },
+            R"pbdoc(
+            Get the microbench results
+            )pbdoc");
     }
 } // namespace shamsys::instance

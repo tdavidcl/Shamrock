@@ -176,6 +176,7 @@ if shamrock.sys.world_rank() == 0:
 
     dic_out = {
         "device_properties": device_properties,
+        "microbench_results": shamrock.sys.get_microbench_results(),
         "world_size": shamrock.sys.world_size(),
         "rate": res_rate,
         "cnt": res_cnt,
