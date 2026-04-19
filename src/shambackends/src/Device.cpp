@@ -78,6 +78,17 @@ namespace {
         } catch (const std::exception &e) {
             return std::nullopt;
         }
+        #elif defined(__APPLE__)
+        // in that case the command is simply sysctl -n machdep.cpu.brand_string
+        std::string brand_string = "";
+        try {
+            brand_string = shambase::popen_fetch_output("sysctl -n machdep.cpu.brand_string");
+            shambase::replace_all(brand_string, "\n", "");
+            return brand_string;
+        } catch (const std::exception &e) {
+            return std::nullopt;
+        }
+        return brand_string;
         #else
         return std::nullopt;
         #endif
