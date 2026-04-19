@@ -17,6 +17,7 @@
 
 #include "shambase/DistributedData.hpp"
 #include "shambase/narrowing.hpp"
+#include "shambase/string.hpp"
 #include "shamalgs/collective/reduction.hpp"
 #include "shamalgs/details/numeric/numeric.hpp"
 #include "shamalgs/numeric.hpp"
@@ -425,6 +426,24 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                 I_inv.get_mdspan(), delta_l.get_mdspan_mat_col(), delta_w.get_mdspan_mat_col());
 
             Tvec vec_delta_w = {delta_w.data[0], delta_w.data[1], delta_w[2]};
+
+            if (sham::has_nan_or_inf(vec_delta_w)) {
+                logger::warn_ln(
+                    "Sink",
+                    shambase::format(
+                        "Nan or inf detected after inertia matrix inversion\n"
+                        "  delta_l = {}\n"
+                        "  delta_w = {}\n"
+                        "  weighted_intertia_sum = {}\n"
+                        "  I_inv = {}\n"
+                        "I will therefore skip the boost step (delta_w = 0)",
+                        delta_l,
+                        delta_w,
+                        weighted_intertia_sum.data,
+                        I_inv.data));
+
+                delta_w = {};
+            }
 
             logger::raw_ln("delta l =", delta_l.data[0], delta_l.data[1], delta_l.data[2]);
             logger::raw_ln("delta w =", delta_w.data[0], delta_w.data[1], delta_w.data[2]);
