@@ -99,7 +99,7 @@ t_stop = [i * dt_stop for i in range(nstop + 1)]
 run_params = []
 
 for center_is_torque_free in [True, False]:
-    for center_racc in [0.25, 0.5, 0.8]:
+    for center_racc in [0.1, 0.25, 0.5, 0.8]:
         if center_is_torque_free:
             for center_torque_boost_radius_fact in [1.5, 2.0, 3.0]:
                 run_params.append(
