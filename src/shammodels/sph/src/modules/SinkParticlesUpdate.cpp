@@ -24,6 +24,7 @@
 #include "shamalgs/primitives/reduction.hpp"
 #include "shamalgs/reduction.hpp"
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/math.hpp"
 #include "shamcomm/logs.hpp"
@@ -437,8 +438,8 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
                         "  weighted_intertia_sum = {}\n"
                         "  I_inv = {}\n"
                         "I will therefore skip the boost step (delta_w = 0)",
-                        delta_l,
-                        delta_w,
+                        delta_l.data,
+                        delta_w.data,
                         weighted_intertia_sum.data,
                         I_inv.data));
 
