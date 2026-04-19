@@ -40,6 +40,7 @@ if [[ -z "${1:-}" ]]; then
     echo "Usage: $0 <llvm_version>"
     exit 1
 fi
+
 LLVM_VERSION=$1
 echo "-> Installing LLVM: $LLVM_VERSION"
 
