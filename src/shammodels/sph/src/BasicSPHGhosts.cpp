@@ -554,7 +554,7 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
         send_count_stats[sender] += ratio;
     });
 
-    #ifdef false
+#ifdef false
     bool has_warn = false;
 
     std::string warn_log = "";
@@ -575,7 +575,7 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     if (has_warn) {
         logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
     }
-    #endif
+#endif
 
     return res;
 }
