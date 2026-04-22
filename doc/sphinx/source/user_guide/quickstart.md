@@ -46,7 +46,7 @@ If you get an error that's weird and it is probably simpler to drop a message on
 With Homebrew:
 
 ```bash
-brew install cmake libomp boost open-mpi adaptivecpp python ninja
+brew install cmake libomp boost open-mpi adaptivecpp python ninja fmt
 ```
 
 :::
@@ -124,14 +124,14 @@ Shamrock provides its own utilities with pre-made configurations for various mac
 :::{tab-item} Linux (Debian & Ubuntu)
 
 ```bash
-./env/new-env --builddir build --machine debian-generic.acpp -- --backend omp
+./env/new-env --machine debian-generic.acpp --builddir build -- --backend omp
 ```
 
 :::
 :::{tab-item} MacOS
 
 ```bash
-./env/new-env --builddir build --machine macos-generic.acpp -- --backend omp
+./env/new-env --machine macos-generic.acpp --builddir build --
 ```
 
 :::
@@ -345,6 +345,10 @@ You should see a figure like:
 The `--rscript` flag means run-scripts. In Shamrock since everything goes through Python your run will be a Python script, hence the name "run script". Here it is a benchmark of one of Shamrock's algorithms.
 :::
 
+:::{note}
+It is normal for the figures to vary slightly between runs. This is a benchmark of the exclusive scans implemented in Shamrock, which are quite fast and therefore subject to some run-to-run variability. On CPU, this is especially noticeable depending on what else is using the memory bandwidth.
+:::
+
 ### Python interpreter + Ipython
 
 :::::{warning}
@@ -402,6 +406,10 @@ import shamrock
 
 In [1]:
 ```
+
+:::{note}
+Currently on MacOS and maybe some other OS you will see `UserWarning: Attempting to work in a virtualenv. If you encounter problems, please install IPython inside the virtualenv.` do not worry to much about it, it works just fine without a venv. We will create one at the next step anyway.
+:::
 
 Now you can use the same python as one would in runscripts. A classic one to run there is the following (which is what I do in the basic CI test btw):
 
