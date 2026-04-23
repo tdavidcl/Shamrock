@@ -77,7 +77,7 @@ def uint_g(r):
 ndust = 4
 rc = 0.25
 stokes = np.logspace(-3, 0, ndust)
-stopping_times = stokes / omega_k(R0) 
+stopping_times = stokes / omega_k(R0)
 print(stopping_times, omega_k(R0))
 from scipy.special import erfinv
 
@@ -175,6 +175,7 @@ model.set_cfl_force(0.1)
 
 model.timestep()
 
+
 def compute_sj_new(patchdata):
     hpart = patchdata["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
@@ -185,10 +186,6 @@ def compute_sj_new(patchdata):
     return s
 
 
-
-
-
-
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 tnext = 0
@@ -197,9 +194,9 @@ for j in range(1000):
         tnext += 0.1
         model.evolve_until(tnext)
 
-        if(j == 20):
+        if j == 20:
             for k in range(ndust):
-                model.overwrite_field_value_f64("s_j",compute_sj_new,k)
+                model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
     dic = ctx.collect_data()
     print(dic["s_j"])
@@ -238,10 +235,12 @@ for j in range(1000):
     axs[0].set_ylabel(r"$\rho$")
     axs[0].set_xlabel(r"$y$")
 
-    axs[0].set_yscale('log')
+    axs[0].set_yscale("log")
     axs[0].legend()
     for i in range(ndust):
-        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=f"dust {i} ts = {stopping_times[i]:.2f}", s=sz)
+        axs[1].scatter(
+            y, s_j[:, i] ** 2 / rho, label=f"dust {i} ts = {stopping_times[i]:.2f}", s=sz
+        )
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$y$")
     axs[1].legend()
