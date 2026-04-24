@@ -49,8 +49,6 @@ namespace shammodels::sph::modules {
         using Tscal  = shambase::VecComponent<Tvec>;
         using Kernel = SPHKernel<Tscal>;
 
-        static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
-
         u32 ndust;
 
         public:
