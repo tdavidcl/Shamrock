@@ -25,7 +25,8 @@
 //%Impl status : Clean unfinished
 
 template<class pos_prec, class u_morton>
-class Interfacehandler<Tree_Send, pos_prec, RadixTree<u_morton, sycl::vec<pos_prec, 3>>> {
+class [[deprecated("Old ways, use the solvergraph nodes in SPH now")]]
+Interfacehandler<Tree_Send, pos_prec, RadixTree<u_morton, sycl::vec<pos_prec, 3>>> {
 
     public:
     using flt = pos_prec;
