@@ -218,8 +218,6 @@ namespace shammodels::sph {
                         acc[i * f_nvar + offset] = pos_to_val(acc_xyz[i]);
                     }
 
-                    logger::raw_ln(acc);
-
                     f.get_buf().copy_from_stdvec(acc);
                 });
         }
@@ -264,8 +262,6 @@ namespace shammodels::sph {
                     for (u32 i = 0; i < obj_cnt; i++) {
                         acc[i * f_nvar + offset] = result[i];
                     }
-
-                    logger::raw_ln(acc);
 
                     f.get_buf().copy_from_stdvec(acc);
                 });
