@@ -20,7 +20,6 @@
  *
  */
 
-#include "patchdata_field.hpp"
 #include "shamrock/legacy/patch/base/enabled_fields.hpp"
 #include "shamrock/legacy/utils/sycl_vector_utils.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"

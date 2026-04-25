@@ -7,8 +7,8 @@
 //
 // -------------------------------------------------------//
 
-#include "shamrock/legacy/patch/base/patchdata_field.hpp"
 #include "shamrock/legacy/patch/utility/patch_field.hpp"
+#include "shamrock/patch/PatchDataField.hpp"
 #include "shamsys/legacy/sycl_mpi_interop.hpp"
 #include "shamtest/shamtest.hpp"
 #include <random>
