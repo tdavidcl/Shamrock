@@ -118,6 +118,7 @@ struct PatchDataMpiRequest {
 #undef X
 };
 
+[[deprecated("Please use CommunicationBuffer & SerializeHelper instead")]]
 inline void waitall_pdat_mpi_rq(std::vector<PatchDataMpiRequest> &rq_lst) {
 
     std::vector<MPI_Request> rqst;
