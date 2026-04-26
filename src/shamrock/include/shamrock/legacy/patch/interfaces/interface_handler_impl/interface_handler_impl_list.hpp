@@ -27,7 +27,7 @@ enum InterfacehandlerImpl { Tree_Send };
 // forward definition of the interface handler
 
 template<InterfacehandlerImpl impl_type, class pos_prec, class Tree>
-class Interfacehandler {
+class [[deprecated("use New comms instead")]] Interfacehandler {
 
     public:
     using flt = pos_prec;
