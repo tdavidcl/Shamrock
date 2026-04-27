@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file NodeUpdateDerivsVaryingAlphaAV.hpp
+ * @file NodeComputePressureGrad.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -23,7 +23,7 @@
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
 
-#define NODE_COMPUTE_PRESSURE_GRAD_EDGES(X_RO, X_RW)                                      \
+#define NODE_COMPUTE_PRESSURE_GRAD_EDGES(X_RO, X_RW)                                               \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
                                                                                                    \
@@ -41,7 +41,7 @@
     X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
                                                                                                    \
     /* outputs */                                                                                  \
-    X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, grad_pressure)                                           
+    X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, grad_pressure)
 
 namespace shammodels::sph::modules {
 
