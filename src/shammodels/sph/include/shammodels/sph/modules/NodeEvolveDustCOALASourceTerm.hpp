@@ -16,16 +16,23 @@
  *
  */
 
+#include "shambase/memory.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shambackends/vec.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
+#include "shamsys/NodeInstance.hpp"
+#include <experimental/mdspan>
+#include <vector>
 
 #define NODE_EVOLVE_DUST_COALA_SOURCE_TERM_EDGES(X_RO, X_RW)                                       \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, rhodust_eps)                                    \
     X_RO(shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>, massgrid)                          \
+    X_RO(shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>, tensor_tabflux_coag)               \
                                                                                                    \
     /* counts */                                                                                   \
     X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
@@ -34,12 +41,64 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
                                                                                                    \
+    /* Here it is the delta_v in the monofluid sense not the coala sense */                        \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, delta_v_j)                                       \
                                                                                                    \
     /* outputs */                                                                                  \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, S_coag)
 
 namespace shammodels::sph::modules {
+
+    template<
+        class T,
+        class E1,
+        class E2,
+        class E3,
+        class E4,
+        class L1,
+        class L2,
+        class L3,
+        class L4,
+        class A1,
+        class A2,
+        class A3,
+        class A4>
+    inline void compute_flux_coag_k0_kdv(
+        int nbins,
+        const std::mdspan<T, E1, L1, A1> &gij,
+        const std::mdspan<T, E2, L2, A2> &tensor_tabflux_coag,
+        const std::mdspan<T, E3, L3, A3> &dv,
+        std::mdspan<T, E4, L4, A4> &flux) {
+        // --- Compile-time rank checks ---
+        static_assert(E1::rank() == 1, "gij must be rank 1");
+        static_assert(E2::rank() == 3, "tensor_tabflux_coag must be rank 3");
+        static_assert(E3::rank() == 2, "dv must be rank 2");
+        static_assert(E4::rank() == 1, "flux must be rank 1");
+
+        // --- Runtime extent checks ---
+        SHAM_ASSERT(gij.extent(0) == dv.extent(0));
+        SHAM_ASSERT(gij.extent(0) == dv.extent(1));
+
+        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == dv.extent(0));
+        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == dv.extent(1));
+
+        SHAM_ASSERT(tensor_tabflux_coag.extent(0) == flux.extent(0));
+
+        /*
+         * Python version:
+         * flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij)
+         */
+
+        for (int j = 0; j < nbins; ++j) {
+            double sum = 0.0;
+            for (int l = 0; l < nbins; ++l) {
+                for (int m = 0; m < nbins; ++m) {
+                    sum += tensor_tabflux_coag(j, l, m) * dv(l, m) * gij[l] * gij[m];
+                }
+            }
+            flux[j] = sum;
+        }
+    }
 
     template<class Tvec, template<class> class SPHKernel>
     class NodeEvolveDustCOALASourceTerm : public shamrock::solvergraph::INode {
@@ -48,14 +107,124 @@ namespace shammodels::sph::modules {
 
         static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
 
-        u32 ndust;
+        u32 nbins;
 
         public:
-        NodeEvolveDustCOALASourceTerm(u32 ndust) : ndust(ndust) {}
+        NodeEvolveDustCOALASourceTerm(u32 nbins) : nbins(nbins) {}
 
         EXPAND_NODE_EDGES(NODE_EVOLVE_DUST_COALA_SOURCE_TERM_EDGES)
 
-        inline void _impl_evaluate_internal() {}
+        inline void _impl_evaluate_internal() {
+
+            auto edges = get_edges();
+
+            auto hpart_spans     = edges.hpart.get_spans();
+            auto s_j_spans       = edges.s_j.get_spans();
+            auto delta_v_j_spans = edges.delta_v_j.get_spans();
+
+            auto S_coag_spans = edges.S_coag.get_spans();
+
+            Tscal rho_eps                                 = edges.rhodust_eps.value;
+            const std::vector<Tscal> &massgrid            = edges.massgrid.value;
+            const std::vector<Tscal> &tensor_tabflux_coag = edges.tensor_tabflux_coag.value;
+
+            auto counts = edges.part_counts.indexes;
+
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+            sham::DeviceBuffer<Tscal> massgrid_buf(nbins, dev_sched);
+            massgrid_buf.copy_from_stdvec(massgrid);
+
+            sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins, dev_sched);
+            tensor_tabflux_coag_buf.copy_from_stdvec(massgrid);
+
+            u32 group_size = 64;
+
+            counts.for_each([&](u64 id_patch, u64 count) {
+                u32 group_cnt     = shambase::group_count(count, group_size);
+                u32 corrected_len = group_cnt * group_size;
+
+                sham::kernel_call_hndl(
+                    q,
+                    sham::MultiRef{
+                        massgrid_buf,
+                        tensor_tabflux_coag_buf,
+                        hpart_spans.get(id_patch),
+                        s_j_spans.get(id_patch),
+                        delta_v_j_spans.get(id_patch)},
+                    sham::MultiRef{S_coag_spans.get(id_patch)},
+                    count,
+                    [=](u32 /**/,
+                        // common to all kernel calls
+                        const Tscal *__restrict massgrid_ptr,
+                        const Tscal *__restrict tensor_tabflux_coag,
+                        // field specific data
+                        const Tscal *__restrict hpart,
+                        const Tscal *__restrict s_j,
+                        const Tvec *__restrict delta_v_j,
+                        Tscal *__restrict S_coag) {
+                        auto range = sycl::nd_range<1>{corrected_len, group_size};
+
+                        return [=](sycl::handler &cgh) {
+                            auto gij_acc = sycl::local_accessor<Tscal>{
+                                sycl::range<1>{group_size} * nbins, cgh};
+                            auto flux_acc = sycl::local_accessor<Tscal>{
+                                sycl::range<1>{group_size} * nbins, cgh};
+                            auto dv_acc = sycl::local_accessor<Tscal>{
+                                sycl::range<1>{group_size} * nbins * nbins, cgh};
+
+                            cgh.parallel_for(range, [=](sycl::nd_item<1> tid) {
+                                const u64 id_a = tid.get_global_linear_id();
+                                const u64 lid  = tid.get_local_linear_id();
+
+                                std::mdspan<Tscal, std::dextents<size_t, 1>> gij{
+                                    &(gij_acc[nbins * lid]), nbins};
+                                std::mdspan<Tscal, std::dextents<size_t, 1>> flux{
+                                    &(flux_acc[nbins * lid]), nbins};
+
+                                std::mdspan<Tscal, std::dextents<size_t, 1>> dv{
+                                    &(dv_acc[nbins * nbins * nbins * lid]), nbins};
+
+                                std::mdspan<Tscal, std::dextents<size_t, 3>> tabflux_coag{
+                                    tensor_tabflux_coag, nbins, nbins, nbins};
+                                std::mdspan<Tscal, std::dextents<size_t, 1>> massgrid{
+                                    massgrid_ptr, nbins};
+
+                                auto rho_dust = [&](int j) {
+                                    return s_j[j] * s_j[j];
+                                };
+
+                                // should implement the same content as
+                                // src/pylib/shamrock/external/coala/interface_coala_shamrock.py
+
+                                for (int j = 0; j < nbins; j++) {
+                                    Tscal rho_d = rho_dust(j);
+                                    if (rho_d > rho_eps) {
+                                        gij(j) = rho_d / (massgrid[j + 1] - massgrid[j]);
+                                    }
+                                }
+
+                                // dv_ij = v_dust_j - v_dust_i
+                                for (int i = 0; i < nbins; ++i) {
+                                    for (int j = 0; j < nbins; ++j) {
+                                        dv(i, j) = sycl::length(delta_v_j[j] - delta_v_j[i]);
+                                    }
+                                }
+
+                                // compute flux for all dust bins
+                                compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
+
+                                // compute flux diff and store
+                                S_coag[0] = -flux[0];
+                                for (int j = 1; j < nbins; ++j) {
+                                    S_coag[j] = flux[j - 1] - flux[j];
+                                }
+                            });
+                        };
+                    });
+            });
+        }
 
         inline virtual std::string _impl_get_label() const {
             return "NodeEvolveDustCOALASourceTerm";
