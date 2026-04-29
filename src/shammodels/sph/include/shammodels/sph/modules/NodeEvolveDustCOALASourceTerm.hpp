@@ -136,7 +136,7 @@ namespace shammodels::sph::modules {
             sham::DeviceBuffer<Tscal> massgrid_buf(nbins, dev_sched);
             massgrid_buf.copy_from_stdvec(massgrid);
 
-            sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins, dev_sched);
+            sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins * nbins * nbins, dev_sched);
             tensor_tabflux_coag_buf.copy_from_stdvec(massgrid);
 
             u32 group_size = 64;
