@@ -35,7 +35,7 @@ def coala_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabflux_c
     """
 
     # compute gij from rhodust for coala k=0
-    gij = np.zeros(nbins) # shape is 1D with k0
+    gij = np.zeros(nbins)  # shape is 1D with k0
     for j in range(nbins):
         if rhodust[j] > rhodust_eps:
             gij[j] = rhodust[j] / (massgrid[j + 1] - massgrid[j])
