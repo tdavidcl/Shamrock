@@ -8,6 +8,7 @@
 // -------------------------------------------------------//
 
 #include "shambase/time.hpp"
+#include "shamalgs/collective/reduction.hpp"
 #include "shamalgs/details/numeric/exclusiveScanAtomic.hpp"
 #include "shamalgs/details/numeric/exclusiveScanGPUGems39.hpp"
 #include "shamalgs/details/numeric/numericFallback.hpp"
@@ -61,7 +62,7 @@ inline sham::DeviceBuffer<T> make_ref(sham::DeviceBuffer<T> &in) {
 }
 
 template<class T>
-inline void burn_scan(sham::DeviceBuffer<T> &in) {
+inline u64 burn_scan(sham::DeviceBuffer<T> &in) {
 
     auto dev_sched = in.get_dev_scheduler_ptr();
 
@@ -98,10 +99,12 @@ inline void burn_scan(sham::DeviceBuffer<T> &in) {
             timer.elasped_sec(),
             i,
             in.get_size()));
+
+    return i;
 }
 
 template<class T>
-inline void fuzz_burn(std::mt19937_64 &eng) {
+inline u64 fuzz_burn(std::mt19937_64 &eng) {
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -118,19 +121,23 @@ inline void fuzz_burn(std::mt19937_64 &eng) {
     sham::DeviceBuffer<T> in_buf(in.size(), dev_sched);
     in_buf.copy_from_stdvec(in);
 
-    burn_scan(in_buf);
+    u64 run_count = burn_scan(in_buf);
+
+    return shamalgs::collective::allreduce_sum(run_count);
 }
 
 TestStart(Unittest, "burn_scan", test_burn_scan, -1) {
 
     std::mt19937_64 eng(0x111 + shamcomm::world_rank() * 1000);
 
+    u64 total_run_count = 0;
     for (u32 i = 0; true; i++) {
         shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         if (shamcomm::world_rank() == 0) {
-            logger::raw_ln("--------------------------------", i);
+            logger::raw_ln(
+                shambase::format("----- run {} | total run count = {} -----", i, total_run_count));
         }
         shamcomm::mpi::Barrier(MPI_COMM_WORLD);
-        fuzz_burn<u32>(eng);
+        total_run_count += fuzz_burn<u32>(eng);
     }
 }
