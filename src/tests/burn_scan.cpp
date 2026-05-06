@@ -75,35 +75,29 @@ inline void burn_scan(sham::DeviceBuffer<T> &in) {
     timer.end();
 
     f64 last_print = 0;
-    u32 i = 0;
+    u32 i          = 0;
     for (; timer.elasped_sec() < 5; i++) {
         source_buf.copy_from(in);
-
-        if (i % 100 == 0) {
-            timer.end();
-            if (timer.elasped_sec() - last_print > 1) {
-                last_print = timer.elasped_sec();
-                logger::raw_ln(shambase::format(
-                    "Burn scan test on world rank {}, run {} times",
-                    shamcomm::world_rank(),
-                    i));
-            }
-        }
 
         auto result   = shamalgs::numeric::scan_exclusive(dev_sched, source_buf, in.get_size());
         bool is_valid = validate_scan(result, ref, result_flag);
         if (!is_valid) {
             throw std::runtime_error("Scan is not valid");
         }
-        timer.end();
+
+        if (i % 10 == 0) {
+            timer.end();
+        }
     }
 
     timer.end();
-    logger::raw_ln(shambase::format(
-        "Burn scan test on world rank {} done in {}s, run {} times",
-        shamcomm::world_rank(),
-        timer.elasped_sec(),
-        i));
+    logger::raw_ln(
+        shambase::format(
+            "Burn scan test on world rank {} done in {}s, run {} times (size={})",
+            shamcomm::world_rank(),
+            timer.elasped_sec(),
+            i,
+            in.get_size()));
 }
 
 template<class T>
@@ -131,10 +125,10 @@ TestStart(Unittest, "burn_scan", test_burn_scan, -1) {
 
     std::mt19937_64 eng(0x111 + shamcomm::world_rank() * 1000);
 
-    for (u32 i = 0; i < 1000; i++) {
+    for (u32 i = 0; true; i++) {
         shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         if (shamcomm::world_rank() == 0) {
-            logger::raw_ln("--------------------------------");
+            logger::raw_ln("--------------------------------", i);
         }
         shamcomm::mpi::Barrier(MPI_COMM_WORLD);
         fuzz_burn<u32>(eng);
