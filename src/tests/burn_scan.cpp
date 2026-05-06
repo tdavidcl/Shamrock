@@ -70,15 +70,40 @@ inline void burn_scan(sham::DeviceBuffer<T> &in) {
     auto source_buf  = sham::DeviceBuffer<T>(in.get_size(), dev_sched);
     auto result_flag = sham::DeviceBuffer<u32>(1, dev_sched);
 
-    for (u32 i = 0; i < 10000; i++) {
+    shambase::Timer timer;
+    timer.start();
+    timer.end();
+
+    f64 last_print = 0;
+    u32 i = 0;
+    for (; timer.elasped_sec() < 5; i++) {
         source_buf.copy_from(in);
+
+        if (i % 100 == 0) {
+            timer.end();
+            if (timer.elasped_sec() - last_print > 1) {
+                last_print = timer.elasped_sec();
+                logger::raw_ln(shambase::format(
+                    "Burn scan test on world rank {}, run {} times",
+                    shamcomm::world_rank(),
+                    i));
+            }
+        }
 
         auto result   = shamalgs::numeric::scan_exclusive(dev_sched, source_buf, in.get_size());
         bool is_valid = validate_scan(result, ref, result_flag);
         if (!is_valid) {
             throw std::runtime_error("Scan is not valid");
         }
+        timer.end();
     }
+
+    timer.end();
+    logger::raw_ln(shambase::format(
+        "Burn scan test on world rank {} done in {}s, run {} times",
+        shamcomm::world_rank(),
+        timer.elasped_sec(),
+        i));
 }
 
 template<class T>
