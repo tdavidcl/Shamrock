@@ -92,13 +92,13 @@ inline u64 burn_scan(sham::DeviceBuffer<T> &in) {
     }
 
     timer.end();
-    logger::raw_ln(
-        shambase::format(
-            "Burn scan test on world rank {} done in {}s, run {} times (size={})",
-            shamcomm::world_rank(),
-            timer.elasped_sec(),
-            i,
-            in.get_size()));
+    // logger::raw_ln(
+    //     shambase::format(
+    //         "Burn scan test on world rank {} done in {}s, run {} times (size={})",
+    //         shamcomm::world_rank(),
+    //         timer.elasped_sec(),
+    //         i,
+    //         in.get_size()));
 
     return i;
 }
@@ -116,7 +116,7 @@ inline u64 fuzz_burn(std::mt19937_64 &eng) {
         shamcomm::world_rank(),
         eng(),
         random_size);
-    logger::raw_ln(log_str);
+    // logger::raw_ln(log_str);
 
     sham::DeviceBuffer<T> in_buf(in.size(), dev_sched);
     in_buf.copy_from_stdvec(in);
