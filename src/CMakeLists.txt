@@ -63,10 +63,12 @@ message("-- adding shamrock target")
 
 pybind11_add_module(shamrock_pylib main_lib.cpp)
 target_link_libraries(shamrock_pylib PUBLIC pybind11::module)
+target_link_libraries(shamrock_pylib PUBLIC pybind11_extra::pybind11_extra)
 set_property(TARGET shamrock_pylib PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_executable(shamrock_exe main.cpp)
 target_link_libraries(shamrock_exe PUBLIC pybind11::embed)
+target_link_libraries(shamrock_exe PUBLIC pybind11_extra::pybind11_extra)
 
 function(target_link_lib_and_install tgt)
     target_link_libraries(${tgt} PUBLIC nlohmann_json::nlohmann_json)

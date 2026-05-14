@@ -37,6 +37,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/SignalCatch.hpp"
 #include "shamsys/shamrock_smi.hpp"
+#include "pybind11_extra.hpp"
 #include <pybind11/embed.h>
 #include <cstdlib>
 #include <stdexcept>
@@ -125,6 +126,8 @@ int main(int argc, char *argv[]) {
 
     if (shamcomm::world_rank() == 0) {
         print_title_bar();
+
+        logger::raw_ln("pybind11_extra:", pybind11_extra::test_function());
 
         logger::print_faint_row();
         if (shamsys::instance::is_initialized()) {
