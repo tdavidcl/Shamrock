@@ -76,6 +76,8 @@ namespace shambase {
      * @brief given a sizeof value return a readble string
      * Example : readable_sizeof(1e9) -> "1.00 GB"
      *
+     * Use to be in base 1024 but was error prone
+     *
      * @param size the size
      * @return std::string the formated string
      */

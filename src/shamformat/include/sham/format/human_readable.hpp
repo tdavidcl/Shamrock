@@ -27,20 +27,34 @@ namespace sham {
 
     namespace details {
 
-        consteval std::array<std::pair<const char *, double>, 12> make_si_pairs() {
-            return {
-                {{"n", 1e-9},
-                 {"u", 1e-6},
-                 {"m", 1e-3},
-                 {"", 1.0},
-                 {"k", 1e3},
-                 {"M", 1e6},
-                 {"G", 1e9},
-                 {"T", 1e12},
-                 {"P", 1e15},
-                 {"E", 1e18},
-                 {"Z", 1e21},
-                 {"Y", 1e24}}};
+        template<bool allow_below_1>
+        consteval auto make_si_pairs() {
+            if constexpr (allow_below_1) {
+                return std::array<std::pair<const char *, double>, 12>{
+                    {{"n", 1e-9},
+                     {"u", 1e-6},
+                     {"m", 1e-3},
+                     {"", 1.0},
+                     {"k", 1e3},
+                     {"M", 1e6},
+                     {"G", 1e9},
+                     {"T", 1e12},
+                     {"P", 1e15},
+                     {"E", 1e18},
+                     {"Z", 1e21},
+                     {"Y", 1e24}}};
+            } else {
+                return std::array<std::pair<const char *, double>, 9>{
+                    {{"", 1.0},
+                     {"k", 1e3},
+                     {"M", 1e6},
+                     {"G", 1e9},
+                     {"T", 1e12},
+                     {"P", 1e15},
+                     {"E", 1e18},
+                     {"Z", 1e21},
+                     {"Y", 1e24}}};
+            }
         }
 
     } // namespace details
@@ -51,8 +65,9 @@ namespace sham {
         double ratio;
     };
 
+    template<bool allow_below_1 = true>
     inline human_readable_t to_human_readable(double value) {
-        static constexpr auto si = details::make_si_pairs();
+        static constexpr auto si = details::make_si_pairs<allow_below_1>();
 
         double ax = std::fabs(value);
 
@@ -68,7 +83,7 @@ namespace sham {
             }
         }
 
-        // too small, clamp to nano
+        // too small, clamp to smallest unit
         const auto &smallest = si.front();
         if (ax < si.front().second) {
             return {
@@ -77,14 +92,9 @@ namespace sham {
                 .ratio  = smallest.second};
         }
 
-        // too large, clamp to yotta
+        // too large, clamp to largest unit (other possibilities are unreachable)
         const auto &largest = si.back();
-        if (ax >= si.back().second) {
-            return {
-                .value = value / largest.second, .prefix = largest.first, .ratio = largest.second};
-        }
-
-        return {.value = value, .prefix = "", .ratio = 1.0}; // unreachable in correct table
+        return {.value = value / largest.second, .prefix = largest.first, .ratio = largest.second};
     }
 
 } // namespace sham
