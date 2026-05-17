@@ -81,7 +81,7 @@ namespace shambase {
      */
     inline std::string readable_sizeof(double size) {
         auto res = sham::to_human_readable(size);
-        return sham::format("{:.2f}{}B", res.value, res.prefix);
+        return sham::format("{:.2f} {}B", res.value, res.prefix);
     }
 
     /**
