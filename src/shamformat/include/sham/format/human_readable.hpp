@@ -12,11 +12,7 @@
 /**
  * @file human_readable.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Core formatting functions: `format`, `vformat`, and `format_printf`
- *
- * This is the primary entry point for the shamformat library. It re-exports
- * aliases and exception declarations from the other headers and provides the
- * public formatting API wrapped with exception handling.
+ * @brief Convert raw numeric values to human-readable SI-formatted pairs
  */
 
 #include <array>
@@ -27,6 +23,13 @@ namespace sham {
 
     namespace details {
 
+        /**
+         * @brief Generate a compile-time table of SI prefixes and their magnitudes.
+         *
+         * @tparam allow_below_1 When true, includes sub-unity prefixes (nano through
+         * milli). When false, starts at unity (no sub-unity prefixes).
+         * @return constexpr std::array of {prefix, magnitude} pairs sorted ascending
+         */
         template<bool allow_below_1>
         consteval auto make_si_pairs() {
             if constexpr (allow_below_1) {
@@ -59,12 +62,32 @@ namespace sham {
 
     } // namespace details
 
+    /**
+     * @brief Struct holding a scaled value with its SI prefix
+     *
+     * @param value the scaled numeric value (e.g. 1.5 for "1.5 k")
+     * @param prefix the SI prefix character (e.g. "k", "M", "")
+     * @param ratio the ratio used to scale the original value
+     */
     struct human_readable_t {
         double value;
         const char *prefix;
         double ratio;
     };
 
+    /**
+     * @brief Convert a raw value to a human-readable scaled form with an SI prefix.
+     *
+     * Finds the largest SI prefix whose magnitude divides evenly into `value`,
+     * returning the scaled value, prefix character, and division ratio. Values
+     * are clamped to the smallest or largest available SI unit when they fall
+     * outside the supported range. Zero always returns an empty prefix.
+     *
+     * @tparam allow_below_1 When true (default), the full table including nano/
+     * micro/milli is used. When false, only prefixes >= 1 are considered.
+     * @param value the raw numeric value to scale
+     * @return human_readable_t the scaled value with prefix information
+     */
     template<bool allow_below_1 = true>
     inline human_readable_t to_human_readable(double value) {
         static constexpr auto si = details::make_si_pairs<allow_below_1>();
