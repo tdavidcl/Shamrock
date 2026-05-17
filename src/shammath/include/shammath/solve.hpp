@@ -17,12 +17,13 @@
  */
 
 #include <cmath>
+#include <concepts>
 #include <functional>
 
 namespace shammath {
 
-    template<class T>
-    float newton_rhaphson(std::function<T(T)> &&f, std::function<T(T)> &&df, T epsilon_c, T x_0) {
+    template<std::floating_point T>
+    T newton_rhaphson(std::function<T(T)> &&f, std::function<T(T)> &&df, T epsilon_c, T x_0) {
 
         auto iterate_newton = [](T f, T df, T xk) -> T {
             return xk - (f / df);

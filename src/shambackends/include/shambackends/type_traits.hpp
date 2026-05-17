@@ -40,17 +40,13 @@ namespace sham {
     }
 
     /**
-     * @brief Check if a type is a valid SYCL base type in Shamrock
+     * @brief Concept for a valid SYCL base type in Shamrock
      *
      * A valid SYCL base type in shamrock is one of: `int64_t`, `int32_t`, `int16_t`, `int8_t`,
      * `uint64_t`, `uint32_t`, `uint16_t`, `uint8_t`, `half`, `float`, `double`.
-     *
-     * @tparam T Type to check
-     * @return true If T is a valid SYCL base type
-     * @return false If T is not a valid SYCL base type
      */
     template<class T>
-    inline constexpr bool is_valid_sycl_base_type
+    concept is_valid_sycl_base_type
         = std::is_same_v<T, i64> || std::is_same_v<T, i32> || std::is_same_v<T, i16>
           || std::is_same_v<T, i8> || std::is_same_v<T, u64> || std::is_same_v<T, u32>
           || std::is_same_v<T, u16> || std::is_same_v<T, u8> || std::is_same_v<T, f16>

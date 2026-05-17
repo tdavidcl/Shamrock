@@ -21,7 +21,6 @@
 #include "shambackends/sycl.hpp"
 #include "shambackends/vec.hpp"
 #include "shammath/CoordRangeTransform.hpp"
-#include <type_traits>
 
 namespace shamrock::sfc {
 
@@ -68,13 +67,10 @@ namespace shamrock::sfc {
                    && max.y() == max_val && max.z() == max_val;
         }
 
-        template<class flt>
+        template<std::floating_point flt>
         inline static u32 coord_to_morton(flt x, flt y, flt z) {
 
-            constexpr bool ok_type = std::is_same<flt, f32>::value || std::is_same<flt, f64>::value;
-            static_assert(ok_type, "unknown input type");
-
-            if constexpr (std::is_same<flt, f32>::value) {
+            if constexpr (std::is_same_v<flt, f32>) {
 
                 x = sycl::fmin(sycl::fmax(x * 1024.F, 0.F), 1024.F - 1.F);
                 y = sycl::fmin(sycl::fmax(y * 1024.F, 0.F), 1024.F - 1.F);
@@ -82,7 +78,7 @@ namespace shamrock::sfc {
 
                 return icoord_to_morton(x, y, z);
 
-            } else if constexpr (std::is_same<flt, f64>::value) {
+            } else {
 
                 x = sycl::fmin(sycl::fmax(x * 1024., 0.), 1024. - 1.);
                 y = sycl::fmin(sycl::fmax(y * 1024., 0.), 1024. - 1.);
@@ -136,13 +132,10 @@ namespace shamrock::sfc {
                    && max.y() == max_val && max.z() == max_val;
         }
 
-        template<class flt>
+        template<std::floating_point flt>
         inline static u64 coord_to_morton(flt x, flt y, flt z) {
 
-            constexpr bool ok_type = std::is_same<flt, f32>::value || std::is_same<flt, f64>::value;
-            static_assert(ok_type, "unknown input type");
-
-            if constexpr (std::is_same<flt, f32>::value) {
+            if constexpr (std::is_same_v<flt, f32>) {
 
                 x = sycl::fmin(sycl::fmax(x * 2097152.F, 0.F), 2097152.F - 1.F);
                 y = sycl::fmin(sycl::fmax(y * 2097152.F, 0.F), 2097152.F - 1.F);
@@ -150,7 +143,7 @@ namespace shamrock::sfc {
 
                 return icoord_to_morton(x, y, z);
 
-            } else if constexpr (std::is_same<flt, f64>::value) {
+            } else {
 
                 x = sycl::fmin(sycl::fmax(x * 2097152., 0.), 2097152. - 1.);
                 y = sycl::fmin(sycl::fmax(y * 2097152., 0.), 2097152. - 1.);
@@ -193,12 +186,12 @@ namespace shamrock::sfc {
         using CoordTransform = shammath::CoordRangeTransform<ipos_t, pos_t>;
 
         private:
-        static constexpr bool implemented_int = std::is_same<pos_t, u32_3>::value
-                                                || std::is_same<pos_t, u64_3>::value
-                                                || std::is_same<pos_t, i64_3>::value;
+        static constexpr bool implemented_int = std::is_same_v<pos_t, u32_3>
+                                                || std::is_same_v<pos_t, u64_3>
+                                                || std::is_same_v<pos_t, i64_3>;
 
         static constexpr bool implemented_float
-            = std::is_same<pos_t, f32_3>::value || std::is_same<pos_t, f64_3>::value;
+            = std::is_same_v<pos_t, f32_3> || std::is_same_v<pos_t, f64_3>;
 
         static_assert(implemented_int || implemented_float, "not implemented");
 

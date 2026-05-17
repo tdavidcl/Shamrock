@@ -16,7 +16,6 @@
  *
  */
 
-#include "shambase/type_traits.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/type_traits.hpp"
 
@@ -32,7 +31,7 @@ namespace shammath {
      * @return true
      * @return false
      */
-    template<class T, std::enable_if_t<sham::is_valid_sycl_base_type<T>, int> = 0>
+    template<sham::is_valid_sycl_base_type T>
     inline bool is_in_half_open(T val, T min, T max) {
         return (val >= min) && (val < max);
     }
@@ -152,7 +151,7 @@ namespace shammath {
      * @param bmax2 Maximum of second interval
      * @return true if intervals are connected (share boundary or overlap)
      */
-    template<class T, std::enable_if_t<sham::is_valid_sycl_base_type<T>, int> = 0>
+    template<sham::is_valid_sycl_base_type T>
     inline bool domain_are_connected(T bmin1, T bmax1, T bmin2, T bmax2) {
         return sham::max(bmin1, bmin2) <= sham::min(bmax1, bmax2);
     }
@@ -216,7 +215,7 @@ namespace shammath {
      * @param bmax2 Maximum of second interval
      * @return true if intervals have non-empty intersection
      */
-    template<class T, std::enable_if_t<sham::is_valid_sycl_base_type<T>, int> = 0>
+    template<sham::is_valid_sycl_base_type T>
     inline bool domain_have_intersect(T bmin1, T bmax1, T bmin2, T bmax2) {
         return sham::max(bmin1, bmin2) < sham::min(bmax1, bmax2);
     }

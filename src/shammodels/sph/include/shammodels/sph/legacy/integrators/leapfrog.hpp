@@ -38,6 +38,7 @@
 #include "shamsys/legacy/sycl_mpi_interop.hpp"
 #include "shamtree/RadixTree.hpp"
 #include <unordered_map>
+#include <concepts>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -50,15 +51,10 @@ namespace integrators {
 
     namespace sph {
 
-        template<class flt, class Kernel, class u_morton>
+        template<std::floating_point flt, class Kernel, class u_morton>
         class LeapfrogGeneral {
             public:
             using vec3 = sycl::vec<flt, 3>;
-
-            static_assert(
-                std::is_same<flt, f16>::value || std::is_same<flt, f32>::value
-                    || std::is_same<flt, f64>::value,
-                "Leapfrog : floating point type should be one of (f16,f32,f64)");
 
             inline static void sycl_move_parts(
                 sycl::queue &queue,
