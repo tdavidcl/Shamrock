@@ -18,7 +18,7 @@
 namespace sham {
 
     /// Internal function ptr handle, static + internal var should be ok across shared libraries
-    static format_except_builder_t internal_func_ptr_make_format_exception = nullptr;
+    format_except_builder_t internal_func_ptr_make_format_exception = nullptr;
 
     sham::format_error make_format_exception(
         std::string_view function_call,
