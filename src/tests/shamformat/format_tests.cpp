@@ -7,7 +7,7 @@
 //
 // -------------------------------------------------------//
 
-#include "shambase/format.hpp"
+#include "sham/format/format.hpp"
 #include "shamtest/shamtest.hpp"
 #include <string_view>
 
@@ -23,6 +23,6 @@ namespace {
     }
 } // namespace
 
-TestStart(Unittest, "shambase/format", test_exception_throw, 1) {
+TestStart(Unittest, "shamformat/format", test_exception_throw, 1) {
     REQUIRE_EXCEPTION_THROW(throwing_format(), fmt::format_error);
 }

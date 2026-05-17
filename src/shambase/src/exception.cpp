@@ -17,8 +17,8 @@
 #include "shambase/SourceLocation.hpp"
 #include "shambase/call_lambda.hpp"
 #include "shambase/exception.hpp"
-#include "shambase/format.hpp"
 #include "shambase/stacktrace.hpp"
+#include "sham/format/format.hpp"
 #include <string>
 
 namespace shambase {
@@ -57,6 +57,6 @@ namespace shambase {
     }
 
     static shambase::call_lambda register_format_exception_builder([]() {
-        set_format_exception_builder(format_exception_builder);
+        sham::set_format_exception_builder(format_exception_builder);
     });
 } // namespace shambase

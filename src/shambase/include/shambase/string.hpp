@@ -18,7 +18,7 @@
 
 #include "shambase/aliases_int.hpp"
 #include "shambase/exception.hpp"
-#include "shambase/format.hpp"
+#include "sham/format/format.hpp"
 #include <fmt/base.h>
 #include <fmt/core.h>
 #include <fmt/format.h>

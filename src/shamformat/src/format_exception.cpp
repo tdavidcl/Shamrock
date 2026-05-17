@@ -8,19 +8,19 @@
 // -------------------------------------------------------//
 
 /**
- * @file format.cpp
+ * @file format_exception.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  */
 
-#include "shambase/format.hpp"
+#include "sham/format/format.hpp"
 
-namespace shambase {
+namespace sham {
 
     /// Internal function ptr handle (intentionally large name for linking)
     format_except_builder_t internal_func_ptr_make_format_exception = nullptr;
 
-    fmt::format_error make_format_exception(
+    sham::format_error make_format_exception(
         std::string_view function_call,
         std::string_view what,
         const std::string &fmt_string,
@@ -28,7 +28,7 @@ namespace shambase {
         if (internal_func_ptr_make_format_exception != nullptr) {
             return internal_func_ptr_make_format_exception(function_call, what, fmt_string, loc);
         } else {
-            return fmt::format_error(std::string(what));
+            return sham::format_error(std::string(what));
         }
     }
 
@@ -36,4 +36,4 @@ namespace shambase {
         internal_func_ptr_make_format_exception = callback;
     }
 
-} // namespace shambase
+} // namespace sham
