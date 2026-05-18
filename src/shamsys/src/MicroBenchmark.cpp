@@ -323,7 +323,7 @@ void shamsys::microbench::saxpy() {
     microbench_results["saxpy_" + type_name] = sum_bw;
 
     if (shamcomm::world_rank() == 0) {
-        auto hr_bw = sham::to_human_readable(sum_bw);
+        auto hr_bw = sham::to_human_readable<false>(sum_bw);
         logger::raw_ln(
             shambase::format(
                 " - saxpy ({})   : {:.2f} {}B.s^-1 (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
