@@ -384,7 +384,7 @@ void shamsys::microbench::fma_chains_rotation() {
     microbench_results["fma_chains_" + type_name] = sum_flop * flops_multiplier;
 
     if (shamcomm::world_rank() == 0) {
-        auto hr_flop = sham::to_human_readable(sum_flop * flops_multiplier);
+        auto hr_flop = sham::to_human_readable<false>(sum_flop * flops_multiplier);
         logger::raw_ln(
             shambase::format(
                 " - fma_chains ({}) : {:.2f} {}flops (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
