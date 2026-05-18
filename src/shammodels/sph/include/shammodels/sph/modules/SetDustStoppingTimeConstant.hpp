@@ -39,13 +39,10 @@
 
 namespace shammodels::sph::modules {
 
-    template<class Tvec, template<class> class SPHKernel>
+    template<class Tvec>
     class SetDustStoppingTimeConstant : public shamrock::solvergraph::INode {
 
-        using Tscal  = shambase::VecComponent<Tvec>;
-        using Kernel = SPHKernel<Tscal>;
-
-        static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
+        using Tscal = shambase::VecComponent<Tvec>;
 
         u32 ndust;
 
