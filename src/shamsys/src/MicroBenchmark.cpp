@@ -150,7 +150,7 @@ void shamsys::microbench::p2p_bandwidth(u32 wr_sender, u32 wr_receiv) {
     microbench_results["p2p_bandwidth"] = bw;
 
     if (shamcomm::world_rank() == 0) {
-        auto hr_bw = sham::to_human_readable(bw);
+        auto hr_bw = sham::to_human_readable<false>(bw);
         logger::raw_ln(
             shambase::format(
                 " - p2p bandwidth    : {:.2f} {}B.s^-1 (ranks : {} -> {}) (loops : {})",
