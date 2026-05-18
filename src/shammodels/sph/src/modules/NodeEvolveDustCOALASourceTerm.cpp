@@ -105,6 +105,9 @@ namespace shammodels::sph::modules {
             auto local_acc_sz_nbins  = sycl::range<1>{group_size * nbins};
             auto local_acc_sz_nbins2 = sycl::range<1>{group_size * nbins * nbins};
 
+            auto true_size = this->true_size;
+            auto rho_eps   = this->rho_eps;
+
             return [=, nbins = this->nbins](sycl::handler &cgh) {
                 auto gij_acc  = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
                 auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
