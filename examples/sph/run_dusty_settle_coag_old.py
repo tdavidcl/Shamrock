@@ -81,37 +81,24 @@ def uint_g(r):
 
 
 ndust = 4
-
-rho_grains_si_edges = [2.3 for i in range(ndust+1)]
-grain_size_si_edges = np.logspace(-5, -2, ndust+1)
-
-print(f"grains sizes = {grain_size_si_edges} [m]")
-print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
-
-grain_size_edges = grain_size_si_edges * codeu.get("m")
-rho_grains_edges = codeu.get("kg") * codeu.get("m", power=-3) * np.array(rho_grains_si_edges)
-
-print(f"grains sizes = {grain_size_edges} [code u]")
-print(f"grains dens  = {rho_grains_edges} [code u]")
-
-grain_size = (grain_size_edges[:-1] + grain_size_edges[1:]) / 2
-rho_grains = (rho_grains_edges[:-1] + rho_grains_edges[1:]) / 2
-
-
-
-dustlabels = [
-    f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)
-]
-
-
+do_epstein_drag = True
 
 if do_epstein_drag:
     rho_grains_si = [0.3 for i in range(4)]
     grain_size_m = np.logspace(-3, -2, ndust)
 
+    print(f"grains sizes = {grain_size_m} [m]")
+    print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
+
+    grain_size = grain_size_m * codeu.get("m")
+    rho_grains = codeu.get("kg") * codeu.get("m", power=-3) * np.array(rho_grains_si)
+
     print(f"grains sizes = {grain_size} [code units]")
     print(f"grains dens  = {rho_grains} [code units]")
 
+    dustlabels = [
+         f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)
+    ]
 
 else:
     stokes = np.logspace(-3, 0, ndust)

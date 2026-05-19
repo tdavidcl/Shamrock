@@ -33,33 +33,33 @@ namespace shammodels::sph::modules {
         class E1,
         class E2,
         class E3,
-        class E4,
         class L1,
         class L2,
         class L3,
-        class L4,
         class A1,
         class A2,
         class A3,
-        class A4>
+        class Func>
+        requires requires(Func f, int a, int b) {
+            { f(a, b) } -> std::same_as<T>;
+        }
     inline void compute_flux_coag_k0_kdv(
         int nbins,
         const std::mdspan<T, E1, L1, A1> &gij,
         const std::mdspan<const T, E2, L2, A2> &tensor_tabflux_coag,
-        const std::mdspan<T, E3, L3, A3> &dv,
-        std::mdspan<T, E4, L4, A4> &flux) {
+        Func &&dv,
+        std::mdspan<T, E3, L3, A3> &flux) {
         // --- Compile-time rank checks ---
         static_assert(E1::rank() == 1, "gij must be rank 1");
         static_assert(E2::rank() == 3, "tensor_tabflux_coag must be rank 3");
-        static_assert(E3::rank() == 2, "dv must be rank 2");
-        static_assert(E4::rank() == 1, "flux must be rank 1");
+        static_assert(E3::rank() == 1, "flux must be rank 1");
 
         // --- Runtime extent checks ---
-        SHAM_ASSERT(gij.extent(0) == dv.extent(0));
-        SHAM_ASSERT(gij.extent(0) == dv.extent(1));
+        SHAM_ASSERT(gij.extent(0) == nbins);
+        SHAM_ASSERT(gij.extent(0) == nbins);
 
-        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == dv.extent(0));
-        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == dv.extent(1));
+        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
 
         SHAM_ASSERT(tensor_tabflux_coag.extent(0) == flux.extent(0));
 
@@ -102,8 +102,7 @@ namespace shammodels::sph::modules {
 
             auto range = sycl::nd_range<1>{corrected_len, group_size};
 
-            auto local_acc_sz_nbins  = sycl::range<1>{group_size * nbins};
-            auto local_acc_sz_nbins2 = sycl::range<1>{group_size * nbins * nbins};
+            auto local_acc_sz_nbins = sycl::range<1>{group_size * nbins};
 
             auto true_size = this->true_size;
             auto rho_eps   = this->rho_eps;
@@ -111,7 +110,6 @@ namespace shammodels::sph::modules {
             return [=, nbins = this->nbins](sycl::handler &cgh) {
                 auto gij_acc  = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
                 auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
-                auto dv_acc   = sycl::local_accessor<Tscal>{local_acc_sz_nbins2, cgh};
 
                 cgh.parallel_for(range, [=](sycl::nd_item<1> tid) {
                     const u64 id_a = tid.get_global_linear_id();
@@ -122,7 +120,6 @@ namespace shammodels::sph::modules {
                     }
 
                     using mdspan_rank_1 = std::mdspan<Tscal, std::dextents<u32, 1>>;
-                    using mdspan_rank_2 = std::mdspan<Tscal, std::dextents<u32, 2>>;
                     using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
 
                     using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
@@ -130,11 +127,9 @@ namespace shammodels::sph::modules {
 
                     auto gij_loc  = &(gij_acc[nbins * lid]);
                     auto flux_loc = &(flux_acc[nbins * lid]);
-                    auto dv_loc   = &(dv_acc[nbins * nbins * lid]);
 
                     mdspan_rank_1 gij(gij_loc, nbins);
                     mdspan_rank_1 flux(flux_loc, nbins);
-                    mdspan_rank_2 dv(dv_loc, nbins, nbins);
 
                     const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins);
@@ -153,11 +148,9 @@ namespace shammodels::sph::modules {
                     }
 
                     // dv_ij = v_dust_j - v_dust_i
-                    for (int i = 0; i < nbins; ++i) {
-                        for (int j = 0; j < nbins; ++j) {
-                            dv(i, j) = sycl::length(delta_v_j[j] - delta_v_j[i]);
-                        }
-                    }
+                    auto dv = [&](int i, int j) {
+                        return sycl::length(delta_v_j[j] - delta_v_j[i]);
+                    };
 
                     // compute flux for all dust bins
                     compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
