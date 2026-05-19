@@ -106,10 +106,10 @@ tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid)
 
 from scipy.special import erfinv
 
-bmin = (-box / 4, -box, -box / 4)
-bmax = (box / 4, box, box / 4)
+bmin = (-box / 4, -box / 4, -box )
+bmax = (box / 4, box / 4, box )
 
-N_target = 1e4
+N_target = 1e4/2
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -186,12 +186,12 @@ model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
 def f_remap(r):
     x, y, z = r
 
-    rn = max(abs(yM), abs(ym))
+    rn = max(abs(zM), abs(zm))
     # print(y, H, H * erfinv(y / rn))
-    y = H * erfinv(y / rn)
+    z = H * erfinv(z / rn)
 
-    y = min(y, yM)
-    y = max(y, ym)
+    z = min(z, zM)
+    z = max(z, zm)
     return (x, y, z)
 
 
@@ -242,8 +242,6 @@ for j in range(60):
 
     print(s_j)
 
-    r = y
-
     hpart = dic["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
@@ -258,27 +256,27 @@ for j in range(60):
 
     fig.subplots_adjust(left=0.07, right=0.98, wspace=0.4)
 
-    axs[0].scatter(y, rho, label="gas", s=sz)
+    axs[0].scatter(z, rho, label="gas", s=sz)
     for i in range(ndust):
-        axs[0].scatter(y, s_j[:, i] ** 2, label=dustlabels[i], s=sz)
+        axs[0].scatter(z, s_j[:, i] ** 2, label=dustlabels[i], s=sz)
     # axs[0].scatter(y,estimated_rho)
     axs[0].set_ylabel(r"$\rho$")
-    axs[0].set_xlabel(r"$y$")
+    axs[0].set_xlabel(r"$z$")
 
     axs[0].set_yscale("log")
     axs[0].legend(fontsize=8)
     for i in range(ndust):
         axs[1].scatter(
-            y, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz
+            z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz
         )
     axs[1].set_ylabel(r"$\epsilon_j$")
-    axs[1].set_xlabel(r"$y$")
+    axs[1].set_xlabel(r"$z$")
     axs[1].legend(fontsize=8)
 
     for i in range(ndust):
-        axs[2].scatter(y, ds_j_dt[:, i], label=dustlabels[i], s=sz)
+        axs[2].scatter(z, ds_j_dt[:, i], label=dustlabels[i], s=sz)
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
-    axs[2].set_xlabel(r"$y$")
+    axs[2].set_xlabel(r"$z$")
     axs[2].legend(fontsize=8)
 
     os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
