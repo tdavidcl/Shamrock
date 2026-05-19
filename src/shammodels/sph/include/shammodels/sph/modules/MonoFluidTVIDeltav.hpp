@@ -92,11 +92,12 @@ namespace shammodels::sph::modules {
                 total_specie_count,
                 [pmass, ndust = ndust](
                     u32 thread_id,
-                    const Tscal *__restrict hpart,
-                    const Tvec *__restrict grad_pressure,
-                    const Tscal *__restrict s_j,
-                    const Tscal *__restrict t_j,
-                    Tvec *__restrict delta_v) {
+                    const Tscal *__restrict hpart,        // npart
+                    const Tvec *__restrict grad_pressure, // npart
+                    const Tscal *__restrict s_j,          // npart * nbins
+                    const Tscal *__restrict t_j,          // npart * nbins
+                    Tvec *__restrict delta_v              // npart * nbins
+                ) {
                     u32 id_a  = thread_id / ndust;
                     u32 jdust = thread_id % ndust;
 
@@ -120,7 +121,7 @@ namespace shammodels::sph::modules {
 
                     Tscal eps_j_a = epsilon(sj_a);
 
-                    delta_v[id_a] = (eps_j_a * tj_a / rho_a) * grad_P_a;
+                    delta_v[thread_id] = (eps_j_a * tj_a / rho_a) * grad_P_a;
                 });
         }
 

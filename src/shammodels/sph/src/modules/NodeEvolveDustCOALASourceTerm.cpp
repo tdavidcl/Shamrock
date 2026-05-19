@@ -20,64 +20,15 @@
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/vec.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/sph/modules/NodeEvolveDustCOALASourceTerm.hpp"
+#include "shamphys/coala_interface.hpp"
 #include "shamrock/patch/PatchDataField.hpp" // IWYU pragma: keep
 #include "shamsys/NodeInstance.hpp"
 #include <experimental/mdspan>
 #include <vector>
 
 namespace shammodels::sph::modules {
-
-    template<
-        class T,
-        class E1,
-        class E2,
-        class E3,
-        class L1,
-        class L2,
-        class L3,
-        class A1,
-        class A2,
-        class A3,
-        class Func>
-        requires requires(Func f, int a, int b) {
-            { f(a, b) } -> std::same_as<T>;
-        }
-    inline void compute_flux_coag_k0_kdv(
-        int nbins,
-        const std::mdspan<T, E1, L1, A1> &gij,
-        const std::mdspan<const T, E2, L2, A2> &tensor_tabflux_coag,
-        Func &&dv,
-        std::mdspan<T, E3, L3, A3> &flux) {
-        // --- Compile-time rank checks ---
-        static_assert(E1::rank() == 1, "gij must be rank 1");
-        static_assert(E2::rank() == 3, "tensor_tabflux_coag must be rank 3");
-        static_assert(E3::rank() == 1, "flux must be rank 1");
-
-        // --- Runtime extent checks ---
-        SHAM_ASSERT(gij.extent(0) == nbins);
-        SHAM_ASSERT(gij.extent(0) == nbins);
-
-        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
-        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
-
-        SHAM_ASSERT(tensor_tabflux_coag.extent(0) == flux.extent(0));
-
-        /*
-         * Python version:
-         * flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij)
-         */
-
-        for (int j = 0; j < nbins; ++j) {
-            double sum = 0.0;
-            for (int l = 0; l < nbins; ++l) {
-                for (int m = 0; m < nbins; ++m) {
-                    sum += tensor_tabflux_coag(j, l, m) * dv(l, m) * gij[l] * gij[m];
-                }
-            }
-            flux[j] = sum;
-        }
-    }
 
     template<class Tvec>
     struct KernelGenCoala_k0 {
@@ -119,6 +70,8 @@ namespace shammodels::sph::modules {
                         return;
                     }
 
+                    u32 id_a_d = id_a * nbins;
+
                     using mdspan_rank_1 = std::mdspan<Tscal, std::dextents<u32, 1>>;
                     using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
 
@@ -135,32 +88,30 @@ namespace shammodels::sph::modules {
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins);
 
                     auto rho_dust = [&](int j) {
-                        auto tmp = s_j[j];
+                        auto tmp = s_j[id_a_d + j];
                         return tmp * tmp;
                     };
+
+                    const Tvec *dv_j = delta_v_j + id_a_d;
+                    // logger::raw_ln(tid.get_local_linear_id(), dv_j[0], dv_j[1], dv_j[2],
+                    // dv_j[3]);
 
                     // should implement the same content as
                     // src/pylib/shamrock/external/coala/interface_coala_shamrock.py
 
-                    for (int j = 0; j < nbins; j++) {
-                        Tscal rho_d = rho_dust(j);
-                        gij(j) = (rho_d > rho_eps) ? rho_d / (massgrid[j + 1] - massgrid[j]) : 0;
-                    }
-
                     // dv_ij = v_dust_j - v_dust_i
                     auto dv = [&](int i, int j) {
-                        return sycl::length(delta_v_j[j] - delta_v_j[i]);
+                        return sycl::length(dv_j[j] - dv_j[i]);
                     };
 
-                    // compute flux for all dust bins
-                    compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
+                    shamphys::compute_gij_k0(rho_dust, rho_eps, massgrid, gij);
 
-                    // compute flux diff and store
-                    u32 id_a_d     = id_a * nbins;
-                    S_coag[id_a_d] = -flux[0];
-                    for (int j = 1; j < nbins; ++j) {
-                        S_coag[id_a_d + j] = flux[j - 1] - flux[j];
-                    }
+                    // compute flux for all dust bins
+                    shamphys::compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
+
+                    // compute flux diff and store result
+                    mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
+                    shamphys::coala_flux_diff(flux, S_coag_span);
                 });
             };
         }

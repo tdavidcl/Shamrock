@@ -80,34 +80,15 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 4
-do_epstein_drag = True
+ndust = 10
 
-if do_epstein_drag:
-    rho_grains_si = [0.3 for i in range(4)]
-    grain_size_m = np.logspace(-3, -2, ndust)
+stokes = np.logspace(-3, 0, ndust)
+stopping_times = stokes / omega_k(R0)
+print(stopping_times, omega_k(R0))
 
-    print(f"grains sizes = {grain_size_m} [m]")
-    print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
-
-    grain_size = grain_size_m * codeu.get("m")
-    rho_grains = codeu.get("kg") * codeu.get("m", power=-3) * np.array(rho_grains_si)
-
-    print(f"grains sizes = {grain_size} [code units]")
-    print(f"grains dens  = {rho_grains} [code units]")
-
-    dustlabels = [
-         f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)
-    ]
-
-else:
-    stokes = np.logspace(-3, 0, ndust)
-    stopping_times = stokes / omega_k(R0)
-    print(stopping_times, omega_k(R0))
-
-    dustlabels = [
-         f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)
-    ]
+dustlabels = [
+    f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)
+]
     
 
 
@@ -117,7 +98,7 @@ massmax = 1e6
 massmin = 1e-3
 massgrid, massbins = coala.init_grid_log(ndust, massmax, massmin)
 print(massgrid, massbins)
-K0 = 40.0
+K0 = 400.0
 Q = 5
 
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid)
@@ -159,10 +140,7 @@ cfg.set_artif_viscosity_VaryingCD10(
 )
 cfg.set_dust_mode_monofluid_tvi(ndust)
 
-if do_epstein_drag:
-    cfg.set_dust_drag_epstein(grain_size, rho_grains)
-else:
-    cfg.set_dust_drag_constant(stopping_times)
+cfg.set_dust_drag_constant(stopping_times)
 
 if do_coag:
     cfg.set_dust_evol_coala_coag(massgrid, tabflux_coag)
@@ -274,7 +252,7 @@ for j in range(60):
 
     sz = 2
 
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5))
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5), dpi=150)
     time = model.get_time()
     fig.suptitle(f"t = {time:.2f}")
 
@@ -288,20 +266,20 @@ for j in range(60):
     axs[0].set_xlabel(r"$y$")
 
     axs[0].set_yscale("log")
-    axs[0].legend()
+    axs[0].legend(fontsize=8)
     for i in range(ndust):
         axs[1].scatter(
             y, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz
         )
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$y$")
-    axs[1].legend()
+    axs[1].legend(fontsize=8)
 
     for i in range(ndust):
         axs[2].scatter(y, ds_j_dt[:, i], label=dustlabels[i], s=sz)
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
     axs[2].set_xlabel(r"$y$")
-    axs[2].legend()
+    axs[2].legend(fontsize=8)
 
     os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
     plt.savefig(f"mono_{'coag' if do_coag else 'mono'}/{j}.png")
