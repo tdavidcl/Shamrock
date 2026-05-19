@@ -28,7 +28,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include <vector>
 
-#define NODE_SET_DUST_STOPPING_TIME_CTE_EDGES(X_RO, X_RW)                                          \
+#define NODE_SET_DUST_STOPPING_TIME_EPSTEIN_EDGES(X_RO, X_RW)                                      \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gamma)                                          \
@@ -59,7 +59,7 @@ namespace shammodels::sph::modules {
         public:
         SetDustStoppingTimeEpstein(u32 ndust) : ndust(ndust) {}
 
-        EXPAND_NODE_EDGES(NODE_SET_DUST_STOPPING_TIME_CTE_EDGES)
+        EXPAND_NODE_EDGES(NODE_SET_DUST_STOPPING_TIME_EPSTEIN_EDGES)
 
         inline void _impl_evaluate_internal() {
 
@@ -98,7 +98,7 @@ namespace shammodels::sph::modules {
                         edges.cs.get_spans().get(id)},
                     sham::MultiRef{edges.t_j.get_spans().get(id)},
                     part_counts.get(id) * ndust,
-                    [ndust = ndust](
+                    [ndust = ndust, pmass, gamma](
                         u32 thread_id,
                         const Tscal *__restrict sgrain_j,
                         const Tscal *__restrict rho_grain_j,

@@ -129,8 +129,6 @@ namespace shammodels::sph {
             u32 ndust;
         };
 
-        std::vector<Tscal> stopping_times;
-
         /// Variant type to store the EOS configuration
         using Variant = std::variant<None, MonofluidTVI, MonofluidComplete>;
 
@@ -173,6 +171,22 @@ namespace shammodels::sph {
             return 0;
         }
 
+        struct ConstantStoppingTimes {
+            std::vector<Tscal> stopping_times;
+        };
+
+        struct EpsteinDrag {
+            static constexpr bool supersonic_correction = false;
+            std::vector<Tscal> grains_sizes;
+            std::vector<Tscal> grains_densities;
+        };
+
+        std::variant<None, ConstantStoppingTimes, EpsteinDrag> dust_drag_mode = None{};
+
+        inline void set_drag_constant(ConstantStoppingTimes in) { dust_drag_mode = in; }
+
+        inline void set_drag_epstein(EpsteinDrag in) { dust_drag_mode = in; }
+
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
 
         inline void set_dust_evol_coala(
@@ -194,9 +208,25 @@ namespace shammodels::sph {
                             "Dust config != None is work in progress, use it at your own risk"));
                 }
 
-                if (get_dust_nvar() != stopping_times.size()) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(
-                        "stopping_times size does not match the number of dust bins");
+                if (std::holds_alternative<None>(dust_drag_mode)) {
+                    throw "bro WTF";
+                } else if (
+                    ConstantStoppingTimes *cfg
+                    = std::get_if<ConstantStoppingTimes>(&dust_drag_mode)) {
+                    if (get_dust_nvar() != cfg->stopping_times.size()) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "stopping_times size does not match the number of dust bins");
+                    }
+                } else if (EpsteinDrag *cfg = std::get_if<EpsteinDrag>(&dust_drag_mode)) {
+                    if (get_dust_nvar() != cfg->grains_densities.size()) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "grains_densities size does not match the number of dust bins");
+                    }
+
+                    if (get_dust_nvar() != cfg->grains_sizes.size()) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "grains_sizes size does not match the number of dust bins");
+                    }
                 }
             }
 

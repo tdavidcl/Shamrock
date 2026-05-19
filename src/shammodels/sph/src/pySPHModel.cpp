@@ -276,9 +276,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::kw_only(),
             py::arg("ndust"))
         .def(
-            "set_dust_stopping_times",
+            "set_drag_constant",
             [](TConfig &self, std::vector<Tscal> ts) {
-                self.dust_config.stopping_times = ts;
+                self.dust_config.set_drag_constant({.stopping_times = ts});
+            })
+        .def(
+            "set_drag_epstein",
+            [](TConfig &self, std::vector<Tscal> grain_sizes, std::vector<Tscal> grain_densities) {
+                self.dust_config.set_drag_epstein(
+                    {.grains_sizes = grain_sizes, .grains_densities = grain_densities});
             })
         .def(
             "set_dust_evol_coala_coag",
