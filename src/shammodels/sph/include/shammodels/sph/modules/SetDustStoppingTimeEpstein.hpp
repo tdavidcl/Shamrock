@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file SetDustStoppingTimeConstant.hpp
+ * @file SetDustStoppingTimeEpstein.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
