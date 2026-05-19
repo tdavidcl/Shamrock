@@ -14,6 +14,8 @@
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
+ * should implement the same content as
+ * src/pylib/shamrock/external/coala/interface_coala_shamrock.py
  */
 
 #include "shambase/assert.hpp"
