@@ -85,7 +85,7 @@ namespace shammodels::sph::modules {
                     mdspan_rank_1 flux(flux_loc, nbins);
 
                     const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
-                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins);
+                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
                     auto rho_dust = [&](int j) {
                         auto tmp = s_j[id_a_d + j];
