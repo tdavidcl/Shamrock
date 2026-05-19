@@ -81,7 +81,7 @@ def uint_g(r):
 
 
 ndust = 4
-rc = 0.25
+
 stokes = np.logspace(-3, 0, ndust)
 stopping_times = stokes / omega_k(R0)
 print(stopping_times, omega_k(R0))
@@ -131,7 +131,7 @@ cfg.set_artif_viscosity_VaryingCD10(
     alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
 )
 cfg.set_dust_mode_monofluid_tvi(ndust)
-cfg.set_dust_stopping_times(stopping_times)
+cfg.set_dust_drag_constant(stopping_times)
 if do_coag:
     cfg.set_dust_evol_coala_coag(massgrid, tabflux_coag)
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
