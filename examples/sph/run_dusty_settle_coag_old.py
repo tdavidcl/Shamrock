@@ -86,11 +86,7 @@ stokes = np.logspace(-3, 0, ndust)
 stopping_times = stokes / omega_k(R0)
 print(stopping_times, omega_k(R0))
 
-dustlabels = [
-    f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)
-]
-    
-
+dustlabels = [f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)]
 
 
 do_coag = True
@@ -106,10 +102,10 @@ tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid)
 
 from scipy.special import erfinv
 
-bmin = (-box / 4, -box / 4, -box )
-bmax = (box / 4, box / 4, box )
+bmin = (-box / 4, -box / 4, -box)
+bmax = (box / 4, box / 4, box)
 
-N_target = 1e4/2
+N_target = 1e4 / 2
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -266,9 +262,7 @@ for j in range(60):
     axs[0].set_yscale("log")
     axs[0].legend(fontsize=8)
     for i in range(ndust):
-        axs[1].scatter(
-            z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz
-        )
+        axs[1].scatter(z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$z$")
     axs[1].legend(fontsize=8)

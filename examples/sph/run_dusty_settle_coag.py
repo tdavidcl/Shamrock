@@ -82,8 +82,8 @@ def uint_g(r):
 
 ndust = 4
 
-rho_grains_si_edges = [2.3 for i in range(ndust+1)]
-grain_size_si_edges = np.logspace(-5, -2, ndust+1)
+rho_grains_si_edges = [2.3 for i in range(ndust + 1)]
+grain_size_si_edges = np.logspace(-5, -2, ndust + 1)
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
 print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
@@ -98,11 +98,7 @@ grain_size = (grain_size_edges[:-1] + grain_size_edges[1:]) / 2
 rho_grains = (rho_grains_edges[:-1] + rho_grains_edges[1:]) / 2
 
 
-
-dustlabels = [
-    f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)
-]
-
+dustlabels = [f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)]
 
 
 if do_epstein_drag:
@@ -118,11 +114,7 @@ else:
     stopping_times = stokes / omega_k(R0)
     print(stopping_times, omega_k(R0))
 
-    dustlabels = [
-         f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)
-    ]
-    
-
+    dustlabels = [f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)]
 
 
 do_coag = True
@@ -303,9 +295,7 @@ for j in range(60):
     axs[0].set_yscale("log")
     axs[0].legend()
     for i in range(ndust):
-        axs[1].scatter(
-            y, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz
-        )
+        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$y$")
     axs[1].legend()
