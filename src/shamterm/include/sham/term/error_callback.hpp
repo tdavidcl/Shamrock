@@ -7,18 +7,24 @@
 //
 // -------------------------------------------------------//
 
+#pragma once
+
 /**
- * @file HydroSoundwave.cpp
+ * @file error_callback.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
+ * @brief Shared callback type definition for parsing error handling
+ *
  */
 
-#include "shamphys/HydroSoundwave.hpp"
+#include <source_location>
+#include <functional>
+#include <stdexcept>
 
-auto shamphys::HydroSoundwave::get_value(f64 t, f64 x) -> field_val {
-    static constexpr std::complex<double> i(0.0, 1.0);
+namespace sham::term {
 
-    std::complex<f64> val = std::exp(i * (get_omega() * t - k * x));
+    /// @brief Callback signature for parsing error reporting (returns what, receives source
+    /// location)
+    using term_parse_callback_t
+        = std::function<std::invalid_argument(const char *what, std::source_location where)>;
 
-    return {.rho = std::real(val * rho_tilde), .v = std::real(val * v_tilde)};
-}
+} // namespace sham::term
