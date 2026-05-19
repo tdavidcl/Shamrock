@@ -105,7 +105,7 @@ from scipy.special import erfinv
 bmin = (-box / 4, -box / 4, -box)
 bmax = (box / 4, box / 4, box)
 
-N_target = 1e4 / 2
+N_target = 1e4
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -214,7 +214,7 @@ def compute_sj_new(patchdata):
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 tnext = 0
-for j in range(60):
+for j in range(100):
     if j == 20:
         for k in range(ndust):
             model.overwrite_field_value_f64("s_j", compute_sj_new, k)
