@@ -80,10 +80,10 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 4
+ndust = 7
 
-rho_grains_si_edges = [2.3 for i in range(ndust + 1)]
-grain_size_si_edges = np.logspace(-5, -2, ndust + 1)
+rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
+grain_size_si_edges = np.logspace(-9, -2, ndust + 1) / 5.5
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
 print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
@@ -97,41 +97,35 @@ print(f"grains dens  = {rho_grains_edges} [code u]")
 grain_size = (grain_size_edges[:-1] + grain_size_edges[1:]) / 2
 rho_grains = (rho_grains_edges[:-1] + rho_grains_edges[1:]) / 2
 
+grain_size_si = (grain_size_si_edges[:-1] + grain_size_si_edges[1:]) / 2
+rho_grains_si = (rho_grains_si_edges[:-1] + rho_grains_si_edges[1:]) / 2
 
-dustlabels = [f"dust {i} s = {grain_size_m[i]:.2e} [m]" for i in range(ndust)]
+dustlabels = [f"dust {i} s = {grain_size_si[i]:.2e} [m]" for i in range(ndust)]
 
+print(f"grains sizes = {grain_size_si} [m]")
+print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
 
-if do_epstein_drag:
-    rho_grains_si = [0.3 for i in range(4)]
-    grain_size_m = np.logspace(-3, -2, ndust)
+print(f"grains sizes = {grain_size} [code units]")
+print(f"grains dens  = {rho_grains} [code units]")
 
-    print(f"grains sizes = {grain_size} [code units]")
-    print(f"grains dens  = {rho_grains} [code units]")
+massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
+massgrid = (massgrid_edges[:-1] + massgrid_edges[1:]) / 2
 
-
-else:
-    stokes = np.logspace(-3, 0, ndust)
-    stopping_times = stokes / omega_k(R0)
-    print(stopping_times, omega_k(R0))
-
-    dustlabels = [f"dust {i} ts = {stopping_times[i]:.2f}" for i in range(ndust)]
-
+print(f"massgrid = {massgrid} [code units]")
+print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
 do_coag = True
-massmax = 1e6
-massmin = 1e-3
-massgrid, massbins = coala.init_grid_log(ndust, massmax, massmin)
-print(massgrid, massbins)
+
 K0 = 40.0
 Q = 5
 
-tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid)
+tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
 
 from scipy.special import erfinv
 
-bmin = (-box / 4, -box, -box / 4)
-bmax = (box / 4, box, box / 4)
+bmin = (-box / 4, -box / 4, -box)
+bmax = (box / 4, box / 4, box)
 
 N_target = 1e4
 scheduler_split_val = int(2e7)
@@ -164,13 +158,10 @@ cfg.set_artif_viscosity_VaryingCD10(
 )
 cfg.set_dust_mode_monofluid_tvi(ndust)
 
-if do_epstein_drag:
-    cfg.set_dust_drag_epstein(grain_size, rho_grains)
-else:
-    cfg.set_dust_drag_constant(stopping_times)
+cfg.set_dust_drag_epstein(grain_size, rho_grains)
 
 if do_coag:
-    cfg.set_dust_evol_coala_coag(massgrid, tabflux_coag)
+    cfg.set_dust_evol_coala_coag(massgrid_edges, tabflux_coag)
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.add_ext_force_velocity_dissipation(eta=10)
 cfg.set_boundary_periodic()
@@ -213,12 +204,12 @@ model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
 def f_remap(r):
     x, y, z = r
 
-    rn = max(abs(yM), abs(ym))
+    rn = max(abs(zM), abs(zm))
     # print(y, H, H * erfinv(y / rn))
-    y = H * erfinv(y / rn)
+    z = H * erfinv(z / rn)
 
-    y = min(y, yM)
-    y = max(y, ym)
+    z = min(z, zM)
+    z = max(z, zm)
     return (x, y, z)
 
 
@@ -245,8 +236,8 @@ def compute_sj_new(patchdata):
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 tnext = 0
-for j in range(60):
-    if j == 20:
+for j in range(100):
+    if j == 30:
         for k in range(ndust):
             model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
@@ -269,42 +260,40 @@ for j in range(60):
 
     print(s_j)
 
-    r = y
-
     hpart = dic["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
     print("compute original rho")
     estimated_rho = [func_rho_t(dic["xyz"][kk]) for kk in range(len(dic["xyz"]))]
 
-    sz = 2
+    sz = 1
 
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5))
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5), dpi=150)
     time = model.get_time()
     fig.suptitle(f"t = {time:.2f}")
 
     fig.subplots_adjust(left=0.07, right=0.98, wspace=0.4)
 
-    axs[0].scatter(y, rho, label="gas", s=sz)
+    axs[0].scatter(z, rho, label="gas", s=sz)
     for i in range(ndust):
-        axs[0].scatter(y, s_j[:, i] ** 2, label=dustlabels[i], s=sz)
+        axs[0].scatter(z, s_j[:, i] ** 2, label=dustlabels[i], s=sz)
     # axs[0].scatter(y,estimated_rho)
     axs[0].set_ylabel(r"$\rho$")
-    axs[0].set_xlabel(r"$y$")
+    axs[0].set_xlabel(r"$z$")
 
     axs[0].set_yscale("log")
-    axs[0].legend()
+    axs[0].legend(fontsize=8)
     for i in range(ndust):
-        axs[1].scatter(y, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
+        axs[1].scatter(z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
     axs[1].set_ylabel(r"$\epsilon_j$")
-    axs[1].set_xlabel(r"$y$")
-    axs[1].legend()
+    axs[1].set_xlabel(r"$z$")
+    axs[1].legend(fontsize=8)
 
     for i in range(ndust):
-        axs[2].scatter(y, ds_j_dt[:, i], label=dustlabels[i], s=sz)
+        axs[2].scatter(z, ds_j_dt[:, i], label=dustlabels[i], s=sz)
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
-    axs[2].set_xlabel(r"$y$")
-    axs[2].legend()
+    axs[2].set_xlabel(r"$z$")
+    axs[2].legend(fontsize=8)
 
     os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
     plt.savefig(f"mono_{'coag' if do_coag else 'mono'}/{j}.png")

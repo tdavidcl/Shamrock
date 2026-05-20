@@ -34,6 +34,12 @@ namespace shammodels::sph::modules {
     struct KernelGenCoala_k0 {
         using Tscal = shambase::VecComponent<Tvec>;
 
+        using mdspan_rank_1 = std::mdspan<Tscal, std::dextents<u32, 1>>;
+        using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
+
+        using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
+        using const_mdspan_rank_3 = std::mdspan<const Tscal, std::dextents<u32, 3>>;
+
         u32 nbins;
         Tscal rho_eps;
         u32 corrected_len;
@@ -72,46 +78,44 @@ namespace shammodels::sph::modules {
 
                     u32 id_a_d = id_a * nbins;
 
-                    using mdspan_rank_1 = std::mdspan<Tscal, std::dextents<u32, 1>>;
-                    using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
+                    /* inputs */
+                    const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
+                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
-                    using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
-                    using const_mdspan_rank_3 = std::mdspan<const Tscal, std::dextents<u32, 3>>;
-
+                    /* internal */
                     auto gij_loc  = &(gij_acc[nbins * lid]);
                     auto flux_loc = &(flux_acc[nbins * lid]);
 
                     mdspan_rank_1 gij(gij_loc, nbins);
                     mdspan_rank_1 flux(flux_loc, nbins);
 
-                    const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
-                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
+                    /* output */
+                    mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
 
+                    /* lambda getters */
                     auto rho_dust = [&](int j) {
                         auto tmp = s_j[id_a_d + j];
                         return tmp * tmp;
                     };
 
-                    const Tvec *dv_j = delta_v_j + id_a_d;
-                    // logger::raw_ln(tid.get_local_linear_id(), dv_j[0], dv_j[1], dv_j[2],
-                    // dv_j[3]);
+                    auto dv = [delta_v = delta_v_j + id_a_d](int i, int j) {
+                        // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
+                        return sycl::length(delta_v[j] - delta_v[i]);
+                    };
 
                     // should implement the same content as
                     // src/pylib/shamrock/external/coala/interface_coala_shamrock.py
 
-                    // dv_ij = v_dust_j - v_dust_i
-                    auto dv = [&](int i, int j) {
-                        return sycl::length(dv_j[j] - dv_j[i]);
-                    };
-
-                    shamphys::compute_gij_k0(rho_dust, rho_eps, massgrid, gij);
-
-                    // compute flux for all dust bins
-                    shamphys::compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
-
-                    // compute flux diff and store result
-                    mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
-                    shamphys::coala_flux_diff(flux, S_coag_span);
+                    shamphys::coala_k0_source_term(
+                        nbins,
+                        dv,
+                        rho_dust,
+                        rho_eps,
+                        massgrid,
+                        tabflux_coag,
+                        gij,
+                        flux,
+                        S_coag_span);
                 });
             };
         }

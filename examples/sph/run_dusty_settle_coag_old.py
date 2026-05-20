@@ -80,7 +80,7 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 10
+ndust = 4
 
 stokes = np.logspace(-3, 0, ndust)
 stopping_times = stokes / omega_k(R0)
@@ -244,7 +244,7 @@ for j in range(100):
     print("compute original rho")
     estimated_rho = [func_rho_t(dic["xyz"][kk]) for kk in range(len(dic["xyz"]))]
 
-    sz = 2
+    sz = 1
 
     fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5), dpi=150)
     time = model.get_time()

@@ -1294,6 +1294,10 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         press_grad_node->evaluate();
         delta_v_node->evaluate();
         node->evaluate();
+
+        // here we could compute the sum of S_coag to see if we are fucking up the dust mass
+        // conservation
+
         node_add_source_term->evaluate();
 
         // logger::raw_ln("S_coag = ", S_coag->get(0).get_buf().copy_to_stdvec());
