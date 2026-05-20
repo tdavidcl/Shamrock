@@ -288,7 +288,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             })
         .def(
             "set_dust_evol_coala_coag",
-            [](TConfig &self, std::vector<Tscal> massgrid, py::array_t<Tscal> tabflux_coag) {
+            [](TConfig &self, Tscal rhodust_eps, std::vector<Tscal> massgrid, py::array_t<Tscal> tabflux_coag) {
                 u32 nbins = massgrid.size() - 1;
 
                 // tabflux_coag is a 3D array of shape (nbins ** 3)
@@ -318,7 +318,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     }
                 }
 
-                self.dust_config.set_dust_evol_coala(massgrid, tabflux_coag_vec);
+                self.dust_config.set_dust_evol_coala({.rhodust_eps = rhodust_eps, .massgrid = massgrid, .tabflux_coag = tabflux_coag_vec});
             })
         .def("add_ext_force_point_mass", &TConfig::add_ext_force_point_mass)
         .def(

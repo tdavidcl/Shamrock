@@ -112,6 +112,7 @@ namespace shammodels::sph {
 
     template<class Tscal>
     struct DustEvolCoalaCoag {
+        Tscal rhodust_eps;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;
     };
@@ -190,9 +191,9 @@ namespace shammodels::sph {
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
 
         inline void set_dust_evol_coala(
-            std::vector<Tscal> massgrid, std::vector<Tscal> tabflux_coag) {
+            DustEvolCoalaCoag<Tscal> cfg) {
             dust_evol_config
-                = DustEvolCoalaCoag<Tscal>{std::move(massgrid), std::move(tabflux_coag)};
+                = cfg;
         }
 
         inline void check_config() {
@@ -245,6 +246,11 @@ namespace shammodels::sph {
                     if (cfg->tabflux_coag.size() != ndust * ndust * ndust) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
                             "tabflux_coag size does not match the number of dust bins");
+                    }
+
+                    if (cfg->rhodust_eps <= 0) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "rhodust_eps must be positive");
                     }
 
                 } else {

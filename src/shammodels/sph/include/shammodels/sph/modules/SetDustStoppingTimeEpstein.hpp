@@ -92,8 +92,8 @@ namespace shammodels::sph::modules {
                 sham::kernel_call(
                     q,
                     sham::MultiRef{
-                        rho_grain_j,
                         sgrain_j,
+                        rho_grain_j,
                         edges.hpart.get_spans().get(id),
                         edges.cs.get_spans().get(id)},
                     sham::MultiRef{edges.t_j.get_spans().get(id)},
@@ -117,8 +117,13 @@ namespace shammodels::sph::modules {
                         using namespace shamrock::sph;
                         Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
 
-                        t_j[thread_id] = shamphys::epstein_stopping_time(
+                        auto ts = shamphys::epstein_stopping_time(
                             rho_grain, sgrain, rho_a, cs_a, gamma);
+
+                            if(id_a == 3000)
+                        logger::raw_ln("ts", jdust, ts, rho_grain, sgrain, rho_a, cs_a, gamma);
+
+                        t_j[thread_id] = ts;
                     });
             });
         }

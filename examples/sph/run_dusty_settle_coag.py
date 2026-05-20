@@ -19,7 +19,7 @@ print(f"coala path : {coala.__file__}")
 
 
 gamma = 1.4
-rho_i = 1
+rho_i = 1e-5
 central_mass = 1
 R0 = 1
 H_r_0 = 0.05
@@ -80,10 +80,10 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 7
+ndust = 9
 
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
-grain_size_si_edges = np.logspace(-9, -2, ndust + 1) / 5.5
+grain_size_si_edges = np.logspace(-4, -2, ndust + 1) 
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
 print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
@@ -114,10 +114,16 @@ massgrid = (massgrid_edges[:-1] + massgrid_edges[1:]) / 2
 print(f"massgrid = {massgrid} [code units]")
 print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
-do_coag = True
+do_coag = False
 
-K0 = 40.0
+
+K0 =  np.pi*((4./3.)*np.pi*rho_grains[0])**(-2./3.)
 Q = 5
+rhodust_eps = 1e-15
+
+print(f"K0 = {K0}")
+
+mrn_pow = 3.5
 
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
@@ -161,7 +167,7 @@ cfg.set_dust_mode_monofluid_tvi(ndust)
 cfg.set_dust_drag_epstein(grain_size, rho_grains)
 
 if do_coag:
-    cfg.set_dust_evol_coala_coag(massgrid_edges, tabflux_coag)
+    cfg.set_dust_evol_coala_coag(rhodust_eps, massgrid_edges, tabflux_coag)
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.add_ext_force_velocity_dissipation(eta=10)
 cfg.set_boundary_periodic()
@@ -223,11 +229,21 @@ model.set_cfl_force(0.1)
 model.timestep()
 
 
-def compute_sj_new(patchdata):
+mrn_weight = grain_size**(-mrn_pow)
+mrn_weight = mrn_weight / np.sum(mrn_weight)
+
+print(f"mrn_weight = {mrn_weight}")
+
+def compute_sj_new_j(patchdata, j):
     hpart = patchdata["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
-    epsilon_target = 0.1 / ndust
+    z = patchdata["xyz"][:, 2]
+    # mask to only modify particles with |z| < H
+    mask = np.abs(z) < 1.5*H
+
+    epsilon_target = 0.1 * mrn_weight[j] * mask
+    print(f"epsilon_target = {epsilon_target} {j}")
     s = np.sqrt(rho * epsilon_target)
 
     return s
@@ -239,12 +255,16 @@ tnext = 0
 for j in range(100):
     if j == 30:
         for k in range(ndust):
+
+            def compute_sj_new(patchdata):
+                return compute_sj_new_j(patchdata, k)
+
             model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
     if j > 0:
         tnext += 0.1
         model.evolve_until(tnext)
-        # model.timestep()
+        #model.timestep()
 
     dic = ctx.collect_data()
     print(dic["s_j"])
@@ -273,20 +293,25 @@ for j in range(100):
     fig.suptitle(f"t = {time:.2f}")
 
     fig.subplots_adjust(left=0.07, right=0.98, wspace=0.4)
+    
+    to_dens = codeu.to("kg") * codeu.to("m")**-3
 
-    axs[0].scatter(z, rho, label="gas", s=sz)
+    axs[0].scatter(z, rho * to_dens, label="gas", s=sz)
     for i in range(ndust):
-        axs[0].scatter(z, s_j[:, i] ** 2, label=dustlabels[i], s=sz)
+        axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, label=dustlabels[i], s=sz)
     # axs[0].scatter(y,estimated_rho)
     axs[0].set_ylabel(r"$\rho$")
     axs[0].set_xlabel(r"$z$")
-
     axs[0].set_yscale("log")
+    #axs[0].set_ylim(1e-12, 10**2)
     axs[0].legend(fontsize=8)
+
     for i in range(ndust):
         axs[1].scatter(z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$z$")
+    axs[1].set_yscale("log")
+    axs[1].set_ylim(1e-8, 1)
     axs[1].legend(fontsize=8)
 
     for i in range(ndust):

@@ -1249,7 +1249,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> rhodust_eps
             = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
-        rhodust_eps->value = 1e-9;
+        rhodust_eps->value = cfg_evol->rhodust_eps;
 
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_pressure
             = std::make_shared<shamrock::solvergraph::Field<Tvec>>(1, "grad P", "grad P");
