@@ -120,8 +120,8 @@ namespace shammodels::sph::modules {
                         auto ts = shamphys::epstein_stopping_time(
                             rho_grain, sgrain, rho_a, cs_a, gamma);
 
-                            if(id_a == 3000)
-                        logger::raw_ln("ts", jdust, ts, rho_grain, sgrain, rho_a, cs_a, gamma);
+                        if (id_a == 2000)
+                            logger::raw_ln("ts", jdust, ts, rho_grain, sgrain, rho_a, cs_a, gamma);
 
                         t_j[thread_id] = ts;
                     });

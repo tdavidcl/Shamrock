@@ -19,7 +19,7 @@ print(f"coala path : {coala.__file__}")
 
 
 gamma = 1.4
-rho_i = 1e-5
+rho_i = 1e-7
 central_mass = 1
 R0 = 1
 H_r_0 = 0.05
@@ -80,10 +80,10 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 9
+ndust = 20
 
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
-grain_size_si_edges = np.logspace(-4, -2, ndust + 1) 
+grain_size_si_edges = np.logspace(-9, -2, ndust + 1)
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
 print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
@@ -94,11 +94,11 @@ rho_grains_edges = codeu.get("kg") * codeu.get("m", power=-3) * np.array(rho_gra
 print(f"grains sizes = {grain_size_edges} [code u]")
 print(f"grains dens  = {rho_grains_edges} [code u]")
 
-grain_size = (grain_size_edges[:-1] + grain_size_edges[1:]) / 2
-rho_grains = (rho_grains_edges[:-1] + rho_grains_edges[1:]) / 2
+grain_size = np.sqrt(grain_size_edges[:-1] * grain_size_edges[1:])
+rho_grains = np.sqrt(rho_grains_edges[:-1] * rho_grains_edges[1:])
 
-grain_size_si = (grain_size_si_edges[:-1] + grain_size_si_edges[1:]) / 2
-rho_grains_si = (rho_grains_si_edges[:-1] + rho_grains_si_edges[1:]) / 2
+grain_size_si = np.sqrt(grain_size_si_edges[:-1] * grain_size_si_edges[1:])
+rho_grains_si = np.sqrt(rho_grains_si_edges[:-1] * rho_grains_si_edges[1:])
 
 dustlabels = [f"dust {i} s = {grain_size_si[i]:.2e} [m]" for i in range(ndust)]
 
@@ -109,18 +109,19 @@ print(f"grains sizes = {grain_size} [code units]")
 print(f"grains dens  = {rho_grains} [code units]")
 
 massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
-massgrid = (massgrid_edges[:-1] + massgrid_edges[1:]) / 2
+massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 
 print(f"massgrid = {massgrid} [code units]")
 print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
-do_coag = False
+do_coag = True
 
 
-K0 =  np.pi*((4./3.)*np.pi*rho_grains[0])**(-2./3.)
+K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
 Q = 5
 rhodust_eps = 1e-15
 
+K0 *= 100
 print(f"K0 = {K0}")
 
 mrn_pow = 3.5
@@ -229,10 +230,12 @@ model.set_cfl_force(0.1)
 model.timestep()
 
 
-mrn_weight = grain_size**(-mrn_pow)
+mrn_weight = grain_size ** (4 - mrn_pow)
 mrn_weight = mrn_weight / np.sum(mrn_weight)
+mrn_weight *= grain_size_si < 250e-9
 
 print(f"mrn_weight = {mrn_weight}")
+
 
 def compute_sj_new_j(patchdata, j):
     hpart = patchdata["hpart"]
@@ -240,7 +243,7 @@ def compute_sj_new_j(patchdata, j):
 
     z = patchdata["xyz"][:, 2]
     # mask to only modify particles with |z| < H
-    mask = np.abs(z) < 1.5*H
+    mask = 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
 
     epsilon_target = 0.1 * mrn_weight[j] * mask
     print(f"epsilon_target = {epsilon_target} {j}")
@@ -252,7 +255,7 @@ def compute_sj_new_j(patchdata, j):
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 tnext = 0
-for j in range(100):
+for j in range(1000):
     if j == 30:
         for k in range(ndust):
 
@@ -264,7 +267,7 @@ for j in range(100):
     if j > 0:
         tnext += 0.1
         model.evolve_until(tnext)
-        #model.timestep()
+        # model.timestep()
 
     dic = ctx.collect_data()
     print(dic["s_j"])
@@ -292,33 +295,51 @@ for j in range(100):
     time = model.get_time()
     fig.suptitle(f"t = {time:.2f}")
 
-    fig.subplots_adjust(left=0.07, right=0.98, wspace=0.4)
-    
-    to_dens = codeu.to("kg") * codeu.to("m")**-3
+    fig.subplots_adjust(left=0.07, right=0.82, wspace=0.35)
 
-    axs[0].scatter(z, rho * to_dens, label="gas", s=sz)
+    to_dens = codeu.to("kg") * codeu.to("m") ** -3
+
+    # tab20: 20 distinct qualitative colors (no repetition for ndust <= 20)
+    dust_colors = plt.colormaps["tab20"](np.linspace(0, 1, ndust, endpoint=False))
+    legend_handles = []
+    legend_labels = []
+
+    h_gas = axs[0].scatter(z, rho * to_dens, label="gas", s=sz, color="0.3", edgecolors="none")
+    legend_handles.append(h_gas)
+    legend_labels.append("gas")
+
     for i in range(ndust):
-        axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, label=dustlabels[i], s=sz)
+        c = dust_colors[i]
+        h = axs[0].scatter(
+            z, s_j[:, i] ** 2 * to_dens, label=dustlabels[i], s=sz, color=c, edgecolors="none"
+        )
+        legend_handles.append(h)
+        legend_labels.append(dustlabels[i])
+        axs[1].scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
+        axs[2].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
+
     # axs[0].scatter(y,estimated_rho)
     axs[0].set_ylabel(r"$\rho$")
     axs[0].set_xlabel(r"$z$")
     axs[0].set_yscale("log")
-    #axs[0].set_ylim(1e-12, 10**2)
-    axs[0].legend(fontsize=8)
+    axs[0].set_ylim(1e-20, 1e-9)
+    # axs[0].set_ylim(1e-12, 10**2)
 
-    for i in range(ndust):
-        axs[1].scatter(z, s_j[:, i] ** 2 / rho, label=dustlabels[i], s=sz)
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$z$")
     axs[1].set_yscale("log")
-    axs[1].set_ylim(1e-8, 1)
-    axs[1].legend(fontsize=8)
+    axs[1].set_ylim(1e-12, 1)
 
-    for i in range(ndust):
-        axs[2].scatter(z, ds_j_dt[:, i], label=dustlabels[i], s=sz)
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
     axs[2].set_xlabel(r"$z$")
-    axs[2].legend(fontsize=8)
+
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        loc="center left",
+        bbox_to_anchor=(0.83, 0.5),
+        fontsize=8,
+    )
 
     os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
     plt.savefig(f"mono_{'coag' if do_coag else 'mono'}/{j}.png")

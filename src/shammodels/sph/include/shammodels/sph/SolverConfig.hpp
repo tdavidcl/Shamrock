@@ -190,11 +190,7 @@ namespace shammodels::sph {
 
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
 
-        inline void set_dust_evol_coala(
-            DustEvolCoalaCoag<Tscal> cfg) {
-            dust_evol_config
-                = cfg;
-        }
+        inline void set_dust_evol_coala(DustEvolCoalaCoag<Tscal> cfg) { dust_evol_config = cfg; }
 
         inline void check_config() {
             bool is_not_none = !is_none();

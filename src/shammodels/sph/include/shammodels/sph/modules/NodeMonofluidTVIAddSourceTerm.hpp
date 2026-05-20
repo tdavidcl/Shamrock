@@ -83,9 +83,16 @@ namespace shammodels::sph::modules {
                     Tscal *__restrict ds_j_dt) {
                     auto sj = s_j[id];
 
-                    bool valid_div = sj * sj > rhodust_eps;
+                    Tscal ds_j_dt_val = 0;
 
-                    auto ds_j_dt_val = (valid_div) ? S[id] / (2 * sycl::sqrt(sj)) : 0;
+                    if (sj * sj > rhodust_eps) {
+                        ds_j_dt_val = S[id] / (2 * sycl::sqrt(sj));
+                    } else {
+                        // we need this trick otherwise the bin would never start to get filled
+                        // because of the cuttof, so the trick is to add the threshold in the
+                        // denominator. yeah dirty i know i know  ...
+                        ds_j_dt_val = S[id] / (2 * sycl::sqrt(sj + sycl::sqrt(rhodust_eps)));
+                    }
 
                     ds_j_dt[id] += ds_j_dt_val;
                 });

@@ -103,6 +103,14 @@ struct KernelUpdateDerivsMonofluidTVI {
             term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
         });
 
+        if (id_a == 2000)
+            logger::raw_ln(
+                "term1",
+                term1,
+                term2,
+                Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2,
+                xyz_a);
+
         // eq 51, Hutchison 2018
         ds_j_dt[thread_id] = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
     }

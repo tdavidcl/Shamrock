@@ -123,7 +123,8 @@ namespace shammodels::sph::modules {
                         Ttilde_sj_a -= eps_k_a * eps_k_a * tk_a;
                     }
 
-                    // logger::raw_ln("Ttilde_sj_a", jdust, Ttilde_sj_a, eps_j_a, tj_a);
+                    if (id_a == 2000)
+                        logger::raw_ln("Ttilde_sj_a", jdust, Ttilde_sj_a, eps_j_a, sj_a, tj_a);
 
                     Ttilde_sj[thread_id] = Ttilde_sj_a;
                 });
