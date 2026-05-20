@@ -12,13 +12,13 @@
 /**
  * @file ComputeDustTtilde.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
- *
+ * @brief Compute the dust combined stopping times Ttilde_sj for each dust species j
+ * see Hutchison 2018 eq 15
  */
 
+#include "shambase/string.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
-#include "shamcomm/logs.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
@@ -89,11 +89,12 @@ namespace shammodels::sph::modules {
                 sham::DDMultiRef{edges.Ttilde_sj.get_spans()},
                 total_specie_count,
                 [pmass, ndust = ndust](
-                    u32 thread_id,
-                    const Tscal *__restrict hpart,
-                    const Tscal *__restrict s_j,
-                    const Tscal *__restrict t_j,
-                    Tscal *__restrict Ttilde_sj) {
+                    u32 thread_id,                 // = part_id * ndust + jdust
+                    const Tscal *__restrict hpart, // [part_counts]
+                    const Tscal *__restrict s_j,   // [part_counts * ndust]
+                    const Tscal *__restrict t_j,   // [part_counts * ndust]
+                    Tscal *__restrict Ttilde_sj    // [part_counts * ndust]
+                ) {
                     u32 id_a  = thread_id / ndust;
                     u32 jdust = thread_id % ndust;
 
@@ -107,6 +108,7 @@ namespace shammodels::sph::modules {
                     auto epsilon = [&](Tscal sj) {
                         return sj * sj / rho_a;
                     };
+
                     /*
                      * Hutchison 2018 eq 15
                      * \tilde{T}_{sj} = \epsilon_j t_j - \sum_{k} \epsilon_k^2 t_k
@@ -132,6 +134,39 @@ namespace shammodels::sph::modules {
 
         inline virtual std::string _impl_get_label() const { return "ComputeDustTtilde"; };
 
-        inline virtual std::string _impl_get_tex() const { return "TODO"; };
+        inline virtual std::string _impl_get_tex() const {
+            auto gpart_mass  = get_ro_edge_base(0).get_tex_symbol();
+            auto part_counts = get_ro_edge_base(1).get_tex_symbol();
+            auto hpart       = get_ro_edge_base(2).get_tex_symbol();
+            auto s_j         = get_ro_edge_base(3).get_tex_symbol();
+            auto t_j         = get_ro_edge_base(4).get_tex_symbol();
+            auto Ttilde_sj   = get_rw_edge_base(0).get_tex_symbol();
+
+            std::string tex = R"tex(
+            Combined dust stopping times $\tilde{T}_{s,j}$ (Hutchison 2018, eq.~15)
+
+            \begin{align}
+            \rho_a &= m_p \left( \frac{h_{\rm fact}}{ {hpart}_a } \right)^3 \\
+            \epsilon_{j,a} &= \frac{ {s_j}_{j,a}^2 }{ \rho_a } \\
+            {Ttilde_sj}_{j,a} &= \epsilon_{j,a} \, {t_j}_{j,a}
+                - \sum_{k=0}^{N_{\rm dust}-1} \epsilon_{k,a}^2 \, {t_j}_{k,a} \\
+            a &\in [0, {part_counts}), \quad j \in [0, N_{\rm dust}) \\
+            m_p &= {gpart_mass}, \quad N_{\rm dust} = {ndust}, \quad h_{\rm fact} = {hfact}
+            \end{align}
+            )tex";
+
+            shambase::replace_all(tex, "{gpart_mass}", gpart_mass);
+            shambase::replace_all(tex, "{part_counts}", part_counts);
+            shambase::replace_all(tex, "{hpart}", hpart);
+            shambase::replace_all(tex, "{s_j}", s_j);
+            shambase::replace_all(tex, "{t_j}", t_j);
+            shambase::replace_all(tex, "{Ttilde_sj}", Ttilde_sj);
+            shambase::replace_all(tex, "{ndust}", shambase::format("{}", ndust));
+            shambase::replace_all(tex, "{hfact}", shambase::format("{}", Kernel::hfactd));
+
+            return tex;
+        };
     };
 } // namespace shammodels::sph::modules
+
+#undef NODE_COMPUTE_DUST_TTILDE_EDGES
