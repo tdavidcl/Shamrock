@@ -81,6 +81,7 @@ def uint_g(r):
 
 
 ndust = 20
+mrn_pow = 3.5
 
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
 grain_size_si_edges = np.logspace(-9, -2, ndust + 1)
@@ -124,8 +125,6 @@ rhodust_eps = 1e-15
 K0 *= 100
 print(f"K0 = {K0}")
 
-mrn_pow = 3.5
-
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
 
@@ -163,12 +162,12 @@ cfg = model.gen_default_config()
 cfg.set_artif_viscosity_VaryingCD10(
     alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
 )
+
 cfg.set_dust_mode_monofluid_tvi(ndust)
-
 cfg.set_dust_drag_epstein(grain_size, rho_grains)
-
 if do_coag:
     cfg.set_dust_evol_coala_coag(rhodust_eps, massgrid_edges, tabflux_coag)
+
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.add_ext_force_velocity_dissipation(eta=10)
 cfg.set_boundary_periodic()

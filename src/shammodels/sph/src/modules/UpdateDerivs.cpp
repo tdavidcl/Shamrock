@@ -1280,14 +1280,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             gpart_mass, part_counts, hpart_refs, grad_pressure, s_j_refs, t_j_field, delta_v);
 
         node->set_edges(
-            rhodust_eps,
-            massgrid,
-            tabflux_coag,
-            part_counts,
-            hpart_refs,
-            s_j_refs,
-            delta_v,
-            S_coag);
+            rhodust_eps, massgrid, tabflux_coag, part_counts, s_j_refs, delta_v, S_coag);
 
         node_add_source_term->set_edges(part_counts, rhodust_eps, S_coag, s_j_refs, ds_j_dt_refs);
 

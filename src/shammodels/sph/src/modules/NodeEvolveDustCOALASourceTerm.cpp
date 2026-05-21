@@ -53,7 +53,6 @@ namespace shammodels::sph::modules {
             const Tscal *__restrict massgrid_ptr,
             const Tscal *__restrict tensor_tabflux_coag,
             // field specific data
-            const Tscal *__restrict hpart,
             const Tscal *__restrict s_j,
             const Tvec *__restrict delta_v_j,
             Tscal *__restrict S_coag) const {
