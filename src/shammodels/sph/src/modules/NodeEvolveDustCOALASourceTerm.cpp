@@ -16,6 +16,7 @@
 
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shambase/string.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/math.hpp"
@@ -168,6 +169,53 @@ namespace shammodels::sph::modules {
                 count,
                 KernelGenCoala_k0<Tvec>{nbins, rho_eps, corrected_len, group_size, u32(count)});
         });
+    }
+
+    template<class Tvec>
+    inline std::string NodeEvolveDustCOALASourceTerm<Tvec>::_impl_get_tex() const {
+
+        auto rhodust_eps         = get_ro_edge_base(0).get_tex_symbol();
+        auto massgrid            = get_ro_edge_base(1).get_tex_symbol();
+        auto tensor_tabflux_coag = get_ro_edge_base(2).get_tex_symbol();
+        auto part_counts         = get_ro_edge_base(3).get_tex_symbol();
+        auto s_j                 = get_ro_edge_base(5).get_tex_symbol();
+        auto delta_v_j           = get_ro_edge_base(6).get_tex_symbol();
+        auto S_coag              = get_rw_edge_base(0).get_tex_symbol();
+
+        std::string tex = R"tex(
+            COALA dust coagulation source term, DG $k=0$ (Lombart et al., 2021)
+
+            Per gas particle $a$ and mass bin $j$ (monofluid: $\rho_{{\rm d},j,a}} = {s_j}_{j,a}^2$):
+
+            \begin{align}
+            \rho_{{\rm d},j,a} &= {s_j}_{j,a}^2 \\
+            \Delta m_j &= {massgrid}_{j+1} - {massgrid}_j \\
+            g_{j,a} &= \begin{cases}
+                \rho_{{\rm d},j,a} / \Delta m_j & \rho_{{\rm d},j,a} > \rho_{\rm eps} \\
+                0 & \text{otherwise}
+            \end{cases} \\
+            \mathrm{dv}_{l,m,a} &= \left| {delta_v_j}_{m,a} - {delta_v_j}_{l,a} \right| \\
+            \mathrm{flux}_{j,a} &= \sum_{l,m}
+                {tensor_tabflux_coag}_{j,l,m}\,
+                \mathrm{dv}_{l,m,a}\, g_{l,a}\, g_{m,a} \\
+            {S_coag}_{0,a} &= -\mathrm{flux}_{0,a}, \quad
+            {S_coag}_{j,a} = \mathrm{flux}_{j-1,a} - \mathrm{flux}_{j,a}
+            \quad (j \ge 1) \\
+            a &\in [0, {part_counts}), \quad j,l,m \in [0, N_{\rm bins}) \\
+            \rho_{\rm eps} &= {rhodust_eps}, \quad N_{\rm bins} = {nbins}
+            \end{align}
+        )tex";
+
+        shambase::replace_all(tex, "{rhodust_eps}", rhodust_eps);
+        shambase::replace_all(tex, "{massgrid}", massgrid);
+        shambase::replace_all(tex, "{tensor_tabflux_coag}", tensor_tabflux_coag);
+        shambase::replace_all(tex, "{part_counts}", part_counts);
+        shambase::replace_all(tex, "{s_j}", s_j);
+        shambase::replace_all(tex, "{delta_v_j}", delta_v_j);
+        shambase::replace_all(tex, "{S_coag}", S_coag);
+        shambase::replace_all(tex, "{nbins}", shambase::format("{}", nbins));
+
+        return tex;
     }
 } // namespace shammodels::sph::modules
 
