@@ -7,7 +7,10 @@ CI test for Sod tube with SPH
 
 import os
 
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 import shamrock
 
@@ -80,7 +83,7 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 20
+ndust = 40
 mrn_pow = 3.5
 
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
@@ -100,8 +103,6 @@ rho_grains = np.sqrt(rho_grains_edges[:-1] * rho_grains_edges[1:])
 
 grain_size_si = np.sqrt(grain_size_si_edges[:-1] * grain_size_si_edges[1:])
 rho_grains_si = np.sqrt(rho_grains_si_edges[:-1] * rho_grains_si_edges[1:])
-
-dustlabels = [f"dust {i} s = {grain_size_si[i]:.2e} [m]" for i in range(ndust)]
 
 print(f"grains sizes = {grain_size_si} [m]")
 print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
@@ -253,6 +254,8 @@ def compute_sj_new_j(patchdata, j):
 
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
+cmap = "plasma"
+
 tnext = 0
 for j in range(1000):
     if j == 30:
@@ -294,26 +297,19 @@ for j in range(1000):
     time = model.get_time()
     fig.suptitle(f"t = {time:.2f}")
 
-    fig.subplots_adjust(left=0.07, right=0.82, wspace=0.35)
+    fig.subplots_adjust(left=0.07, right=1.05, wspace=0.35)
 
     to_dens = codeu.to("kg") * codeu.to("m") ** -3
 
-    # tab20: 20 distinct qualitative colors (no repetition for ndust <= 20)
-    dust_colors = plt.colormaps["tab20"](np.linspace(0, 1, ndust, endpoint=False))
-    legend_handles = []
-    legend_labels = []
+    dust_cmap = plt.colormaps[cmap]
+    dust_norm = mcolors.LogNorm(vmin=grain_size_si.min(), vmax=grain_size_si.max())
+    dust_colors = dust_cmap(dust_norm(grain_size_si))
 
-    h_gas = axs[0].scatter(z, rho * to_dens, label="gas", s=sz, color="0.3", edgecolors="none")
-    legend_handles.append(h_gas)
-    legend_labels.append("gas")
+    axs[0].scatter(z, rho * to_dens, s=sz, color="0.3", edgecolors="none")
 
     for i in range(ndust):
         c = dust_colors[i]
-        h = axs[0].scatter(
-            z, s_j[:, i] ** 2 * to_dens, label=dustlabels[i], s=sz, color=c, edgecolors="none"
-        )
-        legend_handles.append(h)
-        legend_labels.append(dustlabels[i])
+        axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
         axs[1].scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
         axs[2].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
 
@@ -332,15 +328,109 @@ for j in range(1000):
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
     axs[2].set_xlabel(r"$z$")
 
-    fig.legend(
-        legend_handles,
-        legend_labels,
-        loc="center left",
-        bbox_to_anchor=(0.83, 0.5),
-        fontsize=8,
+    gas_handle = Line2D(
+        [0],
+        [0],
+        linestyle="none",
+        marker="o",
+        markersize=5,
+        markerfacecolor="0.3",
+        markeredgecolor="none",
+        label="gas",
     )
+    axs[0].legend(handles=[gas_handle], loc="upper right", fontsize=8)
+
+    dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+    dust_sm.set_array([])
+    cbar = fig.colorbar(dust_sm, ax=axs, pad=0.02, shrink=0.85)
+    cbar.set_label(r"grain size $s$ [m]")
 
     os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
-    plt.savefig(f"mono_{'coag' if do_coag else 'mono'}/{j}.png")
+    plt.savefig(f"mono_{'coag' if do_coag else 'mono'}/vert_slice_{j}.png")
     # model.do_vtk_dump(f"dump_stratif_{j}.vtk", True)
     plt.close()
+
+    fig_coala, ax_coala = plt.subplots(dpi=150)
+    fig_coala.suptitle(f"t = {time:.2f}")
+    z_cmap = plt.colormaps[cmap]
+    z_norm = mcolors.Normalize(vmin=0, vmax=2 * H)
+    for i in range(ndust):
+        rho_dust = s_j[:, i] ** 2 * to_dens
+        x_scat = grain_size_si[i] * np.ones(len(rho_dust))
+
+        cmap_val = np.abs(z)
+        sorted_indices = np.argsort(cmap_val)
+
+        cmap_val = cmap_val[sorted_indices]
+        x_scat = x_scat[sorted_indices]
+        rho_dust = rho_dust[sorted_indices]
+
+        ax_coala.scatter(x_scat, rho_dust, c=cmap_val, cmap=z_cmap, norm=z_norm)
+    ax_coala.set_xscale("log")
+    ax_coala.set_yscale("log")
+    ax_coala.set_xlabel("grain size [m]")
+    ax_coala.set_ylabel("density [kg/m^3]")
+    ax_coala.set_ylim(1e-22, 1e-12)
+    fig_coala.colorbar(
+        cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]"
+    )
+    fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_{j}.png")
+    plt.close(fig_coala)
+
+
+
+    fig_coala, (ax_coala, ax_zsum) = plt.subplots(1, 2, dpi=150, figsize=(12, 5))
+    fig_coala.suptitle(f"t = {time:.2f}")
+    z_cmap = plt.colormaps[cmap]
+    z_norm = mcolors.Normalize(vmin=0, vmax=2.5 * H)
+
+    # The goal of this plot is to do multiple rho(sgrain) averaged for multiple bins of z values
+
+    zbins = np.linspace(0, 3 * H, 25).tolist()
+
+    zbins_centers = (np.array(zbins[1:]) + np.array(zbins[:-1])) / 2
+
+    mdust_zsums = np.zeros(len(zbins_centers))
+    print(f"mdust_zsums = {mdust_zsums}")
+
+    for ibin in range(len(zbins) - 1):
+        zmin = zbins[ibin]
+        zmax = zbins[ibin + 1]
+        cmap_val = (zmin + zmax )/ 2
+
+        mask = (np.abs(z) > zmin) & (np.abs(z) < zmax)
+
+        rho_dust_avg = np.zeros(ndust)
+        for idust in range(ndust):
+            rho_dust = s_j[:, idust] ** 2 * to_dens
+            rho_dust_avg[idust] = np.sum(rho_dust[mask]) / np.sum(mask)
+
+            mdust_zsums[ibin] += np.sum(pmass * (s_j[:, idust] ** 2 / rho) * mask)
+
+        color = z_cmap(z_norm(cmap_val))
+        print(f"rendering zbin {ibin} zmin={zmin} zmax={zmax} with color {color}")
+
+        ax_coala.plot(grain_size_si, rho_dust_avg, color=color, linewidth=1)
+
+    ax_coala.set_xscale("log")
+    ax_coala.set_yscale("log")
+    ax_coala.set_xlabel("grain size [m]")
+    ax_coala.set_ylabel("density [kg/m^3]")
+    ax_coala.set_ylim(1e-22, 1e-12)
+    fig_coala.colorbar(
+        cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]"
+    )
+
+    ax_zsum.plot(zbins_centers, mdust_zsums, marker="o", markersize=3, color="0.3")
+
+    print(f"mdust_zsums = {mdust_zsums}")
+    print(f"zbins_centers = {zbins_centers}")
+    ax_zsum.set_ylabel(r"$\sum m_{\rm dust}$ in $z$ bin")
+    ax_zsum.set_xlabel("z [au]")
+    ax_zsum.set_yscale("log")
+    ax_zsum.set_ylim(1e-16, 1e-12)
+
+    fig_coala.tight_layout()
+    fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")
+    #plt.show()
+    plt.close(fig_coala)

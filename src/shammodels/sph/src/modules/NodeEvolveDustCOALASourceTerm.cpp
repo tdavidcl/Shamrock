@@ -164,7 +164,12 @@ namespace shammodels::sph::modules {
                     delta_v_j_spans.get(id_patch)},
                 sham::MultiRef{S_coag_spans.get(id_patch)},
                 count,
-                KernelGenCoala_k0<Tvec>{nbins, rho_eps, corrected_len, group_size, u32(count)});
+                KernelGenCoala_k0<Tvec>{
+                    .nbins         = nbins,
+                    .rho_eps       = rho_eps,
+                    .corrected_len = corrected_len,
+                    .group_size    = group_size,
+                    .true_size     = u32(count)});
         });
     }
 
