@@ -62,6 +62,6 @@ namespace shammodels::sph::modules {
             return "NodeEvolveDustCOALASourceTerm";
         };
 
-        inline virtual std::string _impl_get_tex() const;
+        virtual std::string _impl_get_tex() const;
     };
 } // namespace shammodels::sph::modules
