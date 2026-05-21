@@ -34,7 +34,6 @@
     X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
                                                                                                    \
     /* to get rho_dust_j */                                                                        \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
                                                                                                    \
     /* Here it is the delta_v in the monofluid sense not the coala sense */                        \
@@ -63,6 +62,6 @@ namespace shammodels::sph::modules {
             return "NodeEvolveDustCOALASourceTerm";
         };
 
-        inline virtual std::string _impl_get_tex() const { return "TODO"; };
+        inline virtual std::string _impl_get_tex() const;
     };
 } // namespace shammodels::sph::modules

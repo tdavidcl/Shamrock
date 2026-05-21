@@ -129,7 +129,6 @@ namespace shammodels::sph::modules {
 
         auto edges = get_edges();
 
-        auto hpart_spans     = edges.hpart.get_spans();
         auto s_j_spans       = edges.s_j.get_spans();
         auto delta_v_j_spans = edges.delta_v_j.get_spans();
 
@@ -162,7 +161,6 @@ namespace shammodels::sph::modules {
                 sham::MultiRef{
                     massgrid_buf,
                     tensor_tabflux_coag_buf,
-                    hpart_spans.get(id_patch),
                     s_j_spans.get(id_patch),
                     delta_v_j_spans.get(id_patch)},
                 sham::MultiRef{S_coag_spans.get(id_patch)},
