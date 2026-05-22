@@ -34,7 +34,7 @@
                                                                                                    \
     /* fields */                                                                                   \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, grad_pressure)                                   \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, grad_P_on_rho)                                   \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, t_j)                                            \
                                                                                                    \
@@ -66,7 +66,7 @@ namespace shammodels::sph::modules {
 
             // check that all input edges have the particles with ghosts zones
             edges.hpart.check_sizes(part_counts);
-            edges.grad_pressure.check_sizes(part_counts);
+            edges.grad_P_on_rho.check_sizes(part_counts);
             edges.s_j.check_sizes(part_counts);
             edges.t_j.check_sizes(part_counts);
 
@@ -85,7 +85,7 @@ namespace shammodels::sph::modules {
                 shamsys::instance::get_compute_scheduler_ptr(),
                 sham::DDMultiRef{
                     edges.hpart.get_spans(),
-                    edges.grad_pressure.get_spans(),
+                    edges.grad_P_on_rho.get_spans(),
                     edges.s_j.get_spans(),
                     edges.t_j.get_spans()},
                 sham::DDMultiRef{edges.delta_v.get_spans()},
@@ -93,7 +93,7 @@ namespace shammodels::sph::modules {
                 [pmass, ndust = ndust](
                     u32 thread_id,
                     const Tscal *__restrict hpart,        // npart
-                    const Tvec *__restrict grad_pressure, // npart
+                    const Tvec *__restrict grad_P_on_rho, // npart
                     const Tscal *__restrict s_j,          // npart * nbins
                     const Tscal *__restrict t_j,          // npart * nbins
                     Tvec *__restrict delta_v              // npart * nbins
@@ -101,10 +101,10 @@ namespace shammodels::sph::modules {
                     u32 id_a  = thread_id / ndust;
                     u32 jdust = thread_id % ndust;
 
-                    Tscal h_a     = hpart[id_a];
-                    Tvec grad_P_a = grad_pressure[id_a];
-                    Tscal sj_a    = s_j[thread_id];
-                    Tscal tj_a    = t_j[thread_id];
+                    Tscal h_a            = hpart[id_a];
+                    Tvec grad_P_on_rho_a = grad_P_on_rho[id_a];
+                    Tscal sj_a           = s_j[thread_id];
+                    Tscal tj_a           = t_j[thread_id];
 
                     using namespace shamrock::sph;
                     Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
@@ -121,7 +121,13 @@ namespace shammodels::sph::modules {
 
                     Tscal eps_j_a = epsilon(sj_a);
 
-                    delta_v[thread_id] = (eps_j_a * tj_a / rho_a) * grad_P_a;
+                    auto tmp = (eps_j_a * tj_a) * grad_P_on_rho_a;
+
+                    if (id_a == 1408)
+                        logger::raw_ln(
+                            "delta v", jdust, tmp, grad_P_on_rho_a, rho_a, eps_j_a, tj_a);
+
+                    delta_v[thread_id] = tmp;
                 });
         }
 

@@ -10,22 +10,16 @@ import os
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import numpy as np
+import shamrock.external.coala as coala
 from matplotlib.lines import Line2D
+from scipy.special import erfinv
 
 import shamrock
 
-shamrock.enable_experimental_features()
-import numpy as np
-import shamrock.external.coala as coala
-
 print(f"coala path : {coala.__file__}")
 
-
-gamma = 1.4
-rho_i = 1e-7
-central_mass = 1
-R0 = 1
-H_r_0 = 0.05
+shamrock.enable_experimental_features()
 
 si = shamrock.UnitSystem()
 sicte = shamrock.Constants(si)
@@ -35,6 +29,33 @@ codeu = shamrock.UnitSystem(
     unit_mass=sicte.sol_mass(),
 )
 ucte = shamrock.Constants(codeu)
+
+
+gamma = 1.4
+rho_i = 1e-7
+central_mass = 1
+R0 = 1
+H_r_0 = 0.05
+
+box_H_count = 8
+
+ndust = 40
+mrn_pow = 3.5
+mrn_cutoff = 250e-9
+
+epsilon_base = 0.01
+
+
+do_coag = True
+
+print("codeu.get('m') / codeu.get('s') =", codeu.get("m") / codeu.get("s"))
+print("codeu.to('m') / codeu.to('s') =", codeu.to("m") / codeu.to("s"))
+
+dv_max = 1000000 * codeu.get("m") / codeu.get("s")
+Q = 5
+rhodust_eps = 1e-15
+K0_multiplier = 100
+
 G = ucte.G()
 
 
@@ -48,7 +69,7 @@ def omega_k(r):
 
 H = H_r_0 * R0
 cs = H * omega_k(R0)
-box = 8 * H
+box = box_H_count * H
 
 print(f"cs = {cs}")
 print(f"H = {H}")
@@ -74,7 +95,7 @@ def func_rho_g(r):
     return rho_i * scaling_rho(r) - sum([func_rho_d_j(r, i) for i in range(ndust)])
 
 
-cs_g = 1
+cs_g = cs
 
 
 def uint_g(r):
@@ -83,8 +104,11 @@ def uint_g(r):
     return P / ((gamma - 1) * rho_g)
 
 
-ndust = 40
-mrn_pow = 3.5
+print(f"dv_max_si = {dv_max * codeu.to('m') / codeu.to('s')} [m/s]")
+print(f"dv_max = {dv_max} [code units]")
+
+print(f"dv_max/cs = {dv_max / cs}")
+
 
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
 grain_size_si_edges = np.logspace(-9, -2, ndust + 1)
@@ -116,20 +140,13 @@ massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 print(f"massgrid = {massgrid} [code units]")
 print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
-do_coag = True
-
 
 K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
-Q = 5
-rhodust_eps = 1e-15
-
-K0 *= 1
+K0 *= K0_multiplier
 print(f"K0 = {K0}")
 
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
-
-from scipy.special import erfinv
 
 bmin = (-box / 4, -box / 4, -box)
 bmax = (box / 4, box / 4, box)
@@ -167,7 +184,7 @@ cfg.set_artif_viscosity_VaryingCD10(
 cfg.set_dust_mode_monofluid_tvi(ndust)
 cfg.set_dust_drag_epstein(grain_size, rho_grains)
 if do_coag:
-    cfg.set_dust_evol_coala_coag(rhodust_eps, massgrid_edges, tabflux_coag)
+    cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
 
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.add_ext_force_velocity_dissipation(eta=10)
@@ -229,9 +246,8 @@ model.set_cfl_force(0.1)
 
 model.timestep()
 
-epsilon_base = 0.01
 mrn_weight = grain_size ** (4 - mrn_pow)
-mrn_weight *= grain_size_si < 250e-9
+mrn_weight *= grain_size_si < mrn_cutoff
 mrn_weight = mrn_weight / np.sum(mrn_weight)
 
 print(f"mrn_weight = {mrn_weight}")
@@ -371,30 +387,31 @@ for j in range(1000):
     # model.do_vtk_dump(f"dump_stratif_{j}.vtk", True)
     plt.close()
 
-    fig_coala, ax_coala = plt.subplots(dpi=dpi)
-    fig_coala.suptitle(f"t = {time:.2f}")
-    z_cmap = plt.colormaps[cmap]
-    z_norm = mcolors.Normalize(vmin=0, vmax=2 * H)
-    for i in range(ndust):
-        rho_dust = s_j[:, i] ** 2 * to_dens
-        x_scat = grain_size_si[i] * np.ones(len(rho_dust))
+    if False:
+        fig_coala, ax_coala = plt.subplots(dpi=dpi)
+        fig_coala.suptitle(f"t = {time:.2f}")
+        z_cmap = plt.colormaps[cmap]
+        z_norm = mcolors.Normalize(vmin=0, vmax=2 * H)
+        for i in range(ndust):
+            rho_dust = s_j[:, i] ** 2 * to_dens
+            x_scat = grain_size_si[i] * np.ones(len(rho_dust))
 
-        cmap_val = np.abs(z)
-        sorted_indices = np.argsort(cmap_val)
+            cmap_val = np.abs(z)
+            sorted_indices = np.argsort(cmap_val)
 
-        cmap_val = cmap_val[sorted_indices]
-        x_scat = x_scat[sorted_indices]
-        rho_dust = rho_dust[sorted_indices]
+            cmap_val = cmap_val[sorted_indices]
+            x_scat = x_scat[sorted_indices]
+            rho_dust = rho_dust[sorted_indices]
 
-        ax_coala.scatter(x_scat, rho_dust, c=cmap_val, cmap=z_cmap, norm=z_norm)
-    ax_coala.set_xscale("log")
-    ax_coala.set_yscale("log")
-    ax_coala.set_xlabel("grain size [m]")
-    ax_coala.set_ylabel("density [kg/m^3]")
-    ax_coala.set_ylim(1e-21, 1e-11)
-    fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
-    fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_{j}.png")
-    plt.close(fig_coala)
+            ax_coala.scatter(x_scat, rho_dust, c=cmap_val, cmap=z_cmap, norm=z_norm)
+        ax_coala.set_xscale("log")
+        ax_coala.set_yscale("log")
+        ax_coala.set_xlabel("grain size [m]")
+        ax_coala.set_ylabel("density [kg/m^3]")
+        ax_coala.set_ylim(1e-21, 1e-11)
+        fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
+        fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_{j}.png")
+        plt.close(fig_coala)
 
     fig_coala, (ax_coala, ax_zsum) = plt.subplots(1, 2, dpi=dpi, figsize=(12, 5))
     fig_coala.suptitle(f"t = {time:.2f}")
@@ -457,7 +474,7 @@ for j in range(1000):
     ax_zsum.set_ylabel(r"$\sum m_{\rm dust}$ in $z$ bin")
     ax_zsum.set_xlabel("z [au]")
     ax_zsum.set_yscale("log")
-    ax_zsum.set_ylim(1e-15, 1e-9)
+    ax_zsum.set_ylim(1e-17, 1e-9)
 
     fig_coala.tight_layout()
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")

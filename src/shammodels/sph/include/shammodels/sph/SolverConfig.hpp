@@ -113,6 +113,7 @@ namespace shammodels::sph {
     template<class Tscal>
     struct DustEvolCoalaCoag {
         Tscal rhodust_eps;
+        Tscal dv_max;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;
     };
@@ -247,6 +248,11 @@ namespace shammodels::sph {
                     if (cfg->rhodust_eps <= 0) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
                             "rhodust_eps must be positive");
+                    }
+
+                    if (cfg->dv_max <= 0) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "dv_max must be positive");
                     }
 
                 } else {

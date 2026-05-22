@@ -27,6 +27,7 @@
 #define NODE_EVOLVE_DUST_COALA_SOURCE_TERM_EDGES(X_RO, X_RW)                                       \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, rhodust_eps)                                    \
+    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, dv_max)                                         \
     X_RO(shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>, massgrid)                          \
     X_RO(shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>, tensor_tabflux_coag)               \
                                                                                                    \

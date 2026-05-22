@@ -1251,8 +1251,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
         rhodust_eps->value = cfg_evol->rhodust_eps;
 
-        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_pressure
-            = std::make_shared<shamrock::solvergraph::Field<Tvec>>(1, "grad P", "grad P");
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dv_max
+            = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
+        dv_max->value = cfg_evol->dv_max;
+
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_P_on_rho
+            = std::make_shared<shamrock::solvergraph::Field<Tvec>>(1, "grad P/rho", "grad P/rho");
 
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> delta_v
             = std::make_shared<shamrock::solvergraph::Field<Tvec>>(ndust, "Delta v", "Delta v");
@@ -1274,13 +1278,13 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             omega_refs,
             pressure_field,
             storage.neigh_cache,
-            grad_pressure);
+            grad_P_on_rho);
 
         delta_v_node->set_edges(
-            gpart_mass, part_counts, hpart_refs, grad_pressure, s_j_refs, t_j_field, delta_v);
+            gpart_mass, part_counts, hpart_refs, grad_P_on_rho, s_j_refs, t_j_field, delta_v);
 
         node->set_edges(
-            rhodust_eps, massgrid, tabflux_coag, part_counts, s_j_refs, delta_v, S_coag);
+            rhodust_eps, dv_max, massgrid, tabflux_coag, part_counts, s_j_refs, delta_v, S_coag);
 
         node_add_source_term->set_edges(part_counts, rhodust_eps, S_coag, s_j_refs, ds_j_dt_refs);
 

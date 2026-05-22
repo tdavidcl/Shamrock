@@ -103,7 +103,7 @@ struct KernelUpdateDerivsMonofluidTVI {
             term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
         });
 
-        if (id_a == 2000)
+        if (id_a == 1408)
             logger::raw_ln(
                 "term1",
                 term1,

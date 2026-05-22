@@ -290,6 +290,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             "set_dust_evol_coala_coag",
             [](TConfig &self,
                Tscal rhodust_eps,
+               Tscal dv_max,
                std::vector<Tscal> massgrid,
                py::array_t<Tscal> tabflux_coag) {
                 u32 nbins = massgrid.size() - 1;
@@ -323,6 +324,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
 
                 self.dust_config.set_dust_evol_coala(
                     {.rhodust_eps  = rhodust_eps,
+                     .dv_max       = dv_max,
                      .massgrid     = massgrid,
                      .tabflux_coag = tabflux_coag_vec});
             })

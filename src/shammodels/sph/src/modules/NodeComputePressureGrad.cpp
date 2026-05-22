@@ -39,7 +39,7 @@ struct KernelComputePressureGrad {
         const Tscal *__restrict omega,
         const Tscal *__restrict pressure,
         shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
-        Tvec *__restrict grad_press) const {
+        Tvec *__restrict grad_P_on_rho) const {
 
         using namespace shamrock::sph;
 
@@ -91,7 +91,10 @@ struct KernelComputePressureGrad {
                 r_ab_unit * Fab_b);
         });
 
-        grad_press[id_a] = force_pressure;
+        if (id_a == 1408)
+            logger::raw_ln("force_pressure", force_pressure, P_a, omega_a, rho_a);
+
+        grad_P_on_rho[id_a] = force_pressure;
     }
 };
 
@@ -112,7 +115,7 @@ void shammodels::sph::modules::NodeComputePressureGrad<Tvec, SPHKernel>::_impl_e
     edges.pressure.check_sizes(part_counts_with_ghost);
 
     // ensure that the output edges are of size part_counts (output without ghosts zones)
-    edges.grad_pressure.ensure_sizes(part_counts);
+    edges.grad_P_on_rho.ensure_sizes(part_counts);
 
     const Tscal pmass = edges.gpart_mass.value;
 
@@ -127,7 +130,7 @@ void shammodels::sph::modules::NodeComputePressureGrad<Tvec, SPHKernel>::_impl_e
             edges.omega.get_spans(),
             edges.pressure.get_spans(),
             edges.neigh_cache},
-        sham::DDMultiRef{edges.grad_pressure.get_spans()},
+        sham::DDMultiRef{edges.grad_P_on_rho.get_spans()},
         part_counts,
         ComputeKernel{pmass});
 }
