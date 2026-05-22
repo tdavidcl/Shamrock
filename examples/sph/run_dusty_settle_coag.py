@@ -116,7 +116,7 @@ massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 print(f"massgrid = {massgrid} [code units]")
 print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
-do_coag = False
+do_coag = True
 
 
 K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
