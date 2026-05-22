@@ -116,7 +116,7 @@ massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 print(f"massgrid = {massgrid} [code units]")
 print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
 
-do_coag = True
+do_coag = False
 
 
 K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
@@ -371,13 +371,9 @@ for j in range(1000):
     ax_coala.set_xlabel("grain size [m]")
     ax_coala.set_ylabel("density [kg/m^3]")
     ax_coala.set_ylim(1e-22, 1e-12)
-    fig_coala.colorbar(
-        cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]"
-    )
+    fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_{j}.png")
     plt.close(fig_coala)
-
-
 
     fig_coala, (ax_coala, ax_zsum) = plt.subplots(1, 2, dpi=150, figsize=(12, 5))
     fig_coala.suptitle(f"t = {time:.2f}")
@@ -396,7 +392,7 @@ for j in range(1000):
     for ibin in range(len(zbins) - 1):
         zmin = zbins[ibin]
         zmax = zbins[ibin + 1]
-        cmap_val = (zmin + zmax )/ 2
+        cmap_val = (zmin + zmax) / 2
 
         mask = (np.abs(z) > zmin) & (np.abs(z) < zmax)
 
@@ -417,9 +413,7 @@ for j in range(1000):
     ax_coala.set_xlabel("grain size [m]")
     ax_coala.set_ylabel("density [kg/m^3]")
     ax_coala.set_ylim(1e-22, 1e-12)
-    fig_coala.colorbar(
-        cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]"
-    )
+    fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
 
     ax_zsum.plot(zbins_centers, mdust_zsums, marker="o", markersize=3, color="0.3")
 
@@ -432,5 +426,5 @@ for j in range(1000):
 
     fig_coala.tight_layout()
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")
-    #plt.show()
+    # plt.show()
     plt.close(fig_coala)

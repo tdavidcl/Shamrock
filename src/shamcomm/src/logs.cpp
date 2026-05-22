@@ -56,6 +56,7 @@ namespace shamcomm::logs {
 
     void code_init_done_log() {
 
+        // start allow utf-8
         auto lines = std::vector<std::string>{
             // Someone that coded too much here
             "Now it's time to " + shambase::term_colors::col8b_cyan()
@@ -78,7 +79,6 @@ While you wait for this simulation to run, give that cat a hug!
   _.|o o  |_   ) )
 -(((---(((--------
             )=",
-            
 
             // Someone that started on oumuamua
             "Shamrock your way to a brighter day!",
@@ -88,12 +88,12 @@ While you wait for this simulation to run, give that cat a hug!
             "シャムロック"
 
             // by the coagulator
-        "We're not here to make seagulls laugh"
+            "We're not here to make seagulls laugh"
 
-        // in places
-        "日本でも使ている", // used in japan
-        "Pretty sure Aussies use that too, mate."
-    };
+            // in places
+            "日本でも使ている", // used in japan
+            "Pretty sure Aussies use that too, mate."};
+        // end allow utf-8
 
         auto get_sentence = [&]() {
             f64 t   = shambase::details::get_wtime();
