@@ -86,12 +86,13 @@ namespace shammodels::sph::modules {
                     Tscal ds_j_dt_val = 0;
 
                     if (sj * sj > rhodust_eps) {
-                        ds_j_dt_val = S[id] / (2 * sycl::sqrt(sj));
+                        ds_j_dt_val = S[id] / (2 * sycl::sqrt(sham::abs(sj)));
                     } else {
                         // we need this trick otherwise the bin would never start to get filled
                         // because of the cuttof, so the trick is to add the threshold in the
                         // denominator. yeah dirty i know i know  ...
-                        ds_j_dt_val = S[id] / (2 * sycl::sqrt(sj + sycl::sqrt(rhodust_eps)));
+                        ds_j_dt_val
+                            = S[id] / (2 * sycl::sqrt(sham::abs(sj) + sycl::sqrt(rhodust_eps)));
                     }
 
                     ds_j_dt[id] += ds_j_dt_val;

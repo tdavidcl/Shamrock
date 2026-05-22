@@ -1575,6 +1575,7 @@ void shammodels::sph::Solver<Tvec, Kern>::prepare_corrector() {
     bool has_psi_field     = solver_config.has_field_psi_on_ch();
     bool has_epsilon_field = solver_config.dust_config.has_epsilon_field();
     bool has_deltav_field  = solver_config.dust_config.has_deltav_field();
+    bool has_s_j_field     = solver_config.dust_config.has_s_j_field();
 
     const u32 iduint      = pdl.get_field_idx<Tscal>("duint");
     const u32 iaxyz       = pdl.get_field_idx<Tvec>("axyz");
@@ -1598,6 +1599,10 @@ void shammodels::sph::Solver<Tvec, Kern>::prepare_corrector() {
     if (has_deltav_field) {
         storage.old_dtdeltav.set(
             utility.save_field<Tvec>(pdl.get_field_idx<Tvec>("dtdeltav"), "dtdeltav_old"));
+    }
+    if (has_s_j_field) {
+        storage.old_ds_j_dt.set(
+            utility.save_field<Tscal>(pdl.get_field_idx<Tscal>("ds_j_dt"), "ds_j_dt_old"));
     }
 }
 
@@ -1670,6 +1675,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     bool has_psi_field     = solver_config.has_field_psi_on_ch();
     bool has_epsilon_field = solver_config.dust_config.has_epsilon_field();
     bool has_deltav_field  = solver_config.dust_config.has_deltav_field();
+    bool has_s_j_field     = solver_config.dust_config.has_s_j_field();
 
     PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
@@ -1685,6 +1691,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     const u32 idpsi_on_ch = (has_psi_field) ? pdl.get_field_idx<Tscal>("dpsi/ch") : 0;
     const u32 iepsilon    = (has_epsilon_field) ? pdl.get_field_idx<Tscal>("epsilon") : 0;
     const u32 idtepsilon  = (has_epsilon_field) ? pdl.get_field_idx<Tscal>("dtepsilon") : 0;
+    const u32 is_j        = (has_s_j_field) ? pdl.get_field_idx<Tscal>("s_j") : 0;
+    const u32 ids_j_dt    = (has_s_j_field) ? pdl.get_field_idx<Tscal>("ds_j_dt") : 0;
     const u32 ideltav     = (has_deltav_field) ? pdl.get_field_idx<Tvec>("deltav") : 0;
     const u32 idtdeltav   = (has_deltav_field) ? pdl.get_field_idx<Tvec>("dtdeltav") : 0;
 
@@ -2230,6 +2238,12 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 ideltav, idtdeltav, storage.old_dtdeltav.get(), epsilon_deltav_sq, dt / 2);
         }
 
+        if (solver_config.dust_config.has_s_j_field()) {
+            ComputeField<Tscal> s_j_s_j_sq = utility.make_compute_field<Tscal>("s_j s_j^2", 1);
+            utility.fields_leapfrog_corrector<Tscal>(
+                is_j, ids_j_dt, storage.old_ds_j_dt.get(), s_j_s_j_sq, dt / 2);
+        }
+
         storage.old_axyz.reset();
         storage.old_duint.reset();
         if (solver_config.has_field_B_on_rho()) {
@@ -2245,6 +2259,10 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         if (solver_config.dust_config.has_deltav_field()) {
             storage.old_dtdeltav.reset();
+        }
+
+        if (solver_config.dust_config.has_s_j_field()) {
+            storage.old_ds_j_dt.reset();
         }
 
         Tscal rank_veps_v = sycl::sqrt(vepsilon_v_sq.compute_rank_max());

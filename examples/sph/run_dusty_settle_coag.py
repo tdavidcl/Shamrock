@@ -123,7 +123,7 @@ K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
 Q = 5
 rhodust_eps = 1e-15
 
-K0 *= 100
+K0 *= 1
 print(f"K0 = {K0}")
 
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
@@ -134,7 +134,7 @@ from scipy.special import erfinv
 bmin = (-box / 4, -box / 4, -box)
 bmax = (box / 4, box / 4, box)
 
-N_target = 1e4
+N_target = 2e4
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
@@ -229,10 +229,10 @@ model.set_cfl_force(0.1)
 
 model.timestep()
 
-
+epsilon_base = 0.01
 mrn_weight = grain_size ** (4 - mrn_pow)
-mrn_weight = mrn_weight / np.sum(mrn_weight)
 mrn_weight *= grain_size_si < 250e-9
+mrn_weight = mrn_weight / np.sum(mrn_weight)
 
 print(f"mrn_weight = {mrn_weight}")
 
@@ -245,7 +245,7 @@ def compute_sj_new_j(patchdata, j):
     # mask to only modify particles with |z| < H
     mask = 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
 
-    epsilon_target = 0.1 * mrn_weight[j] * mask
+    epsilon_target = epsilon_base * mrn_weight[j] * mask
     print(f"epsilon_target = {epsilon_target} {j}")
     s = np.sqrt(rho * epsilon_target)
 
@@ -255,10 +255,11 @@ def compute_sj_new_j(patchdata, j):
 # TODO: add function to modify fields e.g. get rho and do stuff according to it
 
 cmap = "plasma"
+dpi = 250
 
 tnext = 0
 for j in range(1000):
-    if j == 30:
+    if j == 0:
         for k in range(ndust):
 
             def compute_sj_new(patchdata):
@@ -293,7 +294,7 @@ for j in range(1000):
 
     sz = 1
 
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5), dpi=150)
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(12, 5), dpi=dpi)
     time = model.get_time()
     fig.suptitle(f"t = {time:.2f}")
 
@@ -305,13 +306,22 @@ for j in range(1000):
     dust_norm = mcolors.LogNorm(vmin=grain_size_si.min(), vmax=grain_size_si.max())
     dust_colors = dust_cmap(dust_norm(grain_size_si))
 
-    axs[0].scatter(z, rho * to_dens, s=sz, color="0.3", edgecolors="none")
+    rho_dust_all = np.zeros(len(z))
+    epsilon_dust_all = np.zeros(len(z))
 
     for i in range(ndust):
         c = dust_colors[i]
         axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
         axs[1].scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
         axs[2].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
+
+        rho_dust_all += s_j[:, i] ** 2 * to_dens
+        epsilon_dust_all += s_j[:, i] ** 2 / rho
+
+    axs[0].scatter(z, rho * to_dens, s=sz, color="0.0", edgecolors="none")
+    axs[0].scatter(z, rho_dust_all, s=sz, color="0.5", edgecolors="none")
+    axs[1].scatter(z, 1 - epsilon_dust_all, s=sz, color="0.0", edgecolors="none")
+    axs[1].scatter(z, epsilon_dust_all, s=sz, color="0.5", edgecolors="none")
 
     # axs[0].scatter(y,estimated_rho)
     axs[0].set_ylabel(r"$\rho$")
@@ -323,7 +333,7 @@ for j in range(1000):
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$z$")
     axs[1].set_yscale("log")
-    axs[1].set_ylim(1e-12, 1)
+    axs[1].set_ylim(1e-12, 2)
 
     axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
     axs[2].set_xlabel(r"$z$")
@@ -334,11 +344,22 @@ for j in range(1000):
         linestyle="none",
         marker="o",
         markersize=5,
-        markerfacecolor="0.3",
+        markerfacecolor="0.",
         markeredgecolor="none",
         label="gas",
     )
-    axs[0].legend(handles=[gas_handle], loc="upper right", fontsize=8)
+
+    dust_handle = Line2D(
+        [0],
+        [0],
+        linestyle="none",
+        marker="o",
+        markersize=5,
+        markerfacecolor="0.5",
+        markeredgecolor="none",
+        label="dust",
+    )
+    axs[0].legend(handles=[gas_handle, dust_handle], loc="upper right", fontsize=8)
 
     dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
     dust_sm.set_array([])
@@ -350,7 +371,7 @@ for j in range(1000):
     # model.do_vtk_dump(f"dump_stratif_{j}.vtk", True)
     plt.close()
 
-    fig_coala, ax_coala = plt.subplots(dpi=150)
+    fig_coala, ax_coala = plt.subplots(dpi=dpi)
     fig_coala.suptitle(f"t = {time:.2f}")
     z_cmap = plt.colormaps[cmap]
     z_norm = mcolors.Normalize(vmin=0, vmax=2 * H)
@@ -370,12 +391,12 @@ for j in range(1000):
     ax_coala.set_yscale("log")
     ax_coala.set_xlabel("grain size [m]")
     ax_coala.set_ylabel("density [kg/m^3]")
-    ax_coala.set_ylim(1e-22, 1e-12)
+    ax_coala.set_ylim(1e-21, 1e-11)
     fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_{j}.png")
     plt.close(fig_coala)
 
-    fig_coala, (ax_coala, ax_zsum) = plt.subplots(1, 2, dpi=150, figsize=(12, 5))
+    fig_coala, (ax_coala, ax_zsum) = plt.subplots(1, 2, dpi=dpi, figsize=(12, 5))
     fig_coala.suptitle(f"t = {time:.2f}")
     z_cmap = plt.colormaps[cmap]
     z_norm = mcolors.Normalize(vmin=0, vmax=2.5 * H)
@@ -386,8 +407,10 @@ for j in range(1000):
 
     zbins_centers = (np.array(zbins[1:]) + np.array(zbins[:-1])) / 2
 
-    mdust_zsums = np.zeros(len(zbins_centers))
+    mdust_zsums = np.zeros((len(zbins_centers), ndust))
     print(f"mdust_zsums = {mdust_zsums}")
+
+    mgas_zsums = np.zeros(len(zbins_centers))
 
     for ibin in range(len(zbins) - 1):
         zmin = zbins[ibin]
@@ -395,34 +418,46 @@ for j in range(1000):
         cmap_val = (zmin + zmax) / 2
 
         mask = (np.abs(z) > zmin) & (np.abs(z) < zmax)
+        mgas_zsums[ibin] = np.sum(mask) * pmass
 
         rho_dust_avg = np.zeros(ndust)
         for idust in range(ndust):
             rho_dust = s_j[:, idust] ** 2 * to_dens
             rho_dust_avg[idust] = np.sum(rho_dust[mask]) / np.sum(mask)
 
-            mdust_zsums[ibin] += np.sum(pmass * (s_j[:, idust] ** 2 / rho) * mask)
+            mdust_zsums[ibin, idust] += np.sum(pmass * (s_j[:, idust] ** 2 / rho) * mask)
 
         color = z_cmap(z_norm(cmap_val))
         print(f"rendering zbin {ibin} zmin={zmin} zmax={zmax} with color {color}")
 
         ax_coala.plot(grain_size_si, rho_dust_avg, color=color, linewidth=1)
 
+    mdust_zsums_all = np.sum(mdust_zsums, axis=1)
+
     ax_coala.set_xscale("log")
     ax_coala.set_yscale("log")
     ax_coala.set_xlabel("grain size [m]")
     ax_coala.set_ylabel("density [kg/m^3]")
-    ax_coala.set_ylim(1e-22, 1e-12)
+    ax_coala.set_ylim(1e-21, 1e-11)
     fig_coala.colorbar(cm.ScalarMappable(cmap=z_cmap, norm=z_norm), ax=ax_coala, label="z [au]")
 
-    ax_zsum.plot(zbins_centers, mdust_zsums, marker="o", markersize=3, color="0.3")
+    for idust in range(ndust):
+        ax_zsum.plot(
+            zbins_centers, mdust_zsums[:, idust], marker="o", markersize=3, color=dust_colors[idust]
+        )
+
+    ax_zsum.plot(zbins_centers, mdust_zsums_all, marker="o", markersize=3, color="0.5")
+    ax_zsum.plot(zbins_centers, mgas_zsums, marker="o", markersize=3, color="0.0")
+    ax_zsum.legend(handles=[gas_handle, dust_handle], loc="upper right", fontsize=8)
+
+    fig_coala.colorbar(dust_sm, ax=ax_zsum, label="grain size [m]")
 
     print(f"mdust_zsums = {mdust_zsums}")
     print(f"zbins_centers = {zbins_centers}")
     ax_zsum.set_ylabel(r"$\sum m_{\rm dust}$ in $z$ bin")
     ax_zsum.set_xlabel("z [au]")
     ax_zsum.set_yscale("log")
-    ax_zsum.set_ylim(1e-16, 1e-12)
+    ax_zsum.set_ylim(1e-15, 1e-9)
 
     fig_coala.tight_layout()
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")
