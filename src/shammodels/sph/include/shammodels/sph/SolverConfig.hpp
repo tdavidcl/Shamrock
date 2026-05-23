@@ -146,6 +146,34 @@ namespace shammodels::sph {
             return bool(std::get_if<MonofluidComplete>(&current_mode));
         }
 
+        inline void mode_to_json(nlohmann::json &j) const {
+            if (const None *cfg = std::get_if<None>(&current_mode)) {
+                j = {"type", "none"};
+            } else if (const MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
+                j
+                    = {{"type", "monofluid_tvi"},
+                       {"ndust", cfg->ndust}};
+            } else if (const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
+                j
+                    = {{"type", "monofluid_complete"},
+                       {"ndust", cfg->ndust}};
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
+        inline void mode_from_json(const nlohmann::json &j) {
+            if (j.at("type").get<std::string>() == "none") {
+                set_none();
+            } else if (j.at("type").get<std::string>() == "monofluid_tvi") {
+                set_monofluid_tvi(j.at("ndust").get<u32>());
+            } else if (j.at("type").get<std::string>() == "monofluid_complete") {
+                set_monofluid_complete(j.at("ndust").get<u32>());
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
         inline bool has_s_j_field() {
             return is_monofluid_tvi(); // S_j = sqrt(\rho \epsilon_j)
         }
@@ -185,11 +213,73 @@ namespace shammodels::sph {
 
         std::variant<None, ConstantStoppingTimes, EpsteinDrag> dust_drag_mode = None{};
 
+        inline void drag_mode_to_json(nlohmann::json &j) const{
+            if (std::holds_alternative<None>(dust_drag_mode)) {
+                j = {"type", "none"};
+            } else if (
+                const ConstantStoppingTimes *cfg = std::get_if<ConstantStoppingTimes>(&dust_drag_mode)) {
+                j = {{"type", "constant_stopping_times"}, {"stopping_times", cfg->stopping_times}};
+            } else if (const EpsteinDrag *cfg = std::get_if<EpsteinDrag>(&dust_drag_mode)) {
+                j
+                    = {{"type", "epstein_drag"},
+                       {"grains_sizes", cfg->grains_sizes},
+                       {"grains_densities", cfg->grains_densities}};
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
+        inline void drag_mode_from_json(const nlohmann::json &j) {
+            if (j.at("type").get<std::string>() == "none") {
+                dust_drag_mode = None{};
+            } else if (j.at("type").get<std::string>() == "constant_stopping_times") {
+                dust_drag_mode
+                    = ConstantStoppingTimes{j.at("stopping_times").get<std::vector<Tscal>>()};
+            } else if (j.at("type").get<std::string>() == "epstein_drag") {
+                dust_drag_mode = EpsteinDrag{
+                    j.at("grains_sizes").get<std::vector<Tscal>>(),
+                    j.at("grains_densities").get<std::vector<Tscal>>()};
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
         inline void set_drag_constant(ConstantStoppingTimes in) { dust_drag_mode = in; }
 
         inline void set_drag_epstein(EpsteinDrag in) { dust_drag_mode = in; }
 
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
+
+        inline void evol_mode_to_json(nlohmann::json &j) const {
+            if (std::holds_alternative<None>(dust_evol_config)) {
+                j = {"type", "none"};
+            } else if (
+               const  DustEvolCoalaCoag<Tscal> *cfg
+                = std::get_if<DustEvolCoalaCoag<Tscal>>(&dust_evol_config)) {
+                j
+                    = {{"type", "coala_coag"},
+                       {"rhodust_eps", cfg->rhodust_eps},
+                       {"dv_max", cfg->dv_max},
+                       {"massgrid", cfg->massgrid},
+                       {"tabflux_coag", cfg->tabflux_coag}};
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
+        inline void evol_mode_from_json(const nlohmann::json &j) {
+            if (j.at("type").get<std::string>() == "none") {
+                dust_evol_config = None{};
+            } else if (j.at("type").get<std::string>() == "coala_coag") {
+                dust_evol_config = DustEvolCoalaCoag<Tscal>{
+                    .rhodust_eps  = j.at("rhodust_eps").get<Tscal>(),
+                    .dv_max       = j.at("dv_max").get<Tscal>(),
+                    .massgrid     = j.at("massgrid").get<std::vector<Tscal>>(),
+                    .tabflux_coag = j.at("tabflux_coag").get<std::vector<Tscal>>()};
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
 
         inline void set_dust_evol_coala(DustEvolCoalaCoag<Tscal> cfg) { dust_evol_config = cfg; }
 
@@ -200,10 +290,9 @@ namespace shammodels::sph {
                     shambase::throw_with_loc<std::runtime_error>(
                         "Dust config != None is experimental");
                 } else {
-                    ON_RANK_0(
-                        logger::warn_ln(
-                            "SPH::config",
-                            "Dust config != None is work in progress, use it at your own risk"));
+                    ON_RANK_0(logger::warn_ln(
+                        "SPH::config",
+                        "Dust config != None is work in progress, use it at your own risk"));
                 }
 
                 if (std::holds_alternative<None>(dust_drag_mode)) {
@@ -1212,6 +1301,24 @@ namespace shammodels::sph {
         }
     }
 
+    // JSON serialization for DustConfig
+    template<class Tvec>
+    inline void to_json(nlohmann::json &j, const DustConfig<Tvec> &p) {
+        j
+            = {};
+
+            p.mode_to_json(j["mode"] );
+            p.drag_mode_to_json(j["drag_mode"]);
+            p.evol_mode_to_json(j["evol_mode"]);
+    }
+
+    template<class Tvec>
+    inline void from_json(const nlohmann::json &j, DustConfig<Tvec> &p) {
+        p.mode_from_json(j.at("mode"));
+        p.drag_mode_from_json(j.at("drag_mode"));
+        p.evol_mode_from_json(j.at("evol_mode"));
+    }
+
     /**
      * @brief Serializes a SolverConfig object to a JSON object.
      *
@@ -1239,6 +1346,8 @@ namespace shammodels::sph {
             {"time_state", p.time_state},
             // mhd config
             {"mhd_config", p.mhd_config},
+            // dust config
+            {"dust_config", p.dust_config},
             // self gravity config
             {"self_grav_config", p.self_grav_config},
             // tree config
@@ -1329,6 +1438,7 @@ namespace shammodels::sph {
         _get_to_if_contains("unit_sys", p.unit_sys);
         _get_to_if_contains("time_state", p.time_state);
         _get_to_if_contains("mhd_config", p.mhd_config);
+        _get_to_if_contains("dust_config", p.dust_config);
         _get_to_if_contains("self_grav_config", p.self_grav_config);
         _get_to_if_contains("tree_reduction_level", p.tree_reduction_level);
         _get_to_if_contains("use_two_stage_search", p.use_two_stage_search);

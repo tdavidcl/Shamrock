@@ -53,8 +53,18 @@ print("codeu.to('m') / codeu.to('s') =", codeu.to("m") / codeu.to("s"))
 
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5
-rhodust_eps = 1e-15
+rhodust_eps = 1e-17
 K0_multiplier = 100
+
+
+sim_folder = f"dusty_settle_coag/"
+dump_folder = sim_folder + "dump/"
+
+# %%
+# Create the dump directory if it does not exist
+if shamrock.sys.world_rank() == 0:
+    os.makedirs(sim_folder, exist_ok=True)
+    os.makedirs(dump_folder, exist_ok=True)
 
 G = ucte.G()
 
@@ -148,8 +158,8 @@ print(f"K0 = {K0}")
 tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
 
-bmin = (-box / 4, -box / 4, -box)
-bmax = (box / 4, box / 4, box)
+bmin = (-box / 8, -box / 8, -box)
+bmax = (box / 8, box / 8, box)
 
 N_target = 2e4
 scheduler_split_val = int(2e7)
@@ -174,77 +184,84 @@ ctx.pdata_layout_new()
 
 model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
 
-cfg = model.gen_default_config()
-# cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
-# cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
-cfg.set_artif_viscosity_VaryingCD10(
-    alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
-)
+dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_folder)
 
-cfg.set_dust_mode_monofluid_tvi(ndust)
-cfg.set_dust_drag_epstein(grain_size, rho_grains)
-if do_coag:
-    cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
+def setup_model():
+    global bmin, bmax
 
-cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
-cfg.add_ext_force_velocity_dissipation(eta=10)
-cfg.set_boundary_periodic()
-cfg.set_units(codeu)
-cfg.set_eos_isothermal(cs)
-cfg.print_status()
-model.set_solver_config(cfg)
+    cfg = model.gen_default_config()
+    # cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
+    # cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
+    cfg.set_artif_viscosity_VaryingCD10(
+        alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
+    )
 
-model.init_scheduler(int(1e8), 1)
+    cfg.set_dust_mode_monofluid_tvi(ndust)
+    cfg.set_dust_drag_epstein(grain_size, rho_grains)
+    if do_coag:
+        cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
 
+    cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
+    cfg.add_ext_force_velocity_dissipation(eta=10)
+    cfg.set_boundary_periodic()
+    cfg.set_units(codeu)
+    cfg.set_eos_isothermal(cs)
+    cfg.print_status()
+    model.set_solver_config(cfg)
 
-bmin, bmax = model.get_ideal_hcp_box(dr, bmin, bmax)
-xm, ym, zm = bmin
-xM, yM, zM = bmax
-
-model.resize_simulation_box(bmin, bmax)
-
-setup = model.get_setup()
-gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
-setup.apply_setup(gen, insert_step=scheduler_split_val)
-
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
-totmass = rho_i * vol_b
-print("Total mass :", totmass)
-
-pmass = model.total_mass_to_part_mass(totmass)
-model.set_particle_mass(pmass)
-print("Current part mass :", pmass)
-
-# Correct the barycenter
-analysis_barycenter = shamrock.model_sph.analysisBarycenter(model=model)
-barycenter, disc_mass = analysis_barycenter.get_barycenter()
-
-if shamrock.sys.world_rank() == 0:
-    print(f"disc barycenter = {barycenter}")
-
-model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
+    model.init_scheduler(int(1e8), 1)
 
 
-def f_remap(r):
-    x, y, z = r
+    bmin, bmax = model.get_ideal_hcp_box(dr, bmin, bmax)
+    xm, ym, zm = bmin
+    xM, yM, zM = bmax
 
-    rn = max(abs(zM), abs(zm))
-    # print(y, H, H * erfinv(y / rn))
-    z = H * erfinv(z / rn)
+    model.resize_simulation_box(bmin, bmax)
 
-    z = min(z, zM)
-    z = max(z, zm)
-    return (x, y, z)
+    setup = model.get_setup()
+    gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
+    setup.apply_setup(gen, insert_step=scheduler_split_val)
+
+    vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+    totmass = rho_i * vol_b
+    print("Total mass :", totmass)
+
+    pmass = model.total_mass_to_part_mass(totmass)
+    model.set_particle_mass(pmass)
+    print("Current part mass :", pmass)
+
+    # Correct the barycenter
+    analysis_barycenter = shamrock.model_sph.analysisBarycenter(model=model)
+    barycenter, disc_mass = analysis_barycenter.get_barycenter()
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"disc barycenter = {barycenter}")
+
+    model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
 
 
-model.remap_positions(f_remap)
-model.set_field_value_lambda_f64("uint", uint_g)
+    def f_remap(r):
+        x, y, z = r
+
+        rn = max(abs(zM), abs(zm))
+        # print(y, H, H * erfinv(y / rn))
+        z = H * erfinv(z / rn)
+
+        z = min(z, zM)
+        z = max(z, zm)
+        return (x, y, z)
 
 
-model.set_cfl_cour(0.1)
-model.set_cfl_force(0.1)
+    model.remap_positions(f_remap)
+    model.set_field_value_lambda_f64("uint", uint_g)
 
-model.timestep()
+
+    model.set_cfl_cour(0.1)
+    model.set_cfl_force(0.1)
+
+    model.timestep()
+
+dump_helper.load_last_dump_or(setup_model)
 
 mrn_weight = grain_size ** (4 - mrn_pow)
 mrn_weight *= grain_size_si < mrn_cutoff
@@ -252,8 +269,10 @@ mrn_weight = mrn_weight / np.sum(mrn_weight)
 
 print(f"mrn_weight = {mrn_weight}")
 
-
+pmass = model.get_particle_mass()
 def compute_sj_new_j(patchdata, j):
+    global pmass
+
     hpart = patchdata["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
@@ -265,6 +284,8 @@ def compute_sj_new_j(patchdata, j):
     print(f"epsilon_target = {epsilon_target} {j}")
     s = np.sqrt(rho * epsilon_target)
 
+    print(f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]} mask = {mask}, rho = {rho}")
+
     return s
 
 
@@ -273,20 +294,10 @@ def compute_sj_new_j(patchdata, j):
 cmap = "plasma"
 dpi = 250
 
-tnext = 0
-for j in range(1000):
-    if j == 0:
-        for k in range(ndust):
+def analyse_and_plot(j):
 
-            def compute_sj_new(patchdata):
-                return compute_sj_new_j(patchdata, k)
-
-            model.overwrite_field_value_f64("s_j", compute_sj_new, k)
-
-    if j > 0:
-        tnext += 0.1
-        model.evolve_until(tnext)
-        # model.timestep()
+    pmass = model.get_particle_mass()
+    hfact = model.get_hfact()
 
     dic = ctx.collect_data()
     print(dic["s_j"])
@@ -303,7 +314,7 @@ for j in range(1000):
     print(s_j)
 
     hpart = dic["hpart"]
-    rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
+    rho = pmass * (hfact / np.array(hpart)) ** 3
 
     print("compute original rho")
     estimated_rho = [func_rho_t(dic["xyz"][kk]) for kk in range(len(dic["xyz"]))]
@@ -329,7 +340,7 @@ for j in range(1000):
         c = dust_colors[i]
         axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
         axs[1].scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
-        axs[2].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
+        axs[2].scatter(z, 2*s_j[:, i]*ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
 
         rho_dust_all += s_j[:, i] ** 2 * to_dens
         epsilon_dust_all += s_j[:, i] ** 2 / rho
@@ -351,7 +362,7 @@ for j in range(1000):
     axs[1].set_yscale("log")
     axs[1].set_ylim(1e-12, 2)
 
-    axs[2].set_ylabel(r"$\frac{d s_j}{dt}$")
+    axs[2].set_ylabel(r"$\dot{\rho}_{d,j} = 2 s_j \frac{d s_j}{dt}$")
     axs[2].set_xlabel(r"$z$")
 
     gas_handle = Line2D(
@@ -480,3 +491,30 @@ for j in range(1000):
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")
     # plt.show()
     plt.close(fig_coala)
+
+
+t_start = model.get_time()
+
+tlist = [i * 0.1 for i in range(3000)]
+
+tnext = 0
+for j in range(1000):
+
+    if tlist[j] >= t_start:
+        
+        if j > 0:
+            model.evolve_until(tlist[j])
+            # model.timestep()
+
+        if j == 30:
+                for k in range(ndust):
+
+                    def compute_sj_new(patchdata):
+                        return compute_sj_new_j(patchdata, k)
+
+                    model.overwrite_field_value_f64("s_j", compute_sj_new, k)
+                model.set_dt(0.0) # to help the corrector on next step after adding dust
+
+        analyse_and_plot(j)
+
+        dump_helper.write_dump(j, purge_old_dumps=True, keep_first=1, keep_last=3)
