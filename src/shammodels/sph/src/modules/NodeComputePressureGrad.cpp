@@ -91,9 +91,6 @@ struct KernelComputePressureGrad {
                 r_ab_unit * Fab_b);
         });
 
-        if (id_a == 1408)
-            logger::raw_ln("force_pressure", force_pressure, P_a, omega_a, rho_a);
-
         grad_P_on_rho[id_a] = force_pressure;
     }
 };
