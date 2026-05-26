@@ -57,7 +57,7 @@ rhodust_eps = 1e-17
 K0_multiplier = 100
 
 
-sim_folder = f"dusty_settle_coag/"
+sim_folder = "dusty_settle_coag/"
 dump_folder = sim_folder + "dump/"
 
 # %%
@@ -186,6 +186,7 @@ model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6"
 
 dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_folder)
 
+
 def setup_model():
     global bmin, bmax
 
@@ -210,7 +211,6 @@ def setup_model():
     model.set_solver_config(cfg)
 
     model.init_scheduler(int(1e8), 1)
-
 
     bmin, bmax = model.get_ideal_hcp_box(dr, bmin, bmax)
     xm, ym, zm = bmin
@@ -239,7 +239,6 @@ def setup_model():
 
     model.apply_position_offset((-barycenter[0], -barycenter[1], -barycenter[2]))
 
-
     def f_remap(r):
         x, y, z = r
 
@@ -251,15 +250,14 @@ def setup_model():
         z = max(z, zm)
         return (x, y, z)
 
-
     model.remap_positions(f_remap)
     model.set_field_value_lambda_f64("uint", uint_g)
-
 
     model.set_cfl_cour(0.1)
     model.set_cfl_force(0.1)
 
     model.timestep()
+
 
 dump_helper.load_last_dump_or(setup_model)
 
@@ -270,6 +268,8 @@ mrn_weight = mrn_weight / np.sum(mrn_weight)
 print(f"mrn_weight = {mrn_weight}")
 
 pmass = model.get_particle_mass()
+
+
 def compute_sj_new_j(patchdata, j):
     global pmass
 
@@ -284,7 +284,9 @@ def compute_sj_new_j(patchdata, j):
     print(f"epsilon_target = {epsilon_target} {j}")
     s = np.sqrt(rho * epsilon_target)
 
-    print(f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]} mask = {mask}, rho = {rho}")
+    print(
+        f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]} mask = {mask}, rho = {rho}"
+    )
 
     return s
 
@@ -293,6 +295,7 @@ def compute_sj_new_j(patchdata, j):
 
 cmap = "plasma"
 dpi = 250
+
 
 def analyse_and_plot(j):
 
@@ -340,7 +343,7 @@ def analyse_and_plot(j):
         c = dust_colors[i]
         axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
         axs[1].scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
-        axs[2].scatter(z, 2*s_j[:, i]*ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
+        axs[2].scatter(z, 2 * s_j[:, i] * ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
 
         rho_dust_all += s_j[:, i] ** 2 * to_dens
         epsilon_dust_all += s_j[:, i] ** 2 / rho
@@ -499,21 +502,19 @@ tlist = [i * 0.1 for i in range(3000)]
 
 tnext = 0
 for j in range(1000):
-
     if tlist[j] >= t_start:
-        
         if j > 0:
             model.evolve_until(tlist[j])
             # model.timestep()
 
         if j == 30:
-                for k in range(ndust):
+            for k in range(ndust):
 
-                    def compute_sj_new(patchdata):
-                        return compute_sj_new_j(patchdata, k)
+                def compute_sj_new(patchdata):
+                    return compute_sj_new_j(patchdata, k)
 
-                    model.overwrite_field_value_f64("s_j", compute_sj_new, k)
-                model.set_dt(0.0) # to help the corrector on next step after adding dust
+                model.overwrite_field_value_f64("s_j", compute_sj_new, k)
+            model.set_dt(0.0)  # to help the corrector on next step after adding dust
 
         analyse_and_plot(j)
 

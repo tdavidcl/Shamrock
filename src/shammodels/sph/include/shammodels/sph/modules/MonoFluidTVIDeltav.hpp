@@ -25,7 +25,7 @@
 #include "shamrock/solvergraph/ScalarEdge.hpp"
 #include "shamsys/NodeInstance.hpp"
 
-#define MONO_FLUID_TVI_DELTAV_EDGES(X_RO, X_RW)                                                    \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
                                                                                                    \
@@ -54,7 +54,7 @@ namespace shammodels::sph::modules {
         public:
         MonoFluidTVIDeltav(u32 ndust) : ndust(ndust) {}
 
-        EXPAND_NODE_EDGES(MONO_FLUID_TVI_DELTAV_EDGES)
+        EXPAND_NODE_EDGES(NODE_EDGES)
 
         inline void _impl_evaluate_internal() {
 
@@ -113,21 +113,15 @@ namespace shammodels::sph::modules {
                         return sj * sj / rho_a;
                     };
 
+                    Tscal eps_j_a = epsilon(sj_a);
+
                     /*
                      * Hutchison 2018 eq 15
                      * T_{sj} = \epsilon_j (1 - \epsilon_j) t_j
                      * delta_v = \epsilon_j t_j \nabla P / rho = T_{sj} \nabla P / rho_g
                      */
 
-                    Tscal eps_j_a = epsilon(sj_a);
-
-                    auto tmp = (eps_j_a * tj_a) * grad_P_on_rho_a;
-
-                    if (id_a == 1408)
-                        logger::raw_ln(
-                            "delta v", jdust, tmp, grad_P_on_rho_a, rho_a, eps_j_a, tj_a);
-
-                    delta_v[thread_id] = tmp;
+                    delta_v[thread_id] = (eps_j_a * tj_a) * grad_P_on_rho_a;
                 });
         }
 
@@ -138,7 +132,7 @@ namespace shammodels::sph::modules {
             auto gpart_mass    = get_ro_edge_base(0).get_tex_symbol();
             auto part_counts   = get_ro_edge_base(1).get_tex_symbol();
             auto hpart         = get_ro_edge_base(2).get_tex_symbol();
-            auto grad_pressure = get_ro_edge_base(3).get_tex_symbol();
+            auto grad_p_on_rho = get_ro_edge_base(3).get_tex_symbol();
             auto s_j           = get_ro_edge_base(4).get_tex_symbol();
             auto t_j           = get_ro_edge_base(5).get_tex_symbol();
             auto delta_v       = get_rw_edge_base(0).get_tex_symbol();
@@ -148,7 +142,7 @@ namespace shammodels::sph::modules {
 
                 \begin{align}
                 \epsilon_{i,j} = \frac{{s_j}_{i,j}^2}{{rho}_i ({hpart}_i)} \\
-                {delta_v}_{i,j} = \epsilon_{i,j} {t_j}_{i,j} {grad_pressure}_i / {rho}_i \\
+                {delta_v}_{i,j} = \epsilon_{i,j} {t_j}_{i,j} {grad_p_on_rho}_i  \\
                 i \in [0,{part_counts}] \\
                 j \in [0,{ndust}]
                 \end{align}
@@ -157,7 +151,7 @@ namespace shammodels::sph::modules {
             shambase::replace_all(tex, "{gpart_mass}", gpart_mass);
             shambase::replace_all(tex, "{part_counts}", part_counts);
             shambase::replace_all(tex, "{hpart}", hpart);
-            shambase::replace_all(tex, "{grad_pressure}", grad_pressure);
+            shambase::replace_all(tex, "{grad_p_on_rho}", grad_p_on_rho);
             shambase::replace_all(tex, "{s_j}", s_j);
             shambase::replace_all(tex, "{t_j}", t_j);
             shambase::replace_all(tex, "{delta_v}", delta_v);
@@ -166,3 +160,5 @@ namespace shammodels::sph::modules {
         };
     };
 } // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
