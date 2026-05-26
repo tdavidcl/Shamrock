@@ -16,6 +16,7 @@
  *
  */
 
+#include "shambase/string.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
@@ -28,7 +29,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include <vector>
 
-#define NODE_SET_DUST_STOPPING_TIME_EPSTEIN_EDGES(X_RO, X_RW)                                      \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gamma)                                          \
@@ -52,14 +53,14 @@ namespace shammodels::sph::modules {
         using Tscal  = shambase::VecComponent<Tvec>;
         using Kernel = SPHKernel<Tscal>;
 
-        static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
-
         u32 ndust;
+        std::unique_ptr<sham::DeviceBuffer<Tscal>> sgrain_j;
+        std::unique_ptr<sham::DeviceBuffer<Tscal>> rho_grain_j;
 
         public:
         SetDustStoppingTimeEpstein(u32 ndust) : ndust(ndust) {}
 
-        EXPAND_NODE_EDGES(NODE_SET_DUST_STOPPING_TIME_EPSTEIN_EDGES)
+        EXPAND_NODE_EDGES(NODE_EDGES)
 
         inline void _impl_evaluate_internal() {
 
@@ -70,16 +71,25 @@ namespace shammodels::sph::modules {
             auto &part_counts                            = edges.part_counts.indexes;
             const std::vector<Tscal> &inputs_sgrain_j    = edges.sgrain_j.value;
             const std::vector<Tscal> &inputs_rho_grain_j = edges.rho_grain_j.value;
+            SHAM_ASSERT(inputs_sgrain_j.size() == ndust);
+            SHAM_ASSERT(inputs_rho_grain_j.size() == ndust);
 
             // ensure that the output edges are of size part_counts
             edges.t_j.ensure_sizes(part_counts);
 
             auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-            sham::DeviceBuffer<Tscal> sgrain_j(ndust, dev_sched);
-            sham::DeviceBuffer<Tscal> rho_grain_j(ndust, dev_sched);
-            sgrain_j.copy_from_stdvec(inputs_sgrain_j);
-            rho_grain_j.copy_from_stdvec(inputs_rho_grain_j);
+            if (!sgrain_j) {
+                sgrain_j = std::make_unique<sham::DeviceBuffer<Tscal>>(ndust, dev_sched);
+            }
+            if (!rho_grain_j) {
+                rho_grain_j = std::make_unique<sham::DeviceBuffer<Tscal>>(ndust, dev_sched);
+            }
+
+            sgrain_j->resize(ndust);
+            rho_grain_j->resize(ndust);
+            sgrain_j->copy_from_stdvec(inputs_sgrain_j);
+            rho_grain_j->copy_from_stdvec(inputs_rho_grain_j);
 
             auto &q = shamsys::instance::get_compute_scheduler().get_queue();
 
@@ -92,12 +102,12 @@ namespace shammodels::sph::modules {
                 sham::kernel_call(
                     q,
                     sham::MultiRef{
-                        sgrain_j,
-                        rho_grain_j,
+                        *sgrain_j,
+                        *rho_grain_j,
                         edges.hpart.get_spans().get(id),
                         edges.cs.get_spans().get(id)},
                     sham::MultiRef{edges.t_j.get_spans().get(id)},
-                    part_counts.get(id) * ndust,
+                    count * ndust,
                     [ndust = ndust, pmass, gamma](
                         u32 thread_id,
                         const Tscal *__restrict sgrain_j,
@@ -120,16 +130,51 @@ namespace shammodels::sph::modules {
                         auto ts = shamphys::epstein_stopping_time(
                             rho_grain, sgrain, rho_a, cs_a, gamma);
 
-                        if (id_a == 1408)
-                            logger::raw_ln("ts", jdust, ts, rho_grain, sgrain, rho_a, cs_a, gamma);
-
                         t_j[thread_id] = ts;
                     });
             });
         }
 
-        inline virtual std::string _impl_get_label() const { return "ComputeDustTtilde"; };
+        inline virtual std::string _impl_get_label() const { return "SetDustStoppingTimeEpstein"; };
 
-        inline virtual std::string _impl_get_tex() const { return "TODO"; };
+        inline virtual std::string _impl_get_tex() const {
+
+            auto gpart_mass  = get_ro_edge_base(0).get_tex_symbol();
+            auto gamma       = get_ro_edge_base(1).get_tex_symbol();
+            auto sgrain_j    = get_ro_edge_base(2).get_tex_symbol();
+            auto rho_grain_j = get_ro_edge_base(3).get_tex_symbol();
+            auto part_counts = get_ro_edge_base(4).get_tex_symbol();
+            auto hpart       = get_ro_edge_base(5).get_tex_symbol();
+            auto cs          = get_ro_edge_base(6).get_tex_symbol();
+            auto t_j         = get_rw_edge_base(0).get_tex_symbol();
+
+            std::string tex = R"tex(
+                SetDustStoppingTimeEpstein (PHANTOM eq.~250, subsonic)
+
+                \begin{align}
+                \rho_i &= {gpart_mass} \left( \frac{h_{\rm fact}}{ {hpart}_i } \right)^3 \\
+                {t_j}_{i,j} &= \frac{ {rho_grain_j}_j \, {sgrain_j}_j }{ \rho_i \, {cs}_i }
+                    \sqrt{\frac{\pi \, {gamma}}{8}} \\
+                i &\in [0,{part_counts}) \\
+                j &\in [0,{ndust}) \\
+                h_{\rm fact} &= {hfact}
+                \end{align}
+            )tex";
+
+            shambase::replace_all(tex, "{gpart_mass}", gpart_mass);
+            shambase::replace_all(tex, "{gamma}", gamma);
+            shambase::replace_all(tex, "{sgrain_j}", sgrain_j);
+            shambase::replace_all(tex, "{rho_grain_j}", rho_grain_j);
+            shambase::replace_all(tex, "{part_counts}", part_counts);
+            shambase::replace_all(tex, "{ndust}", shambase::format("{}", ndust));
+            shambase::replace_all(tex, "{hpart}", hpart);
+            shambase::replace_all(tex, "{cs}", cs);
+            shambase::replace_all(tex, "{t_j}", t_j);
+            shambase::replace_all(tex, "{hfact}", shambase::format("{}", Kernel::hfactd));
+
+            return tex;
+        };
     };
 } // namespace shammodels::sph::modules
+
+#undef NODE_EDGES

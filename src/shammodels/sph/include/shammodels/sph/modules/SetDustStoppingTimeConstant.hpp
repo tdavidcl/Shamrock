@@ -16,10 +16,10 @@
  *
  */
 
+#include "shambase/string.hpp"
 #include "shambackends/DeviceBuffer.hpp"
-#include "shambackends/kernel_call_distrib.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shambackends/vec.hpp"
-#include "shammodels/sph/math/density.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
@@ -27,7 +27,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include <vector>
 
-#define NODE_SET_DUST_STOPPING_TIME_CTE_EDGES(X_RO, X_RW)                                          \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>, t_j_0)                             \
                                                                                                    \
@@ -45,11 +45,12 @@ namespace shammodels::sph::modules {
         using Tscal = shambase::VecComponent<Tvec>;
 
         u32 ndust;
+        std::unique_ptr<sham::DeviceBuffer<Tscal>> t_j_0;
 
         public:
         SetDustStoppingTimeConstant(u32 ndust) : ndust(ndust) {}
 
-        EXPAND_NODE_EDGES(NODE_SET_DUST_STOPPING_TIME_CTE_EDGES)
+        EXPAND_NODE_EDGES(NODE_EDGES)
 
         inline void _impl_evaluate_internal() {
 
@@ -59,12 +60,17 @@ namespace shammodels::sph::modules {
 
             auto &part_counts                   = edges.part_counts.indexes;
             const std::vector<Tscal> &inputs_tj = edges.t_j_0.value;
+            SHAM_ASSERT(inputs_tj.size() == ndust);
 
             // ensure that the output edges are of size part_counts
             edges.t_j.ensure_sizes(part_counts);
 
-            sham::DeviceBuffer<Tscal> t_j_0(ndust, shamsys::instance::get_compute_scheduler_ptr());
-            t_j_0.copy_from_stdvec(inputs_tj);
+            if (!t_j_0) {
+                t_j_0 = std::make_unique<sham::DeviceBuffer<Tscal>>(
+                    ndust, shamsys::instance::get_compute_scheduler_ptr());
+            }
+            t_j_0->resize(ndust);
+            t_j_0->copy_from_stdvec(inputs_tj);
 
             auto &q = shamsys::instance::get_compute_scheduler().get_queue();
 
@@ -73,9 +79,9 @@ namespace shammodels::sph::modules {
                 // id_patch
                 sham::kernel_call(
                     q,
-                    sham::MultiRef{t_j_0},
+                    sham::MultiRef{*t_j_0},
                     sham::MultiRef{edges.t_j.get_spans().get(id)},
-                    part_counts.get(id) * ndust,
+                    count * ndust,
                     [ndust
                      = ndust](u32 thread_id, const Tscal *__restrict t_j_0, Tscal *__restrict t_j) {
                         u32 jdust      = thread_id % ndust;
@@ -84,8 +90,34 @@ namespace shammodels::sph::modules {
             });
         }
 
-        inline virtual std::string _impl_get_label() const { return "ComputeDustTtilde"; };
+        inline virtual std::string _impl_get_label() const {
+            return "SetDustStoppingTimeConstant";
+        };
 
-        inline virtual std::string _impl_get_tex() const { return "TODO"; };
+        inline virtual std::string _impl_get_tex() const {
+
+            auto t_j_0       = get_ro_edge_base(0).get_tex_symbol();
+            auto part_counts = get_ro_edge_base(1).get_tex_symbol();
+            auto t_j         = get_rw_edge_base(0).get_tex_symbol();
+
+            std::string tex = R"tex(
+                SetDustStoppingTimeConstant
+
+                \begin{align}
+                {t_j}_{i,j} &= {t_j_0}_j \\
+                i &\in [0,{part_counts}) \\
+                j &\in [0,{ndust})
+                \end{align}
+            )tex";
+
+            shambase::replace_all(tex, "{t_j_0}", t_j_0);
+            shambase::replace_all(tex, "{part_counts}", part_counts);
+            shambase::replace_all(tex, "{ndust}", shambase::format("{}", ndust));
+            shambase::replace_all(tex, "{t_j}", t_j);
+
+            return tex;
+        };
     };
 } // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
