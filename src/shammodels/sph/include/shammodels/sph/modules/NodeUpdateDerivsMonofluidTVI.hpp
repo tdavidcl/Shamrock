@@ -23,7 +23,8 @@
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
 
-#define NODE_UPDATE_DERIVS_MONOFLUID_TVI_EDGES(X_RO, X_RW)                                         \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- inputs ------------------- */                                           \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
                                                                                                    \
@@ -43,7 +44,7 @@
     /* neigh */                                                                                    \
     X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
                                                                                                    \
-    /* outputs */                                                                                  \
+    /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, ds_j_dt)
 
 namespace shammodels::sph::modules {
@@ -60,7 +61,7 @@ namespace shammodels::sph::modules {
         public:
         NodeUpdateDerivsMonofluidTVI(u32 ndust) : ndust(ndust) {}
 
-        EXPAND_NODE_EDGES(NODE_UPDATE_DERIVS_MONOFLUID_TVI_EDGES)
+        EXPAND_NODE_EDGES(NODE_EDGES)
 
         void _impl_evaluate_internal();
 
@@ -68,6 +69,8 @@ namespace shammodels::sph::modules {
             return "NodeUpdateDerivsMonofluidTVI";
         };
 
-        inline virtual std::string _impl_get_tex() const { return "TODO"; };
+        virtual std::string _impl_get_tex() const;
     };
 } // namespace shammodels::sph::modules
+
+#undef NODE_EDGES

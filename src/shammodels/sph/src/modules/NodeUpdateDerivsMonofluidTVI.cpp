@@ -14,12 +14,12 @@
  *
  */
 
-#include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
+#include "shambase/string.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
-#include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
-#include "shamrock/patch/PatchDataField.hpp"
+#include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
+#include "shamrock/patch/PatchDataField.hpp" // IWYU pragma: keep
 
 template<class Tvec, template<class> class SPHKernel>
 struct KernelUpdateDerivsMonofluidTVI {
@@ -97,19 +97,9 @@ struct KernelUpdateDerivsMonofluidTVI {
             Tscal delta_P     = P_a - P_b;
             Tscal Ts_weighted = (Ttilde_sj_a / rho_a + Ttilde_sj_b / rho_b);
 
-            // logger::raw_ln("Ts_weighted", Ts_weighted);
-
             term1 += (pmass * s_j_b / rho_b) * Ts_weighted * delta_P * F_ab_bar;
             term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
         });
-
-        if (id_a == 1408)
-            logger::raw_ln(
-                "term1",
-                term1,
-                term2,
-                Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2,
-                xyz_a);
 
         // eq 51, Hutchison 2018
         ds_j_dt[thread_id] = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
@@ -162,6 +152,75 @@ void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>::
         sham::DDMultiRef{edges.ds_j_dt.get_spans()},
         total_specie_count,
         ComputeKernel{pmass, ndust});
+}
+
+template<class Tvec, template<class> class SPHKernel>
+std::string shammodels::sph::modules::NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>::_impl_get_tex()
+    const {
+    auto gpart_mass  = get_ro_edge_base(0).get_tex_symbol();
+    auto part_counts = get_ro_edge_base(1).get_tex_symbol();
+    auto xyz         = get_ro_edge_base(3).get_tex_symbol();
+    auto hpart       = get_ro_edge_base(4).get_tex_symbol();
+    auto vxyz        = get_ro_edge_base(5).get_tex_symbol();
+    auto omega       = get_ro_edge_base(6).get_tex_symbol();
+    auto pressure    = get_ro_edge_base(7).get_tex_symbol();
+    auto s_j         = get_ro_edge_base(8).get_tex_symbol();
+    auto Ttilde_sj   = get_ro_edge_base(9).get_tex_symbol();
+    auto ds_j_dt     = get_rw_edge_base(0).get_tex_symbol();
+
+    const std::string ndust_str         = std::to_string(ndust);
+    const std::string kernel_radius_str = std::to_string(kernel_radius);
+
+    std::string tex = R"tex(
+        NodeUpdateDerivsMonofluidTVI (eq. 51, Hutchison 2018)
+
+        For gas particle $a$ and dust bin $j$:
+
+        \begin{align}
+        \rho_a &= \rho_h({gpart_mass}, {hpart}_a) \\
+        \rho_b &= \rho_h({gpart_mass}, {hpart}_b) \\
+        \mathbf{v}_{a,b} &= {vxyz}_a - {vxyz}_b \\
+        \hat{\mathbf{r}}_{a,b} &= \frac{{xyz}_a - {xyz}_b}{\lvert {xyz}_a - {xyz}_b\rvert} \\
+        F_{a,b}^a &= \mathrm{d}W_{3d}(\lvert \mathbf{r}_{a,b}\rvert, {hpart}_a) \\
+        F_{a,b}^b &= \mathrm{d}W_{3d}(\lvert \mathbf{r}_{a,b}\rvert, {hpart}_b) \\
+        \bar{F}_{a,b} &= \frac{F_{a,b}^a + F_{a,b}^b}{2} \\
+        T^{\rm w}_{j,a,b} &= \frac{{Ttilde_sj}_{j,a}}{\rho_a} + \frac{{Ttilde_sj}_{j,b}}{\rho_b}
+        \\
+        {ds_j_dt}_{j,a} &=
+            -\frac{1}{2}\sum_{b \in \mathcal{N}(a)}
+            {gpart_mass}\;
+            \frac{{s_j}_{j,b}}{\rho_b}\;
+            T^{\rm w}_{j,a,b}\;
+            ({pressure}_a - {pressure}_b)\;
+            \bar{F}_{a,b}
+        \\
+        &\quad +
+            \frac{{s_j}_{j,a}}{2\rho_a\,{omega}_a}
+            \sum_{b \in \mathcal{N}(a)}
+            {gpart_mass}\;
+            \mathbf{v}_{a,b}\cdot\left(\hat{\mathbf{r}}_{a,b} F_{a,b}^a\right)
+        \end{align}
+
+        with the neighbor set $\mathcal{N}(a)$ defined by the kernel support:
+        $\lvert \mathbf{r}_{a,b}\rvert \le \max({hpart}_a,{hpart}_b)\,{Rkern}$.
+
+        $a \in [0,{part_counts})$, $j \in [0,{ndust})$.
+    )tex";
+
+    shambase::replace_all(tex, "{gpart_mass}", gpart_mass);
+    shambase::replace_all(tex, "{part_counts}", part_counts);
+    shambase::replace_all(tex, "{xyz}", xyz);
+    shambase::replace_all(tex, "{hpart}", hpart);
+    shambase::replace_all(tex, "{vxyz}", vxyz);
+    shambase::replace_all(tex, "{omega}", omega);
+    shambase::replace_all(tex, "{pressure}", pressure);
+    shambase::replace_all(tex, "{s_j}", s_j);
+    shambase::replace_all(tex, "{Ttilde_sj}", Ttilde_sj);
+    shambase::replace_all(tex, "{ds_j_dt}", ds_j_dt);
+    shambase::replace_all(tex, "{ndust}", ndust_str);
+    shambase::replace_all(tex, "{Rkern}", kernel_radius_str);
+
+    return tex;
 }
 
 using namespace shammath;
