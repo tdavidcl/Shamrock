@@ -103,12 +103,6 @@ namespace shammodels::sph::modules {
                     auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
                         // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
                         auto tmp = sycl::length(delta_v[j] - delta_v[i]);
-
-                        if (tmp > 0.00021080513948785768 * 100) {
-                            logger::raw_ln("wtf !", id_a, i, j, tmp);
-                            throw "";
-                        }
-
                         return (tmp > dv_max) ? 0 : tmp;
                     };
 
@@ -241,7 +235,7 @@ namespace shammodels::sph::modules {
     }
 
     template<class Tvec>
-    inline std::string NodeEvolveDustCOALASourceTerm<Tvec>::_impl_get_tex() const {
+    std::string NodeEvolveDustCOALASourceTerm<Tvec>::_impl_get_tex() const {
 
         auto rhodust_eps         = get_ro_edge_base(0).get_tex_symbol();
         auto massgrid            = get_ro_edge_base(1).get_tex_symbol();
