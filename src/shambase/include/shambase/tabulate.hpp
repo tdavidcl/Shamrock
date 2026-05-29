@@ -34,7 +34,7 @@ namespace shambase {
         inline table(size_t column_count) : cols_count(column_count) {}
 
         struct rule {};
-        struct double_rule {};
+        struct heavy_rule {};
         struct rulled_data {
             std::vector<std::string> colnames;
         };
@@ -48,11 +48,11 @@ namespace shambase {
             positionning position;
         };
 
-        std::vector<std::variant<rule, double_rule, rulled_data, data>> table_lines;
+        std::vector<std::variant<rule, heavy_rule, rulled_data, data>> table_lines;
 
         inline void add_rule() { table_lines.push_back(rule{}); }
 
-        inline void add_double_rule() { table_lines.push_back(double_rule{}); }
+        inline void add_heavy_rule() { table_lines.push_back(heavy_rule{}); }
 
         inline void add_rulled_data(const std::vector<std::string> &colnames) {
             if (colnames.size() != cols_count) {
@@ -63,7 +63,7 @@ namespace shambase {
             }
             table_lines.push_back(rulled_data{colnames});
         }
-        
+
         inline void add_data(const std::vector<std::string> &cols, positionning position) {
             if (cols.size() != cols_count) {
                 throw make_except_with_loc<std::invalid_argument>(shambase::format(
@@ -140,7 +140,7 @@ namespace shambase {
                         print += shambase::format(
                             "-{:<{}}-+", std::string(widths[i], '-'), widths[i]);
                     }
-                } else if (double_rule *double_rule_line = std::get_if<double_rule>(&line)) {
+                } else if (heavy_rule *double_rule_line = std::get_if<heavy_rule>(&line)) {
                     print += "\n+";
                     for (size_t i = 0; i < cols_count; i++) {
                         print += shambase::format(

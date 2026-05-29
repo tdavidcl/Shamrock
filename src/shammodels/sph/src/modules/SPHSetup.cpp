@@ -972,11 +972,11 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
 
             Table table(6);
 
-            table.add_double_rule();
+            table.add_heavy_rule();
             table.add_data(
                 {"rank", "rank get (sum/max)", "MPI", "alloc d% h%", "mem (max) d", "mem (max) h"},
                 Table::center);
-            table.add_double_rule();
+            table.add_heavy_rule();
             for (u32 i = 0; i < shamcomm::world_size(); i++) {
                 table.add_data(
                     {shambase::format("{:<4}", i),

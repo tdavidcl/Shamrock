@@ -134,9 +134,9 @@ std::string shammodels::report_perf_timestep(
         }
     }
 
-    table.add_double_rule();
+    table.add_heavy_rule();
     table.add_data(header, Table::center);
-    table.add_double_rule();
+    table.add_heavy_rule();
     for (u32 i = 0; i < shamcomm::world_size(); i++) {
         std::vector<std::string> row = {
             shambase::format("{:<4}", i),
