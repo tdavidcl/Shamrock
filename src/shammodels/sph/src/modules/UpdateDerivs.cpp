@@ -1151,9 +1151,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     std::shared_ptr<shamrock::solvergraph::Field<Tscal>> t_j_field
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "t_j", "t_j");
 
-    using None                  = DustConfig::None;
-    using ConstantStoppingTimes = DustConfig::ConstantStoppingTimes;
-    using EpsteinDrag           = DustConfig::EpsteinDrag;
+    using None                  = typename DustConfig::None;
+    using ConstantStoppingTimes = typename DustConfig::ConstantStoppingTimes;
+    using EpsteinDrag           = typename DustConfig::EpsteinDrag;
 
     if (std::holds_alternative<None>(cfg.dust_drag_mode)) {
 
