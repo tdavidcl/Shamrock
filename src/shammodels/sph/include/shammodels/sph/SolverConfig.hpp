@@ -148,7 +148,7 @@ namespace shammodels::sph {
 
         inline void mode_to_json(nlohmann::json &j) const {
             if (const None *cfg = std::get_if<None>(&current_mode)) {
-                j = {"type", "none"};
+                j = {{"type", "none"}};
             } else if (const MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
                 j = {{"type", "monofluid_tvi"}, {"ndust", cfg->ndust}};
             } else if (
@@ -160,11 +160,12 @@ namespace shammodels::sph {
         }
 
         inline void mode_from_json(const nlohmann::json &j) {
-            if (j.at("type").get<std::string>() == "none") {
+            const std::string type = j.at("type").get<std::string>();
+            if (type == "none") {
                 set_none();
-            } else if (j.at("type").get<std::string>() == "monofluid_tvi") {
+            } else if (type == "monofluid_tvi") {
                 set_monofluid_tvi(j.at("ndust").get<u32>());
-            } else if (j.at("type").get<std::string>() == "monofluid_complete") {
+            } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
             } else {
                 shambase::throw_unimplemented();

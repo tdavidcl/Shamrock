@@ -633,8 +633,6 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 gpart_mass,
                 Kernel::hfactd};
         });
-
-        logger::info_ln("ComputeEos", "SJ field has been computed");
     } else {
         compute_eos_internal([&](PatchDataLayer &mpdat) {
             return RhoGetterBase<Tscal>{
