@@ -213,7 +213,7 @@ namespace shammodels::sph {
 
         inline void drag_mode_to_json(nlohmann::json &j) const {
             if (std::holds_alternative<None>(dust_drag_mode)) {
-                j = {"type", "none"};
+                j = {{"type", "none"}};
             } else if (
                 const ConstantStoppingTimes *cfg
                 = std::get_if<ConstantStoppingTimes>(&dust_drag_mode)) {
@@ -243,9 +243,9 @@ namespace shammodels::sph {
             }
         }
 
-        inline void set_drag_constant(ConstantStoppingTimes in) { dust_drag_mode = in; }
+        inline void set_drag_constant(ConstantStoppingTimes in) { dust_drag_mode = std::move(in); }
 
-        inline void set_drag_epstein(EpsteinDrag in) { dust_drag_mode = in; }
+        inline void set_drag_epstein(EpsteinDrag in) { dust_drag_mode = std::move(in); }
 
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
 
@@ -285,6 +285,10 @@ namespace shammodels::sph {
         inline void check_config() {
             bool is_not_none = !is_none();
             if (is_not_none) {
+
+                shambase::throw_unimplemented(
+                    "the Solver does not support dust. It will be coming soon !");
+
                 if (!shamrock::are_experimental_features_allowed()) {
                     shambase::throw_with_loc<std::runtime_error>(
                         "Dust config != None is experimental");
