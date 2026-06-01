@@ -18,9 +18,11 @@
 #include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/string.hpp"
 #include "shamalgs/buf_checksum.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shamcmdopt/env.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -356,7 +358,13 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 shamalgs::buf_checksum(tmp5));
         }
 
-        {
+        // replay the kernel like a madman
+        for (u32 i = 0; i < 1000; i++) {
+
+            if (shamcomm::world_rank() == 0 && i % 100 == 0) {
+                logger::raw_ln(shambase::format("replay the kernel {}/1000", i));
+            }
+
             sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
             sham::EventList depends_list;
 
@@ -407,6 +415,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             tree_field_rint.complete_event_state(e);
             neigh_count_leaf.complete_event_state(e);
             leaf_it.complete_event_state(e);
+
+            NamedStackEntry stack_loc1ccccc{"wait queue"};
+
+            shamsys::instance::get_compute_queue().wait_and_throw();
         }
 
         NamedStackEntry stack_loc1ccccc{"wait queue"};
