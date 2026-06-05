@@ -125,6 +125,7 @@ namespace shammodels::sph {
 
         struct MonofluidTVI {
             u32 ndust;
+            bool pure_diffusion_mode = false;
         };
 
         struct MonofluidComplete {
@@ -137,7 +138,9 @@ namespace shammodels::sph {
         Variant current_mode = None{};
 
         inline void set_none() { current_mode = None{}; }
-        inline void set_monofluid_tvi(u32 nvar) { current_mode = MonofluidTVI{nvar}; }
+        inline void set_monofluid_tvi(u32 nvar, bool pure_diffusion_mode = false) {
+            current_mode = MonofluidTVI{nvar, pure_diffusion_mode};
+        }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
         inline bool is_none() { return std::holds_alternative<None>(current_mode); }
@@ -150,7 +153,10 @@ namespace shammodels::sph {
             if (const None *cfg = std::get_if<None>(&current_mode)) {
                 j = {{"type", "none"}};
             } else if (const MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
-                j = {{"type", "monofluid_tvi"}, {"ndust", cfg->ndust}};
+                j
+                    = {{"type", "monofluid_tvi"},
+                       {"ndust", cfg->ndust},
+                       {"pure_diffusion_mode", cfg->pure_diffusion_mode}};
             } else if (
                 const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 j = {{"type", "monofluid_complete"}, {"ndust", cfg->ndust}};
@@ -164,7 +170,8 @@ namespace shammodels::sph {
             if (type == "none") {
                 set_none();
             } else if (type == "monofluid_tvi") {
-                set_monofluid_tvi(j.at("ndust").get<u32>());
+                set_monofluid_tvi(
+                    j.at("ndust").get<u32>(), j.at("pure_diffusion_mode").get<bool>());
             } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
             } else {
@@ -286,9 +293,6 @@ namespace shammodels::sph {
             bool is_not_none = !is_none();
             if (is_not_none) {
 
-                shambase::throw_unimplemented(
-                    "the Solver does not support dust. It will be coming soon !");
-
                 if (!shamrock::are_experimental_features_allowed()) {
                     shambase::throw_with_loc<std::runtime_error>(
                         "Dust config != None is experimental");
@@ -300,7 +304,8 @@ namespace shammodels::sph {
                 }
 
                 if (std::holds_alternative<None>(dust_drag_mode)) {
-                    throw "bro WTF";
+                    throw shambase::make_except_with_loc<std::runtime_error>(
+                        "you must select a drag mode for the dust if the dust is on !");
                 } else if (
                     ConstantStoppingTimes *cfg
                     = std::get_if<ConstantStoppingTimes>(&dust_drag_mode)) {

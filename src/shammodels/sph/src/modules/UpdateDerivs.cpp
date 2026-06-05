@@ -1071,6 +1071,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust_monofluid_tvi_Sj(
     DustConfig cfg) {
+
+    using MonofluidTVI = typename DustConfig::MonofluidTVI;
+
     StackEntry stack_loc{};
 
     using namespace shamrock;
@@ -1296,8 +1299,22 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         // conservation
 
         node_add_source_term->evaluate();
-
+    }
+  
         // logger::raw_ln("S_coag = ", S_coag->get(0).get_buf().copy_to_stdvec());
+    MonofluidTVI &cfg_monofluid_tvi
+        = shambase::get_check_ref((std::get_if<MonofluidTVI>(&cfg.current_mode)));
+
+    if (cfg_monofluid_tvi.pure_diffusion_mode) {
+        // reset accelerations & du/dt to 0
+
+        const u32 iaxyz  = pdl.get_field_idx<Tvec>("axyz");
+        const u32 iduint = pdl.get_field_idx<Tscal>("duint");
+
+        scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+            pdat.get_field_buf_ref<Tvec>(iaxyz).fill({0, 0, 0});
+            pdat.get_field_buf_ref<Tscal>(iduint).fill(0);
+        });
     }
 }
 
