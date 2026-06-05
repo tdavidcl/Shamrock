@@ -4,7 +4,12 @@ from .StandardPlotHelper import AnalysisHelper  # noqa: I001
 from .UnitHelper import plot_codeu_to_unit  # noqa: I001
 
 # Render based analysis
-from .DensityPlots import ColumnDensityPlot, SliceDensityPlot
+from .DensityPlots import (
+    ColumnDensityPlot,
+    SliceDensityPlot,
+    ColumnDensityPlotDust,
+    SliceDensityPlotDust,
+)
 from .ColumnParticleCount import ColumnParticleCount
 from .ParticlesDt import SliceDtPart
 from .VelocityPlots import (
