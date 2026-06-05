@@ -68,7 +68,7 @@ ucte = shamrock.Constants(codeu)
 
 
 # Resolution
-Npart = 200000
+Npart = 100000
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -505,6 +505,107 @@ def analysis(ianalysis):
     perf_analysis.analysis_save(ianalysis)
 
 
+face_on_render_kwargs = {
+    "x_unit": "au",
+    "y_unit": "au",
+    "time_unit": "year",
+    "x_label": "x",
+    "y_label": "y",
+}
+
+sink_params = {
+    "sink_scale_factor": 1,
+    "sink_color": "green",
+    "sink_linewidth": 1,
+    "sink_fill": False,
+}
+
+
+def render_analysis(iplot):
+
+    column_density_plot.make_plot(
+        iplot,
+        **face_on_render_kwargs,
+        field_unit="kg.m^-2",
+        field_label="$\\int \\rho \\, \\mathrm{{d}} z$",
+        vmin=1e-2,
+        vmax=1e4,
+        norm="log",
+        **sink_params,
+    )
+
+    for jdust, p in enumerate(dust_column_density_plot):
+        p.make_plot(
+            iplot,
+            **face_on_render_kwargs,
+            field_unit="kg.m^-2",
+            field_label=f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$ [{grain_size_si[jdust]:.3g}]",
+            vmin=1e-2,
+            vmax=1e4,
+            norm="log",
+            **sink_params,
+        )
+
+    vertical_density_plot.make_plot(
+        iplot,
+        **face_on_render_kwargs,
+        field_unit="kg.m^-3",
+        field_label="$\\rho$",
+        vmin=1e-10,
+        vmax=1e-6,
+        norm="log",
+        **sink_params,
+    )
+
+    for jdust, p in enumerate(dust_slice_density_plot):
+        p.make_plot(
+            iplot,
+            **face_on_render_kwargs,
+            field_unit="kg.m^-3",
+            field_label=f"$\\rho_{{d, {jdust} }}$ [{grain_size_si[jdust]:.3g}]",
+            vmin=1e-10 / 100,
+            vmax=1e-6 / 100,
+            norm="log",
+            **sink_params,
+        )
+
+    v_z_slice_plot.make_plot(
+        iplot,
+        **face_on_render_kwargs,
+        field_unit="m.s^-1",
+        field_label="$\\mathrm{v}_z$",
+        cmap="seismic",
+        cmap_bad_color="white",
+        vmin=-300,
+        vmax=300,
+        **sink_params,
+    )
+
+    dt_part_slice_plot.make_plot(
+        iplot,
+        **face_on_render_kwargs,
+        field_unit="year",
+        field_label="$\\Delta t$",
+        vmin=1e-4,
+        vmax=1,
+        norm="log",
+        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
+        **sink_params,
+    )
+
+    column_particle_count_plot.make_plot(
+        iplot,
+        **face_on_render_kwargs,
+        field_unit=None,
+        field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
+        vmin=1,
+        vmax=1e2,
+        norm="log",
+        contour_list=[1, 10, 100, 1000],
+        **sink_params,
+    )
+
+
 # %%
 # Evolve the simulation
 model.solver_logs_reset_cumulated_step_time()
@@ -524,6 +625,7 @@ for ttarg in t_stop:
 
         if istop % plot_freq_stop == 0:
             analysis(iplot)
+            render_analysis(iplot)
 
     if istop % dump_freq_stop == 0:
         idump += 1
@@ -539,22 +641,6 @@ for ttarg in t_stop:
 # Load the on-the-fly analysis after the run to make the plots
 # (everything in this section can be in another file)
 import matplotlib
-
-face_on_render_kwargs = {
-    "x_unit": "au",
-    "y_unit": "au",
-    "time_unit": "year",
-    "x_label": "x",
-    "y_label": "y",
-}
-
-sink_params = {
-    "sink_scale_factor": 1,
-    "sink_color": "green",
-    "sink_linewidth": 1,
-    "sink_fill": False,
-}
-
 
 column_density_plot.render_all(
     **face_on_render_kwargs,
