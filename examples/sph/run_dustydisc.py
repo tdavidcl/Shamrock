@@ -80,7 +80,8 @@ alpha_u = 1.0
 beta_AV = 2.0
 
 # Dust parameters
-ndust = 5
+kernel = "M6"
+ndust = 0
 mrn_pow = 3.5
 mrn_cutoff_si = np.inf  # would be 250e-9 normally
 
@@ -93,7 +94,7 @@ grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
 C_cour = 0.1
 C_force = 0.1
 
-sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}/"
+sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}/"
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
@@ -188,7 +189,7 @@ ctx.pdata_layout_new()
 # %%
 # Attach a SPH model to the context
 
-model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
+model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel=kernel)
 
 
 dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
@@ -233,8 +234,9 @@ def setup_model():
 
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
-    cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
-    cfg.set_dust_drag_epstein(grain_size, rho_grains)
+    if ndust > 0:
+        cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
+        cfg.set_dust_drag_epstein(grain_size, rho_grains)
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
@@ -411,37 +413,37 @@ column_density_plot.render_args = {
     **sink_params,
     "extra_title": "[gas + dust]",
 }
+if ndust > 0:
+    dust_column_density_plot = []
 
-dust_column_density_plot = []
-
-for jdust in range(ndust):
-    dust_column_density_plot.append(
-        ColumnDensityPlotDust(
-            model,
-            ext_r=rout * 1.5,
-            nx=1024,
-            ny=1024,
-            ex=(1, 0, 0),
-            ey=(0, 1, 0),
-            center=(0, 0, 0),
-            ndust=ndust,
-            jdust=jdust,
-            analysis_folder=analysis_folder,
-            analysis_prefix=f"rho_integ_dust_{jdust}",
+    for jdust in range(ndust):
+        dust_column_density_plot.append(
+            ColumnDensityPlotDust(
+                model,
+                ext_r=rout * 1.5,
+                nx=1024,
+                ny=1024,
+                ex=(1, 0, 0),
+                ey=(0, 1, 0),
+                center=(0, 0, 0),
+                ndust=ndust,
+                jdust=jdust,
+                analysis_folder=analysis_folder,
+                analysis_prefix=f"rho_integ_dust_{jdust}",
+            )
         )
-    )
 
-    fact = epsilon_base * mrn_weight[jdust]
-    dust_column_density_plot[jdust].render_args = {
-        **column_density_plot.render_args,
-        "field_unit": "kg.m^-2",
-        "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
-        "vmin": fact * 1e-2,
-        "vmax": fact * 1e4,
-        "norm": "log",
-        **sink_params,
-        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
-    }
+        fact = epsilon_base * mrn_weight[jdust]
+        dust_column_density_plot[jdust].render_args = {
+            **column_density_plot.render_args,
+            "field_unit": "kg.m^-2",
+            "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
+            "vmin": fact * 1e-2,
+            "vmax": fact * 1e4,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+        }
 
 vertical_density_plot = SliceDensityPlot(
     model,
@@ -466,76 +468,77 @@ vertical_density_plot.render_args = {
     "extra_title": "[gas + dust]",
 }
 
-dust_slice_density_plot = []
+if ndust > 0:
+    dust_slice_density_plot = []
 
-for jdust in range(ndust):
-    dust_slice_density_plot.append(
-        SliceDensityPlotDust(
-            model,
-            ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-            nx=1920,
-            ny=1080,
-            ex=(1, 0, 0),
-            ey=(0, 0, 1),
-            center=(0, 0, 0),
-            ndust=ndust,
-            jdust=jdust,
-            analysis_folder=analysis_folder,
-            analysis_prefix=f"rho_slice_dust_{jdust}",
+    for jdust in range(ndust):
+        dust_slice_density_plot.append(
+            SliceDensityPlotDust(
+                model,
+                ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+                nx=1920,
+                ny=1080,
+                ex=(1, 0, 0),
+                ey=(0, 0, 1),
+                center=(0, 0, 0),
+                ndust=ndust,
+                jdust=jdust,
+                analysis_folder=analysis_folder,
+                analysis_prefix=f"rho_slice_dust_{jdust}",
+            )
         )
-    )
-    fact = epsilon_base * mrn_weight[jdust]
+        fact = epsilon_base * mrn_weight[jdust]
 
-    dust_slice_density_plot[jdust].render_args = {
-        **vertical_density_plot.render_args,
-        "field_unit": "kg.m^-3",
-        "field_label": f"$\\rho_{{d, {jdust} }}$",
-        "vmin": fact * 1e-12,
-        "vmax": fact * 1e-6,
-        "norm": "log",
-        **sink_params,
-        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
-    }
+        dust_slice_density_plot[jdust].render_args = {
+            **vertical_density_plot.render_args,
+            "field_unit": "kg.m^-3",
+            "field_label": f"$\\rho_{{d, {jdust} }}$",
+            "vmin": fact * 1e-12,
+            "vmax": fact * 1e-6,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+        }
 
 
-dust_slice_epsilon_plot = []
+    dust_slice_epsilon_plot = []
 
-for jdust in range(ndust):
+    for jdust in range(ndust):
 
-    def compute_epsilon_integ(helper, internal_jdust=jdust):
-        return helper.slice_render(
-            "custom",
-            "f64",
-            do_normalization=True,
-            min_normalization=1e-9,
-            custom_getter=get_epsilon_j_getter(model, internal_jdust, ndust),
+        def compute_epsilon_integ(helper, internal_jdust=jdust):
+            return helper.slice_render(
+                "custom",
+                "f64",
+                do_normalization=True,
+                min_normalization=1e-9,
+                custom_getter=get_epsilon_j_getter(model, internal_jdust, ndust),
+            )
+
+        dust_slice_epsilon_plot.append(
+            StandardPlotHelper(
+                model,
+                ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+                nx=1920,
+                ny=1080,
+                ex=(1, 0, 0),
+                ey=(0, 0, 1),
+                center=(0, 0, 0),
+                analysis_folder=analysis_folder,
+                analysis_prefix=f"epsilon_slice_dust_{jdust}",
+                compute_function=compute_epsilon_integ,
+            )
         )
 
-    dust_slice_epsilon_plot.append(
-        StandardPlotHelper(
-            model,
-            ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-            nx=1920,
-            ny=1080,
-            ex=(1, 0, 0),
-            ey=(0, 0, 1),
-            center=(0, 0, 0),
-            analysis_folder=analysis_folder,
-            analysis_prefix=f"epsilon_slice_dust_{jdust}",
-            compute_function=compute_epsilon_integ,
-        )
-    )
-
-    dust_slice_epsilon_plot[jdust].render_args = {
-        **vertical_density_plot.render_args,
-        "field_unit": None,
-        "field_label": f"$\\epsilon_{{d, {jdust} }}$",
-        "vmin": 1e-6,
-        "vmax": 1e-1,
-        "norm": "log",
-        **sink_params,
-        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
-    }
+        dust_slice_epsilon_plot[jdust].render_args = {
+            **vertical_density_plot.render_args,
+            "field_unit": None,
+            "field_label": f"$\\epsilon_{{d, {jdust} }}$",
+            "vmin": 1e-6,
+            "vmax": 1e-1,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+        }
 
 
 v_z_slice_plot = SliceVzPlot(
@@ -828,7 +831,6 @@ class radial_profile_plot:
         self.profile_plot.render_all(self.plot_func)
 
 
-rad_plot = radial_profile_plot()
 
 
 class vert_slices_plots:
@@ -1041,8 +1043,9 @@ class vert_slices_plots:
     def render_all(self):
         self.profile_plot.render_all(self.plot_func)
 
-
-vert_plot = vert_slices_plots()
+if ndust > 0:
+    rad_plot = radial_profile_plot()
+    vert_plot = vert_slices_plots()
 
 
 def analysis(ianalysis):
@@ -1053,19 +1056,21 @@ def analysis(ianalysis):
     dt_part_slice_plot.analysis_save(ianalysis)
     column_particle_count_plot.analysis_save(ianalysis)
 
-    for p in dust_column_density_plot:
-        p.analysis_save(ianalysis)
+    if ndust > 0:
+        for p in dust_column_density_plot:
+            p.analysis_save(ianalysis)
 
-    for p in dust_slice_density_plot:
-        p.analysis_save(ianalysis)
+        for p in dust_slice_density_plot:
+            p.analysis_save(ianalysis)
 
-    for p in dust_slice_epsilon_plot:
-        p.analysis_save(ianalysis)
+        for p in dust_slice_epsilon_plot:
+            p.analysis_save(ianalysis)
 
     perf_analysis.analysis_save(ianalysis)
 
-    rad_plot.analysis_save(ianalysis)
-    vert_plot.analysis_save(ianalysis)
+    if ndust > 0:
+        rad_plot.analysis_save(ianalysis)
+        vert_plot.analysis_save(ianalysis)
 
 
 def render_analysis(iplot):
@@ -1075,28 +1080,29 @@ def render_analysis(iplot):
         **column_density_plot.render_args,
     )
 
-    for jdust, p in enumerate(dust_column_density_plot):
-        p.make_plot(
-            iplot,
-            **p.render_args,
-        )
-
     vertical_density_plot.make_plot(
         iplot,
         **vertical_density_plot.render_args,
     )
 
-    for jdust, p in enumerate(dust_slice_density_plot):
-        p.make_plot(
-            iplot,
-            **p.render_args,
-        )
+    if ndust > 0:
+        for jdust, p in enumerate(dust_column_density_plot):
+            p.make_plot(
+                iplot,
+                **p.render_args,
+            )
 
-    for jdust, p in enumerate(dust_slice_epsilon_plot):
-        p.make_plot(
-            iplot,
-            **p.render_args,
-        )
+        for jdust, p in enumerate(dust_slice_density_plot):
+            p.make_plot(
+                iplot,
+                **p.render_args,
+            )
+
+        for jdust, p in enumerate(dust_slice_epsilon_plot):
+            p.make_plot(
+                iplot,
+                **p.render_args,
+            )
 
     v_z_slice_plot.make_plot(
         iplot,
@@ -1113,8 +1119,9 @@ def render_analysis(iplot):
         **column_particle_count_plot.render_args,
     )
 
-    rad_plot.make_plot(iplot)
-    vert_plot.make_plot(iplot)
+    if ndust > 0:
+        rad_plot.make_plot(iplot)
+        vert_plot.make_plot(iplot)
 
 
 # %%
