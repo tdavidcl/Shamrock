@@ -3,7 +3,7 @@ import numpy as np
 from .StandardPlotHelper import StandardPlotHelper
 
 
-def get_rhod_getter(model, jdust, ndust):
+def get_rhod_j_getter(model, jdust, ndust):
 
     def int_getter(size: int, dic_out: dict) -> np.array:
         s_j = dic_out["s_j"].reshape(-1, ndust)
@@ -12,16 +12,44 @@ def get_rhod_getter(model, jdust, ndust):
     return int_getter
 
 
-def get_epsilon_getter(model, jdust, ndust):
+def get_rhod_getter(model, ndust):
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        s_j = dic_out["s_j"].reshape(-1, ndust)
+        rho_d_sum = np.sum(s_j**2, axis=1)
+        return rho_d_sum
+
+    return int_getter
+
+
+def get_rhog_getter(model, ndust):
 
     pmass = model.get_particle_mass()
     hfact = model.get_hfact()
 
-    rhod_getter = get_rhod_getter(model, jdust, ndust)
+    rhod_getter = get_rhod_getter(model, ndust)
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        rho_d_sum = rhod_getter(size, dic_out)
+
+        hpart = dic_out["hpart"]
+        rho = pmass * (hfact / np.array(hpart)) ** 3
+
+        return rho - rho_d_sum
+
+    return int_getter
+
+
+def get_epsilon_j_getter(model, jdust, ndust):
+
+    pmass = model.get_particle_mass()
+    hfact = model.get_hfact()
+
+    rhod_j_getter = get_rhod_j_getter(model, jdust, ndust)
 
     def int_getter(size: int, dic_out: dict) -> np.array:
 
-        rhod = rhod_getter(size, dic_out)
+        rhod = rhod_j_getter(size, dic_out)
 
         hpart = dic_out["hpart"]
         rho = pmass * (hfact / np.array(hpart)) ** 3
@@ -58,7 +86,7 @@ def ColumnDensityPlotDust(
 ):
     def compute_rhod_integ(helper):
         return helper.column_integ_render(
-            "custom", "f64", custom_getter=get_rhod_getter(model, jdust, ndust)
+            "custom", "f64", custom_getter=get_rhod_j_getter(model, jdust, ndust)
         )
 
     return StandardPlotHelper(
@@ -126,7 +154,7 @@ def SliceDensityPlotDust(
             "f64",
             do_normalization,
             min_normalization,
-            custom_getter=get_rhod_getter(model, jdust, ndust),
+            custom_getter=get_rhod_j_getter(model, jdust, ndust),
         )
 
     return StandardPlotHelper(

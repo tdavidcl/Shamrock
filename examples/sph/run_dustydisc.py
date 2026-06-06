@@ -93,7 +93,7 @@ grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
 C_cour = 0.1
 C_force = 0.1
 
-sim_folder = f"_to_trash/circular_dustydisc_{Npart}/"
+sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}/"
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
@@ -366,7 +366,10 @@ from shamrock.utils.analysis import (
     SliceVzPlot,
     StandardPlotHelper,
     VerticalShearGradient,
-    get_epsilon_getter,
+    get_epsilon_j_getter,
+    get_rhod_getter,
+    get_rhod_j_getter,
+    get_rhog_getter,
 )
 
 face_on_render_kwargs = {
@@ -505,7 +508,7 @@ for jdust in range(ndust):
             "f64",
             do_normalization=True,
             min_normalization=1e-9,
-            custom_getter=get_epsilon_getter(model, internal_jdust, ndust),
+            custom_getter=get_epsilon_j_getter(model, internal_jdust, ndust),
         )
 
     dust_slice_epsilon_plot.append(
@@ -606,6 +609,214 @@ column_particle_count_plot.render_args = {
 }
 
 
+class radial_profile_plot:
+    def __init__(self):
+        self.profile_plot = AnalysisHelper(
+            analysis_folder=os.path.join(analysis_folder, "plots"),
+            analysis_prefix="density_profile",
+        )
+
+    def analysis_save(self, ianalysis):
+        def internal(size: int, x: np.array, y: np.array, z: np.array) -> np.array:
+            r = np.sqrt(x**2 + y**2 + z**2)
+            return r
+
+        def custom_getter_r(size: int, dic_out: dict) -> np.array:
+            return internal(
+                size,
+                dic_out["xyz"][:, 0],
+                dic_out["xyz"][:, 1],
+                dic_out["xyz"][:, 2],
+            )
+
+        x_min = center_racc / 2.0
+        x_max = rout * 2
+        x_min_log = np.log10(x_min)
+        x_max_log = np.log10(x_max)
+
+        bin_edges_x1d = np.logspace(x_min_log, x_max_log, 2049)
+
+        dens_fact = codeu.to("kg") * codeu.to("m", power=-3)
+
+        rho_t_field = model.compute_field("rho", "f64")
+        hpart_field = model.compute_field("hpart", "f64")
+        r_field = model.compute_field("custom", "f64", custom_getter_r)
+
+        rho_g_field = model.compute_field("custom", "f64", get_rhog_getter(model, ndust))
+        rho_d_field = model.compute_field("custom", "f64", get_rhod_getter(model, ndust))
+
+        dic_ret = {
+            "time": model.get_time(),
+            "bin_edges_x1d": bin_edges_x1d,
+        }
+
+        histo_rho_t = shamrock.compute_histogram(
+            bin_edges=bin_edges_x1d,
+            x_field=r_field,
+            y_field=rho_t_field,
+            do_average=True,
+        )
+
+        histo_rho_g = shamrock.compute_histogram(
+            bin_edges=bin_edges_x1d,
+            x_field=r_field,
+            y_field=rho_g_field,
+            do_average=True,
+        )
+
+        histo_rho_d = shamrock.compute_histogram(
+            bin_edges=bin_edges_x1d,
+            x_field=r_field,
+            y_field=rho_d_field,
+            do_average=True,
+        )
+
+        dic_ret["histo_rho_t"] = np.array(histo_rho_t) * dens_fact
+        dic_ret["histo_rho_g"] = np.array(histo_rho_g) * dens_fact
+        dic_ret["histo_rho_d"] = np.array(histo_rho_d) * dens_fact
+
+        dic_ret["histo_rho_d_j"] = []
+
+        for jdust in range(ndust):
+            rhod_j_field = model.compute_field(
+                "custom", "f64", get_rhod_j_getter(model, jdust, ndust)
+            )
+
+            histo_rho_d_j = shamrock.compute_histogram(
+                bin_edges=bin_edges_x1d,
+                x_field=r_field,
+                y_field=rhod_j_field,
+                do_average=True,
+            )
+
+            dic_ret["histo_rho_d_j"].append(np.array(histo_rho_d_j) * dens_fact)
+
+        self.profile_plot.analysis_save(ianalysis, dic_ret)
+
+    def plot_func(self, iplot, data):
+
+        data = data.item()
+        print(data.keys())
+
+        time = data["time"]
+
+        bin_edges_x1d = data["bin_edges_x1d"]
+
+        bin_center = (bin_edges_x1d[:-1] + bin_edges_x1d[1:]) / 2
+
+        fig = plt.figure(dpi=150, figsize=(8, 5))
+
+        dust_cmap = plt.colormaps["plasma"]
+        dust_norm = mcolors.LogNorm(vmin=grain_size_si.min(), vmax=grain_size_si.max() * 10)
+        dust_colors = dust_cmap(dust_norm(grain_size_si))
+
+        plt.plot(bin_center, data["histo_rho_t"], "--")
+        plt.plot(bin_center, data["histo_rho_g"], color="0.0")
+        plt.plot(bin_center, data["histo_rho_d"], color="0.5")
+
+        for jdust in range(ndust):
+            c = dust_colors[jdust]
+            plt.plot(bin_center, data["histo_rho_d_j"][jdust], color=c)
+
+        plt.xlabel("r [au]")
+        plt.ylabel("$\\langle \\rho \\rangle_z$ [kg.m^-3]")
+
+        plt.xscale("log")
+        plt.yscale("log")
+
+        plt.xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
+        plt.ylim(1e-16, 1e-5)
+
+        text = f"t = {time:0.3f}"
+        from matplotlib.offsetbox import AnchoredText
+
+        anchored_text = AnchoredText(text, loc=2)
+        plt.gca().add_artist(anchored_text)
+
+        dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+        dust_sm.set_array([])
+        cbar = fig.colorbar(dust_sm, ax=plt.gca(), pad=0.02, shrink=0.85)
+        cbar.set_label(r"grain size $s$ [m]")
+
+        gas_handle = Line2D(
+            [0],
+            [0],
+            linestyle="none",
+            marker="o",
+            markersize=5,
+            markerfacecolor="0.",
+            markeredgecolor="none",
+            label="gas",
+        )
+
+        dust_handle = Line2D(
+            [0],
+            [0],
+            linestyle="none",
+            marker="o",
+            markersize=5,
+            markerfacecolor="0.5",
+            markeredgecolor="none",
+            label="dust",
+        )
+        plt.gca().legend(handles=[gas_handle, dust_handle], loc="upper right", fontsize=8)
+
+        plt.savefig(self.profile_plot.analysis_prefix + f"_curves_{iplot:07}.png")
+        plt.close()
+
+        fig, axs = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
+        axs[0].plot(bin_center, data["histo_rho_t"], "--", label="total")
+        axs[0].plot(bin_center, data["histo_rho_g"], color="0.0", label="gas")
+        axs[0].plot(bin_center, data["histo_rho_d"], color="0.5", label="dust")
+
+        axs[1].set_xlabel("r [au]")
+        axs[0].set_ylabel("$\\langle \\rho \\rangle_z$ [kg.m^-3]")
+
+        axs[0].set_xscale("log")
+        axs[0].set_yscale("log")
+
+        axs[0].set_xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
+        axs[0].set_ylim(1e-14, 1e-6)
+
+        axs[0].legend(loc="upper right", fontsize=8)
+
+        im = np.zeros((ndust, len(bin_center)))
+
+        for jdust in range(ndust):
+            im[jdust, :] = data["histo_rho_d_j"][jdust]
+
+        rho_norm = mcolors.LogNorm(vmin=1e-14, vmax=1e-9)
+        axs[1].pcolormesh(
+            bin_edges_x1d,
+            grain_size_si_edges,
+            im,
+            cmap=dust_cmap,
+            norm=rho_norm,
+            shading="auto",
+        )
+        axs[1].set_ylabel("grain size [m]")
+        axs[1].set_yscale("log")
+        axs[1].set_ylim(grain_size_si_edges[0], grain_size_si_edges[-1])
+
+        rho_sm = cm.ScalarMappable(cmap=dust_cmap, norm=rho_norm)
+        rho_sm.set_array([])
+        fig.subplots_adjust(right=0.88)
+        cbar = fig.colorbar(rho_sm, ax=axs, pad=0.02, shrink=0.85)
+        cbar.set_label(r"$\langle \rho(r,s_{{grain}}) \rangle_z$ [kg.m^-3]")
+
+        plt.savefig(self.profile_plot.analysis_prefix + f"_image_{iplot:07}.png")
+        plt.close()
+
+    def make_plot(self, iplot):
+        self.profile_plot.make_plot(iplot, self.plot_func)
+
+    def render_all(self):
+        self.profile_plot.render_all(self.plot_func)
+
+
+rad_plot = radial_profile_plot()
+
+
 def analysis(ianalysis):
 
     column_density_plot.analysis_save(ianalysis)
@@ -624,6 +835,8 @@ def analysis(ianalysis):
         p.analysis_save(ianalysis)
 
     perf_analysis.analysis_save(ianalysis)
+
+    rad_plot.analysis_save(ianalysis)
 
 
 def render_analysis(iplot):
@@ -670,6 +883,8 @@ def render_analysis(iplot):
         iplot,
         **column_particle_count_plot.render_args,
     )
+
+    rad_plot.make_plot(iplot)
 
 
 # %%

@@ -9,7 +9,10 @@ from .DensityPlots import (
     SliceDensityPlot,
     ColumnDensityPlotDust,
     SliceDensityPlotDust,
-    get_epsilon_getter,
+    get_epsilon_j_getter,
+    get_rhod_j_getter,
+    get_rhod_getter,
+    get_rhog_getter,
 )
 from .ColumnParticleCount import ColumnParticleCount
 from .ParticlesDt import SliceDtPart
