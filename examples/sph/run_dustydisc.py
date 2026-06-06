@@ -617,8 +617,8 @@ class radial_profile_plot:
         )
 
     def analysis_save(self, ianalysis):
-        def internal(size: int, x: np.array, y: np.array, z: np.array) -> np.array:
-            r = np.sqrt(x**2 + y**2 + z**2)
+        def internal(size: int, x: np.array, y: np.array) -> np.array:
+            r = np.sqrt(x**2 + y**2)
             return r
 
         def custom_getter_r(size: int, dic_out: dict) -> np.array:
@@ -626,7 +626,6 @@ class radial_profile_plot:
                 size,
                 dic_out["xyz"][:, 0],
                 dic_out["xyz"][:, 1],
-                dic_out["xyz"][:, 2],
             )
 
         x_min = center_racc / 2.0
@@ -764,10 +763,15 @@ class radial_profile_plot:
         plt.savefig(self.profile_plot.analysis_prefix + f"_curves_{iplot:07}.png")
         plt.close()
 
-        fig, axs = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
+        fig, axs = plt.subplots(
+            2, 1, figsize=(10, 7), sharex=True, gridspec_kw={"wspace": 0.0, "hspace": 0}
+        )
         axs[0].plot(bin_center, data["histo_rho_t"], "--", label="total")
         axs[0].plot(bin_center, data["histo_rho_g"], color="0.0", label="gas")
         axs[0].plot(bin_center, data["histo_rho_d"], color="0.5", label="dust")
+
+        for jdust in range(ndust):
+            axs[0].plot(bin_center, data["histo_rho_d_j"][jdust], color=dust_colors[jdust])
 
         axs[1].set_xlabel("r [au]")
         axs[0].set_ylabel("$\\langle \\rho \\rangle_z$ [kg.m^-3]")
@@ -776,7 +780,7 @@ class radial_profile_plot:
         axs[0].set_yscale("log")
 
         axs[0].set_xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
-        axs[0].set_ylim(1e-14, 1e-6)
+        axs[0].set_ylim(1.1e-14, 1e-6)  # 1.1 to avoid the tick
 
         axs[0].legend(loc="upper right", fontsize=8)
 
@@ -801,8 +805,18 @@ class radial_profile_plot:
         rho_sm = cm.ScalarMappable(cmap=dust_cmap, norm=rho_norm)
         rho_sm.set_array([])
         fig.subplots_adjust(right=0.88)
-        cbar = fig.colorbar(rho_sm, ax=axs, pad=0.02, shrink=0.85)
-        cbar.set_label(r"$\langle \rho(r,s_{{grain}}) \rangle_z$ [kg.m^-3]")
+        cbar_dust = fig.colorbar(
+            dust_sm, ax=axs[0], pad=0.03, fraction=0.025, aspect=20, shrink=0.85
+        )
+        cbar_dust.set_label(r"grain size $s$ [m]")
+        cbar_rho = fig.colorbar(rho_sm, ax=axs[1], pad=0.03, fraction=0.025, aspect=20, shrink=0.85)
+        cbar_rho.set_label(r"$\langle \rho(r,s_{{grain}}) \rangle_z$ [kg.m^-3]")
+
+        text = f"t = {time:0.3f}"
+        from matplotlib.offsetbox import AnchoredText
+
+        anchored_text = AnchoredText(text, loc=2)
+        axs[0].add_artist(anchored_text)
 
         plt.savefig(self.profile_plot.analysis_prefix + f"_image_{iplot:07}.png")
         plt.close()
@@ -815,6 +829,220 @@ class radial_profile_plot:
 
 
 rad_plot = radial_profile_plot()
+
+
+class vert_slices_plots:
+    def __init__(self):
+        self.profile_plot = AnalysisHelper(
+            analysis_folder=os.path.join(analysis_folder, "plots"),
+            analysis_prefix="vert_slices",
+        )
+        self.rcenters = [2, 5, 8]
+        self.rextents_fact = 0.25
+
+    def analysis_save(self, ianalysis):
+
+        z_r_extent = 4 * H_r_0
+        z_r_edges = np.linspace(-z_r_extent, z_r_extent, 2049)
+
+        dens_fact = codeu.to("kg") * codeu.to("m", power=-3)
+
+        dic_ret = {
+            "time": model.get_time(),
+            "z_r_edges": z_r_edges,
+            "rcases": [{} for _ in self.rcenters],
+        }
+
+        rho_t_field = model.compute_field("rho", "f64")
+        hpart_field = model.compute_field("hpart", "f64")
+
+        rho_g_field = model.compute_field("custom", "f64", get_rhog_getter(model, ndust))
+        rho_d_field = model.compute_field("custom", "f64", get_rhod_getter(model, ndust))
+
+        rho_d_j_fields = []
+        for jdust in range(ndust):
+            rho_d_j_fields.append(
+                model.compute_field("custom", "f64", get_rhod_j_getter(model, jdust, ndust))
+            )
+
+        for ir, rcenter in enumerate(self.rcenters):
+            r_extent = rcenter * self.rextents_fact
+
+            r_min = rcenter - r_extent
+            r_max = rcenter + r_extent
+
+            def internal(size: int, x: np.array, y: np.array, z: np.array) -> np.array:
+                r = np.sqrt(x**2 + y**2)
+                # make a mask for the particles inside the ring
+                valid = (r >= r_min) & (r <= r_max)
+                # fill a array with nans
+                out = np.full_like(z, np.nan, dtype=np.float64)
+                # replace nans by values in the ring
+                out[valid] = z[valid] / r[valid]
+
+                # show average of the array
+                # print(f"Average of the array: {np.nanmean(r[valid])} for r = {r_extent} rmin = {r_min} rmax = {r_max}")
+
+                return out
+
+            def custom_getter(size: int, dic_out: dict) -> np.array:
+                return internal(
+                    size,
+                    dic_out["xyz"][:, 0],
+                    dic_out["xyz"][:, 1],
+                    dic_out["xyz"][:, 2],
+                )
+
+            z_r_field = model.compute_field("custom", "f64", custom_getter)
+
+            histo_rho_t = shamrock.compute_histogram(
+                bin_edges=z_r_edges,
+                x_field=z_r_field,
+                y_field=rho_t_field,
+                do_average=True,
+            )
+
+            histo_rho_g = shamrock.compute_histogram(
+                bin_edges=z_r_edges,
+                x_field=z_r_field,
+                y_field=rho_g_field,
+                do_average=True,
+            )
+
+            histo_rho_d = shamrock.compute_histogram(
+                bin_edges=z_r_edges,
+                x_field=z_r_field,
+                y_field=rho_d_field,
+                do_average=True,
+            )
+
+            dic_ret["rcases"][ir]["histo_rho_t"] = np.array(histo_rho_t) * dens_fact
+            dic_ret["rcases"][ir]["histo_rho_g"] = np.array(histo_rho_g) * dens_fact
+            dic_ret["rcases"][ir]["histo_rho_d"] = np.array(histo_rho_d) * dens_fact
+
+            dic_ret["rcases"][ir]["histo_rho_d_j"] = []
+
+            for jdust in range(ndust):
+                histo_rho_d_j = shamrock.compute_histogram(
+                    bin_edges=z_r_edges,
+                    x_field=z_r_field,
+                    y_field=rho_d_j_fields[jdust],
+                    do_average=True,
+                )
+
+                dic_ret["rcases"][ir]["histo_rho_d_j"].append(np.array(histo_rho_d_j) * dens_fact)
+
+        self.profile_plot.analysis_save(ianalysis, dic_ret)
+
+    def plot_func(self, iplot, data):
+
+        data = data.item()
+
+        time = data["time"]
+        z_r_edges = data["z_r_edges"]
+
+        bin_center = (z_r_edges[:-1] + z_r_edges[1:]) / 2
+
+        dust_cmap = plt.colormaps["plasma"]
+        dust_norm = mcolors.LogNorm(vmin=grain_size_si.min(), vmax=grain_size_si.max() * 10)
+        dust_colors = dust_cmap(dust_norm(grain_size_si))
+
+        fig, axs = plt.subplots(
+            2,
+            len(self.rcenters),
+            figsize=(15, 7),
+            sharex=True,
+            sharey="row",
+            gridspec_kw={"wspace": 0.0, "hspace": 0},
+        )
+        rho_norm = mcolors.LogNorm(vmin=1e-14, vmax=1e-9)
+        for ir, rcenter in enumerate(self.rcenters):
+            axs[0, ir].plot(bin_center, data["rcases"][ir]["histo_rho_t"], "--", label="total")
+            axs[0, ir].plot(bin_center, data["rcases"][ir]["histo_rho_g"], color="0.0", label="gas")
+            axs[0, ir].plot(
+                bin_center, data["rcases"][ir]["histo_rho_d"], color="0.5", label="dust"
+            )
+
+            for jdust in range(ndust):
+                axs[0, ir].plot(
+                    bin_center, data["rcases"][ir]["histo_rho_d_j"][jdust], color=dust_colors[jdust]
+                )
+
+            axs[0, ir].set_yscale("log")
+            axs[0, ir].set_xlim(np.min(z_r_edges), np.max(z_r_edges))
+            axs[0, ir].set_ylim(1.1e-16, 1e-6)  # 1.1 to avoid the tick
+            axs[0, ir].legend(loc="upper right", fontsize=8)
+
+            axs[0, ir].set_title(rf"$r \in {rcenter} \pm {self.rextents_fact * rcenter}$")
+            if ir == 0:
+                axs[0, ir].set_ylabel(r"$\langle \rho \rangle_r$ [kg.m^-3]")
+            else:
+                axs[0, ir].tick_params(labelleft=False, left=False)
+            axs[0, ir].tick_params(labelbottom=False)
+
+            im = np.zeros((ndust, len(bin_center)))
+
+            for jdust in range(ndust):
+                im[jdust, :] = data["rcases"][ir]["histo_rho_d_j"][jdust]
+
+            axs[1, ir].pcolormesh(
+                z_r_edges,
+                grain_size_si_edges,
+                im,
+                cmap=dust_cmap,
+                norm=rho_norm,
+                shading="auto",
+            )
+
+            if ir == 0:
+                axs[1, ir].set_ylabel(r"grain size $s$ [m]")
+            else:
+                axs[1, ir].tick_params(labelleft=False, left=False)
+
+            axs[1, ir].set_xlim(np.min(z_r_edges), np.max(z_r_edges))
+            axs[1, ir].set_ylim(grain_size_si_edges[0], grain_size_si_edges[-1])
+
+            axs[1, ir].set_yscale("log")
+
+            labels = axs[1, ir].get_xticklabels()
+            if ir > 0 and labels:
+                labels[0].set_visible(False)
+            if ir < len(self.rcenters) - 1 and labels:
+                labels[-1].set_visible(False)
+
+            axs[1, ir].set_xlabel(r"z/r")
+
+        dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+        dust_sm.set_array([])
+        rho_sm = cm.ScalarMappable(cmap=dust_cmap, norm=rho_norm)
+        rho_sm.set_array([])
+        fig.tight_layout(rect=[0, 0, 0.94, 1])
+        cbar_dust = fig.colorbar(
+            dust_sm, ax=axs[0, :], pad=0.03, fraction=0.025, aspect=20, shrink=0.85
+        )
+        cbar_dust.set_label(r"grain size $s$ [m]")
+        cbar_rho = fig.colorbar(
+            rho_sm, ax=axs[1, :], pad=0.03, fraction=0.025, aspect=20, shrink=0.85
+        )
+        cbar_rho.set_label(r"$\langle \rho(z/r,s_{\mathrm{grain}}) \rangle_r$ [kg.m^-3]")
+
+        text = f"t = {time:0.3f}"
+        from matplotlib.offsetbox import AnchoredText
+
+        anchored_text = AnchoredText(text, loc=2)
+        axs[0, 0].add_artist(anchored_text)
+
+        plt.savefig(self.profile_plot.analysis_prefix + f"_vert_slices_{iplot:07}.png")
+        plt.close()
+
+    def make_plot(self, iplot):
+        self.profile_plot.make_plot(iplot, self.plot_func)
+
+    def render_all(self):
+        self.profile_plot.render_all(self.plot_func)
+
+
+vert_plot = vert_slices_plots()
 
 
 def analysis(ianalysis):
@@ -837,6 +1065,7 @@ def analysis(ianalysis):
     perf_analysis.analysis_save(ianalysis)
 
     rad_plot.analysis_save(ianalysis)
+    vert_plot.analysis_save(ianalysis)
 
 
 def render_analysis(iplot):
@@ -885,6 +1114,7 @@ def render_analysis(iplot):
     )
 
     rad_plot.make_plot(iplot)
+    vert_plot.make_plot(iplot)
 
 
 # %%
