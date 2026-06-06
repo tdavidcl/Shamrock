@@ -28,32 +28,8 @@ if not shamrock.sys.is_initialized():
     shamrock.sys.init("0:0")
 
 # %%
-# mpl style
-mpl.rcParams.update(
-    {
-        "font.family": "serif",
-        "mathtext.fontset": "cm",
-        "font.size": 14,
-        "axes.labelsize": 16,
-        "axes.titlesize": 16,
-        "xtick.labelsize": 13,
-        "ytick.labelsize": 13,
-        "legend.fontsize": 13,
-        "axes.facecolor": "#f2f2f2",
-        "axes.linewidth": 1.0,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
-        "xtick.top": True,
-        "ytick.right": True,
-        "xtick.major.size": 8,
-        "ytick.major.size": 8,
-        "xtick.minor.visible": True,
-        "ytick.minor.visible": True,
-        "legend.frameon": True,
-        "legend.fancybox": False,
-        "legend.edgecolor": "black",
-    }
-)
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
 
 # %%
 # Sim parameters
@@ -93,7 +69,7 @@ center_racc = 0.8
 disc_mass = 0.01  # sol mass
 rout = 10.0  # au
 rin = 1.0  # au
-H_r_0 = 0.05
+H_r_0 = 0.1
 q = 0.5
 p = 3.0 / 2.0
 r0 = 1.0
@@ -250,6 +226,11 @@ def setup_model():
     # Generate the default config
     cfg = model.gen_default_config()
     cfg.set_artif_viscosity_ConstantDisc(alpha_u=alpha_u, alpha_AV=alpha_AV, beta_AV=beta_AV)
+
+    # cfg.set_artif_viscosity_VaryingCD10(
+    #    alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
+    # )
+
     cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
     cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
