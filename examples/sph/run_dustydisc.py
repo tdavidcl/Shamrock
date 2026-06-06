@@ -36,7 +36,7 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 si = shamrock.UnitSystem()
 sicte = shamrock.Constants(si)
 codeu = shamrock.UnitSystem(
-    unit_time=3600 * 24 * 365,  # year
+    unit_time=sicte.year(),  # year
     unit_length=sicte.au(),  # astro unit
     unit_mass=sicte.sol_mass(),
 )
@@ -406,7 +406,7 @@ column_density_plot.render_args = {
     "vmax": 1e4,
     "norm": "log",
     **sink_params,
-    "extra_title": "[gas]",
+    "extra_title": "[gas + dust]",
 }
 
 dust_column_density_plot = []
@@ -460,7 +460,7 @@ vertical_density_plot.render_args = {
     "vmax": 1e-6,
     "norm": "log",
     **sink_params,
-    "extra_title": "[gas]",
+    "extra_title": "[gas + dust]",
 }
 
 dust_slice_density_plot = []
