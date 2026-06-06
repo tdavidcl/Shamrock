@@ -87,7 +87,7 @@ mrn_cutoff_si = np.inf  # would be 250e-9 normally
 epsilon_base = 0.01
 
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
-grain_size_si_edges = np.logspace(-5, -3, ndust + 1)  # 10um -> 1mm
+grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
 
 # Integrator parameters
 C_cour = 0.1
@@ -364,8 +364,25 @@ from shamrock.utils.analysis import (
     SliceDiffVthetaProfile,
     SliceDtPart,
     SliceVzPlot,
+    StandardPlotHelper,
     VerticalShearGradient,
+    get_epsilon_getter,
 )
+
+face_on_render_kwargs = {
+    "x_unit": "au",
+    "y_unit": "au",
+    "time_unit": "year",
+    "x_label": "x",
+    "y_label": "y",
+}
+
+sink_params = {
+    "sink_scale_factor": 1,
+    "sink_color": "green",
+    "sink_linewidth": 1,
+    "sink_fill": False,
+}
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 
@@ -380,6 +397,17 @@ column_density_plot = ColumnDensityPlot(
     analysis_folder=analysis_folder,
     analysis_prefix="rho_integ_gas",
 )
+
+column_density_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "kg.m^-2",
+    "field_label": "$\\int \\rho \\, \\mathrm{{d}} z$",
+    "vmin": 1e-2,
+    "vmax": 1e4,
+    "norm": "log",
+    **sink_params,
+    "extra_title": "[gas]",
+}
 
 dust_column_density_plot = []
 
@@ -400,6 +428,18 @@ for jdust in range(ndust):
         )
     )
 
+    fact = epsilon_base * mrn_weight[jdust]
+    dust_column_density_plot[jdust].render_args = {
+        **column_density_plot.render_args,
+        "field_unit": "kg.m^-2",
+        "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
+        "vmin": fact * 1e-2,
+        "vmax": fact * 1e4,
+        "norm": "log",
+        **sink_params,
+        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+    }
+
 vertical_density_plot = SliceDensityPlot(
     model,
     ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
@@ -411,6 +451,17 @@ vertical_density_plot = SliceDensityPlot(
     analysis_folder=analysis_folder,
     analysis_prefix="rho_slice_gas",
 )
+
+vertical_density_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "kg.m^-3",
+    "field_label": "$\\rho$",
+    "vmin": 1e-12,
+    "vmax": 1e-6,
+    "norm": "log",
+    **sink_params,
+    "extra_title": "[gas]",
+}
 
 dust_slice_density_plot = []
 
@@ -430,6 +481,59 @@ for jdust in range(ndust):
             analysis_prefix=f"rho_slice_dust_{jdust}",
         )
     )
+    fact = epsilon_base * mrn_weight[jdust]
+
+    dust_slice_density_plot[jdust].render_args = {
+        **vertical_density_plot.render_args,
+        "field_unit": "kg.m^-3",
+        "field_label": f"$\\rho_{{d, {jdust} }}$",
+        "vmin": fact * 1e-12,
+        "vmax": fact * 1e-6,
+        "norm": "log",
+        **sink_params,
+        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+    }
+
+
+dust_slice_epsilon_plot = []
+
+for jdust in range(ndust):
+
+    def compute_epsilon_integ(helper, internal_jdust=jdust):
+        return helper.slice_render(
+            "custom",
+            "f64",
+            do_normalization=True,
+            min_normalization=1e-9,
+            custom_getter=get_epsilon_getter(model, internal_jdust, ndust),
+        )
+
+    dust_slice_epsilon_plot.append(
+        StandardPlotHelper(
+            model,
+            ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+            nx=1920,
+            ny=1080,
+            ex=(1, 0, 0),
+            ey=(0, 0, 1),
+            center=(0, 0, 0),
+            analysis_folder=analysis_folder,
+            analysis_prefix=f"epsilon_slice_dust_{jdust}",
+            compute_function=compute_epsilon_integ,
+        )
+    )
+
+    dust_slice_epsilon_plot[jdust].render_args = {
+        **vertical_density_plot.render_args,
+        "field_unit": None,
+        "field_label": f"$\\epsilon_{{d, {jdust} }}$",
+        "vmin": 1e-6,
+        "vmax": 1e-1,
+        "norm": "log",
+        **sink_params,
+        "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+    }
+
 
 v_z_slice_plot = SliceVzPlot(
     model,
@@ -444,6 +548,17 @@ v_z_slice_plot = SliceVzPlot(
     do_normalization=True,
 )
 
+v_z_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "m.s^-1",
+    "field_label": "$\\mathrm{v}_z$",
+    "cmap": "seismic",
+    "cmap_bad_color": "white",
+    "vmin": -300,
+    "vmax": 300,
+    **sink_params,
+}
+
 dt_part_slice_plot = SliceDtPart(
     model,
     ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
@@ -456,6 +571,17 @@ dt_part_slice_plot = SliceDtPart(
     analysis_prefix="dt_part_slice",
 )
 
+dt_part_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "year",
+    "field_label": "$\\Delta t$",
+    "vmin": 1e-4,
+    "vmax": 1,
+    "norm": "log",
+    "contour_list": [1e-4, 1e-3, 1e-2, 1e-1, 1],
+    **sink_params,
+}
+
 column_particle_count_plot = ColumnParticleCount(
     model,
     ext_r=rout * 1.5,
@@ -467,6 +593,17 @@ column_particle_count_plot = ColumnParticleCount(
     analysis_folder=analysis_folder,
     analysis_prefix="particle_count",
 )
+
+column_particle_count_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": None,
+    "field_label": "$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
+    "vmin": 1,
+    "vmax": 1e2,
+    "norm": "log",
+    "contour_list": [1, 10, 100, 1000],
+    **sink_params,
+}
 
 
 def analysis(ianalysis):
@@ -483,107 +620,55 @@ def analysis(ianalysis):
     for p in dust_slice_density_plot:
         p.analysis_save(ianalysis)
 
+    for p in dust_slice_epsilon_plot:
+        p.analysis_save(ianalysis)
+
     perf_analysis.analysis_save(ianalysis)
-
-
-face_on_render_kwargs = {
-    "x_unit": "au",
-    "y_unit": "au",
-    "time_unit": "year",
-    "x_label": "x",
-    "y_label": "y",
-}
-
-sink_params = {
-    "sink_scale_factor": 1,
-    "sink_color": "green",
-    "sink_linewidth": 1,
-    "sink_fill": False,
-}
 
 
 def render_analysis(iplot):
 
     column_density_plot.make_plot(
         iplot,
-        **face_on_render_kwargs,
-        field_unit="kg.m^-2",
-        field_label="$\\int \\rho \\, \\mathrm{{d}} z$",
-        vmin=1e-2,
-        vmax=1e4,
-        norm="log",
-        **sink_params,
+        **column_density_plot.render_args,
     )
 
     for jdust, p in enumerate(dust_column_density_plot):
         p.make_plot(
             iplot,
-            **face_on_render_kwargs,
-            field_unit="kg.m^-2",
-            field_label=f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$ [{grain_size_si[jdust]:.3g}]",
-            vmin=1e-2,
-            vmax=1e4,
-            norm="log",
-            **sink_params,
+            **p.render_args,
         )
 
     vertical_density_plot.make_plot(
         iplot,
-        **face_on_render_kwargs,
-        field_unit="kg.m^-3",
-        field_label="$\\rho$",
-        vmin=1e-10,
-        vmax=1e-6,
-        norm="log",
-        **sink_params,
+        **vertical_density_plot.render_args,
     )
 
     for jdust, p in enumerate(dust_slice_density_plot):
         p.make_plot(
             iplot,
-            **face_on_render_kwargs,
-            field_unit="kg.m^-3",
-            field_label=f"$\\rho_{{d, {jdust} }}$ [{grain_size_si[jdust]:.3g}]",
-            vmin=1e-10 / 100,
-            vmax=1e-6 / 100,
-            norm="log",
-            **sink_params,
+            **p.render_args,
+        )
+
+    for jdust, p in enumerate(dust_slice_epsilon_plot):
+        p.make_plot(
+            iplot,
+            **p.render_args,
         )
 
     v_z_slice_plot.make_plot(
         iplot,
-        **face_on_render_kwargs,
-        field_unit="m.s^-1",
-        field_label="$\\mathrm{v}_z$",
-        cmap="seismic",
-        cmap_bad_color="white",
-        vmin=-300,
-        vmax=300,
-        **sink_params,
+        **v_z_slice_plot.render_args,
     )
 
     dt_part_slice_plot.make_plot(
         iplot,
-        **face_on_render_kwargs,
-        field_unit="year",
-        field_label="$\\Delta t$",
-        vmin=1e-4,
-        vmax=1,
-        norm="log",
-        contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
-        **sink_params,
+        **dt_part_slice_plot.render_args,
     )
 
     column_particle_count_plot.make_plot(
         iplot,
-        **face_on_render_kwargs,
-        field_unit=None,
-        field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
-        vmin=1,
-        vmax=1e2,
-        norm="log",
-        contour_list=[1, 10, 100, 1000],
-        **sink_params,
+        **column_particle_count_plot.render_args,
     )
 
 
@@ -624,81 +709,40 @@ for ttarg in t_stop:
 import matplotlib
 
 column_density_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="kg.m^-2",
-    field_label="$\\int \\rho \\, \\mathrm{{d}} z$",
-    vmin=1e-2,
-    vmax=1e4,
-    norm="log",
-    **sink_params,
+    **column_density_plot.render_args,
 )
 
 for jdust, p in enumerate(dust_column_density_plot):
     p.render_all(
-        **face_on_render_kwargs,
-        field_unit="kg.m^-2",
-        field_label=f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$ [{grain_size_si[jdust]:.3g}]",
-        vmin=1e-2,
-        vmax=1e4,
-        norm="log",
-        **sink_params,
+        **p.render_args,
     )
 
 
 vertical_density_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="kg.m^-3",
-    field_label="$\\rho$",
-    vmin=1e-10,
-    vmax=1e-6,
-    norm="log",
-    **sink_params,
+    **vertical_density_plot.render_args,
 )
 
 for jdust, p in enumerate(dust_slice_density_plot):
     p.render_all(
-        **face_on_render_kwargs,
-        field_unit="kg.m^-3",
-        field_label=f"$\\rho_{{d, {jdust} }}$ [{grain_size_si[jdust]:.3g}]",
-        vmin=1e-10 / 100,
-        vmax=1e-6 / 100,
-        norm="log",
-        **sink_params,
+        **p.render_args,
     )
 
+for jdust, p in enumerate(dust_slice_epsilon_plot):
+    p.render_all(
+        **p.render_args,
+    )
 
 v_z_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="m.s^-1",
-    field_label="$\\mathrm{v}_z$",
-    cmap="seismic",
-    cmap_bad_color="white",
-    vmin=-300,
-    vmax=300,
-    **sink_params,
+    **v_z_slice_plot.render_args,
 )
 
 
 dt_part_slice_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit="year",
-    field_label="$\\Delta t$",
-    vmin=1e-4,
-    vmax=1,
-    norm="log",
-    contour_list=[1e-4, 1e-3, 1e-2, 1e-1, 1],
-    **sink_params,
+    **dt_part_slice_plot.render_args,
 )
 
 column_particle_count_plot.render_all(
-    **face_on_render_kwargs,
-    field_unit=None,
-    field_label="$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
-    vmin=1,
-    vmax=1e2,
-    norm="log",
-    contour_list=[1, 10, 100, 1000],
-    **sink_params,
+    **column_particle_count_plot.render_args,
 )
 
 

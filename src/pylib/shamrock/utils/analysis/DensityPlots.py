@@ -26,7 +26,11 @@ def get_epsilon_getter(model, jdust, ndust):
         hpart = dic_out["hpart"]
         rho = pmass * (hfact / np.array(hpart)) ** 3
 
-        return rhod / rho
+        tmp = rhod / rho
+
+        print(tmp.min(), tmp.max())
+        print(tmp)
+        return tmp
 
     return int_getter
 

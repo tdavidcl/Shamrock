@@ -9,6 +9,7 @@ from .DensityPlots import (
     SliceDensityPlot,
     ColumnDensityPlotDust,
     SliceDensityPlotDust,
+    get_epsilon_getter,
 )
 from .ColumnParticleCount import ColumnParticleCount
 from .ParticlesDt import SliceDtPart
