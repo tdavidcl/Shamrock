@@ -14,10 +14,10 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
+import shamrock.external.coala as coala
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
 
-import shamrock.external.coala as coala
 import shamrock
 
 shamrock.enable_experimental_features()
@@ -45,14 +45,14 @@ ucte = shamrock.Constants(codeu)
 
 
 configs = [
-    {"kernel": "M4", "ndust" : 0, "coala":False},
-    {"kernel": "M6", "ndust" : 0, "coala":False}
+    {"kernel": "M4", "ndust": 0, "coala": False},
+    {"kernel": "M6", "ndust": 0, "coala": False},
 ]
 
 for n in range(100):
-    configs.append({"kernel": "M6", "ndust" : n, "coala":False})
+    configs.append({"kernel": "M6", "ndust": n, "coala": False})
     if n >= 5:
-        configs.append({"kernel": "M6", "ndust" : n, "coala":True})
+        configs.append({"kernel": "M6", "ndust": n, "coala": True})
 
 for c in configs:
     # Resolution
@@ -71,7 +71,6 @@ for c in configs:
 
     # The list of times at which the simulation will pause for analysis / dumping
     t_stop = [i * dt_stop for i in range(nstop + 1)]
-
 
     # Sink parameters
     center_mass = 1.0
@@ -124,25 +123,20 @@ for c in configs:
     # Physical constants
     G = ucte.G()
 
-
     # Disc profiles
     def sigma_profile(r):
         sigma_0 = 1.0  # We do not care as it will be renormalized
         return sigma_0 * (r / r0) ** (-p)
 
-
     def kep_profile(r):
         return (G * center_mass / r) ** 0.5
-
 
     def omega_k(r):
         return kep_profile(r) / r
 
-
     def cs_profile(r):
         cs_in = (H_r_0 * r0) * omega_k(r0)
         return ((r / r0) ** (-q)) * cs_in
-
 
     # %%
     # Create the dump directory if it does not exist
@@ -164,17 +158,14 @@ for c in configs:
 
     cs0 = cs_profile(r0)
 
-
     def rot_profile(r):
         return ((kep_profile(r) ** 2) - (2 * p + q) * cs_profile(r) ** 2) ** 0.5
-
 
     def H_profile(r):
         H = cs_profile(r) / omega_k(r)
         # fact = (2.**0.5) * 3. # factor taken from phantom, to fasten thermalizing
         fact = 1.0
         return fact * H
-
 
     print(f"grains sizes = {grain_size_si_edges} [m]")
     print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
@@ -197,15 +188,12 @@ for c in configs:
     print(f"grains sizes = {grain_size} [code units]")
     print(f"grains dens  = {rho_grains} [code units]")
 
-
     if ndust > 0:
-
         massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
         massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 
         print(f"massgrid = {massgrid} [code units]")
         print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
-
 
         K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
         K0 *= K0_multiplier
@@ -226,7 +214,6 @@ for c in configs:
 
     model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel=kernel)
 
-
     dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
 
     # %%
@@ -237,7 +224,6 @@ for c in configs:
     mrn_weight = mrn_weight / np.sum(mrn_weight)
 
     print(f"mrn_weight = {mrn_weight}")
-
 
     def compute_sj_new_j(patchdata, j):
         global pmass
@@ -254,7 +240,6 @@ for c in configs:
         )
 
         return s
-
 
     def setup_model():
         global disc_mass
@@ -275,9 +260,9 @@ for c in configs:
             if use_coala:
                 cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
 
-
-
-        cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
+        cfg.add_kill_sphere(
+            center=(0, 0, 0), radius=bsize
+        )  # kill particles outside the simulation box
 
         cfg.set_units(codeu)
         cfg.set_particle_mass(pmass)
@@ -391,14 +376,12 @@ for c in configs:
 
         model.set_dt(0.0)  # to help the corrector on next step after adding dust
 
-
     setup_model()
 
     # %%
     # Evolve the simulation
     model.solver_logs_reset_cumulated_step_time()
     model.solver_logs_reset_step_count()
-
 
     res_rates = []
     for i in range(10):
@@ -409,4 +392,3 @@ for c in configs:
     c2["rate"] = np.max(res_rates)
 
     print(c2)
-

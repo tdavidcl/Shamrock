@@ -39,7 +39,7 @@ H_r_0 = 0.05
 
 box_H_count = 8
 
-ndust = 40
+ndust = 20
 mrn_pow = 3.5
 mrn_cutoff = 250e-9
 
@@ -197,7 +197,7 @@ def setup_model():
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
 
-    cfg.set_dust_mode_monofluid_tvi(ndust)
+    cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
     cfg.set_dust_drag_epstein(grain_size, rho_grains)
     if do_coag:
         cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
@@ -491,6 +491,7 @@ def analyse_and_plot(j):
     ax_zsum.set_ylim(1e-17, 1e-9)
 
     fig_coala.tight_layout()
+    os.makedirs(f"mono_{'coag' if do_coag else 'mono'}", exist_ok=True)
     fig_coala.savefig(f"mono_{'coag' if do_coag else 'mono'}/coala_plot_avg_{j}.png")
     # plt.show()
     plt.close(fig_coala)

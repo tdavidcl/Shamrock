@@ -14,10 +14,10 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
+import shamrock.external.coala as coala
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
 
-import shamrock.external.coala as coala
 import shamrock
 
 shamrock.enable_experimental_features()
@@ -82,21 +82,23 @@ beta_AV = 2.0
 
 # Dust parameters
 kernel = "M6"
-ndust = 0
-use_coala = False
+ndust = int(os.environ.get("NDUST", 0))
+use_coala = True
+
+print(f"ndust = {ndust}")
 
 mrn_pow = 3.5
-mrn_cutoff_si = np.inf  # would be 250e-9 normally
+mrn_cutoff_si = 250e-9  # would be 250e-9 normally
 
 epsilon_base = 0.01
 
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
-grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
+grain_size_si_edges = np.logspace(-9, -2, ndust + 1)  # 10um -> 1mm
 
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5
 rhodust_eps = 1e-17
-K0_multiplier = 100
+K0_multiplier = 1
 
 # Integrator parameters
 C_cour = 0.1
@@ -188,13 +190,11 @@ print(f"grains dens  = {rho_grains} [code units]")
 
 
 if ndust > 0:
-
     massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
     massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 
     print(f"massgrid = {massgrid} [code units]")
     print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
-
 
     K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
     K0 *= K0_multiplier
@@ -263,8 +263,6 @@ def setup_model():
         cfg.set_dust_drag_epstein(grain_size, rho_grains)
         if use_coala:
             cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
-
-
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
@@ -402,6 +400,8 @@ from shamrock.utils.analysis import (
     get_rhog_getter,
 )
 
+plot_jdust_mod = 4
+
 face_on_render_kwargs = {
     "x_unit": "au",
     "y_unit": "au",
@@ -445,6 +445,9 @@ if ndust > 0:
     dust_column_density_plot = []
 
     for jdust in range(ndust):
+        if jdust % plot_jdust_mod > 0:
+            continue
+
         dust_column_density_plot.append(
             ColumnDensityPlotDust(
                 model,
@@ -462,7 +465,11 @@ if ndust > 0:
         )
 
         fact = epsilon_base * mrn_weight[jdust]
-        dust_column_density_plot[jdust].render_args = {
+
+        if fact == 0:
+            fact = epsilon_base * np.max(mrn_weight)  # otherwise we get a 0 for axis
+
+        dust_column_density_plot[-1].render_args = {
             **column_density_plot.render_args,
             "field_unit": "kg.m^-2",
             "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
@@ -500,6 +507,9 @@ if ndust > 0:
     dust_slice_density_plot = []
 
     for jdust in range(ndust):
+        if jdust % plot_jdust_mod > 0:
+            continue
+
         dust_slice_density_plot.append(
             SliceDensityPlotDust(
                 model,
@@ -517,7 +527,10 @@ if ndust > 0:
         )
         fact = epsilon_base * mrn_weight[jdust]
 
-        dust_slice_density_plot[jdust].render_args = {
+        if fact == 0:
+            fact = epsilon_base * np.max(mrn_weight)  # otherwise we get a 0 for axis
+
+        dust_slice_density_plot[-1].render_args = {
             **vertical_density_plot.render_args,
             "field_unit": "kg.m^-3",
             "field_label": f"$\\rho_{{d, {jdust} }}$",
@@ -528,10 +541,11 @@ if ndust > 0:
             "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
         }
 
-
     dust_slice_epsilon_plot = []
 
     for jdust in range(ndust):
+        if jdust % plot_jdust_mod > 0:
+            continue
 
         def compute_epsilon_integ(helper, internal_jdust=jdust):
             return helper.slice_render(
@@ -557,7 +571,7 @@ if ndust > 0:
             )
         )
 
-        dust_slice_epsilon_plot[jdust].render_args = {
+        dust_slice_epsilon_plot[-1].render_args = {
             **vertical_density_plot.render_args,
             "field_unit": None,
             "field_label": f"$\\epsilon_{{d, {jdust} }}$",
@@ -859,8 +873,6 @@ class radial_profile_plot:
         self.profile_plot.render_all(self.plot_func)
 
 
-
-
 class vert_slices_plots:
     def __init__(self):
         self.profile_plot = AnalysisHelper(
@@ -1071,6 +1083,7 @@ class vert_slices_plots:
     def render_all(self):
         self.profile_plot.render_all(self.plot_func)
 
+
 if ndust > 0:
     rad_plot = radial_profile_plot()
     vert_plot = vert_slices_plots()
@@ -1114,19 +1127,19 @@ def render_analysis(iplot):
     )
 
     if ndust > 0:
-        for jdust, p in enumerate(dust_column_density_plot):
+        for p in dust_column_density_plot:
             p.make_plot(
                 iplot,
                 **p.render_args,
             )
 
-        for jdust, p in enumerate(dust_slice_density_plot):
+        for p in dust_slice_density_plot:
             p.make_plot(
                 iplot,
                 **p.render_args,
             )
 
-        for jdust, p in enumerate(dust_slice_epsilon_plot):
+        for p in dust_slice_epsilon_plot:
             p.make_plot(
                 iplot,
                 **p.render_args,
@@ -1164,7 +1177,9 @@ iplot = 0
 istop = 0
 for ttarg in t_stop:
     if ttarg >= t_start:
-        model.evolve_until(ttarg)
+        # model.evolve_until(ttarg)
+
+        model.timestep()
 
         if istop % dump_freq_stop == 0:
             dump_helper.write_dump(idump, purge_old_dumps=True, keep_first=1, keep_last=3)
