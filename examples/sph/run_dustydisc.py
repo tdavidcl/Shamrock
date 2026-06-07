@@ -1177,9 +1177,9 @@ iplot = 0
 istop = 0
 for ttarg in t_stop:
     if ttarg >= t_start:
-        # model.evolve_until(ttarg)
+        model.evolve_until(ttarg)
 
-        model.timestep()
+        # model.timestep()
 
         if istop % dump_freq_stop == 0:
             dump_helper.write_dump(idump, purge_old_dumps=True, keep_first=1, keep_last=3)
