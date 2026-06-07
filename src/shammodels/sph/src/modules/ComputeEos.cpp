@@ -604,9 +604,6 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
     shambase::get_check_ref(storage.pressure).ensure_sizes(counts_with_ghosts);
     shambase::get_check_ref(storage.soundspeed).ensure_sizes(counts_with_ghosts);
 
-    logger::raw_ln(
-        solver_config.dust_config.has_epsilon_field(), solver_config.dust_config.has_s_j_field());
-
     if (solver_config.dust_config.has_epsilon_field()) {
 
         u32 iepsilon_interf = ghost_layout.get_field_idx<Tscal>("epsilon");

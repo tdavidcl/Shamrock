@@ -93,6 +93,23 @@ void integ::leapfrog_corrector(
     sycl::range<1> elem_range,
     flt hdt) {
 
+    if (elem_range.get(0) > buf_der_old.get_size()) {
+        throw shambase::make_except_with_loc<std::runtime_error>(
+            "elem_range.get(0) > buf_der_old.get_size()");
+    }
+    if (elem_range.get(0) > buf_eps_sq.get_size()) {
+        throw shambase::make_except_with_loc<std::runtime_error>(
+            "elem_range.get(0) > buf_eps_sq.get_size()");
+    }
+    if (elem_range.get(0) > buf_val.get_size()) {
+        throw shambase::make_except_with_loc<std::runtime_error>(
+            "elem_range.get(0) > buf_val.get_size()");
+    }
+    if (elem_range.get(0) > buf_der.get_size()) {
+        throw shambase::make_except_with_loc<std::runtime_error>(
+            "elem_range.get(0) > buf_der.get_size()");
+    }
+
     sham::EventList depends_list;
 
     auto acc_u          = buf_val.get_write_access(depends_list);

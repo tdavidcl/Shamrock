@@ -30,9 +30,16 @@ codeu = shamrock.UnitSystem(
 )
 ucte = shamrock.Constants(codeu)
 
+kg_m3_codeu = codeu.get("kg") * codeu.get("m", power=-3)
+kg_m3_fact = codeu.to("kg") * codeu.to("m", power=-3)
+print("kg_m3_codeu =", kg_m3_codeu)
+print("kg_m3_fact =", kg_m3_fact)
+print("codeu.get('m') / codeu.get('s') =", codeu.get("m") / codeu.get("s"))
+print("codeu.to('m') / codeu.to('s') =", codeu.to("m") / codeu.to("s"))
+
 
 gamma = 1.4
-rho_i = 1e-7
+rho_i = 1e-10 * kg_m3_codeu
 central_mass = 1
 R0 = 1
 H_r_0 = 0.05
@@ -48,13 +55,11 @@ epsilon_base = 0.01
 
 do_coag = True
 
-print("codeu.get('m') / codeu.get('s') =", codeu.get("m") / codeu.get("s"))
-print("codeu.to('m') / codeu.to('s') =", codeu.to("m") / codeu.to("s"))
 
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5
 rhodust_eps = 1e-17
-K0_multiplier = 100
+K0_multiplier = 1
 
 
 sim_folder = "dusty_settle_coag/"
@@ -505,7 +510,7 @@ tnext = 0
 for j in range(1000):
     if tlist[j] >= t_start:
         if j > 0:
-            #model.evolve_until(tlist[j])
+            # model.evolve_until(tlist[j])
             model.timestep()
 
         if j == 0:

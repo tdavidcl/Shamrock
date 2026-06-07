@@ -47,7 +47,7 @@
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
+void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs(Tscal dt_hydro) {
 
     Cfg_AV cfg_av       = solver_config.artif_viscosity;
     Cfg_MHD cfg_mhd     = solver_config.mhd_config;
@@ -75,7 +75,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs() {
 
     if (cfg_dust.has_s_j_field()) {
         // we can do it separately because the backreaction is done only through the pressure
-        update_derivs_dust_monofluid_tvi_Sj(cfg_dust);
+        update_derivs_dust_monofluid_tvi_Sj(cfg_dust, dt_hydro);
     }
 }
 
@@ -1070,7 +1070,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust_monofluid_tvi_Sj(
-    DustConfig cfg) {
+    DustConfig cfg, Tscal dt_hydro) {
 
     using MonofluidTVI = typename DustConfig::MonofluidTVI;
 
@@ -1258,6 +1258,10 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
         dv_max->value = cfg_evol->dv_max;
 
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt_hydro_edge
+            = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
+        dt_hydro_edge->value = dt_hydro;
+
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> grad_P_on_rho
             = std::make_shared<shamrock::solvergraph::Field<Tvec>>(1, "grad P/rho", "grad P/rho");
 
@@ -1289,7 +1293,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         node->set_edges(
             rhodust_eps, dv_max, massgrid, tabflux_coag, part_counts, s_j_refs, delta_v, S_coag);
 
-        node_add_source_term->set_edges(part_counts, rhodust_eps, S_coag, s_j_refs, ds_j_dt_refs);
+        node_add_source_term->set_edges(
+            part_counts, rhodust_eps, dt_hydro_edge, S_coag, s_j_refs, ds_j_dt_refs);
 
         press_grad_node->evaluate();
         delta_v_node->evaluate();
