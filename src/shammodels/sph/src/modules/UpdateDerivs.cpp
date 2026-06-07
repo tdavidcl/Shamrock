@@ -1300,8 +1300,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
         node_add_source_term->evaluate();
     }
-  
-        // logger::raw_ln("S_coag = ", S_coag->get(0).get_buf().copy_to_stdvec());
+
+    // logger::raw_ln("S_coag = ", S_coag->get(0).get_buf().copy_to_stdvec());
     MonofluidTVI &cfg_monofluid_tvi
         = shambase::get_check_ref((std::get_if<MonofluidTVI>(&cfg.current_mode)));
 

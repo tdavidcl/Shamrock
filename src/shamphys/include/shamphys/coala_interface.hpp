@@ -117,6 +117,11 @@ namespace shamphys {
         SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
         SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
 
+        // initialize flux to 0
+        for (int j = 0; j < nbins; ++j) {
+            flux[j] = 0;
+        }
+
         /*
          * Python version:
          * flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij)
