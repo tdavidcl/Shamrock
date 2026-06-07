@@ -17,6 +17,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
 
+import shamrock.external.coala as coala
 import shamrock
 
 shamrock.enable_experimental_features()
@@ -82,6 +83,8 @@ beta_AV = 2.0
 # Dust parameters
 kernel = "M6"
 ndust = 0
+use_coala = False
+
 mrn_pow = 3.5
 mrn_cutoff_si = np.inf  # would be 250e-9 normally
 
@@ -90,11 +93,16 @@ epsilon_base = 0.01
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
 grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
 
+dv_max = 1000000 * codeu.get("m") / codeu.get("s")
+Q = 5
+rhodust_eps = 1e-17
+K0_multiplier = 100
+
 # Integrator parameters
 C_cour = 0.1
 C_force = 0.1
 
-sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}/"
+sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}_coala_{use_coala}/"
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
@@ -178,6 +186,22 @@ print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
 print(f"grains sizes = {grain_size} [code units]")
 print(f"grains dens  = {rho_grains} [code units]")
 
+
+if ndust > 0:
+
+    massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
+    massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
+
+    print(f"massgrid = {massgrid} [code units]")
+    print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
+
+
+    K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
+    K0 *= K0_multiplier
+    print(f"K0 = {K0}")
+
+    tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
+
 # %%
 # Start the context
 # The context holds the data of the code
@@ -237,6 +261,10 @@ def setup_model():
     if ndust > 0:
         cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
         cfg.set_dust_drag_epstein(grain_size, rho_grains)
+        if use_coala:
+            cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
+
+
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
