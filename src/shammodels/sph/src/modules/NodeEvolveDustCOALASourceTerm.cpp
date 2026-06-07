@@ -119,13 +119,6 @@ namespace shammodels::sph::modules {
                         gij,
                         flux,
                         S_coag_span);
-
-                    Tscal S_coag_max_norm = 0;
-                    Tscal S_coag_sum      = 0;
-                    for (int j = 0; j < S_coag_span.extent(0); ++j) {
-                        S_coag_sum += S_coag_span(j);
-                        S_coag_max_norm = std::max(S_coag_max_norm, std::abs(S_coag_span(j)));
-                    }
                 });
             };
         }
