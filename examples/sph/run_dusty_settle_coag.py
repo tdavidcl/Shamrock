@@ -505,10 +505,10 @@ tnext = 0
 for j in range(1000):
     if tlist[j] >= t_start:
         if j > 0:
-            model.evolve_until(tlist[j])
-            # model.timestep()
+            #model.evolve_until(tlist[j])
+            model.timestep()
 
-        if j == 30:
+        if j == 0:
             for k in range(ndust):
 
                 def compute_sj_new(patchdata):

@@ -136,6 +136,17 @@ namespace shammodels::sph::modules {
                     Tvec grad_P_on_rho_g_a = grad_P_on_rho_a / (1 - sum_eps);
 
                     delta_v[thread_id] = tj_a * grad_P_on_rho_g_a;
+
+                    if (id_a == 1408)
+                        logger::raw_ln(
+                            "delta v",
+                            jdust,
+                            delta_v[thread_id],
+                            grad_P_on_rho_a,
+                            sum_eps,
+                            rho_a,
+                            eps_j_a,
+                            tj_a);
                 });
         }
 
