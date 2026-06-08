@@ -835,6 +835,8 @@ class radial_profile_plot:
             im[jdust, :] = data["histo_rho_d_j"][jdust]
 
         rho_norm = mcolors.LogNorm(vmin=1e-14, vmax=1e-9)
+        im = np.where(im <= 0, 1e-30, im)
+
         axs[1].pcolormesh(
             bin_edges_x1d,
             grain_size_si_edges,
@@ -1026,6 +1028,8 @@ class vert_slices_plots:
 
             for jdust in range(ndust):
                 im[jdust, :] = data["rcases"][ir]["histo_rho_d_j"][jdust]
+
+            im = np.where(im <= 0, 1e-30, im)
 
             axs[1, ir].pcolormesh(
                 z_r_edges,
