@@ -33,6 +33,8 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     args = parser.parse_args(argv)
 
+    run_cmd(f"syclenv create os.archlinux.acpp {builddir}")
+
     acpp_target = utils.acpp.get_acpp_target_env(args)
     if acpp_target == None:
         print("-- target not specified using acpp default")
@@ -49,18 +51,14 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     envgen.export_list = {
         "SHAMROCK_DIR": shamrockdir,
-        "BUILD_DIR": builddir,
-        "CMAKE_GENERATOR": cmake_gen,
-        "MAKE_EXEC": gen,
-        "MAKE_OPT": f"({gen_opt})",
-        "CMAKE_OPT": f"({cmake_extra_args})",
+        "BUILD_DIR": "$SYCLENV_CURRENT_ENV_PATH",
+        "CMAKE_SHAMROCK_OPT": f"({cmake_extra_args})",
         "SHAMROCK_BUILD_TYPE": f"'{cmake_build_type}'",
         "SHAMROCK_CXX_FLAGS": "\" --acpp-targets='" + acpp_target + "'\"",
         "SPHINX_VENV_DIR": builddir + "/.sphinxvenv",
     }
 
     envgen.ext_script_list = [
-        shamrockdir + "/env/helpers/clone-acpp.sh",
         shamrockdir + "/env/helpers/pull_reffiles.sh",
         shamrockdir + "/env/helpers/sphinx.sh",
     ]
