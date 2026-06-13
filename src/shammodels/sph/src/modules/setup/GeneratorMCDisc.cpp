@@ -101,6 +101,9 @@ shamrock::patch::PatchDataLayer shammodels::sph::modules::GeneratorMCDisc<Tvec, 
     std::vector<Tvec> vec_pos;
     std::vector<Tscal> vec_rho;
 
+    vec_pos.reserve(pos_data.size());
+    vec_rho.reserve(pos_data.size());
+
     for (DiscOutput o : pos_data) {
         vec_pos.push_back(o.pos);
         vec_rho.push_back(o.rho);
@@ -108,12 +111,14 @@ shamrock::patch::PatchDataLayer shammodels::sph::modules::GeneratorMCDisc<Tvec, 
 
     // compute the hpart from the rho
     std::vector<Tscal> vec_h;
+    vec_h.reserve(pos_data.size());
     for (Tscal rho : vec_rho) {
         vec_h.push_back(shamrock::sph::h_rho(pmass, rho, Kernel::hfactd) * init_h_factor);
     }
 
     // compute velocities
     std::vector<Tvec> vec_vel;
+    vec_vel.reserve(pos_data.size());
     for (size_t i = 0; i < vec_pos.size(); i++) {
         Tvec vel = vel_profile(vec_pos[i]);
         vec_vel.push_back(vel);
@@ -128,6 +133,7 @@ shamrock::patch::PatchDataLayer shammodels::sph::modules::GeneratorMCDisc<Tvec, 
             throw shambase::make_except_with_loc<std::invalid_argument>(
                 "With this EOS you need to provide a cs_profile");
         }
+        vec_cs.reserve(pos_data.size());
         for (size_t i = 0; i < vec_pos.size(); i++) {
             Tscal cs = cs_profile(vec_pos[i]);
             vec_cs.push_back(cs);
