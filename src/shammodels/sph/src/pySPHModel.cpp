@@ -448,6 +448,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     std::move(sigma_profile),
                     std::move(H_profile),
                     [vth_r = std::move(rot_profile)](Tvec pos) {
+                        pos[2]  = 0; // to get the cylindrical radius
                         Tscal r = sycl::length(pos);
 
                         auto etheta = sycl::vec<Tscal, 3>{-pos.y(), pos.x(), 0};
@@ -456,6 +457,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                         return vth_r(r) * etheta;
                     },
                     [cs_r = std::move(cs_profile)](Tvec pos) {
+                        pos[2]  = 0; // to get the cylindrical radius
                         Tscal r = sycl::length(pos);
                         return cs_r(r);
                     },
