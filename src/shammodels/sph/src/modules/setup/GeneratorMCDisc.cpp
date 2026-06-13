@@ -56,16 +56,6 @@ auto shammodels::sph::modules::GeneratorMCDisc<Tvec, SPHKernel>::DiscIterator::n
     Tscal fs  = 1;
     Tscal rho = (sigma * fs) * sycl::exp(-z * z / (2 * H * H));
 
-    /*
-    Tscal rot_speed = rot_profile(r);
-    Tscal cs        = cs_profile(r);
-
-    auto etheta = sycl::vec<Tscal, 3>{-pos.y(), pos.x(), 0};
-    etheta /= sycl::length(etheta);
-
-    auto vel = rot_speed * etheta;
-*/
-
     DiscOutput out{.pos = pos, .rho = rho};
 
     // increase counter + check if finished
