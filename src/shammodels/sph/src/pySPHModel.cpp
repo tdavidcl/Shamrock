@@ -438,16 +438,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                std::function<Tscal(Tscal)> H_profile,
                std::function<Tscal(Tscal)> rot_profile,
                std::function<Tscal(Tscal)> cs_profile,
+               std::function<Tvec(Tvec)> velocity_field,
+               std::function<Tscal(Tvec)> cs_field,
                u64 random_seed,
                Tscal init_h_factor) {
-                return self.make_generator_disc_mc(
-                    part_mass,
-                    disc_mass,
-                    r_in,
-                    r_out,
-                    std::move(sigma_profile),
-                    std::move(H_profile),
-                    [vth_r = std::move(rot_profile)](Tvec pos) {
+                auto build_vel_lambda = [&]() -> std::function<Tvec(Tvec)> {
+                    if (!velocity_field && !rot_profile) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "make_generator_disc_mc: either velocity_field or rot_profile must be "
+                            "provided");
+                    }
+
+                    if (velocity_field) {
+                        return std::move(velocity_field);
+                    }
+                    return [vth_r = std::move(rot_profile)](Tvec pos) {
                         pos[2]  = 0; // to get the cylindrical radius
                         Tscal r = sycl::length(pos);
 
@@ -455,12 +460,54 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                         etheta /= sycl::length(etheta);
 
                         return vth_r(r) * etheta;
-                    },
-                    [cs_r = std::move(cs_profile)](Tvec pos) {
+                    };
+                };
+
+                auto build_cs_lambda = [&]() -> std::function<Tscal(Tvec)> {
+                    bool need_cs = self.solver_config.is_eos_locally_isothermal();
+
+                    if (!need_cs) {
+                        if (cs_field) {
+                            logger::warn_ln(
+                                "SPHSetup",
+                                "make_generator_disc_mc: with the current EOS, cs_field is "
+                                "ignored");
+                        }
+                        if (cs_profile) {
+                            logger::warn_ln(
+                                "SPHSetup",
+                                "make_generator_disc_mc: with the current EOS, cs_profile is "
+                                "ignored");
+                        }
+                        return std::function<Tscal(Tvec)>{};
+                    }
+
+                    if (!cs_field && !cs_profile) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "make_generator_disc_mc: either cs_field or cs_profile must be "
+                            "provided");
+                    }
+
+                    if (cs_field) {
+                        return std::move(cs_field);
+                    }
+
+                    return [cs_r = std::move(cs_profile)](Tvec pos) {
                         pos[2]  = 0; // to get the cylindrical radius
                         Tscal r = sycl::length(pos);
                         return cs_r(r);
-                    },
+                    };
+                };
+
+                return self.make_generator_disc_mc(
+                    part_mass,
+                    disc_mass,
+                    r_in,
+                    r_out,
+                    std::move(sigma_profile),
+                    std::move(H_profile),
+                    build_vel_lambda(),
+                    build_cs_lambda(),
                     std::mt19937_64(random_seed),
                     init_h_factor);
             },
@@ -471,8 +518,10 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("r_out"),
             py::arg("sigma_profile"),
             py::arg("H_profile"),
-            py::arg("rot_profile"),
-            py::arg("cs_profile"),
+            py::arg("rot_profile")    = std::function<Tscal(Tscal)>{},
+            py::arg("cs_profile")     = std::function<Tscal(Tscal)>{},
+            py::arg("velocity_field") = std::function<Tvec(Tvec)>{},
+            py::arg("cs_field")       = std::function<Tscal(Tvec)>{},
             py::arg("random_seed"),
             py::arg("init_h_factor") = 0.8)
         .def(

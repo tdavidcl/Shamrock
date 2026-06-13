@@ -124,6 +124,10 @@ shamrock::patch::PatchDataLayer shammodels::sph::modules::GeneratorMCDisc<Tvec, 
 
     std::vector<Tscal> vec_cs;
     if (need_cs) {
+        if (!cs_profile) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(
+                "With this EOS you need to provide a cs_profile");
+        }
         for (size_t i = 0; i < vec_pos.size(); i++) {
             Tscal cs = cs_profile(vec_pos[i]);
             vec_cs.push_back(cs);
