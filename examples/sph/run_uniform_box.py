@@ -17,6 +17,11 @@ if not shamrock.sys.is_initialized():
     shamrock.sys.init("0:0")
 
 # %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
+
+
+# %%
 # Setup parameters
 
 gamma = 5.0 / 3.0
@@ -146,5 +151,8 @@ sc = ax.scatter(
     c=dat["hpart"],
     cmap=cm,
 )
+
+ax.minorticks_off()
+
 plt.colorbar(sc)
 plt.show()

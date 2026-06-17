@@ -52,6 +52,7 @@ box_H_count = 8
 ndust = 5
 mrn_pow = 3.5
 mrn_cutoff_si = np.inf  # would be 250e-9 normally
+gamma = 1.4
 
 epsilon_base = 0.01
 
@@ -109,9 +110,6 @@ def func_rho_g(r):
 
 
 cs_g = cs
-
-
-gamma = 1.4
 
 
 def uint_g(r):
@@ -191,7 +189,7 @@ def setup_model():
     )
 
     cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
-    cfg.set_dust_drag_epstein(grain_size, rho_grains)
+    cfg.set_dust_drag_epstein(gamma, grain_size, rho_grains)
     cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
     cfg.add_ext_force_velocity_dissipation(eta=5)
     cfg.set_boundary_periodic()
@@ -277,6 +275,35 @@ def compute_sj_new_j(patchdata, j):
 
 cmap = "plasma"
 dpi = 250
+
+
+def save_analysis_data(filename, key, value, ianalysis):
+    """Helper to save analysis data to a JSON file."""
+    import json
+
+    if shamrock.sys.world_rank() == 0:
+        filepath = os.path.join(dump_folder, filename)
+        try:
+            with open(filepath, "r") as fp:
+                data = json.load(fp)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {key: []}
+        data[key] = data[key][:ianalysis]
+        data[key].append({"t": model.get_time(), key: value})
+        with open(filepath, "w") as fp:
+            json.dump(data, fp, indent=4)
+
+
+def load_data_from_json(filename, key):
+    """Helper to load analysis data from a JSON file."""
+    import json
+
+    filepath = os.path.join(dump_folder, filename)
+    with open(filepath, "r") as fp:
+        data = json.load(fp)[key]
+    t = [d["t"] for d in data]
+    values = [d[key] for d in data]
+    return t, values
 
 
 def analyse_and_plot(j):
@@ -416,9 +443,26 @@ def analyse_and_plot(j):
     plt.close()
 
 
+# %%
+# Timestep loop
+
+analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
+
 t_start = model.get_time()
 
 tlist = [0.1 * i for i in range(20)] + [i * 0.1 + 2 for i in range(3000)]
+
+dust_injected = False
+
+idust_analysis = 0
+
+
+def dust_mass_analysis():
+    global idust_analysis
+    dust_mass = analysis_dust_mass.get_dust_mass()
+    save_analysis_data("dust_mass.json", "dust_mass", dust_mass, idust_analysis)
+    idust_analysis += 1
+
 
 tnext = 0
 for j in range(1000):
@@ -426,6 +470,9 @@ for j in range(1000):
         if j > 0:
             model.evolve_until(tlist[j])
             # model.timestep()
+
+            if dust_injected:
+                dust_mass_analysis()
 
         if j == 20:
             for k in range(ndust):
@@ -437,6 +484,9 @@ for j in range(1000):
 
                 model.set_cfl_cour(0.1)
                 model.set_cfl_force(0.1)
+
+            dust_injected = True
+            dust_mass_analysis()
 
             model.set_dt(0.0)  # to help the corrector on next step after adding dust
 
@@ -478,3 +528,40 @@ ani.save("_to_trash/dustysettle_vert_slice_s_tvi.gif", writer=writer)
 if shamrock.sys.world_rank() == 0:
     # Show the animation
     plt.show()
+
+# %%
+# Plot the mass history
+
+t, dust_mass = load_data_from_json("dust_mass.json", "dust_mass")
+dust_mass = np.array(dust_mass)
+
+plt.figure()
+for k in range(ndust):
+    mh = dust_mass[:, k]
+    deviation = (mh / mh[0]) - 1
+
+    t_dyn = 1
+    ts = shamrock.phys.epstein_stopping_time(
+        rho_grain=rho_grains[k], s_grain=grain_size[k], rho=rho_i, cs=cs, gamma=gamma
+    )
+    St = ts / t_dyn
+
+    plt.plot(t, deviation, label=f"dust {k}, s = {grain_size_si[k]:.1e} [m], St = {St:.1e}")
+
+total_dust_mass = np.sum(dust_mass, axis=1)
+plt.plot(
+    t,
+    (total_dust_mass / total_dust_mass[0]) - 1,
+    color="grey",
+    label="total dust mass",
+    linestyle="--",
+)
+
+plt.xlabel("t")
+plt.ylabel("$\delta M_{dust} / M_{dust,0}$")
+plt.yscale("log")
+plt.title("Dust mass conservation")
+plt.legend()
+plt.tight_layout()
+plt.savefig(f"{dump_folder}/plots/dust_mass_history.png")
+plt.show()
