@@ -57,7 +57,7 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-dt_stop = 5
+dt_stop = 1
 
 # Sink parameters
 center_mass = 1.0
@@ -370,7 +370,7 @@ max_rho_plot = 1e-9
 min_rho_plot = 1e-16
 max_rho_integ_plot = 1e4
 min_rho_integ_plot = 1e-3
-plot_jdust_mod = 1
+plot_jdust_mod = 4
 
 face_on_render_kwargs = {
     "x_unit": "au",
@@ -1071,6 +1071,216 @@ if ndust > 0:
     vert_plot = vert_slices_plots()
 
 
+def get_s_mean_getter(model, ndust, grain_size):
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        s_j = dic_out["s_j"].reshape(-1, ndust)
+        rho_d = s_j**2
+        s_mean = np.sum(rho_d * grain_size, axis=1) / np.sum(rho_d, axis=1)
+        print(f"s_mean = {s_mean} (max = {np.max(s_mean)}, min = {np.min(s_mean)})")
+        return s_mean
+
+    return maybe_njit(int_getter)
+
+
+def ColumnAverageDustSizePlot(
+    model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix, ndust, grain_size
+):
+    def compute_s_mean_integ(helper):
+        return helper.column_average_render(
+            "custom", "f64", custom_getter=get_s_mean_getter(model, ndust, grain_size)
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_integ,
+    )
+
+
+def SliceDustSizePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    ndust,
+    grain_size,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_s_mean_slice(helper):
+        return helper.slice_render(
+            "custom",
+            "f64",
+            custom_getter=get_s_mean_getter(model, ndust, grain_size),
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_slice,
+    )
+
+
+if ndust > 0:
+    col_smean_plot = ColumnAverageDustSizePlot(
+        model,
+        ext_r=disc.rout * 1.5,
+        nx=1024,
+        ny=1024,
+        ex=(1, 0, 0),
+        ey=(0, 1, 0),
+        center=(0, 0, 0),
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_column",
+        ndust=ndust,
+        grain_size=grain_size,
+    )
+    col_smean_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "m",
+        "field_label": "$\\langle s \\rangle$",
+        "vmin": grain_size_si.min(),
+        "vmax": grain_size_si.max(),
+        "contour_list": [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+        "norm": "log",
+    }
+
+    slice_smean_plot = SliceDustSizePlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_slice",
+        ndust=ndust,
+        grain_size=grain_size,
+    )
+
+    slice_smean_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "m",
+        "field_label": "$\\langle s \\rangle$",
+        "vmin": grain_size_si.min(),
+        "vmax": grain_size_si.max(),
+        "contour_list": [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+        "norm": "log",
+    }
+
+
+def get_s_mean_evol_getter(model, ndust, grain_size):
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        s_j = dic_out["s_j"].reshape(-1, ndust)
+        ds_j_dt = dic_out["ds_j_dt"].reshape(-1, ndust)
+
+        rho_d = s_j**2
+        drhod_dt = 2 * s_j * ds_j_dt
+
+        rho_d_sum = np.sum(rho_d, axis=1)
+        drhod_dt_sum = np.sum(drhod_dt, axis=1)
+
+        rho_d_s_sum = np.sum(rho_d * grain_size, axis=1)
+        drho_d_s_dt_sum = np.sum(drhod_dt * grain_size, axis=1)
+
+        s_mean = rho_d_s_sum / rho_d_sum
+        ds_mean_dt = (drho_d_s_dt_sum * rho_d_sum - drhod_dt_sum * rho_d_s_sum) / rho_d_sum**2
+
+        print(f"ds_mean_dt = {ds_mean_dt} (max = {np.max(ds_mean_dt)}, min = {np.min(ds_mean_dt)})")
+        si_conv = codeu.to("m") / codeu.to("s")
+        print(
+            f"ds_mean_dt (si) = {ds_mean_dt * si_conv} (max = {np.max(ds_mean_dt * si_conv)}, min = {np.min(ds_mean_dt * si_conv)})"
+        )
+        ret = ds_mean_dt / s_mean
+
+        si_conv = 1 / codeu.to("yr")
+        print(f"ret = {ret} (max = {np.max(ret)}, min = {np.min(ret)})")
+        print(
+            f"ret (si) = {ret * si_conv} (max = {np.max(ret * si_conv)}, min = {np.min(ret * si_conv)})"
+        )
+        return ret
+
+    return maybe_njit(int_getter)
+
+
+def SliceDustEvolSizePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    ndust,
+    grain_size,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_s_mean_evol_slice(helper):
+        return helper.slice_render(
+            "custom",
+            "f64",
+            custom_getter=get_s_mean_evol_getter(model, ndust, grain_size),
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_evol_slice,
+    )
+
+
+if ndust > 0:
+    slice_smean_evol_plot = SliceDustEvolSizePlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_evol_slice",
+        ndust=ndust,
+        grain_size=grain_size,
+    )
+
+    slice_smean_evol_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "yr^-1",
+        "field_label": "$\\frac{d}{dt} \\langle s \\rangle / \\langle s \\rangle$",
+        "vmin": -1e-3,
+        "vmax": 1e-3,
+        "contour_list": [-1, -1e-1, -1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1],
+        "norm": "linear",
+    }
+
+
 def analysis(ianalysis):
 
     column_density_plot.analysis_save(ianalysis)
@@ -1095,6 +1305,9 @@ def analysis(ianalysis):
     if ndust > 0:
         rad_plot.analysis_save(ianalysis)
         vert_plot.analysis_save(ianalysis)
+        col_smean_plot.analysis_save(ianalysis)
+        slice_smean_plot.analysis_save(ianalysis)
+        slice_smean_evol_plot.analysis_save(ianalysis)
 
 
 def render_analysis(iplot):
@@ -1151,6 +1364,11 @@ def render_analysis(iplot):
     if ndust > 0:
         rad_plot.make_plot(iplot)
         vert_plot.make_plot(iplot)
+
+        col_smean_plot.make_plot(iplot, **col_smean_plot.render_args)
+        slice_smean_plot.make_plot(iplot, **slice_smean_plot.render_args)
+
+        slice_smean_evol_plot.make_plot(iplot, **slice_smean_evol_plot.render_args)
 
 
 # %%
