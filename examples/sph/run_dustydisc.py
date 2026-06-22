@@ -57,7 +57,7 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-dt_stop = 1
+dt_stop = 10
 
 # Sink parameters
 center_mass = 1.0
@@ -190,15 +190,18 @@ dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
 # %%
 # Load the last dump if it exists, setup otherwise
 
+print("grain_size_si = ", grain_size_si)
+
 alpha = 4 - mrn_pow
 
 # apply cutoff on edges
 edges_clipped = np.clip(grain_size_si_edges, None, mrn_cutoff_si)
-
 mrn_weight = (edges_clipped[1:] ** (alpha + 1) - edges_clipped[:-1] ** (alpha + 1)) / (alpha + 1)
 mrn_weight = mrn_weight / np.sum(mrn_weight)
-
 print("mrn_weight = ", mrn_weight)
+
+# MRN weight is ds/N so that \int \rho(s) ds = \sum_j mrn_weight[j] \rho_j = \rho_d
+grain_size_si_bin_width = grain_size_si_edges[1:] - grain_size_si_edges[:-1]
 
 S_mean_init = (3.0 / 5.0) * mrn_cutoff_si
 S_mean = np.sum(mrn_weight * grain_size_si) / np.sum(mrn_weight)
@@ -1196,14 +1199,16 @@ def get_s_mean_evol_getter(model, ndust, grain_size):
         rho_d = s_j**2
         drhod_dt = 2 * s_j * ds_j_dt
 
-        rho_d_sum = np.sum(rho_d, axis=1)
-        drhod_dt_sum = np.sum(drhod_dt, axis=1)
+        rho_d_integ = np.sum(rho_d, axis=1)
+        drhod_dt_integ = np.sum(drhod_dt, axis=1)
 
-        rho_d_s_sum = np.sum(rho_d * grain_size, axis=1)
-        drho_d_s_dt_sum = np.sum(drhod_dt * grain_size, axis=1)
+        rho_d_s_integ = np.sum(rho_d * grain_size, axis=1)
+        drho_d_s_dt_integ = np.sum(drhod_dt * grain_size, axis=1)
 
-        s_mean = rho_d_s_sum / rho_d_sum
-        ds_mean_dt = (drho_d_s_dt_sum * rho_d_sum - drhod_dt_sum * rho_d_s_sum) / rho_d_sum**2
+        s_mean = rho_d_s_integ / rho_d_integ
+        ds_mean_dt = (
+            drho_d_s_dt_integ * rho_d_integ - drhod_dt_integ * rho_d_s_integ
+        ) / rho_d_integ**2
 
         print(f"ds_mean_dt = {ds_mean_dt} (max = {np.max(ds_mean_dt)}, min = {np.min(ds_mean_dt)})")
         si_conv = codeu.to("m") / codeu.to("s")
@@ -1270,14 +1275,20 @@ if ndust > 0:
         grain_size=grain_size,
     )
 
+    rnorm = mcolors.SymLogNorm(
+        vmin=-1e-2,
+        vmax=1e-2,
+        linthresh=1e-5,
+    )
+
     slice_smean_evol_plot.render_args = {
         **face_on_render_kwargs,
         "field_unit": "yr^-1",
-        "field_label": "$\\frac{d}{dt} \\langle s \\rangle / \\langle s \\rangle$",
-        "vmin": -1e-3,
-        "vmax": 1e-3,
+        "field_label": r"$\partial_t{ \langle s \rangle}  / \langle s \rangle$",
         "contour_list": [-1, -1e-1, -1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1],
-        "norm": "linear",
+        "cmap": "seismic",
+        "cmap_bad_color": "white",
+        "norm": rnorm,
     }
 
 
