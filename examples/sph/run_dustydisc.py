@@ -133,6 +133,7 @@ if shamrock.sys.world_rank() == 0:
 bsize = disc.rout * 2
 bmin = (-bsize, -bsize, -bsize)
 bmax = (bsize, bsize, bsize)
+profiles = disc.get_profiles()
 
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
@@ -441,14 +442,18 @@ if ndust > 0:
             "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
         }
 
+slice_params = {
+    "ext_r": disc.rout * 0.6 / (16.0 / 9.0),  # aspect ratio of 16:9
+    "nx": 1920,
+    "ny": 1080,
+    "ex": (1, 0, 0),
+    "ey": (0, 0, 1),
+    "center": ((disc.rin + disc.rout) / 2, 0, 0),
+}
+
 vertical_density_plot = SliceDensityPlot(
     model,
-    ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=(0, 0, 0),
+    **slice_params,
     analysis_folder=analysis_folder,
     analysis_prefix="rho_slice_gas",
 )
@@ -474,12 +479,7 @@ if ndust > 0:
         dust_slice_density_plot.append(
             SliceDensityPlotDust(
                 model,
-                ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-                nx=1920,
-                ny=1080,
-                ex=(1, 0, 0),
-                ey=(0, 0, 1),
-                center=(0, 0, 0),
+                **slice_params,
                 ndust=ndust,
                 jdust=jdust,
                 analysis_folder=analysis_folder,
@@ -520,12 +520,7 @@ if ndust > 0:
         dust_slice_epsilon_plot.append(
             StandardPlotHelper(
                 model,
-                ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-                nx=1920,
-                ny=1080,
-                ex=(1, 0, 0),
-                ey=(0, 0, 1),
-                center=(0, 0, 0),
+                **slice_params,
                 analysis_folder=analysis_folder,
                 analysis_prefix=f"epsilon_slice_dust_{jdust}",
                 compute_function=compute_epsilon_integ,
@@ -546,12 +541,7 @@ if ndust > 0:
 
 v_z_slice_plot = SliceVzPlot(
     model,
-    ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=(0, 0, 0),
+    **slice_params,
     analysis_folder=analysis_folder,
     analysis_prefix="v_z_slice",
     do_normalization=True,
@@ -568,14 +558,29 @@ v_z_slice_plot.render_args = {
     **sink_params,
 }
 
+relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="relative_azy_velocity_slice",
+    velocity_profile=profiles.vtheta_kepler,
+    do_normalization=True,
+    min_normalization=1e-9,
+)
+
+relative_azy_velocity_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "m.s^-1",
+    "field_label": "$\\mathrm{v}_{\\theta} - v_k$",
+    "cmap": "seismic",
+    "cmap_bad_color": "white",
+    "vmin": -300,
+    "vmax": 300,
+}
+
 dt_part_slice_plot = SliceDtPart(
     model,
-    ext_r=disc.rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
-    nx=1920,
-    ny=1080,
-    ex=(1, 0, 0),
-    ey=(0, 0, 1),
-    center=((disc.rin + disc.rout) / 2, 0, 0),
+    **slice_params,
     analysis_folder=analysis_folder,
     analysis_prefix="dt_part_slice",
 )
@@ -1063,6 +1068,7 @@ def analysis(ianalysis):
     column_density_plot.analysis_save(ianalysis)
     vertical_density_plot.analysis_save(ianalysis)
     v_z_slice_plot.analysis_save(ianalysis)
+    relative_azy_velocity_slice_plot.analysis_save(ianalysis)
     dt_part_slice_plot.analysis_save(ianalysis)
     column_particle_count_plot.analysis_save(ianalysis)
 
@@ -1117,6 +1123,11 @@ def render_analysis(iplot):
     v_z_slice_plot.make_plot(
         iplot,
         **v_z_slice_plot.render_args,
+    )
+
+    relative_azy_velocity_slice_plot.make_plot(
+        iplot,
+        **relative_azy_velocity_slice_plot.render_args,
     )
 
     dt_part_slice_plot.make_plot(
