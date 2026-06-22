@@ -17,6 +17,8 @@ import numpy as np
 import shamrock.external.coala as coala
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
+from shamrock.utils.numba_helper import maybe_njit
+from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
 import shamrock
 
@@ -55,25 +57,26 @@ scheduler_merge_val = scheduler_split_val // 16
 dump_freq_stop = 2
 plot_freq_stop = 1
 
-dt_stop = 0.1
-nstop = 30
-
-# The list of times at which the simulation will pause for analysis / dumping
-t_stop = [i * dt_stop for i in range(nstop + 1)]
-
+dt_stop = 5
 
 # Sink parameters
 center_mass = 1.0
-center_racc = 0.8
+center_racc = 8.0  # au
 
-# Disc parameter
-disc_mass = 0.01  # sol mass
-rout = 10.0  # au
-rin = 1.0  # au
-H_r_0 = 0.1
-q = 0.5
-p = 3.0 / 2.0
-r0 = 1.0
+# Disc parameters
+disc = shamrock.utils.disc_setup.StandardDisc(
+    units=codeu,
+    center_mass=center_mass,
+    disc_mass=0.05,  # sol mass
+    rin=10.0,  # au
+    rout=150.0,  # au
+    H_r_0=0.1,
+    q=0.5,
+    p=3.0 / 2.0,
+    r0=10.0,
+    rotation="subkeplerian_3d",
+    inner_tapering=True,
+)
 
 # Viscosity parameter
 alpha_AV = 1.0e-3 / 0.08
@@ -84,6 +87,7 @@ beta_AV = 2.0
 kernel = "M6"
 ndust = int(os.environ.get("NDUST", 0))
 use_coala = True
+gamma = 1.4
 
 print(f"ndust = {ndust}")
 
@@ -112,28 +116,6 @@ plot_folder = analysis_folder + "plots/"
 
 dump_prefix = dump_folder + "dump_"
 
-# Physical constants
-G = ucte.G()
-
-
-# Disc profiles
-def sigma_profile(r):
-    sigma_0 = 1.0  # We do not care as it will be renormalized
-    return sigma_0 * (r / r0) ** (-p)
-
-
-def kep_profile(r):
-    return (G * center_mass / r) ** 0.5
-
-
-def omega_k(r):
-    return kep_profile(r) / r
-
-
-def cs_profile(r):
-    cs_in = (H_r_0 * r0) * omega_k(r0)
-    return ((r / r0) ** (-q)) * cs_in
-
 
 # %%
 # Create the dump directory if it does not exist
@@ -147,24 +129,10 @@ if shamrock.sys.world_rank() == 0:
 # Utility functions and quantities deduced from the base one
 
 # Deduced quantities
-pmass = disc_mass / Npart
 
-bsize = rout * 2
+bsize = disc.rout * 2
 bmin = (-bsize, -bsize, -bsize)
 bmax = (bsize, bsize, bsize)
-
-cs0 = cs_profile(r0)
-
-
-def rot_profile(r):
-    return ((kep_profile(r) ** 2) - (2 * p + q) * cs_profile(r) ** 2) ** 0.5
-
-
-def H_profile(r):
-    H = cs_profile(r) / omega_k(r)
-    # fact = (2.**0.5) * 3. # factor taken from phantom, to fasten thermalizing
-    fact = 1.0
-    return fact * H
 
 
 print(f"grains sizes = {grain_size_si_edges} [m]")
@@ -229,7 +197,7 @@ print(f"mrn_weight = {mrn_weight}")
 
 
 def compute_sj_new_j(patchdata, j):
-    global pmass
+    pmass = model.get_particle_mass()
 
     hpart = patchdata["hpart"]
     rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
@@ -256,18 +224,18 @@ def setup_model():
     #    alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     # )
 
-    cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
+    cfg.set_eos_locally_isothermalLP07(cs0=disc.cs0(), q=disc.q, r0=disc.r0)
 
     if ndust > 0:
         cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
-        cfg.set_dust_drag_epstein(grain_size, rho_grains)
+        cfg.set_dust_drag_epstein(gamma, grain_size, rho_grains)
         if use_coala:
             cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
     cfg.set_units(codeu)
-    cfg.set_particle_mass(pmass)
+    cfg.set_particle_mass(disc.part_mass(Npart))
     # Set the CFL
     cfg.set_cfl_cour(C_cour)
     cfg.set_cfl_force(C_force)
@@ -302,20 +270,11 @@ def setup_model():
     # Create the setup
 
     setup = model.get_setup()
-    gen_disc = setup.make_generator_disc_mc(
-        part_mass=pmass,
-        disc_mass=disc_mass,
-        r_in=rin,
-        r_out=rout,
-        sigma_profile=sigma_profile,
-        H_profile=H_profile,
-        rot_profile=rot_profile,
-        cs_profile=cs_profile,
-        random_seed=666,
-    )
+    gen_disc = disc.make_generator(setup, Npart, random_seed=666)
 
     # Print the dot graph of the setup
-    print(gen_disc.get_dot())
+    if shamrock.sys.world_rank() == 0:
+        print(gen_disc.get_dot())
 
     # Apply the setup
     setup.apply_setup(gen_disc)
@@ -379,8 +338,6 @@ def setup_model():
     model.set_dt(0.0)  # to help the corrector on next step after adding dust
 
 
-dump_helper.load_last_dump_or(setup_model)
-
 from shamrock.utils.analysis import (
     AnalysisHelper,
     ColumnDensityPlot,
@@ -400,7 +357,11 @@ from shamrock.utils.analysis import (
     get_rhog_getter,
 )
 
-plot_jdust_mod = 4
+max_rho_plot = 1e-9
+min_rho_plot = 1e-16
+max_rho_integ_plot = 1e4
+min_rho_integ_plot = 1e-3
+plot_jdust_mod = 1
 
 face_on_render_kwargs = {
     "x_unit": "au",
@@ -421,7 +382,7 @@ perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 
 column_density_plot = ColumnDensityPlot(
     model,
-    ext_r=rout * 1.5,
+    ext_r=disc.rout * 1.5,
     nx=1024,
     ny=1024,
     ex=(1, 0, 0),
@@ -435,8 +396,8 @@ column_density_plot.render_args = {
     **face_on_render_kwargs,
     "field_unit": "kg.m^-2",
     "field_label": "$\\int \\rho \\, \\mathrm{{d}} z$",
-    "vmin": 1e-2,
-    "vmax": 1e4,
+    "vmin": min_rho_integ_plot,
+    "vmax": max_rho_integ_plot,
     "norm": "log",
     **sink_params,
     "extra_title": "[gas + dust]",
@@ -451,7 +412,7 @@ if ndust > 0:
         dust_column_density_plot.append(
             ColumnDensityPlotDust(
                 model,
-                ext_r=rout * 1.5,
+                ext_r=disc.rout * 1.5,
                 nx=1024,
                 ny=1024,
                 ex=(1, 0, 0),
@@ -473,8 +434,8 @@ if ndust > 0:
             **column_density_plot.render_args,
             "field_unit": "kg.m^-2",
             "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
-            "vmin": fact * 1e-2,
-            "vmax": fact * 1e4,
+            "vmin": fact * min_rho_integ_plot,
+            "vmax": fact * max_rho_integ_plot,
             "norm": "log",
             **sink_params,
             "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
@@ -482,7 +443,7 @@ if ndust > 0:
 
 vertical_density_plot = SliceDensityPlot(
     model,
-    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,
     ny=1080,
     ex=(1, 0, 0),
@@ -496,8 +457,8 @@ vertical_density_plot.render_args = {
     **face_on_render_kwargs,
     "field_unit": "kg.m^-3",
     "field_label": "$\\rho$",
-    "vmin": 1e-12,
-    "vmax": 1e-6,
+    "vmin": min_rho_plot,
+    "vmax": max_rho_plot,
     "norm": "log",
     **sink_params,
     "extra_title": "[gas + dust]",
@@ -513,7 +474,7 @@ if ndust > 0:
         dust_slice_density_plot.append(
             SliceDensityPlotDust(
                 model,
-                ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+                ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
                 nx=1920,
                 ny=1080,
                 ex=(1, 0, 0),
@@ -534,8 +495,8 @@ if ndust > 0:
             **vertical_density_plot.render_args,
             "field_unit": "kg.m^-3",
             "field_label": f"$\\rho_{{d, {jdust} }}$",
-            "vmin": fact * 1e-12,
-            "vmax": fact * 1e-6,
+            "vmin": fact * min_rho_plot,
+            "vmax": fact * max_rho_plot,
             "norm": "log",
             **sink_params,
             "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
@@ -559,7 +520,7 @@ if ndust > 0:
         dust_slice_epsilon_plot.append(
             StandardPlotHelper(
                 model,
-                ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+                ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
                 nx=1920,
                 ny=1080,
                 ex=(1, 0, 0),
@@ -585,7 +546,7 @@ if ndust > 0:
 
 v_z_slice_plot = SliceVzPlot(
     model,
-    ext_r=rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
+    ext_r=disc.rout * 1.1 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,
     ny=1080,
     ex=(1, 0, 0),
@@ -609,12 +570,12 @@ v_z_slice_plot.render_args = {
 
 dt_part_slice_plot = SliceDtPart(
     model,
-    ext_r=rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
+    ext_r=disc.rout * 0.5 / (16.0 / 9.0),  # aspect ratio of 16:9
     nx=1920,
     ny=1080,
     ex=(1, 0, 0),
     ey=(0, 0, 1),
-    center=((rin + rout) / 2, 0, 0),
+    center=((disc.rin + disc.rout) / 2, 0, 0),
     analysis_folder=analysis_folder,
     analysis_prefix="dt_part_slice",
 )
@@ -624,15 +585,15 @@ dt_part_slice_plot.render_args = {
     "field_unit": "year",
     "field_label": "$\\Delta t$",
     "vmin": 1e-4,
-    "vmax": 1,
+    "vmax": 100,
     "norm": "log",
-    "contour_list": [1e-4, 1e-3, 1e-2, 1e-1, 1],
+    "contour_list": [1e-2, 1e-1, 1, 10, 100],
     **sink_params,
 }
 
 column_particle_count_plot = ColumnParticleCount(
     model,
-    ext_r=rout * 1.5,
+    ext_r=disc.rout * 1.5,
     nx=1024,
     ny=1024,
     ex=(1, 0, 0),
@@ -673,8 +634,8 @@ class radial_profile_plot:
                 dic_out["xyz"][:, 1],
             )
 
-        x_min = center_racc / 2.0
-        x_max = rout * 2
+        x_min = center_racc / 1.1
+        x_max = disc.rout * 2
         x_min_log = np.log10(x_min)
         x_max_log = np.log10(x_max)
 
@@ -769,7 +730,7 @@ class radial_profile_plot:
         plt.yscale("log")
 
         plt.xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
-        plt.ylim(1e-16, 1e-5)
+        plt.ylim(min_rho_plot, max_rho_plot)
 
         text = f"t = {time:0.3f}"
         from matplotlib.offsetbox import AnchoredText
@@ -825,7 +786,7 @@ class radial_profile_plot:
         axs[0].set_yscale("log")
 
         axs[0].set_xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
-        axs[0].set_ylim(1.1e-14, 1e-6)  # 1.1 to avoid the tick
+        axs[0].set_ylim(min_rho_plot * 1.1, max_rho_plot)  # 1.1 to avoid the tick
 
         axs[0].legend(loc="upper right", fontsize=8)
 
@@ -834,7 +795,9 @@ class radial_profile_plot:
         for jdust in range(ndust):
             im[jdust, :] = data["histo_rho_d_j"][jdust]
 
-        rho_norm = mcolors.LogNorm(vmin=1e-14, vmax=1e-9)
+        rho_norm = mcolors.LogNorm(
+            vmin=min_rho_plot * epsilon_base, vmax=max_rho_plot * epsilon_base
+        )
         im = np.where(im <= 0, 1e-30, im)
 
         axs[1].pcolormesh(
@@ -881,12 +844,12 @@ class vert_slices_plots:
             analysis_folder=os.path.join(analysis_folder, "plots"),
             analysis_prefix="vert_slices",
         )
-        self.rcenters = [2, 5, 8]
+        self.rcenters = [20, 50, 100]
         self.rextents_fact = 0.25
 
     def analysis_save(self, ianalysis):
 
-        z_r_extent = 4 * H_r_0
+        z_r_extent = 4 * disc.H_r_0
         z_r_edges = np.linspace(-z_r_extent, z_r_extent, 2049)
 
         dens_fact = codeu.to("kg") * codeu.to("m", power=-3)
@@ -999,7 +962,9 @@ class vert_slices_plots:
             sharey="row",
             gridspec_kw={"wspace": 0.0, "hspace": 0},
         )
-        rho_norm = mcolors.LogNorm(vmin=1e-14, vmax=1e-9)
+        rho_norm = mcolors.LogNorm(
+            vmin=min_rho_plot * epsilon_base, vmax=max_rho_plot * epsilon_base
+        )
         for ir, rcenter in enumerate(self.rcenters):
             axs[0, ir].plot(bin_center, data["rcases"][ir]["histo_rho_t"], "--", label="total")
             axs[0, ir].plot(bin_center, data["rcases"][ir]["histo_rho_g"], color="0.0", label="gas")
@@ -1014,7 +979,7 @@ class vert_slices_plots:
 
             axs[0, ir].set_yscale("log")
             axs[0, ir].set_xlim(np.min(z_r_edges), np.max(z_r_edges))
-            axs[0, ir].set_ylim(1.1e-16, 1e-6)  # 1.1 to avoid the tick
+            axs[0, ir].set_ylim(1.1 * min_rho_plot, max_rho_plot)  # 1.1 to avoid the tick
             axs[0, ir].legend(loc="upper right", fontsize=8)
 
             axs[0, ir].set_title(rf"$r \in {rcenter} \pm {self.rextents_fact * rcenter}$")
@@ -1171,81 +1136,26 @@ def render_analysis(iplot):
 
 # %%
 # Evolve the simulation
-model.solver_logs_reset_cumulated_step_time()
-model.solver_logs_reset_step_count()
-
-t_start = model.get_time()
-
-idump = 0
-iplot = 0
-istop = 0
-for ttarg in t_stop:
-    if ttarg >= t_start:
-        model.evolve_until(ttarg)
-
-        # model.timestep()
-
-        if istop % dump_freq_stop == 0:
-            dump_helper.write_dump(idump, purge_old_dumps=True, keep_first=1, keep_last=3)
-
-        if istop % plot_freq_stop == 0:
-            analysis(iplot)
-            render_analysis(iplot)
-
-    if istop % dump_freq_stop == 0:
-        idump += 1
-
-    if istop % plot_freq_stop == 0:
-        iplot += 1
-
-    istop += 1
-
-# %%
-# Plot generation
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-# Load the on-the-fly analysis after the run to make the plots
-# (everything in this section can be in another file)
-import matplotlib
-
-column_density_plot.render_all(
-    **column_density_plot.render_args,
-)
-
-for jdust, p in enumerate(dust_column_density_plot):
-    p.render_all(
-        **p.render_args,
-    )
 
 
-vertical_density_plot.render_all(
-    **vertical_density_plot.render_args,
-)
+class Simulation(SimulationRunner):
+    # Use the global vars defined at the top of the file
+    t_end = np.inf
+    dump_prefix = dump_prefix
 
-for jdust, p in enumerate(dust_slice_density_plot):
-    p.render_all(
-        **p.render_args,
-    )
+    @callback(tsim_interval=dt_stop)  # Do the analysis every dt_stop
+    def analysis(self, ianalysis):
+        analysis(ianalysis)
+        render_analysis(ianalysis)
 
-for jdust, p in enumerate(dust_slice_epsilon_plot):
-    p.render_all(
-        **p.render_args,
-    )
+    @callback(walltime_interval=10 * 60)  # Checkpoint the simulation every 10 minutes
+    def checkpoint(self, icheckpoint):
+        self.do_checkpoint(icheckpoint, purge_old_dumps=True, keep_first=1, keep_last=3)
 
-v_z_slice_plot.render_all(
-    **v_z_slice_plot.render_args,
-)
-
-
-dt_part_slice_plot.render_all(
-    **dt_part_slice_plot.render_args,
-)
-
-column_particle_count_plot.render_all(
-    **column_particle_count_plot.render_args,
-)
+    @simulation_setup
+    def setup(self):
+        setup_model()
 
 
-# %%
-# Plot the performance history (Switch close_plots to True if doing a long run)
-perf_analysis.plot_perf_history(close_plots=False)
-plt.show()
+sim = Simulation(model)
+sim.run()
