@@ -190,11 +190,19 @@ dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
 # %%
 # Load the last dump if it exists, setup otherwise
 
-mrn_weight = grain_size ** (4 - mrn_pow)
-mrn_weight *= grain_size_si < mrn_cutoff_si
+alpha = 4 - mrn_pow
+
+# apply cutoff on edges
+edges_clipped = np.clip(grain_size_si_edges, None, mrn_cutoff_si)
+
+mrn_weight = (edges_clipped[1:] ** (alpha + 1) - edges_clipped[:-1] ** (alpha + 1)) / (alpha + 1)
 mrn_weight = mrn_weight / np.sum(mrn_weight)
 
-print(f"mrn_weight = {mrn_weight}")
+print("mrn_weight = ", mrn_weight)
+
+S_mean_init = (3.0 / 5.0) * mrn_cutoff_si
+S_mean = np.sum(mrn_weight * grain_size_si) / np.sum(mrn_weight)
+print(f"S_mean = {S_mean} S_mean_init = {S_mean_init}")
 
 
 def compute_sj_new_j(patchdata, j):
