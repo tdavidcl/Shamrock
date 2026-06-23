@@ -20,43 +20,11 @@
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shamrock/solvergraph/IEdge.hpp"
+#include "shamrock/solvergraph/LifetimeTracker.hpp"
 #include <memory>
 #include <vector>
 
 namespace shamrock::solvergraph {
-
-    template<typename T>
-    class LifetimeTracker : public shambase::WithUUID<LifetimeTracker<T>, u64> {
-        public:
-        inline static void (*on_create)(u64 uuid)  = nullptr;
-        inline static void (*on_destroy)(u64 uuid) = nullptr;
-
-        inline static void (*on_update)(T &node) = nullptr;
-
-        LifetimeTracker() : shambase::WithUUID<LifetimeTracker, u64>() {
-            if (on_create != nullptr) {
-                on_create(this->get_uuid());
-            }
-        };
-
-        LifetimeTracker(const LifetimeTracker &)            = delete;
-        LifetimeTracker &operator=(const LifetimeTracker &) = delete;
-
-        LifetimeTracker(LifetimeTracker &&) noexcept            = default;
-        LifetimeTracker &operator=(LifetimeTracker &&) noexcept = default;
-
-        inline void notify_update(T &node) {
-            if (on_update != nullptr) {
-                on_update(node);
-            }
-        }
-
-        ~LifetimeTracker() {
-            if (on_destroy != nullptr) {
-                on_destroy(this->get_uuid());
-            }
-        };
-    };
 
     /// Inode is node between data edges, takes multiple inputs, multiple outputs
     class INode : public std::enable_shared_from_this<INode> {
@@ -148,7 +116,15 @@ namespace shamrock::solvergraph {
         }
 
         /// Evaluate the node
-        inline void evaluate() { _impl_evaluate_internal(); }
+        inline void evaluate() {
+            if (tracker) {
+                tracker->notify_op(0);
+            }
+            _impl_evaluate_internal();
+            if (tracker) {
+                tracker->notify_op(1);
+            }
+        }
 
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
         inline std::string get_dot_graph() { return get_dot_graph_partial(); };
