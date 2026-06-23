@@ -25,14 +25,52 @@
 
 namespace shamrock::solvergraph {
 
+    template<typename T>
+    class LifetimeTracker : public shambase::WithUUID<LifetimeTracker<T>, u64> {
+        public:
+        inline static void (*on_create)(u64 uuid)  = nullptr;
+        inline static void (*on_destroy)(u64 uuid) = nullptr;
+
+        inline static void (*on_update)(T &node) = nullptr;
+
+        LifetimeTracker() : shambase::WithUUID<LifetimeTracker, u64>() {
+            if (on_create != nullptr) {
+                on_create(this->get_uuid());
+            }
+        };
+
+        LifetimeTracker(const LifetimeTracker &)            = delete;
+        LifetimeTracker &operator=(const LifetimeTracker &) = delete;
+
+        LifetimeTracker(LifetimeTracker &&) noexcept            = default;
+        LifetimeTracker &operator=(LifetimeTracker &&) noexcept = default;
+
+        inline void notify_update(T &node) {
+            if (on_update != nullptr) {
+                on_update(node);
+            }
+        }
+
+        ~LifetimeTracker() {
+            if (on_destroy != nullptr) {
+                on_destroy(this->get_uuid());
+            }
+        };
+    };
+
     /// Inode is node between data edges, takes multiple inputs, multiple outputs
-    class INode : public std::enable_shared_from_this<INode>,
-                  public shambase::WithUUID<INode, u64> {
+    class INode : public std::enable_shared_from_this<INode> {
 
         /// Read only edges
-        std::vector<std::shared_ptr<IEdge>> ro_edges;
+        std::vector<std::shared_ptr<IEdge>> ro_edges = {};
         /// Read write edges
-        std::vector<std::shared_ptr<IEdge>> rw_edges;
+        std::vector<std::shared_ptr<IEdge>> rw_edges = {};
+
+        /// track the UUID of the node to notify changes.
+        /// Sadly we can not use a WithUUID directly since it is hard to log destruction in the
+        /// destructor if the object was moved which could lead to double free notifications.
+        std::shared_ptr<LifetimeTracker<INode>> tracker
+            = std::make_shared<LifetimeTracker<INode>>();
 
         public:
         INode() = default;
@@ -45,6 +83,9 @@ namespace shamrock::solvergraph {
 
         /// Move assignment - automatically delegates to base classes and members
         INode &operator=(INode &&) noexcept = default;
+
+        /// Get the UUID of the node
+        inline u64 get_uuid() const { return shambase::get_check_ref(tracker).get_uuid(); }
 
         /// Get a shared pointer to this node
         inline std::shared_ptr<INode> getptr_shared() { return shared_from_this(); }
@@ -71,6 +112,7 @@ namespace shamrock::solvergraph {
 
         /// Destructor (virtual) & reset the edges
         virtual ~INode() {
+            tracker.reset();
             __internal_set_ro_edges({});
             __internal_set_rw_edges({});
         }
@@ -124,6 +166,9 @@ namespace shamrock::solvergraph {
         /// Get the TeX of the node partial
         inline std::string get_tex_partial() { return _impl_get_tex(); };
 
+        /// Get the label of the node
+        inline std::string get_label() { return _impl_get_label(); };
+
         /// print the node info
         inline virtual std::string print_node_info() const {
             std::string node_info = shambase::format("Node info :\n");
@@ -176,6 +221,9 @@ namespace shamrock::solvergraph {
         for (auto e : ro_edges) {
             // shambase::get_check_ref(e).parent = getptr_weak();
         }
+        if (tracker) {
+            tracker->notify_update(*this);
+        }
     }
 
     inline void INode::__internal_set_rw_edges(std::vector<std::shared_ptr<IEdge>> new_rw_edges) {
@@ -185,6 +233,9 @@ namespace shamrock::solvergraph {
         this->rw_edges = new_rw_edges;
         for (auto e : rw_edges) {
             // shambase::get_check_ref(e).child = getptr_weak();
+        }
+        if (tracker) {
+            tracker->notify_update(*this);
         }
     }
 

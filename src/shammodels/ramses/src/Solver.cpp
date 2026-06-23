@@ -269,8 +269,30 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
     std::string _impl_get_tex() { return "TODO"; }
 };
 
+void on_node_create(u64 uuid) {
+    shamcomm::logs::info_ln(
+        "Solver",
+        "Node created with UUID =",
+        uuid);
+}
+
+void on_node_destroy(u64 uuid) {
+    shamcomm::logs::info_ln("Solver", "Node destroyed with UUID =", uuid);
+}
+
+void on_node_update(shamrock::solvergraph::INode &node) {
+    shamcomm::logs::info_ln("Solver", "Node updated with UUID =", node.get_uuid(), "type =", typeid(node).name(), "label =", node.get_label());
+}
+
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
+
+    shamrock::solvergraph::LifetimeTracker<shamrock::solvergraph::INode>::on_create
+        = on_node_create;
+    shamrock::solvergraph::LifetimeTracker<shamrock::solvergraph::INode>::on_destroy
+        = on_node_destroy;
+    shamrock::solvergraph::LifetimeTracker<shamrock::solvergraph::INode>::on_update
+        = on_node_update;
 
     bool enable_mem_free = false;
 
