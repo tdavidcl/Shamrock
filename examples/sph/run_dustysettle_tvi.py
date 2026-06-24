@@ -57,6 +57,10 @@ gamma = 1.4
 
 epsilon_base = 0.01
 
+tlist = [0.1 * i for i in range(20)] + [i * 0.1 + 2 for i in range(3000)]
+tinject = 2
+iinject = 20
+
 
 sim_folder = "_to_trash/dusty_settle/"
 dump_folder = sim_folder + "dump/"
@@ -242,11 +246,23 @@ def setup_model():
 
 dump_helper.load_last_dump_or(setup_model)
 
-mrn_weight = grain_size ** (4 - mrn_pow)
-mrn_weight *= grain_size_si < mrn_cutoff_si
-mrn_weight = mrn_weight / np.sum(mrn_weight)
 
-print(f"mrn_weight = {mrn_weight}")
+print("grain_size_si = ", grain_size_si)
+
+alpha = 4 - mrn_pow
+
+# apply cutoff on edges
+edges_clipped = np.clip(grain_size_si_edges, None, mrn_cutoff_si)
+mrn_weight = (edges_clipped[1:] ** (alpha + 1) - edges_clipped[:-1] ** (alpha + 1)) / (alpha + 1)
+mrn_weight = mrn_weight / np.sum(mrn_weight)
+print("mrn_weight = ", mrn_weight)
+
+# MRN weight is ds/N so that \int \rho(s) ds = \sum_j mrn_weight[j] \rho_j = \rho_d
+grain_size_si_bin_width = grain_size_si_edges[1:] - grain_size_si_edges[:-1]
+
+S_mean_init = (3.0 / 5.0) * mrn_cutoff_si
+S_mean = np.sum(mrn_weight * grain_size_si) / np.sum(mrn_weight)
+print(f"S_mean = {S_mean} S_mean_init = {S_mean_init}")
 
 pmass = model.get_particle_mass()
 
@@ -335,8 +351,8 @@ def analyse_and_plot(j):
     sz = 1
 
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(12, 5), dpi=dpi)
-    time = model.get_time()
-    fig.suptitle(f"t = {time:.2f}")
+    time = model.get_time() - tinject
+    fig.suptitle(f"t = {time:.2f} [yr]")
 
     fig.subplots_adjust(left=0.07, right=1.05, wspace=0.35)
 
@@ -367,14 +383,15 @@ def analyse_and_plot(j):
     axs[0].set_xlabel(r"$z$")
     axs[0].set_yscale("log")
     axs[0].set_ylim(1e-20, 1e-8)
-    axs[0].set_xlim(-4 * H, 4 * H)
+    axs[0].set_xlim(-2.2 * H, 2.2 * H)
     # axs[0].set_ylim(1e-12, 10**2)
 
     axs[1].set_ylabel(r"$\epsilon_j$")
     axs[1].set_xlabel(r"$z$")
     axs[1].set_yscale("log")
-    axs[1].set_ylim(1e-12, 2)
-    axs[1].set_xlim(-4 * H, 4 * H)
+    # axs[1].set_ylim(1e-12, 2) # if you want the full range
+    axs[1].set_ylim(1e-5, 1e-1)  # if you want to see the dust only
+    axs[1].set_xlim(-2.2 * H, 2.2 * H)
 
     gas_handle = Line2D(
         [0],
@@ -410,8 +427,8 @@ def analyse_and_plot(j):
     plt.close()
 
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(12, 5), dpi=dpi)
-    time = model.get_time()
-    fig.suptitle(f"t = {time:.2f}")
+    time = model.get_time() - tinject
+    fig.suptitle(f"t = {time:.2f} [yr]")
 
     fig.subplots_adjust(left=0.07, right=1.05, wspace=0.35)
 
@@ -451,8 +468,6 @@ analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
 
 t_start = model.get_time()
 
-tlist = [0.1 * i for i in range(20)] + [i * 0.1 + 2 for i in range(3000)]
-
 dust_injected = False
 
 idust_analysis = 0
@@ -475,7 +490,7 @@ for j in range(1000):
             if dust_injected:
                 dust_mass_analysis()
 
-        if j == 20:
+        if j == iinject:
             for k in range(ndust):
 
                 def compute_sj_new(patchdata):
