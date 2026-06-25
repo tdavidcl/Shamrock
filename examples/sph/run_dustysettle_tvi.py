@@ -53,7 +53,7 @@ box_H_count = 8
 
 ndust = 5
 mrn_pow = 3.5
-mrn_cutoff_si = 2e-4  # np.inf  # would be 250e-9 normally
+mrn_cutoff_si = np.inf  # would be 250e-9 normally
 gamma = 1.4
 
 epsilon_base = 0.01
