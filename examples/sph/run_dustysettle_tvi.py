@@ -359,7 +359,7 @@ def analyse_and_plot(j):
     axs[1].set_xlabel(r"$z$")
     axs[1].set_yscale("log")
     # axs[1].set_ylim(1e-12, 2) # if you want the full range
-    axs[1].set_ylim(1e-5, 1e-1)  # if you want to see the dust only
+    axs[1].set_ylim(1e-4, 1e-1)  # if you want to see the dust only
     axs[1].set_xlim(-2.2 * H, 2.2 * H)
 
     gas_handle = Line2D(
