@@ -19,6 +19,7 @@ from matplotlib.lines import Line2D
 from scipy.special import erfinv
 from shamrock.utils.numba_helper import maybe_njit
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
+from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 
 import shamrock
 
@@ -99,6 +100,10 @@ epsilon_base = 0.01
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
 grain_size_si_edges = np.logspace(-9, -2, ndust + 1)  # 10um -> 1mm
 
+mrn_distribution = DustMRNDistribution(
+    codeu, mrn_pow, mrn_cutoff_si, grain_size_si_edges, rho_grains_si_edges
+)
+
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5
 rhodust_eps = 1e-17
@@ -135,41 +140,22 @@ bmin = (-bsize, -bsize, -bsize)
 bmax = (bsize, bsize, bsize)
 profiles = disc.get_profiles()
 
-
-print(f"grains sizes = {grain_size_si_edges} [m]")
-print(f"grains dens  = {rho_grains_si_edges} [kg.m^-3]")
-
-grain_size_edges = grain_size_si_edges * codeu.get("m")
-rho_grains_edges = codeu.get("kg") * codeu.get("m", power=-3) * np.array(rho_grains_si_edges)
-
-print(f"grains sizes = {grain_size_edges} [code u]")
-print(f"grains dens  = {rho_grains_edges} [code u]")
-
-grain_size = np.sqrt(grain_size_edges[:-1] * grain_size_edges[1:])
-rho_grains = np.sqrt(rho_grains_edges[:-1] * rho_grains_edges[1:])
-
-grain_size_si = np.sqrt(grain_size_si_edges[:-1] * grain_size_si_edges[1:])
-rho_grains_si = np.sqrt(rho_grains_si_edges[:-1] * rho_grains_si_edges[1:])
-
-print(f"grains sizes = {grain_size_si} [m]")
-print(f"grains dens  = {rho_grains_si} [kg.m^-3]")
-
-print(f"grains sizes = {grain_size} [code units]")
-print(f"grains dens  = {rho_grains} [code units]")
-
+grain_size = mrn_distribution.grain_size
+grain_size_si = mrn_distribution.grain_size_si
+rho_grains = mrn_distribution.rho_grains
+massgrid_edges = mrn_distribution.massgrid_edges
+mrn_weight = mrn_distribution.mrn_weight
 
 if ndust > 0:
-    massgrid_edges = (4 * np.pi / 3) * rho_grains_edges * grain_size_edges**3
-    massgrid = np.sqrt(massgrid_edges[:-1] * massgrid_edges[1:])
 
-    print(f"massgrid = {massgrid} [code units]")
-    print(f"massgrid = {massgrid * codeu.to('kg')} [kg]")
+    print(f"massgrid = {mrn_distribution.massgrid} [code units]")
+    print(f"massgrid = {mrn_distribution.massgrid * codeu.to('kg')} [kg]")
 
-    K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
+    K0 = np.pi * ((4.0 / 3.0) * np.pi * mrn_distribution.rho_grains[0]) ** (-2.0 / 3.0)
     K0 *= K0_multiplier
     print(f"K0 = {K0}")
 
-    tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
+    tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, mrn_distribution.massgrid_edges)
 
 # %%
 # Start the context
@@ -189,24 +175,6 @@ dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
 
 # %%
 # Load the last dump if it exists, setup otherwise
-
-print("grain_size_si = ", grain_size_si)
-
-alpha = 4 - mrn_pow
-
-# apply cutoff on edges
-edges_clipped = np.clip(grain_size_si_edges, None, mrn_cutoff_si)
-mrn_weight = (edges_clipped[1:] ** (alpha + 1) - edges_clipped[:-1] ** (alpha + 1)) / (alpha + 1)
-mrn_weight = mrn_weight / np.sum(mrn_weight)
-print("mrn_weight = ", mrn_weight)
-
-# MRN weight is ds/N so that \int \rho(s) ds = \sum_j mrn_weight[j] \rho_j = \rho_d
-grain_size_si_bin_width = grain_size_si_edges[1:] - grain_size_si_edges[:-1]
-
-S_mean_init = (3.0 / 5.0) * mrn_cutoff_si
-S_mean = np.sum(mrn_weight * grain_size_si) / np.sum(mrn_weight)
-print(f"S_mean = {S_mean} S_mean_init = {S_mean_init}")
-
 
 def compute_sj_new_j(patchdata, j):
     pmass = model.get_particle_mass()
