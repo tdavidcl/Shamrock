@@ -50,6 +50,15 @@ class DustMRNDistribution:
         rank_0_print(f"  grains sizes (bin) = {self.grain_size.tolist()} [code units]")
         rank_0_print(f"  grains dens (bin) = {self.rho_grains.tolist()} [code units]")
 
+        self.massgrid_edges = (4 * np.pi / 3) * self.rho_grains_edges * self.grain_size_edges**3
+        self.massgrid = np.sqrt(self.massgrid_edges[:-1] * self.massgrid_edges[1:])
+
+        self.massgrid_si_edges = self.massgrid_edges * self.codeu.to("kg")
+        self.massgrid_si = self.massgrid * self.codeu.to("kg")
+
+        rank_0_print(f"  massgrid = {self.massgrid_si.tolist()} [kg]")
+        rank_0_print(f"  massgrid = {self.massgrid.tolist()} [code units]")
+
         rank_0_print()
         rank_0_print("deduced:")
 
