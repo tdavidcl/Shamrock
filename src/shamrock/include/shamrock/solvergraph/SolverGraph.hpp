@@ -16,13 +16,42 @@
  *
  */
 
+#include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
 #include "shamrock/solvergraph/IEdge.hpp"
 #include "shamrock/solvergraph/INode.hpp"
 #include <unordered_map>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace shamrock::solvergraph {
+
+    struct SolverGraphContraint {
+        std::optional<std::function<bool(const std::shared_ptr<INode> &)>> _validate_node;
+        std::optional<std::function<bool(const std::shared_ptr<IEdge> &)>> _validate_edge;
+
+        inline static SolverGraphContraint no_constraint() {
+            return {._validate_node = std::nullopt, ._validate_edge = std::nullopt};
+        }
+
+        inline bool validate_node(const std::shared_ptr<INode> &node) {
+            if (_validate_node) {
+                return (*_validate_node)(node);
+            }
+            return true;
+        }
+
+        inline bool validate_edge(const std::shared_ptr<IEdge> &edge) {
+            if (_validate_edge) {
+                return (*_validate_edge)(edge);
+            }
+            return true;
+        }
+    };
 
     /**
      * @brief A graph container for managing solver nodes and edges with type-safe access.
@@ -55,15 +84,33 @@ namespace shamrock::solvergraph {
      */
     class SolverGraph {
         /// Registry of nodes by name
-        std::unordered_map<std::string, std::shared_ptr<INode>> nodes;
+        std::unordered_map<std::string, std::shared_ptr<INode>> nodes = {};
 
         /// Registry of edges by name
-        std::unordered_map<std::string, std::shared_ptr<IEdge>> edges;
+        std::unordered_map<std::string, std::shared_ptr<IEdge>> edges = {};
+
+        SolverGraphContraint constraint = SolverGraphContraint::no_constraint();
 
         public:
         ///////////////////////////////////////
         // base getters and setters
         ///////////////////////////////////////
+
+        SolverGraph() = default;
+
+        SolverGraph(
+            std::optional<std::function<bool(const std::shared_ptr<INode> &)>> &&_validate_node,
+            std::optional<std::function<bool(const std::shared_ptr<IEdge> &)>> &&_validate_edge)
+            : constraint(
+                  SolverGraphContraint{
+                      ._validate_node = std::move(_validate_node),
+                      ._validate_edge = std::move(_validate_edge)}) {}
+
+        inline static SolverGraph with_constraint(
+            std::optional<std::function<bool(const std::shared_ptr<INode> &)>> &&_validate_node,
+            std::optional<std::function<bool(const std::shared_ptr<IEdge> &)>> &&_validate_edge) {
+            return SolverGraph{std::move(_validate_node), std::move(_validate_edge)};
+        }
 
         /**
          * @brief Register a node with the graph using a shared pointer.
@@ -74,6 +121,12 @@ namespace shamrock::solvergraph {
          */
         inline std::shared_ptr<INode> register_node_ptr_base(
             const std::string &name, std::shared_ptr<INode> node) {
+
+            if (!constraint.validate_node(node)) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(
+                    "node validation failed under solvergraph constraint");
+            }
+
             const auto [it, inserted] = nodes.try_emplace(name, std::move(node));
             if (!inserted) {
                 shambase::throw_with_loc<std::invalid_argument>(
@@ -91,6 +144,12 @@ namespace shamrock::solvergraph {
          */
         inline std::shared_ptr<IEdge> register_edge_ptr_base(
             const std::string &name, std::shared_ptr<IEdge> edge) {
+
+            if (!constraint.validate_edge(edge)) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(
+                    "edge validation failed under solvergraph constraint");
+            }
+
             const auto [it, inserted] = edges.try_emplace(name, std::move(edge));
             if (!inserted) {
                 shambase::throw_with_loc<std::invalid_argument>(
@@ -335,6 +394,24 @@ namespace shamrock::solvergraph {
         template<class T>
         inline const T &get_edge_ref(const std::string &name) const {
             return shambase::get_check_ref(get_edge_ptr<T>(name));
+        }
+
+        inline std::vector<std::string> get_edge_names() const {
+            std::vector<std::string> ret{};
+
+            for (auto &[k, e] : edges) {
+                ret.push_back(k);
+            }
+            return ret;
+        }
+
+        inline std::vector<std::string> get_node_names() const {
+            std::vector<std::string> ret{};
+
+            for (auto &[k, n] : nodes) {
+                ret.push_back(k);
+            }
+            return ret;
         }
     };
 
