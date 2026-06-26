@@ -17,6 +17,7 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
+#include "sham/format/human_readable.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/reduction.hpp"
 #include "shambackends/Device.hpp"
@@ -31,6 +32,12 @@
 #include "shamsys/legacy/log.hpp"
 #include <stdexcept>
 #include <vector>
+
+namespace {
+
+    std::unordered_map<std::string, double> microbench_results = {};
+
+}
 
 namespace shamsys::microbench {
     /// MPI point-to-point bandwidth benchmark
@@ -50,21 +57,6 @@ namespace shamsys::microbench {
     /// Vector allgather benchmark
     void vector_allgather(u32 el_per_rank);
 
-    std::tuple<std::string, std::string> format_result(f64 val) {
-
-        std::array<char, 6> prefixes    = {'k', 'M', 'G', 'T', 'P', 'E'};
-        std::array<f64, 6> prefixes_val = {1.e3, 1.e6, 1.e9, 1.e12, 1.e15, 1.e18};
-
-        std::string prefix = "";
-        f64 val_out        = val;
-        for (size_t i = 0; i < prefixes.size(); i++) {
-            if (val > prefixes_val[i]) {
-                prefix  = prefixes[i];
-                val_out = val / prefixes_val[i];
-            }
-        }
-        return {prefix, shambase::format("{:.3}", val_out)};
-    }
 } // namespace shamsys::microbench
 
 void shamsys::run_micro_benchmark() {
@@ -153,13 +145,17 @@ void shamsys::microbench::p2p_bandwidth(u32 wr_sender, u32 wr_receiv) {
 
     } while (shamalgs::collective::allreduce_min(t) < 1);
 
+    f64 bw = f64(length * loops) / t;
+
+    microbench_results["p2p_bandwidth"] = bw;
+
     if (shamcomm::world_rank() == 0) {
-        auto [prefix, val] = format_result(f64(length * loops) / t);
+        auto hr_bw = sham::to_human_readable<false>(bw);
         logger::raw_ln(
             shambase::format(
-                " - p2p bandwidth    : {} {}B.s^-1 (ranks : {} -> {}) (loops : {})",
-                val,
-                prefix,
+                " - p2p bandwidth    : {:.2f} {}B.s^-1 (ranks : {} -> {}) (loops : {})",
+                hr_bw.value,
+                hr_bw.prefix,
                 wr_sender,
                 wr_receiv,
                 loops));
@@ -212,15 +208,18 @@ void shamsys::microbench::p2p_latency(u32 wr1, u32 wr2) {
         f64 t_end = MPI_Wtime();
         t += t_end - t_start;
 
-        bench_timer.end();
+        bench_timer.stop();
 
-    } while (shamalgs::collective::allreduce_min(bench_timer.elasped_sec()) < 1);
+    } while (shamalgs::collective::allreduce_min(bench_timer.elapsed_sec()) < 1);
+
+    f64 latency                       = t / f64(loops);
+    microbench_results["p2p_latency"] = latency;
 
     if (shamcomm::world_rank() == 0) {
         logger::raw_ln(
             shambase::format(
                 " - p2p latency     : {:.4e} s (ranks : {} <-> {}) (loops : {})",
-                t / f64(loops),
+                latency,
                 wr1,
                 wr2,
                 loops));
@@ -321,15 +320,17 @@ void shamsys::microbench::saxpy() {
     f64 sum_bw = shamalgs::collective::allreduce_sum(bw);
     f64 avg_bw = sum_bw / (f64) shamcomm::world_size();
 
+    microbench_results["saxpy_" + type_name] = sum_bw;
+
     if (shamcomm::world_rank() == 0) {
-        auto [prefix, val] = format_result(sum_bw);
+        auto hr_bw = sham::to_human_readable<false>(sum_bw);
         logger::raw_ln(
             shambase::format(
-                " - saxpy ({})   : {} {}B.s^-1 (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
+                " - saxpy ({})   : {:.2f} {}B.s^-1 (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
                 "({:.1e} ms, {})",
                 type_name,
-                val,
-                prefix,
+                hr_bw.value,
+                hr_bw.prefix,
                 min_bw,
                 max_bw,
                 avg_bw,
@@ -380,15 +381,17 @@ void shamsys::microbench::fma_chains_rotation() {
     f64 sum_flop = shamalgs::collective::allreduce_sum(result.flops);
     f64 avg_flop = sum_flop / (f64) shamcomm::world_size();
 
+    microbench_results["fma_chains_" + type_name] = sum_flop * flops_multiplier;
+
     if (shamcomm::world_rank() == 0) {
-        auto [prefix, val] = format_result(sum_flop * flops_multiplier);
+        auto hr_flop = sham::to_human_readable<false>(sum_flop * flops_multiplier);
         logger::raw_ln(
             shambase::format(
-                " - fma_chains ({}) : {} {}flops (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
+                " - fma_chains ({}) : {:.2f} {}flops (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
                 "({:.1e} ms, rotations = {})",
                 type_name,
-                val,
-                prefix,
+                hr_flop.value,
+                hr_flop.prefix,
                 min_flop * flops_multiplier,
                 max_flop * flops_multiplier,
                 avg_flop * flops_multiplier,
@@ -427,6 +430,8 @@ void shamsys::microbench::vector_allgather(u32 el_per_rank) {
     f64 sum_t = shamalgs::collective::allreduce_sum(t);
     f64 avg_t = sum_t / (f64) shamcomm::world_size();
 
+    microbench_results["vector_allgather_u64_" + std::to_string(el_per_rank)] = avg_t;
+
     if (shamcomm::world_rank() == 0) {
         logger::raw_ln(
             shambase::format(
@@ -438,4 +443,8 @@ void shamsys::microbench::vector_allgather(u32 el_per_rank) {
                 max_t,
                 loops));
     }
+}
+
+const std::unordered_map<std::string, double> &shamsys::get_microbench_results() {
+    return microbench_results;
 }

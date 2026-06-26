@@ -113,7 +113,7 @@ namespace shamrock::amr {
                 tot_refine += len;
 
                 // add the results to the map
-                ret.add_obj(id_patch, OptIndexList{std::move(buf), len});
+                ret.add_obj(id_patch, OptIndexList{.idx = std::move(buf), .count = len});
             });
 
             logger::info_ln("AMRGrid", "on this process", tot_refine, "cells were refined");
@@ -253,7 +253,7 @@ namespace shamrock::amr {
                 tot_merge += len;
 
                 // add the results to the map
-                ret.add_obj(id_patch, OptIndexList{std::move(opt_buf), len});
+                ret.add_obj(id_patch, OptIndexList{.idx = std::move(opt_buf), .count = len});
             });
 
             logger::info_ln(
@@ -500,7 +500,7 @@ namespace shamrock::amr {
                   cell_count[1] / gcd_cell_count,
                   cell_count[2] / gcd_cell_count}});
 
-            sched.for_each_patch([](u64 id_patch, patch::Patch p) {
+            sched.for_each_patch([](u64 id_patch, const patch::Patch &p) {
                 // TODO implement check to verify that patch a cubes of size 2^n
             });
 

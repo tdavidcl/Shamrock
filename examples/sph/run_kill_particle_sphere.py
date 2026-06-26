@@ -22,6 +22,11 @@ def is_in_sphere(pt):
 
 
 # %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
+
+
+# %%
 # Setup parameters
 
 dr = 0.1
@@ -129,6 +134,8 @@ def plot_state(iplot):
 
         ax.scatter(X, Y, Z, s=1)
 
+        ax.minorticks_off()
+
         ax.set_title(f"t = {model.get_time():.2f} ")
 
         plt.savefig(os.path.join(dump_folder, f"{sim_name}_{iplot:04}.png"))
@@ -137,7 +144,7 @@ def plot_state(iplot):
 ####################################################
 # Run the simulation
 ####################################################
-nstop = 28  # To be increased when epmty simulations will be fixed
+nstop = 28  # To be increased when empty simulations will be fixed
 dt_stop = 0.1
 
 t_stop = [i * dt_stop for i in range(nstop + 1)]

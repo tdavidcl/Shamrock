@@ -24,7 +24,7 @@
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 
-#define NODE_SUM_FLUX_DUST(X_RO, X_RW)                                                             \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* ------------------- inputs ------------------- */                                           \
     /* number of blocks     */                                                                     \
     X_RO(shamrock::solvergraph::Indexes<u32>, block_counts)                                        \
@@ -66,14 +66,16 @@ namespace shammodels::basegodunov::modules {
         using AMRBlock = shammodels::amr::AMRBlock<Tvec, TgridVec, 1>;
 
         u32 block_size;
+        Tscal dxfact;
         u32 ndust;
 
         public:
-        NodeSumFluxDust(u32 block_size, u32 ndust) : block_size(block_size), ndust(ndust) {}
+        NodeSumFluxDust(u32 block_size, Tscal dxfact, u32 ndust)
+            : block_size(block_size), dxfact(dxfact), ndust(ndust) {}
 
         using CellGraphEdge = solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>;
 
-        EXPAND_NODE_EDGES(NODE_SUM_FLUX_DUST)
+        EXPAND_NODE_EDGES(NODE_EDGES)
 
         void _impl_evaluate_internal();
 
@@ -84,4 +86,4 @@ namespace shammodels::basegodunov::modules {
 
 } // namespace shammodels::basegodunov::modules
 
-#undef NODE_SUM_FLUX_DUST
+#undef NODE_EDGES
