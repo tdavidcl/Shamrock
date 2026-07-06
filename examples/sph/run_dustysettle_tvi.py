@@ -871,7 +871,7 @@ plt.plot(
 
 plt.xlabel("t")
 plt.ylabel("$\|delta M_{dust} / M_{dust,0}$")
-plt.yscale("symlog", linthresh=1e-7)
+plt.yscale("symlog", linthresh=1e-8)
 plt.title("Dust mass conservation")
 plt.legend()
 plt.tight_layout()
