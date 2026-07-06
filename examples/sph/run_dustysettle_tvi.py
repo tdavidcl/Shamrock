@@ -508,7 +508,7 @@ class ReferenceDustySettle:
 class ReferenceDustySettleAll:
     def __init__(self):
         self.rhomid = get_max_rho()
-        self.tau = 0.1
+        self.tau = 0.05
 
         self.vK = kep_profile(R0) * codeu.to("m") / codeu.to("s")
         self.OmegaK = omega_k(R0) * codeu.to("s") ** -1
