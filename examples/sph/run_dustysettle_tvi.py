@@ -831,7 +831,7 @@ ani.save("_to_trash/dustysettle_vert_slice_s_tvi.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
-    plt.close()
+    plt.show()
 
 # %%
 # Plot the mass history
