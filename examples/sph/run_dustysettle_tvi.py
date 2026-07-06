@@ -136,22 +136,22 @@ mrn_distribution = DustMRNDistribution(
 bmin = (-box / 8, -box / 8, -box)
 bmax = (box / 8, box / 8, box)
 
-N_target = 1e4
 scheduler_split_val = int(2e7)
 scheduler_merge_val = int(1)
 
-xm, ym, zm = bmin
-xM, yM, zM = bmax
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+lx = 12
+ly = 12
+lz = 512
+lmin = (-lx//2,-ly//2,-lz//2)
+lmax = (lx//2,ly//2,lz//2)
 
-part_vol = vol_b / N_target
-
-# lattice volume
-HCP_PACKING_DENSITY = 0.74
-part_vol_lattice = HCP_PACKING_DENSITY * part_vol
-
-dr = (part_vol_lattice / ((4.0 / 3.0) * np.pi)) ** (1.0 / 3.0)
-bmin, bmax = shamrock.math.get_ideal_hcp_box(dr, bmin, bmax)
+# Call with dr = 1 as we will rescale on next call
+(xm, ym, zm), (xM, yM, zM) = shamrock.math.get_periodic_hcp_box(1., lmin, lmax)
+print(f"base lattice : xM = {xM}, yM = {yM}, zM = {zM}")
+dr = 2*box / (zM - zm)
+print(f"dr = {dr}")
+bmin, bmax = shamrock.math.get_periodic_hcp_box(dr, lmin, lmax)
+print(f"new lattice : bmin = {bmin}, bmax = {bmax}")
 xm, ym, zm = bmin
 xM, yM, zM = bmax
 
@@ -508,7 +508,7 @@ class ReferenceDustySettle:
 class ReferenceDustySettleAll:
     def __init__(self):
         self.rhomid = get_max_rho()
-        self.tau = 0.025
+        self.tau = 0.1
 
         self.vK = kep_profile(R0) * codeu.to("m") / codeu.to("s")
         self.OmegaK = omega_k(R0) * codeu.to("s") ** -1
@@ -544,6 +544,32 @@ class ReferenceDustySettleAll:
 
 reference_dusty_settle = None
 
+def compute_L2_error(z,field, z_ref, field_ref):
+
+    z_field_sort_args = np.argsort(z)
+    z_field_sorted = z[z_field_sort_args]
+    field_field_sorted = field[z_field_sort_args]
+
+    # Interpolate field to the same grid as the reference field
+    field_interp = np.interp(z_ref, z_field_sorted, field_field_sorted)
+
+    # Compute delta
+    delta = field_interp - field_ref
+
+    # Compute L2 func
+    L2_func = delta ** 2
+
+    # Compute L2 integral    # Use the appropriate trapezoidal integration function
+    if hasattr(np, "trapezoid"):
+        L2_integral = np.trapezoid(L2_func, z_ref)  # NumPy >= 2.0
+    else:
+        L2_integral = np.trapz(L2_func, z_ref)       # NumPy < 2.0
+
+
+    return np.sqrt(L2_integral)
+
+t_l2 = []
+l2_errors = [[] for _ in range(ndust)]
 
 def analyse_and_plot(j):
 
@@ -589,6 +615,9 @@ def analyse_and_plot(j):
     rho_dust_all = np.zeros(len(z))
     epsilon_dust_all = np.zeros(len(z))
 
+    if reference_dusty_settle is not None:
+        t_l2.append(time)
+
     for i in range(ndust):
         c = dust_colors[i]
         axs[0].scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
@@ -613,6 +642,10 @@ def analyse_and_plot(j):
             print(ana_epsilon.max(), ana_epsilon.min())
             axs[1].plot(reference_dusty_settle.soluces[i].zbar, ana_epsilon, "--", color="0.0")
 
+            L2_error = compute_L2_error(z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon)
+            print(f"L2 error for dust {i} = {L2_error}")
+            l2_errors[i].append(L2_error)
+
     axs[0].scatter(z, rho * to_dens, s=sz, color="0.0", edgecolors="none")
     axs[0].scatter(z, rho_dust_all, s=sz, color="0.5", edgecolors="none")
     axs[1].scatter(z, 1 - epsilon_dust_all, s=sz, color="0.0", edgecolors="none")
@@ -623,7 +656,7 @@ def analyse_and_plot(j):
     axs[0].set_xlabel(r"$z$")
     axs[0].set_yscale("log")
     axs[0].set_ylim(1e-20, 1e-8)
-    axs[0].set_xlim(-2.2 * H, 2.2 * H)
+    axs[0].set_xlim(-box, box)
     # axs[0].set_ylim(1e-12, 10**2)
 
     axs[1].set_ylabel(r"$\epsilon_j$")
@@ -631,7 +664,7 @@ def analyse_and_plot(j):
     axs[1].set_yscale("log")
     # axs[1].set_ylim(1e-12, 2) # if you want the full range
     axs[1].set_ylim(1e-4, 1e-1)  # if you want to see the dust only
-    axs[1].set_xlim(-2.2 * H, 2.2 * H)
+    axs[1].set_xlim(-box, box)
 
     gas_handle = Line2D(
         [0],
@@ -785,7 +818,7 @@ ani.save("_to_trash/dustysettle_vert_slice_tvi.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
-    plt.show()
+    plt.close()
 
 # %%
 glob_str = f"{dump_folder}/plots/vert_slice_s_*.png"
@@ -798,7 +831,7 @@ ani.save("_to_trash/dustysettle_vert_slice_s_tvi.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
-    plt.show()
+    plt.close()
 
 # %%
 # Plot the mass history
@@ -838,9 +871,25 @@ plt.plot(
 
 plt.xlabel("t")
 plt.ylabel("$\|delta M_{dust} / M_{dust,0}$")
-plt.yscale("log")
+plt.yscale("symlog", linthresh=1e-7)
 plt.title("Dust mass conservation")
 plt.legend()
 plt.tight_layout()
 plt.savefig(f"{dump_folder}/plots/dust_mass_history.png")
+plt.show()
+
+# %%
+# Plot the L2 errors
+
+plt.figure()
+for k in range(ndust):
+    plt.plot(t_l2, l2_errors[k], label=f"dust {k}")
+    print(f"L2 error for dust {k} = {l2_errors[k]}")
+plt.xlabel("t")
+plt.ylabel("L2 error")
+plt.yscale("log")
+plt.title("L2 errors")
+plt.legend()
+plt.tight_layout()
+plt.savefig(f"{dump_folder}/plots/l2_errors.png")
 plt.show()
