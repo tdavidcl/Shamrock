@@ -141,7 +141,7 @@ scheduler_merge_val = int(1)
 
 lx = 12
 ly = 12
-lz = 512
+lz = 64
 lmin = (-lx//2,-ly//2,-lz//2)
 lmax = (lx//2,ly//2,lz//2)
 
