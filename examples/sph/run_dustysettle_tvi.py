@@ -656,7 +656,7 @@ def analyse_and_plot(j):
     axs[0].set_xlabel(r"$z$")
     axs[0].set_yscale("log")
     axs[0].set_ylim(1e-20, 1e-8)
-    axs[0].set_xlim(-box, box)
+    axs[0].set_xlim(-2.2 * H, 2.2 * H)
     # axs[0].set_ylim(1e-12, 10**2)
 
     axs[1].set_ylabel(r"$\epsilon_j$")
