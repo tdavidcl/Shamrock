@@ -142,13 +142,13 @@ scheduler_merge_val = int(1)
 lx = 12
 ly = 12
 lz = 64
-lmin = (-lx//2,-ly//2,-lz//2)
-lmax = (lx//2,ly//2,lz//2)
+lmin = (-lx // 2, -ly // 2, -lz // 2)
+lmax = (lx // 2, ly // 2, lz // 2)
 
 # Call with dr = 1 as we will rescale on next call
-(xm, ym, zm), (xM, yM, zM) = shamrock.math.get_periodic_hcp_box(1., lmin, lmax)
+(xm, ym, zm), (xM, yM, zM) = shamrock.math.get_periodic_hcp_box(1.0, lmin, lmax)
 print(f"base lattice : xM = {xM}, yM = {yM}, zM = {zM}")
-dr = 2*box / (zM - zm)
+dr = 2 * box / (zM - zm)
 print(f"dr = {dr}")
 bmin, bmax = shamrock.math.get_periodic_hcp_box(dr, lmin, lmax)
 print(f"new lattice : bmin = {bmin}, bmax = {bmax}")
@@ -544,7 +544,8 @@ class ReferenceDustySettleAll:
 
 reference_dusty_settle = None
 
-def compute_L2_error(z,field, z_ref, field_ref):
+
+def compute_L2_error(z, field, z_ref, field_ref):
 
     z_field_sort_args = np.argsort(z)
     z_field_sorted = z[z_field_sort_args]
@@ -557,19 +558,20 @@ def compute_L2_error(z,field, z_ref, field_ref):
     delta = field_interp - field_ref
 
     # Compute L2 func
-    L2_func = delta ** 2
+    L2_func = delta**2
 
     # Compute L2 integral    # Use the appropriate trapezoidal integration function
     if hasattr(np, "trapezoid"):
         L2_integral = np.trapezoid(L2_func, z_ref)  # NumPy >= 2.0
     else:
-        L2_integral = np.trapz(L2_func, z_ref)       # NumPy < 2.0
-
+        L2_integral = np.trapz(L2_func, z_ref)  # NumPy < 2.0
 
     return np.sqrt(L2_integral)
 
+
 t_l2 = []
 l2_errors = [[] for _ in range(ndust)]
+
 
 def analyse_and_plot(j):
 
@@ -642,7 +644,9 @@ def analyse_and_plot(j):
             print(ana_epsilon.max(), ana_epsilon.min())
             axs[1].plot(reference_dusty_settle.soluces[i].zbar, ana_epsilon, "--", color="0.0")
 
-            L2_error = compute_L2_error(z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon)
+            L2_error = compute_L2_error(
+                z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon
+            )
             print(f"L2 error for dust {i} = {L2_error}")
             l2_errors[i].append(L2_error)
 
