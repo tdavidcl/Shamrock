@@ -818,7 +818,7 @@ ani.save("_to_trash/dustysettle_vert_slice_tvi.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
-    plt.close()
+    plt.show()
 
 # %%
 glob_str = f"{dump_folder}/plots/vert_slice_s_*.png"
