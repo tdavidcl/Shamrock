@@ -115,7 +115,7 @@ namespace shammodels::sph {
 
         struct None {};
 
-        struct MonofluidTVI {
+        struct MonofluidTVA {
             u32 ndust;
             bool pure_diffusion_mode = false;
         };
@@ -125,18 +125,18 @@ namespace shammodels::sph {
         };
 
         /// Variant type to store the EOS configuration
-        using Variant = std::variant<None, MonofluidTVI, MonofluidComplete>;
+        using Variant = std::variant<None, MonofluidTVA, MonofluidComplete>;
 
         Variant current_mode = None{};
 
         inline void set_none() { current_mode = None{}; }
-        inline void set_monofluid_tvi(u32 nvar, bool pure_diffusion_mode = false) {
-            current_mode = MonofluidTVI{nvar, pure_diffusion_mode};
+        inline void set_monofluid_tva(u32 nvar, bool pure_diffusion_mode = false) {
+            current_mode = MonofluidTVA{nvar, pure_diffusion_mode};
         }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
         inline bool is_none() { return std::holds_alternative<None>(current_mode); }
-        inline bool is_monofluid_tvi() { return bool(std::get_if<MonofluidTVI>(&current_mode)); }
+        inline bool is_monofluid_tva() { return bool(std::get_if<MonofluidTVA>(&current_mode)); }
         inline bool is_monofluid_complete() {
             return bool(std::get_if<MonofluidComplete>(&current_mode));
         }
@@ -144,9 +144,9 @@ namespace shammodels::sph {
         inline void mode_to_json(nlohmann::json &j) const {
             if (const None *cfg = std::get_if<None>(&current_mode)) {
                 j = {{"type", "none"}};
-            } else if (const MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
+            } else if (const MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
                 j
-                    = {{"type", "monofluid_tvi"},
+                    = {{"type", "monofluid_tva"},
                        {"ndust", cfg->ndust},
                        {"pure_diffusion_mode", cfg->pure_diffusion_mode}};
             } else if (
@@ -161,8 +161,8 @@ namespace shammodels::sph {
             const std::string type = j.at("type").get<std::string>();
             if (type == "none") {
                 set_none();
-            } else if (type == "monofluid_tvi") {
-                set_monofluid_tvi(
+            } else if (type == "monofluid_tva") {
+                set_monofluid_tva(
                     j.at("ndust").get<u32>(), j.at("pure_diffusion_mode").get<bool>());
             } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
@@ -172,7 +172,7 @@ namespace shammodels::sph {
         }
 
         inline bool has_s_j_field() {
-            return is_monofluid_tvi(); // S_j = sqrt(\rho \epsilon_j)
+            return is_monofluid_tva(); // S_j = sqrt(\rho \epsilon_j)
         }
 
         inline bool has_epsilon_field() {
@@ -188,7 +188,7 @@ namespace shammodels::sph {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "Querying a dust nvar with no dust as config is ... discutable ...");
                 return 0;
-            } else if (MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
+            } else if (MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
                 return cfg->ndust;
             } else if (MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 return cfg->ndust;

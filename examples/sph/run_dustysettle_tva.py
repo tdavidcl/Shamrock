@@ -179,7 +179,7 @@ def setup_model():
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
 
-    cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
+    cfg.set_dust_mode_monofluid_tva(nvar=ndust)
     cfg.set_dust_drag_epstein(gamma, mrn_distribution.grain_size, mrn_distribution.rho_grains)
     cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
     cfg.add_ext_force_velocity_dissipation(eta=5)
@@ -781,7 +781,7 @@ ani = show_image_sequence(glob_str)
 from matplotlib.animation import PillowWriter
 
 writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-ani.save("_to_trash/dustysettle_vert_slice_tvi.gif", writer=writer)
+ani.save("_to_trash/dustysettle_vert_slice_tva.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
@@ -794,7 +794,7 @@ ani = show_image_sequence(glob_str)
 from matplotlib.animation import PillowWriter
 
 writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-ani.save("_to_trash/dustysettle_vert_slice_s_tvi.gif", writer=writer)
+ani.save("_to_trash/dustysettle_vert_slice_s_tva.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     # Show the animation
