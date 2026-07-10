@@ -65,15 +65,15 @@ jobs:
 
       - name: Create documentation archive
         run: |
-          tar -zcvf /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar .
-          mv /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar .
+          tar -zcvf /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar.gz .
+          mv /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar.gz .
 
       - name: Archive generated page
         uses: actions/upload-artifact@v7
         id: artifact-upload-step
         with:
-          name: shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar
-          path: shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar
+          name: shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar.gz
+          path: shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar.gz
           archive: false
 
       # See https://github.com/actions/upload-artifact/issues/50#issuecomment-1856471599
