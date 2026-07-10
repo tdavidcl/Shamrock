@@ -64,7 +64,9 @@ jobs:
         run : ls -la
 
       - name: Create documentation archive
-        run: tar -zcvf shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar .
+        run: |
+          tar -zcvf /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar .
+          mv /tmp/shamrock-${{ needs.extract_version.outputs.version }}-documentation.tar .
 
       - name: Archive generated page
         uses: actions/upload-artifact@v7
