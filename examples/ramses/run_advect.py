@@ -93,16 +93,13 @@ def run_advect(slope_limiter: str, riemann_solver: str, only_last_step: bool = T
         # (cell_center does not exist so it will be computed on the fly)
         cell_center = patchdata.get("cell_center")
 
-        ncell = cell_center.shape[0]
-        rho = np.zeros(ncell)
-        v = np.zeros((ncell, 3))
-        e = np.zeros(ncell)
+        x = cell_center[:, 0]
+        rho = np.where((x < 0.6) & (x > 0.4), 2.0, 1.0)
 
-        for i in range(ncell):
-            x = cell_center[i, 0]
-            rho[i] = rho_x(x)
-            v[i, 0] = v_x(x)
-            e[i] = e_x()
+        ncell = cell_center.shape[0]
+        v = np.zeros((ncell, 3))
+        v[:, 0] = 1.0
+        e = np.ones(ncell)
 
         rho_v = rho[:, None] * v
         rho_e = rho * e
