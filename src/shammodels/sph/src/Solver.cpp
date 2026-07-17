@@ -1806,8 +1806,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         }
     }
 
-    Tscal t_current = solver_config.get_time();
-    Tscal dt        = solver_config.get_dt_sph();
+    Tscal t_current = get_time();
+    Tscal dt        = get_dt_sph();
 
     StackEntry stack_loc{};
 
@@ -2467,7 +2467,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         eps_v));
             }
             need_rerun_corrector = true;
-            solver_config.time_state.cfl_multiplier /= 2;
+            set_cfl_multipler(get_cfl_multipler() / 2);
 
             // logger::info_ln("rerun corrector ...");
         } else {
@@ -2751,10 +2751,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 });
             };
 
-            Tscal C_cour
-                = solver_config.cfl_config.cfl_cour * solver_config.time_state.cfl_multiplier;
-            Tscal C_force
-                = solver_config.cfl_config.cfl_force * solver_config.time_state.cfl_multiplier;
+            Tscal C_cour  = solver_config.cfl_config.cfl_cour * get_cfl_multipler();
+            Tscal C_force = solver_config.cfl_config.cfl_force * get_cfl_multipler();
             Tscal eta_phi = solver_config.cfl_config.eta_sink;
 
             std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> C_cour_edge
@@ -2815,8 +2813,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> C_1fluid_edge
                     = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>(
                         "C_1fluid", "C_{1fluid}");
-                C_1fluid_edge->value = solver_config.dust_config.get_monofluid_tva().C_1_fluid
-                                       * solver_config.time_state.cfl_multiplier;
+                C_1fluid_edge->value
+                    = solver_config.dust_config.get_monofluid_tva().C_1_fluid * get_cfl_multipler();
 
                 compute_cfl_dust1_fluid->set_edges(
                     storage.part_counts,
@@ -2849,8 +2847,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
                 C_delta_v_edge = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>(
                     "C_delta_v", "C_{delta_v}");
-                C_delta_v_edge->value
-                    = cfg_monofluid_tva.C_delta_v * solver_config.time_state.cfl_multiplier;
+                C_delta_v_edge->value = cfg_monofluid_tva.C_delta_v * get_cfl_multipler();
 
                 cfl_density_threshold_edge
                     = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>(
@@ -2985,11 +2982,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             if (shamcomm::world_rank() == 0) {
                 logger::info_ln(
-                    "sph::Model",
-                    "cfl dt =",
-                    next_cfl,
-                    "cfl multiplier :",
-                    solver_config.time_state.cfl_multiplier);
+                    "sph::Model", "cfl dt =", next_cfl, "cfl multiplier :", get_cfl_multipler());
             }
 
             // this should not be needed idealy, but we need the pressure on the ghosts and
@@ -3119,17 +3112,17 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     shambase::get_check_ref(storage.neigh_cache).free_alloc();
 
-    solver_config.set_next_dt(next_cfl);
-    solver_config.set_time(t_current + dt);
+    set_next_dt(next_cfl);
+    set_time(t_current + dt);
 
     auto get_next_cfl_mult = [&]() {
-        Tscal cfl_m = solver_config.time_state.cfl_multiplier;
+        Tscal cfl_m = get_cfl_multipler();
         Tscal stiff = solver_config.cfl_config.cfl_multiplier_stiffness;
 
         return (cfl_m * stiff + 1.) / (stiff + 1.);
     };
 
-    solver_config.time_state.cfl_multiplier = get_next_cfl_mult();
+    set_cfl_multipler(get_next_cfl_mult());
 
     TimestepLog log;
     log.rank     = shamcomm::world_rank();
