@@ -53,7 +53,7 @@ void add(
     f_c.complete_event_state(e);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:smalltaskgraph", DeviceBuffer_small_task_graph, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:smalltaskgraph", 1) {
 
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
@@ -70,7 +70,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:smalltaskgraph", DeviceBuffer_sma
     add(q, a, b, c);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:copy_to_stdvec", devbuf_testcopy_to_stdvec, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:copy_to_stdvec", 1) {
     using T = int;
 
     std::shared_ptr<sham::DeviceScheduler> dev_sched
@@ -91,8 +91,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:copy_to_stdvec", devbuf_testcopy_
     }
 }
 
-TestStart(
-    Unittest, "shambackends/DeviceBuffer:copy_to_sycl_buffer", devbuf_testcopy_to_sycl_buffer, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:copy_to_sycl_buffer", 1) {
     using T = int;
 
     std::shared_ptr<sham::DeviceScheduler> dev_sched
@@ -126,7 +125,7 @@ TestStart(
     }
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:fill", DeviceBuffer_fill1, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill", 1) {
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -147,7 +146,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:fill", DeviceBuffer_fill1, 1) {
     }
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:fill(with count)", DeviceBuffer_fill2, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill(with count)", 1) {
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -175,7 +174,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:fill(with count)", DeviceBuffer_f
     }
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:fill(exception)", DeviceBuffer_fill3, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill(exception)", 1) {
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -186,7 +185,71 @@ TestStart(Unittest, "shambackends/DeviceBuffer:fill(exception)", DeviceBuffer_fi
     REQUIRE_EXCEPTION_THROW(buffer.fill(5, {15, 20}), std::invalid_argument);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:resize", DeviceBuffer_resize, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill_lambda", 1) {
+    std::shared_ptr<sham::DeviceScheduler> dev_sched
+        = shamsys::instance::get_compute_scheduler_ptr();
+
+    // Create a device buffer with size 10
+    sham::DeviceBuffer<int> buffer(10, dev_sched);
+
+    // Fill the buffer with i^2
+    buffer.fill_lambda([](size_t i) {
+        return i * i;
+    });
+
+    {
+        std::vector<int> b = buffer.copy_to_stdvec();
+        REQUIRE_EQUAL(b.size(), 10);
+
+        // Check that the buffer is filled with the correct value (i^2)
+        for (int i = 0; i < 10; i++) {
+            REQUIRE_EQUAL(b[i], i * i);
+        }
+    }
+}
+
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill_lambda(different size)", 1) {
+    std::shared_ptr<sham::DeviceScheduler> dev_sched
+        = shamsys::instance::get_compute_scheduler_ptr();
+
+    // Create a device buffer with size 20
+    sham::DeviceBuffer<int> buffer(20, dev_sched);
+
+    // Fill the buffer with i^2
+    buffer.fill_lambda([](size_t i) {
+        return i * i;
+    });
+
+    {
+        std::vector<int> b = buffer.copy_to_stdvec();
+        REQUIRE_EQUAL(b.size(), 20);
+
+        // Check that the buffer is filled with the correct value (i^2)
+        for (int i = 0; i < 20; i++) {
+            REQUIRE_EQUAL(b[i], i * i);
+        }
+    }
+}
+
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:fill_lambda(empty buffer)", 1) {
+    std::shared_ptr<sham::DeviceScheduler> dev_sched
+        = shamsys::instance::get_compute_scheduler_ptr();
+
+    // Create an empty device buffer
+    sham::DeviceBuffer<int> buffer(0, dev_sched);
+
+    // Fill the buffer with i^2 (should handle empty buffer gracefully)
+    buffer.fill_lambda([](size_t i) {
+        return i * i;
+    });
+
+    {
+        std::vector<int> b = buffer.copy_to_stdvec();
+        REQUIRE_EQUAL(b.size(), 0);
+    }
+}
+
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:resize", 1) {
 
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
@@ -221,11 +284,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:resize", DeviceBuffer_resize, 1) 
     REQUIRE(a.get_mem_usage() == 0);
 }
 
-TestStart(
-    Unittest,
-    "shambackends/DeviceBuffer:copy_to_stdvec_idx_range",
-    DeviceBuffer_copy_to_stdvec_idx_range,
-    1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:copy_to_stdvec_idx_range", 1) {
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -258,7 +317,7 @@ TestStart(
         [[maybe_unused]] auto _ = buffer.copy_to_stdvec_idx_range(0, 11), std::invalid_argument);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:get_val_at_idx", DeviceBuffer_get_val_at_idx, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:get_val_at_idx", 1) {
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -274,7 +333,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:get_val_at_idx", DeviceBuffer_get
     REQUIRE_EXCEPTION_THROW(buffer.get_val_at_idx(10), std::invalid_argument);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:set_val_at_idx", DeviceBuffer_set_val_at_idx, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:set_val_at_idx", 1) {
     std::shared_ptr<sham::DeviceScheduler> dev_sched
         = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -291,7 +350,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:set_val_at_idx", DeviceBuffer_set
     REQUIRE_EXCEPTION_THROW(buffer.set_val_at_idx(10, 5), std::invalid_argument);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:append", DeviceBuffer_append, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:append", 1) {
     using T        = int;
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -332,7 +391,7 @@ TestStart(Unittest, "shambackends/DeviceBuffer:append", DeviceBuffer_append, 1) 
     REQUIRE_EXCEPTION_THROW(buf5.append(buf5), std::invalid_argument);
 }
 
-TestStart(Unittest, "shambackends/DeviceBuffer:copy_range", DeviceBuffer_copy_range, 1) {
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:copy_range", 1) {
     using T        = int;
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
