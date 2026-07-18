@@ -28,6 +28,7 @@
 #include "shamrock/scheduler/InterfacesUtility.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
+#include "shamrock/solvergraph/ScalarEdgeSerializable.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
 #include <functional>
@@ -87,13 +88,63 @@ namespace shammodels::sph {
         Config solver_config;
         SolverLog solve_logs;
 
-        inline Tscal get_time() { return solver_config.time_state.time; }
-        inline void set_time(Tscal t) { solver_config.time_state.time = t; }
-        inline Tscal get_dt_sph() { return solver_config.time_state.dt_sph; }
-        inline void set_next_dt(Tscal dt) { solver_config.time_state.dt_sph = dt; }
-        inline Tscal get_cfl_multipler() { return solver_config.time_state.cfl_multiplier; }
-        inline void set_cfl_multipler(Tscal lambda) {
-            solver_config.time_state.cfl_multiplier = lambda;
+        /// Access synchronized simulation time (scheduler edge "time")
+        inline Tscal &time_edge_value() {
+            return scheduler()
+                .synchronized_data
+                .template get_edge_ref<shamrock::solvergraph::ScalarEdgeSerializable<Tscal>>("time")
+                .value;
+        }
+
+        /// Access synchronized next dt (scheduler edge "dt", not solver_graph "dt")
+        inline Tscal &dt_edge_value() {
+            return scheduler()
+                .synchronized_data
+                .template get_edge_ref<shamrock::solvergraph::ScalarEdgeSerializable<Tscal>>("dt")
+                .value;
+        }
+
+        /// Access synchronized CFL multiplier (scheduler edge "cfl_multiplier")
+        inline Tscal &cfl_multiplier_edge_value() {
+            return scheduler()
+                .synchronized_data
+                .template get_edge_ref<shamrock::solvergraph::ScalarEdgeSerializable<Tscal>>(
+                    "cfl_multiplier")
+                .value;
+        }
+
+        inline Tscal get_time() { return time_edge_value(); }
+        inline void set_time(Tscal t) { time_edge_value() = t; }
+        inline Tscal get_dt_sph() { return dt_edge_value(); }
+        inline void set_next_dt(Tscal dt) { dt_edge_value() = dt; }
+        inline Tscal get_cfl_multipler() { return cfl_multiplier_edge_value(); }
+        inline void set_cfl_multipler(Tscal lambda) { cfl_multiplier_edge_value() = lambda; }
+
+        /// Register time/dt/cfl_multiplier synchronized edges if missing (idempotent)
+        inline void ensure_time_state_edges() {
+            auto &sync    = scheduler().synchronized_data;
+            auto names    = sync.get_edge_names();
+            auto has_edge = [&](const std::string &name) {
+                return std::find(names.begin(), names.end(), name) != names.end();
+            };
+
+            if (!has_edge("time")) {
+                auto edge = sync.register_edge(
+                    "time", shamrock::solvergraph::ScalarEdgeSerializable<Tscal>("time", "t"));
+                edge->value = 0;
+            }
+            if (!has_edge("dt")) {
+                auto edge = sync.register_edge(
+                    "dt", shamrock::solvergraph::ScalarEdgeSerializable<Tscal>("dt", "dt"));
+                edge->value = 0;
+            }
+            if (!has_edge("cfl_multiplier")) {
+                auto edge = sync.register_edge(
+                    "cfl_multiplier",
+                    shamrock::solvergraph::ScalarEdgeSerializable<Tscal>(
+                        "cfl_multiplier", "C_{\\rm CFL}"));
+                edge->value = 1e-2;
+            }
         }
 
         struct SolverStepCallback {

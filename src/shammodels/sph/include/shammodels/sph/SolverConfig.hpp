@@ -59,14 +59,6 @@ namespace shammodels::sph {
     struct SolverConfig;
 
     /**
-     * @brief Solver status variables
-     *
-     * @tparam Tvec the type of the vector used to represent the particles
-     */
-    template<class Tvec>
-    struct SolverStatusVar;
-
-    /**
      * @brief The configuration for the CFL condition
      *
      * @tparam Tscal the type of the scalar used to represent the quantities
@@ -416,18 +408,6 @@ namespace shammodels::sph {
 
 } // namespace shammodels::sph
 
-template<class Tvec>
-struct shammodels::sph::SolverStatusVar {
-
-    /// The type of the scalar used to represent the quantities
-    using Tscal = shambase::VecComponent<Tvec>;
-
-    Tscal time   = 0; ///< Current time
-    Tscal dt_sph = 0; ///< Current time step
-
-    Tscal cfl_multiplier = 1e-2; ///< Current cfl multiplier
-};
-
 template<class Tvec, template<class> class SPHKernel>
 struct shammodels::sph::SolverConfig {
 
@@ -445,8 +425,7 @@ struct shammodels::sph::SolverConfig {
     /// The radius of the sph kernel
     static constexpr Tscal Rkern = Kernel::Rkern;
 
-    Tscal gpart_mass;            ///< The mass of each gas particle
-    CFLConfig<Tscal> cfl_config; ///< The configuration for the CFL condition
+    Tscal gpart_mass; ///< The mass of each gas particle
 
     bool track_particles_id = false;
 
@@ -512,14 +491,10 @@ struct shammodels::sph::SolverConfig {
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    // Solver status variables
+    // CFL Configuration (config)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Alias to SolverStatusVar type
-    using SolverStatusVar = SolverStatusVar<Tvec>;
-
-    /// The time sate of the simulation
-    SolverStatusVar time_state;
+    CFLConfig<Tscal> cfl_config; ///< The configuration for the CFL condition
 
     /// Set the CFL multiplier for the stiffness
     inline void set_cfl_mult_stiffness(Tscal cstiff) {
@@ -532,7 +507,7 @@ struct shammodels::sph::SolverConfig {
     bool show_cfl_detail = false;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    // Solver status variables (END)
+    // CFL Configuration (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1087,32 +1062,6 @@ namespace shammodels::sph {
         }
     }
 
-    /**
-     * @brief Converts a SolverStatusVar object to a JSON object.
-     *
-     * @param j The JSON object to be populated.
-     * @param p The SolverStatusVar object to be converted.
-     */
-    template<class Tvec>
-    inline void to_json(nlohmann::json &j, const SolverStatusVar<Tvec> &p) {
-        j = nlohmann::json{
-            {"time", p.time}, {"dt_sph", p.dt_sph}, {"cfl_multiplier", p.cfl_multiplier}};
-    }
-
-    /**
-     * @brief Deserializes a SolverStatusVar object from a JSON object.
-     *
-     * @param j The JSON object to deserialize from.
-     * @param p The SolverStatusVar object to populate.
-     */
-    template<class Tvec>
-    inline void from_json(const nlohmann::json &j, SolverStatusVar<Tvec> &p) {
-        using Tscal = typename SolverStatusVar<Tvec>::Tscal;
-        j.at("time").get_to<Tscal>(p.time);
-        j.at("dt_sph").get_to<Tscal>(p.dt_sph);
-        j.at("cfl_multiplier").get_to<Tscal>(p.cfl_multiplier);
-    }
-
     // JSON serialization for ParticleKillingConfig
     template<class Tvec>
     inline void to_json(nlohmann::json &j, const ParticleKillingConfig<Tvec> &p) {
@@ -1298,7 +1247,6 @@ namespace shammodels::sph {
             {"gpart_mass", p.gpart_mass},
             {"cfl_config", p.cfl_config},
             {"unit_sys", p.unit_sys},
-            {"time_state", p.time_state},
             {"show_cfl_detail", p.show_cfl_detail},
             // mhd config
             {"mhd_config", p.mhd_config},
@@ -1392,7 +1340,6 @@ namespace shammodels::sph {
         _get_to_if_contains("gpart_mass", p.gpart_mass);
         _get_to_if_contains("cfl_config", p.cfl_config);
         _get_to_if_contains("unit_sys", p.unit_sys);
-        _get_to_if_contains("time_state", p.time_state);
         _get_to_if_contains("show_cfl_detail", p.show_cfl_detail);
         _get_to_if_contains("mhd_config", p.mhd_config);
         _get_to_if_contains("dust_config", p.dust_config);
