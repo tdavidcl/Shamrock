@@ -7,6 +7,8 @@ CI test for Sod tube with SPH
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.animation import PillowWriter
+from shamrock.utils.plot import show_image_sequence
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
 import shamrock
@@ -26,8 +28,14 @@ u_d = P_d / ((gamma - 1) * rho_d)
 
 resol = 128
 
+epsilon = 0.5
+ts = 0.1
+
 sim_folder = f"_to_trash/dustysod_{resol}/"
 dump_folder = sim_folder + "dump/"
+
+
+shamrock.enable_experimental_features()
 
 ctx = shamrock.Context()
 ctx.pdata_layout_new()
@@ -40,7 +48,7 @@ class Simulation(SimulationRunner):
     t_end = 0.245
     dump_prefix = dump_folder + "dump_"
 
-    @callback(tsim_interval=0.01)  # Do the analysis every dt_stop
+    @callback(tsim_interval=0.245 / 16)  # Do the analysis every dt_stop
     def analysis_plots(self, ianalysis):
         dic = ctx.collect_data()
         pmass = model.get_particle_mass()
@@ -89,8 +97,10 @@ class Simulation(SimulationRunner):
         plt.grid()
         plt.ylim(0, 1.1)
         plt.xlim(0, 1)
-        plt.title("t=" + str(self.model.get_time()))
-        plt.show()
+        plt.xlabel("x")
+        plt.title(f"t={self.model.get_time():.3f}")
+        plt.savefig(dump_folder + f"sod_{ianalysis:04d}.png")
+        plt.close()
 
     @callback(walltime_interval=30.0)  # Checkpoint the simulation every 30 seconds
     def checkpoint(self, icheckpoint):
@@ -105,6 +115,9 @@ class Simulation(SimulationRunner):
         )
         cfg.set_boundary_periodic()
         cfg.set_eos_adiabatic(gamma)
+        cfg.set_dust_mode_monofluid_tva(nvar=1)
+        cfg.set_dust_drag_constant([ts])
+        cfg.set_cfld
         cfg.print_status()
         model.set_solver_config(cfg)
 
@@ -131,6 +144,12 @@ class Simulation(SimulationRunner):
         model.set_value_in_a_box("uint", "f64", u_g, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
         model.set_value_in_a_box("uint", "f64", u_d, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
 
+        s_g = np.sqrt(rho_g * epsilon)
+        s_d = np.sqrt(rho_d * epsilon)
+
+        model.set_value_in_a_box("s_j", "f64", s_g, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
+        model.set_value_in_a_box("s_j", "f64", s_d, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
+
         vol_b = xs * ys * zs
 
         totmass = (rho_d * vol_b) + (rho_g * vol_b)
@@ -146,3 +165,12 @@ class Simulation(SimulationRunner):
 
 
 Simulation(model).run()
+
+glob_str = f"{dump_folder}sod_*.png"
+ani = show_image_sequence(glob_str)
+
+writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+ani.save("_to_trash/sod.gif", writer=writer)
+
+if shamrock.sys.world_rank() == 0:
+    plt.show()

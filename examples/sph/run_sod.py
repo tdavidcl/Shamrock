@@ -7,9 +7,9 @@ CI test for Sod tube with SPH
 
 import matplotlib.pyplot as plt
 import numpy as np
-from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
-from shamrock.utils.plot import show_image_sequence
 from matplotlib.animation import PillowWriter
+from shamrock.utils.plot import show_image_sequence
+from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
 import shamrock
 
@@ -28,7 +28,7 @@ u_d = P_d / ((gamma - 1) * rho_d)
 
 resol = 128
 
-sim_folder = f"_to_trash/dustysod_{resol}/"
+sim_folder = f"_to_trash/sod_{resol}/"
 dump_folder = sim_folder + "dump/"
 
 ctx = shamrock.Context()
@@ -42,7 +42,7 @@ class Simulation(SimulationRunner):
     t_end = 0.245
     dump_prefix = dump_folder + "dump_"
 
-    @callback(tsim_interval=0.245/16)  # Do the analysis every dt_stop
+    @callback(tsim_interval=0.245 / 16)  # Do the analysis every dt_stop
     def analysis_plots(self, ianalysis):
         dic = ctx.collect_data()
         pmass = model.get_particle_mass()
