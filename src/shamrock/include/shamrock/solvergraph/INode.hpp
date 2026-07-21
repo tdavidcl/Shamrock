@@ -286,7 +286,8 @@ namespace shamrock::solvergraph {
 #define INODE_GET_RO(type, name) get_ro_edge<type>(ro++),
 #define INODE_GET_RW(type, name) get_rw_edge<type>(rw++),
 
-#define INODE_DECL_RO_OPTIONAL(type, name) const std::optional<std::reference_wrapper<const type>> name;
+#define INODE_DECL_RO_OPTIONAL(type, name)                                                         \
+    const std::optional<std::reference_wrapper<const type>> name;
 #define INODE_DECL_RW_OPTIONAL(type, name) const std::optional<std::reference_wrapper<type>> name;
 #define INODE_PARAM_RO_OPTIONAL(type, name) const std::optional<std::shared_ptr<type>> &name,
 #define INODE_PARAM_RW_OPTIONAL(type, name) const std::optional<std::shared_ptr<type>> &name,
