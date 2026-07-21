@@ -112,7 +112,7 @@ namespace shammodels::sph {
             bool pure_diffusion_mode = false;
 
             Tscal C_1_fluid             = 0.1;
-            Tscal C_delta_v             = 1.0;
+            Tscal C_drift               = 1.0;
             Tscal cfl_density_threshold = shambase::get_epsilon<Tscal>();
 
             bool ensure_s_j_positivity = true;
@@ -132,14 +132,14 @@ namespace shammodels::sph {
             u32 nvar,
             bool pure_diffusion_mode    = false,
             Tscal C_1_fluid             = 0.1,
-            Tscal C_delta_v             = 1.0,
+            Tscal C_drift               = 1.0,
             Tscal cfl_density_threshold = shambase::get_epsilon<Tscal>(),
             bool ensure_s_j_positivity  = true) {
             current_mode = MonofluidTVA{
                 nvar,
                 pure_diffusion_mode,
                 C_1_fluid,
-                C_delta_v,
+                C_drift,
                 cfl_density_threshold,
                 ensure_s_j_positivity};
         }
@@ -164,7 +164,7 @@ namespace shammodels::sph {
                        {"ndust", cfg->ndust},
                        {"pure_diffusion_mode", cfg->pure_diffusion_mode},
                        {"C_1_fluid", cfg->C_1_fluid},
-                       {"C_delta_v", cfg->C_delta_v},
+                       {"C_drift", cfg->C_drift},
                        {"cfl_density_threshold", cfg->cfl_density_threshold},
                        {"ensure_s_j_positivity", cfg->ensure_s_j_positivity}};
             } else if (
@@ -184,7 +184,7 @@ namespace shammodels::sph {
                     j.at("ndust").get<u32>(),
                     j.at("pure_diffusion_mode").get<bool>(),
                     j.at("C_1_fluid").get<Tscal>(),
-                    j.at("C_delta_v").get<Tscal>(),
+                    j.at("C_drift").get<Tscal>(),
                     j.at("cfl_density_threshold").get<Tscal>(),
                     j.at("ensure_s_j_positivity").get<bool>());
             } else if (type == "monofluid_complete") {
@@ -233,6 +233,8 @@ namespace shammodels::sph {
         };
 
         std::variant<None, ConstantStoppingTimes, EpsteinDrag> dust_drag_mode = None{};
+
+        bool ballabio_ts_limiter = false;
 
         inline void drag_mode_to_json(nlohmann::json &j) const {
             if (std::holds_alternative<None>(dust_drag_mode)) {
@@ -1215,12 +1217,14 @@ namespace shammodels::sph {
 
         p.mode_to_json(j["mode"]);
         p.drag_mode_to_json(j["drag_mode"]);
+        j["ballabio_ts_limiter"] = p.ballabio_ts_limiter;
     }
 
     template<class Tvec>
     inline void from_json(const nlohmann::json &j, DustConfig<Tvec> &p) {
         p.mode_from_json(j.at("mode"));
         p.drag_mode_from_json(j.at("drag_mode"));
+        p.ballabio_ts_limiter = j.value("ballabio_ts_limiter", false);
     }
 
     /**

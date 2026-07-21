@@ -271,14 +271,14 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                u32 nvar,
                bool pure_diffusion_mode,
                Tscal C_1_fluid,
-               Tscal C_delta_v,
+               Tscal C_drift,
                Tscal cfl_density_threshold,
                bool ensure_s_j_positivity) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
                     C_1_fluid,
-                    C_delta_v,
+                    C_drift,
                     cfl_density_threshold,
                     ensure_s_j_positivity);
             },
@@ -286,7 +286,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("nvar"),
             py::arg("pure_diffusion_mode")   = false,
             py::arg("C_1_fluid")             = 0.1,
-            py::arg("C_delta_v")             = 1.0,
+            py::arg("C_drift")               = 1.0,
             py::arg("cfl_density_threshold") = shambase::get_epsilon<Tscal>(),
             py::arg("ensure_s_j_positivity") = true)
         .def(
@@ -315,6 +315,12 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("gamma"),
             py::arg("grain_sizes"),
             py::arg("grain_densities"))
+        .def(
+            "set_dust_ballabio_ts_limiter",
+            [](TConfig &self, bool enabled) {
+                self.dust_config.ballabio_ts_limiter = enabled;
+            },
+            py::arg("enabled"))
         .def("add_ext_force_point_mass", &TConfig::add_ext_force_point_mass)
         .def("add_ext_force_paczynski_wiita", &TConfig::add_ext_force_paczynski_wiita)
         .def(
