@@ -5,13 +5,25 @@ Testing Sod tube with SPH
 CI test for Sod tube with SPH
 """
 
+import json
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import PillowWriter
+from shamrock.utils.analysis import AnalysisHelper
 from shamrock.utils.plot import show_image_sequence
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
 import shamrock
+
+# If we use the shamrock executable to run this script instead of the python interpreter,
+# we should not initialize the system as the shamrock executable needs to handle specific MPI logic
+if not shamrock.sys.is_initialized():
+    shamrock.change_loglevel(1)
+    shamrock.sys.init("0:0")
+
+# %%
 
 gamma = 1.4
 
@@ -26,15 +38,25 @@ P_d = 0.1
 u_g = P_g / ((gamma - 1) * rho_g)
 u_d = P_d / ((gamma - 1) * rho_d)
 
-resol = 128
+resol = int(os.environ.get("RESOL", 128))
 
 sim_folder = f"_to_trash/sod_{resol}/"
 dump_folder = sim_folder + "dump/"
+
+# %%
 
 ctx = shamrock.Context()
 ctx.pdata_layout_new()
 
 model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
+
+l2_error_analysis = AnalysisHelper(
+    analysis_folder=sim_folder,
+    analysis_prefix="l2_error",
+)
+
+
+# %%
 
 
 class Simulation(SimulationRunner):
@@ -42,7 +64,7 @@ class Simulation(SimulationRunner):
     t_end = 0.245
     dump_prefix = dump_folder + "dump_"
 
-    @callback(tsim_interval=0.245 / 16)  # Do the analysis every dt_stop
+    @callback(at_tsim=(0.245 * np.linspace(0.0, 1.0, 10)).tolist())  # Do the analysis every dt_stop
     def analysis_plots(self, ianalysis):
         dic = ctx.collect_data()
         pmass = model.get_particle_mass()
@@ -61,7 +83,10 @@ class Simulation(SimulationRunner):
         sodanalysis = model.make_analysis_sodtube(
             sod, (1, 0, 0), self.model.get_time(), 0.0, -0.5, 0.5
         )
-        print(sodanalysis.compute_L2_dist())
+        l2_rho, l2_v, l2_P = sodanalysis.compute_L2_dist()
+        l2_error_analysis.analysis_save(
+            ianalysis, {"l2_rho": l2_rho, "l2_v": l2_v, "l2_P": l2_P, "time": self.model.get_time()}
+        )
 
         plt.plot(x, rho, ".", label="rho")
         plt.plot(x, vx, ".", label="v")
@@ -129,11 +154,8 @@ class Simulation(SimulationRunner):
         gen1 = setup.make_generator_lattice_hcp(dr, V_g_min, V_g_max)
         gen2 = setup.make_generator_lattice_hcp(dr * fact, V_d_min, V_d_max)
         comb = setup.make_combiner_add(gen1, gen2)
-        # print(comb.get_dot())
-        setup.apply_setup(comb)
 
-        # model.add_cube_fcc_3d(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
-        # model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
+        setup.apply_setup(comb)
 
         model.set_value_in_a_box("uint", "f64", u_g, V_g_min, V_g_max)
         model.set_value_in_a_box("uint", "f64", u_d, V_d_min, V_d_max)
@@ -156,6 +178,8 @@ class Simulation(SimulationRunner):
 
 Simulation(model).run()
 
+# %%
+
 glob_str = f"{dump_folder}sod_*.png"
 ani = show_image_sequence(glob_str)
 
@@ -164,3 +188,43 @@ ani.save("_to_trash/sod.gif", writer=writer)
 
 if shamrock.sys.world_rank() == 0:
     plt.show()
+
+
+# %%
+
+t, l2_rho, l2_v, l2_P = [], [], [], []
+for i in l2_error_analysis.get_list_analysis_id():
+    data = l2_error_analysis.load_analysis(i).item()
+    t.append(data["time"])
+    l2_rho.append(data["l2_rho"])
+    l2_v.append(data["l2_v"])
+    l2_P.append(data["l2_P"])
+
+l2_v = np.array(l2_v)
+
+plt.plot(t, l2_rho, label="l2_rho")
+plt.plot(t, l2_v[:, 0], label="l2_v (vx)")
+plt.plot(t, l2_v[:, 1], label="l2_v (vy)")
+plt.plot(t, l2_v[:, 2], label="l2_v (vz)")
+plt.plot(t, l2_P, label="l2_P")
+plt.legend()
+plt.xlabel("t")
+plt.ylabel("L2 error")
+plt.yscale("log")
+plt.tight_layout()
+plt.savefig(f"{dump_folder}/l2_error.png")
+plt.show()
+
+# %%
+
+print("##### Test result #####")
+result = {
+    "t": float(t[-1]),
+    "l2_rho": l2_rho[-1],
+    "l2_v": l2_v[-1].tolist(),
+    "l2_P": l2_P[-1],
+    "resol": resol,
+}
+print(result)
+
+json.dump(result, open(f"{dump_folder}/test_result.json", "w"), indent=4)
