@@ -18,6 +18,14 @@ gamma = 1.4
 rho_g = 1
 rho_d = 0.125
 
+epsilons = [0.5]
+ts = [0.001]
+ndust = len(epsilons)
+
+eps_all = np.sum(epsilons)
+gas_fact = 1 - eps_all
+
+
 fact = (rho_g / rho_d) ** (1.0 / 3.0)
 
 P_g = 1
@@ -28,12 +36,8 @@ u_d = P_d / ((gamma - 1) * rho_d)
 
 resol = 128
 
-epsilon = 0.5
-ts = 0.1
-
 sim_folder = f"_to_trash/dustysod_{resol}/"
 dump_folder = sim_folder + "dump/"
-
 
 shamrock.enable_experimental_features()
 
@@ -55,13 +59,18 @@ class Simulation(SimulationRunner):
 
         x = np.array(dic["xyz"][:, 0]) + 0.5
         vx = dic["vxyz"][:, 0]
-        uint = dic["uint"][:]
+        uint_tilde = dic["uint"][:]
+        sj = dic["s_j"].reshape(-1, ndust)
 
         hpart = dic["hpart"]
         alpha = dic["alpha_AV"]
 
         rho = pmass * (model.get_hfact() / hpart) ** 3
-        P = (gamma - 1) * rho * uint
+
+        rho_d = sj**2
+        rho_g = rho - np.sum(rho_d, axis=1)
+
+        P = (gamma - 1) * rho * uint_tilde  # = rho_g * u
 
         sod = shamrock.phys.SodTube(gamma=gamma, rho_1=1, P_1=1, rho_5=0.125, P_5=0.1)
         sodanalysis = model.make_analysis_sodtube(
@@ -69,10 +78,13 @@ class Simulation(SimulationRunner):
         )
         print(sodanalysis.compute_L2_dist())
 
-        plt.plot(x, rho, ".", label="rho")
+        plt.plot(x, rho, ".", label="rho_g")
         plt.plot(x, vx, ".", label="v")
         plt.plot(x, P, ".", label="P")
         plt.plot(x, alpha, ".", label="alpha")
+
+        for i in range(ndust):
+            plt.plot(x, rho_d[:, i], ".", label=f"rho_d_{i}")
 
         x = np.linspace(-0.5, 0.5, 1000)
 
@@ -116,8 +128,8 @@ class Simulation(SimulationRunner):
         cfg.set_boundary_periodic()
         cfg.set_eos_adiabatic(gamma)
         cfg.set_dust_mode_monofluid_tva(nvar=1)
-        cfg.set_dust_drag_constant([ts])
-        cfg.set_cfld
+        cfg.set_dust_drag_constant(ts)
+        cfg.set_show_cfl_detail(True)
         cfg.print_status()
         model.set_solver_config(cfg)
 
@@ -129,11 +141,14 @@ class Simulation(SimulationRunner):
 
         model.resize_simulation_box((-xs, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
 
+        V_g_min = (-xs, -ys / 2, -zs / 2)
+        V_g_max = (0, ys / 2, zs / 2)
+        V_d_min = (0, -ys / 2, -zs / 2)
+        V_d_max = (xs, ys / 2, zs / 2)
+
         setup = model.get_setup()
-        gen1 = setup.make_generator_lattice_hcp(dr, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
-        gen2 = setup.make_generator_lattice_hcp(
-            dr * fact, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2)
-        )
+        gen1 = setup.make_generator_lattice_hcp(dr, V_g_min, V_g_max)
+        gen2 = setup.make_generator_lattice_hcp(dr * fact, V_d_min, V_d_max)
         comb = setup.make_combiner_add(gen1, gen2)
         # print(comb.get_dot())
         setup.apply_setup(comb)
@@ -141,14 +156,17 @@ class Simulation(SimulationRunner):
         # model.add_cube_fcc_3d(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
         # model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
-        model.set_value_in_a_box("uint", "f64", u_g, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
-        model.set_value_in_a_box("uint", "f64", u_d, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
+        model.set_value_in_a_box("uint", "f64", u_g, V_g_min, V_g_max)
+        model.set_value_in_a_box("uint", "f64", u_d, V_d_min, V_d_max)
 
-        s_g = np.sqrt(rho_g * epsilon)
-        s_d = np.sqrt(rho_d * epsilon)
+        for i in range(ndust):
+            epsilon = epsilons[i]
 
-        model.set_value_in_a_box("s_j", "f64", s_g, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
-        model.set_value_in_a_box("s_j", "f64", s_d, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
+            s_g = np.sqrt(rho_g * epsilon)
+            s_d = np.sqrt(rho_d * epsilon)
+
+            model.set_value_in_a_box("s_j", "f64", s_g, V_g_min, V_g_max, ivar=i)
+            model.set_value_in_a_box("s_j", "f64", s_d, V_d_min, V_d_max, ivar=i)
 
         vol_b = xs * ys * zs
 
@@ -162,6 +180,8 @@ class Simulation(SimulationRunner):
 
         model.set_cfl_cour(0.1)
         model.set_cfl_force(0.1)
+
+        model.timestep()
 
 
 Simulation(model).run()

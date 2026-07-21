@@ -120,11 +120,14 @@ class Simulation(SimulationRunner):
 
         model.resize_simulation_box((-xs, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
 
+        V_g_min = (-xs, -ys / 2, -zs / 2)
+        V_g_max = (0, ys / 2, zs / 2)
+        V_d_min = (0, -ys / 2, -zs / 2)
+        V_d_max = (xs, ys / 2, zs / 2)
+
         setup = model.get_setup()
-        gen1 = setup.make_generator_lattice_hcp(dr, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
-        gen2 = setup.make_generator_lattice_hcp(
-            dr * fact, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2)
-        )
+        gen1 = setup.make_generator_lattice_hcp(dr, V_g_min, V_g_max)
+        gen2 = setup.make_generator_lattice_hcp(dr * fact, V_d_min, V_d_max)
         comb = setup.make_combiner_add(gen1, gen2)
         # print(comb.get_dot())
         setup.apply_setup(comb)
@@ -132,8 +135,8 @@ class Simulation(SimulationRunner):
         # model.add_cube_fcc_3d(dr, (-xs,-ys/2,-zs/2),(0,ys/2,zs/2))
         # model.add_cube_fcc_3d(dr*fact, (0,-ys/2,-zs/2),(xs,ys/2,zs/2))
 
-        model.set_value_in_a_box("uint", "f64", u_g, (-xs, -ys / 2, -zs / 2), (0, ys / 2, zs / 2))
-        model.set_value_in_a_box("uint", "f64", u_d, (0, -ys / 2, -zs / 2), (xs, ys / 2, zs / 2))
+        model.set_value_in_a_box("uint", "f64", u_g, V_g_min, V_g_max)
+        model.set_value_in_a_box("uint", "f64", u_d, V_d_min, V_d_max)
 
         vol_b = xs * ys * zs
 
@@ -147,6 +150,8 @@ class Simulation(SimulationRunner):
 
         model.set_cfl_cour(0.1)
         model.set_cfl_force(0.1)
+
+        model.timestep()
 
 
 Simulation(model).run()
