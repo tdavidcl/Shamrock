@@ -26,9 +26,7 @@
 #include "shamphys/eos.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
-#include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamrock/solvergraph/IDataEdge.hpp"
-#include "shamsys/legacy/log.hpp"
 
 #define NODE_EDGES(X_RO, X_RW, X_RO_OPTIONAL, X_RW_OPTIONAL)                                       \
     /* ------------------- inputs ------------------- */                                           \
@@ -128,110 +126,6 @@ namespace shammodels::common::modules {
 
 #undef NODE_EDGES
 
-template<class Tscal>
-struct RhoGetterBase {
-    sham::DeviceBuffer<Tscal> &buf_h;
-    Tscal pmass;
-    Tscal hfact;
-
-    struct accessed {
-        const Tscal *h;
-        Tscal pmass;
-        Tscal hfact;
-
-        Tscal operator()(u32 i) const {
-            using namespace shamrock::sph;
-            return rho_h(pmass, h[i], hfact);
-        }
-    };
-
-    accessed get_read_access(sham::EventList &depends_list) {
-        auto h = buf_h.get_read_access(depends_list);
-        return accessed{h, pmass, hfact};
-    }
-
-    void complete_event_state(sycl::event e) { buf_h.complete_event_state(e); }
-};
-
-template<class Tscal>
-struct RhoGetterMonofluid {
-    sham::DeviceBuffer<Tscal> &buf_h;
-    sham::DeviceBuffer<Tscal> &buf_epsilon;
-    u32 nvar_dust;
-    Tscal pmass;
-    Tscal hfact;
-
-    struct accessed {
-        const Tscal *h;
-        const Tscal *buf_epsilon;
-        u32 nvar_dust;
-        Tscal pmass;
-        Tscal hfact;
-
-        Tscal operator()(u32 i) const {
-
-            Tscal epsilon_sum = 0;
-            for (u32 j = 0; j < nvar_dust; j++) {
-                epsilon_sum += buf_epsilon[i * nvar_dust + j];
-            }
-
-            using namespace shamrock::sph;
-            return (1 - epsilon_sum) * rho_h(pmass, h[i], hfact);
-        }
-    };
-
-    accessed get_read_access(sham::EventList &depends_list) {
-        auto h       = buf_h.get_read_access(depends_list);
-        auto epsilon = buf_epsilon.get_read_access(depends_list);
-
-        return accessed{h, epsilon, nvar_dust, pmass, hfact};
-    }
-
-    void complete_event_state(sycl::event e) { buf_h.complete_event_state(e); }
-};
-
-template<class Tscal>
-struct RhoGetterSJ {
-    sham::DeviceBuffer<Tscal> &buf_h;
-    sham::DeviceBuffer<Tscal> &buf_s_j;
-    u32 nvar_dust;
-    Tscal pmass;
-    Tscal hfact;
-
-    struct accessed {
-        const Tscal *h;
-        const Tscal *buf_s_j;
-        u32 nvar_dust;
-        Tscal pmass;
-        Tscal hfact;
-
-        Tscal operator()(u32 i) const {
-            using namespace shamrock::sph;
-            Tscal rho = rho_h(pmass, h[i], hfact);
-
-            Tscal epsilon_sum = 0;
-            for (u32 j = 0; j < nvar_dust; j++) {
-                Tscal s_j = buf_s_j[i * nvar_dust + j];
-                epsilon_sum += s_j * s_j / rho;
-            }
-
-            return rho * (1 - epsilon_sum);
-        }
-    };
-
-    accessed get_read_access(sham::EventList &depends_list) {
-        auto h   = buf_h.get_read_access(depends_list);
-        auto s_j = buf_s_j.get_read_access(depends_list);
-
-        return accessed{h, s_j, nvar_dust, pmass, hfact};
-    }
-
-    void complete_event_state(sycl::event e) {
-        buf_h.complete_event_state(e);
-        buf_s_j.complete_event_state(e);
-    }
-};
-
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal(
     const shamrock::solvergraph::IDataEdge<Tscal> &hfactd,
@@ -248,7 +142,6 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
 
     shamrock::patch::PatchDataLayerLayout &ghost_layout
         = shambase::get_check_ref(storage.ghost_layout.get());
-    u32 iuint_interf = ghost_layout.get_field_idx<Tscal>("uint");
 
     using namespace shamrock;
     using namespace shamrock::patch;
@@ -272,8 +165,6 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
 
     bool has_rho = spans_rho.has_value();
     bool has_h   = spans_h.has_value();
-
-    logger::raw_ln("has_rho: ", has_rho, " has_h: ", has_h);
 
     // must have either rho or h
     if ((!has_rho || has_h) && (has_rho || !has_h)) {
@@ -505,7 +396,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
 
         shamrock::solvergraph::FieldRefs<Tvec> xyz_refs{"", ""};
         auto refs
-            = storage.merged_patchdata_ghost.get()
+            = storage.merged_xyzh.get()
                   .template map<shamrock::solvergraph::PatchDataFieldRef<Tvec>>(
                       [&](u64 id,
                           PatchDataLayer &mpdat) -> shamrock::solvergraph::PatchDataFieldRef<Tvec> {
@@ -591,7 +482,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
 
         shamrock::solvergraph::FieldRefs<Tvec> xyz_refs{"", ""};
         auto refs
-            = storage.merged_patchdata_ghost.get()
+            = storage.merged_xyzh.get()
                   .template map<shamrock::solvergraph::PatchDataFieldRef<Tvec>>(
                       [&](u64 id,
                           PatchDataLayer &mpdat) -> shamrock::solvergraph::PatchDataFieldRef<Tvec> {
@@ -742,7 +633,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
 
         shamrock::solvergraph::FieldRefs<Tvec> xyz_refs{"", ""};
         auto refs
-            = storage.merged_patchdata_ghost.get()
+            = storage.merged_xyzh.get()
                   .template map<shamrock::solvergraph::PatchDataFieldRef<Tvec>>(
                       [&](u64 id,
                           PatchDataLayer &mpdat) -> shamrock::solvergraph::PatchDataFieldRef<Tvec> {
@@ -937,43 +828,16 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
     u32 ihpart_interf = ghost_layout.get_field_idx<Tscal>("hpart");
     u32 iuint_interf  = ghost_layout.get_field_idx<Tscal>("uint");
 
-    shamrock::SchedulerUtility utility(scheduler());
-
     shamrock::solvergraph::IDataEdge<Tscal> hfactd("hfactd", "hfactd");
     shamrock::solvergraph::IDataEdge<Tscal> pmass("pmass", "pmass");
 
     hfactd.data = Kernel::hfactd;
     pmass.data  = gpart_mass;
 
-    if (solver_config.dust_config.has_epsilon_field()) {
+    auto &sizes = shambase::get_check_ref(storage.part_counts_with_ghost);
 
-        // u32 iepsilon_interf = ghost_layout.get_field_idx<Tscal>("epsilon");
-        // u32 nvar_dust       = solver_config.dust_config.get_dust_nvar();
-        //
-        // compute_eos_internal([&](PatchDataLayer &mpdat) {
-        //    return RhoGetterMonofluid<Tscal>{
-        //        mpdat.get_field_buf_ref<Tscal>(ihpart_interf),
-        //        mpdat.get_field_buf_ref<Tscal>(iepsilon_interf),
-        //        nvar_dust,
-        //        gpart_mass,
-        //        Kernel::hfactd};
-        //});
-    } else if (solver_config.dust_config.has_s_j_field()) {
-
-        // u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
-        // u32 nvar_dust   = solver_config.dust_config.get_dust_nvar();
-        //
-        // compute_eos_internal([&](PatchDataLayer &mpdat) {
-        //     return RhoGetterSJ<Tscal>{
-        //         mpdat.get_field_buf_ref<Tscal>(ihpart_interf),
-        //         mpdat.get_field_buf_ref<Tscal>(is_j_interf),
-        //         nvar_dust,
-        //         gpart_mass,
-        //         Kernel::hfactd};
-        // });
-    } else {
-
-        shamrock::solvergraph::FieldRefs<Tscal> h_refs{"", ""};
+    shamrock::solvergraph::FieldRefs<Tscal> h_refs{"", ""};
+    {
         auto refs = storage.merged_patchdata_ghost.get()
                         .template map<shamrock::solvergraph::PatchDataFieldRef<Tscal>>(
                             [&](u64 id, PatchDataLayer &mpdat)
@@ -981,15 +845,141 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                                 return mpdat.get_field<Tscal>(ihpart_interf);
                             });
         h_refs.set_refs(refs);
+    }
 
-        shamrock::solvergraph::FieldRefs<Tscal> uint_refs{"", ""};
-        refs = storage.merged_patchdata_ghost.get()
-                   .template map<shamrock::solvergraph::PatchDataFieldRef<Tscal>>(
-                       [&](u64 id, PatchDataLayer &mpdat)
-                           -> shamrock::solvergraph::PatchDataFieldRef<Tscal> {
-                           return mpdat.get_field<Tscal>(iuint_interf);
-                       });
+    shamrock::solvergraph::FieldRefs<Tscal> uint_refs{"", ""};
+    {
+        auto refs = storage.merged_patchdata_ghost.get()
+                        .template map<shamrock::solvergraph::PatchDataFieldRef<Tscal>>(
+                            [&](u64 id, PatchDataLayer &mpdat)
+                                -> shamrock::solvergraph::PatchDataFieldRef<Tscal> {
+                                return mpdat.get_field<Tscal>(iuint_interf);
+                            });
         uint_refs.set_refs(refs);
+    }
+
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    if (solver_config.dust_config.has_epsilon_field()) {
+
+        u32 iepsilon_interf = ghost_layout.get_field_idx<Tscal>("epsilon");
+        u32 nvar_dust       = solver_config.dust_config.get_dust_nvar();
+
+        shamrock::solvergraph::Field<Tscal> rho_g
+            = shamrock::solvergraph::Field<Tscal>(1, "rho_g", "rho_g");
+        shamrock::solvergraph::Field<Tscal> uint_g
+            = shamrock::solvergraph::Field<Tscal>(1, "uint_g", "uint_g");
+
+        rho_g.ensure_sizes(sizes.indexes);
+        uint_g.ensure_sizes(sizes.indexes);
+
+        shamrock::solvergraph::FieldRefs<Tscal> epsilon_refs{"", ""};
+        auto refs = storage.merged_patchdata_ghost.get()
+                        .template map<shamrock::solvergraph::PatchDataFieldRef<Tscal>>(
+                            [&](u64 id, PatchDataLayer &mpdat)
+                                -> shamrock::solvergraph::PatchDataFieldRef<Tscal> {
+                                return mpdat.get_field<Tscal>(iepsilon_interf);
+                            });
+        epsilon_refs.set_refs(refs);
+
+        sham::distributed_data_kernel_call(
+            dev_sched,
+            sham::DDMultiRef{h_refs.get_spans(), uint_refs.get_spans(), epsilon_refs.get_spans()},
+            sham::DDMultiRef{rho_g.get_spans(), uint_g.get_spans()},
+            sizes.indexes,
+            [pmass = pmass.data, hfactd = hfactd.data, nvar_dust](
+                u32 gid,
+                const Tscal *h,
+                const Tscal *uint,
+                const Tscal *epsilon,
+                Tscal *rho_g,
+                Tscal *uint_g) {
+                using namespace shamrock::sph;
+                Tscal rho_a  = rho_h(pmass, h[gid], hfactd);
+                Tscal uint_a = uint[gid];
+
+                Tscal epsilon_sum = 0;
+                for (u32 j = 0; j < nvar_dust; j++) {
+                    epsilon_sum += epsilon[gid * nvar_dust + j];
+                }
+
+                Tscal rho_g_a  = rho_a * (1 - epsilon_sum);
+                Tscal uint_g_a = uint_a / (1 - epsilon_sum);
+
+                rho_g[gid]  = rho_g_a;
+                uint_g[gid] = uint_g_a;
+            });
+
+        compute_eos_internal(
+            hfactd,
+            pmass,
+            rho_g,
+            std::nullopt,
+            uint_g,
+            sizes,
+            shambase::get_check_ref(storage.pressure),
+            shambase::get_check_ref(storage.soundspeed));
+    } else if (solver_config.dust_config.has_s_j_field()) {
+
+        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
+        u32 nvar_dust   = solver_config.dust_config.get_dust_nvar();
+
+        shamrock::solvergraph::Field<Tscal> rho_g
+            = shamrock::solvergraph::Field<Tscal>(1, "rho_g", "rho_g");
+        shamrock::solvergraph::Field<Tscal> uint_g
+            = shamrock::solvergraph::Field<Tscal>(1, "uint_g", "uint_g");
+
+        rho_g.ensure_sizes(sizes.indexes);
+        uint_g.ensure_sizes(sizes.indexes);
+
+        shamrock::solvergraph::FieldRefs<Tscal> s_j_refs{"", ""};
+        auto refs = storage.merged_patchdata_ghost.get()
+                        .template map<shamrock::solvergraph::PatchDataFieldRef<Tscal>>(
+                            [&](u64 id, PatchDataLayer &mpdat)
+                                -> shamrock::solvergraph::PatchDataFieldRef<Tscal> {
+                                return mpdat.get_field<Tscal>(is_j_interf);
+                            });
+        s_j_refs.set_refs(refs);
+
+        sham::distributed_data_kernel_call(
+            dev_sched,
+            sham::DDMultiRef{h_refs.get_spans(), uint_refs.get_spans(), s_j_refs.get_spans()},
+            sham::DDMultiRef{rho_g.get_spans(), uint_g.get_spans()},
+            sizes.indexes,
+            [pmass = pmass.data, hfactd = hfactd.data, nvar_dust](
+                u32 gid,
+                const Tscal *h,
+                const Tscal *uint,
+                const Tscal *s_j,
+                Tscal *rho_g,
+                Tscal *uint_g) {
+                using namespace shamrock::sph;
+                Tscal rho_a  = rho_h(pmass, h[gid], hfactd);
+                Tscal uint_a = uint[gid];
+
+                Tscal epsilon_sum = 0;
+                for (u32 j = 0; j < nvar_dust; j++) {
+                    Tscal s = s_j[gid * nvar_dust + j];
+                    epsilon_sum += s * s / rho_a;
+                }
+
+                Tscal rho_g_a  = rho_a * (1 - epsilon_sum);
+                Tscal uint_g_a = uint_a / (1 - epsilon_sum);
+
+                rho_g[gid]  = rho_g_a;
+                uint_g[gid] = uint_g_a;
+            });
+
+        compute_eos_internal(
+            hfactd,
+            pmass,
+            rho_g,
+            std::nullopt,
+            uint_g,
+            sizes,
+            shambase::get_check_ref(storage.pressure),
+            shambase::get_check_ref(storage.soundspeed));
+    } else {
 
         compute_eos_internal(
             hfactd,
@@ -997,7 +987,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             std::nullopt,
             h_refs,
             uint_refs,
-            shambase::get_check_ref(storage.part_counts_with_ghost),
+            sizes,
             shambase::get_check_ref(storage.pressure),
             shambase::get_check_ref(storage.soundspeed));
     }
