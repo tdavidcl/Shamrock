@@ -196,7 +196,7 @@ def analysis(i_snapshot):
 
     l_0 = np.log2(base * 2)
 
-    l = -np.log2(dX / max(dX0, dX.max())) + l_0
+    l = -np.log2(dX / dX0) + l_0
 
     ax1.scatter(X, rho, rasterized=True, s=12 * np.ones(X.shape), label="rho")
     ax1.scatter(X, vx, rasterized=True, s=12 * np.ones(X.shape), label="v")
@@ -238,10 +238,13 @@ def analysis(i_snapshot):
         arr_vx.append(_vx)
         arr_P.append(_P)
 
-    ax1.plot(arr_x, arr_rho, ls="--", lw=2.0, color="black", label="analytic")
-    ax1.plot(arr_x, arr_vx, ls="--", lw=2.0, color="black")
-    ax1.plot(arr_x, arr_P, ls="--", lw=2.0, color="black")
+    ax1.plot(arr_x, arr_rho, ls="--", lw=2.0, alpha=0.7, color="black", label="analytic")
+    ax1.plot(arr_x, arr_vx, ls="--", lw=2.0, alpha=0.7, color="black")
+    ax1.plot(arr_x, arr_P, ls="--", lw=2.0, alpha=0.7, color="black")
     ax2.set_ylabel("AMR level")
+    ax2.set_autoscale_on(False)
+    ax2.set_ylim(0.5, l_0 + max_amr_lev + 0.5)
+    ax1.set_xlim(-0.05, 1.05)
     plt.title(f"Threshold = {err_max}, derefinement factor = {err_min}")
     plt.savefig(f"_to_trash/sod_tube_amr_{i_snapshot:04d}.png")
     plt.close()
@@ -249,7 +252,7 @@ def analysis(i_snapshot):
 
 # %%
 
-t_snapshot = np.linspace(0, 0.245, 60).tolist()
+t_snapshot = np.linspace(0, 0.245, 120).tolist()
 
 for i_snapshot, t_target in enumerate(t_snapshot):
     model.evolve_until(t_target)
