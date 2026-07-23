@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import PillowWriter
 from shamrock.utils.plot import show_image_sequence
+
 import shamrock
 
 shamrock.enable_experimental_features()
@@ -104,6 +105,7 @@ model.set_field_value_lambda_f64_3("rhovel", rhovel_map)
 
 # %%
 
+
 def convert_to_cell_coords(dic):
 
     cmin = dic["cell_min"]
@@ -144,9 +146,11 @@ def convert_to_cell_coords(dic):
 
     return dic
 
+
 xref = 0.5
 xrange = 0.5
 sod = shamrock.phys.SodTube(gamma=gamma, rho_1=1, P_1=1, rho_5=0.125, P_5=0.1)
+
 
 def analysis(i_snapshot):
     global dX0
@@ -204,7 +208,16 @@ def analysis(i_snapshot):
         label="P",
     )
     idx = np.argsort(X)
-    ax2.plot(X[idx], l[idx], color="purple", marker="D", linewidth=2.0, ls="-.", label="AMR level",rasterized=True)
+    ax2.plot(
+        X[idx],
+        l[idx],
+        color="purple",
+        marker="D",
+        linewidth=2.0,
+        ls="-.",
+        label="AMR level",
+        rasterized=True,
+    )
     # plt.scatter(X,rhoetot, rasterized=True,label="rhoetot")
     ax1.legend(loc=0)
     ax2.legend(loc=0)
