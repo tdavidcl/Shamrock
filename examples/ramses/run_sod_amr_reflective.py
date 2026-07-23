@@ -8,16 +8,14 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-
+from matplotlib.animation import PillowWriter
+from shamrock.utils.plot import show_image_sequence
 import shamrock
 
 shamrock.enable_experimental_features()
 
-ctx = shamrock.Context()
-ctx.pdata_layout_new()
-
-model = shamrock.get_Model_Ramses(context=ctx, vector_type="f64_3", grid_repr="i64_3")
-
+# %%
+# Setup parameters
 
 multx = 1
 multy = 1
@@ -25,12 +23,22 @@ multz = 1
 max_amr_lev = 2
 cell_size = 2 << max_amr_lev  # refinement is limited to cell_size = 2
 base = 16
+gamma = 1.4
+scale_fact = 1 / (cell_size * base * multx)
+
+# %%
+
+ctx = shamrock.Context()
+ctx.pdata_layout_new()
+
+model = shamrock.get_Model_Ramses(context=ctx, vector_type="f64_3", grid_repr="i64_3")
+
+
+# %%
 
 cfg = model.gen_default_config()
-scale_fact = 1 / (cell_size * base * multx)
 cfg.set_scale_factor(scale_fact)
 
-gamma = 1.4
 cfg.set_eos_gamma(gamma)
 cfg.set_Csafe(0.3)
 cfg.set_boundary_condition("x", "reflective")
@@ -94,6 +102,8 @@ model.set_field_value_lambda_f64("rhoetot", rhoetot_map)
 model.set_field_value_lambda_f64_3("rhovel", rhovel_map)
 
 
+# %%
+
 def convert_to_cell_coords(dic):
 
     cmin = dic["cell_min"]
@@ -134,43 +144,17 @@ def convert_to_cell_coords(dic):
 
     return dic
 
-
-t_target = 0.245
-
-dt = 0
-t = 0
-freq = 10
-dX0 = 0
-for i in range(100000):
-    next_dt = model.evolve_once_override_time(t, dt)
-    if i == 0:
-        dic0 = convert_to_cell_coords(ctx.collect_data())
-        dX0 = dic0["ymax"][0] - dic0["ymin"][0]
-
-    t += dt
-    dt = next_dt
-
-    # if i % freq == 0:
-    #    model.dump_vtk(f"test{i:04d}.vtk")
-
-    if t_target < t + next_dt:
-        dt = t_target - t
-    if t == t_target:
-        # model.dump_vtk(f"test{i:04d}.vtk")
-        break
-
 xref = 0.5
 xrange = 0.5
 sod = shamrock.phys.SodTube(gamma=gamma, rho_1=1, P_1=1, rho_5=0.125, P_5=0.1)
-sodanalysis = model.make_analysis_sodtube(sod, (0, 1, 0), t_target, xref, 0.0, 1.0)
 
-
-#################
-### Plot
-#################
-# do plot or not
-if True:
+def analysis(i_snapshot):
+    global dX0
     dic = convert_to_cell_coords(ctx.collect_data())
+    if i_snapshot == 0:
+        dX0 = dic["ymax"][0] - dic["ymin"][0]
+
+    t = model.get_time()
 
     X = []
     dX = []
@@ -190,6 +174,14 @@ if True:
     rho = np.array(rho)
     rhovelx = np.array(rhovelx)
     rhoetot = np.array(rhoetot)
+
+    keep = (np.array(dic["xmin"]) < 0.01) & (np.array(dic["zmin"]) < 0.01)
+    print("cell count on line: ", keep.sum())
+    X = X[keep]
+    dX = dX[keep]
+    rho = rho[keep]
+    rhovelx = rhovelx[keep]
+    rhoetot = rhoetot[keep]
 
     vx = rhovelx / rho
 
@@ -212,7 +204,7 @@ if True:
         label="P",
     )
     idx = np.argsort(X)
-    ax2.plot(X[idx], l[idx], color="purple", marker="D", linewidth=2.0, ls="-.", label="AMR level")
+    ax2.plot(X[idx], l[idx], color="purple", marker="D", linewidth=2.0, ls="-.", label="AMR level",rasterized=True)
     # plt.scatter(X,rhoetot, rasterized=True,label="rhoetot")
     ax1.legend(loc=0)
     ax2.legend(loc=0)
@@ -228,7 +220,7 @@ if True:
     for i in range(len(arr_x)):
         x_ = arr_x[i] - xref
 
-        _rho, _vx, _P = sod.get_value(t_target, x_)
+        _rho, _vx, _P = sod.get_value(t, x_)
         arr_rho.append(_rho)
         arr_vx.append(_vx)
         arr_P.append(_P)
@@ -238,5 +230,32 @@ if True:
     ax1.plot(arr_x, arr_P, ls="--", lw=2.0, color="black")
     ax2.set_ylabel("AMR level")
     plt.title(f"Threshold = {err_max}, derefinement factor = {err_min}")
-    plt.savefig("sod_tube_amr_24_06_2026.png")
-    #######
+    plt.savefig(f"_to_trash/sod_tube_amr_{i_snapshot:04d}.png")
+    plt.close()
+
+
+# %%
+
+t_snapshot = np.linspace(0, 0.245, 60).tolist()
+
+for i_snapshot, t_target in enumerate(t_snapshot):
+    model.evolve_until(t_target)
+    analysis(i_snapshot)
+
+# %%
+
+sodanalysis = model.make_analysis_sodtube(sod, (0, 1, 0), t_target, xref, 0.0, 1.0)
+rho, v, P = sodanalysis.compute_L2_dist()
+print(rho, v, P)
+
+
+# %%
+
+glob_str = "_to_trash/sod_tube_amr_*.png"
+ani = show_image_sequence(glob_str)
+
+writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+ani.save("_to_trash/sod_tube_amr.gif", writer=writer)
+
+if shamrock.sys.world_rank() == 0:
+    plt.show()
