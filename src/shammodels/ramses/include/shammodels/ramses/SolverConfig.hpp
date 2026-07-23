@@ -312,19 +312,12 @@ namespace shammodels::basegodunov {
 
     inline void to_json(nlohmann::json &j, const BCConfig::GhostType &e) {
         switch (e) {
-        case BCConfig::GhostType::Periodic:
-            j = "periodic";
-            break;
-        case BCConfig::GhostType::Reflective:
-            j = "reflective";
-            break;
-        case BCConfig::GhostType::Outflow:
-            j = "outflow";
-            break;
+        case BCConfig::GhostType::Periodic  : j = "periodic"; break;
+        case BCConfig::GhostType::Reflective: j = "reflective"; break;
+        case BCConfig::GhostType::Outflow   : j = "outflow"; break;
         default:
             shambase::throw_with_loc<std::runtime_error>(
-                "Invalid BCConfig::GhostType value: "
-                + std::to_string(static_cast<int>(e)));
+                "Invalid BCConfig::GhostType value: " + std::to_string(static_cast<int>(e)));
         }
     }
 
@@ -377,9 +370,10 @@ namespace shammodels::basegodunov {
         } else if (const auto *cfg = std::get_if<typename AMR::DensityBased>(&p.config)) {
             j = {{"type", "density_based"}, {"crit_mass", cfg->crit_mass}};
         } else if (const auto *cfg = std::get_if<typename AMR::PseudoGradientBased>(&p.config)) {
-            j = {{"type", "pseudo_gradient_based"},
-                 {"error_min", cfg->error_min},
-                 {"error_max", cfg->error_max}};
+            j
+                = {{"type", "pseudo_gradient_based"},
+                   {"error_min", cfg->error_min},
+                   {"error_max", cfg->error_max}};
         } else if (const auto *cfg = std::get_if<typename AMR::JeansLengthBased>(&p.config)) {
             j = {{"type", "jeans_length_based"}, {"N_J", cfg->N_J}, {"T_0", cfg->T_0}};
         } else if (const auto *cfg = std::get_if<typename AMR::ShearBased>(&p.config)) {
@@ -406,8 +400,7 @@ namespace shammodels::basegodunov {
         } else if (type == "shear_based") {
             p.set_refine_shear_based(j.at("threshold").get<Tscal>());
         } else {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Invalid AMR mode type: " + type);
+            shambase::throw_with_loc<std::runtime_error>("Invalid AMR mode type: " + type);
         }
     }
 
