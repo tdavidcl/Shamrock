@@ -259,6 +259,9 @@ def analysis(i_snapshot):
 
 # %%
 
+if shamrock.sys.world_rank() == 0:
+    os.makedirs("_to_trash", exist_ok=True)
+
 t_snapshot = np.linspace(0, 0.245, 120).tolist()
 
 for i_snapshot, t_target in enumerate(t_snapshot):
