@@ -29,15 +29,15 @@ rho = 1
 epsilon_0 = 0.5
 cs_g_list = np.logspace(-4, -1, 3).tolist()
 ts = 1
-ampl_perturbation = 0.0001
-plot_scaling = 1e4
-label_scaling = "10^4 \\cdot"
+
+ampl_perturbation = 0.001
+plot_scaling = 1e3
+label_scaling = "10^3 \\cdot"
 delta_v_0_list = [cs * ampl_perturbation for cs in cs_g_list]
 
-bmin = (-0.5, -0.5 / 4, -0.5 / 4)
-bmax = (0.5, 0.5 / 4, 0.5 / 4)
-
-N_target = 1e5
+lx = int(os.environ.get("LZ", 18))
+ly = 12
+lz = 12
 
 # %%
 # Use shamrock documentation style for matplotlib
@@ -47,22 +47,16 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 # %%
 # Do setup
 
-xm, ym, zm = bmin
-xM, yM, zM = bmax
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+lmin = (-(lx // 2), -(ly // 2), -(lz // 2))
+lmax = (lx // 2, ly // 2, lz // 2)
 
-part_vol = vol_b / N_target
-
-# lattice volume
-HCP_PACKING_DENSITY = 0.74
-part_vol_lattice = HCP_PACKING_DENSITY * part_vol
-
-dr = (part_vol_lattice / ((4.0 / 3.0) * np.pi)) ** (1.0 / 3.0)
-
-print(f"dr={dr}, bmin={bmin}, bmax={bmax}")
-
-
-bmin, bmax = shamrock.math.get_ideal_hcp_box(dr, bmin, bmax)
+# Call with dr = 1 as we will rescale on next call
+(xm, ym, zm), (xM, yM, zM) = shamrock.math.get_periodic_hcp_box(1.0, lmin, lmax)
+print(f"base lattice : xM = {xM}, yM = {yM}, zM = {zM}")
+dr = 1. / (xM - xm)
+print(f"dr = {dr}")
+bmin, bmax = shamrock.math.get_periodic_hcp_box(dr, lmin, lmax)
+print(f"new lattice : bmin = {bmin}, bmax = {bmax}")
 xm, ym, zm = bmin
 xM, yM, zM = bmax
 
@@ -310,7 +304,7 @@ for ics, cs in enumerate(cs_g_list):
     print(Twave)
 
     Twave_cnt = 40
-    nwave = 2.5
+    nwave = 2.0
 
     t_list = []
     rho_t_list = []
