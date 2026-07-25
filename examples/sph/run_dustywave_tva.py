@@ -53,7 +53,7 @@ lmax = (lx // 2, ly // 2, lz // 2)
 # Call with dr = 1 as we will rescale on next call
 (xm, ym, zm), (xM, yM, zM) = shamrock.math.get_periodic_hcp_box(1.0, lmin, lmax)
 print(f"base lattice : xM = {xM}, yM = {yM}, zM = {zM}")
-dr = 1. / (xM - xm)
+dr = 1.0 / (xM - xm)
 print(f"dr = {dr}")
 bmin, bmax = shamrock.math.get_periodic_hcp_box(dr, lmin, lmax)
 print(f"new lattice : bmin = {bmin}, bmax = {bmax}")
@@ -428,12 +428,14 @@ for ics, cs in enumerate(cs_g_list):
     factor = plot_scaling
 
     def add_curve(x, y, symbol, label):
-        curves.append({
-            "x" : x,
-            "y" : factor * y,
-            "symbol" : symbol,
-            "label" : label,
-        })
+        curves.append(
+            {
+                "x": x,
+                "y": factor * y,
+                "symbol": symbol,
+                "label": label,
+            }
+        )
 
     add_curve(t_arr, rho_t_list, ".", r"$\delta \rho (t)$")
     add_curve(t_arr, eps_t_list, ".", r"$\delta \epsilon (t)$")
@@ -443,12 +445,12 @@ for ics, cs in enumerate(cs_g_list):
     add_curve(t_arr, vx_t_list_analytic / cs, "--", r"$\delta v_x / c_s(t)$ analytic")
 
     return_dict = {
-        "curves" : curves,
-        "cs" : cs,
-        "ics" : ics,
-        "xlabel" : "$t$ [code unit]",
-        "ylabel" : f"${label_scaling} \\delta$ fields [code unit]",
-        "title" : f"cs={cs:.2e} [code unit]",
+        "curves": curves,
+        "cs": cs,
+        "ics": ics,
+        "xlabel": "$t$ [code unit]",
+        "ylabel": f"${label_scaling} \\delta$ fields [code unit]",
+        "title": f"cs={cs:.2e} [code unit]",
     }
 
     plt.figure(dpi=150)
@@ -458,7 +460,7 @@ for ics, cs in enumerate(cs_g_list):
     plt.ylabel(return_dict["ylabel"])
     plt.title(return_dict["title"])
     plt.legend(fontsize=12, loc="upper right")
-    plt.savefig(f"_to_trash/dustywave_tva_scan_{return_dict["ics"]:04}.png")
+    plt.savefig(f"_to_trash/dustywave_tva_scan_{return_dict['ics']:04}.png")
 
     all_case_plot.append(return_dict)
 
@@ -469,9 +471,27 @@ from shamrock.utils.plot import show_image_sequence
 
 keep_list = []
 
+# %%
+# show them the gifs (i have to unroll the loop otherwise the doc does not capture the gifs ...)
+ani0 = show_image_sequence(f"_to_trash/dump_dustywave_tva_{0:02d}_*.png")
+writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+ani0.save(f"_to_trash/dustywave_tva_scan_{0:04}.gif", writer=writer)
+plt.show()
+
+# %%
+ani1 = show_image_sequence(f"_to_trash/dump_dustywave_tva_{1:02d}_*.png")
+writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+ani1.save(f"_to_trash/dustywave_tva_scan_{1:04}.gif", writer=writer)
+plt.show()
+
+# %%
+ani2 = show_image_sequence(f"_to_trash/dump_dustywave_tva_{2:02d}_*.png")
+writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+ani2.save(f"_to_trash/dustywave_tva_scan_{2:04}.gif", writer=writer)
+plt.show()
 
 
-#%%
+# %%
 fig, axs = plt.subplots(1, len(all_case_plot), figsize=(12, 5), sharey=True)
 for i, case in enumerate(all_case_plot):
     for curve in case["curves"]:
@@ -483,6 +503,6 @@ for i, case in enumerate(all_case_plot):
 
 axs[0].legend(fontsize=11, loc="upper left")
 plt.tight_layout()
-plt.savefig(f"_to_trash/dustywave_tva_scan_all.png")
-plt.savefig(f"_to_trash/dustywave_tva_scan_all.pdf")
+plt.savefig("_to_trash/dustywave_tva_scan_all.png")
+plt.savefig("_to_trash/dustywave_tva_scan_all.pdf")
 plt.close()
