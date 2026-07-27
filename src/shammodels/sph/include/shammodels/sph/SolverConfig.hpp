@@ -135,10 +135,10 @@ namespace shammodels::sph {
         inline void set_none() { current_mode = None{}; }
         inline void set_monofluid_tva(
             u32 nvar,
-            bool pure_diffusion_mode    = false,
-            Tscal C_1_fluid             = 0.1,
-            Tscal C_drift               = 1.0,
-            Tscal cfl_density_threshold = shambase::get_epsilon<Tscal>(),
+            bool pure_diffusion_mode         = false,
+            Tscal C_1_fluid                  = 0.1,
+            Tscal C_drift                    = 1.0,
+            Tscal cfl_density_threshold      = shambase::get_epsilon<Tscal>(),
             bool ensure_s_j_positivity       = true,
             bool smooth_s_positivity_limiter = true,
             bool dust_corrected_av           = false) {
