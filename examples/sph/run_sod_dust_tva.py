@@ -35,7 +35,7 @@ rho_g = 1
 rho_d = 0.125
 
 epsilons = [0.5]
-ts = [0.001]
+ts = [0.00001]
 ndust = len(epsilons)
 
 eps_all = np.sum(epsilons)
@@ -117,13 +117,15 @@ class Simulation(SimulationRunner):
             ianalysis, {"dust_mass": dmass, "time": self.model.get_time()}
         )
 
-        plt.plot(x, rho, ".", label="rho_g")
-        plt.plot(x, vx, ".", label="v")
-        plt.plot(x, P, ".", label="P")
-        plt.plot(x, alpha, ".", label="alpha")
+        plt.plot(x, rho, ".", label=r"$\rho_g + \rho_{\mathrm{d}}$")
 
         for i in range(ndust):
-            plt.plot(x, rho_d[:, i], ".", label=f"rho_d_{i}")
+            plt.plot(x, rho_d[:, i], ".", label=r"$\rho_{\mathrm{d},{i}}$")
+
+        plt.plot(x, vx, ".", label=r"$v_x$")
+        plt.plot(x, P, ".", label=r"$P$")
+        plt.plot(x, uint_tilde * (gamma-1), ".", label=r"$\tilde{u} (\gamma-1)$")
+        plt.plot(x, alpha, ".", label=r"$\alpha$")
 
         x = np.linspace(-0.5, 0.5, 1000)
 
@@ -144,11 +146,11 @@ class Simulation(SimulationRunner):
         plt.plot(x, vx, color="black")
         plt.plot(x, P, color="black")
 
-        plt.legend()
+        plt.legend(loc="center left")
         plt.grid()
-        plt.ylim(0, 1.1)
+        plt.ylim(0, 1.5)
         plt.xlim(0, 1)
-        plt.xlabel("x")
+        plt.xlabel(r"$x$")
         plt.title(f"t={self.model.get_time():.3f}")
         plt.savefig(dump_folder + f"sod_{ianalysis:04d}.png")
         plt.close()
