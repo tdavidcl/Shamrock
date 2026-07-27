@@ -5,6 +5,8 @@ Dustywave TVA dispersion relation
 This example shows how to derive the dustywave TVA dispersion relation using SymPy
 """
 
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
@@ -312,6 +314,7 @@ def plot_case(k_plot, eps_value, cs_value, ts_value):
     plt.suptitle(f"$\epsilon = {eps_value}, c_s = {cs_value}, t_s = {ts_value}$")
 
     plt.tight_layout()
+    os.makedirs("_to_trash", exist_ok=True)
     plt.savefig(f"_to_trash/dustywave_sympy_eps_{eps_value}_cs_{cs_value}_ts_{ts_value}.pdf")
 
 
