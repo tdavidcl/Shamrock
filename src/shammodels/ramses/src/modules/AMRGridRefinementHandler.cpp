@@ -969,8 +969,6 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
                     auto get_coord = [](u32 i) -> std::array<u32, dim> {
                         constexpr u32 NsideBlockPow = 1;
                         constexpr u32 Nside         = 1U << NsideBlockPow;
-                        constexpr u32 side_size     = Nside;
-                        constexpr u32 block_size    = shambase::pow_constexpr<dim>(Nside);
 
                         if constexpr (dim == 3) {
                             const u32 tmp = i >> NsideBlockPow;
