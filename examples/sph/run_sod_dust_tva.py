@@ -35,7 +35,7 @@ rho_g = 1
 rho_d = 0.125
 
 epsilons = [0.5]
-ts = [1e-4]
+ts = [1e-4]  # PL15 use K=1000 this correspond to ts=1e-4 in the rarefaction region
 ndust = len(epsilons)
 
 eps_all = np.sum(epsilons)
@@ -49,7 +49,7 @@ P_d = 0.1
 u_g = P_g / ((gamma - 1) * rho_g)
 u_d = P_d / ((gamma - 1) * rho_d)
 
-resol = int(os.environ.get("RESOL", 512))
+resol = int(os.environ.get("RESOL", 128))
 
 sim_folder = f"_to_trash/dustysod_{resol}/"
 dump_folder = sim_folder + "dump/"
