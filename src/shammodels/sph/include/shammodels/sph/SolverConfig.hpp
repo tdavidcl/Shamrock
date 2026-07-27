@@ -116,7 +116,9 @@ namespace shammodels::sph {
             Tscal cfl_density_threshold = shambase::get_epsilon<Tscal>();
 
             bool ensure_s_j_positivity = true;
-            bool dust_corrected_av     = false;
+
+// use the corrected q_AV from Hutchison 2018 & Price Laibe 15
+            bool dust_corrected_av     = false; 
         };
 
         struct MonofluidComplete {
