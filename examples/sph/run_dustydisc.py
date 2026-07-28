@@ -109,7 +109,9 @@ class DustLimiter(Enum):
     HARD = "hard"
 
 
-limiter = DustLimiter.NONE
+_dust_limiter_env = os.environ.get("DUST_LIMITER", "none")
+limiter = DustLimiter(_dust_limiter_env)
+print(f"limiter = {limiter} (DUST_LIMITER={_dust_limiter_env!r})")
 
 # Integrator parameters
 C_cour = 0.1
