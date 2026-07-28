@@ -234,6 +234,9 @@ class Simulation(SimulationRunner):
             elif hasattr(a, "render"):
                 a.render()
 
+        if ianalysis > 10:
+            return
+
         dic = ctx.collect_data()
 
         s_j = dic["s_j"]
@@ -245,8 +248,8 @@ class Simulation(SimulationRunner):
 
         plt.figure(dpi=250)
         for j in range(ndust):
-            print(z_r.shape, s_j[:, j].shape)
-            plt.scatter(z_r, s_j[:, j], s=1, label=f"dust {j}")
+            print(z_r[::10].shape, s_j[::10, j].shape)
+            plt.scatter(z_r[::10], s_j[::10, j], s=1, label=f"dust {j}")
         plt.legend()
         plt.xlabel("z/r")
         plt.ylabel("s")
@@ -671,7 +674,7 @@ class DustMassAnalysis:
             plt.plot(
                 t,
                 deviation,
-                label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}",
+                label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m]",
             )
 
         total_dust_mass = np.sum(dust_mass, axis=1)
