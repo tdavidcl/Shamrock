@@ -8,6 +8,7 @@ A disc but with dust
 import os
 
 import numpy as np
+from shamrock.utils.analysis import StandardPlotHelper
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
@@ -46,7 +47,7 @@ scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-analysis_frequency = 0.1  # years
+analysis_frequency = 1.0  # years
 t_end = 1000.0  # years
 
 # Sink parameters
@@ -149,34 +150,26 @@ ctx.pdata_layout_new()
 model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel=kernel)
 
 
-def compute_sj_new_j(patchdata, j):
-    pmass = model.get_particle_mass()
-
-    hpart = patchdata["hpart"]
-    rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
-
-    epsilon_target = epsilon_base * mrn_weight[j]
-    print(f"epsilon_target = {epsilon_target} {j}")
-    s = np.sqrt(rho * epsilon_target)
-
-    print(
-        f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]}, rho = {rho}"
-    )
-
-    return s
-
-
 class Simulation(SimulationRunner):
     # Use the global vars defined at the top of the file
     t_end = t_end
     dump_prefix = dump_prefix
 
-    @callback(tsim_interval=analysis_frequency)  # Do the analysis every analysis_frequency
-    def analysis(self, ianalysis): ...
+    def compute_sj_new_j(self, patchdata, j):
+        pmass = model.get_particle_mass()
 
-    @callback(walltime_interval=10 * 60)  # Checkpoint the simulation every 10 minutes
-    def checkpoint(self, icheckpoint):
-        self.do_checkpoint(icheckpoint, purge_old_dumps=True, keep_first=1, keep_last=3)
+        hpart = patchdata["hpart"]
+        rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
+
+        epsilon_target = epsilon_base * mrn_weight[j]
+        print(f"epsilon_target = {epsilon_target} {j}")
+        s = np.sqrt(rho * epsilon_target)
+
+        print(
+            f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]}, rho = {rho}"
+        )
+
+        return s
 
     @callback(at_tsim=0.0)
     def inject_dust(self, _):
@@ -184,11 +177,29 @@ class Simulation(SimulationRunner):
         for k in range(ndust):
 
             def compute_sj_new(patchdata):
-                return compute_sj_new_j(patchdata, k)
+                return self.compute_sj_new_j(patchdata, k)
 
             model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
         model.set_dt(0.0)  # to help the corrector on next step after adding dust
+
+    @callback(tsim_interval=analysis_frequency)  # Do the analysis every analysis_frequency
+    def analysis(self, ianalysis):
+        # Run all the analysis modules (declared below)
+        for a in self.analysis_modules:
+            a.analysis_save(ianalysis)
+
+            if hasattr(a, "make_plot"):
+                a.make_plot(
+                    ianalysis,
+                    **a.render_args,
+                )
+            elif hasattr(a, "plot_perf_history"):
+                a.plot_perf_history(close_plots=True)
+
+    @callback(walltime_interval=10 * 60)  # Checkpoint the simulation every 10 minutes
+    def checkpoint(self, icheckpoint):
+        self.do_checkpoint(icheckpoint, purge_old_dumps=True, keep_first=1, keep_last=3)
 
     @simulation_setup
     def setup(self):
@@ -301,5 +312,234 @@ class Simulation(SimulationRunner):
         model.change_htolerances(coarse=1.1, fine=1.1)
 
 
+# %%
+# Custom Analysis modules
+
+
+def get_rhod_j_getter(model, jdust, ndust):
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        s_j = dic_out["s_j"].reshape(-1, ndust)
+        return s_j[:, jdust] ** 2
+
+    return int_getter
+
+
+def ColumnDensityPlotDust(
+    model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix, jdust, ndust
+):
+    def compute_rhod_integ(helper):
+        return helper.column_integ_render(
+            "custom", "f64", custom_getter=get_rhod_j_getter(model, jdust, ndust)
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_rhod_integ,
+    )
+
+
+def SliceDensityPlotDust(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    jdust,
+    ndust,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_rho_slice(helper):
+        return helper.slice_render(
+            "custom",
+            "f64",
+            do_normalization,
+            min_normalization,
+            custom_getter=get_rhod_j_getter(model, jdust, ndust),
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_rho_slice,
+    )
+
+
+# %%
+# Define sim analysis
+
+max_rho_plot = 1e-9
+min_rho_plot = 1e-18
+max_rho_integ_plot = 1e3
+min_rho_integ_plot = 1e-5
+
+
+face_on_render_kwargs = {
+    "x_unit": "au",
+    "y_unit": "au",
+    "time_unit": "year",
+    "x_label": "x",
+    "y_label": "y",
+}
+
+sink_params = {
+    "sink_scale_factor": 1,
+    "sink_color": "green",
+    "sink_linewidth": 1,
+    "sink_fill": False,
+}
+
+
+slice_params = {
+    "ext_r": disc.rout * 0.6 / (16.0 / 9.0),  # aspect ratio of 16:9
+    "nx": 1920,
+    "ny": 1080,
+    "ex": (1, 0, 0),
+    "ey": (0, 0, 1),
+    "center": ((disc.rin + disc.rout) / 2, 0, 0),
+}
+
+
+from shamrock.utils.analysis import (
+    ColumnDensityPlot,
+    PerfHistory,
+    SliceDensityPlot,
+)
+
+perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
+
+
+column_density_plot = ColumnDensityPlot(
+    model,
+    ext_r=disc.rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_integ_gas",
+)
+
+column_density_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "kg.m^-2",
+    "field_label": "$\\int \\rho \\, \\mathrm{{d}} z$",
+    "vmin": min_rho_integ_plot,
+    "vmax": max_rho_integ_plot,
+    "norm": "log",
+    **sink_params,
+    "extra_title": "[gas + dust]",
+}
+if ndust > 0:
+    dust_column_density_plot = []
+
+    for jdust in range(ndust):
+        dust_column_density_plot.append(
+            ColumnDensityPlotDust(
+                model,
+                ext_r=disc.rout * 1.5,
+                nx=1024,
+                ny=1024,
+                ex=(1, 0, 0),
+                ey=(0, 1, 0),
+                center=(0, 0, 0),
+                ndust=ndust,
+                jdust=jdust,
+                analysis_folder=analysis_folder,
+                analysis_prefix=f"rho_integ_dust_{jdust}",
+            )
+        )
+
+        dust_column_density_plot[-1].render_args = {
+            **column_density_plot.render_args,
+            "field_unit": "kg.m^-2",
+            "field_label": f"$\\int \\rho_{{d, {jdust} }} \\, \\mathrm{{d}} z$",
+            "vmin": min_rho_integ_plot,
+            "vmax": max_rho_integ_plot,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+        }
+
+
+vertical_density_plot = SliceDensityPlot(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="rho_slice_gas",
+)
+
+vertical_density_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "kg.m^-3",
+    "field_label": "$\\rho$",
+    "vmin": min_rho_plot,
+    "vmax": max_rho_plot,
+    "norm": "log",
+    **sink_params,
+    "extra_title": "[gas + dust]",
+}
+
+if ndust > 0:
+    dust_slice_density_plot = []
+
+    for jdust in range(ndust):
+        dust_slice_density_plot.append(
+            SliceDensityPlotDust(
+                model,
+                **slice_params,
+                ndust=ndust,
+                jdust=jdust,
+                analysis_folder=analysis_folder,
+                analysis_prefix=f"rho_slice_dust_{jdust}",
+            )
+        )
+
+        dust_slice_density_plot[-1].render_args = {
+            **vertical_density_plot.render_args,
+            "field_unit": "kg.m^-3",
+            "field_label": f"$\\rho_{{d, {jdust} }}$",
+            "vmin": min_rho_plot,
+            "vmax": max_rho_plot,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
+        }
+
+# %%
+# Run the simulation
+
 sim = Simulation(model)
+
+sim.analysis_modules = [
+    perf_analysis,
+    column_density_plot,
+    vertical_density_plot,
+]
+
+if ndust > 0:
+    sim.analysis_modules.extend(dust_column_density_plot)
+    sim.analysis_modules.extend(dust_slice_density_plot)
+
 sim.run()
