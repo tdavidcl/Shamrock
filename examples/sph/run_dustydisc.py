@@ -6,7 +6,9 @@ A disc but with dust
 """
 
 import os
+from enum import Enum
 
+import matplotlib.pyplot as plt
 import numpy as np
 from shamrock.utils.analysis import StandardPlotHelper
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
@@ -47,8 +49,10 @@ scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-analysis_frequency = 1.0  # years
+analysis_frequency = 2.5  # years
+high_freq_analysis_frequency = 0.1  # years
 t_end = 1000.0  # years
+t_inject = 0.0  # years
 
 # Sink parameters
 center_mass = 1.0  # sol mass
@@ -91,12 +95,21 @@ mrn_cutoff_si = np.inf  # would be 250e-9 normally
 epsilon_base = 0.01
 
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
-grain_size_si_edges = np.logspace(-9, -2, ndust + 1)  # 10um -> 1mm
+grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
 
 mrn_distribution = DustMRNDistribution(
     codeu, mrn_pow, mrn_cutoff_si, grain_size_si_edges, rho_grains_si_edges
 )
 
+
+class DustLimiter(Enum):
+    NONE = "none"
+    SMOOTH = "smooth"
+    BALLABIO = "ballabio"
+    HARD = "hard"
+
+
+limiter = DustLimiter.NONE
 
 # Integrator parameters
 C_cour = 0.1
@@ -171,7 +184,7 @@ class Simulation(SimulationRunner):
 
         return s
 
-    @callback(at_tsim=0.0)
+    @callback(at_tsim=t_inject)
     def inject_dust(self, _):
         # Add the dust
         for k in range(ndust):
@@ -182,6 +195,24 @@ class Simulation(SimulationRunner):
             model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
         model.set_dt(0.0)  # to help the corrector on next step after adding dust
+
+    @callback(
+        tsim_interval=high_freq_analysis_frequency
+    )  # Do the analysis every analysis_frequency
+    def high_freq_analysis(self, ianalysis):
+        # Run all the analysis modules (declared below)
+        for a in self.high_freq_analysis_modules:
+            a.analysis_save(ianalysis)
+
+            if hasattr(a, "make_plot"):
+                a.make_plot(
+                    ianalysis,
+                    **a.render_args,
+                )
+            elif hasattr(a, "plot_perf_history"):
+                a.plot_perf_history(close_plots=True)
+            elif hasattr(a, "render"):
+                a.render()
 
     @callback(tsim_interval=analysis_frequency)  # Do the analysis every analysis_frequency
     def analysis(self, ianalysis):
@@ -196,8 +227,33 @@ class Simulation(SimulationRunner):
                 )
             elif hasattr(a, "plot_perf_history"):
                 a.plot_perf_history(close_plots=True)
+            elif hasattr(a, "render"):
+                a.render()
 
-    @callback(walltime_interval=10 * 60)  # Checkpoint the simulation every 10 minutes
+        dic = ctx.collect_data()
+
+        s_j = dic["s_j"]
+        s_j = s_j.reshape(-1, ndust)
+        xyz = dic["xyz"]
+
+        r = np.linalg.norm(xyz[:, :-1], axis=1)
+        z_r = xyz[:, -1] / r
+
+        plt.figure(dpi=250)
+        for j in range(ndust):
+            print(z_r.shape, s_j[:, j].shape)
+            plt.scatter(z_r, s_j[:, j], s=1, label=f"dust {j}")
+        plt.legend()
+        plt.xlabel("z/r")
+        plt.ylabel("s")
+        plt.yscale("symlog", linthresh=1e-8)
+        plt.title(f"t = {model.get_time():.1f} [yr]")
+        plt.xlim(-0.4, 0.4)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_folder, f"z_r_vs_s_{ianalysis}.png"))
+        plt.close()
+
+    @callback(walltime_interval=60)  # Checkpoint the simulation every 10 minutes
     def checkpoint(self, icheckpoint):
         self.do_checkpoint(icheckpoint, purge_old_dumps=True, keep_first=1, keep_last=3)
 
@@ -216,8 +272,25 @@ class Simulation(SimulationRunner):
         cfg.set_eos_locally_isothermalLP07(cs0=disc.cs0(), q=disc.q, r0=disc.r0)
 
         if ndust > 0:
-            cfg.set_dust_mode_monofluid_tva(nvar=ndust)
             cfg.set_dust_drag_epstein(gamma, grain_size, rho_grains)
+
+            if limiter == DustLimiter.NONE:
+                cfg.set_dust_mode_monofluid_tva(
+                    nvar=ndust, ensure_s_j_positivity=False, smooth_s_positivity_limiter=False
+                )
+            elif limiter == DustLimiter.SMOOTH:
+                cfg.set_dust_mode_monofluid_tva(
+                    nvar=ndust, ensure_s_j_positivity=False, smooth_s_positivity_limiter=True
+                )
+            elif limiter == DustLimiter.BALLABIO:
+                cfg.set_dust_mode_monofluid_tva(
+                    nvar=ndust, ensure_s_j_positivity=False, smooth_s_positivity_limiter=False
+                )
+                cfg.set_dust_ballabio_ts_limiter(True)
+            elif limiter == DustLimiter.HARD:
+                cfg.set_dust_mode_monofluid_tva(
+                    nvar=ndust, ensure_s_j_positivity=True, smooth_s_positivity_limiter=False
+                )
 
         cfg.add_kill_sphere(
             center=(0, 0, 0), radius=bsize
@@ -421,6 +494,7 @@ slice_params = {
 
 
 from shamrock.utils.analysis import (
+    AnalysisHelper,
     ColumnDensityPlot,
     PerfHistory,
     SliceDensityPlot,
@@ -527,13 +601,113 @@ if ndust > 0:
             "extra_title": f"[$s_{{grain}}$ = {grain_size_si[jdust]:.2e} m]",
         }
 
+
+class DustMassAnalysis:
+    def __init__(self, model, analysis_folder, analysis_prefix):
+        self.model = model
+        self.analysis_folder = analysis_folder
+        self.analysis_prefix = analysis_prefix
+        self.analysis_helper = AnalysisHelper(analysis_folder, analysis_prefix)
+        self.analysis = shamrock.model_sph.analysisDustMass(model=model)
+        self.render_args = {}
+
+    def analysis_save(self, ianalysis):
+        dust_mass = self.analysis.get_dust_mass()
+
+        # if all dust mass is zero replace by nans
+        if np.max(dust_mass) == 0:
+            print("all dust mass is zero, replacing by nans")
+            dust_mass = [np.nan for _ in range(ndust)]
+
+        self.analysis_helper.analysis_save(
+            ianalysis, {"time": self.model.get_time(), "dust_mass": dust_mass}
+        )
+
+    def render(self):
+        ids = self.analysis_helper.get_list_analysis_id()
+
+        t = []
+        dust_mass = []
+        for ianalysis in ids:
+            ld = self.analysis_helper.load_analysis(ianalysis).item()
+            t.append(ld["time"])
+            dust_mass.append(ld["dust_mass"])
+
+        t = np.array(t)
+        dust_mass = np.array(dust_mass)
+
+        # tinject = first non nan
+        iinject = np.argmax(~np.isnan(dust_mass)[:, 0])
+        tinject = np.array(t)[iinject]
+
+        t = np.array(t) - tinject
+
+        St = np.zeros(ndust)
+
+        ref_r = disc.r0
+        rho_r = 1e-11 * codeu.get("kg") * codeu.get("m", power=-3)
+        cs_r = profiles.cs(ref_r)
+
+        for k in range(ndust):
+            t_dyn = 2 * np.pi / profiles.omega_k(ref_r)
+            ts = shamrock.phys.epstein_stopping_time(
+                rho_grain=mrn_distribution.rho_grains[k],
+                s_grain=mrn_distribution.grain_size[k],
+                rho=rho_r,
+                cs=cs_r,
+                gamma=gamma,
+            )
+            St[k] = ts / t_dyn
+
+        plt.figure(dpi=250)
+        for k in range(ndust):
+            mh = dust_mass[:, k]
+            deviation = (mh / mh[iinject]) - 1
+
+            plt.plot(
+                t,
+                deviation,
+                label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}",
+            )
+
+        total_dust_mass = np.sum(dust_mass, axis=1)
+        plt.plot(
+            t,
+            (total_dust_mass / total_dust_mass[iinject]) - 1,
+            color="grey",
+            label="total dust mass",
+            linestyle="--",
+        )
+
+        plt.xlabel("t")
+        plt.ylabel("$\\delta M_{dust} / M_{dust,0}$")
+        plt.yscale("symlog", linthresh=1e-8)
+        plt.title("Dust mass conservation")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_folder, "dust_mass_history.png"))
+        plt.close()
+
+        for k in range(ndust):
+            plt.figure(dpi=250)
+            plt.plot(t, dust_mass[:, k])
+            plt.xlabel("t")
+            plt.ylabel("M_{dust,k} [M_sol]")
+            plt.title(f"s = {mrn_distribution.grain_size_si[k]:.1e} [m]")
+            plt.tight_layout()
+            plt.savefig(os.path.join(plot_folder, f"dust_history_dust_{k}.png"))
+            plt.close()
+
+
+dust_mass_analysis = DustMassAnalysis(model, analysis_folder, "dust_mass")
+
+
 # %%
 # Run the simulation
 
 sim = Simulation(model)
 
 sim.analysis_modules = [
-    perf_analysis,
     column_density_plot,
     vertical_density_plot,
 ]
@@ -541,5 +715,12 @@ sim.analysis_modules = [
 if ndust > 0:
     sim.analysis_modules.extend(dust_column_density_plot)
     sim.analysis_modules.extend(dust_slice_density_plot)
+
+sim.high_freq_analysis_modules = [
+    perf_analysis,
+]
+
+if ndust > 0:
+    sim.high_freq_analysis_modules.append(dust_mass_analysis)
 
 sim.run()
