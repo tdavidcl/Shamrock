@@ -42,7 +42,8 @@ ucte = shamrock.Constants(codeu)
 
 
 # Resolution
-Npart = 1000000
+Npart = int(os.environ.get("NPART", 100000))
+print(f"Npart = {Npart} (NPART={os.environ.get('NPART', 'not set')!r})")
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
