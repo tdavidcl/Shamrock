@@ -42,7 +42,7 @@ ucte = shamrock.Constants(codeu)
 
 
 # Resolution
-Npart = 100000
+Npart = 1000000
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -95,7 +95,7 @@ mrn_cutoff_si = np.inf  # would be 250e-9 normally
 epsilon_base = 0.01
 
 rho_grains_si_edges = np.array([2.3 * 1000 for _ in range(ndust + 1)])  # 2.3 g.cm^-3
-grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 10um -> 1mm
+grain_size_si_edges = np.logspace(-6.5, -1.5, ndust + 1)  # 10um -> 1mm
 
 mrn_distribution = DustMRNDistribution(
     codeu, mrn_pow, mrn_cutoff_si, grain_size_si_edges, rho_grains_si_edges
