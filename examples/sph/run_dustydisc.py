@@ -118,7 +118,8 @@ print(f"limiter = {limiter} (DUST_LIMITER={_dust_limiter_env!r})")
 C_cour = 0.1
 C_force = 0.1
 
-sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}/"
+
+sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}_{limiter.value}/"
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
