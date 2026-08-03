@@ -31,6 +31,7 @@
 #include "shammodels/ramses/config/enum_GravityMode.hpp"
 #include "shammodels/ramses/config/enum_RiemannSolverMode.hpp"
 #include "shammodels/ramses/config/enum_SlopeMode.hpp"
+#include "shammodels/ramses/config/enum_AMRInterpoMode.hpp"
 #include "shamrock/experimental_features.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
@@ -174,6 +175,8 @@ struct shammodels::basegodunov::SolverConfig {
     RiemannSolverMode riemann_config  = HLL;
     SlopeMode slope_config            = VanLeer_sym;
     bool face_half_time_interpolation = true;
+
+    AMRInterpoMode amr_interpo_mode = FIRST_ORDER;
 
     inline bool should_compute_rho_mean() { return is_gravity_on() && is_boundary_periodic(); }
 
