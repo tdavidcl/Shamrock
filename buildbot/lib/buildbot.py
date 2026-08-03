@@ -183,7 +183,7 @@ def get_current_buildsystem(abs_build_dir) -> BuildSystem:
     if os.path.isfile(abs_build_dir + "/Makefile"):
         return BuildSystem.Makefiles
 
-    raise "buildsystem not recognized"
+    raise ValueError("buildsystem not recognized")
 
 
 def clean_build_dir(abs_build_dir):
@@ -248,7 +248,7 @@ def configure(
     if compiler == SyclCompiler.DPCPP:
         cmake_cmd += " -DSyCL_Compiler=DPCPP"
         if not backend in SyclCompiler.DPCPP_SUPPORT:
-            raise "error backend not supported by dpcpp"
+            raise ValueError("error backend not supported by dpcpp")
 
         if backend == SyCLBE.CUDA:
             cmake_cmd += " -DSyCL_Compiler_BE=CUDA"
@@ -257,7 +257,7 @@ def configure(
     elif compiler == SyclCompiler.HipSYCL:
         cmake_cmd += " -DSyCL_Compiler=HIPSYCL"
         if not backend in SyclCompiler.HipSYCL_SUPPORT:
-            raise "error backend not supported by hipsycl"
+            raise ValueError("error backend not supported by hipsycl")
 
         if backend == SyCLBE.OpenMP:
             cmake_cmd += " -DSyCL_Compiler_BE=OMP"

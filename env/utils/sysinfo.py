@@ -112,6 +112,6 @@ def select_generator(args, buildtype):
     elif buildtype == "coverage":
         cmake_buildt = "COVERAGE"
     else:
-        raise "Unknown build type"
+        raise ValueError("Unknown build type")
 
     return gen, gen_opt, cmake_gen, cmake_buildt

@@ -74,8 +74,8 @@ hyperfigures=false]
 
 class ReportFormat(Enum):
     Tex = 1
-    HTML = 1
-    Txt = 1
+    HTML = 2
+    Txt = 3
 
 
 def load_test_report(file):

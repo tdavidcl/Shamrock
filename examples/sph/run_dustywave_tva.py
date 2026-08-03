@@ -35,7 +35,7 @@ plot_scaling = 1e3
 label_scaling = "10^3 \\cdot"
 delta_v_0_list = [cs * ampl_perturbation for cs in cs_g_list]
 
-lx = int(os.environ.get("LZ", 18))
+lx = int(os.environ.get("LZ", "18"))
 ly = 12
 lz = 12
 

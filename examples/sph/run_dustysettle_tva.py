@@ -87,7 +87,7 @@ grain_size_si_edges = np.logspace(-5, -3, ndust + 1)
 # Resolution (lattice size)
 lx = 12
 ly = 12
-lz = int(os.environ.get("LZ", 64))
+lz = int(os.environ.get("LZ", "64"))
 
 # Time
 tlist = [0.1 * i for i in range(1000)]
@@ -512,7 +512,7 @@ def compute_L2_error(z, field, z_ref, field_ref):
     if hasattr(np, "trapezoid"):
         trap_func = np.trapezoid
     else:
-        trap_func = np.trapz
+        trap_func = np.trapz  # noqa: NPY201
 
     # Compute L2 integral
     L2_integral = trap_func(L2_func, z_ref)

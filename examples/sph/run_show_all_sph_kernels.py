@@ -23,7 +23,7 @@ def compute_integ_3d(q, W):
     if hasattr(np, "trapezoid"):
         integrate_func = np.trapezoid
     else:
-        integrate_func = np.trapz
+        integrate_func = np.trapz  # noqa: NPY201
     return integrate_func(4 * np.pi * q**2 * W, q)
 
 

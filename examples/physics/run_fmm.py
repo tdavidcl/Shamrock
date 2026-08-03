@@ -1098,7 +1098,7 @@ def tensor_collect_norm(d):
     elif isinstance(d, shamrock.math.SymTensorCollection_f64_1_1):
         return np.sqrt(d.t1.inner(d.t1))
     else:
-        raise ValueError(f"Unsupported tensor collection type: {type(d)}")
+        raise TypeError(f"Unsupported tensor collection type: {type(d)}")
 
 
 print("Q_n_B norm =", tensor_collect_norm(Q_n_B))
