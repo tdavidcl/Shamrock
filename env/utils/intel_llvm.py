@@ -60,9 +60,9 @@ def get_intel_llvm_target_flags(args):
             'No backend enabled for intel llvm (use the "--cuda" or "--hip" flag to enable one)'
         )
 
-    if not (args.target in arch_list.keys()):
+    if not (args.target in arch_list):
         print(f"enabled target (Cuda={args.cuda}, Hip={args.hip}) :")
-        for k in arch_list.keys():
+        for k in arch_list:
             print("   ", k, ":", arch_list[k]["desc"])
         raise Exception("Unknown target")
 

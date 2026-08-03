@@ -80,7 +80,7 @@ def do_setup(model, cs, delta_v_0):
     model.set_solver_config(cfg)
 
     scheduler_split_val = int(2e7)
-    scheduler_merge_val = int(1)
+    scheduler_merge_val = 1
 
     model.init_scheduler(scheduler_split_val, scheduler_merge_val)
 

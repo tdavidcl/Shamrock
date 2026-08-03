@@ -399,12 +399,12 @@ def patch_file(file, header_loc):
     # lines_in = re.sub(r"\A(?s).*?\*\/(?-s)",r"", lines_in)
 
     lines_in = re.sub(
-        r"(?<!_)delete\s*([^ ]+)\s*;", "{log_delete(\g<1>,log_alloc_ln);delete \g<1>;}", lines_in
+        r"(?<!_)delete\s*([^ ]+)\s*;", r"{log_delete(\g<1>,log_alloc_ln);delete \g<1>;}", lines_in
     )
 
     lines_in = re.sub(
         r"(?<!_)delete\s*\[\]\s*([^ ]+)\s*;",
-        "{log_delete(\g<1>,log_alloc_ln);delete[] \g<1>;}",
+        r"{log_delete(\g<1>,log_alloc_ln);delete[] \g<1>;}",
         lines_in,
     )
 

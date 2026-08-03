@@ -322,13 +322,13 @@ if args.fresh:
 
 if args.interactive:
     if args.compiler == "intel_llvm":
-        print((profile_dpcpp.keys()))
+        print(profile_dpcpp.keys())
 
     elif args.compiler == "acpp":
-        print((profile_acpp.keys()))
+        print(profile_acpp.keys())
 
     elif args.compiler == "acpp_cmake":
-        print((profile_acpp_cmake.keys()))
+        print(profile_acpp_cmake.keys())
 
     args.profile = input("    please input the profile name : ")
 

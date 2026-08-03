@@ -22,10 +22,10 @@ import json
 import os
 
 import matplotlib as mpl
-import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
 from matplotlib.animation import PillowWriter
 from matplotlib.lines import Line2D
 from scipy.linalg import solve_banded
@@ -97,7 +97,7 @@ t_end = tinject + 3.0
 
 # Scheduler
 scheduler_split_val = int(2e7)
-scheduler_merge_val = int(1)
+scheduler_merge_val = 1
 
 # Artificial viscosity
 av_alpha_min = 0.0
@@ -510,9 +510,9 @@ def compute_L2_error(z, field, z_ref, field_ref):
 
     trap_func = None
     if hasattr(np, "trapezoid"):
-        trap_func = getattr(np, "trapezoid")
+        trap_func = np.trapezoid
     else:
-        trap_func = getattr(np, "trapz")
+        trap_func = np.trapz
 
     # Compute L2 integral
     L2_integral = trap_func(L2_func, z_ref)
