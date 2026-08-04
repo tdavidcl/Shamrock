@@ -83,6 +83,8 @@ jobs:
           - worldsize: 2
             testfile: gsph_sod_tube_gsph.py
           - worldsize: 1
+            testfile: gsph_sod_tube_exact_inutsuka.py
+          - worldsize: 1
             testfile: comp_phantom_sedov_1patch.py
           - worldsize: 2
             testfile: comp_phantom_sedov_1patch.py
@@ -174,6 +176,20 @@ jobs:
             artifact_name: gallery_ramses_run_advect
           - testfile: "examples/ramses/run_toro_shocks.py"
             artifact_name: gallery_ramses_run_toro_shocks
+          - testfile: "examples/ramses/run_sod_amr_reflective.py"
+            artifact_name: gallery_ramses_run_sod_amr_reflective
+
+          # GSPH examples
+          - testfile: "examples/gsph/run_sod.py"
+            artifact_name: gallery_gsph_run_sod
+          - testfile: "examples/gsph/run_advection.py"
+            artifact_name: gallery_gsph_run_advection
+          - testfile: "examples/gsph/run_123_problem.py"
+            artifact_name: gallery_gsph_run_123_problem
+          - testfile: "examples/gsph/run_symmetric_collision.py"
+            artifact_name: gallery_gsph_run_symmetric_collision
+          - testfile: "examples/gsph/run_blast_wave.py"
+            artifact_name: gallery_gsph_run_blast_wave
 
           # SPH examples
           - testfile: "examples/sph/run_circular_disc_lense_thirring.py"
@@ -182,6 +198,8 @@ jobs:
             artifact_name: gallery_sph_run_circular_disc_central_pot
           - testfile: "examples/sph/run_circular_disc_sink.py"
             artifact_name: gallery_sph_run_circular_disc_sink
+          - testfile: "examples/sph/run_pn_disc.py"
+            artifact_name: gallery_sph_run_pn_disc
           - testfile: "examples/sph/run_kelvin_helmholtz.py"
             artifact_name: gallery_sph_run_kelvin_helmholtz
           - testfile: "examples/sph/run_sph_shear_test.py"
@@ -196,12 +214,16 @@ jobs:
             artifact_name: gallery_sph_pairing_instab
           - testfile: "examples/sph/run_cubic_reorganisation.py"
             artifact_name: gallery_sph_cubic_reorg
-          - testfile: "examples/sph/run_dustydiffuse_tvi.py"
-            artifact_name: gallery_sph_dustydiffuse_tvi
-          - testfile: "examples/sph/run_dustywave_tvi.py"
-            artifact_name: gallery_sph_dustywave_tvi
-          - testfile: "examples/sph/run_dustysettle_tvi.py"
-            artifact_name: gallery_sph_dustysettle_tvi
+          - testfile: "examples/sph/run_dustydiffuse_tva.py"
+            artifact_name: gallery_sph_dustydiffuse_tva
+          - testfile: "examples/sph/run_dustywave_tva.py"
+            artifact_name: gallery_sph_dustywave_tva
+          - testfile: "examples/sph/run_dustysettle_tva.py"
+            artifact_name: gallery_sph_dustysettle_tva
+          - testfile: "examples/sph/run_sod.py"
+            artifact_name: gallery_sph_sod
+          - testfile: "examples/sph/run_sod_dust_tva.py"
+            artifact_name: gallery_sph_sod_dust_tva
 
           # Tests CI
           - testfile: "examples/tests_ci/run_compare_shamrock_ph_disc.py"

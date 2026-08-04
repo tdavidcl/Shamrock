@@ -48,6 +48,7 @@
 #include "shammodels/ramses/modules/TransformGhostLayer.hpp"
 #include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include "shamrock/io/LegacyVtkWriter.hpp"
+#include "shamrock/solvergraph/CopyPatchDataField.hpp"
 #include "shamrock/solvergraph/CopyPatchDataLayerFields.hpp"
 #include "shamrock/solvergraph/ExchangeGhostLayer.hpp"
 #include "shamrock/solvergraph/ExtractCounts.hpp"
@@ -393,6 +394,11 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.press
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
 
+    if (!solver_config.amr_mode.old_amr) { // TODO disable also if amr is none
+        storage.rho_primitive = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "rho-prim", "rho-prim");
+    }
+
     if (solver_config.is_dust_on()) {
         u32 ndust = solver_config.dust_config.ndust;
 
@@ -428,6 +434,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         // get blocks at level0 sizes for all patches
         storage.level0_size = std::make_shared<shamrock::solvergraph::ScalarsEdge<TgridVec>>(
             "level0_amr", "level0_amr");
+    }
+
+    if (solver_config.amr_mode.need_amr_level_compute()) {
+        using TgridUint = typename std::make_unsigned<shambase::VecComponent<TgridVec>>::type;
+        storage.amr_block_levels
+            = std::make_shared<shamrock::solvergraph::Field<TgridUint>>(1, "", "");
     }
 
     storage.grad_rho = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
@@ -1505,8 +1517,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     sham::MemPerfInfos mem_perf_infos_start = sham::details::get_mem_perf_info();
     f64 mpi_timer_start                     = shamcomm::mpi::get_timer("total");
 
-    Tscal t_current = solver_config.get_time();
-    Tscal dt_input  = solver_config.get_dt();
+    Tscal t_current = get_time();
+    Tscal dt_input  = get_dt();
 
     if (shamcomm::world_rank() == 0) {
         logger::normal_ln("amr::Godunov", shambase::format("t = {}, dt = {}", t_current, dt_input));
@@ -1617,8 +1629,21 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         shambase::throw_unimplemented();
     }
 
-    modules::AMRGridRefinementHandler refinement(context, solver_config, storage);
-    refinement.update_refinement();
+    if (!solver_config.amr_mode.old_amr) {
+        shamrock::solvergraph::CopyPatchDataField<Tscal> node_copy_rho{};
+        node_copy_rho.set_edges(storage.refs_rho, storage.rho_primitive);
+        node_copy_rho.evaluate();
+    }
+
+    // TODO: check if we can drop that
+    if (dt_input > 0) {
+        modules::AMRGridRefinementHandler refinement(context, solver_config, storage);
+        if (solver_config.amr_mode.old_amr) {
+            refinement.update_refinement_old();
+        } else {
+            refinement.update_refinement_new();
+        }
+    }
 
     modules::ComputeCFL cfl_compute(context, solver_config, storage);
     f64 new_dt = cfl_compute.compute_cfl();
@@ -1627,8 +1652,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (solver_config.is_dust_on())
         new_dt = std::min(new_dt, cfl_compute.compute_dust_cfl());
 
-    solver_config.set_next_dt(new_dt);
-    solver_config.set_time(t_current + dt_input);
+    set_next_dt(new_dt);
+    set_time(t_current + dt_input);
 
     if (solver_config.drag_config.drag_solver_config != DragSolverMode::NoDrag) {
         storage.rho_next_no_drag.reset();
@@ -1773,8 +1798,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::do_debug_vtk_dump(std::str
     */
 
     /*
-    std::unique_ptr<sycl::buffer<Tscal>> dtrho = storage.dtrho.get().rankgather_computefield(sched);
-    writer.write_field("dtrho", dtrho, num_obj * block_size);
+    std::unique_ptr<sycl::buffer<Tscal>> dtrho =
+    storage.dtrho.get().rankgather_computefield(sched); writer.write_field("dtrho", dtrho,
+    num_obj * block_size);
 
     std::unique_ptr<sycl::buffer<Tvec>> dtrhov
         = storage.dtrhov.get().rankgather_computefield(sched);
