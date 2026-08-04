@@ -793,6 +793,8 @@ u64 max_stack_move_count_thread = 0;
             logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_ref_ptr));
             // print offset leaf
             logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, offset_leaf: {}", shamcomm::world_rank(), patch_id, intnode_cnt));
+            // print stack_history.get_size()
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history.get_size(): {}", shamcomm::world_rank(), patch_id, stack_history.get_size()));
             stack_history.complete_event_state(sycl::event{});
             stack_history_ref.complete_event_state(sycl::event{});
         }
