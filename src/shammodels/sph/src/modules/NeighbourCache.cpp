@@ -550,12 +550,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             }
         }
 
-        // replay the kernel like a madman
-        for (u32 i = 0; i < 100000; i++) {
+       sham::DeviceBuffer<u64> stack_move_count(leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+u64 total_stack_move_count = 0;
+u64 max_stack_move_count_thread = 0;
 
-            if (shamcomm::world_rank() == 0 && i % 1000 == 0) {
-                logger::raw_ln(shambase::format("replay the kernel {}/100000 xxx forhang4", i));
-            }
+        { // count the number of stack move that did happens
 
             sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
             sham::EventList depends_list;
@@ -565,6 +564,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto rint_tree   = tree_field_rint.get_read_access(depends_list);
             auto neigh_cnt   = neigh_count_leaf.get_write_access(depends_list);
             auto leaf_looper = leaf_it.get_read_access(depends_list);
+            auto stack_move_count_ptr = stack_move_count.get_write_access(depends_list);
 
             auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
@@ -586,6 +586,257 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                 shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
                     u32 id_a = (u32) gid;
+
+                    u32 stack_move_counter = 0;
+
+                    static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
+
+                    auto oob_check
+                        = [&](auto acc, u32 idx, u32 buf_size, const char *name) -> auto & {
+                        if (idx < buf_size) {
+                            return acc[idx];
+                        }
+
+                        return acc[idx]; // only to shut up warnings
+                    };
+
+                    auto oob_check_stack = [&](std::array<u32, tree_depth> &stack,
+                                               u32 idx,
+                                               const char *name) -> u32 & {
+                        if (idx < tree_depth) {
+                            return stack[idx];
+                        }
+
+
+                        return stack[idx]; // only to shut up warnings
+                    };
+
+                    Tscal leaf_a_rint
+                        = oob_check(rint_tree, offset_leaf + gid, rint_tree_size, "rint_tree")
+                          * Kernel::Rkern;
+                    Tvec leaf_a_bmin = oob_check(
+                        leaf_looper.aabb_min,
+                        offset_leaf + gid,
+                        leaf_looper_aabb_min_size,
+                        "leaf_looper.aabb_min");
+                    Tvec leaf_a_bmax = oob_check(
+                        leaf_looper.aabb_max,
+                        offset_leaf + gid,
+                        leaf_looper_aabb_max_size,
+                        "leaf_looper.aabb_max");
+                    Tvec leaf_a_bmin_ext = leaf_a_bmin - leaf_a_rint;
+                    Tvec leaf_a_bmax_ext = leaf_a_bmax + leaf_a_rint;
+
+                    u32 cnt = 0;
+
+                    auto traverse_condition_with_aabb
+                        = [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
+                        Tscal int_r_max_cell
+                            = oob_check(rint_tree, node_id, rint_tree_size, "rint_tree")
+                              * Kernel::Rkern;
+
+                        Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
+                        Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
+
+                        return BBAA::cella_neigh_b(leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
+                               || BBAA::cella_neigh_b(
+                                   leaf_a_bmin_ext,
+                                   leaf_a_bmax_ext,
+                                   node_aabb.lower,
+                                   node_aabb.upper);
+                    };
+
+                    auto traverse_condition = [&](u32 node_id) -> bool {
+                        return traverse_condition_with_aabb(
+                            node_id,
+                            shammath::AABB<Tvec>{
+                                oob_check(
+                                    leaf_looper.aabb_min,
+                                    node_id,
+                                    leaf_looper_aabb_min_size,
+                                    "leaf_looper.aabb_min"),
+                                oob_check(
+                                    leaf_looper.aabb_max,
+                                    node_id,
+                                    leaf_looper_aabb_max_size,
+                                    "leaf_looper.aabb_max")});
+                    };
+
+                    auto on_found_leaf = [&](u32 node_id) {
+                        cnt++;
+                    };
+
+                    auto on_excluded_node = [&](u32 node_id) {};
+
+                    {
+
+                        auto get_left_child = [&](u32 id) -> u32 {
+                            return oob_check(
+                                       leaf_looper.tree_traverser.lchild_id,
+                                       id,
+                                       leaf_looper_tree_traverser_lchild_id_size,
+                                       "leaf_looper.tree_traverser.lchild_id")
+                                   + offset_leaf
+                                         * u32(oob_check(
+                                             leaf_looper.tree_traverser.lchild_flag,
+                                             id,
+                                             leaf_looper_tree_traverser_lchild_flag_size,
+                                             "leaf_looper.tree_traverser.lchild_flag"));
+                        };
+
+                        auto get_right_child = [&](u32 id) -> u32 {
+                            return oob_check(
+                                       leaf_looper.tree_traverser.rchild_id,
+                                       id,
+                                       leaf_looper_tree_traverser_rchild_id_size,
+                                       "leaf_looper.tree_traverser.rchild_id")
+                                   + offset_leaf
+                                         * u32(oob_check(
+                                             leaf_looper.tree_traverser.rchild_flag,
+                                             id,
+                                             leaf_looper_tree_traverser_rchild_flag_size,
+                                             "leaf_looper.tree_traverser.rchild_flag"));
+                        };
+
+                        auto is_id_leaf = [&](u32 id) -> bool {
+                            return id >= leaf_looper.tree_traverser.offset_leaf;
+                        };
+
+                        // On a Karras tree, the root is always 0
+                        u32 root_node = 0;
+
+                        static constexpr u32 _nindex = 4294967295;
+
+                        // Init the stack state
+                        std::array<u32, tree_depth> id_stack;
+
+                        u32 stack_cursor                                    = tree_depth - 1;
+                        oob_check_stack(id_stack, stack_cursor, "id_stack") = root_node;
+
+                        // until the stack is empty
+                        while (stack_cursor < tree_depth) {
+
+                            // Pop the top of the stack
+                            u32 current_node_id
+                                = oob_check_stack(id_stack, stack_cursor, "id_stack");
+                            oob_check_stack(id_stack, stack_cursor, "id_stack") = _nindex;
+                            stack_cursor++;
+
+                            // check iteraction creteria
+                            bool cur_id_valid = traverse_condition(current_node_id);
+
+                            if (cur_id_valid) { // leaf or cell satisfies the criteria
+
+                                if (is_id_leaf(current_node_id)) { // I found a leaf !!!!!
+
+                                    on_found_leaf(current_node_id);
+
+                                } else { // it can interact & not leaf => stack
+
+                                    u32 lid = get_left_child(current_node_id);
+                                    u32 rid = get_right_child(current_node_id);
+
+                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = rid;
+                                    stack_cursor--;
+
+                                    oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
+                                    stack_cursor--;
+
+                                    stack_move_counter+= 2;
+                                }
+                            } else {
+                                // This does not satisfy the criteria => excluded case (gravity for
+                                // ex.)
+                                on_excluded_node(current_node_id);
+                            }
+                        }
+                    }
+
+                    oob_check(neigh_cnt, id_a, neigh_count_leaf_size, "neigh_count_leaf") = cnt;
+                    stack_move_count_ptr[id_a] = stack_move_counter;
+                });
+            });
+
+            buf_xyz.complete_event_state(e);
+            buf_hpart.complete_event_state(e);
+            tree_field_rint.complete_event_state(e);
+            neigh_count_leaf.complete_event_state(e);
+            leaf_it.complete_event_state(e);
+            stack_move_count.complete_event_state(e);
+
+            NamedStackEntry stack_loc1ccccc{"wait queue"};
+
+            shamsys::instance::get_compute_queue().wait_and_throw();
+
+            std::vector<u64> stack_move_count_host = stack_move_count.copy_to_stdvec();
+            
+            for (u64 i = 0; i < stack_move_count_host.size(); i++) {
+                total_stack_move_count += stack_move_count_host[i];
+                max_stack_move_count_thread = std::max(max_stack_move_count_thread, stack_move_count_host[i]);
+            }
+
+            logger::raw_ln(shambase::format("total_stack_move_count: {}", total_stack_move_count));
+            logger::raw_ln(shambase::format("max_stack_move_count_thread: {}", max_stack_move_count_thread));
+        }
+
+        // here the layout of the stack history will be tid*max_stack_move_count_thread + loc_index
+        sham::DeviceBuffer<u64> stack_history(max_stack_move_count_thread * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_ref(max_stack_move_count_thread * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+
+        {
+            sham::EventList depends_list;
+            auto stack_history_ptr = stack_history.get_write_access(depends_list);
+            auto stack_history_ref_ptr = stack_history_ref.get_write_access(depends_list);
+            depends_list.wait_and_throw();
+            //print pointer
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_ref_ptr));
+            // print offset leaf
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, offset_leaf: {}", shamcomm::world_rank(), patch_id, intnode_cnt));
+            stack_history.complete_event_state(sycl::event{});
+            stack_history_ref.complete_event_state(sycl::event{});
+        }
+
+        // replay the kernel like a madman
+        for (u32 i = 0; i < 100000; i++) {
+            stack_history.fill(0);
+
+            if (shamcomm::world_rank() == 0 && i % 1000 == 0) {
+                logger::raw_ln(shambase::format("replay the kernel {}/100000 xxx forhang4", i));
+            }
+
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            sham::EventList depends_list;
+
+            auto xyz         = buf_xyz.get_read_access(depends_list);
+            auto hpart       = buf_hpart.get_read_access(depends_list);
+            auto rint_tree   = tree_field_rint.get_read_access(depends_list);
+            auto neigh_cnt   = neigh_count_leaf.get_write_access(depends_list);
+            auto leaf_looper = leaf_it.get_read_access(depends_list);
+            auto stack_history_ptr = stack_history.get_write_access(depends_list);
+
+            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+                u32 offset_leaf = intnode_cnt;
+
+                u32 xyz_size                  = buf_xyz.get_size();
+                u32 hpart_size                = buf_hpart.get_size();
+                u32 rint_tree_size            = tree_field_rint.get_size();
+                u32 neigh_count_leaf_size     = neigh_count_leaf.get_size();
+                u32 leaf_looper_aabb_min_size = leaf_it.aabb_min.get_size();
+                u32 leaf_looper_aabb_max_size = leaf_it.aabb_max.get_size();
+                u32 leaf_looper_tree_traverser_lchild_id_size
+                    = leaf_it.tree_traverser.buf_lchild_id.get_size();
+                u32 leaf_looper_tree_traverser_rchild_id_size
+                    = leaf_it.tree_traverser.buf_rchild_id.get_size();
+                u32 leaf_looper_tree_traverser_lchild_flag_size
+                    = leaf_it.tree_traverser.buf_lchild_flag.get_size();
+                u32 leaf_looper_tree_traverser_rchild_flag_size
+                    = leaf_it.tree_traverser.buf_rchild_flag.get_size();
+
+                shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
+                    u32 id_a = (u32) gid;
+
+                    u64 stack_history_index = id_a * max_stack_move_count_thread;
 
                     static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
 
@@ -781,6 +1032,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                                     oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
                                     stack_cursor--;
+
+                                        stack_history_ptr[stack_history_index] = rid;
+                                        stack_history_index ++;
+
+                                    stack_history_ptr[stack_history_index] = lid;
+                                    stack_history_index ++;
                                 }
                             } else {
                                 // This does not satisfy the criteria => excluded case (gravity for
@@ -799,10 +1056,23 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             tree_field_rint.complete_event_state(e);
             neigh_count_leaf.complete_event_state(e);
             leaf_it.complete_event_state(e);
+            stack_history.complete_event_state(e);
 
             NamedStackEntry stack_loc1ccccc{"wait queue"};
 
             shamsys::instance::get_compute_queue().wait_and_throw();
+
+            // debug code
+        //    std::vector<u64> stack_history_host = stack_history.copy_to_stdvec();
+        //    std::vector<u64> stack_history_ref_host = stack_history_ref.copy_to_stdvec();
+        //    // print thread 10000
+        //    for(u64 i = 0; i < max_stack_move_count_thread; i++) {
+        //        logger::raw_ln(shambase::format("thread 10000: {} {}", stack_history_host[10000*max_stack_move_count_thread + i], stack_history_ref_host[10000*max_stack_move_count_thread + i]));
+        //    }
+
+            if(i == 0) {
+                stack_history_ref.copy_from(stack_history);
+            }
         }
 
         NamedStackEntry stack_loc1ccccc{"wait queue"};
