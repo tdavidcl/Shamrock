@@ -62,10 +62,25 @@ echo "::endgroup::"
 # Run the unittests for different world sizes
 #############################################
 
+if ! python3 -c "import pytest" 2>/dev/null; then
+    python3 -m pip install pytest
+fi
+
+export PYTHONPATH="$(pwd):$(pwd)/../src/pylib${PYTHONPATH:+:$PYTHONPATH}"
+export LD_LIBRARY_PATH="$(pwd)${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 for world_size in 1 2 3 4; do
     echo "::group::Shamrock Unittests world_size = ${world_size}"
 
     mpirun ${MPIARGS} -n ${world_size} ./shamrock_test --smi-full --sycl-cfg "${SYCLCFG}" --unittest --loglevel 0
 
+    echo "::group::Shamrock Python Unittests world_size = ${world_size}"
+    mpirun ${MPIARGS} -n ${world_size} python3 -m pytest ../src/tests/python -v -s
+    echo "::endgroup::"
+
     echo "::endgroup::"
 done
+
+#############################################
+# Python integration
+#############################################
