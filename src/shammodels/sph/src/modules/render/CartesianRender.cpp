@@ -232,6 +232,185 @@ namespace shammodels::sph::modules {
 
 #undef NODE_EDGES
 
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* scalars */                                                                                  \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
+    X_RO(shamrock::solvergraph::IDataEdge<u32>, tree_reduction_level)                              \
+                                                                                                   \
+    /* counts */                                                                                   \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+                                                                                                   \
+    /* fields */                                                                                   \
+    X_RO(shamrock::solvergraph::IFieldRefs<Tvec>, positions)                                       \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, h_part)                                         \
+    X_RO(shamrock::solvergraph::IFieldSpan<T>, field_data)                                         \
+    X_RO(shamrock::solvergraph::DeviceBufferEdge<shammath::Ray<Tvec>>, rays)                       \
+                                                                                                   \
+    /* outputs */                                                                                  \
+    X_RW(shamrock::solvergraph::DeviceBufferEdge<T>, interpolated_field)
+
+namespace shammodels::sph::modules {
+
+    template<class Tvec, class T, template<class> class SPHKernel>
+    class SPHColumnInteg : public shamrock::solvergraph::INode {
+
+        using Tscal  = shambase::VecComponent<Tvec>;
+        using Kernel = SPHKernel<Tscal>;
+
+        public:
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() override {
+
+            __shamrock_stack_entry();
+
+            auto edges = get_edges();
+
+            auto &part_counts = edges.part_counts.indexes;
+
+            edges.positions.check_sizes(part_counts);
+            edges.h_part.check_sizes(part_counts);
+            edges.field_data.check_sizes(part_counts);
+
+            const sham::DeviceBuffer<shammath::Ray<Tvec>> &rays_buf = edges.rays.value;
+            sham::DeviceBuffer<T> &output_buf = edges.interpolated_field.value;
+
+            u32 nrays = rays_buf.get_size();
+            if (output_buf.get_size() != nrays) {
+                output_buf.resize_discard_data(nrays);
+            }
+            output_buf.fill(sham::VectorProperties<T>::get_zero());
+
+            using u_morton = u32;
+            using RTree    = RadixTree<u_morton, Tvec>;
+
+            Tscal partmass           = edges.gpart_mass.data;
+            u32 tree_reduction_level = edges.tree_reduction_level.data;
+            sham::DeviceQueue &queue = shamsys::instance::get_compute_scheduler().get_queue();
+            auto dev_sched           = shamsys::instance::get_compute_scheduler_ptr();
+
+            part_counts.for_each([&](u64 id, u32 count) {
+                if (count == 0) {
+                    return;
+                }
+
+                PatchDataField<Tvec> &pos = edges.positions.get_field(id);
+                if (pos.is_empty()) {
+                    return;
+                }
+
+                Tvec bmax = pos.compute_max();
+                Tvec bmin = pos.compute_min();
+
+                shammath::AABB<Tvec> aabb(bmin, bmax);
+
+                Tscal infty = std::numeric_limits<Tscal>::infinity();
+
+                aabb.lower[0] = std::nextafter(aabb.lower[0], -infty);
+                aabb.lower[1] = std::nextafter(aabb.lower[1], -infty);
+                aabb.lower[2] = std::nextafter(aabb.lower[2], -infty);
+                aabb.upper[0] = std::nextafter(aabb.upper[0], infty);
+                aabb.upper[1] = std::nextafter(aabb.upper[1], infty);
+                aabb.upper[2] = std::nextafter(aabb.upper[2], infty);
+
+                u32 obj_cnt = pos.get_obj_cnt();
+
+                RTree tree(
+                    dev_sched,
+                    {aabb.lower, aabb.upper},
+                    pos.get_buf(),
+                    obj_cnt,
+                    tree_reduction_level);
+
+                tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
+                tree.convert_bounding_box(shamsys::instance::get_compute_queue());
+
+                auto &hpart_span = edges.h_part.get_spans().get(id);
+                auto &field_span = edges.field_data.get_spans().get(id);
+                auto &buf_hpart  = hpart_span.field_ref.get_buf();
+                auto &buf_field  = field_span.field_ref.get_buf();
+
+                RadixTreeField<Tscal> hmax_tree
+                    = tree.compute_int_boxes(shamsys::instance::get_compute_queue(), buf_hpart, 1);
+
+                sham::EventList depends_list;
+                T *render_field = output_buf.get_write_access(depends_list);
+
+                const shammath::Ray<Tvec> *image_rays = rays_buf.get_read_access(depends_list);
+
+                auto xyz      = pos.get_buf().get_read_access(depends_list);
+                auto hpart    = buf_hpart.get_read_access(depends_list);
+                auto torender = buf_field.get_read_access(depends_list);
+
+                sycl::event e2 = queue.submit(depends_list, [&, render_field](sycl::handler &cgh) {
+                    shamrock::tree::ObjectIterator particle_looper(tree, cgh);
+
+                    sycl::accessor hmax{
+                        shambase::get_check_ref(hmax_tree.radix_tree_field_buf),
+                        cgh,
+                        sycl::read_only};
+
+                    constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+                    shambase::parallel_for(cgh, nrays, "compute column render", [=](u32 gid) {
+                        T acc = sham::VectorProperties<T>::get_zero();
+
+                        shammath::Ray<Tvec> ray = image_rays[gid];
+
+                        particle_looper.rtree_for(
+                            [&](u32 node_id, Tvec bmin_cell, Tvec bmax_cell) -> bool {
+                                Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
+
+                                auto interbox
+                                    = shammath::AABB<Tvec>{bmin_cell, bmax_cell}.expand_all(
+                                        rint_cell);
+
+                                return interbox.intersect_ray(ray);
+                            },
+                            [&](u32 id_b) {
+                                Tvec dr = ray.origin - xyz[id_b];
+
+                                dr -= ray.direction * sycl::dot(dr, ray.direction);
+
+                                Tscal rab2 = sycl::dot(dr, dr);
+                                Tscal h_b  = hpart[id_b];
+
+                                if (rab2 > h_b * h_b * Rker2) {
+                                    return;
+                                }
+
+                                Tscal rab = sycl::sqrt(rab2);
+
+                                T val = torender[id_b];
+
+                                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                                acc += partmass * val * Kernel::Y_3d(rab, h_b, 4) / rho_b;
+                            });
+
+                        render_field[gid] += acc;
+                    });
+                });
+
+                pos.get_buf().complete_event_state(e2);
+                buf_hpart.complete_event_state(e2);
+                buf_field.complete_event_state(e2);
+                output_buf.complete_event_state(e2);
+                rays_buf.complete_event_state(e2);
+            });
+
+            shamalgs::collective::reduce_buffer_in_place_sum(output_buf, MPI_COMM_WORLD);
+        }
+
+        inline std::string _impl_get_label() const override { return "SPHColumnInteg"; }
+
+        inline std::string _impl_get_tex() const override { return "TODO"; }
+    };
+
+} // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
+
 namespace shammodels::sph::modules {
 
     template<class Tvec>
@@ -491,112 +670,69 @@ namespace shammodels::sph::modules {
         std::function<field_getter_t> field_getter,
         const sham::DeviceBuffer<shammath::Ray<Tvec>> &rays) -> sham::DeviceBuffer<Tfield> {
 
-        sham::DeviceBuffer<Tfield> ret{
-            rays.get_size(), shamsys::instance::get_compute_scheduler_ptr()};
-        ret.fill(sham::VectorProperties<Tfield>::get_zero());
+        auto part_counts = shamrock::solvergraph::Indexes<u32>::make_shared("part_counts", "N");
+        auto positions_refs
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("positions", "\\mathbf{r}");
+        auto hpart_refs = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("h_part", "h");
+        auto field_data
+            = std::make_shared<shamrock::solvergraph::Field<Tfield>>(1, "field_data", "f");
 
-        using u_morton = u32;
-        using RTree    = RadixTree<u_morton, Tvec>;
+        shamrock::solvergraph::DDPatchDataFieldRef<Tvec> pos_dd;
+        shamrock::solvergraph::DDPatchDataFieldRef<Tscal> h_dd;
 
-        shamrock::patch::PatchCoordTransform<Tvec> transf
-            = scheduler().get_sim_box().template get_patch_transform<Tvec>();
+        scheduler().for_each_patchdata_nonempty(
+            [&](const shamrock::patch::Patch cur_p, shamrock::patch::PatchDataLayer &pdat) {
+                u64 id  = cur_p.id_patch;
+                u32 cnt = pdat.get_obj_cnt();
 
-        scheduler().for_each_patchdata_nonempty([&](const shamrock::patch::Patch cur_p,
-                                                    shamrock::patch::PatchDataLayer &pdat) {
-            shammath::CoordRange<Tvec> box = transf.to_obj_coord(cur_p);
-
-            PatchDataField<Tvec> &main_field = pdat.get_field<Tvec>(0);
-
-            auto &buf_xyz = pdat.get_field<Tvec>(0).get_buf();
-            auto &buf_hpart
-                = pdat.get_field<Tscal>(pdat.pdl().get_field_idx<Tscal>("hpart")).get_buf();
-
-            auto &buf_field_to_render = field_getter(cur_p, pdat);
-
-            u32 obj_cnt = main_field.get_obj_cnt();
-
-            RTree tree(
-                shamsys::instance::get_compute_scheduler_ptr(),
-                {box.lower, box.upper},
-                buf_xyz,
-                obj_cnt,
-                solver_config.tree_reduction_level);
-
-            tree.compute_cell_ibounding_box(shamsys::instance::get_compute_queue());
-            tree.convert_bounding_box(shamsys::instance::get_compute_queue());
-
-            RadixTreeField<Tscal> hmax_tree = tree.compute_int_boxes(
-                shamsys::instance::get_compute_queue(),
-                pdat.get_field<Tscal>(pdat.pdl().get_field_idx<Tscal>("hpart")).get_buf(),
-                1);
-
-            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-            sham::EventList depends_list;
-            Tfield *render_field = ret.get_write_access(depends_list);
-
-            const shammath::Ray<Tvec> *image_rays = rays.get_read_access(depends_list);
-
-            auto xyz      = buf_xyz.get_read_access(depends_list);
-            auto hpart    = buf_hpart.get_read_access(depends_list);
-            auto torender = buf_field_to_render.get_read_access(depends_list);
-
-            sycl::event e2 = q.submit(depends_list, [&, render_field](sycl::handler &cgh) {
-                shamrock::tree::ObjectIterator particle_looper(tree, cgh);
-
-                sycl::accessor hmax{
-                    shambase::get_check_ref(hmax_tree.radix_tree_field_buf), cgh, sycl::read_only};
-
-                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
-
-                Tscal partmass = solver_config.gpart_mass;
-
-                shambase::parallel_for(cgh, rays.get_size(), "compute slice render", [=](u32 gid) {
-                    Tfield ret = sham::VectorProperties<Tfield>::get_zero();
-
-                    shammath::Ray<Tvec> ray = image_rays[gid];
-
-                    particle_looper.rtree_for(
-                        [&](u32 node_id, Tvec bmin, Tvec bmax) -> bool {
-                            Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
-
-                            auto interbox = shammath::AABB<Tvec>{bmin, bmax}.expand_all(rint_cell);
-
-                            return interbox.intersect_ray(ray);
-                        },
-                        [&](u32 id_b) {
-                            Tvec dr = ray.origin - xyz[id_b];
-
-                            dr -= ray.direction * sycl::dot(dr, ray.direction);
-
-                            Tscal rab2 = sycl::dot(dr, dr);
-                            Tscal h_b  = hpart[id_b];
-
-                            if (rab2 > h_b * h_b * Rker2) {
-                                return;
-                            }
-
-                            Tscal rab = sycl::sqrt(rab2);
-
-                            Tfield val = torender[id_b];
-
-                            Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
-
-                            ret += partmass * val * Kernel::Y_3d(rab, h_b, 4) / rho_b;
-                        });
-
-                    render_field[gid] += ret;
-                });
+                part_counts->indexes.add_obj(id, std::move(cnt));
+                pos_dd.add_obj(id, std::ref(pdat.get_field<Tvec>(0)));
+                h_dd.add_obj(
+                    id, std::ref(pdat.get_field<Tscal>(pdat.pdl().get_field_idx<Tscal>("hpart"))));
             });
 
-            buf_xyz.complete_event_state(e2);
-            buf_hpart.complete_event_state(e2);
-            buf_field_to_render.complete_event_state(e2);
-            ret.complete_event_state(e2);
-            rays.complete_event_state(e2);
-        });
+        positions_refs->set_refs(pos_dd);
+        hpart_refs->set_refs(h_dd);
 
-        shamalgs::collective::reduce_buffer_in_place_sum(ret, MPI_COMM_WORLD);
+        field_data->ensure_sizes(part_counts->indexes);
+
+        scheduler().for_each_patchdata_nonempty(
+            [&](const shamrock::patch::Patch cur_p, shamrock::patch::PatchDataLayer &pdat) {
+                const sham::DeviceBuffer<Tfield> &src = field_getter(cur_p, pdat);
+                field_data->get(cur_p.id_patch).overwrite(src, static_cast<u32>(src.get_size()));
+            });
+
+        auto gpart_mass  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("gpart_mass", "m");
+        gpart_mass->data = solver_config.gpart_mass;
+
+        auto tree_reduction_level
+            = shamrock::solvergraph::IDataEdge<u32>::make_shared("tree_reduction_level", "l");
+        tree_reduction_level->data = solver_config.tree_reduction_level;
+
+        auto rays_edge
+            = std::make_shared<shamrock::solvergraph::DeviceBufferEdge<shammath::Ray<Tvec>>>(
+                "rays", "\\mathbf{r}_{\\rm ray}");
+        rays_edge->value.resize(rays.get_size());
+        rays_edge->value.copy_from(rays);
+
+        auto interpolated_field = std::make_shared<shamrock::solvergraph::DeviceBufferEdge<Tfield>>(
+            "interpolated_field", "f_{\\rm interp}");
+
+        auto node = std::make_shared<SPHColumnInteg<Tvec, Tfield, SPHKernel>>();
+        node->set_edges(
+            gpart_mass,
+            tree_reduction_level,
+            part_counts,
+            positions_refs,
+            hpart_refs,
+            field_data,
+            rays_edge,
+            interpolated_field);
+        node->evaluate();
+
+        sham::DeviceBuffer<Tfield> ret{
+            interpolated_field->value.get_size(), shamsys::instance::get_compute_scheduler_ptr()};
+        ret.copy_from(interpolated_field->value);
 
         return ret;
     }
