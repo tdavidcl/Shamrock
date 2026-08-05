@@ -47,7 +47,7 @@
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
 #include "shamrock/scheduler/PatchTree.hpp"
 #include "shamrock/scheduler/SchedulerPatchData.hpp"
-#include "shamrock/solvergraph/SolverGraphSerializable.hpp"
+#include "shamsolvergraph/SolverGraphSerializable.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 
 struct PatchSchedulerConfig {
