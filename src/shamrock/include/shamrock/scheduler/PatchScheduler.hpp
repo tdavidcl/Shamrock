@@ -25,8 +25,8 @@
 #include "shambase/time.hpp"
 #include "shamalgs/collective/distributedDataComm.hpp"
 #include "shamrock/legacy/patch/utility/patch_field.hpp"
-#include "shamrock/solvergraph/NodeSetEdge.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
+#include "shamsolvergraph/node/NodeSetEdge.hpp"
 #include <nlohmann/json.hpp>
 #include <unordered_set>
 #include <fstream>

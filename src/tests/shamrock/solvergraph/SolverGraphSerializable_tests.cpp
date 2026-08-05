@@ -8,10 +8,10 @@
 // -------------------------------------------------------//
 
 #include "shamcomm/logs.hpp"
-#include "shamrock/solvergraph/IEdge.hpp"
-#include "shamrock/solvergraph/INode.hpp"
-#include "shamrock/solvergraph/JsonSerializable.hpp"
 #include "shamrock/solvergraph/SolverGraphSerializable.hpp"
+#include "shamsolvergraph/JsonSerializable.hpp"
+#include "shamsolvergraph/edge/IEdge.hpp"
+#include "shamsolvergraph/node/INode.hpp"
 #include "shamtest/shamtest.hpp"
 #include <string>
 
