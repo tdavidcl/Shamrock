@@ -135,7 +135,7 @@ namespace shammodels::basegodunov::modules {
             const AMRInterpoMode amr_refine_interpo_mode);
 
         template<class UserAccCrit, class UserAccSplit, class UserAccMerge>
-        void internal_update_refinement_new(const u32 amr_refine_interpo_mode);
+        void internal_update_refinement_new(const AMRInterpoMode amr_refine_interpo_mode);
 
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
