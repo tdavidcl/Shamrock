@@ -1388,7 +1388,7 @@ bool shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 template<class Tvec, class TgridVec>
 template<class UserAccCrit, class UserAccSplit, class UserAccMerge>
 void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
-    internal_update_refinement_new(const u32 amr_refine_interpo_mode) {
+    internal_update_refinement_new(const AMRInterpoMode amr_refine_interpo_mode) {
 
     // Ensure that the blocks are sorted before refinement
     AMRSortBlocks block_sorter(context, solver_config, storage);
