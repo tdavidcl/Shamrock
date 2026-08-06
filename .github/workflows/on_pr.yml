@@ -52,10 +52,11 @@ jobs:
           exit 0
         fi
 
+  # this job notify the end of the build regardless of light-ci value
   all_light:
     needs: [ main_workflow ]
     # run always except for cancel
-    if: ${{ always() && !cancelled() && contains(github.event.pull_request.labels.*.name, 'light-ci') }}
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
     - name: Status summary
