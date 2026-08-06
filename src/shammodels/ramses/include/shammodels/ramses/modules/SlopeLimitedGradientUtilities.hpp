@@ -319,46 +319,6 @@ namespace {
                slope_function<Tvec, mode>(delta_zm.rhovel, delta_zp.rhovel)};
 
         return {lim_slope_x, lim_slope_y, lim_slope_z};
-
-        // shammath::ConsState<Tvec> W_i
-        //     = {field_access_rho(cell_global_id),
-        //        field_access_rhoe(cell_global_id),
-        //        field_access_rho_vel(cell_global_id)};
-
-        // shammath::ConsState<Tvec> W_xp = get_avg_neigh(graph_iter_xp);
-        // shammath::ConsState<Tvec> W_xm = get_avg_neigh(graph_iter_xm);
-        // shammath::ConsState<Tvec> W_yp = get_avg_neigh(graph_iter_yp);
-        // shammath::ConsState<Tvec> W_ym = get_avg_neigh(graph_iter_ym);
-        // shammath::ConsState<Tvec> W_zp = get_avg_neigh(graph_iter_zp);
-        // shammath::ConsState<Tvec> W_zm = get_avg_neigh(graph_iter_zm);
-
-        // shammath::ConsState<Tvec> delta_W_x_p = W_xp - W_i;
-        // shammath::ConsState<Tvec> delta_W_y_p = W_yp - W_i;
-        // shammath::ConsState<Tvec> delta_W_z_p = W_zp - W_i;
-
-        // shammath::ConsState<Tvec> delta_W_x_m = W_i - W_xm;
-        // shammath::ConsState<Tvec> delta_W_y_m = W_i - W_ym;
-        // shammath::ConsState<Tvec> delta_W_z_m = W_i - W_zm;
-
-        // Tscal fact = 1. / delta_cell;
-
-        // shammath::ConsState<Tvec> lim_slope_W_x
-        //     = {slope_function<Tscal, mode>(delta_W_x_m.rho * fact, delta_W_x_p.rho * fact),
-        //        slope_function<Tscal, mode>(delta_W_x_m.rhoe * fact, delta_W_x_p.rhoe * fact),
-        //        slope_function<Tvec, mode>(delta_W_x_m.rhovel * fact, delta_W_x_p.rhovel * fact)};
-
-        // shammath::ConsState<Tvec> lim_slope_W_y
-        //     = {slope_function<Tscal, mode>(delta_W_y_m.rho * fact, delta_W_y_p.rho * fact),
-        //        slope_function<Tscal, mode>(delta_W_y_m.rhoe * fact, delta_W_y_p.rhoe * fact),
-        //        slope_function<Tvec, mode>(delta_W_y_m.rhovel * fact, delta_W_y_p.rhovel * fact)};
-
-        // shammath::ConsState<Tvec> lim_slope_W_z
-        //     = {slope_function<Tscal, mode>(delta_W_z_m.rho * fact, delta_W_z_p.rho * fact),
-        //        slope_function<Tscal, mode>(delta_W_z_m.rhoe * fact, delta_W_z_p.rhoe * fact),
-        // //        slope_function<Tvec, mode>(delta_W_z_m.rhovel * fact, delta_W_z_p.rhovel *
-        // fact)};
-
-        // return {lim_slope_W_x, lim_slope_W_y, lim_slope_W_z};
     }
 
     /**
