@@ -11,7 +11,7 @@
 
 /**
  * @file enum_AMRInterpoMode.hpp
- * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr) 
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me) --no git blame--
  * @brief AMR (refinement) prolongation mode enum + json serialization/deserialization
  *
@@ -24,8 +24,8 @@
 namespace shammodels::basegodunov {
 
     enum AMRInterpoMode {
-        FIRST_ORDER = 0, // 
-        SECOND_ORDER   = 1, // second order (with Minmod slope limiter + conservative variables)
+        FIRST_ORDER  = 0, //
+        SECOND_ORDER = 1, // second order (with Minmod slope limiter + conservative variables)
     };
 
     SHAMROCK_JSON_SERIALIZE_ENUM(

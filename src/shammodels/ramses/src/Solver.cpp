@@ -399,13 +399,15 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             AMRBlock::block_size, "rho-prim", "rho-prim");
     }
 
-
     // will be filled only if valid refinement criterion is provided
-    using AMRmode_None                = typename AMRMode<Tvec, TgridVec>::None;
-    if (std::get_if<AMRmode_None>(&solver_config.amr_mode.config) == nullptr){
-        storage.rho_snap = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "rho_snap", "rho_snap");
-        storage.rhoe_snap = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "rhoe_snap", "rhoe_snap");
-        storage.rho_vel_snap = std::make_shared<shamrock::solvergraph::Field<Tvec>>(AMRBlock::block_size, "rhov_snap", "rhov_snap");
+    using AMRmode_None = typename AMRMode<Tvec, TgridVec>::None;
+    if (std::get_if<AMRmode_None>(&solver_config.amr_mode.config) == nullptr) {
+        storage.rho_snap = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "rho_snap", "rho_snap");
+        storage.rhoe_snap = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "rhoe_snap", "rhoe_snap");
+        storage.rho_vel_snap = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "rhov_snap", "rhov_snap");
     }
 
     if (solver_config.is_dust_on()) {
@@ -1650,7 +1652,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         if (solver_config.amr_mode.old_amr) {
             refinement.update_refinement_old();
         } else {
-            using AMRmode_None                = typename AMRMode<Tvec, TgridVec>::None;
+            using AMRmode_None = typename AMRMode<Tvec, TgridVec>::None;
             if (std::get_if<AMRmode_None>(&solver_config.amr_mode.config) == nullptr) {
                 shamrock::solvergraph::CopyPatchDataField<Tscal> node_cpy_rho_snap{};
                 node_cpy_rho_snap.set_edges(storage.refs_rho, storage.rho_snap);
@@ -1665,7 +1667,6 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
             // Then refinement pass
             refinement.update_refinement_new();
-
         }
     }
 
