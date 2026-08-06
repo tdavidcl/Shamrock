@@ -22,6 +22,11 @@ def is_in_sphere(pt):
 
 
 # %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
+
+
+# %%
 # Setup parameters
 
 dr = 0.1
@@ -129,6 +134,8 @@ def plot_state(iplot):
 
         ax.scatter(X, Y, Z, s=1)
 
+        ax.minorticks_off()
+
         ax.set_title(f"t = {model.get_time():.2f} ")
 
         plt.savefig(os.path.join(dump_folder, f"{sim_name}_{iplot:04}.png"))
@@ -163,7 +170,7 @@ plt.close(fig)
 # Convert PNG sequence to Image sequence in mpl
 ####################################################
 
-import matplotlib.animation as animation
+from matplotlib import animation
 from shamrock.utils.plot import show_image_sequence
 
 # If the animation is not returned only a static image will be shown in the doc

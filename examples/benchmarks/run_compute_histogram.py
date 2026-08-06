@@ -11,9 +11,9 @@ This example benchmarks the compute histogram performance for the different algo
 import random
 import time
 
-import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors
 
 import shamrock
 
@@ -22,6 +22,12 @@ import shamrock
 if not shamrock.sys.is_initialized():
     shamrock.change_loglevel(1)
     shamrock.sys.init("0:0")
+
+
+# %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
+
 
 # %%
 impl_control = shamrock.algs.compute_histogram_impl()

@@ -17,7 +17,7 @@
  */
 
 #include "shambase/aliases_float.hpp"
-#include "shambase/format_time.hpp"
+#include "shambase/string.hpp"
 
 #ifndef __MACH__
     #define USE_PLF_TIMER
@@ -76,7 +76,10 @@ namespace shambase {
          * @brief Converts the stored nanosecond time to a string representation.
          * @return std::string A string representation of the elapsed time.
          */
-        inline std::string get_time_str() const { return nanosec_to_time_str(nanosec); }
+        inline std::string get_time_str() const {
+            auto res = sham::to_human_readable(nanosec * 1e-9);
+            return sham::format("{:.2f} {}s", res.value, res.prefix);
+        }
 
         /**
          * @brief Converts the stored nanosecond time to a floating point representation in seconds.

@@ -10,9 +10,9 @@ This example benchmarks the is_all_true performance for the different algorithms
 import random
 import time
 
-import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors
 
 import shamrock
 
@@ -21,6 +21,11 @@ import shamrock
 if not shamrock.sys.is_initialized():
     shamrock.change_loglevel(1)
     shamrock.sys.init("0:0")
+
+
+# %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
 
 
 # %%
@@ -137,5 +142,5 @@ plt.yscale("log")
 
 plt.grid(True)
 
-plt.legend()
+plt.legend(fontsize=10)
 plt.show()

@@ -18,6 +18,11 @@ if not shamrock.sys.is_initialized():
     shamrock.sys.init("0:0")
 
 # %%
+# Use shamrock documentation style for matplotlib
+shamrock.matplotlib.set_shamrock_mpl_style()
+
+
+# %%
 # Setup units
 
 si = shamrock.UnitSystem()
@@ -307,7 +312,7 @@ cbar = plt.colorbar(res, extend="both")
 cbar.set_label(r"$\int \rho \, \mathrm{d} z$ [code unit]")
 # or r"$\rho$ [code unit]" for slices
 
-plt.title("t = {:0.3f} [code unit]".format(model.get_time()))
+plt.title(f"t = {model.get_time():0.3f} [code unit]")
 plt.xlabel("x")
 plt.ylabel("z")
 plt.show()

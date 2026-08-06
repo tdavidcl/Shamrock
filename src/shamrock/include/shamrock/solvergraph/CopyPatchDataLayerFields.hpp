@@ -19,9 +19,9 @@
 #include "shambase/exception.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
-#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/IPatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
+#include "shamsolvergraph/node/INode.hpp"
 #include <memory>
 
 namespace shamrock::solvergraph {
@@ -50,7 +50,9 @@ namespace shamrock::solvergraph {
         }
 
         Edges get_edges() {
-            return Edges{get_ro_edge<IPatchDataLayerRefs>(0), get_rw_edge<PatchDataLayerEdge>(0)};
+            return Edges{
+                .original = get_ro_edge<IPatchDataLayerRefs>(0),
+                .target   = get_rw_edge<PatchDataLayerEdge>(0)};
         }
 
         void _impl_evaluate_internal();

@@ -18,6 +18,7 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
+#include "nlohmann/json.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
@@ -211,8 +212,8 @@ PatchScheduler::PatchScheduler(
     u64 crit_merge)
     : pdl_ptr(pdl_ptr),
       patch_data(
-          pdl_ptr,
-          {{0, 0, 0}, {max_axis_patch_coord, max_axis_patch_coord, max_axis_patch_coord}}) {
+          pdl_ptr, {{0, 0, 0}, {max_axis_patch_coord, max_axis_patch_coord, max_axis_patch_coord}}),
+      synchronized_data() {
 
     crit_patch_split = crit_split;
     crit_patch_merge = crit_merge;
@@ -974,10 +975,10 @@ std::vector<std::unique_ptr<shamrock::patch::PatchDataLayer>> PatchScheduler::ga
 
             send_payloads.push_back(
                 Message{
-                    std::make_unique<shamcomm::CommunicationBuffer>(
+                    .buf = std::make_unique<shamcomm::CommunicationBuffer>(
                         std::move(tmp), shamsys::instance::get_compute_scheduler_ptr()),
-                    0,
-                    i32(i)});
+                    .rank = 0,
+                    .tag  = i32(i)});
         }
     }
 
@@ -990,9 +991,9 @@ std::vector<std::unique_ptr<shamrock::patch::PatchDataLayer>> PatchScheduler::ga
         for (u32 i = 0; i < plist.size(); i++) {
             recv_payloads.push_back(
                 Message{
-                    std::unique_ptr<shamcomm::CommunicationBuffer>{},
-                    i32(plist[i].node_owner_id),
-                    i32(i)});
+                    .buf  = std::unique_ptr<shamcomm::CommunicationBuffer>{},
+                    .rank = i32(plist[i].node_owner_id),
+                    .tag  = i32(i)});
         }
     }
 
@@ -1026,5 +1027,6 @@ nlohmann::json PatchScheduler::serialize_patch_metadata() {
         {"patchdata_layout", pdl_old()},
         {"sim_box", jsim_box},
         {"crit_patch_split", crit_patch_split},
-        {"crit_patch_merge", crit_patch_merge}};
+        {"crit_patch_merge", crit_patch_merge},
+        {"synchronized_data", synchronized_data}};
 }

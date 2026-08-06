@@ -47,6 +47,10 @@ set(Sources
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/ComputeNeighStats.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAV.cpp
+    src/modules/NodeUpdateDerivsVaryingAlphaAVDustTVA.cpp
+    src/modules/NodeUpdateDerivsMonofluidTVA.cpp
+    src/modules/NodeComputePressureGrad.cpp
+    src/modules/NodeEvolveDustCOALASourceTerm.cpp
     src/modules/setup/GeneratorMCDisc.cpp
     src/modules/setup/ModifierApplyDiscWarp.cpp
     src/modules/setup/ModifierApplyCustomWarp.cpp
@@ -59,6 +63,9 @@ set(Sources
     src/modules/self_gravity/SGSFMMPlummer.cpp
     src/modules/render/CartesianRender.cpp
     src/modules/render/RenderFieldGetter.cpp
+    src/modules/render/SPHInterpolation.cpp
+    src/modules/render/SPHColumnInteg.cpp
+    src/modules/render/SPHAzymuthalInteg.cpp
     src/modules/io/VTKDump.cpp
 )
 
