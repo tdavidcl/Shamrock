@@ -1521,7 +1521,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
             Storage &storage,
             u64 &id_patch,
             shamrock::patch::PatchDataLayer &pdat,
-            u32 _amr_ref_interpo_mode)
+            AMRInterpoMode _amr_ref_interpo_mode)
             : cell_graph_xp(
                   shambase::get_check_ref(storage.cell_graph_edge)
                       .get_refs_dir(Direction::xp)
