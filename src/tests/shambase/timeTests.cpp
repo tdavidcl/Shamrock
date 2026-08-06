@@ -62,7 +62,6 @@ TestStart(Unittest, "shambase/time/reusability", unitt_timer_reusability, 1) {
     f64 elapsed1 = timer.elapsed_sec();
 
     timer.start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     timer.stop();
     f64 elapsed2 = timer.elapsed_sec();
 
