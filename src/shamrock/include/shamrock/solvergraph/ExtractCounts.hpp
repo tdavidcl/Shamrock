@@ -17,9 +17,9 @@
  *
  */
 
-#include "shamrock/solvergraph/INode.hpp"
 #include "shamrock/solvergraph/IPatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
+#include "shamsolvergraph/node/INode.hpp"
 
 namespace shamrock::solvergraph {
 
@@ -40,7 +40,9 @@ namespace shamrock::solvergraph {
         }
 
         Edges get_edges() {
-            return Edges{get_ro_edge<IPatchDataLayerRefs>(0), get_rw_edge<Indexes<u32>>(0)};
+            return Edges{
+                .refs   = get_ro_edge<IPatchDataLayerRefs>(0),
+                .counts = get_rw_edge<Indexes<u32>>(0)};
         }
 
         void _impl_evaluate_internal() {

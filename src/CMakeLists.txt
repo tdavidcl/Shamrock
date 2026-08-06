@@ -6,11 +6,14 @@
 # ~~~
 
 set(as_subproject
+    shamformat
+    shamterm
     shamunits
     shambase
     shamcomm
     shambackends
     shammath
+    shamsolvergraph
     shamalgs
     shamsys
     shamphys
@@ -35,6 +38,8 @@ macro(find_package)
     endif()
 endmacro()
 
+add_subdirectory(shamformat)
+add_subdirectory(shamterm)
 add_subdirectory(shamunits)
 add_subdirectory(shambase)
 add_subdirectory(shambindings)
@@ -42,6 +47,7 @@ add_subdirectory(shamcmdopt)
 add_subdirectory(shamcomm)
 add_subdirectory(shambackends)
 add_subdirectory(shammath)
+add_subdirectory(shamsolvergraph)
 add_subdirectory(shamalgs)
 add_subdirectory(shamphys)
 add_subdirectory(shamsys)
