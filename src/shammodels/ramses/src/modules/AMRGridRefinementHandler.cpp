@@ -1275,7 +1275,7 @@ template<class UserAcc>
 bool shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
     internal_derefine_grid_new(
         shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_derefine_flags,
-        const u32 amr_refine_interpo_mode) {
+        const AMRInterpoMode amr_refine_interpo_mode) {
 
     using namespace shamrock::patch;
 
