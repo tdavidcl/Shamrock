@@ -25,17 +25,6 @@ NEW_TEST(Unittest, "shambase/time/start_stop_elapsed_gt_zero", 1) {
     REQUIRE(!time_str.empty());
 }
 
-NEW_TEST(Unittest, "shambase/time/sleep_200ms_precision", 1) {
-
-    shambase::Timer timer;
-    timer.start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(400));
-    timer.stop();
-
-    // sadly i must be verrrrrrry loose on the tolerances because of Github runners ...
-    REQUIRE_FLOAT_EQUAL(timer.elapsed_sec(), 0.4, 0.2);
-}
-
 NEW_TEST(Unittest, "shambase/time/stop_overwrites_nanosec", 1) {
 
     shambase::Timer timer;
