@@ -64,14 +64,6 @@ err_min = 0.25
 err_max = 0.15
 
 cfg.set_amr_mode_pseudo_gradient_based(error_min=err_min, error_max=err_max)
-
-# mass_crit = 1e-6 * 5 * 2 * 2
-# cfg.set_amr_mode_density_based(crit_mass=mass_crit)
-
-
-# crit_refin = 0.1
-# crit_coars = 0.2
-# cfg.set_amr_mode_second_order_derivative_based(crit_min=crit_refin, crit_max=crit_coars)
 model.set_solver_config(cfg)
 
 

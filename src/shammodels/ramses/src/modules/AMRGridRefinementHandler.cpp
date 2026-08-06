@@ -1502,9 +1502,9 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
         u64 p_id;
         f64 *cell_sizes;
 
-        f64 *rho_old_snap;
-        f64_3 *rho_vel_old_snap;
-        f64 *rhoE_old_snap;
+        const f64 *rho_old_snap;
+        const f64_3 *rho_vel_old_snap;
+        const f64 *rhoE_old_snap;
 
         AMRInterpoMode amr_ref_interpo_mode;
 
@@ -1567,15 +1567,15 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
             rho_old_snap     = shambase::get_check_ref(storage.rho_snap)
                                    .get(id_patch)
                                    .get_buf()
-                                   .get_write_access(depends_list);
+                                   .get_read_access(depends_list);
             rhoE_old_snap    = shambase::get_check_ref(storage.rhoe_snap)
                                    .get(id_patch)
                                    .get_buf()
-                                   .get_write_access(depends_list);
+                                   .get_read_access(depends_list);
             rho_vel_old_snap = shambase::get_check_ref(storage.rho_vel_snap)
                                    .get(id_patch)
                                    .get_buf()
-                                   .get_write_access(depends_list);
+                                   .get_read_access(depends_list);
 
             // new conservative variables
             rho        = pdat.get_field<f64>(2).get_buf().get_write_access(depends_list);
@@ -1692,10 +1692,6 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
                             glid[2] % AMRBlock::Nside});
             };
 
-            std::array<f64, AMRBlock::block_size> old_rho_block;
-            std::array<f64_3, AMRBlock::block_size> old_rho_vel_block;
-            std::array<f64, AMRBlock::block_size> old_rhoE_block;
-
             for (u32 loc_id = 0; loc_id < AMRBlock::block_size; loc_id++) {
 
                 auto [lx, ly, lz] = get_coord_ref(loc_id);
@@ -1715,15 +1711,15 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
                 child_center_offsets[7] = {c_offset, c_offset, c_offset};    /*(1,1,1)*/
 
                 auto cons_var_slopes = get_3d_grad_cons<Tvec, Minmod>(
-                    cell_sizes,
+                    acc.cell_sizes,
                     AMRBlock::block_size,
                     old_cell_idx,
-                    cell_graph_xp,
-                    cell_graph_xm,
-                    cell_graph_yp,
-                    cell_graph_ym,
-                    cell_graph_zp,
-                    cell_graph_zm,
+                    acc.cell_graph_xp,
+                    acc.cell_graph_xm,
+                    acc.cell_graph_yp,
+                    acc.cell_graph_ym,
+                    acc.cell_graph_zp,
+                    acc.cell_graph_zm,
                     [=](u32 id) {
                         return acc.rho_old_snap[id];
                     },
@@ -1734,6 +1730,34 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
                         return acc.rhoE_old_snap[id];
                     });
 
+                std::array<f64, AMRBlock::block_size> _rho_block;
+                std::array<f64_3, AMRBlock::block_size> _rho_vel_block;
+                std::array<f64, AMRBlock::block_size> _rhoE_block;
+
+                bool do_second_order = true;
+
+                for (u32 subdiv_lid = 0; subdiv_lid < 8; subdiv_lid++) {
+                    shammath::ConsState<Tvec> cons_var_interp
+                        = child_center_offsets[subdiv_lid][0] * cons_var_slopes[0]
+                          + child_center_offsets[subdiv_lid][1] * cons_var_slopes[1]
+                          + child_center_offsets[subdiv_lid][2] * cons_var_slopes[2];
+
+                    _rho_block[subdiv_lid] = acc.rho_old_snap[old_cell_idx]
+                                             + cons_var_interp.rho * acc.amr_ref_interpo_mode;
+                    _rho_vel_block[subdiv_lid]
+                        = acc.rho_vel_old_snap[old_cell_idx]
+                          + cons_var_interp.rhovel * acc.amr_ref_interpo_mode;
+                    _rhoE_block[subdiv_lid] = acc.rhoE_old_snap[old_cell_idx]
+                                              + cons_var_interp.rhoe * acc.amr_ref_interpo_mode;
+
+                    const auto e_int
+                        = _rhoE_block[subdiv_lid]
+                          - 0.5 * sham::dot(_rho_vel_block[subdiv_lid], _rho_vel_block[subdiv_lid])
+                                / (_rho_block[subdiv_lid]);
+                    do_second_order
+                        = do_second_order && (_rho_block[subdiv_lid] > 0.0) && (e_int > 0.0);
+                }
+
                 for (u32 subdiv_lid = 0; subdiv_lid < 8; subdiv_lid++) {
 
                     auto [sx, sy, sz] = get_coord_ref(subdiv_lid);
@@ -1742,17 +1766,13 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 
                     u32 new_cell_idx = get_gid_write(glid);
 
-                    shammath::ConsState<Tvec> cons_var_interp
-                        = child_center_offsets[subdiv_lid][0] * cons_var_slopes[0]
-                          + child_center_offsets[subdiv_lid][1] * cons_var_slopes[1]
-                          + child_center_offsets[subdiv_lid][2] * cons_var_slopes[2];
-
-                    acc.rho[new_cell_idx]     = acc.rho_old_snap[old_cell_idx]
-                                                + cons_var_interp.rho * acc.amr_ref_interpo_mode;
-                    acc.rho_vel[new_cell_idx] = acc.rho_vel_old_snap[old_cell_idx]
-                                                + cons_var_interp.rhovel * acc.amr_ref_interpo_mode;
-                    acc.rhoE[new_cell_idx]    = acc.rhoE_old_snap[old_cell_idx]
-                                                + cons_var_interp.rhoe * acc.amr_ref_interpo_mode;
+                    acc.rho[new_cell_idx]     = (do_second_order) ? _rho_block[subdiv_lid]
+                                                                  : acc.rho_old_snap[old_cell_idx];
+                    acc.rho_vel[new_cell_idx] = (do_second_order)
+                                                    ? _rho_vel_block[subdiv_lid]
+                                                    : acc.rho_vel_old_snap[old_cell_idx];
+                    acc.rhoE[new_cell_idx]    = (do_second_order) ? _rhoE_block[subdiv_lid]
+                                                                  : acc.rhoE_old_snap[old_cell_idx];
                 }
             }
         }

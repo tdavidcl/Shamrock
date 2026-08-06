@@ -24,13 +24,13 @@
 namespace shammodels::basegodunov {
 
     enum AMRInterpoMode {
-        FIRST_ORDER  = 0, //
+        FIRST_ORDER  = 0, // first order
         SECOND_ORDER = 1, // second order (with Minmod slope limiter + conservative variables)
     };
 
     SHAMROCK_JSON_SERIALIZE_ENUM(
         AMRInterpoMode,
-        {{AMRInterpoMode::FIRST_ORDER, "first_order"},
-         {AMRInterpoMode::SECOND_ORDER, "second_order"}});
+        {{AMRInterpoMode::FIRST_ORDER, "amr_first_order"},
+         {AMRInterpoMode::SECOND_ORDER, "amr_second_order"}});
 
 } // namespace shammodels::basegodunov

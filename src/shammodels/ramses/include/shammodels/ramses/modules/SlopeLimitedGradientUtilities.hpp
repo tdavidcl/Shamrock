@@ -150,13 +150,10 @@ namespace {
         auto get_gradiant_dir = [&](auto &graph_links, Direction dir) -> Tfield {
             Tfield acc            = shambase::VectorProperties<Tfield>::get_zero();
             auto cell_center_dist = cell_sizes[cur_cell_block_id];
-            auto fac              = 1.;
+
             u32 cnt = graph_links.for_each_object_link_cnt(cell_global_id, [&](u32 id_b) {
                 auto neigh_block_id = id_b / block_size;
-
-                int sign = 1 - 2 * (dir % 2);
-                acc += sign * (field_access(id_b) - field_access(cell_global_id));
-
+                auto fac            = 1.;
                 if (cell_sizes[neigh_block_id] > cell_sizes[cur_cell_block_id]) {
                     fac = (3. / 2.);
                 }
@@ -166,9 +163,12 @@ namespace {
                 if (cell_sizes[neigh_block_id] < cell_sizes[cur_cell_block_id]) {
                     fac = (3. / 4.);
                 }
+                const auto inv_dist = 1. / (fac * cell_center_dist);
+
+                int sign = 1 - 2 * (dir % 2);
+                acc += sign * inv_dist * (field_access(id_b) - field_access(cell_global_id));
             });
-            return (cnt > 0) ? acc / (cell_center_dist * fac * cnt)
-                             : shambase::VectorProperties<Tfield>::get_zero();
+            return (cnt > 0) ? acc / cnt : shambase::VectorProperties<Tfield>::get_zero();
         };
 
         Tfield delta_xp = get_gradiant_dir(graph_iter_xp, Direction::xp);
@@ -198,8 +198,9 @@ namespace {
      * @tparam ACCField1
      * @tparam ACCField2
      * @tparam ACCField3
+     * @param cell_sizes
+     * @param block_size
      * @param cell_global_id
-     * @param delta_cell
      * @param graph_iter_xp
      * @param graph_iter_xm
      * @param graph_iter_yp
@@ -234,26 +235,29 @@ namespace {
             Tscal acc_rhoe        = shambase::VectorProperties<Tscal>::get_zero();
             Tvec acc_rho_vel      = shambase::VectorProperties<Tvec>::get_zero();
             auto cell_center_dist = cell_sizes[cur_cell_block_id];
-            auto fac              = 1.;
+
             auto cnt = graph_links.for_each_object_link_cnt(cell_global_id, [&](u32 id_b) {
                 auto neigh_block_id = id_b / block_size;
-
-                int sign = 1 - 2 * (dir % 2);
-                acc_rho += sign * (field_access_rho(id_b) - field_access_rho(cell_global_id));
-                acc_rhoe += sign * (field_access_rhoe(id_b) - field_access_rhoe(cell_global_id));
-                acc_rho_vel
-                    += sign * (field_access_rho_vel(id_b) - field_access_rho_vel(cell_global_id));
-
+                auto fac            = 1.;
                 if (cell_sizes[neigh_block_id] > cell_sizes[cur_cell_block_id]) {
                     fac = (3. / 2.);
                 }
-
                 // This logic suppose that the last (4-th) cell at interface have same size with the
                 // other three cells. This is also consitent with 2:1 refinement.
                 // TODO: extended to anisotropic mesh
                 if (cell_sizes[neigh_block_id] < cell_sizes[cur_cell_block_id]) {
                     fac = (3. / 4.);
                 }
+                const auto inv_dist = 1. / (fac * cell_center_dist);
+
+                int sign = 1 - 2 * (dir % 2);
+                acc_rho += sign * inv_dist
+                           * (field_access_rho(id_b) - field_access_rho(cell_global_id));
+                acc_rhoe += sign * inv_dist
+                            * (field_access_rhoe(id_b) - field_access_rhoe(cell_global_id));
+                acc_rho_vel
+                    += sign * inv_dist
+                       * (field_access_rho_vel(id_b) - field_access_rho_vel(cell_global_id));
             });
 
             shammath::ConsState<Tvec> res
@@ -265,34 +269,8 @@ namespace {
                     shambase::VectorProperties<Tscal>::get_zero()}};
             if (cnt > 0) {
                 (res = {acc_rho, acc_rhoe, acc_rho_vel});
-                res *= 1. / (cnt * fac * cell_center_dist);
+                res *= 1. / cnt;
             }
-            return res;
-        };
-
-        auto get_avg_neigh = [&](auto &graph_links) -> shammath::ConsState<Tvec> {
-            Tscal acc_rho    = shambase::VectorProperties<Tscal>::get_zero();
-            Tscal acc_rhoe   = shambase::VectorProperties<Tscal>::get_zero();
-            Tvec acc_rho_vel = shambase::VectorProperties<Tvec>::get_zero();
-            u32 cnt          = graph_links.for_each_object_link_cnt(cell_global_id, [&](u32 id_b) {
-                acc_rho += field_access_rho(id_b);
-                acc_rho_vel += field_access_rho_vel(id_b);
-                acc_rhoe += field_access_rhoe(id_b);
-            });
-
-            shammath::ConsState<Tvec> res
-                = {shambase::VectorProperties<Tscal>::get_zero(),
-                   shambase::VectorProperties<Tscal>::get_zero(),
-
-                   {shambase::VectorProperties<Tscal>::get_zero(),
-                    shambase::VectorProperties<Tscal>::get_zero(),
-                    shambase::VectorProperties<Tscal>::get_zero()}};
-
-            if (cnt > 0) {
-                res = {acc_rho, acc_rhoe, acc_rho_vel};
-                res *= (1. / cnt);
-            }
-
             return res;
         };
 
