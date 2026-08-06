@@ -11,7 +11,7 @@
 #include "shamtest/shamtest.hpp"
 #include <thread>
 
-TestStart(Unittest, "shambase/time/start_stop_elapsed_gt_zero", unitt_timer_start_stop_elapsed, 1) {
+NEW_TEST(Unittest, "shambase/time/start_stop_elapsed_gt_zero", 1) {
 
     shambase::Timer timer;
 
@@ -25,7 +25,7 @@ TestStart(Unittest, "shambase/time/start_stop_elapsed_gt_zero", unitt_timer_star
     REQUIRE(!time_str.empty());
 }
 
-TestStart(Unittest, "shambase/time/sleep_200ms_precision", unitt_timer_sleep_200ms, 1) {
+NEW_TEST(Unittest, "shambase/time/sleep_200ms_precision", 1) {
 
     shambase::Timer timer;
     timer.start();
@@ -36,7 +36,7 @@ TestStart(Unittest, "shambase/time/sleep_200ms_precision", unitt_timer_sleep_200
     REQUIRE_FLOAT_EQUAL(timer.elapsed_sec(), 0.4, 0.2);
 }
 
-TestStart(Unittest, "shambase/time/stop_overwrites_nanosec", unitt_timer_stop_overwrites, 1) {
+NEW_TEST(Unittest, "shambase/time/stop_overwrites_nanosec", 1) {
 
     shambase::Timer timer;
 
@@ -52,7 +52,7 @@ TestStart(Unittest, "shambase/time/stop_overwrites_nanosec", unitt_timer_stop_ov
     REQUIRE(elapsed1 < elapsed2);
 }
 
-TestStart(Unittest, "shambase/time/reusability", unitt_timer_reusability, 1) {
+NEW_TEST(Unittest, "shambase/time/reusability", 1) {
 
     shambase::Timer timer;
 
@@ -68,7 +68,7 @@ TestStart(Unittest, "shambase/time/reusability", unitt_timer_reusability, 1) {
     REQUIRE(elapsed1 > elapsed2);
 }
 
-TestStart(Unittest, "shambase/time/get_time_str_has_unit", unitt_timer_get_time_str_format, 1) {
+NEW_TEST(Unittest, "shambase/time/get_time_str_has_unit", 1) {
 
     shambase::Timer timer;
     timer.start();
