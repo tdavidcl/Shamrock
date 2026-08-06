@@ -4,7 +4,7 @@ A solver graph is a DAG of **nodes** connected by **edges**. Nodes read and writ
 edge data in `_impl_evaluate_internal()`. Edges carry typed values (fields,
 scalars, indexes, ...). Most nodes can be found under the `shamrock::solvergraph` namespace.
 
-- Nodes inherit `INode`. 
+- Nodes inherit `INode`.
 - edges can be wired with `set_edges()`
 - evaluation of the node from **edges** input and in-out is done using `evaluate()`.
 
@@ -52,7 +52,7 @@ List inputs first, outputs last.
 
 ## Optional edges
 
-An optional input may be absent at wiring time for nodes having multiple evaluation modes. 
+An optional input may be absent at wiring time for nodes having multiple evaluation modes.
 To use optional edges use `EXPAND_NODE_EDGES_OPTIONAL` when `NODE_EDGES`
 contains any `X_*_OPTIONAL` macro.
 
