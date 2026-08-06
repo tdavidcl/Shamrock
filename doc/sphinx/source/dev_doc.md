@@ -9,6 +9,7 @@ Welcome to the developer documentation of Shamrock
 dev_doc/ide-setup.md
 dev_doc/building-doc.md
 dev_doc/testing.md
+dev_doc/solvergraph_nodes.md
 dev_doc/types.md
 dev_doc/profiling.md
 dev_doc/build-profiling.md
