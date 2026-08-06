@@ -1506,7 +1506,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
         f64_3 *rho_vel_old_snap;
         f64 *rhoE_old_snap;
 
-        u32 amr_ref_interpo_mode;
+        AMRInterpoMode amr_ref_interpo_mode;
 
         // this will be needed for interpolation during refinement
         AMRGraphLinkiterator cell_graph_xp;
