@@ -1179,7 +1179,7 @@ template<class UserAcc>
 bool shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
     internal_refine_grid_new(
         shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags,
-        const u32 amr_refine_interpo_mode) {
+        const AMRInterpoMode amr_refine_interpo_mode) {
 
     u64 sum_block_count = 0;
 
