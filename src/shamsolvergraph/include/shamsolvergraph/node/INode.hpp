@@ -102,7 +102,7 @@ namespace shamrock::solvergraph {
                 return std::nullopt;
             }
 
-            shambase::throw_with_loc<std::invalid_argument>(
+            throw shambase::make_except_with_loc<std::invalid_argument>(
                 shambase::format("Edge is not from the requested type: {}", slot));
         }
 
@@ -120,7 +120,7 @@ namespace shamrock::solvergraph {
                 return std::nullopt;
             }
 
-            shambase::throw_with_loc<std::invalid_argument>(
+            throw shambase::make_except_with_loc<std::invalid_argument>(
                 shambase::format("Edge is not from the requested type: {}", slot));
         }
 
