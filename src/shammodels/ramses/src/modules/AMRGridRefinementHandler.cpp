@@ -2583,7 +2583,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
         //////// apply refine ////////
         // Note that this only add new blocks at the end of the patchdata
         const AMRInterpoMode amr_ref_interpo_mode = solver_config.amr_interpo_mode;
-        bool change_refine             = internal_refine_grid_new<RefineCellAccessor>(
+        bool change_refine                        = internal_refine_grid_new<RefineCellAccessor>(
             std::move(refine_list), amr_ref_interpo_mode);
 
         //////// apply derefine ////////
