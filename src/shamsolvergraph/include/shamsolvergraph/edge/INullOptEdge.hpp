@@ -16,7 +16,7 @@
  *
  */
 
-#include "shamrock/solvergraph/IEdge.hpp"
+#include "shamsolvergraph/edge/IEdge.hpp"
 #include <memory>
 #include <optional>
 
