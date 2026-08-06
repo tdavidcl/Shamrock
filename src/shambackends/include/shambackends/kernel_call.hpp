@@ -17,6 +17,7 @@
  */
 
 #include "shambase/optional.hpp"
+#include "shambase/type_traits.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call/MultiRef.hpp"
 #include "shambackends/kernel_call/MultiRefOpt.hpp"
@@ -67,20 +68,11 @@ namespace sham {
             in_out.complete_event_state(e);
         }
 
-        template<typename Signature>
-        struct expected_kernel_signature;
+        //////////////////////////////////////////////////////////////////////////////
+        // Helper types for kernel signature checking (and clean error messages)
+        //////////////////////////////////////////////////////////////////////////////
 
-        template<typename Ret, typename... Ts>
-        struct expected_kernel_signature<Ret(Ts...)> {};
-
-        template<typename Tuple>
-        struct tuple_to_signature;
-
-        template<typename... Ts>
-        struct tuple_to_signature<std::tuple<Ts...>> {
-            using type = void(Ts...);
-        };
-
+        /// helper type to get the arguments types of the kernel generator
         template<class index_t, class RefIn, class RefOut>
         struct kernel_gen_args {
 
@@ -94,10 +86,28 @@ namespace sham {
                     std::declval<sham::EventList &>()))>()));
         };
 
+        /// Helper to extract the function signature from a tuple of types
+        template<typename Tuple>
+        struct tuple_to_signature;
+
+        template<typename... Ts>
+        struct tuple_to_signature<std::tuple<Ts...>> {
+            using type = void(Ts...);
+        };
+
+        /// Trick to name the error message if we want to use it
+        template<typename Signature>
+        struct expected_kernel_signature;
+
+        template<typename Ret, typename... Ts>
+        struct expected_kernel_signature<Ret(Ts...)> {};
+
+        /// The expected signature of the kernel generator
         template<class index_t, class RefIn, class RefOut>
         using kernel_expected_signature = expected_kernel_signature<typename tuple_to_signature<
             typename kernel_gen_args<index_t, RefIn, RefOut>::args_types>::type>;
 
+        /// Helper to check if the functor is invocable with the expected signature
         template<typename F, typename Signature>
         struct is_kernel_invocable;
 
@@ -105,12 +115,32 @@ namespace sham {
         struct is_kernel_invocable<F, expected_kernel_signature<Ret(Ts...)>>
             : std::bool_constant<std::invocable<F, Ts...>> {};
 
+        /// Concept to check if the functor is invocable with the expected signature
+        /// can be used by doing :
+        /// requires kernel_invocable<Functor, kernel_expected_signature<index_t, RefIn, RefOut>>
         template<typename F, typename Signature>
         concept kernel_invocable = is_kernel_invocable<F, Signature>::value;
 
+        /// Unwrap `expected_kernel_signature<Ret(Ts...)>` to the raw function type `Ret(Ts...)`
+        /// so diagnostics can print the signature without an extra template nesting level.
+        template<typename Signature>
+        struct expected_kernel_fn_type;
+
+        template<typename Ret, typename... Ts>
+        struct expected_kernel_fn_type<expected_kernel_signature<Ret(Ts...)>> {
+            using type = Ret(Ts...);
+        };
+
+        /// Always-false flag parameterized by the expected function type (shown in static_assert).
+        template<class ExpectedFnSignature>
+        inline constexpr bool matches_expected_kernel_signature = false;
+
         /// internal implementation of typed_index_kernel_call
+        ///
+        /// Signature mismatches are reported with a single static_assert that embeds the raw
+        /// expected function type. The body is gated by if constexpr so a bad functor does not
+        /// cascade into further template errors.
         template<class index_t, class RefIn, class RefOut, class Functor>
-            requires kernel_invocable<Functor, kernel_expected_signature<index_t, RefIn, RefOut>>
         void typed_index_kernel_call(
             sham::DeviceQueue &q,
             RefIn in,
@@ -119,24 +149,31 @@ namespace sham {
             Functor &&func,
             SourceLocation &&callsite = SourceLocation{}) {
 
-            __shamrock_log_callsite(callsite);
+            using expected_sig = kernel_expected_signature<index_t, RefIn, RefOut>;
 
-            typed_index_kernel_call_lambda(
-                q,
-                in,
-                in_out,
-                n,
-                [func
-                 = std::forward<Functor>(func)](u32 n, auto... __acc_in, auto... __acc_in_out) {
-                    return [=](sycl::handler &cgh) {
-                        cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
-                            shambase::check_functor_signature_deduce<void>(
-                                func, index_t(item.get_linear_id()), __acc_in..., __acc_in_out...);
+            if constexpr (is_kernel_invocable<Functor, expected_sig>::value) {
+                __shamrock_log_callsite(callsite);
 
-                            func(index_t(item.get_linear_id()), __acc_in..., __acc_in_out...);
-                        });
-                    };
-                });
+                typed_index_kernel_call_lambda(
+                    q,
+                    in,
+                    in_out,
+                    n,
+                    [func
+                     = std::forward<Functor>(func)](u32 n, auto... __acc_in, auto... __acc_in_out) {
+                        return [=](sycl::handler &cgh) {
+                            cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+                                func(index_t(item.get_linear_id()), __acc_in..., __acc_in_out...);
+                            });
+                        };
+                    });
+            } else {
+                static_assert(
+                    matches_expected_kernel_signature<
+                        typename expected_kernel_fn_type<expected_sig>::type>,
+                    "Kernel functor is not invocable with the expected signature; see "
+                    "matches_expected_kernel_signature<void(...)> for the required argument list.");
+            }
         }
     } // namespace details
 
