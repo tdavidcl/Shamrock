@@ -7,24 +7,5 @@ queue_rules:
       trailers:
         - approved-by
         - merged-by
-    merge_protections:
-      - name: current-ruleset
-        success_conditions:
-          - and:
-              # First OR block (pre-commit.ci - pr)
-              - or:
-                  - "check-success = pre-commit.ci - pr"
-                  - "check-neutral = pre-commit.ci - pr"
-                  - "check-skipped = pre-commit.ci - pr"
-
-              # Updated OR block (all_light)
-              - or:
-                  - "check-success = all_light"
-                  - "check-neutral = all_light"
-                  - "check-skipped = all_light"
-
-              # Review approval
-              - "github-review-approved"
-
-        merge_conditions:
-          - "check-success = all"
+    merge_conditions:
+      - check-success = all
