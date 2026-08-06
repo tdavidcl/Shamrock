@@ -80,4 +80,3 @@ TestStart(Unittest, "shambase/time/get_time_str_has_unit", unitt_timer_get_time_
     REQUIRE(!s.empty());
     REQUIRE(s.find("ms") != std::string::npos || s.find("us") != std::string::npos);
 }
-
