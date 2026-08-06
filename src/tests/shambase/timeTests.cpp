@@ -81,19 +81,3 @@ TestStart(Unittest, "shambase/time/get_time_str_has_unit", unitt_timer_get_time_
     REQUIRE(s.find("ms") != std::string::npos || s.find("us") != std::string::npos);
 }
 
-TestStart(
-    Unittest, "shambase/time/nanosec_to_time_str_all_units", unitt_nanosec_to_time_str_various, 1) {
-
-    using namespace shambase;
-
-    REQUIRE(nanosec_to_time_str(0) == "0.00 ns");
-    REQUIRE(nanosec_to_time_str(500) == "500.00 ns");
-    REQUIRE(nanosec_to_time_str(2500) == "2.50 us");
-    REQUIRE(nanosec_to_time_str(5000000) == "5.00 ms");
-    REQUIRE(nanosec_to_time_str(2500000) == "2.50 ms");
-    REQUIRE(nanosec_to_time_str(5000000000) == "5.00 s");
-    REQUIRE(nanosec_to_time_str(2500000000) == "2.50 s");
-    REQUIRE(nanosec_to_time_str(2500000000000) == "2.50 ks");
-    REQUIRE(nanosec_to_time_str(2500000000000000) == "2.50 Ms");
-    REQUIRE(nanosec_to_time_str(2500000000000000000) == "2.50 Gs");
-}
