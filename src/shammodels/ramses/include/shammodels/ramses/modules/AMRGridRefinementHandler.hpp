@@ -132,7 +132,7 @@ namespace shammodels::basegodunov::modules {
         template<class UserAcc>
         bool internal_derefine_grid_new(
             shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_derefine_flags,
-            const u32 amr_refine_interpo_mode);
+            const AMRInterpoMode amr_refine_interpo_mode);
 
         template<class UserAccCrit, class UserAccSplit, class UserAccMerge>
         void internal_update_refinement_new(const u32 amr_refine_interpo_mode);
