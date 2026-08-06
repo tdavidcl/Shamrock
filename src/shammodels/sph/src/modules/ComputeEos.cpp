@@ -26,7 +26,7 @@
 #include "shamphys/eos.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
-#include "shamrock/solvergraph/IDataEdge.hpp"
+#include "shamsolvergraph/edge/IDataEdge.hpp"
 
 #define NODE_EDGES(X_RO, X_RW, X_RO_OPTIONAL, X_RW_OPTIONAL)                                       \
     /* ------------------- inputs ------------------- */                                           \
