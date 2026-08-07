@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Detect CI flags from a unified diff against the PR base."""
 
 import argparse
@@ -52,9 +51,8 @@ def is_core_component_path(path: str) -> bool:
 
 def is_model_path(path: str, model: str) -> bool:
     normalized = path.replace("\\", "/")
-    return (
-        is_under_prefix(normalized, f"src/shammodels/{model}")
-        or is_under_prefix(normalized, f"src/tests/shammodels/{model}")
+    return is_under_prefix(normalized, f"src/shammodels/{model}") or is_under_prefix(
+        normalized, f"src/tests/shammodels/{model}"
     )
 
 
@@ -75,8 +73,7 @@ def evaluate_flags(paths: set[str]) -> dict[str, bool]:
 
 def write_github_output(flags: dict[str, bool], output_path: str) -> None:
     with open(output_path, "a", encoding="utf-8") as out:
-        for name, value in flags.items():
-            out.write(f"{name}={str(value).lower()}\n")
+        out.writelines(f"{name}={str(value).lower()}\n" for name, value in flags.items())
 
 
 def main() -> int:
