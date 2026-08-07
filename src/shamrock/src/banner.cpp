@@ -90,9 +90,9 @@ namespace {
     }
 
     void print_standard_title_bar() {
-        if (!try_print_picture()) {
-            logger::raw_ln(shamrock_title_bar_big);
-        }
+        // if (!try_print_picture()) { // need more testing on the kitty banner picture
+        logger::raw_ln(shamrock_title_bar_big);
+        // }
     }
 
 } // namespace
