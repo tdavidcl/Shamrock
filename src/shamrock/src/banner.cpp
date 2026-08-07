@@ -15,9 +15,12 @@
  */
 
 #include "shambase/stacktrace.hpp"
+#include "sham/term/tty.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamrock/version.hpp"
+#include <cstdlib>
+#include <filesystem>
 #include <random>
 #include <sstream>
 #include <string>
@@ -57,6 +60,43 @@ inline std::string very_rare_title_bar = "\n\
 ";
 // end allow utf-8
 
+namespace {
+
+    std::optional<std::string> get_banner_pic_path() {
+        constexpr const char *kitty_banner_path
+            = "../doc/mkdocs/docs/assets/no_background_nocolor.png";
+        if (std::filesystem::exists(kitty_banner_path)) {
+            return kitty_banner_path;
+        }
+        return std::nullopt;
+    }
+
+    bool try_print_picture() {
+        if (!sham::term::is_a_tty()) {
+            return false;
+        }
+
+        const char *term = std::getenv("TERM");
+        if (term == nullptr || std::string(term) != "xterm-kitty") {
+            return false;
+        }
+
+        if (std::optional<std::string> banner_path = get_banner_pic_path()) {
+            std::system(("kitten icat " + *banner_path).c_str());
+            return true;
+        }
+
+        return false;
+    }
+
+    void print_standard_title_bar() {
+        if (!try_print_picture()) {
+            logger::raw_ln(shamrock_title_bar_big);
+        }
+    }
+
+} // namespace
+
 namespace shamrock {
 
     std::string get_date_hour_string() {
@@ -73,7 +113,7 @@ namespace shamrock {
         if (pure_random_number() % 100 == 0) {
             logger::raw_ln(very_rare_title_bar);
         } else {
-            logger::raw_ln(shamrock_title_bar_big);
+            print_standard_title_bar();
         }
 
         logger::raw_ln(
