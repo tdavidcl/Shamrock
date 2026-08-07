@@ -54,7 +54,11 @@ NEW_TEST(Unittest, "shambackends/kernel_call", 1) {
         sham::MultiRef{rho_field_const, uint_field_const},
         sham::MultiRef{P_field, cs_field},
         size,
-        [](u32 i, const T *__restrict rho, T *__restrict U, T *__restrict P, T *__restrict cs) {
+        [](u32 i,
+           const T *__restrict rho,
+           const T *__restrict U,
+           T *__restrict P,
+           T *__restrict cs) {
             T r = rho[i];
             T u = U[i];
 
