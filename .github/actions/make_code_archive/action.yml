@@ -1,0 +1,33 @@
+name: Make code archive
+description: Archive Shamrock with submodules and upload as an artifact
+
+inputs:
+  output_name:
+    description: Output archive filename and artifact name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download git-archive-all.sh
+      shell: bash
+      run: |
+        wget https://raw.githubusercontent.com/fabacab/git-archive-all.sh/refs/heads/master/git-archive-all.sh
+        chmod +x git-archive-all.sh
+
+    - name: Archive Shamrock with submodules
+      shell: bash
+      run: |
+        ./git-archive-all.sh
+        ls
+
+    - name: Rename archive
+      shell: bash
+      run: |
+        mv Shamrock.tar ${{ inputs.output_name }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.output_name }}
+        path: ${{ inputs.output_name }}
