@@ -12,8 +12,8 @@ runs:
     - name: Validate output name
       shell: bash
       run: |
-        if [[ "${{ inputs.output_name }}" != *.tar ]]; then
-          echo "output_name must end with .tar, got: ${{ inputs.output_name }}"
+        if [[ "${{ inputs.output_name }}" != *.tar.gz ]]; then
+          echo "output_name must end with .tar.gz, got: ${{ inputs.output_name }}"
           exit 1
         fi
 
@@ -33,10 +33,11 @@ runs:
         ./git-archive-all.sh
         ls
 
-    - name: Rename archive
+    - name: Compress archive
       shell: bash
       run: |
-        mv Shamrock.tar ${{ inputs.output_name }}
+        gzip -c Shamrock.tar > /tmp/${{ inputs.output_name }}
+        mv /tmp/${{ inputs.output_name }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v7
