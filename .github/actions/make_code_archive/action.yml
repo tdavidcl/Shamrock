@@ -9,6 +9,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate output name
+      shell: bash
+      run: |
+        if [[ "${{ inputs.output_name }}" != *.tar ]]; then
+          echo "output_name must end with .tar, got: ${{ inputs.output_name }}"
+          exit 1
+        fi
+
+    - name: Checkout submodules
+      shell: bash
+      run: git submodule update --init --recursive
+
     - name: Download git-archive-all.sh
       shell: bash
       run: |
