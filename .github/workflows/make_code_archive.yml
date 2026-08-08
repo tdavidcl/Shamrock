@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: extract_version
     steps:
-      - uses: actions/checkout@v7
       - uses: Shamrock-code/action-make-code-archive@v1
         with:
           output_name: shamrock-${{ needs.extract_version.outputs.version }}.tar.gz
