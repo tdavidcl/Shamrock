@@ -20,7 +20,6 @@
 #include "shambase/stacktrace.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
-#include "shammodels/sph/SinkPartStruct.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"

@@ -30,6 +30,7 @@
 #include "shammodels/sph/io/Phantom2Shamrock.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
+#include "shammodels/sph/sink_edges_helper.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
@@ -51,20 +52,6 @@ f64 shammodels::sph::Model<Tvec, SPHKernel>::evolve_once_time_expl(f64 t_curr, f
 template<class Tvec, template<class> class SPHKernel>
 shammodels::sph::TimestepLog shammodels::sph::Model<Tvec, SPHKernel>::timestep() {
     return solver.evolve_once();
-}
-
-template<class T>
-void ensure_sync_data_edge(
-    shamrock::solvergraph::SolverGraphSerializable &sync_data,
-    const std::string &name,
-    const std::string &tex_symbol,
-    T init_value) {
-
-    if (!sync_data.has_edge(name)) {
-        auto edge = sync_data.register_edge(
-            name, shamrock::solvergraph::IDataEdgeSerializable<T>(name, tex_symbol));
-        edge->data = std::move(init_value);
-    }
 }
 
 template<class Tvec, template<class> class SPHKernel>
@@ -96,33 +83,11 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init() {
 
     solver.ensure_time_state_edges();
 
-    bool use_sinks = true;
-    if (use_sinks) {
-        // will be moved to "ensure_sink_edges"
-
-        auto &sync = sched.synchronized_data;
-
-        ensure_sync_data_edge<std::vector<Tvec>>(sync, "sink_pos", "\\bf{r}_{\\mathrm{sink}}", {});
-        ensure_sync_data_edge<std::vector<Tvec>>(sync, "sink_vel", "\\bf{v}_{\\mathrm{sink}}", {});
-        ensure_sync_data_edge<std::vector<Tvec>>(
-            sync, "sink_acc_sph", "\\bf{a}_{\\mathrm{sink, sph}}", {});
-        ensure_sync_data_edge<std::vector<Tvec>>(
-            sync, "sink_acc_ext", "\\bf{a}_{\\mathrm{sink, ext}}", {});
-        ensure_sync_data_edge<std::vector<Tscal>>(sync, "sink_mass", "m_{\\mathrm{sink}}", {});
-        ensure_sync_data_edge<std::vector<Tvec>>(
-            sync, "sink_angular_momentum", "\\bf{L}_{\\mathrm{sink}}", {});
-        ensure_sync_data_edge<std::vector<Tscal>>(
-            sync, "sink_accretion_radius", "r_{\\mathrm{accretion}}", {});
-    }
+    ensure_sink_edges<Tvec>(sched.synchronized_data);
 
     // must be bone after time state edges are ensured (it will connect to it)
     solver.init_solver_graph();
 }
-
-template<class T>
-struct shambase::TypeNameInfo<std::vector<T>> {
-    inline static const std::string name = "std::vector<" + get_type_name<T>() + ">";
-};
 
 REGISTER_IDATAEDGESERIALIZABLE(shamrock::solvergraph::IDataEdgeSerializable<f64>);
 REGISTER_IDATAEDGESERIALIZABLE(shamrock::solvergraph::IDataEdgeSerializable<std::vector<f64>>);
@@ -1531,11 +1496,7 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     bool bypass_error_check = false;
 
     auto get_sink_count = [&]() -> int {
-        if (solver.storage.sinks.is_empty()) {
-            return 0;
-        } else {
-            return int(solver.storage.sinks.get().size());
-        }
+        return int(get_sink_pos<Tvec>(shambase::get_check_ref(ctx.sched).synchronized_data).size());
     };
 
     dump.override_magic_number();
@@ -1636,35 +1597,38 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
 
     dump.blocks.push_back(std::move(block_part));
 
-    if (!solver.storage.sinks.is_empty()) {
+    {
+        auto &sync = shambase::get_check_ref(ctx.sched).synchronized_data;
+        auto edges = get_sink_edges<Tvec>(sync);
+        if (edges.has_sinks()) {
+            auto sinks = to_sink_particles(edges);
+            // add sinks to block 1
+            PhantomDumpBlock sink_block;
 
-        auto &sinks = solver.storage.sinks.get();
-        // add sinks to block 1
-        PhantomDumpBlock sink_block;
+            u64 xid  = sink_block.get_ref_fort_real("x");
+            u64 yid  = sink_block.get_ref_fort_real("y");
+            u64 zid  = sink_block.get_ref_fort_real("z");
+            u64 mid  = sink_block.get_ref_fort_real("m");
+            u64 hid  = sink_block.get_ref_fort_real("h");
+            u64 vxid = sink_block.get_ref_fort_real("vx");
+            u64 vyid = sink_block.get_ref_fort_real("vy");
+            u64 vzid = sink_block.get_ref_fort_real("vz");
 
-        u64 xid  = sink_block.get_ref_fort_real("x");
-        u64 yid  = sink_block.get_ref_fort_real("y");
-        u64 zid  = sink_block.get_ref_fort_real("z");
-        u64 mid  = sink_block.get_ref_fort_real("m");
-        u64 hid  = sink_block.get_ref_fort_real("h");
-        u64 vxid = sink_block.get_ref_fort_real("vx");
-        u64 vyid = sink_block.get_ref_fort_real("vy");
-        u64 vzid = sink_block.get_ref_fort_real("vz");
+            for (SinkParticle<Tvec> s : sinks) {
+                sink_block.blocks_fort_real[xid].vals.push_back(s.pos.x());
+                sink_block.blocks_fort_real[yid].vals.push_back(s.pos.y());
+                sink_block.blocks_fort_real[zid].vals.push_back(s.pos.z());
+                sink_block.blocks_fort_real[mid].vals.push_back(s.mass);
+                sink_block.blocks_fort_real[hid].vals.push_back(s.accretion_radius);
+                sink_block.blocks_fort_real[vxid].vals.push_back(s.velocity.x());
+                sink_block.blocks_fort_real[vyid].vals.push_back(s.velocity.y());
+                sink_block.blocks_fort_real[vzid].vals.push_back(s.velocity.z());
+            }
 
-        for (SinkParticle<Tvec> s : sinks) {
-            sink_block.blocks_fort_real[xid].vals.push_back(s.pos.x());
-            sink_block.blocks_fort_real[yid].vals.push_back(s.pos.y());
-            sink_block.blocks_fort_real[zid].vals.push_back(s.pos.z());
-            sink_block.blocks_fort_real[mid].vals.push_back(s.mass);
-            sink_block.blocks_fort_real[hid].vals.push_back(s.accretion_radius);
-            sink_block.blocks_fort_real[vxid].vals.push_back(s.velocity.x());
-            sink_block.blocks_fort_real[vyid].vals.push_back(s.velocity.y());
-            sink_block.blocks_fort_real[vzid].vals.push_back(s.velocity.z());
+            sink_block.tot_count = sinks.size();
+
+            dump.blocks.push_back(std::move(sink_block));
         }
-
-        sink_block.tot_count = sinks.size();
-
-        dump.blocks.push_back(std::move(sink_block));
     }
 
     return dump;
