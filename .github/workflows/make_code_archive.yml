@@ -14,6 +14,6 @@ jobs:
     needs: extract_version
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/make_code_archive
+      - uses: Shamrock-code/action-make-code-archive@v1
         with:
           output_name: shamrock-${{ needs.extract_version.outputs.version }}.tar.gz
