@@ -20,6 +20,7 @@
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
+#include "shambackends/type_traits.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/crystalLattice.hpp"
 #include "shammath/sphkernels.hpp"
@@ -52,6 +53,20 @@ shammodels::sph::TimestepLog shammodels::sph::Model<Tvec, SPHKernel>::timestep()
     return solver.evolve_once();
 }
 
+template<class T>
+void ensure_sync_data_edge(
+    shamrock::solvergraph::SolverGraphSerializable &sync_data,
+    const std::string &name,
+    const std::string &tex_symbol,
+    T init_value) {
+
+    if (!sync_data.has_edge(name)) {
+        auto edge = sync_data.register_edge(
+            name, shamrock::solvergraph::IDataEdgeSerializable<T>(name, tex_symbol));
+        edge->data = std::move(init_value);
+    }
+}
+
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::Model<Tvec, SPHKernel>::init() {
 
@@ -81,9 +96,37 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init() {
 
     solver.ensure_time_state_edges();
 
+    bool use_sinks = true;
+    if (use_sinks) {
+        // will be moved to "ensure_sink_edges"
+
+        auto &sync = sched.synchronized_data;
+
+        ensure_sync_data_edge<std::vector<Tvec>>(sync, "sink_pos", "\\bf{r}_{\\mathrm{sink}}", {});
+        ensure_sync_data_edge<std::vector<Tvec>>(sync, "sink_vel", "\\bf{v}_{\\mathrm{sink}}", {});
+        ensure_sync_data_edge<std::vector<Tvec>>(
+            sync, "sink_acc_sph", "\\bf{a}_{\\mathrm{sink, sph}}", {});
+        ensure_sync_data_edge<std::vector<Tvec>>(
+            sync, "sink_acc_ext", "\\bf{a}_{\\mathrm{sink, ext}}", {});
+        ensure_sync_data_edge<std::vector<Tscal>>(sync, "sink_mass", "m_{\\mathrm{sink}}", {});
+        ensure_sync_data_edge<std::vector<Tvec>>(
+            sync, "sink_angular_momentum", "\\bf{L}_{\\mathrm{sink}}", {});
+        ensure_sync_data_edge<std::vector<Tscal>>(
+            sync, "sink_accretion_radius", "r_{\\mathrm{accretion}}", {});
+    }
+
     // must be bone after time state edges are ensured (it will connect to it)
     solver.init_solver_graph();
 }
+
+template<class T>
+struct shambase::TypeNameInfo<std::vector<T>> {
+    inline static const std::string name = "std::vector<" + get_type_name<T>() + ">";
+};
+
+REGISTER_IDATAEDGESERIALIZABLE(shamrock::solvergraph::IDataEdgeSerializable<f64>);
+REGISTER_IDATAEDGESERIALIZABLE(shamrock::solvergraph::IDataEdgeSerializable<std::vector<f64>>);
+REGISTER_IDATAEDGESERIALIZABLE(shamrock::solvergraph::IDataEdgeSerializable<std::vector<f64_3>>);
 
 template<class Tvec, template<class> class SPHKernel>
 u64 shammodels::sph::Model<Tvec, SPHKernel>::get_total_part_count() {

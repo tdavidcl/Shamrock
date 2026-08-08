@@ -109,8 +109,6 @@ namespace shammodels::sph {
         Component<shamrock::ComputeField<Tvec>> old_dtdeltav;
         Component<shamrock::ComputeField<Tscal>> old_ds_j_dt;
 
-        Component<std::vector<SinkParticle<Tvec>>> sinks;
-
         struct Timings {
             f64 interface = 0;
             f64 neighbors = 0;
