@@ -14,20 +14,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Reconfigure git
-        run: |
-          git config --global --add safe.directory '*'
-          git config --global --list
+      - uses: actions/checkout@v7 # only to resolve the local action
 
-      - uses: actions/checkout@v4
-
-      - name: Extract version from CMake
+      - uses: ./.github/actions/extract_version
         id: version
-        continue-on-error: true
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. 2>&1 | tee cmake_output.txt || true
-          VERSION=$(grep -F 'Shamrock version :' cmake_output.txt | sed 's/-- Shamrock version : //' || echo "unknown")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Detected version: $VERSION"
