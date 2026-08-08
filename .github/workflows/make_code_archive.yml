@@ -9,7 +9,7 @@ jobs:
     uses: ./.github/workflows/extract_version.yml
 
   make_code_archive:
-    name: Build & Upload
+    name: Make code archive
     runs-on: ubuntu-latest
     needs: extract_version
     steps:
