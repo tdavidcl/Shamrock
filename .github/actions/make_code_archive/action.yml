@@ -17,6 +17,8 @@ runs:
           exit 1
         fi
 
+    - uses: actions/checkout@v7
+
     - name: Checkout submodules
       shell: bash
       run: git submodule update --init --recursive
