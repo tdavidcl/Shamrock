@@ -30,6 +30,7 @@
 #include "shamcomm/logs.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <pybind11/complex.h>
+#include <utility>
 
 ON_PYTHON_INIT {
     auto &m = root_module;
@@ -357,7 +358,7 @@ ON_PYTHON_INIT {
     shamalgs_module.def(
         "string_histogram",
         [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
-            return shamalgs::collective::string_histogram(inputs, delimiter, hash_based);
+            return shamalgs::collective::string_histogram(inputs, std::move(delimiter), hash_based);
         },
         py::arg("inputs"),
         py::arg("delimiter")  = "\n",
@@ -366,7 +367,8 @@ ON_PYTHON_INIT {
     shamalgs_module.def(
         "all_string_histogram",
         [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
-            return shamalgs::collective::all_string_histogram(inputs, delimiter, hash_based);
+            return shamalgs::collective::all_string_histogram(
+                inputs, std::move(delimiter), hash_based);
         },
         py::arg("inputs"),
         py::arg("delimiter")  = "\n",
