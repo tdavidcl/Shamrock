@@ -58,10 +58,10 @@ def build_model_with_sinks():
     model.set_cfl_force(0.1)
     model.set_eta_sink(1.0)
 
-    model.init_scheduler(100, 1)
+    model.init_scheduler(1000, 1)
 
     # Very coarse HCP cube -> handful of SPH particles
-    dr = 0.1
+    dr = 0.05
     bmin = (-0.6, -0.6, -0.6)
     bmax = (0.6, 0.6, 0.6)
     model.resize_simulation_box(bmin, bmax)
@@ -70,10 +70,18 @@ def build_model_with_sinks():
     gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
     setup.apply_setup(gen)
 
+    eng = shamrock.algs.gen_seed(42)
+
+    def vel_func(r):
+        vx, vy, vz = shamrock.algs.mock_gaussian_f64_3(eng)
+        return (10 * vx, 10 * vy, 10 * vz)
+
+    model.set_field_value_lambda_f64_3("vxyz", vel_func)
+
     # A few sinks (must be added after init_scheduler, on all ranks)
-    model.add_sink(1.0, (0.1, 0.0, 0.0), (0.0, 0.05, 0.0), 0.05)
-    model.add_sink(0.5, (-0.2, 0.1, 0.0), (0.0, -0.03, 0.0), 0.04)
-    model.add_sink(0.25, (0.0, -0.15, 0.05), (0.02, 0.0, 0.0), 0.03)
+    model.add_sink(1.0, (0.1, 0.0, 0.0), (0.0, 0.05, 0.0), 0.15)
+    model.add_sink(0.5, (-0.2, 0.1, 0.0), (0.0, -0.03, 0.0), 0.15)
+    model.add_sink(0.25, (0.0, -0.15, 0.05), (0.02, 0.0, 0.0), 0.15)
 
     return ctx, model
 
@@ -83,7 +91,7 @@ def main():
 
     check_sinks_are_in_sync(ctx, model)
 
-    for _ in range(3):
+    for _ in range(5):
         model.timestep()
     check_sinks_are_in_sync(ctx, model)
 
@@ -108,7 +116,7 @@ def main():
 
     check_sinks_are_in_sync(ctx2, model2)
 
-    for _ in range(3):
+    for _ in range(5):
         model2.timestep()
     check_sinks_are_in_sync(ctx2, model2)
 
