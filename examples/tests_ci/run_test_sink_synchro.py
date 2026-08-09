@@ -24,7 +24,8 @@ def check_sinks_are_in_sync(ctx, model):
         )
     shamrock.sys.mpi_barrier()
     if shamrock.sys.world_rank() == 0:
-        print(f"Sinks are in sync !")
+        print("Sinks are in sync !")
+
 
 si = shamrock.UnitSystem()
 sicte = shamrock.Constants(si)
@@ -35,6 +36,7 @@ codeu = shamrock.UnitSystem(
 )
 ucte = shamrock.Constants(codeu)
 G = ucte.G()
+
 
 def build_model_with_sinks():
     ctx = shamrock.Context()
@@ -56,7 +58,7 @@ def build_model_with_sinks():
     model.set_cfl_force(0.1)
     model.set_eta_sink(1.0)
 
-    model.init_scheduler(int(100), 1)
+    model.init_scheduler(100, 1)
 
     # Very coarse HCP cube -> handful of SPH particles
     dr = 0.1
