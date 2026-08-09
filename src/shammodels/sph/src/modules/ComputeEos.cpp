@@ -377,6 +377,11 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
         auto &sink_mass = get_sink_mass<Tvec>(scheduler().synchronized_data);
         u32 sink_cnt    = shambase::narrow_or_throw<u32>(sink_pos.size());
 
+        if (sink_cnt == 0) {
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "No sinks found for the equation of state");
+        }
+
         shamrock::solvergraph::FieldRefs<Tvec> xyz_refs{"", ""};
         auto refs
             = storage.merged_xyzh.get()
