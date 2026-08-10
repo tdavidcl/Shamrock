@@ -35,15 +35,13 @@ def get_available_ram_macos():
 
 
 def get_avail_mem():
-    import subprocess
-
     if psutil_found:
         return (psutil.virtual_memory().available) / 1e6
 
-    if sys.platform == "darwin":
-        return get_available_ram_macos()
-
     try:
+        if sys.platform == "darwin":
+            return get_available_ram_macos()
+
         free_available = not (os.popen("free -m -t").read() == "")
 
         if free_available:
@@ -62,8 +60,9 @@ def get_avail_mem():
             return out
         # else:
         #    print(os.popen('vm_stat | grep page size').readlines())
-    except:
-        print("Available memory can not be detected using free")
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+        tool = "vm_stat/sysctl" if sys.platform == "darwin" else "free"
+        print(f"Available memory can not be detected using {tool}")
         print("Error was :")
         import traceback
 
@@ -90,6 +89,26 @@ def should_limit_comp_cores():
         limit = True
         cnt = max(cnt, 1)
         print("   -> limiting to", cnt, "cores")
+
+    env_nproc = os.environ.get("SHAMROCK_BUILD_NPROC")
+    if env_nproc:
+        try:
+            nproc = int(env_nproc)
+        except ValueError:
+            print(f"-- invalid SHAMROCK_BUILD_NPROC={env_nproc!r}, ignoring")
+        else:
+            if nproc < 1:
+                print(f"-- SHAMROCK_BUILD_NPROC={nproc} must be >= 1, ignoring")
+            else:
+                if nproc < cnt:
+                    print(f"-- SHAMROCK_BUILD_NPROC={nproc}, limiting compilation to {nproc} cores")
+                    cnt = nproc
+                    limit = True
+                elif not limit:
+                    # Explicit request: force -j even when memory did not limit
+                    print(f"-- SHAMROCK_BUILD_NPROC={nproc}, using {nproc} compile jobs")
+                    cnt = nproc
+                    limit = True
 
     return limit, cnt
 
