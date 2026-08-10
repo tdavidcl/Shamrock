@@ -31,7 +31,7 @@ def get_available_ram_macos():
     speculative_pages = stats.get("Pages speculative", 0)
 
     available_bytes = (free_pages + inactive_pages + speculative_pages) * page_size
-    return available_bytes / (1024**3)
+    return available_bytes
 
 
 def get_avail_mem():
@@ -83,11 +83,13 @@ def should_limit_comp_cores():
     avail_per_cores = avail / os.cpu_count()
     if avail_per_cores < MAX_COMP_SZ:
         print("-- low memory per cores, limitting number of thread for compilation")
-        print("   ->  free memory /cores :", avail / os.cpu_count())
+        print("   -> available memory:", avail)
+        print("   -> core count:", os.cpu_count())
+        print("   -> free memory /cores :", avail / os.cpu_count())
         cnt = int(avail / MAX_COMP_SZ)
         limit = True
         cnt = max(cnt, 1)
-        print("   ->  limiting to", cnt, "cores")
+        print("   -> limiting to", cnt, "cores")
 
     return limit, cnt
 
