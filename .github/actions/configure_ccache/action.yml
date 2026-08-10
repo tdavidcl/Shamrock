@@ -13,5 +13,6 @@ runs:
         echo " ----- New configuration:   ----- "
         ccache -o compiler_check='%compiler% -dumpmachine; %compiler% -dumpversion'
         ccache -o compression=true
+        ccache -o compression_level=4
         ccache -p
         echo " ----- ccache configuration done ----- "
