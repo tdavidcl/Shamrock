@@ -26,7 +26,382 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
+#include "shamrock/solvergraph/DistributedBuffers.hpp"
 #include <shambackends/sycl.hpp>
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- (field) inputs ------------------- */                                   \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, positions)                                       \
+                                                                                                   \
+    /* ------------------- (sink) inputs ------------------- */                                    \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_positions)                      \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, sink_accr_radii)                    \
+                                                                                                   \
+    /* ------------------- outputs ------------------- */                                          \
+    /* sink_accretion_table[id_a] = who should accrete part [id_a] (or u32_max if none); */        \
+    X_RW(shamrock::solvergraph::Field<u32>, sink_accretion_table)
+
+namespace shammodels::common::modules {
+    template<class Tvec>
+    class SinkParticlesFlagAccreteHard : public shamrock::solvergraph::INode,
+                                         public shamrock::solvergraph::IFreeable {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        std::unique_ptr<sham::DeviceBuffer<Tvec>> sink_pos;
+        std::unique_ptr<sham::DeviceBuffer<Tscal>> sink_accr_radii;
+
+        public:
+        SinkParticlesFlagAccreteHard() = default;
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+
+            __shamrock_stack_entry();
+
+            auto edges = get_edges();
+
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+            if (!sink_pos) {
+                sink_pos = std::make_unique<sham::DeviceBuffer<Tvec>>(
+                    edges.sink_positions.size(), dev_sched);
+            }
+            if (!sink_accr_radii) {
+                sink_accr_radii = std::make_unique<sham::DeviceBuffer<Tscal>>(
+                    edges.sink_accr_radii.size(), dev_sched);
+            }
+
+            if (edges.sink_positions.size() != edges.sink_accr_radii.size()) {
+                throw shambase::make_except_with_loc<std::runtime_error>(
+                    "Sink positions and accretion radii must have the same size");
+            }
+
+            sink_pos->resize(edges.sink_positions.size());
+            sink_accr_radii->resize(edges.sink_accr_radii.size());
+
+            sink_pos->copy_from(edges.sink_positions);
+            sink_accr_radii->copy_from(edges.sink_accr_radii);
+
+            edges.positions.check_sizes(edges.part_counts.indexes);
+            edges.sink_accretion_table.ensure_sizes(edges.part_counts.indexes);
+
+            auto &pos_spans       = edges.positions.get_spans();
+            auto &table_acc_spans = edges.sink_accretion_table.get_spans();
+
+            u32 sink_count = edges.sink_positions.size();
+
+            edges.part_counts.for_each([&](u64 id_patch, u32 part_count) {
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{pos_spans.get(id_patch), *sink_pos, *sink_accr_radii},
+                    sham::MultiRef{table_acc_spans.get(id_patch)},
+                    part_count,
+                    [sink_count](
+                        u32 id_a,
+                        const Tvec *__restrict part_pos,
+                        const Tvec *__restrict sink_pos,
+                        const Tscal *__restrict sink_accr_radii,
+                        u32 *__restrict sink_accretion_table) {
+                        Tvec r_a = part_pos[id_a];
+
+                        u32 result = u32_max;
+
+                        for (u32 i_sink = 0; i_sink < sink_count; i_sink++) {
+                            Tscal acc_radii = sink_accr_radii[i_sink];
+                            Tvec d          = r_a - sink_pos[i_sink];
+
+                            bool should_accrete = sycl::dot(d, d) > acc_radii * acc_radii;
+                            if (should_accrete) {
+                                result = i_sink;
+                                break;
+                            }
+                        }
+
+                        sink_accretion_table[id_a] = result;
+                    });
+            });
+        }
+
+        inline void free_alloc() {
+            sink_pos        = {};
+            sink_accr_radii = {};
+        }
+    };
+} // namespace shammodels::common::modules
+
+#undef NODE_EDGES
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- (param) inputs ------------------- */                                   \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                              \
+                                                                                                   \
+    /* ------------------- (field) inputs ------------------- */                                   \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, positions)                                       \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, velocities)                                      \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, accelerations)                                   \
+                                                                                                   \
+    /* ------------------- (sink) accretion table ------------------- */                           \
+    X_RW(shamrock::solvergraph::Field<u32>, sink_accretion_table)                                  \
+                                                                                                   \
+    /* ------------------- (sink) in/out ------------------- */                                    \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_pos)                            \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_vel)                            \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_accel)                          \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_angmom)                         \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, sink_mass)
+
+namespace shammodels::common::modules {
+    template<class Tvec>
+    class SinkParticlesAccreteQuantities : public shamrock::solvergraph::INode {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        public:
+        SinkParticlesAccreteQuantities() = default;
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+
+            __shamrock_stack_entry();
+
+            auto edges = get_edges();
+
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+            Tscal gpart_mass = edges.gpart_mass;
+            Tscal dt         = edges.dt;
+
+            sham::DeviceBuffer<u32> acc_flag(0, dev_sched);
+
+            bool had_accretion = false;
+            std::string log    = "sink accretion :";
+
+            u32 sink_count = edges.sink_positions.size();
+            for (u32 i_sink = 0; i_sink < sink_count; i_sink++) {
+
+                Tvec r_sink = edges.sink_positions[i_sink];
+                Tvec v_sink = edges.sink_velocities[i_sink];
+                Tvec a_sink = edges.sink_accelerations[i_sink];
+
+                // compute the accreted mass, position moment and linear momentum
+                Tscal s_acc_mass = 0;
+                Tvec s_acc_mxyz  = {0, 0, 0};
+                Tvec s_acc_pxyz  = {0, 0, 0};
+                Tvec s_acc_maxyz = {0, 0, 0};
+                Tvec s_acc_lxyz  = {0, 0, 0};
+
+                edges.part_counts.for_each([&](u64 id_patch, u32 Nobj) {
+                    acc_flag.resize(Nobj);
+
+                    auto &acc_table = edges.sink_accretion_table.get_spans().get(id_patch);
+
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{acc_table},
+                        sham::MultiRef{acc_flag},
+                        Nobj,
+                        [i_sink](
+                            u32 id_a, const u32 *__restrict acc_table, u32 *__restrict acc_flag) {
+                            acc_flag[id_a] = (acc_table[id_a] == i_sink) ? 1 : 0;
+                        });
+
+                    auto id_list_accrete = shamalgs::stream_compact(dev_sched, acc_flag, Nobj);
+
+                    auto &pos_data = edges.positions.get_spans().get(id_patch);
+                    auto &vel_data = edges.velocities.get_spans().get(id_patch);
+                    auto &acc_data = edges.accelerations.get_spans().get(id_patch);
+
+                    // sum accreted values onto sink
+                    if (id_list_accrete.get_size() > 0) {
+                        u32 Naccrete = shambase::narrow_or_throw<u32>(id_list_accrete.get_size());
+
+                        Tscal acc_mass = gpart_mass * Naccrete;
+
+                        sham::DeviceBuffer<Tvec> pxyz_acc(Naccrete, dev_sched);
+                        sham::DeviceBuffer<Tvec> maxyz_acc(Naccrete, dev_sched);
+                        sham::DeviceBuffer<Tvec> mxyz_acc(Naccrete, dev_sched);
+                        sham::DeviceBuffer<Tvec> lxyz_acc(Naccrete, dev_sched);
+
+                        sham::kernel_call(
+                            q,
+                            sham::MultiRef{pos_data, vel_data, acc_data, id_list_accrete},
+                            sham::MultiRef{pxyz_acc, mxyz_acc, maxyz_acc, lxyz_acc},
+                            Naccrete,
+                            [gpart_mass, r_sink, v_sink, dt](
+                                u32 id_a,
+                                const Tvec *__restrict xyz,
+                                const Tvec *__restrict vxyz,
+                                const Tvec *__restrict axyz,
+                                const u32 *__restrict id_acc,
+                                Tvec *__restrict accretion_p,
+                                Tvec *__restrict accretion_mr,
+                                Tvec *__restrict accretion_ma,
+                                Tvec *__restrict accretion_l) {
+                                u32 i_a            = id_acc[id_a];
+                                Tvec r             = xyz[i_a];
+                                Tvec v             = vxyz[i_a];
+                                Tvec a             = axyz[i_a];
+                                accretion_p[id_a]  = gpart_mass * v;
+                                accretion_mr[id_a] = gpart_mass * r;
+                                accretion_ma[id_a] = gpart_mass * a;
+
+                                // dirty trick to account for the residual acceleration in the spin.
+                                // This allows us to maitain a much better angular momentum
+                                // conservation.
+                                v += a * dt / 2;
+                                accretion_l[id_a]
+                                    = gpart_mass * sycl::cross(r - r_sink, v - v_sink);
+                            });
+
+                        Tvec acc_pxyz = shamalgs::primitives::sum(dev_sched, pxyz_acc, 0, Naccrete);
+                        Tvec acc_mxyz = shamalgs::primitives::sum(dev_sched, mxyz_acc, 0, Naccrete);
+                        Tvec acc_maxyz
+                            = shamalgs::primitives::sum(dev_sched, maxyz_acc, 0, Naccrete);
+                        Tvec acc_lxyz = shamalgs::primitives::sum(dev_sched, lxyz_acc, 0, Naccrete);
+
+                        s_acc_mass += acc_mass;
+                        s_acc_pxyz += acc_pxyz;
+                        s_acc_mxyz += acc_mxyz;
+                        s_acc_maxyz += acc_maxyz;
+                        s_acc_lxyz += acc_lxyz;
+                    }
+                });
+
+                Tscal sum_acc_mass = shamalgs::collective::allreduce_sum(s_acc_mass);
+
+                // if there is accretion continue otherwise skip that part
+                if (sum_acc_mass <= 0) {
+                    continue;
+                }
+
+                Tvec sum_acc_pxyz  = shamalgs::collective::allreduce_sum(s_acc_pxyz);
+                Tvec sum_acc_mxyz  = shamalgs::collective::allreduce_sum(s_acc_mxyz);
+                Tvec sum_acc_maxyz = shamalgs::collective::allreduce_sum(s_acc_maxyz);
+                Tvec sum_acc_lxyz  = shamalgs::collective::allreduce_sum(s_acc_lxyz);
+
+                Tscal old_mass = edges.sink_mass[i_sink];
+                Tvec old_pos   = edges.sink_pos[i_sink];
+                Tvec old_vel   = edges.sink_vel[i_sink];
+                Tvec old_acc   = edges.sink_accel[i_sink];
+                Tvec old_ang   = edges.sink_angmom[i_sink];
+
+                // compute the new sink values
+                Tscal new_mass   = old_mass + sum_acc_mass;
+                Tvec new_pos     = (sum_acc_mxyz + old_pos * old_mass) / (old_mass + sum_acc_mass);
+                Tvec new_vel     = (sum_acc_pxyz + old_vel * old_mass) / (old_mass + sum_acc_mass);
+                Tvec new_acc     = (sum_acc_maxyz + old_acc * old_mass) / (old_mass + sum_acc_mass);
+                Tvec new_ang_mom = old_ang + sum_acc_lxyz
+                                   - new_mass * sycl::cross(new_pos - old_pos, new_vel - old_vel);
+
+                // write back the update sink state
+                edges.sink_mass[i_sink]   = new_mass;
+                edges.sink_pos[i_sink]    = new_pos;
+                edges.sink_vel[i_sink]    = new_vel;
+                edges.sink_angmom[i_sink] = new_ang_mom;
+                edges.sink_accel[i_sink]  = new_acc;
+
+                had_accretion = true;
+                log += shambase::format(
+                    "\n    id {} deltas : mass={} r={} v={} l={}",
+                    i_sink,
+                    new_mass - old_mass,
+                    new_pos - old_pos,
+                    new_vel - old_vel,
+                    new_ang_mom - old_ang);
+            }
+        }
+
+        inline void free_alloc() {}
+    };
+} // namespace shammodels::common::modules
+
+#undef NODE_EDGES
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- (sink) accretion table ------------------- */                           \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shamrock::solvergraph::Field<u32>, sink_accretion_table)                                  \
+                                                                                                   \
+    /* ------------------- Patchdatas ------------------- */                                       \
+    X_RW(shamrock::solvergraph::PatchDataLayerRefs, pdats)
+
+namespace shammodels::common::modules {
+    template<class Tvec>
+    class SinkParticlesEvictAccretedParticles : public shamrock::solvergraph::INode {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        public:
+        SinkParticlesEvictAccretedParticles() = default;
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+
+            __shamrock_stack_entry();
+
+            auto edges = get_edges();
+
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+            auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+            sham::DeviceBuffer<u32> keep_flag(0, dev_sched);
+            sham::DeviceBuffer<int> accr_flag(1, dev_sched);
+
+            edges.part_counts.for_each([&](u64 id_patch, u32 Nobj) {
+                auto &pdat      = edges.pdats.get(id_patch);
+                auto &acc_table = edges.sink_accretion_table.get_spans().get(id_patch);
+
+                keep_flag.resize(Nobj);
+                accr_flag.fill(0);
+
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{acc_table},
+                    sham::MultiRef{keep_flag, accr_flag},
+                    Nobj,
+                    [](u32 id_a,
+                       const u32 *__restrict acc_table,
+                       u32 *__restrict keep_flag,
+                       int *__restrict accr_flag) {
+                        bool keep       = acc_table[id_a] == u32_max;
+                        keep_flag[id_a] = keep ? 1 : 0;
+
+                        sycl::atomic_ref<
+                            int,
+                            sycl::memory_order_relaxed,
+                            sycl::memory_scope_device,
+                            sycl::access::address_space::global_space>
+                            atomic_accr(accr_flag[0]);
+
+                        if (!keep) {
+                            atomic_accr.fetch_or(1);
+                        }
+                    });
+
+                int accr_flag_val = accr_flag.get_val_at_idx(0);
+
+                if (accr_flag_val != 0) {
+
+                    sham::DeviceBuffer<u32> id_list_keep
+                        = shamalgs::stream_compact(dev_sched, keep_flag, Nobj);
+
+                    pdat.keep_ids(
+                        id_list_keep, shambase::narrow_or_throw<u32>(id_list_keep.get_size()));
+                }
+            });
+        }
+    };
+} // namespace shammodels::common::modules
+#undef NODE_EDGES
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_particles(Tscal dt) {
