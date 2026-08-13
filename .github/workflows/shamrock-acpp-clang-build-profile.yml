@@ -1,0 +1,81 @@
+name: Acpp/clang (Build profile)
+
+
+on:
+  workflow_call:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+
+jobs:
+
+  shamrock_acpp_generic_build_profile:
+    name: Ubuntu 22 LLVM 15 -- debian-generic.acpp -- --backend generic
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15
+
+    timeout-minutes: 120
+    steps:
+      #### Checkout part ####
+      # Checkout merge commit if PR otherwise default
+      - name : Reconfigure git
+        run:  |
+          git config --global --add safe.directory '*'
+          git config --global --list
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request_target'
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: "refs/pull/${{ github.event.number }}/merge"
+
+      - uses: actions/checkout@v4
+        if: github.event_name != 'pull_request_target'
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Show diff against main
+        if: github.event_name == 'pull_request_target'
+        run: git diff ${{ github.event.pull_request.base.sha }} HEAD
+      #### End Checkout part ####
+
+      - name: ls local
+        run : ls -la
+
+      - name: Install ClangBuildAnalyzer
+        run: |
+          git clone --depth 1 https://github.com/aras-p/ClangBuildAnalyzer.git /tmp/ClangBuildAnalyzer
+          cmake -S /tmp/ClangBuildAnalyzer -B /tmp/ClangBuildAnalyzer/build
+          cmake --build /tmp/ClangBuildAnalyzer/build -j$(nproc)
+          echo "/tmp/ClangBuildAnalyzer/build" >> $GITHUB_PATH
+
+      - name: Setup env
+        run: ./env/new-env --machine debian-generic.acpp --builddir build -- --backend generic
+
+      - name: Configure
+        shell: bash # In docker container github action default to sh
+        run: |
+          cd build
+          source ./activate
+          export SHAMROCK_CXX_FLAGS="${SHAMROCK_CXX_FLAGS} -ftime-trace"
+          shamconfigure
+
+      - name: Build with ClangBuildAnalyzer
+        shell: bash # In docker container github action default to sh
+        run: |
+          cd build
+          export NINJA_STATUS="[%f/%t j=%r] "
+          source ./activate
+          ClangBuildAnalyzer --start .
+          shammake
+          ClangBuildAnalyzer --stop . capture_build.bin
+
+      - name: Analyze build profile
+        shell: bash # In docker container github action default to sh
+        run: |
+          cd build
+          ClangBuildAnalyzer --analyze capture_build.bin
