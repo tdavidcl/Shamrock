@@ -59,15 +59,11 @@ jobs:
           echo "email=$(git show -s --format='%ae' HEAD~0)" >> $GITHUB_OUTPUT
 
       - name: Show email
-        run: echo "Commiter email is ${{ steps.author.outputs.email }}" >
-          report_______email.md
+        run: echo "Commiter email is ${{ steps.author.outputs.email }}" > report_______email.md
 
       - name: Validate author email
         if: ${{ endsWith(steps.author.outputs.EMAIL, 'noreply.github.com')  }}
-        run: echo "You are using github private e-mail. This prevent proper tracing of
-          who contributed what, please disable it (see [Keep my email addresses
-          private](https://github.com/settings/emails))." >>
-          report_______email.md
+        run: echo "You are using github private e-mail. This prevent proper tracing of who contributed what, please disable it (see [Keep my email addresses private](https://github.com/settings/emails))." >> report_______email.md
 
       - uses: actions/upload-artifact@v4
         with:
@@ -172,12 +168,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install pck (doxygen)
+      - name : Install pck (doxygen)
         run: |
           sudo apt update && \
           sudo apt install -y -qq doxygen graphviz
 
-      - name: Modify texlive packages
+      - name : Modify texlive packages
         run: |
           sudo apt install -y \
             texlive-full \
@@ -185,7 +181,7 @@ jobs:
             ghostscript \
             latexmk
 
-      - name: Run doxygen
+      - name : Run doxygen
         run: |
           cd doc/doxygen
           doxygen dox.conf
@@ -205,8 +201,8 @@ jobs:
     steps:
       #### Checkout part ####
       # Checkout merge commit if PR otherwise default
-      - name: Reconfigure git
-        run: |
+      - name : Reconfigure git
+        run:  |
           git config --global --add safe.directory '*'
           git config --global --list
       - uses: actions/checkout@v4
@@ -263,18 +259,14 @@ jobs:
           name: report_doc_diff
           path: ./report_doc_diff.md
 
+
   make_github_page:
     name: "GithubPage"
-    needs:
-      [
-        make_documentation,
-        shamrock_linux_acpp_phystests,
-        shamrock_linux_acpp_cov,
-        shamrock_linux_acpp_tidy,
-      ]
+    needs: [make_documentation, shamrock_linux_acpp_phystests, shamrock_linux_acpp_cov,shamrock_linux_acpp_tidy]
     uses: ./.github/workflows/make_website.yml
     with:
       upload-page-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
 
   deploy_page:
 
