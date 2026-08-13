@@ -126,8 +126,15 @@ Agent-made commits should use `Assisted-by: <agent_name>` instead of
 
 ## Upstream repo & PRs
 
-The upstream repo is `Shamrock-code/Shamrock`.
-PR lookups should target the upstream:
+The upstream repo is `Shamrock-code/Shamrock`. Development happens on forks
+(e.g. `tdavidcl/Shamrock`), so **always open pull requests against the upstream
+`Shamrock-code/Shamrock` `main` branch** (a cross-fork PR: head is the fork
+branch, base is `Shamrock-code:main`) — never against the fork's own `main`.
+
+The repository owner must be the first author of both the commits and the PR;
+agents attribute themselves with an `Assisted-by:` trailer only.
+
+PR lookups should also target the upstream:
 
 ```bash
 gh pr list --repo Shamrock-code/Shamrock
