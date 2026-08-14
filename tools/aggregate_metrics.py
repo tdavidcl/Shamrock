@@ -30,15 +30,15 @@ def env_metadata():
     )
     for key, env_name in mapping:
         value = os.environ.get(env_name)
-        if value:
+        if value is not None:
             meta[key] = value
 
     run_id = os.environ.get("GITHUB_RUN_ID")
-    if run_id:
+    if run_id is not None:
         meta["run_id"] = int(run_id)
 
     run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT")
-    if run_attempt:
+    if run_attempt is not None:
         meta["run_attempt"] = int(run_attempt)
 
     return meta
