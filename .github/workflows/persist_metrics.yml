@@ -1,0 +1,158 @@
+name: Persist metrics
+
+# Reusable workflow that downloads one JSON artifact from a completed workflow
+# run and appends it to metrics/<metric_id>/YYYY-MM.json on an orphan history
+# branch (persistent storage, similar to gh-pages).
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: Name of the artifact to download from the source run
+        type: string
+        required: true
+      metric_id:
+        description: Subfolder under metrics/ on the history branch
+        type: string
+        required: true
+      source_run_id:
+        description: Workflow run id to download the artifact from
+        type: string
+        required: true
+      dry_run:
+        description: Merge and print without committing or pushing
+        type: boolean
+        required: false
+        default: false
+      history_branch:
+        description: Orphan branch that stores only the metrics folder
+        type: string
+        required: false
+        default: metrics-history
+
+concurrency:
+  group: persist-metrics-${{ inputs.history_branch }}
+  cancel-in-progress: false
+
+jobs:
+  persist_metrics:
+    name: Persist metrics
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+
+      - name: Reconfigure git
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global --list
+
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+          persist-credentials: false
+
+      - name: Download metric artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: downloaded_artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Locate incoming JSON
+        shell: bash
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          ls -la downloaded_artifact
+          find downloaded_artifact -type f -print
+          if [ -f "downloaded_artifact/${ARTIFACT_NAME}" ]; then
+            incoming="downloaded_artifact/${ARTIFACT_NAME}"
+          else
+            mapfile -t jsons < <(find downloaded_artifact -type f -name '*.json' | sort)
+            if [ "${#jsons[@]}" -ne 1 ]; then
+              echo "Expected one JSON file in artifact '${ARTIFACT_NAME}', found ${#jsons[@]}"
+              exit 1
+            fi
+            incoming="${jsons[0]}"
+          fi
+          echo "Using incoming file: ${incoming}"
+          cp "${incoming}" incoming.json
+          cat incoming.json
+
+      - name: Append onto history branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORY_BRANCH: ${{ inputs.history_branch }}
+          METRIC_ID: ${{ inputs.metric_id }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          history_dir="${GITHUB_WORKSPACE}/history"
+          mkdir -p "${history_dir}"
+          cd "${history_dir}"
+
+          git init -b "${HISTORY_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://github.com/${REPO}.git"
+          git config --local http.https://github.com/.extraheader \
+            "AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+
+          sync_history() {
+            if git ls-remote --exit-code --heads origin "${HISTORY_BRANCH}" >/dev/null; then
+              git fetch --depth=1 origin "${HISTORY_BRANCH}"
+              git checkout -B "${HISTORY_BRANCH}" FETCH_HEAD
+            elif ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+              find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+            fi
+          }
+
+          MAX_ATTEMPTS=5
+          for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+            echo "Persist attempt ${attempt}/${MAX_ATTEMPTS}"
+            sync_history
+
+            result="$(python3 "${GITHUB_WORKSPACE}/repo/tools/append_monthly_metrics.py" \
+              "${history_dir}/metrics" "${METRIC_ID}" "${GITHUB_WORKSPACE}/incoming.json")"
+            echo "${result}"
+            relpath="${result#* }"
+
+            echo "Monthly file ${relpath}:"
+            cat "${relpath}"
+
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "dry_run=true; skipping commit and push"
+              exit 0
+            fi
+
+            git add metrics
+            if ! git diff --cached --quiet; then
+              git commit -m "Add ${relpath} from run ${SOURCE_RUN_ID}"
+            else
+              echo "No new index changes (idempotent skip or already committed)"
+            fi
+
+            if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+              echo "Nothing to persist"
+              exit 0
+            fi
+
+            if git push origin "HEAD:${HISTORY_BRANCH}"; then
+              echo "Pushed ${HISTORY_BRANCH}"
+              exit 0
+            fi
+
+            echo "Push failed, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "Failed to push after ${MAX_ATTEMPTS} attempts"
+          exit 1
