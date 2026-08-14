@@ -112,22 +112,22 @@ passed to the constructor (graph structure). Data edges are still wired with
 `set_edges`.
 
 ```cpp
-auto then_node = std::make_shared<MyNode>(...);
+auto then_node = std::make_shared<MyNode>(...); // optional
 auto else_node = std::make_shared<MyNode>(...); // optional
 auto cond = IDataEdge<bool>::make_shared("do_step", "do_step");
 
 auto if_node = std::make_shared<OperationIf>("do step", then_node, else_node);
 if_node->set_edges(cond);
 
-cond->data = true;  // evaluate then_node
+cond->data = true;  // evaluate then_node (or skip if none)
 if_node->evaluate();
 
-cond->data = false; // evaluate else_node (or skip if no else was given)
+cond->data = false; // evaluate else_node (or skip if none)
 if_node->evaluate();
 ```
 
 To gate several nodes, wrap them in an `OperationSequence` and pass that as
-`then_node` / `else_node`.
+`then_node` / `else_node`. Else-only is `OperationIf("name", {}, else_node)`.
 
 ## Related files
 

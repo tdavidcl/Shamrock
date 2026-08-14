@@ -21,7 +21,9 @@ namespace shamrock::solvergraph {
 
     void OperationIf::_impl_evaluate_internal() {
         if (get_edges().condition.data) {
-            then_node->evaluate();
+            if (then_node) {
+                then_node->evaluate();
+            }
         } else if (else_node) {
             else_node->evaluate();
         }
@@ -35,11 +37,18 @@ namespace shamrock::solvergraph {
         ss << shambase::format(
             "n_{} [label=\"{}\", shape=diamond];\n", get_uuid(), _impl_get_label());
 
-        ss << then_node->get_dot_graph_partial();
-        ss << shambase::format(
-            "n_{} -> {} [label=\"true\"];\n", get_uuid(), then_node->get_dot_graph_node_start());
-        ss << then_node->get_dot_graph_node_end() << " -> "
-           << shambase::format("n_{}_end", get_uuid()) << ";\n";
+        if (then_node) {
+            ss << then_node->get_dot_graph_partial();
+            ss << shambase::format(
+                "n_{} -> {} [label=\"true\"];\n",
+                get_uuid(),
+                then_node->get_dot_graph_node_start());
+            ss << then_node->get_dot_graph_node_end() << " -> "
+               << shambase::format("n_{}_end", get_uuid()) << ";\n";
+        } else {
+            ss << shambase::format(
+                "n_{} -> n_{}_end [label=\"true\", style=dashed];\n", get_uuid(), get_uuid());
+        }
 
         if (else_node) {
             ss << else_node->get_dot_graph_partial();
@@ -70,7 +79,9 @@ namespace shamrock::solvergraph {
     std::string OperationIf::_impl_get_tex() const {
         std::stringstream ss;
         ss << "Start : " << _impl_get_label() << "\n";
-        ss << "Then :\n" << then_node->get_tex_partial() << "\n";
+        if (then_node) {
+            ss << "Then :\n" << then_node->get_tex_partial() << "\n";
+        }
         if (else_node) {
             ss << "Else :\n" << else_node->get_tex_partial() << "\n";
         }

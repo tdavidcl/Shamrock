@@ -99,7 +99,37 @@ NEW_TEST(Unittest, "shamsolvergraph/node/OperationIf", 1) {
     }
 
     {
-        REQUIRE_EXCEPTION_THROW(OperationIf("if", nullptr), std::invalid_argument);
+        auto else_count = make_counter();
+        auto cond       = make_condition(true);
+        auto else_node  = std::make_shared<ProbeNode>(else_count, u32{2});
+
+        OperationIf node("if", {}, else_node);
+        node.set_edges(cond);
+        node.evaluate();
+
+        REQUIRE_EQUAL(else_count->data, u32{0});
+    }
+
+    {
+        auto else_count = make_counter();
+        auto cond       = make_condition(false);
+        auto else_node  = std::make_shared<ProbeNode>(else_count, u32{2});
+
+        OperationIf node("if", {}, else_node);
+        node.set_edges(cond);
+        node.evaluate();
+
+        REQUIRE_EQUAL(else_count->data, u32{2});
+    }
+
+    {
+        auto cond = make_condition(true);
+        OperationIf node("if");
+        node.set_edges(cond);
+        node.evaluate();
+        REQUIRE(node.get_dot_graph().find("true") != std::string::npos);
+        REQUIRE(node.get_tex().find("Then") == std::string::npos);
+        REQUIRE(node.get_tex().find("Else") == std::string::npos);
     }
 
     {

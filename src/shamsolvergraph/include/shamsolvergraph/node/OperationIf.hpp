@@ -12,8 +12,8 @@
 /**
  * @file OperationIf.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Meta node that evaluates a then-node when a bool edge is true, and an optional else-node
- * when false
+ * @brief Meta node that evaluates an optional then-node when a bool edge is true, and an optional
+ * else-node when false
  *
  */
 
@@ -25,8 +25,8 @@
 namespace shamrock::solvergraph {
 
     /**
-     * @brief Conditional meta node: if `condition` is true, evaluate `then_node`; otherwise
-     * evaluate `else_node` when one was provided.
+     * @brief Conditional meta node: if `condition` is true, evaluate `then_node` when one was
+     * provided; otherwise evaluate `else_node` when one was provided.
      *
      * Nested nodes are graph structure and are taken in the constructor (like
      * OperationSequence). The runtime predicate is an `IDataEdge<bool>` wired with `set_edges`.
@@ -39,20 +39,15 @@ namespace shamrock::solvergraph {
         public:
         /**
          * @param name Display name for DOT / TeX
-         * @param then_node Node evaluated when the condition edge is true (required)
+         * @param then_node Node evaluated when the condition edge is true (optional)
          * @param else_node Node evaluated when the condition edge is false (optional)
          */
         OperationIf(
             std::string name,
-            std::shared_ptr<INode> then_node,
+            std::shared_ptr<INode> then_node = {},
             std::shared_ptr<INode> else_node = {})
             : then_node(std::move(then_node)), else_node(std::move(else_node)),
-              name(std::move(name)) {
-            if (!this->then_node) {
-                shambase::throw_with_loc<std::invalid_argument>(
-                    "OperationIf must have a then node");
-            }
-        }
+              name(std::move(name)) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
