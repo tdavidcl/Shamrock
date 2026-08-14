@@ -9,10 +9,8 @@ from pathlib import Path
 
 def metric_key(path):
     name = path.name
-    if name.startswith("metric__"):
-        name = name[len("metric__") :]
-    if name.endswith(".json"):
-        name = name[: -len(".json")]
+    name = name.removeprefix("metric__")
+    name = name.removesuffix(".json")
     return name
 
 
