@@ -22,24 +22,18 @@ def find_metric_files(root):
 def env_metadata():
     meta = {}
     mapping = (
-        ("sha", "GITHUB_SHA"),
-        ("ref", "GITHUB_REF"),
-        ("event_name", "GITHUB_EVENT_NAME"),
-        ("repository", "GITHUB_REPOSITORY"),
-        ("workflow", "GITHUB_WORKFLOW"),
+        ("sha", "GITHUB_SHA", str),
+        ("ref", "GITHUB_REF", str),
+        ("event_name", "GITHUB_EVENT_NAME", str),
+        ("repository", "GITHUB_REPOSITORY", str),
+        ("workflow", "GITHUB_WORKFLOW", str),
+        ("run_id", "GITHUB_RUN_ID", int),
+        ("run_attempt", "GITHUB_RUN_ATTEMPT", int),
     )
-    for key, env_name in mapping:
+    for key, env_name, conv in mapping:
         value = os.environ.get(env_name)
         if value is not None:
-            meta[key] = value
-
-    run_id = os.environ.get("GITHUB_RUN_ID")
-    if run_id is not None:
-        meta["run_id"] = int(run_id)
-
-    run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT")
-    if run_attempt is not None:
-        meta["run_attempt"] = int(run_attempt)
+            meta[key] = conv(value)
 
     return meta
 
