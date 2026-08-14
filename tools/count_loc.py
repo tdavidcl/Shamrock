@@ -12,6 +12,18 @@ from pathlib import Path
 # (src/, cmake/, tools/, env/, buildbot/, ...).
 KINDS = {
     "code": [],
+    "shammodels/sph": [
+        "src/shammodels/sph",
+    ],
+    "shammodels/ramses": [
+        "src/shammodels/ramses",
+    ],
+    "shammodels/zeus": [
+        "src/shammodels/zeus",
+    ],
+    "shammodels/gsph": [
+        "src/shammodels/gsph",
+    ],
     "examples": [
         "examples",
         "doc/sphinx/examples",
