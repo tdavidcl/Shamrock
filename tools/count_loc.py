@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 # Kind -> repository path prefixes it covers (relative to the repo root).
-# First matching kind wins, so more specific prefixes must come first.
+# First matching partition kind wins, so more specific prefixes must come first.
 # "code" has no prefixes: it is the fallback for unmatched files
 # (src/, cmake/, tools/, env/, buildbot/, ...).
 KINDS = {
@@ -31,6 +31,15 @@ KINDS = {
     "doc": [
         "doc",
     ],
+}
+
+# Detail kinds are also counted in their parent. They are extra breakdowns,
+# not exclusive buckets. total.all sums partition kinds only.
+KIND_PARENT = {
+    "shammodels/sph": "code",
+    "shammodels/ramses": "code",
+    "shammodels/zeus": "code",
+    "shammodels/gsph": "code",
 }
 
 CATEGORIES = {
@@ -70,13 +79,22 @@ def in_submodule(path, prefixes):
     return any(s == prefix or s.startswith(prefix + "/") for prefix in prefixes)
 
 
-def file_kind(path):
+def matches_prefix(path_str, prefix):
+    return path_str == prefix or path_str.startswith(prefix + "/")
+
+
+def classify(path):
     s = path.as_posix()
+    primary = None
+    details = []
     for kind, prefixes in KINDS.items():
-        for prefix in prefixes:
-            if s == prefix or s.startswith(prefix + "/"):
-                return kind
-    return "code"
+        if not any(matches_prefix(s, prefix) for prefix in prefixes):
+            continue
+        if kind in KIND_PARENT:
+            details.append(kind)
+        elif primary is None:
+            primary = kind
+    return primary or "code", details
 
 
 def list_files(patterns, prefixes):
@@ -106,14 +124,18 @@ def count_loc():
     for name, patterns in CATEGORIES.items():
         counts = empty_kind_counts()
         for path in list_files(patterns, prefixes):
-            kind = file_kind(path)
+            kind, details = classify(path)
             with path.open("rb") as handle:
                 n = sum(1 for _ in handle)
             counts[kind] += n
             grand[kind] += n
+            for detail in details:
+                counts[detail] += n
+                grand[detail] += n
         result[name] = counts
 
-    result["total"] = {**grand, "all": sum(grand.values())}
+    partition_total = sum(grand[kind] for kind in KINDS if kind not in KIND_PARENT)
+    result["total"] = {**grand, "all": partition_total}
     return result
 
 
