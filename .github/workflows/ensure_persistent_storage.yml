@@ -1,0 +1,24 @@
+name: Ensure persistent-storage
+
+
+on:
+  workflow_call:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+
+jobs:
+  ensure_persistent_storage:
+    name: Ensure persistent-storage
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Shamrock-code/action-ensure-orphan-branch@f9e63471c0351bb0ab63c77e8c91550810d34056
+        with:
+          branch_name: persistent-storage
