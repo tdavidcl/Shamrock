@@ -6,6 +6,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+KINDS = ("code", "examples", "doc")
+
+CATEGORIES = {
+    "*.cpp": ["*.cpp"],
+    "*.hpp": ["*.hpp"],
+    "*.py": ["*.py"],
+    "CMakeLists.txt + *.cmake": [
+        "CMakeLists.txt",
+        "**/CMakeLists.txt",
+        "*.cmake",
+    ],
+}
+
 
 def submodule_prefixes():
     try:
@@ -30,6 +43,18 @@ def in_submodule(path, prefixes):
     return any(s == prefix or s.startswith(prefix + "/") for prefix in prefixes)
 
 
+def file_kind(path):
+    parts = path.parts
+    if parts and parts[0] == "examples":
+        return "examples"
+    # doc/sphinx/examples is a symlink to examples/; count it as examples if listed.
+    if len(parts) >= 3 and parts[0] == "doc" and parts[1] == "sphinx" and parts[2] == "examples":
+        return "examples"
+    if parts and parts[0] == "doc":
+        return "doc"
+    return "code"
+
+
 def list_files(patterns, prefixes):
     out = subprocess.check_output(["git", "ls-files", "-z", "--"] + patterns)
     files = []
@@ -45,31 +70,26 @@ def list_files(patterns, prefixes):
     return files
 
 
-def count_lines(files):
-    total = 0
-    for path in files:
-        with path.open("rb") as handle:
-            total += sum(1 for _ in handle)
-    return total
+def empty_kind_counts():
+    return {kind: 0 for kind in KINDS}
 
 
 def count_loc():
     prefixes = submodule_prefixes()
-    categories = {
-        "*.cpp": ["*.cpp"],
-        "*.hpp": ["*.hpp"],
-        "*.py": ["*.py"],
-        "CMakeLists.txt + *.cmake": [
-            "CMakeLists.txt",
-            "**/CMakeLists.txt",
-            "*.cmake",
-        ],
-    }
-
     result = {}
-    for name, patterns in categories.items():
-        result[name] = count_lines(list_files(patterns, prefixes))
-    result["total"] = sum(result.values())
+    grand = empty_kind_counts()
+
+    for name, patterns in CATEGORIES.items():
+        counts = empty_kind_counts()
+        for path in list_files(patterns, prefixes):
+            kind = file_kind(path)
+            with path.open("rb") as handle:
+                n = sum(1 for _ in handle)
+            counts[kind] += n
+            grand[kind] += n
+        result[name] = counts
+
+    result["total"] = {**grand, "all": sum(grand.values())}
     return result
 
 
