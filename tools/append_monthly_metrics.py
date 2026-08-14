@@ -18,9 +18,7 @@ def monthly_path(metrics_root, metric_id, now=None):
 
 def validate_metric_id(metric_id):
     if not METRIC_ID_RE.fullmatch(metric_id):
-        raise ValueError(
-            f"invalid metric_id {metric_id!r}; expected characters in [A-Za-z0-9._-]"
-        )
+        raise ValueError(f"invalid metric_id {metric_id!r}; expected characters in [A-Za-z0-9._-]")
 
 
 def load_entries(monthly_file):
@@ -28,7 +26,7 @@ def load_entries(monthly_file):
         return []
     entries = json.loads(monthly_file.read_text())
     if not isinstance(entries, list):
-        raise ValueError(f"{monthly_file} is not a JSON array")
+        raise TypeError(f"{monthly_file} is not a JSON array")
     return entries
 
 

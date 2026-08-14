@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import append_monthly_metrics as amm
 
-
 NOW = datetime(2026, 8, 14, 13, 18, 22, tzinfo=timezone.utc)
 
 
@@ -28,9 +27,7 @@ class AppendMonthlyMetricsTest(unittest.TestCase):
 
     def test_empty_monthly_file_creates_array(self):
         incoming = {"datetime": "2026-08-14 13:18:22Z", "run_id": 1, "metrics": {"loc": {}}}
-        monthly_file, appended = amm.append_monthly_metrics(
-            self.root, "ci", incoming, now=NOW
-        )
+        monthly_file, appended = amm.append_monthly_metrics(self.root, "ci", incoming, now=NOW)
         self.assertTrue(appended)
         self.assertEqual(monthly_file, self.root / "ci" / "2026-08.json")
         self.assertEqual(json.loads(monthly_file.read_text()), [incoming])
@@ -41,9 +38,7 @@ class AppendMonthlyMetricsTest(unittest.TestCase):
         first = {"run_id": 1, "metrics": {"a": 1}}
         second = {"run_id": 2, "metrics": {"a": 2}}
         amm.append_monthly_metrics(self.root, "ci", first, now=NOW)
-        monthly_file, appended = amm.append_monthly_metrics(
-            self.root, "ci", second, now=NOW
-        )
+        monthly_file, appended = amm.append_monthly_metrics(self.root, "ci", second, now=NOW)
         self.assertTrue(appended)
         self.assertEqual(json.loads(monthly_file.read_text()), [first, second])
 
@@ -62,7 +57,7 @@ class AppendMonthlyMetricsTest(unittest.TestCase):
         monthly_file = self.root / "ci" / "2026-08.json"
         monthly_file.parent.mkdir(parents=True)
         monthly_file.write_text("{}\n")
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             amm.append_monthly_metrics(self.root, "ci", {"run_id": 1}, now=NOW)
         self.assertIn("not a JSON array", str(ctx.exception))
 
