@@ -63,7 +63,7 @@ jobs:
         fi
 
   # Mergify merge-queue entry gate (queue_conditions: check-success = all_light).
-  # Runs regardless of the light-ci label so every PR can enter the queue.
+  # Runs regardless of the light-ci label.
   # Same gate logic as all; see comment above for needs.main_workflow.result states.
   all_light:
     needs: [ main_workflow ]
