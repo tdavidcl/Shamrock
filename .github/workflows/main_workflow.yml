@@ -85,7 +85,7 @@ jobs:
       - name: Count lines of code
         shell: bash
         run: |
-          python3 buildbot/count_loc.py metric__loc.json
+          python3 tools/count_loc.py metric__loc.json
           cat metric__loc.json
 
       - name: Upload lines of code metric

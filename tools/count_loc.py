@@ -6,12 +6,27 @@ import subprocess
 import sys
 from pathlib import Path
 
-KINDS = ("code", "examples", "doc")
+# Kind -> repository path prefixes it covers (relative to the repo root).
+# First matching kind wins, so more specific prefixes must come first.
+# "code" has no prefixes: it is the fallback for unmatched files
+# (src/, cmake/, tools/, env/, buildbot/, ...).
+KINDS = {
+    "code": [],
+    "examples": [
+        "examples",
+        "doc/sphinx/examples",
+    ],
+    "doc": [
+        "doc",
+    ],
+}
 
 CATEGORIES = {
     "*.cpp": ["*.cpp"],
     "*.hpp": ["*.hpp"],
     "*.py": ["*.py"],
+    "*.md": ["*.md"],
+    "*.rst": ["*.rst"],
     "CMakeLists.txt + *.cmake": [
         "CMakeLists.txt",
         "**/CMakeLists.txt",
@@ -44,14 +59,11 @@ def in_submodule(path, prefixes):
 
 
 def file_kind(path):
-    parts = path.parts
-    if parts and parts[0] == "examples":
-        return "examples"
-    # doc/sphinx/examples is a symlink to examples/; count it as examples if listed.
-    if len(parts) >= 3 and parts[0] == "doc" and parts[1] == "sphinx" and parts[2] == "examples":
-        return "examples"
-    if parts and parts[0] == "doc":
-        return "doc"
+    s = path.as_posix()
+    for kind, prefixes in KINDS.items():
+        for prefix in prefixes:
+            if s == prefix or s.startswith(prefix + "/"):
+                return kind
     return "code"
 
 
