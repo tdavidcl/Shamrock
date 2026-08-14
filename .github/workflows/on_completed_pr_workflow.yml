@@ -19,6 +19,19 @@ on:
       - completed
 
 jobs:
+  persist_metrics:
+    name: Persist metrics (dry run)
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/persist_metrics.yml
+    with:
+      artifact_name: metrics.json
+      metric_id: ci
+      source_run_id: ${{ github.event.workflow_run.id }}
+      dry_run: true
+
   deploy:
     runs-on: ubuntu-latest
 

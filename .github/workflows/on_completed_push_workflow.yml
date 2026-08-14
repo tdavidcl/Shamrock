@@ -1,0 +1,23 @@
+name: On Push (completed)
+
+# After "On Push" finishes, persist the aggregated metrics.json artifact onto
+# the orphan metrics-history branch. See persist_metrics.yml.
+
+on:
+  workflow_run:
+    workflows: ['On Push']
+    types:
+      - completed
+
+jobs:
+  persist_metrics:
+    name: Persist metrics
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.head_branch == 'main' }}
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/persist_metrics.yml
+    with:
+      artifact_name: metrics.json
+      metric_id: ci
+      source_run_id: ${{ github.event.workflow_run.id }}
