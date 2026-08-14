@@ -1,4 +1,4 @@
-name: Ensure persistent-storage
+name: Ensure metrics-history
 
 
 on:
@@ -9,8 +9,8 @@ on:
 
 
 jobs:
-  ensure_persistent_storage:
-    name: Ensure persistent-storage
+  ensure_metrics_history:
+    name: Ensure metrics-history
     runs-on: ubuntu-latest
 
     permissions:
@@ -21,4 +21,4 @@ jobs:
 
       - uses: Shamrock-code/action-ensure-orphan-branch@f9e63471c0351bb0ab63c77e8c91550810d34056
         with:
-          branch_name: persistent-storage
+          branch_name: metrics-history
