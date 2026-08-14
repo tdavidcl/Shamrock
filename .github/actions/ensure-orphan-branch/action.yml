@@ -1,5 +1,5 @@
 name: Ensure orphan branch
-description: Create a named orphan branch if it does not already exist on the repository.
+description: Create a named orphan branch if it does not already exist.
 author: Shamrock-code
 
 branding:
@@ -11,50 +11,38 @@ inputs:
     description: Name of the orphan branch to ensure exists.
     required: false
     default: orphan-branch
-  github_token:
-    description: Token used to query and push the branch. Defaults to the workflow GITHUB_TOKEN.
-    required: false
-    default: ${{ github.token }}
-  repository:
-    description: Target repository in owner/name form. Defaults to the current repository.
-    required: false
-    default: ${{ github.repository }}
-  commit_message:
-    description: Commit message used when creating the orphan branch.
-    required: false
-    default: Initial commit on orphan branch
-  git_user_name:
-    description: Git author/committer name used for the initial orphan commit.
-    required: false
-    default: github-actions[bot]
-  git_user_email:
-    description: Git author/committer email used for the initial orphan commit.
-    required: false
-    default: 41898282+github-actions[bot]@users.noreply.github.com
 
 outputs:
-  branch_name:
-    description: Branch that was checked or created.
-    value: ${{ steps.ensure.outputs.branch_name }}
   exists:
-    description: Whether the branch already existed before this run (`true` or `false`).
-    value: ${{ steps.ensure.outputs.exists }}
-  created:
-    description: Whether this run created the branch (`true` or `false`).
-    value: ${{ steps.ensure.outputs.created }}
+    description: Whether the branch already existed.
+    value: ${{ steps.check_branch.outputs.exists }}
 
 runs:
   using: composite
   steps:
-    - name: Ensure orphan branch
-      id: ensure
+    - name: Check if branch exists
+      id: check_branch
       shell: bash
       env:
         BRANCH_NAME: ${{ inputs.branch_name }}
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-        REPOSITORY: ${{ inputs.repository }}
-        COMMIT_MESSAGE: ${{ inputs.commit_message }}
-        GIT_USER_NAME: ${{ inputs.git_user_name }}
-        GIT_USER_EMAIL: ${{ inputs.git_user_email }}
-        GITHUB_SERVER_URL: ${{ github.server_url }}
-      run: bash "${GITHUB_ACTION_PATH}/ensure-orphan-branch.sh"
+      run: |
+        if git ls-remote --heads origin "$BRANCH_NAME" | grep "$BRANCH_NAME"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create orphan branch if missing
+      if: steps.check_branch.outputs.exists == 'false'
+      shell: bash
+      env:
+        BRANCH_NAME: ${{ inputs.branch_name }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git checkout --orphan "$BRANCH_NAME"
+        git rm -rf .
+        echo "# $BRANCH_NAME" > README.md
+        git add README.md
+        git commit -m "Initial commit on orphan branch"
+        git push origin "$BRANCH_NAME"
