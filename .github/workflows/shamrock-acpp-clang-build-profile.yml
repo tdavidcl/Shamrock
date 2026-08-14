@@ -129,9 +129,15 @@ jobs:
       - name: Write build profile metric JSON
         shell: bash
         run: |
-          python3 tools/clang_build_analyzer_to_json.py \
-            build/clang_build_analyzer_report.txt \
-            metric__build_profile.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path("build/clang_build_analyzer_report.txt").read_text()
+          Path("metric__build_profile.json").write_text(
+              json.dumps({"data": report}, indent=3) + "\n"
+          )
+          PY
           cat metric__build_profile.json
 
       - name: Upload build profile metric
