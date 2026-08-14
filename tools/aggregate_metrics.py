@@ -43,11 +43,7 @@ def aggregate(root, now=None):
         now = datetime.now(timezone.utc)
     now = now.astimezone(timezone.utc).replace(microsecond=0)
 
-    payload = {
-        "datetime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-    }
+    payload = {"datetime": now.strftime("%Y-%m-%d %H:%M:%SZ")}
     payload.update(env_metadata())
 
     metrics = {}
