@@ -19,6 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Shamrock-code/action-ensure-orphan-branch@f9e63471c0351bb0ab63c77e8c91550810d34056
+      - uses: Shamrock-code/action-ensure-orphan-branch@c18ff0971932d59862ce52112925a5f5fc5c19f0
         with:
           branch_name: metrics-history
