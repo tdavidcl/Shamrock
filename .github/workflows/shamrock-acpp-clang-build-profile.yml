@@ -125,3 +125,17 @@ jobs:
         with:
           name: report_clang_build_analyzer
           path: build/clang_build_analyzer_report.txt
+
+      - name: Write build profile metric JSON
+        shell: bash
+        run: |
+          python3 tools/clang_build_analyzer_to_json.py \
+            build/clang_build_analyzer_report.txt \
+            metric__build_profile.json
+          cat metric__build_profile.json
+
+      - name: Upload build profile metric
+        uses: actions/upload-artifact@v4
+        with:
+          name: metric__build_profile.json
+          path: metric__build_profile.json
