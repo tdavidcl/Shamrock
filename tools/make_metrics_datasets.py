@@ -47,11 +47,11 @@ def write_dataset(output_dir, name, data):
     path = output_dir / f"{name}.json"
     payload = {"name": name, "data": data}
     path.write_text(json.dumps(payload, indent=3) + "\n")
-    return path
+    print(path)
 
 
-def prune_output_dir(output_dir, keep_paths):
-    keep = {path.resolve() for path in keep_paths}
+def prune_output_dir(output_dir, keep_names):
+    keep = {(output_dir / name).resolve() for name in keep_names}
     if not output_dir.is_dir():
         return
     for path in output_dir.iterdir():
@@ -64,11 +64,8 @@ def build_datasets(root, output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    produced = [
-        write_dataset(output_dir, "doxygen_warnings", build_doxygen_warnings(snapshots)),
-    ]
-    prune_output_dir(output_dir, produced)
-    return produced
+    write_dataset(output_dir, "doxygen_warnings", build_doxygen_warnings(snapshots))
+    prune_output_dir(output_dir, DATASET_FILES)
 
 
 def main():
@@ -86,10 +83,7 @@ def main():
         help="Directory to write dataset JSON files into",
     )
     args = parser.parse_args()
-
-    produced = build_datasets(args.metrics_history_root, args.output_dir)
-    for path in produced:
-        print(path)
+    build_datasets(args.metrics_history_root, args.output_dir)
 
 
 if __name__ == "__main__":

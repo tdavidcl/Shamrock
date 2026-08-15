@@ -54,8 +54,7 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
             stale = output_dir / "compile_times.json"
             stale.write_text("{}\n")
 
-            produced = mmd.build_datasets(root, output_dir)
-            self.assertEqual([path.name for path in produced], ["doxygen_warnings.json"])
+            mmd.build_datasets(root, output_dir)
             self.assertFalse(stale.exists())
             self.assertEqual(
                 sorted(path.name for path in output_dir.iterdir()), ["doxygen_warnings.json"]
