@@ -67,17 +67,14 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
                 [
                     {
                         "datetime": "2026-08-15 12:17:37Z",
-                        "sha": "abc123",
                         "doxygen_warning_count": 8171,
                     },
                     {
                         "datetime": "2026-08-16 00:00:00Z",
-                        "sha": "def456",
                         "doxygen_warning_count": 8100,
                     },
                     {
                         "datetime": "2026-08-17 00:00:00Z",
-                        "sha": "ghi789",
                         "doxygen_warning_count": 8000,
                     },
                 ],

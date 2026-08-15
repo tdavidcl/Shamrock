@@ -25,7 +25,6 @@ def build_doxygen_warnings(snapshots):
         data.append(
             {
                 "datetime": snapshot["datetime"],
-                "sha": snapshot.get("sha"),
                 "doxygen_warning_count": snapshot["metrics"]["doxygen_warn"][
                     "doxygen_warning_count"
                 ],
