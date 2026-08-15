@@ -63,6 +63,35 @@ jobs:
           source ./activate
           export SHAMROCK_CXX_FLAGS="${SHAMROCK_CXX_FLAGS} -ftime-trace"
           shamconfigure
+          # Inject memlog as innermost launcher without changing env scripts
+          memlog="$SHAMROCK_DIR/tools/memlog.sh"
+          inject_launcher() {
+            local var=$1
+            local existing
+            existing=$(grep "^${var}:" CMakeCache.txt | head -n1 | cut -d= -f2- || true)
+            if echo "$existing" | grep -q 'memlog.sh'; then
+              return 0
+            fi
+            if [ -n "$existing" ]; then
+              cmake . -D"${var}=${existing};${memlog}"
+            else
+              cmake . -D"${var}=${memlog}"
+            fi
+          }
+          inject_launcher CMAKE_CXX_COMPILER_LAUNCHER
+          if grep -q '^CMAKE_C_COMPILER_LAUNCHER:' CMakeCache.txt; then
+            inject_launcher CMAKE_C_COMPILER_LAUNCHER
+          fi
+
+      - name: Install GNU time
+        run: |
+          if [ ! -x /usr/bin/time ]; then
+            if command -v sudo >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y time
+            else
+              apt-get update && apt-get install -y time
+            fi
+          fi
 
       - name: Build with ClangBuildAnalyzer
         shell: bash # In docker container github action default to sh
@@ -70,6 +99,8 @@ jobs:
           cd build
           export NINJA_STATUS="[%f/%t j=%r] "
           source ./activate
+          mkdir -p memlog
+          export MEMLOG_DIR="$PWD/memlog"
           ClangBuildAnalyzer --start .
           shammake
           ClangBuildAnalyzer --stop . capture_build.bin
@@ -117,7 +148,13 @@ jobs:
         run: |
           set -o pipefail
           cd build
+          source ./activate
           ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
+          python3 "$SHAMROCK_DIR/tools/parse_memlog.py" \
+            --memlog-dir memlog \
+            --append-report clang_build_analyzer_report.txt \
+            --metric-out ../metric__build_profile.json
+          cat ../metric__build_profile.json
 
       - name: Upload build profile report
         uses: actions/upload-artifact@v4
@@ -125,3 +162,10 @@ jobs:
         with:
           name: report_clang_build_analyzer
           path: build/clang_build_analyzer_report.txt
+
+      - name: Upload build profile metric
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metric__build_profile.json
+          path: metric__build_profile.json

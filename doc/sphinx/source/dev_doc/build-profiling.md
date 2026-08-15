@@ -14,6 +14,42 @@ ClangBuildAnalyzer --stop . capture_build.bin
 ClangBuildAnalyzer --analyze capture_build.bin
 ```
 
+## Compiler peak RSS (memlog)
+
+To record per-translation-unit peak RSS without changing env scripts, wrap the compiler after `shamconfigure`. Requires GNU `time` on Linux (`apt install time`) or BSD `/usr/bin/time` on macOS.
+
+```bash
+cd build
+source ./activate
+export SHAMROCK_CXX_FLAGS="${SHAMROCK_CXX_FLAGS} -ftime-trace"
+shamconfigure
+
+memlog="$SHAMROCK_DIR/tools/memlog.sh"
+existing=$(grep '^CMAKE_CXX_COMPILER_LAUNCHER:' CMakeCache.txt | cut -d= -f2- || true)
+if [ -n "$existing" ]; then
+  cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="${existing};${memlog}"
+else
+  cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="${memlog}"
+fi
+
+mkdir -p memlog
+export MEMLOG_DIR="$PWD/memlog"
+shammake clean
+ccache -C
+
+ClangBuildAnalyzer --start .
+shammake
+ClangBuildAnalyzer --stop . capture_build.bin
+ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
+
+python3 "$SHAMROCK_DIR/tools/parse_memlog.py" \
+  --memlog-dir memlog \
+  --append-report clang_build_analyzer_report.txt \
+  --metric-out metric__build_profile.json
+```
+
+`parse_memlog.py` appends the 10 highest peak-RSS files to the ClangBuildAnalyzer report and writes `metric__build_profile.json` with the full report in `data` and per-file RSS in `compile_memory`.
+
 ## Example output (2026-08-04)
 
 ```
