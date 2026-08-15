@@ -19,17 +19,10 @@ def load_snapshots(root):
     return snapshots
 
 
-def snapshot_metrics(snapshot):
-    metrics = snapshot.get("metrics")
-    if isinstance(metrics, dict):
-        return metrics
-    return {}
-
-
 def build_doxygen_warnings(snapshots):
     data = []
     for snapshot in snapshots:
-        warn = snapshot_metrics(snapshot).get("doxygen_warn")
+        warn = snapshot["metrics"].get("doxygen_warn")
         if not isinstance(warn, dict) or "doxygen_warning_count" not in warn:
             continue
         data.append(
