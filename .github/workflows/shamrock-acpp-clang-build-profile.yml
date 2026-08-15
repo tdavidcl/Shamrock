@@ -140,9 +140,7 @@ jobs:
           ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
           python3 "$SHAMROCK_DIR/tools/parse_memlog.py" \
             --memlog-dir memlog \
-            --append-report clang_build_analyzer_report.txt \
-            --metric-out ../metric__build_profile.json
-          cat ../metric__build_profile.json
+            --append-report clang_build_analyzer_report.txt
 
       - name: Upload build profile report
         uses: actions/upload-artifact@v4
@@ -154,13 +152,28 @@ jobs:
       - name: Write build profile metric JSON
         shell: bash
         run: |
+          python3 tools/parse_memlog.py \
+            --memlog-dir build/memlog \
+            --metric-out /tmp/compile_memory.json
           python3 - <<'PY'
           import json
           from pathlib import Path
 
           report = Path("build/clang_build_analyzer_report.txt").read_text()
+          payload = {"data": report}
+          compile_memory_path = Path("/tmp/compile_memory.json")
+          if compile_memory_path.is_file():
+              extra = json.loads(compile_memory_path.read_text())
+              if "compile_memory" in extra:
+                  payload["compile_memory"] = extra["compile_memory"]
           Path("metric__build_profile.json").write_text(
-              json.dumps({"data": report}, indent=3) + "\n"
+              json.dumps(payload, indent=3) + "\n"
           )
           PY
           cat metric__build_profile.json
+
+      - name: Upload build profile metric
+        uses: actions/upload-artifact@v4
+        with:
+          name: metric__build_profile.json
+          path: metric__build_profile.json
