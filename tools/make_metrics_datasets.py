@@ -22,14 +22,13 @@ def load_snapshots(root):
 def build_doxygen_warnings(snapshots):
     data = []
     for snapshot in snapshots:
-        warn = snapshot["metrics"].get("doxygen_warn")
-        if not isinstance(warn, dict) or "doxygen_warning_count" not in warn:
-            continue
         data.append(
             {
                 "datetime": snapshot["datetime"],
                 "sha": snapshot.get("sha"),
-                "doxygen_warning_count": warn["doxygen_warning_count"],
+                "doxygen_warning_count": snapshot["metrics"]["doxygen_warn"][
+                    "doxygen_warning_count"
+                ],
             }
         )
     return data

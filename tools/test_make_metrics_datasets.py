@@ -18,7 +18,7 @@ def write_snapshot(root, name, payload):
 
 
 class MakeMetricsDatasetsTests(unittest.TestCase):
-    def test_build_doxygen_warnings_skips_incomplete_and_prunes_stale(self):
+    def test_build_doxygen_warnings_and_clears_stale_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_snapshot(
@@ -36,7 +36,7 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
                 {
                     "datetime": "2026-08-16 00:00:00Z",
                     "sha": "def456",
-                    "metrics": {"loc": {"total": {"code": 1}}},
+                    "metrics": {"doxygen_warn": {"doxygen_warning_count": 8100}},
                 },
             )
             write_snapshot(
@@ -69,6 +69,11 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
                         "datetime": "2026-08-15 12:17:37Z",
                         "sha": "abc123",
                         "doxygen_warning_count": 8171,
+                    },
+                    {
+                        "datetime": "2026-08-16 00:00:00Z",
+                        "sha": "def456",
+                        "doxygen_warning_count": 8100,
                     },
                     {
                         "datetime": "2026-08-17 00:00:00Z",
