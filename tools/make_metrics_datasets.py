@@ -2,9 +2,8 @@
 
 import argparse
 import json
+import shutil
 from pathlib import Path
-
-DATASET_FILES = ("doxygen_warnings.json",)
 
 
 def load_snapshots(root):
@@ -50,22 +49,14 @@ def write_dataset(output_dir, name, data):
     print(path)
 
 
-def prune_output_dir(output_dir, keep_names):
-    keep = {(output_dir / name).resolve() for name in keep_names}
-    if not output_dir.is_dir():
-        return
-    for path in output_dir.iterdir():
-        if path.is_file() and path.resolve() not in keep:
-            path.unlink()
-
-
 def build_datasets(root, output_dir):
     snapshots = load_snapshots(root)
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
 
     write_dataset(output_dir, "doxygen_warnings", build_doxygen_warnings(snapshots))
-    prune_output_dir(output_dir, DATASET_FILES)
 
 
 def main():
