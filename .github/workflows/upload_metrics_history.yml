@@ -60,6 +60,9 @@ jobs:
           git add -A output
           git commit -m "Add aggregated metrics for ${date_time}"
 
+      - name: Show commit diff
+        run: git --no-pager show
+
       - name: Push metrics-history
         if: ${{ inputs.push }}
         run: git push origin metrics-history
