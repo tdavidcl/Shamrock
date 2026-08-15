@@ -147,32 +147,20 @@ jobs:
           from pathlib import Path
 
           report_path = Path("build/clang_build_analyzer_report.txt")
-          report = report_path.read_text() if report_path.is_file() else ""
-          compile_memory_path = Path("build/memlog/compile_memory.json")
-          compile_memory = None
-          if compile_memory_path.is_file():
-              compile_memory = json.loads(compile_memory_path.read_text())
-              records = sorted(
-                  compile_memory,
-                  key=lambda item: -(item.get("rss_mb") or 0),
-              )
-              lines = ["**** Files with highest peak RSS (compiler process):"]
-              for item in records[:10]:
-                  path = item.get("src") or item.get("obj")
-                  lines.append(f"{item['rss_mb']:8.1f} MB: {path}")
-              if not records:
-                  lines.append("  (no memlog records)")
-              lines.append("")
-              if report and not report.endswith("\n"):
-                  report += "\n"
-              report += "\n".join(lines) + "\n"
-              report_path.write_text(report)
-
-          payload = {"data": report}
-          if compile_memory is not None:
-              payload["compile_memory"] = compile_memory
+          report = report_path.read_text()
+          compile_memory = json.loads(Path("build/memlog/compile_memory.json").read_text())
+          records = sorted(compile_memory, key=lambda item: -item["rss_mb"])
+          lines = ["**** Files with highest peak RSS (compiler process):"]
+          for item in records[:10]:
+              path = item["src"] or item["obj"]
+              lines.append(f"{item['rss_mb']:8.1f} MB: {path}")
+          if not report.endswith("\n"):
+              report += "\n"
+          report += "\n".join(lines) + "\n"
+          report_path.write_text(report)
           Path("metric__build_profile.json").write_text(
-              json.dumps(payload, indent=3) + "\n"
+              json.dumps({"data": report, "compile_memory": compile_memory}, indent=3)
+              + "\n"
           )
           PY
           cat metric__build_profile.json
