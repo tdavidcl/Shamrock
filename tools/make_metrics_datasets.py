@@ -1,7 +1,7 @@
 # Build JS-friendly plot datasets from metrics-history aggregated JSON files.
 
+import argparse
 import json
-import sys
 from pathlib import Path
 
 DATASET_FILES = ("doxygen_warnings.json",)
@@ -72,13 +72,24 @@ def build_datasets(root, output_dir):
 
 
 def main():
-    if len(sys.argv) != 3:
-        sys.stderr.write("usage: make_metrics_datasets.py METRICS_HISTORY_ROOT OUTPUT_DIR\n")
-        sys.exit(2)
+    parser = argparse.ArgumentParser(
+        description="Build JS-friendly plot datasets from metrics-history aggregated JSON."
+    )
+    parser.add_argument(
+        "metrics_history_root",
+        type=Path,
+        help="Root of the metrics-history checkout (contains aggregated/)",
+    )
+    parser.add_argument(
+        "output_dir",
+        type=Path,
+        help="Directory to write dataset JSON files into",
+    )
+    args = parser.parse_args()
 
-    produced = build_datasets(sys.argv[1], sys.argv[2])
+    produced = build_datasets(args.metrics_history_root, args.output_dir)
     for path in produced:
-        sys.stdout.write(f"{path}\n")
+        print(path)
 
 
 if __name__ == "__main__":
