@@ -63,6 +63,12 @@ jobs:
           source ./activate
           export SHAMROCK_CXX_FLAGS="${SHAMROCK_CXX_FLAGS} -ftime-trace"
           shamconfigure
+
+      - name: Inject memlog compiler launcher
+        shell: bash # In docker container github action default to sh
+        run: |
+          cd build
+          source ./activate
           # Inject memlog as innermost launcher without changing env scripts
           memlog="$SHAMROCK_DIR/tools/memlog.sh"
           inject_launcher() {
