@@ -113,8 +113,7 @@ jobs:
   shamrock_linux_acpp_build_profile:
     name: Tests
     needs: [src_check]
-    # Temporarily enabled in light CI to test memlog profiling
-    # if: ${{ !inputs.light_ci }}
+    if: ${{ !inputs.light_ci }}
     uses: ./.github/workflows/shamrock-acpp-clang-build-profile.yml
 
   shamrock_linux_acpp_conda:
