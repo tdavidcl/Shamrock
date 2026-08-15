@@ -18,10 +18,6 @@ def write_snapshot(root, name, payload):
 
 
 class MakeMetricsDatasetsTests(unittest.TestCase):
-    def test_iso8601(self):
-        self.assertEqual(mmd.to_iso8601("2026-08-15 12:17:37Z"), "2026-08-15T12:17:37Z")
-        self.assertEqual(mmd.to_iso8601("2026-08-15T12:17:37Z"), "2026-08-15T12:17:37Z")
-
     def test_build_doxygen_warnings_skips_incomplete_and_prunes_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -71,12 +67,12 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
                 doxygen["data"],
                 [
                     {
-                        "datetime": "2026-08-15T12:17:37Z",
+                        "datetime": "2026-08-15 12:17:37Z",
                         "sha": "abc123",
                         "doxygen_warning_count": 8171,
                     },
                     {
-                        "datetime": "2026-08-17T00:00:00Z",
+                        "datetime": "2026-08-17 00:00:00Z",
                         "sha": "ghi789",
                         "doxygen_warning_count": 8000,
                     },

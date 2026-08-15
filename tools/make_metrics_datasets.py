@@ -7,10 +7,6 @@ from pathlib import Path
 DATASET_FILES = ("doxygen_warnings.json",)
 
 
-def to_iso8601(datetime_str):
-    return datetime_str.replace(" ", "T")
-
-
 def load_snapshots(root):
     aggregated = Path(root) / "aggregated"
     if not aggregated.is_dir():
@@ -39,7 +35,7 @@ def build_doxygen_warnings(snapshots):
             continue
         data.append(
             {
-                "datetime": to_iso8601(snapshot["datetime"]),
+                "datetime": snapshot["datetime"],
                 "sha": snapshot.get("sha"),
                 "doxygen_warning_count": warn["doxygen_warning_count"],
             }
