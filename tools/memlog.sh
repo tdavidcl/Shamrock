@@ -5,6 +5,8 @@
 #
 # When MEMLOG_DIR is set, update MEMLOG_DIR/compile_memory.json (max RSS per file).
 
+# Pull the source (.cpp/.cc/.cxx/.c) and -o object path out of the compiler
+# command line (CMake runs: memlog.sh <compiler> ... -c src.cpp -o src.cpp.o).
 src=""
 obj=""
 prev=""
