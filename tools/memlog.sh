@@ -14,14 +14,9 @@ for a in "$@"; do
         obj=$a
     fi
     case "$a" in
-        -o)
-            ;;
-        -o*)
-            obj=${a#-o}
-            ;;
-        *.cpp | *.cc | *.cxx | *.c)
-            src=$a
-            ;;
+        -o) ;;
+        -o*) obj=${a#-o} ;;
+        *.cpp | *.cc | *.cxx | *.c) src=$a ;;
     esac
     prev=$a
 done
@@ -32,43 +27,46 @@ if [ ! -x /usr/bin/time ]; then
 fi
 
 tmp=$(mktemp) || exit 1
-cleanup() {
-    rm -f "$tmp"
-}
-trap cleanup EXIT
+trap 'rm -f "$tmp"' EXIT
 
-uname_s=$(uname -s)
-if [ "$uname_s" = Darwin ]; then
+if [ "$(uname -s)" = Darwin ]; then
     /usr/bin/time -l -o "$tmp" "$@"
-    status=$?
-    rss_bytes=$(awk '/maximum resident set size/ { print $1; exit }' "$tmp")
-    rss_kb=$(awk -v b="${rss_bytes:-0}" 'BEGIN { printf "%.0f", b / 1024 }')
 else
     /usr/bin/time -f '%M' -o "$tmp" "$@"
-    status=$?
-    rss_kb=$(awk '/^[0-9]+$/ { v=$1 } END { print v+0 }' "$tmp")
 fi
+status=$?
 
-if [ -z "$rss_kb" ]; then
-    rss_kb=0
-fi
+python3 - "$tmp" "$src" "$obj" "$(uname -s)" "${MEMLOG_DIR:-}" <<'PY'
+import json
+import os
+import sys
+import tempfile
 
-mb=$(awk -v kb="$rss_kb" 'BEGIN { printf "%.1f", kb / 1024 }')
-label=$src
-if [ -z "$label" ]; then
-    label=$obj
-fi
-printf 'MEM_PEAK_MB=%s FILE=%s\n' "$mb" "$label" >&2
+time_file, src, obj, uname, memlog_dir = sys.argv[1:6]
+text = open(time_file).read()
+rss_kb = 0.0
+if uname == "Darwin":
+    for line in text.splitlines():
+        if "maximum resident set size" in line:
+            rss_kb = int(line.split()[0]) / 1024.0
+            break
+else:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.isdigit():
+            rss_kb = float(stripped)
 
-if [ -n "${MEMLOG_DIR:-}" ]; then
-    mkdir -p "$MEMLOG_DIR" || exit "$status"
-    rec=$(mktemp "$MEMLOG_DIR/XXXXXX") || exit "$status"
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c 'import json, sys; print(json.dumps({"file": sys.argv[1], "object": sys.argv[2], "peak_rss_kb": int(float(sys.argv[3] or 0))}))' \
-            "$src" "$obj" "$rss_kb" >"$rec"
-    else
-        printf '{"file":"%s","object":"%s","peak_rss_kb":%s}\n' "$src" "$obj" "$rss_kb" >"$rec"
-    fi
-fi
+print(f"MEM_PEAK_MB={rss_kb / 1024.0:.1f} FILE={src or obj}", file=sys.stderr)
+
+if memlog_dir:
+    os.makedirs(memlog_dir, exist_ok=True)
+    fd, _path = tempfile.mkstemp(dir=memlog_dir)
+    with os.fdopen(fd, "w") as handle:
+        json.dump(
+            {"file": src, "object": obj, "peak_rss_kb": int(round(rss_kb))},
+            handle,
+        )
+        handle.write("\n")
+PY
 
 exit "$status"
