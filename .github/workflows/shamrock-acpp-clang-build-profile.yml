@@ -69,25 +69,7 @@ jobs:
         run: |
           cd build
           source ./activate
-          # Inject memlog as innermost launcher without changing env scripts
-          memlog="$SHAMROCK_DIR/tools/memlog.sh"
-          inject_launcher() {
-            local var=$1
-            local existing
-            existing=$(grep "^${var}:" CMakeCache.txt | head -n1 | cut -d= -f2- || true)
-            if echo "$existing" | grep -q 'memlog.sh'; then
-              return 0
-            fi
-            if [ -n "$existing" ]; then
-              cmake . -D"${var}=${existing};${memlog}"
-            else
-              cmake . -D"${var}=${memlog}"
-            fi
-          }
-          inject_launcher CMAKE_CXX_COMPILER_LAUNCHER
-          if grep -q '^CMAKE_C_COMPILER_LAUNCHER:' CMakeCache.txt; then
-            inject_launcher CMAKE_C_COMPILER_LAUNCHER
-          fi
+          cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="$SHAMROCK_DIR/tools/memlog.sh"
 
       - name: Install GNU time
         run: |
