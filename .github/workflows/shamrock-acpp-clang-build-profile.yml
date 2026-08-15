@@ -146,9 +146,12 @@ jobs:
           import json
           from pathlib import Path
 
+          # Load ClangBuildAnalyzer text and memlog RSS records.
           report_path = Path("build/clang_build_analyzer_report.txt")
           report = report_path.read_text()
           compile_memory = json.loads(Path("build/memlog/compile_memory.json").read_text())
+
+          # Append the top 10 peak-RSS files to the analyzer report.
           records = sorted(compile_memory, key=lambda item: -item["rss_mb"])
           lines = ["**** Files with highest peak RSS (compiler process):"]
           for item in records[:10]:
@@ -158,6 +161,8 @@ jobs:
               report += "\n"
           report += "\n".join(lines) + "\n"
           report_path.write_text(report)
+
+          # Write metric JSON: full report text plus the memlog array.
           Path("metric__build_profile.json").write_text(
               json.dumps({"data": report, "compile_memory": compile_memory}, indent=3)
               + "\n"
