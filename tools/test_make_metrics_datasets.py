@@ -56,6 +56,10 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
             ),
             "src/shammodels/sph/src/pySPHModel.cpp",
         )
+        self.assertEqual(
+            mmd.object_file_label("/__w/Shamrock/Shamrock/src/shammodels/sph/src/pySPHModel.cpp"),
+            "src/shammodels/sph/src/pySPHModel.cpp",
+        )
 
     def test_parse_time_summary_and_top_files(self):
         summary = mmd.parse_time_summary(SAMPLE_REPORT)
@@ -73,6 +77,28 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
         codegen_rows = mmd.parse_file_times(SAMPLE_REPORT, mmd.CODEGEN_FILES_HEADER)
         self.assertEqual(len(codegen_rows), 3)
         self.assertEqual(codegen_rows[2]["label"], "src/shamrock/src/patch/PatchDataField.cpp")
+
+        rss_rows = mmd.parse_file_rss(SAMPLE_REPORT, mmd.RSS_FILES_HEADER)
+        self.assertEqual(len(rss_rows), 1)
+        self.assertEqual(rss_rows[0]["rss_mb"], 1234.5)
+        self.assertEqual(rss_rows[0]["label"], "src/shammodels/sph/src/pySPHModel.cpp")
+
+    def test_parse_rss_usage_prefers_structured_memlog(self):
+        usage = [
+            {"rss_mb": 100.0, "path": "/__w/Shamrock/Shamrock/src/a.cpp"},
+            {
+                "rss_mb": 2693.9,
+                "path": "/__w/Shamrock/Shamrock/src/shammodels/sph/src/pySPHModel.cpp",
+            },
+            {"rss_mb": 50.0, "path": "/__w/Shamrock/Shamrock/src/b.cpp"},
+        ]
+        rows = mmd.parse_rss_usage(usage)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["rank"], 1)
+        self.assertEqual(rows[0]["rss_mb"], 2693.9)
+        self.assertEqual(rows[0]["label"], "src/shammodels/sph/src/pySPHModel.cpp")
+        self.assertEqual(mmd.peak_rss_mb({"compile_memory_usage": usage}), 2693.9)
+        self.assertIsNone(mmd.peak_rss_mb({}))
 
     def test_build_datasets_skips_incomplete_and_prunes_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,6 +124,30 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
                     "metrics": {"doxygen_warn": {"doxygen_warning_count": 8000}},
                 },
             )
+            write_snapshot(
+                root,
+                "2026-08-17_00-00-00Z.json",
+                {
+                    "datetime": "2026-08-17 00:00:00Z",
+                    "sha": "ghi789",
+                    "metrics": {
+                        "doxygen_warn": {"doxygen_warning_count": 7900},
+                        "build_profile": {
+                            "data": SAMPLE_REPORT,
+                            "compile_memory_usage": [
+                                {
+                                    "rss_mb": 97.0,
+                                    "path": "/__w/Shamrock/Shamrock/src/shamterm/src/color.cpp",
+                                },
+                                {
+                                    "rss_mb": 2693.9,
+                                    "path": "/__w/Shamrock/Shamrock/src/shammodels/sph/src/pySPHModel.cpp",
+                                },
+                            ],
+                        },
+                    },
+                },
+            )
 
             output_dir = root / "output"
             output_dir.mkdir()
@@ -113,21 +163,37 @@ class MakeMetricsDatasetsTests(unittest.TestCase):
             self.assertEqual(doxygen["name"], "doxygen_warnings")
             self.assertEqual(
                 [row["doxygen_warning_count"] for row in doxygen["data"]],
-                [8171, 8000],
+                [8171, 8000, 7900],
             )
             self.assertEqual(doxygen["data"][0]["datetime"], "2026-08-15T12:17:37Z")
 
             compile_times = json.loads((output_dir / "compile_times.json").read_text())
-            self.assertEqual(len(compile_times["data"]), 1)
+            self.assertEqual(len(compile_times["data"]), 2)
             self.assertEqual(compile_times["data"][0]["sha"], "abc123")
+            self.assertNotIn("peak_rss_mb", compile_times["data"][0])
             self.assertAlmostEqual(compile_times["data"][0]["total_s"], 9395.6 + 7453.7)
+            self.assertEqual(compile_times["data"][1]["sha"], "ghi789")
+            self.assertEqual(compile_times["data"][1]["peak_rss_mb"], 2693.9)
 
             top_parse = json.loads((output_dir / "top_parse_files.json").read_text())
-            self.assertEqual(len(top_parse["data"]), 10)
+            self.assertEqual(len(top_parse["data"]), 20)
             self.assertEqual(top_parse["data"][0]["rank"], 1)
 
             top_codegen = json.loads((output_dir / "top_codegen_files.json").read_text())
-            self.assertEqual(len(top_codegen["data"]), 3)
+            self.assertEqual(len(top_codegen["data"]), 6)
+
+            top_rss = json.loads((output_dir / "top_rss_files.json").read_text())
+            # First snapshot falls back to the text RSS section (1 row).
+            # Third snapshot uses compile_memory_usage (2 rows, ranked by rss).
+            self.assertEqual(len(top_rss["data"]), 3)
+            self.assertEqual(top_rss["data"][0]["sha"], "abc123")
+            self.assertEqual(top_rss["data"][0]["rss_mb"], 1234.5)
+            self.assertEqual(top_rss["data"][1]["sha"], "ghi789")
+            self.assertEqual(top_rss["data"][1]["rss_mb"], 2693.9)
+            self.assertEqual(
+                top_rss["data"][1]["label"],
+                "src/shammodels/sph/src/pySPHModel.cpp",
+            )
 
 
 if __name__ == "__main__":
