@@ -27,6 +27,7 @@ if [ ! -x /usr/bin/time ]; then
     exec "$@"
 fi
 
+# Run the compiler under /usr/bin/time and capture peak RSS in $tmp.
 tmp=$(mktemp) || exit 1
 trap 'rm -f "$tmp"' EXIT
 
