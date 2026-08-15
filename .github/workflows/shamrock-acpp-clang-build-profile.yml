@@ -164,7 +164,7 @@ jobs:
 
           # Write metric JSON: full report text plus the memlog array.
           Path("metric__build_profile.json").write_text(
-              json.dumps({"data": report, "compile_memory": compile_memory}, indent=3)
+              json.dumps({"data": report, "compile_memory_usage": compile_memory}, indent=3)
               + "\n"
           )
           PY
