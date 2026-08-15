@@ -3,7 +3,8 @@
 # Linux: GNU /usr/bin/time -f '%M' (kilobytes)
 # macOS: BSD /usr/bin/time -l (bytes)
 #
-# When MEMLOG_DIR is set, update MEMLOG_DIR/compile_memory.json (max RSS per file).
+# When MEMLOG_DIR is set, append one {rss_mb, src, obj} record to
+# MEMLOG_DIR/compile_memory.json.
 
 # Pull the source (.cpp/.cc/.cxx/.c) and -o object path out of the compiler
 # command line (CMake runs: memlog.sh <compiler> ... -c src.cpp -o src.cpp.o).
@@ -38,7 +39,7 @@ else
 fi
 status=$?
 
-# Parse time output and write/update MEMLOG_DIR/compile_memory.json.
+# Parse time output and append {rss_mb, src, obj} to MEMLOG_DIR/compile_memory.json.
 python3 - "$tmp" "$src" "$obj" "$(uname -s)" "${MEMLOG_DIR:-}" <<'PY'
 import fcntl
 import json
@@ -46,74 +47,46 @@ import os
 import sys
 import tempfile
 
+
+def parse_output(time_file, src, obj, uname):
+    text = open(time_file).read()
+    rss_kb = 0.0
+    if uname == "Darwin":
+        for line in text.splitlines():
+            if "maximum resident set size" in line:
+                rss_kb = int(line.split()[0]) / 1024.0
+                break
+    else:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.isdigit():
+                rss_kb = float(stripped)
+    return src or None, obj or None, round(rss_kb / 1024.0, 1)
+
+
+def write_output(path, src, obj, rss_mb):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    record = {"rss_mb": rss_mb, "src": src, "obj": obj}
+    lock_path = path + ".lock"
+    with open(lock_path, "a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        records = []
+        if os.path.isfile(path):
+            with open(path) as handle:
+                records = json.load(handle)
+        records.append(record)
+        fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".json")
+        with os.fdopen(fd, "w") as handle:
+            json.dump(records, handle, indent=3)
+            handle.write("\n")
+        os.replace(tmp_path, path)
+
+
 time_file, src, obj, uname, memlog_dir = sys.argv[1:6]
-text = open(time_file).read()
-rss_kb = 0.0
-if uname == "Darwin":
-    for line in text.splitlines():
-        if "maximum resident set size" in line:
-            rss_kb = int(line.split()[0]) / 1024.0
-            break
-else:
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.isdigit():
-            rss_kb = float(stripped)
-
-peak_rss_mb = round(rss_kb / 1024.0, 1)
-print(f"MEM_PEAK_MB={peak_rss_mb:.1f} FILE={src or obj}", file=sys.stderr)
-
-if not memlog_dir:
-    raise SystemExit(0)
-
-def strip_prefix(path):
-    if not path:
-        return path
-    for key in ("SHAMROCK_DIR", "GITHUB_WORKSPACE"):
-        root = os.environ.get(key)
-        if not root:
-            continue
-        root = os.path.abspath(root)
-        prefix = root if root.endswith(os.sep) else root + os.sep
-        if path.startswith(prefix):
-            return path[len(prefix) :]
-    return path
-
-file_path = strip_prefix(src)
-object_path = strip_prefix(obj)
-key = file_path or object_path
-if not key:
-    raise SystemExit(0)
-
-os.makedirs(memlog_dir, exist_ok=True)
-out_path = os.path.join(memlog_dir, "compile_memory.json")
-lock_path = out_path + ".lock"
-with open(lock_path, "a+") as lock:
-    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-    data = {"rss_unit": "MB", "file_count": 0, "max_peak_rss_mb": 0.0, "files": []}
-    if os.path.isfile(out_path):
-        with open(out_path) as handle:
-            data = json.load(handle)
-    by_key = {(item.get("file") or item.get("object")): item for item in data.get("files", [])}
-    previous = by_key.get(key)
-    if previous is None or peak_rss_mb > previous.get("peak_rss_mb", 0):
-        by_key[key] = {
-            "file": file_path,
-            "object": object_path,
-            "peak_rss_mb": peak_rss_mb,
-        }
-    files = sorted(by_key.values(), key=lambda item: -item["peak_rss_mb"])
-    data = {
-        "rss_unit": "MB",
-        "file_count": len(files),
-        "max_peak_rss_mb": files[0]["peak_rss_mb"] if files else 0.0,
-        "files": files,
-    }
-    fd, tmp_path = tempfile.mkstemp(dir=memlog_dir, suffix=".json")
-    with os.fdopen(fd, "w") as handle:
-        json.dump(data, handle, indent=3)
-        handle.write("\n")
-    os.replace(tmp_path, out_path)
+src, obj, rss_mb = parse_output(time_file, src, obj, uname)
+print(f"MEM_PEAK_MB={rss_mb:.1f} FILE={src or obj}", file=sys.stderr)
+if memlog_dir:
+    write_output(os.path.join(memlog_dir, "compile_memory.json"), src, obj, rss_mb)
 PY
 
 exit "$status"

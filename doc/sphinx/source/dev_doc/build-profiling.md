@@ -43,7 +43,7 @@ ClangBuildAnalyzer --stop . capture_build.bin
 ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
 ```
 
-`MEMLOG_DIR/compile_memory.json` is updated during the build with per-file peak RSS. Append the top entries to the ClangBuildAnalyzer report and wrap both into `metric__build_profile.json`:
+`MEMLOG_DIR/compile_memory.json` is a JSON array of `{rss_mb, src, obj}` records appended during the build. Append the top entries to the ClangBuildAnalyzer report and wrap both into `metric__build_profile.json`:
 
 ```bash
 python3 - <<'PY'
@@ -53,9 +53,10 @@ from pathlib import Path
 report_path = Path("clang_build_analyzer_report.txt")
 report = report_path.read_text()
 compile_memory = json.loads(Path("memlog/compile_memory.json").read_text())
+records = sorted(compile_memory, key=lambda item: -(item.get("rss_mb") or 0))
 lines = ["**** Files with highest peak RSS (compiler process):"]
-for item in compile_memory["files"][:10]:
-    lines.append(f"{item['peak_rss_mb']:8.1f} MB: {item['file'] or item['object']}")
+for item in records[:10]:
+    lines.append(f"{item['rss_mb']:8.1f} MB: {item['src'] or item['obj']}")
 report_path.write_text(report + "\n".join(lines) + "\n")
 Path("metric__build_profile.json").write_text(
     json.dumps({"data": report_path.read_text(), "compile_memory": compile_memory}, indent=3)

@@ -152,12 +152,15 @@ jobs:
           compile_memory = None
           if compile_memory_path.is_file():
               compile_memory = json.loads(compile_memory_path.read_text())
-              files = compile_memory.get("files") or []
+              records = sorted(
+                  compile_memory,
+                  key=lambda item: -(item.get("rss_mb") or 0),
+              )
               lines = ["**** Files with highest peak RSS (compiler process):"]
-              for item in files[:10]:
-                  path = item.get("file") or item.get("object")
-                  lines.append(f"{item['peak_rss_mb']:8.1f} MB: {path}")
-              if not files:
+              for item in records[:10]:
+                  path = item.get("src") or item.get("obj")
+                  lines.append(f"{item['rss_mb']:8.1f} MB: {path}")
+              if not records:
                   lines.append("  (no memlog records)")
               lines.append("")
               if report and not report.endswith("\n"):
