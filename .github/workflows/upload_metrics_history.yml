@@ -2,7 +2,7 @@ name: Upload metrics history
 
 # Reusable workflow that commits aggregated metrics.json from the current
 # workflow run to the metrics-history orphan branch as
-# aggregated/<date_time>.json.
+# aggregated/<date_time>.json, then rebuilds the JS plot datasets in output/.
 
 on:
   workflow_call:
@@ -37,6 +37,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # tools/ disappears after checking out the data-only orphan branch.
+          cp tools/make_metrics_datasets.py /tmp/make_metrics_datasets.py
+
           git fetch origin metrics-history
           git checkout metrics-history
 
@@ -44,6 +47,9 @@ jobs:
           mkdir -p aggregated
           cp metrics.json "aggregated/${date_time}.json"
 
+          python3 /tmp/make_metrics_datasets.py . output
+
           git add "aggregated/${date_time}.json"
+          git add -A output
           git commit -m "Add aggregated metrics for ${date_time}"
           git push origin metrics-history
