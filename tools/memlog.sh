@@ -77,7 +77,7 @@ def write_output(path, src, obj, rss_mb):
         records.append(record)
         fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".json")
         with os.fdopen(fd, "w") as handle:
-            json.dump(records, handle, indent=3)
+            json.dump(records, handle, indent=4)
             handle.write("\n")
         os.replace(tmp_path, path)
 

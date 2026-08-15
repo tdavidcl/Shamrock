@@ -59,7 +59,7 @@ for item in records[:10]:
     lines.append(f"{item['rss_mb']:8.1f} MB: {item['src'] or item['obj']}")
 report_path.write_text(report + "\n".join(lines) + "\n")
 Path("metric__build_profile.json").write_text(
-    json.dumps({"data": report_path.read_text(), "compile_memory_usage": compile_memory}, indent=3)
+    json.dumps({"data": report_path.read_text(), "compile_memory_usage": compile_memory}, indent=4)
     + "\n"
 )
 PY
