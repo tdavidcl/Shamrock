@@ -38,6 +38,7 @@ else
 fi
 status=$?
 
+# Parse time output and write/update MEMLOG_DIR/compile_memory.json.
 python3 - "$tmp" "$src" "$obj" "$(uname -s)" "${MEMLOG_DIR:-}" <<'PY'
 import fcntl
 import json
