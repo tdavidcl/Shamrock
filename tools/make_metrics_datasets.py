@@ -3,6 +3,7 @@
 import argparse
 import json
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -19,12 +20,17 @@ def load_snapshots(root):
     return snapshots
 
 
+def to_iso8601(datetime_str):
+    dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def build_doxygen_warnings(snapshots):
     data = []
     for snapshot in snapshots:
         data.append(
             {
-                "datetime": snapshot["datetime"],
+                "datetime": to_iso8601(snapshot["datetime"]),
                 "doxygen_warning_count": snapshot["metrics"]["doxygen_warn"][
                     "doxygen_warning_count"
                 ],
