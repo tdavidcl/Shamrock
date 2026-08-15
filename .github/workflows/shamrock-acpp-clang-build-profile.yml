@@ -150,13 +150,16 @@ jobs:
           report_path = Path("build/clang_build_analyzer_report.txt")
           report = report_path.read_text()
           compile_memory = json.loads(Path("build/memlog/compile_memory.json").read_text())
+          compile_memory_usage = [
+              {"rss_mb": item["rss_mb"], "path": item["src"] or item["obj"]}
+              for item in compile_memory
+          ]
 
           # Append the top 10 peak-RSS files to the analyzer report.
-          records = sorted(compile_memory, key=lambda item: -item["rss_mb"])
+          records = sorted(compile_memory_usage, key=lambda item: -item["rss_mb"])
           lines = ["**** Files with highest peak RSS (compiler process):"]
           for item in records[:10]:
-              path = item["src"] or item["obj"]
-              lines.append(f"{item['rss_mb']:8.1f} MB: {path}")
+              lines.append(f"{item['rss_mb']:8.1f} MB: {item['path']}")
           if not report.endswith("\n"):
               report += "\n"
           report += "\n".join(lines) + "\n"
@@ -164,7 +167,7 @@ jobs:
 
           # Write metric JSON: full report text plus the memlog array.
           Path("metric__build_profile.json").write_text(
-              json.dumps({"data": report, "compile_memory_usage": compile_memory}, indent=4)
+              json.dumps({"data": report, "compile_memory_usage": compile_memory_usage}, indent=4)
               + "\n"
           )
           PY
