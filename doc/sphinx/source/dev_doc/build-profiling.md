@@ -41,14 +41,28 @@ ClangBuildAnalyzer --start .
 shammake
 ClangBuildAnalyzer --stop . capture_build.bin
 ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
-
-python3 "$SHAMROCK_DIR/tools/parse_memlog.py" \
-  --memlog-dir memlog \
-  --append-report clang_build_analyzer_report.txt \
-  --metric-out metric__build_profile.json
 ```
 
-`parse_memlog.py` appends the 10 highest peak-RSS files to the ClangBuildAnalyzer report and writes `metric__build_profile.json` with the full report in `data` and per-file RSS in `compile_memory`.
+`MEMLOG_DIR/compile_memory.json` is updated during the build with per-file peak RSS. Append the top entries to the ClangBuildAnalyzer report and wrap both into `metric__build_profile.json`:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+report_path = Path("clang_build_analyzer_report.txt")
+report = report_path.read_text()
+compile_memory = json.loads(Path("memlog/compile_memory.json").read_text())
+lines = ["**** Files with highest peak RSS (compiler process):"]
+for item in compile_memory["files"][:10]:
+    lines.append(f"{item['peak_rss_mb']:8.1f} MB: {item['file'] or item['object']}")
+report_path.write_text(report + "\n".join(lines) + "\n")
+Path("metric__build_profile.json").write_text(
+    json.dumps({"data": report_path.read_text(), "compile_memory": compile_memory}, indent=3)
+    + "\n"
+)
+PY
+```
 
 ## Example output (2026-08-04)
 

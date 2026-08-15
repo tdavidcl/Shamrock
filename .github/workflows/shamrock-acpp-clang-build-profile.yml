@@ -138,9 +138,41 @@ jobs:
           cd build
           source ./activate
           ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
-          python3 "$SHAMROCK_DIR/tools/parse_memlog.py" \
-            --memlog-dir memlog \
-            --append-report clang_build_analyzer_report.txt
+
+      - name: Write build profile metric JSON
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_path = Path("build/clang_build_analyzer_report.txt")
+          report = report_path.read_text() if report_path.is_file() else ""
+          compile_memory_path = Path("build/memlog/compile_memory.json")
+          compile_memory = None
+          if compile_memory_path.is_file():
+              compile_memory = json.loads(compile_memory_path.read_text())
+              files = compile_memory.get("files") or []
+              lines = ["**** Files with highest peak RSS (compiler process):"]
+              for item in files[:10]:
+                  path = item.get("file") or item.get("object")
+                  lines.append(f"{item['peak_rss_mb']:8.1f} MB: {path}")
+              if not files:
+                  lines.append("  (no memlog records)")
+              lines.append("")
+              if report and not report.endswith("\n"):
+                  report += "\n"
+              report += "\n".join(lines) + "\n"
+              report_path.write_text(report)
+
+          payload = {"data": report}
+          if compile_memory is not None:
+              payload["compile_memory"] = compile_memory
+          Path("metric__build_profile.json").write_text(
+              json.dumps(payload, indent=3) + "\n"
+          )
+          PY
+          cat metric__build_profile.json
 
       - name: Upload build profile report
         uses: actions/upload-artifact@v4
@@ -148,29 +180,6 @@ jobs:
         with:
           name: clang_build_analyzer_report.txt
           path: build/clang_build_analyzer_report.txt
-
-      - name: Write build profile metric JSON
-        shell: bash
-        run: |
-          python3 tools/parse_memlog.py \
-            --memlog-dir build/memlog \
-            --metric-out /tmp/compile_memory.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = Path("build/clang_build_analyzer_report.txt").read_text()
-          payload = {"data": report}
-          compile_memory_path = Path("/tmp/compile_memory.json")
-          if compile_memory_path.is_file():
-              extra = json.loads(compile_memory_path.read_text())
-              if "compile_memory" in extra:
-                  payload["compile_memory"] = extra["compile_memory"]
-          Path("metric__build_profile.json").write_text(
-              json.dumps(payload, indent=3) + "\n"
-          )
-          PY
-          cat metric__build_profile.json
 
       - name: Upload build profile metric
         uses: actions/upload-artifact@v4
