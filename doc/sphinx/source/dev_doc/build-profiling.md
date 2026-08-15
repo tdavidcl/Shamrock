@@ -16,54 +16,15 @@ ClangBuildAnalyzer --analyze capture_build.bin
 
 ## Compiler peak RSS (memlog)
 
-To record per-translation-unit peak RSS without changing env scripts, wrap the compiler after `shamconfigure`. Requires GNU `time` on Linux (`apt install time`) or BSD `/usr/bin/time` on macOS.
+To also record per-file compiler peak RSS, wrap the compiler after `shamconfigure` (GNU `time` on Linux, BSD `/usr/bin/time` on macOS) and set `MEMLOG_DIR`:
 
 ```bash
-cd build
-source ./activate
-export SHAMROCK_CXX_FLAGS="${SHAMROCK_CXX_FLAGS} -ftime-trace"
-shamconfigure
-
-memlog="$SHAMROCK_DIR/tools/memlog.sh"
-existing=$(grep '^CMAKE_CXX_COMPILER_LAUNCHER:' CMakeCache.txt | cut -d= -f2- || true)
-if [ -n "$existing" ]; then
-  cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="${existing};${memlog}"
-else
-  cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="${memlog}"
-fi
-
+cmake . -DCMAKE_CXX_COMPILER_LAUNCHER="$SHAMROCK_DIR/tools/memlog.sh"
 mkdir -p memlog
 export MEMLOG_DIR="$PWD/memlog"
-shammake clean
-ccache -C
-
-ClangBuildAnalyzer --start .
-shammake
-ClangBuildAnalyzer --stop . capture_build.bin
-ClangBuildAnalyzer --analyze capture_build.bin | tee clang_build_analyzer_report.txt
 ```
 
-`MEMLOG_DIR/compile_memory.json` is a JSON array of `{rss_mb, src, obj}` records appended during the build. Append the top entries to the ClangBuildAnalyzer report and wrap both into `metric__build_profile.json`:
-
-```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-report_path = Path("clang_build_analyzer_report.txt")
-report = report_path.read_text()
-compile_memory = json.loads(Path("memlog/compile_memory.json").read_text())
-records = sorted(compile_memory, key=lambda item: -(item.get("rss_mb") or 0))
-lines = ["**** Files with highest peak RSS (compiler process):"]
-for item in records[:10]:
-    lines.append(f"{item['rss_mb']:8.1f} MB: {item['src'] or item['obj']}")
-report_path.write_text(report + "\n".join(lines) + "\n")
-Path("metric__build_profile.json").write_text(
-    json.dumps({"data": report_path.read_text(), "compile_memory_usage": compile_memory}, indent=4)
-    + "\n"
-)
-PY
-```
+Then run the same ClangBuildAnalyzer sequence as above. Each compile appends `{rss_mb, src, obj}` to `$MEMLOG_DIR/compile_memory.json`.
 
 ## Example output (2026-08-04)
 
