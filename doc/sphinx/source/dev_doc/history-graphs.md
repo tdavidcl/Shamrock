@@ -72,7 +72,8 @@ The org website can embed this chart with:
 CI counts lines in tracked source files, excluding git submodules. Exclusive
 partitions (`code`, `examples`, `doc`) sum to `all`. Nested `shammodels/*`
 counts are subsets of `code`, not extra buckets. File-type totals sum the
-exclusive partitions only.
+exclusive partitions only. Both y-axes use a log scale so small series stay
+visible next to the totals.
 
 ```{raw} html
 <iframe

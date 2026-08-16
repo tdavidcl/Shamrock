@@ -110,29 +110,19 @@
           : ["#076678", "#af3a03", "#79740e", "#8f3f71", "#9d0006", "#427b58", "#b57614", "#d65d0e"];
       }
 
-      function paddedRange(values, integer) {
-        const nums = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+      // Plotly log-axis range is log10 of the linear limits.
+      function paddedLogRange(values) {
+        const nums = values.filter(
+          (value) => typeof value === "number" && Number.isFinite(value) && value > 0
+        );
         if (nums.length === 0) {
           return undefined;
         }
-        const min = Math.min(...nums);
-        const max = Math.max(...nums);
-        const span = max - min;
-        const pad = span === 0 ? Math.max(Math.abs(min) * 0.05, integer ? 1 : 0.05) : span * 0.1;
-        let lo = min - pad;
-        let hi = max + pad;
-        if (integer) {
-          lo = Math.floor(lo);
-          hi = Math.ceil(hi);
-          if (lo === hi) {
-            lo -= 1;
-            hi += 1;
-          }
-        }
-        if (min >= 0) {
-          lo = Math.max(0, lo);
-        }
-        return [lo, hi];
+        const logMin = Math.log10(Math.min(...nums));
+        const logMax = Math.log10(Math.max(...nums));
+        const span = logMax - logMin;
+        const pad = span === 0 ? 0.1 : span * 0.1;
+        return [logMin - pad, logMax + pad];
       }
 
       function hasValues(values) {
@@ -186,9 +176,10 @@
           },
           yaxis: {
             title: { text: "By area" },
+            type: "log",
             tickformat: ",d",
             autorange: false,
-            range: paddedRange(collectedValues(series, AREA_SPECS), true),
+            range: paddedLogRange(collectedValues(series, AREA_SPECS)),
             ...axis,
           },
           xaxis2: {
@@ -199,9 +190,10 @@
           },
           yaxis2: {
             title: { text: "By file type" },
+            type: "log",
             tickformat: ",d",
             autorange: false,
-            range: paddedRange(collectedValues(series, FILETYPE_SPECS), true),
+            range: paddedLogRange(collectedValues(series, FILETYPE_SPECS)),
             ...axis,
           },
           hovermode: "x unified",
