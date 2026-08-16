@@ -95,6 +95,31 @@
         return series.translation_unit_count.some((value) => value !== null);
       }
 
+      function paddedRange(values, integer) {
+        const nums = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+        if (nums.length === 0) {
+          return undefined;
+        }
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+        const span = max - min;
+        const pad = span === 0 ? Math.max(Math.abs(min) * 0.05, integer ? 1 : 0.05) : span * 0.1;
+        let lo = min - pad;
+        let hi = max + pad;
+        if (integer) {
+          lo = Math.floor(lo);
+          hi = Math.ceil(hi);
+          if (lo === hi) {
+            lo -= 1;
+            hi += 1;
+          }
+        }
+        if (min >= 0) {
+          lo = Math.max(0, lo);
+        }
+        return [lo, hi];
+      }
+
       function chartLayout(theme, series) {
         const dark = theme === "dark";
         const bg = dark ? "#282828" : "#fff";
@@ -131,7 +156,10 @@
             zerolinecolor: grid,
             linecolor: muted,
             tickfont: { color: muted },
-            rangemode: "tozero",
+            autorange: false,
+            range: paddedRange(
+              [].concat(series.parsing_h, series.codegen_h, series.total_h)
+            ),
           },
           hovermode: "x unified",
         };
@@ -140,12 +168,13 @@
             title: { text: "Translation units", font: { color: tuColor } },
             overlaying: "y",
             side: "right",
-            rangemode: "tozero",
             showgrid: false,
             zerolinecolor: grid,
             linecolor: tuColor,
             tickfont: { color: tuColor },
             tickformat: "d",
+            autorange: false,
+            range: paddedRange(series.translation_unit_count, true),
           };
         }
         return layout;

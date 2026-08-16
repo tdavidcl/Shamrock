@@ -82,7 +82,32 @@
         document.documentElement.setAttribute("data-theme", theme);
       }
 
-      function chartLayout(theme) {
+      function paddedRange(values, integer) {
+        const nums = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+        if (nums.length === 0) {
+          return undefined;
+        }
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+        const span = max - min;
+        const pad = span === 0 ? Math.max(Math.abs(min) * 0.05, integer ? 1 : 0.05) : span * 0.1;
+        let lo = min - pad;
+        let hi = max + pad;
+        if (integer) {
+          lo = Math.floor(lo);
+          hi = Math.ceil(hi);
+          if (lo === hi) {
+            lo -= 1;
+            hi += 1;
+          }
+        }
+        if (min >= 0) {
+          lo = Math.max(0, lo);
+        }
+        return [lo, hi];
+      }
+
+      function chartLayout(theme, series) {
         const dark = theme === "dark";
         const bg = dark ? "#282828" : "#fff";
         const fg = dark ? "#ebdbb2" : "#3c3836";
@@ -108,7 +133,9 @@
             zerolinecolor: grid,
             linecolor: muted,
             tickfont: { color: muted },
-            rangemode: "tozero",
+            tickformat: "d",
+            autorange: false,
+            range: paddedRange(series.y, true),
           },
           hovermode: "x unified",
         };
@@ -194,7 +221,7 @@
                 "%{x|%Y-%m-%d %H:%M UTC}<br>warnings: %{y}<extra></extra>",
             },
           ],
-          chartLayout(theme),
+          chartLayout(theme, series),
           { responsive: true, displaylogo: false }
         );
         setStatus("");
@@ -218,7 +245,7 @@
                   "%{x|%Y-%m-%d %H:%M UTC}<br>warnings: %{y}<extra></extra>",
               },
             ],
-            chartLayout(theme)
+            chartLayout(theme, series)
           );
         };
 
