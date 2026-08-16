@@ -1,9 +1,13 @@
-# Doxygen warning history
+# History graphs
+
+CI metrics are stored on the
+[`metrics-history`](https://github.com/Shamrock-code/Shamrock/tree/metrics-history)
+branch. The charts below load those live series.
+
+## Doxygen warnings
 
 CI records the number of Doxygen warnings produced when the documentation is
-built. The chart below loads the live series from the
-[`metrics-history`](https://github.com/Shamrock-code/Shamrock/tree/metrics-history)
-branch.
+built.
 
 ```{raw} html
 <iframe
