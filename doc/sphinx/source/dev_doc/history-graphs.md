@@ -39,14 +39,15 @@ published Sphinx docs, so it can embed this chart with:
 
 CI records ClangBuildAnalyzer compile times: the sum of frontend parsing and
 backend codegen across translation units. That is cumulative compiler work, not
-wall-clock time. See [Profiling build performance / time](build-profiling.md).
+wall-clock time. The right axis shows how many translation units were profiled.
+See [Profiling build performance / time](build-profiling.md).
 
 ```{raw} html
 <iframe
   src="../_static/build_time_total.html"
-  title="Build time over time"
+  title="Build time and translation units over time"
   width="100%"
-  height="600"
+  height="640"
   style="border: none;"
 ></iframe>
 ```
@@ -59,9 +60,9 @@ The org website can embed this chart with:
 ```html
 <iframe
   src="https://shamrock-code.github.io/Shamrock/sphinx/_static/build_time_total.html"
-  title="Build time over time"
+  title="Build time and translation units over time"
   width="100%"
-  height="600"
+  height="640"
   style="border: none;"
 ></iframe>
 ```
