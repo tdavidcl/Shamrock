@@ -63,7 +63,10 @@ def parse_build_profile_summary(text):
 def build_build_time_total(snapshots):
     data = []
     for snapshot in snapshots:
-        parsed = parse_build_profile_summary(snapshot["metrics"]["build_profile"]["data"])
+        profile = snapshot.get("metrics", {}).get("build_profile")
+        if profile is None:
+            continue
+        parsed = parse_build_profile_summary(profile["data"])
         data.append({"datetime": to_iso8601(snapshot["datetime"]), **parsed})
     return data
 
