@@ -81,6 +81,13 @@ def loc_extension_total(counts):
     return sum(counts.get(kind, 0) for kind in LOC_PARTITION_KINDS)
 
 
+def flatten_loc_totals(totals):
+    flattened = {}
+    for key, value in totals.items():
+        flattened[key if key == "all" else f"all_{key}"] = value
+    return flattened
+
+
 def build_loc(snapshots):
     data = []
     for snapshot in snapshots:
@@ -90,10 +97,7 @@ def build_loc(snapshots):
         totals = next((loc[key] for key in LOC_TOTAL_KEYS if key in loc), None)
         if totals is None:
             continue
-        row = {
-            "datetime": to_iso8601(snapshot["datetime"]),
-            "totals": totals,
-        }
+        row = {"datetime": to_iso8601(snapshot["datetime"]), **flatten_loc_totals(totals)}
         for key, counts in loc.items():
             if key in LOC_TOTAL_KEYS:
                 continue
