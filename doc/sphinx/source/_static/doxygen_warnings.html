@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doxygen warning count</title>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2/plotly.min.js"></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        font-family: system-ui, sans-serif;
+      }
+      #chart {
+        width: 100%;
+        height: 100%;
+      }
+      #status {
+        display: none;
+        box-sizing: border-box;
+        padding: 1rem 1.25rem;
+        font-size: 0.95rem;
+      }
+      body.status #chart {
+        display: none;
+      }
+      body.status #status {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading Doxygen warning history…</div>
+    <div id="chart"></div>
+    <script>
+      const DATA_URLS = [
+        "https://raw.githubusercontent.com/Shamrock-code/Shamrock/refs/heads/metrics-history/output/doxygen_warnings.json",
+        "https://cdn.jsdelivr.net/gh/Shamrock-code/Shamrock@metrics-history/output/doxygen_warnings.json",
+      ];
+
+      const THEMES = {
+        dark: {
+          paper: "#282828",
+          plot: "#282828",
+          text: "#ebdbb2",
+          muted: "#a89984",
+          grid: "#504945",
+          line: "#fabd2f",
+          marker: "#fe8019",
+        },
+        light: {
+          paper: "#ffffff",
+          plot: "#ffffff",
+          text: "#3c3836",
+          muted: "#665c54",
+          grid: "#d5c4a1",
+          line: "#d79921",
+          marker: "#d65d0e",
+        },
+      };
+
+      function showStatus(message) {
+        document.body.classList.add("status");
+        document.getElementById("status").textContent = message;
+      }
+
+      function resolveTheme() {
+        try {
+          if (window.parent && window.parent !== window) {
+            const parentTheme =
+              window.parent.document.documentElement.getAttribute("data-theme");
+            if (parentTheme === "dark" || parentTheme === "light") {
+              return parentTheme;
+            }
+          }
+        } catch (_err) {
+          /* cross-origin parent or inaccessible document */
+        }
+        return window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+
+      function applyPageTheme(theme) {
+        const colors = THEMES[theme];
+        document.documentElement.style.background = colors.paper;
+        document.body.style.background = colors.paper;
+        document.body.style.color = colors.text;
+        document.getElementById("status").style.color = colors.text;
+      }
+
+      function mapSeries(payload) {
+        if (!payload || !Array.isArray(payload.data)) {
+          throw new Error("Dataset is missing a data array");
+        }
+        const rows = payload.data
+          .filter(
+            (row) =>
+              row &&
+              typeof row.datetime === "string" &&
+              typeof row.doxygen_warning_count === "number"
+          )
+          .slice()
+          .sort((a, b) => a.datetime.localeCompare(b.datetime));
+        return {
+          x: rows.map((row) => row.datetime),
+          y: rows.map((row) => row.doxygen_warning_count),
+        };
+      }
+
+      function chartLayout(theme) {
+        const colors = THEMES[theme];
+        return {
+          margin: { t: 48, r: 24, b: 56, l: 72 },
+          paper_bgcolor: colors.paper,
+          plot_bgcolor: colors.plot,
+          font: { color: colors.text },
+          title: {
+            text: "Doxygen warning count",
+            font: { size: 16, color: colors.text },
+          },
+          xaxis: {
+            title: { text: "datetime (UTC)" },
+            type: "date",
+            gridcolor: colors.grid,
+            linecolor: colors.grid,
+            tickfont: { color: colors.muted },
+            titlefont: { color: colors.muted },
+          },
+          yaxis: {
+            title: { text: "doxygen_warning_count" },
+            gridcolor: colors.grid,
+            linecolor: colors.grid,
+            tickfont: { color: colors.muted },
+            titlefont: { color: colors.muted },
+            rangemode: "tozero",
+          },
+          hovermode: "x unified",
+        };
+      }
+
+      function chartConfig() {
+        return {
+          responsive: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ["lasso2d", "select2d"],
+        };
+      }
+
+      async function fetchDataset() {
+        let lastError = null;
+        for (const url of DATA_URLS) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              throw new Error(response.status + " " + response.statusText);
+            }
+            return await response.json();
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        throw lastError || new Error("Failed to load dataset");
+      }
+
+      let series = null;
+
+      function drawChart() {
+        if (!series) {
+          return;
+        }
+        const theme = resolveTheme();
+        applyPageTheme(theme);
+        const colors = THEMES[theme];
+        Plotly.react(
+          "chart",
+          [
+            {
+              type: "scatter",
+              mode: "lines+markers",
+              x: series.x,
+              y: series.y,
+              name: "doxygen_warning_count",
+              line: { color: colors.line, width: 2 },
+              marker: { color: colors.marker, size: 8 },
+              hovertemplate:
+                "%{x|%Y-%m-%d %H:%M UTC}<br>warnings: %{y}<extra></extra>",
+            },
+          ],
+          chartLayout(theme),
+          chartConfig()
+        );
+      }
+
+      function watchTheme() {
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        if (typeof media.addEventListener === "function") {
+          media.addEventListener("change", drawChart);
+        } else if (typeof media.addListener === "function") {
+          media.addListener(drawChart);
+        }
+        try {
+          if (window.parent && window.parent !== window) {
+            const parentRoot = window.parent.document.documentElement;
+            const observer = new MutationObserver(drawChart);
+            observer.observe(parentRoot, {
+              attributes: true,
+              attributeFilter: ["data-theme"],
+            });
+          }
+        } catch (_err) {
+          /* parent theme is not observable */
+        }
+      }
+
+      (async function main() {
+        document.body.classList.add("status");
+        try {
+          const payload = await fetchDataset();
+          series = mapSeries(payload);
+          if (series.x.length === 0) {
+            showStatus("The Doxygen warning dataset is empty.");
+            return;
+          }
+          document.body.classList.remove("status");
+          applyPageTheme(resolveTheme());
+          drawChart();
+          watchTheme();
+        } catch (err) {
+          showStatus(
+            "Could not load Doxygen warning history. " +
+              (err && err.message ? err.message : String(err))
+          );
+        }
+      })();
+    </script>
+  </body>
+</html>
