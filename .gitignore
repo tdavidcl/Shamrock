@@ -7,6 +7,8 @@ __pycache__
 
 #compile/build/test folders
 build_*
+# Sphinx Plotly page; would otherwise match build_*
+!doc/sphinx/source/_static/build_time_total.html
 build
 
 test_pipeline
