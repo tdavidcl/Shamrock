@@ -62,9 +62,9 @@
         "https://cdn.jsdelivr.net/gh/Shamrock-code/Shamrock@metrics-history/output/build_time_total.json",
       ];
       const SECONDS_PER_HOUR = 3600;
-      // Vertical markers on the date axis (ISO date, UTC).
+      // Vertical markers on the date axis (ISO datetime, UTC).
       const PLOT_EVENTS = [
-        { date: "2026-08-17", text: "force -j 4 in gh-runners" },
+        { date: "2026-08-17T13:43:38Z", text: "force -j 4 in gh-runners" },
       ];
 
       function parentTheme() {
@@ -122,6 +122,20 @@
           lo = Math.max(0, lo);
         }
         return [lo, hi];
+      }
+
+      function paddedDateRange(isoValues) {
+        const times = isoValues
+          .map((value) => Date.parse(value))
+          .filter((value) => Number.isFinite(value));
+        if (times.length === 0) {
+          return undefined;
+        }
+        const min = Math.min(...times);
+        const max = Math.max(...times);
+        const span = max - min;
+        const pad = span === 0 ? 60 * 60 * 1000 : span * 0.05;
+        return [new Date(min - pad).toISOString(), new Date(max + pad).toISOString()];
       }
 
       function eventDecorations(theme, series) {
@@ -202,6 +216,10 @@
             zerolinecolor: grid,
             linecolor: muted,
             tickfont: { color: muted },
+            autorange: false,
+            range: paddedDateRange(
+              series.x.concat(PLOT_EVENTS.map((event) => event.date))
+            ),
           },
           yaxis: {
             title: { text: "Time (hours)" },
