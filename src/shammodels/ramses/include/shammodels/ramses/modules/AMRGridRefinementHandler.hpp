@@ -114,6 +114,13 @@ namespace shammodels::basegodunov::modules {
         /**
          * @brief
          */
+        void check_geometrical_validity(
+            shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags,
+            shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_derefine_flags);
+
+        /**
+         * @brief
+         */
         void enforce_two_to_one_refinement_new(
             shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags);
 
