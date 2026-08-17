@@ -113,7 +113,7 @@ jobs:
   shamrock_linux_acpp_build_profile:
     name: Tests
     needs: [src_check]
-    # TEMP: run build profile in light CI for testing; restore `if: ${{ !inputs.light_ci }}` afterward
+    if: ${{ !inputs.light_ci }}
     uses: ./.github/workflows/shamrock-acpp-clang-build-profile.yml
 
   shamrock_linux_acpp_conda:
