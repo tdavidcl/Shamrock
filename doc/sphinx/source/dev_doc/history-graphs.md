@@ -67,6 +67,38 @@ The org website can embed this chart with:
 ></iframe>
 ```
 
+## Expensive headers (top 10)
+
+CI records ClangBuildAnalyzer header include costs. The chart keeps only the
+top 10 headers of each commit: a header that drops out of that ranking is omitted
+at that date (`null` y, `connectgaps: false`). See
+[Profiling build performance / time](build-profiling.md).
+
+```{raw} html
+<iframe
+  src="../_static/expensive_headers_top10.html"
+  title="Top 10 expensive headers over time"
+  width="100%"
+  height="700"
+  style="border: none;"
+></iframe>
+```
+
+Raw Plotly JSON:
+[expensive_headers_top10.json](https://raw.githubusercontent.com/Shamrock-code/Shamrock/refs/heads/metrics-history/output/expensive_headers_top10.json).
+
+The org website can embed this chart with:
+
+```html
+<iframe
+  src="https://shamrock-code.github.io/Shamrock/sphinx/_static/expensive_headers_top10.html"
+  title="Top 10 expensive headers over time"
+  width="100%"
+  height="700"
+  style="border: none;"
+></iframe>
+```
+
 ## Lines of code
 
 CI counts lines in tracked source files, excluding git submodules. Exclusive
