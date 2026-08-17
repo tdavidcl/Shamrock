@@ -67,6 +67,38 @@ The org website can embed this chart with:
 ></iframe>
 ```
 
+## Slowest compile functions (top 10)
+
+CI records ClangBuildAnalyzer's "Functions that took longest to compile". The
+chart keeps only the top 10 functions of each commit: a function that drops
+out of that ranking is omitted at that date (`null` y, `connectgaps: false`).
+See [Profiling build performance / time](build-profiling.md).
+
+```{raw} html
+<iframe
+  src="../_static/compile_functions_top10.html"
+  title="Top 10 functions that took longest to compile"
+  width="100%"
+  height="700"
+  style="border: none;"
+></iframe>
+```
+
+Raw Plotly JSON:
+[compile_functions_top10.json](https://raw.githubusercontent.com/Shamrock-code/Shamrock/refs/heads/metrics-history/output/compile_functions_top10.json).
+
+The org website can embed this chart with:
+
+```html
+<iframe
+  src="https://shamrock-code.github.io/Shamrock/sphinx/_static/compile_functions_top10.html"
+  title="Top 10 functions that took longest to compile"
+  width="100%"
+  height="700"
+  style="border: none;"
+></iframe>
+```
+
 ## Lines of code
 
 CI counts lines in tracked source files, excluding git submodules. Exclusive
