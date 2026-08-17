@@ -46,10 +46,10 @@ namespace shammodels::sph::pysph {
 
         shamlog_debug_ln("[Py]", "registering class :", name_model, typeid(T).name());
 
-        py::class_<T> cls(m, name_model.c_str())
-            .def(py::init([](ShamrockCtx &ctx) {
-                return std::make_unique<T>(ctx);
-            }))
+        py::class_<T> cls(m, name_model.c_str());
+        cls.def(py::init([](ShamrockCtx &ctx) {
+               return std::make_unique<T>(ctx);
+           }))
             .def("init", &T::init)
             .def("init_scheduler", &T::init_scheduler)
 
