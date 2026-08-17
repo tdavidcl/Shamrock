@@ -4,9 +4,7 @@ queue_rules:
     commit_message_format:
       title: pr-title
       body: pr-body
-      trailers:
-        - approved-by
-        - merged-by
+      trailers: []
     merge_conditions:
       - check-success = all
     branch_protection_injection_mode: none
@@ -18,5 +16,6 @@ queue_rules:
     merge_bot_account: mergify[bot]
     update_bot_account: mergify[bot]
     batch_size: 5
+    batch_max_wait_time: 10min
 merge_queue:
-  max_parallel_checks: 2
+  max_parallel_checks: 1
