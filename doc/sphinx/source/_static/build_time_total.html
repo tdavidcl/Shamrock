@@ -124,20 +124,6 @@
         return [lo, hi];
       }
 
-      function paddedDateRange(isoValues) {
-        const times = isoValues
-          .map((value) => Date.parse(value))
-          .filter((value) => Number.isFinite(value));
-        if (times.length === 0) {
-          return undefined;
-        }
-        const min = Math.min(...times);
-        const max = Math.max(...times);
-        const span = max - min;
-        const pad = span === 0 ? 60 * 60 * 1000 : span * 0.05;
-        return [new Date(min - pad).toISOString(), new Date(max + pad).toISOString()];
-      }
-
       function eventDecorations(theme, series) {
         const dark = theme === "dark";
         const color = dark ? "#fabd2f" : "#b57614";
@@ -216,10 +202,6 @@
             zerolinecolor: grid,
             linecolor: muted,
             tickfont: { color: muted },
-            autorange: false,
-            range: paddedDateRange(
-              series.x.concat(PLOT_EVENTS.map((event) => event.date))
-            ),
           },
           yaxis: {
             title: { text: "Time (hours)" },
