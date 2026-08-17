@@ -37,6 +37,15 @@
         height: 100%;
       }
 
+      #anno-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        overflow: visible;
+        z-index: 1;
+      }
+
       #status {
         position: absolute;
         inset: 0;
@@ -56,12 +65,274 @@
   <body>
     <div id="status">Loading build time history…</div>
     <div id="chart"></div>
+    <svg id="anno-overlay" aria-hidden="true"></svg>
     <script>
       const DATA_URLS = [
         "https://raw.githubusercontent.com/Shamrock-code/Shamrock/refs/heads/metrics-history/output/build_time_total.json",
         "https://cdn.jsdelivr.net/gh/Shamrock-code/Shamrock@metrics-history/output/build_time_total.json",
       ];
       const SECONDS_PER_HOUR = 3600;
+
+      // Matplotlib-style annotate() callouts. Offsets and connectionstyle match:
+      //   ax.annotate(text, xy=(...), xycoords='data',
+      //               xytext=(-90, 50), textcoords='offset points',
+      //               arrowprops=dict(arrowstyle="->",
+      //                               connectionstyle="arc,angleA=0,armA=50,rad=10"))
+      const CURVED_ANNOTATIONS = [
+        {
+          date: "2026-08-17",
+          text: "force -j 4 in gh-runners",
+          series: "total_h",
+          xytext: [-90, 50],
+          connectionstyle: { angleA: 0, armA: 50, rad: 10 },
+        },
+      ];
+
+      function lastIndexOnDate(dates, datePrefix) {
+        let found = -1;
+        for (let i = 0; i < dates.length; i++) {
+          if (String(dates[i]).startsWith(datePrefix)) {
+            found = i;
+          }
+        }
+        return found;
+      }
+
+      function axisNumeric(axis, value) {
+        let converted = axis.d2c(value);
+        if (!Number.isFinite(converted) && axis.type === "date") {
+          const ms = Date.parse(value);
+          if (Number.isFinite(ms)) {
+            converted = axis.d2c(ms);
+          }
+        }
+        return converted;
+      }
+
+      function rangeNumeric(value) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return value;
+        }
+        const ms = Date.parse(value);
+        return Number.isFinite(ms) ? ms : Number(value);
+      }
+
+      function dataToPixel(gd, x, y) {
+        const xaxis = gd._fullLayout && gd._fullLayout.xaxis;
+        const yaxis = gd._fullLayout && gd._fullLayout.yaxis;
+        if (!xaxis || !yaxis || typeof xaxis.d2c !== "function" || typeof yaxis.d2c !== "function") {
+          return null;
+        }
+        const xc = axisNumeric(xaxis, x);
+        const yc = axisNumeric(yaxis, y);
+        if (!Number.isFinite(xc) || !Number.isFinite(yc)) {
+          return null;
+        }
+        const xp = xaxis.l2p(xc);
+        const yp = yaxis.l2p(yc);
+        if (!Number.isFinite(xp) || !Number.isFinite(yp)) {
+          return null;
+        }
+        return { x: xaxis._offset + xp, y: yaxis._offset + yp };
+      }
+
+      function inAxisRange(gd, x, y) {
+        const xaxis = gd._fullLayout.xaxis;
+        const yaxis = gd._fullLayout.yaxis;
+        const xc = axisNumeric(xaxis, x);
+        const yc = axisNumeric(yaxis, y);
+        const xr = xaxis.range;
+        const yr = yaxis.range;
+        if (!xr || !yr) {
+          return true;
+        }
+        const xmin = Math.min(rangeNumeric(xr[0]), rangeNumeric(xr[1]));
+        const xmax = Math.max(rangeNumeric(xr[0]), rangeNumeric(xr[1]));
+        const ymin = Math.min(rangeNumeric(yr[0]), rangeNumeric(yr[1]));
+        const ymax = Math.max(rangeNumeric(yr[0]), rangeNumeric(yr[1]));
+        return xc >= xmin && xc <= xmax && yc >= ymin && yc <= ymax;
+      }
+
+      // Port of matplotlib.patches.ConnectionStyle.Arc.connect (y-up angles).
+      function matplotlibArcPath(posA, posB, style) {
+        const angleA = style.angleA || 0;
+        const angleB = style.angleB || 0;
+        const armA = style.armA;
+        const armB = style.armB;
+        const rad = style.rad || 0;
+        const deg = Math.PI / 180;
+        const cosA = Math.cos(angleA * deg);
+        const sinA = -Math.sin(angleA * deg);
+        const cosB = Math.cos(angleB * deg);
+        const sinB = -Math.sin(angleB * deg);
+        const x1 = posA.x;
+        const y1 = posA.y;
+        const x2 = posB.x;
+        const y2 = posB.y;
+
+        const vertices = [{ x: x1, y: y1 }];
+        const codes = ["M"];
+        let rounded = [];
+
+        if (armA) {
+          rounded.push({ x: x1 + (armA - rad) * cosA, y: y1 + (armA - rad) * sinA });
+          rounded.push({ x: x1 + armA * cosA, y: y1 + armA * sinA });
+        }
+
+        if (armB) {
+          const xArmB = x2 + armB * cosB;
+          const yArmB = y2 + armB * sinB;
+          if (rounded.length) {
+            const last = rounded[rounded.length - 1];
+            const dx = xArmB - last.x;
+            const dy = yArmB - last.y;
+            const dd = Math.hypot(dx, dy) || 1;
+            rounded.push({ x: last.x + (rad * dx) / dd, y: last.y + (rad * dy) / dd });
+            vertices.push(...rounded);
+            codes.push("L", "Q", "Q");
+            rounded = [];
+          } else {
+            const last = vertices[vertices.length - 1];
+            const dx = xArmB - last.x;
+            const dy = yArmB - last.y;
+            const dd = Math.hypot(dx, dy) || 1;
+            rounded = [
+              { x: last.x + ((dd - rad) * dx) / dd, y: last.y + ((dd - rad) * dy) / dd },
+              { x: xArmB, y: yArmB },
+            ];
+          }
+        }
+
+        if (rounded.length) {
+          const last = rounded[rounded.length - 1];
+          const dx = x2 - last.x;
+          const dy = y2 - last.y;
+          const dd = Math.hypot(dx, dy) || 1;
+          rounded.push({ x: last.x + (rad * dx) / dd, y: last.y + (rad * dy) / dd });
+          vertices.push(...rounded);
+          codes.push("L", "Q", "Q");
+        }
+
+        vertices.push({ x: x2, y: y2 });
+        codes.push("L");
+
+        const parts = [];
+        for (let i = 0; i < vertices.length; i++) {
+          const code = codes[i];
+          const p = vertices[i];
+          if (code === "M") {
+            parts.push(`M ${p.x} ${p.y}`);
+          } else if (code === "L") {
+            parts.push(`L ${p.x} ${p.y}`);
+          } else if (code === "Q") {
+            const end = vertices[i + 1];
+            parts.push(`Q ${p.x} ${p.y} ${end.x} ${end.y}`);
+            i += 1;
+          }
+        }
+        return { d: parts.join(" "), vertices };
+      }
+
+      function arrowHeadPoints(fromPt, toPt, size) {
+        const dx = toPt.x - fromPt.x;
+        const dy = toPt.y - fromPt.y;
+        const angle = Math.atan2(dy, dx);
+        const spread = Math.PI * 0.82;
+        return [
+          toPt,
+          {
+            x: toPt.x - size * Math.cos(angle - spread),
+            y: toPt.y - size * Math.sin(angle - spread),
+          },
+          {
+            x: toPt.x - size * Math.cos(angle + spread),
+            y: toPt.y - size * Math.sin(angle + spread),
+          },
+        ];
+      }
+
+      function svgEl(name, attrs) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+        Object.keys(attrs).forEach((key) => {
+          el.setAttribute(key, attrs[key]);
+        });
+        return el;
+      }
+
+      function drawCurvedAnnotations(gd, series) {
+        const overlay = document.getElementById("anno-overlay");
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+        if (!gd || !gd._fullLayout) {
+          return;
+        }
+        overlay.setAttribute("width", String(gd._fullLayout.width));
+        overlay.setAttribute("height", String(gd._fullLayout.height));
+        overlay.style.width = `${gd._fullLayout.width}px`;
+        overlay.style.height = `${gd._fullLayout.height}px`;
+
+        const styles = getComputedStyle(document.documentElement);
+        const color = styles.getPropertyValue("--fg").trim() || "#3c3836";
+        const bg = styles.getPropertyValue("--bg").trim() || "#fff";
+
+        CURVED_ANNOTATIONS.forEach((anno) => {
+          const idx = lastIndexOnDate(series.x, anno.date);
+          if (idx < 0) {
+            return;
+          }
+          const yValues = series[anno.series];
+          if (!yValues || typeof yValues[idx] !== "number") {
+            return;
+          }
+          const x = series.x[idx];
+          const y = yValues[idx];
+          if (!inAxisRange(gd, x, y)) {
+            return;
+          }
+          const xy = dataToPixel(gd, x, y);
+          if (!xy) {
+            return;
+          }
+          const posB = xy;
+          const posA = { x: posB.x + anno.xytext[0], y: posB.y - anno.xytext[1] };
+          const path = matplotlibArcPath(posA, posB, anno.connectionstyle);
+          const verts = path.vertices;
+          const fromPt = verts.length >= 2 ? verts[verts.length - 2] : posA;
+          const head = arrowHeadPoints(fromPt, posB, 8);
+          const g = svgEl("g", { fill: color, stroke: color });
+          g.appendChild(
+            svgEl("path", {
+              d: path.d,
+              fill: "none",
+              "stroke-width": "1.25",
+              "stroke-linecap": "round",
+              "stroke-linejoin": "round",
+            })
+          );
+          g.appendChild(
+            svgEl("polygon", {
+              points: head.map((p) => `${p.x},${p.y}`).join(" "),
+              stroke: "none",
+            })
+          );
+          const text = svgEl("text", {
+            x: String(posA.x - 6),
+            y: String(posA.y),
+            "text-anchor": "end",
+            "dominant-baseline": "middle",
+            "font-family": "system-ui, sans-serif",
+            "font-size": "13",
+            fill: color,
+            stroke: bg,
+            "stroke-width": "4",
+            "paint-order": "stroke",
+          });
+          text.textContent = anno.text;
+          g.appendChild(text);
+          overlay.appendChild(g);
+        });
+      }
 
       function parentTheme() {
         try {
@@ -130,7 +401,7 @@
         const tuColor = seriesColors(theme).tus;
         const layout = {
           title: { text: "Build time (ClangBuildAnalyzer)", font: { color: fg, size: 18 } },
-          margin: { l: 64, r: showTu ? 72 : 24, t: 48, b: 80 },
+          margin: { l: 64, r: showTu ? 72 : 24, t: 56, b: 80 },
           paper_bgcolor: bg,
           plot_bgcolor: bg,
           font: { color: fg },
@@ -318,6 +589,8 @@
           displaylogo: false,
         });
         setStatus("");
+        drawCurvedAnnotations(chart, series);
+        chart.on("plotly_afterplot", () => drawCurvedAnnotations(chart, series));
 
         const restyle = () => {
           theme = parentTheme();
