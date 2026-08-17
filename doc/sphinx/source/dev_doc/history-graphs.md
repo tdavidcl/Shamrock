@@ -67,6 +67,38 @@ The org website can embed this chart with:
 ></iframe>
 ```
 
+## Template instantiation (top 10)
+
+CI records ClangBuildAnalyzer template instantiation times. The chart keeps
+only the top 10 templates of each commit: a template that drops out of that
+ranking is omitted at that date (`null` y, `connectgaps: false`). See
+[Profiling build performance / time](build-profiling.md).
+
+```{raw} html
+<iframe
+  src="../_static/template_instantiation_top10.html"
+  title="Top 10 template instantiations over time"
+  width="100%"
+  height="800"
+  style="border: none;"
+></iframe>
+```
+
+Raw Plotly JSON:
+[template_instantiation_top10.json](https://raw.githubusercontent.com/Shamrock-code/Shamrock/refs/heads/metrics-history/output/template_instantiation_top10.json).
+
+The org website can embed this chart with:
+
+```html
+<iframe
+  src="https://shamrock-code.github.io/Shamrock/sphinx/_static/template_instantiation_top10.html"
+  title="Top 10 template instantiations over time"
+  width="100%"
+  height="800"
+  style="border: none;"
+></iframe>
+```
+
 ## Lines of code
 
 CI counts lines in tracked source files, excluding git submodules. Exclusive
