@@ -41,10 +41,15 @@ fi
 
 cd build
 
-# shamconfigure builds AdaptiveCpp from source on first run (cached after
-# that) and then configures Shamrock with CMake.
+# shamconfigure builds AdaptiveCpp from source on first run (a few minutes,
+# cached after that) and then configures Shamrock with CMake. It does NOT
+# compile Shamrock itself: a full `shammake` of every target takes ~40min,
+# so it is intentionally left for later, on demand. Prefer building only
+# the target(s) touched by a change, e.g.:
+#   ./shamenv_do shammake shammodels_sph
+# and reserve a full `./shamenv_do shammake` (or `shammake shamrock_test`)
+# for when tests actually need to run or the binary needs to execute.
 ./shamenv_do shamconfigure
-./shamenv_do shammake
 
 # --- Reference files (needed for unit tests) ----------------------------
 if [ ! -d reference-files ]; then
