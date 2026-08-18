@@ -107,8 +107,7 @@ jobs:
   env_tests:
     name: Tests
     needs: [src_check]
-    # Temporary: run env_tests in light CI so macos-26 python tests can track the
-    # shutdown crash. Other env_tests matrix entries are skipped when light_ci is true.
+    # Temporary: macos-26 is tagged light_ci so python shutdown can be tracked on PRs.
     uses: ./.github/workflows/env_tests.yml
     with:
       light_ci: ${{ inputs.light_ci }}
