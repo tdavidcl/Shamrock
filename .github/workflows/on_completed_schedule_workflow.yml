@@ -1,0 +1,26 @@
+name: On Schedule (completed)
+
+# After "On Schedule" finishes, persist the aggregated metrics.json artifact
+# onto the orphan metrics-history branch. See persist_metrics.yml.
+#
+# This succeeds once schedule CI also uploads metrics.json (collect_metrics
+# is currently wired on push/PR in a separate change).
+
+on:
+  workflow_run:
+    workflows: ['On Schedule']
+    types:
+      - completed
+
+jobs:
+  persist_metrics:
+    name: Persist metrics
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/persist_metrics.yml
+    with:
+      artifact_name: metrics.json
+      metric_id: ci
+      source_run_id: ${{ format('{0}', github.event.workflow_run.id) }}
