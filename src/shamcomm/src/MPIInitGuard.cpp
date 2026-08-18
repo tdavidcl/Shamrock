@@ -8,18 +8,18 @@
 // -------------------------------------------------------//
 
 /**
- * @file MpiInstance.cpp
+ * @file MPIInitGuard.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief RAII wrapper around MPI_Init and MPI_Finalize
  */
 
-#include "shamcomm/MpiInstance.hpp"
+#include "shamcomm/MPIInitGuard.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 
 namespace shamcomm {
 
-    MpiInstance::MpiInstance(int *argc, char ***argv) {
+    MPIInitGuard::MPIInitGuard(int *argc, char ***argv) {
         int initialized = 0;
         MPICHECK(MPI_Initialized(&initialized));
         if (initialized) {
@@ -31,9 +31,9 @@ namespace shamcomm {
         owns_mpi = true;
     }
 
-    MpiInstance::~MpiInstance() { close(); }
+    MPIInitGuard::~MPIInitGuard() { close(); }
 
-    void MpiInstance::close() {
+    void MPIInitGuard::close() {
         if (!owns_mpi) {
             return;
         }
@@ -47,6 +47,6 @@ namespace shamcomm {
         owns_mpi = false;
     }
 
-    bool MpiInstance::is_active() const { return owns_mpi; }
+    bool MPIInitGuard::is_active() const { return owns_mpi; }
 
 } // namespace shamcomm
