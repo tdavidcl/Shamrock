@@ -6,7 +6,13 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-cd "$CLAUDE_PROJECT_DIR"
+# CLAUDE_PROJECT_DIR is unset when the environment is started from a
+# manually configured directory (e.g. pasted into the environment's setup
+# script box) rather than the normal session bootstrap; in that case we're
+# already in the right directory, so just skip the cd.
+if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+  cd "$CLAUDE_PROJECT_DIR"
+fi
 
 # --- System dependencies -----------------------------------------------
 # AdaptiveCpp (SYCL) needs Boost.context/fiber and an LLVM install; Shamrock
@@ -19,7 +25,11 @@ for pkg in $NEEDED_PKGS; do
   fi
 done
 if [ -n "$MISSING_PKGS" ]; then
-  apt-get update
+  # Some base images ship extra apt sources (e.g. deadsnakes/ondrej PPAs)
+  # that this environment's network policy blocks; that makes `apt-get
+  # update` exit non-zero even though the archives we actually need
+  # (Ubuntu main/universe/security) refresh fine. Don't let that abort us.
+  apt-get update || true
   DEBIAN_FRONTEND=noninteractive apt-get install -y $MISSING_PKGS
 fi
 
@@ -27,7 +37,9 @@ fi
 # which expects a distutils "install_layout" attribute that setuptools'
 # vendored (local) distutils no longer provides. Forcing stdlib distutils
 # avoids the AttributeError when hook environments are built.
-echo 'export SETUPTOOLS_USE_DISTUTILS=stdlib' >> "$CLAUDE_ENV_FILE"
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo 'export SETUPTOOLS_USE_DISTUTILS=stdlib' >> "$CLAUDE_ENV_FILE"
+fi
 export SETUPTOOLS_USE_DISTUTILS=stdlib
 
 # --- Submodules ----------------------------------------------------------
