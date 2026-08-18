@@ -107,7 +107,6 @@ jobs:
   env_tests:
     name: Tests
     needs: [src_check]
-    # Temporary: macos-26 is tagged light_ci so python shutdown can be tracked on PRs.
     uses: ./.github/workflows/env_tests.yml
     with:
       light_ci: ${{ inputs.light_ci }}
