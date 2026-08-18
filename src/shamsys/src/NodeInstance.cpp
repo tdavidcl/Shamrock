@@ -147,14 +147,19 @@ namespace syclinit {
     void finalize() {
         initialized = false;
 
-        device_compute.reset();
-        device_alt.reset();
+        // Drop schedulers first so DeviceQueue / sycl::queue destructors run while
+        // AdaptiveCpp (and the MPI runtime) are still alive. Resetting devices or
+        // contexts first only drops aliases; the queues still die with the
+        // schedulers, and doing that during process-exit static destruction races
+        // AdaptiveCpp's own teardown (mutex lock EINVAL on macOS + OpenMP).
+        sched_compute.reset();
+        sched_alt.reset();
 
         ctx_compute.reset();
         ctx_alt.reset();
 
-        sched_compute.reset();
-        sched_alt.reset();
+        device_compute.reset();
+        device_alt.reset();
     }
 }; // namespace syclinit
 
@@ -343,6 +348,14 @@ namespace shamsys::instance {
     }
 
     void close_mpi() {
+        int mpi_initialized_flag = 0;
+        int mpi_finalized_flag   = 0;
+        mpi::initialized(&mpi_initialized_flag);
+        mpi::finalized(&mpi_finalized_flag);
+        if (!mpi_initialized_flag || mpi_finalized_flag) {
+            return;
+        }
+
         mpidtypehandler::free_mpidtype();
 
         free_sycl_mpi_types();
@@ -360,7 +373,9 @@ namespace shamsys::instance {
 
         close_mpi();
 
-        syclinit::finalize();
+        if (syclinit::initialized) {
+            syclinit::finalize();
+        }
     }
 
     ////////////////////////////

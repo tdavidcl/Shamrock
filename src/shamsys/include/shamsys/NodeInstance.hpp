@@ -97,10 +97,13 @@ namespace shamsys::instance {
     /**
      * @brief close the NodeInstance
      * Aka : Finalize both MPI & SYCL
+     *
+     * Safe to call more than once. No-op if MPI is already finalized and SYCL
+     * queues have already been released.
      */
     void close();
 
-    /// Finalize MPI
+    /// Finalize MPI. Safe to call more than once; no-op after MPI_Finalize.
     void close_mpi();
 
     [[deprecated("Please use shamrock smi instead")]]
