@@ -29,14 +29,13 @@ if not shamrock.sys.is_initialized():
 shamrock.matplotlib.set_shamrock_mpl_style()
 
 
-
 # %%
 configs = [
     {"kernel": "M4", "ndust": 0},
     {"kernel": "M6", "ndust": 0},
 ]
 
-for n in range(1,100):
+for n in range(1, 100):
     configs.append({"kernel": "M6", "ndust": n})
 
 
@@ -51,7 +50,6 @@ for c in configs:
         unit_mass=sicte.sol_mass(),
     )
     ucte = shamrock.Constants(codeu)
-
 
     # Resolution
     Npart = int(os.environ.get("NPART", 100000))
@@ -114,13 +112,11 @@ for c in configs:
         codeu, mrn_pow, mrn_cutoff_si, grain_size_si_edges, rho_grains_si_edges
     )
 
-
     class DustLimiter(Enum):
         NONE = "none"
         SMOOTH = "smooth"
         BALLABIO = "ballabio"
         HARD = "hard"
-
 
     _dust_limiter_env = os.environ.get("DUST_LIMITER", "none")
     limiter = DustLimiter(_dust_limiter_env)
@@ -130,7 +126,6 @@ for c in configs:
     C_cour = 0.1
     C_force = 0.1
 
-
     sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}_{limiter.value}/"
 
     dump_folder = sim_folder + "dump/"
@@ -138,7 +133,6 @@ for c in configs:
     plot_folder = analysis_folder + "plots/"
 
     dump_prefix = dump_folder + "dump_"
-
 
     # %%
     # Create the dump directory if it does not exist
@@ -163,7 +157,6 @@ for c in configs:
     rho_grains = mrn_distribution.rho_grains
     massgrid_edges = mrn_distribution.massgrid_edges
     mrn_weight = mrn_distribution.mrn_weight
-
 
     # %%
     # Start the context
@@ -211,9 +204,7 @@ for c in configs:
                 nvar=ndust, ensure_s_j_positivity=True, smooth_s_positivity_limiter=False
             )
 
-    cfg.add_kill_sphere(
-        center=(0, 0, 0), radius=bsize
-    )  # kill particles outside the simulation box
+    cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
     cfg.set_units(codeu)
     cfg.set_particle_mass(disc.part_mass(Npart))
@@ -303,7 +294,7 @@ for c in configs:
     model.timestep()
     model.change_htolerances(coarse=1.1, fine=1.1)
 
-    def compute_sj_new_j( patchdata, j):
+    def compute_sj_new_j(patchdata, j):
         pmass = model.get_particle_mass()
 
         hpart = patchdata["hpart"]
@@ -320,6 +311,7 @@ for c in configs:
         return s
 
         # Add the dust
+
     for k in range(ndust):
 
         def compute_sj_new(patchdata):

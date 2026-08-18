@@ -311,7 +311,7 @@ def plot_case(k_plot, eps_value, cs_value, ts_value):
         fontsize=9,
     )
     plt.ylim(ymin, ymax)
-    plt.suptitle(f"$\epsilon = {eps_value}, c_s = {cs_value}, t_s = {ts_value}$")
+    plt.suptitle(rf"$\epsilon = {eps_value}, c_s = {cs_value}, t_s = {ts_value}$")
 
     plt.tight_layout()
     os.makedirs("_to_trash", exist_ok=True)
