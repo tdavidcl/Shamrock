@@ -9,108 +9,131 @@ on:
 
 jobs:
 
+  set_matrix:
+    name: Set env tests matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        shell: bash
+        run: |
+          cat > matrix.json <<'JSON'
+          {
+            "include": [
+              {
+                "machine": "debian-generic.acpp",
+                "args": "--backend omp",
+                "container": "ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15",
+                "runson": "ubuntu-latest",
+                "imagename": "Ubuntu 22 LLVM 15",
+                "runtest": true,
+                "runtestpy": true,
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "omp"
+              },
+              {
+                "machine": "debian-generic.acpp",
+                "args": "--backend generic",
+                "container": "ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15",
+                "runson": "ubuntu-latest",
+                "imagename": "Ubuntu 22 LLVM 15",
+                "runtest": true,
+                "runtestpy": true,
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "generic"
+              },
+              {
+                "machine": "debian-generic.acpp",
+                "args": "--backend cuda.explicit-multipass --arch sm_80",
+                "container": "ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15cuda11",
+                "runson": "ubuntu-latest",
+                "imagename": "Ubuntu 22 LLVM 15 CUDA 11",
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "cuda.explicit-multipass"
+              },
+              {
+                "machine": "debian-generic.acpp",
+                "args": "--backend cuda.integrated-multipass --arch sm_80",
+                "container": "ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15cuda11",
+                "runson": "ubuntu-latest",
+                "imagename": "Ubuntu 22 LLVM 15 CUDA 11",
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "cuda.integrated-multipass"
+              },
+              {
+                "machine": "debian-generic.acpp",
+                "args": "--backend hip --arch gfx906",
+                "container": "ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15rocm543",
+                "runson": "ubuntu-latest",
+                "imagename": "Ubuntu 22 LLVM 15 ROCM 5.4.3",
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "hip"
+              },
+              {
+                "machine": "archlinux.acpp",
+                "args": "--backend generic",
+                "container": "archlinux/archlinux:base-devel",
+                "runson": "ubuntu-latest",
+                "imagename": "ArchLinux",
+                "runtest": true,
+                "runtestpy": true,
+                "mpiargs": "--allow-run-as-root --bind-to none --oversubscribe",
+                "ccache-key-extra": "generic"
+              },
+              {
+                "machine": "macos-generic.acpp",
+                "runson": "macos-14",
+                "imagename": "MacOS-14",
+                "runtest": true,
+                "mpiargs": "--oversubscribe",
+                "ccache-key-extra": "macos14"
+              },
+              {
+                "machine": "macos-generic.acpp",
+                "runson": "macos-15",
+                "imagename": "MacOS-15",
+                "runtest": true,
+                "mpiargs": "--oversubscribe",
+                "ccache-key-extra": "macos15",
+                "build_nproc": 4
+              },
+              {
+                "machine": "macos-generic.acpp",
+                "runson": "macos-15-intel",
+                "imagename": "MacOS-15 (intel)",
+                "runtest": true,
+                "mpiargs": "--oversubscribe",
+                "ccache-key-extra": "macos15-intel"
+              },
+              {
+                "machine": "macos-generic.acpp",
+                "runson": "macos-26",
+                "imagename": "MacOS-26",
+                "runtest": true,
+                "mpiargs": "--oversubscribe",
+                "ccache-key-extra": "macos26"
+              }
+            ]
+          }
+          JSON
+
+          {
+            echo "matrix<<EOF"
+            cat matrix.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
   compile_and_test:
     name: "${{ matrix.imagename }} -- ${{ matrix.machine }} -- ${{ matrix.args }}"
+    needs: [set_matrix]
     runs-on: ${{ matrix.runson }}
 
     container:
       image: ${{ matrix.container }}
 
     strategy:
-      matrix:
-        include:
-
-          ##########################################################################################
-          # Ubuntu
-          ##########################################################################################
-          - machine: debian-generic.acpp
-            args: --backend omp
-            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15
-            runson: ubuntu-latest
-            imagename: Ubuntu 22 LLVM 15
-            runtest: yes
-            runtestpy: yes
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: omp
-
-          - machine: debian-generic.acpp
-            args: --backend generic
-            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15
-            runson: ubuntu-latest
-            imagename: Ubuntu 22 LLVM 15
-            runtest: yes
-            runtestpy: yes
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: generic
-
-          - machine: debian-generic.acpp
-            args: --backend cuda.explicit-multipass --arch sm_80
-            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15cuda11
-            runson: ubuntu-latest
-            imagename: Ubuntu 22 LLVM 15 CUDA 11
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: cuda.explicit-multipass
-
-          - machine: debian-generic.acpp
-            args: --backend cuda.integrated-multipass --arch sm_80
-            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15cuda11
-            runson: ubuntu-latest
-            imagename: Ubuntu 22 LLVM 15 CUDA 11
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: cuda.integrated-multipass
-
-          - machine: debian-generic.acpp
-            args: --backend hip --arch gfx906
-            container: ghcr.io/shamrock-code/shamrock-ci:ubuntu22llvm15rocm543
-            runson: ubuntu-latest
-            imagename: Ubuntu 22 LLVM 15 ROCM 5.4.3
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: hip
-
-          ##########################################################################################
-          # Arch Linux
-          ##########################################################################################
-          - machine: archlinux.acpp
-            args: --backend generic
-            container: archlinux/archlinux:base-devel
-            runson: ubuntu-latest
-            imagename: ArchLinux
-            runtest: yes
-            runtestpy: yes
-            mpiargs: --allow-run-as-root --bind-to none --oversubscribe
-            ccache-key-extra: generic
-
-          ##########################################################################################
-          # MacOS
-          ##########################################################################################
-          - machine: macos-generic.acpp
-            runson: macos-14
-            imagename: MacOS-14
-            runtest: yes
-            mpiargs: --oversubscribe
-            ccache-key-extra: macos14
-
-          - machine: macos-generic.acpp
-            runson: macos-15
-            imagename: MacOS-15
-            runtest: yes
-            mpiargs: --oversubscribe
-            ccache-key-extra: macos15
-            build_nproc: 4
-
-          - machine: macos-generic.acpp
-            runson: macos-15-intel
-            imagename: MacOS-15 (intel)
-            runtest: yes
-            mpiargs: --oversubscribe
-            ccache-key-extra: macos15-intel
-
-          - machine: macos-generic.acpp
-            runson: macos-26
-            imagename: MacOS-26
-            runtest: yes
-            mpiargs: --oversubscribe
-            ccache-key-extra: macos26
+      matrix: ${{ fromJSON(needs.set_matrix.outputs.matrix) }}
 
     timeout-minutes: 120
     steps:
