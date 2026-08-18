@@ -1,0 +1,24 @@
+name: Ensure metrics-history
+
+
+on:
+  workflow_call:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+
+jobs:
+  ensure_metrics_history:
+    name: Ensure metrics-history
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Shamrock-code/action-ensure-orphan-branch@c18ff0971932d59862ce52112925a5f5fc5c19f0
+        with:
+          branch_name: metrics-history
