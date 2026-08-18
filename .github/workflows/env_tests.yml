@@ -3,15 +3,30 @@ name: Compile & Unit tests
 
 on:
   workflow_call:
+    inputs:
+      light_ci:
+        description: "If true, only run the macos-26 job (temporary: track python shutdown crash)"
+        required: false
+        type: boolean
+        default: false
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      light_ci:
+        description: "If true, only run the macos-26 job (temporary: track python shutdown crash)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
 
   compile_and_test:
     name: "${{ matrix.imagename }} -- ${{ matrix.machine }} -- ${{ matrix.args }}"
     runs-on: ${{ matrix.runson }}
+    # Temporary: in light CI, only macos-26 runs so we can track the python module
+    # shutdown crash without enabling the full env_tests matrix on every PR.
+    if: ${{ !inputs.light_ci || matrix.light_ci }}
 
     container:
       image: ${{ matrix.container }}
@@ -105,10 +120,13 @@ jobs:
             mpiargs: --oversubscribe
             ccache-key-extra: macos15-intel
 
+          # Temporary: runtestpy + light_ci to track python shutdown crash on macos-26
           - machine: macos-generic.acpp
             runson: macos-26
             imagename: MacOS-26
             runtest: yes
+            runtestpy: yes
+            light_ci: yes
             mpiargs: --oversubscribe
             ccache-key-extra: macos26
 
