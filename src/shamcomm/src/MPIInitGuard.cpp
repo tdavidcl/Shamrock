@@ -14,10 +14,35 @@
  */
 
 #include "shamcomm/MPIInitGuard.hpp"
+#include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
 
 namespace shamcomm {
+
+    namespace {
+
+        void log_mpi_init_call(int *argc, char ***argv) {
+            logs::debug_mpi_ln("MPIInitGuard", "MPI_Init(", argc, ",", argv, ")");
+
+            if (argc == nullptr) {
+                return;
+            }
+
+            logs::debug_mpi_ln("MPIInitGuard", "MPI_Init *argc =", *argc);
+
+            if (argv == nullptr || *argv == nullptr) {
+                return;
+            }
+
+            for (int i = 0; i < *argc; i++) {
+                const char *arg = (*argv)[i];
+                logs::debug_mpi_ln(
+                    "MPIInitGuard", "MPI_Init argv[", i, "] =", (arg != nullptr) ? arg : "nullptr");
+            }
+        }
+
+    } // namespace
 
     MPIInitGuard::MPIInitGuard(int *argc, char ***argv) {
         int initialized = 0;
@@ -27,6 +52,7 @@ namespace shamcomm {
             return;
         }
 
+        log_mpi_init_call(argc, argv);
         MPICHECK(MPI_Init(argc, argv));
         owns_mpi = true;
     }
@@ -41,6 +67,7 @@ namespace shamcomm {
         int finalized = 0;
         MPICHECK(MPI_Finalized(&finalized));
         if (!finalized) {
+            logs::debug_mpi_ln("MPIInitGuard", "MPI_Finalize()");
             MPICHECK(MPI_Finalize());
         }
 
