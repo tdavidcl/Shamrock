@@ -126,7 +126,7 @@ upstream `main` on that repo.
 
 ### Commit authorship
 
-Commit-msg hooks rewrite the author and inject `Co-authored-by` (often
+Commit-msg hooks can rewrite the author and inject `Co-authored-by` (often)
 with a model name). After every `git commit`, amend with `--no-verify`
 before pushing (a plain amend re-runs the hook):
 
