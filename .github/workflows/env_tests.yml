@@ -156,6 +156,9 @@ jobs:
             mv matrix.filtered.json matrix.json
           fi
 
+          echo "matrix.json:"
+          cat matrix.json
+
           {
             echo "matrix<<EOF"
             cat matrix.json
