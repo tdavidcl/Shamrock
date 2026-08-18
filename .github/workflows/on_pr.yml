@@ -48,7 +48,6 @@ jobs:
 
           Light CI is enabled (the default for pull requests). This will only run the basic tests and not the full tests.
           Full CI runs if the `full-ci` label is set, or automatically on Mergify merge-queue branches (`mergify/merge-queue/*`).
-          The compile-time build profile job also runs if the `profile-build` label is set.
           The merge gate job "on PR / all" is skipped in this case. Queue entry uses "on PR / all_light"; full CI runs in the merge queue.
           EOF
 
