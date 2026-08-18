@@ -30,6 +30,7 @@
 #include "shambackends/typeAliasVec.hpp"
 #include "shamcmdopt/cmdopt.hpp"
 #include "shamcmdopt/env.hpp"
+#include "shamcomm/MpiInstance.hpp"
 #include "shamcomm/local_rank.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
@@ -165,6 +166,10 @@ namespace syclinit {
 
 namespace shamsys::instance {
 
+    namespace {
+        std::unique_ptr<shamcomm::MpiInstance> mpi_instance;
+    } // namespace
+
     u32 compute_queue_eu_count = 64;
 
     u32 get_compute_queue_eu_count(u32 id) { return compute_queue_eu_count; }
@@ -249,9 +254,13 @@ namespace shamsys::instance {
 
     void start_mpi(MPIInitInfo mpi_info) {
 
+        if (mpi_instance) {
+            throw ShamsysInstanceException("MPI is already initialized");
+        }
+
         shamcomm::fetch_mpi_capabilities(mpi_info.forced_state);
 
-        mpi::init(&mpi_info.argc, &mpi_info.argv);
+        mpi_instance = std::make_unique<shamcomm::MpiInstance>(&mpi_info.argc, &mpi_info.argv);
 
         shamcomm::fetch_world_info();
 
@@ -348,11 +357,7 @@ namespace shamsys::instance {
     }
 
     void close_mpi() {
-        int mpi_initialized_flag = 0;
-        int mpi_finalized_flag   = 0;
-        mpi::initialized(&mpi_initialized_flag);
-        mpi::finalized(&mpi_finalized_flag);
-        if (!mpi_initialized_flag || mpi_finalized_flag) {
+        if (!mpi_instance) {
             return;
         }
 
@@ -366,7 +371,7 @@ namespace shamsys::instance {
             logger::raw_ln(" Hopefully it was quick :')\n");
         }
 
-        mpi::finalize();
+        mpi_instance.reset();
     }
 
     void close() {
