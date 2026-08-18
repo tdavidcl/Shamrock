@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file MpiInstance.hpp
+ * @file MPIInitGuard.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief RAII wrapper around MPI_Init and MPI_Finalize
  */
@@ -18,15 +18,15 @@
 namespace shamcomm {
 
     /**
-     * @brief RAII owner of the MPI library lifetime
+     * @brief RAII guard of the MPI library lifetime
      *
      * The constructor initializes MPI if it is not already initialized. The destructor (or
-     * `close()`) finalizes MPI if and only if this instance started it.
+     * `close()`) finalizes MPI if and only if this guard started it.
      *
      * Copy and move are disabled: a process may initialize MPI only once, and ownership of that
      * session must stay unique.
      */
-    class MpiInstance {
+    class MPIInitGuard {
         public:
         /**
          * @brief Initialize MPI if it is not already initialized
@@ -34,27 +34,27 @@ namespace shamcomm {
          * @param argc Argument count pointer forwarded to MPI_Init (may be nullptr)
          * @param argv Argument vector pointer forwarded to MPI_Init (may be nullptr)
          */
-        explicit MpiInstance(int *argc = nullptr, char ***argv = nullptr);
+        explicit MPIInitGuard(int *argc = nullptr, char ***argv = nullptr);
 
-        /// Finalize MPI if this instance owns the session
-        ~MpiInstance();
+        /// Finalize MPI if this guard owns the session
+        ~MPIInitGuard();
 
-        MpiInstance(const MpiInstance &)            = delete;
-        MpiInstance &operator=(const MpiInstance &) = delete;
-        MpiInstance(MpiInstance &&)                 = delete;
-        MpiInstance &operator=(MpiInstance &&)      = delete;
+        MPIInitGuard(const MPIInitGuard &)            = delete;
+        MPIInitGuard &operator=(const MPIInitGuard &) = delete;
+        MPIInitGuard(MPIInitGuard &&)                 = delete;
+        MPIInitGuard &operator=(MPIInitGuard &&)      = delete;
 
         /**
-         * @brief Finalize MPI early if this instance owns the session
+         * @brief Finalize MPI early if this guard owns the session
          *
          * Idempotent: a second call (including the destructor after `close()`) is a no-op.
          */
         void close();
 
         /**
-         * @brief Whether this instance currently owns an active MPI session
+         * @brief Whether this guard currently owns an active MPI session
          *
-         * @return true if this instance started MPI and has not closed it yet
+         * @return true if this guard started MPI and has not closed it yet
          */
         bool is_active() const;
 

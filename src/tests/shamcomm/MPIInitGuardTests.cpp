@@ -7,15 +7,15 @@
 //
 // -------------------------------------------------------//
 
-#include "shamcomm/MpiInstance.hpp"
+#include "shamcomm/MPIInitGuard.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamtest/shamtest.hpp"
 
-NEW_TEST(Unittest, "shamcomm/MpiInstance", 1) {
+NEW_TEST(Unittest, "shamcomm/MPIInitGuard", 1) {
     REQUIRE(shamcomm::is_mpi_initialized());
 
     {
-        shamcomm::MpiInstance extra;
+        shamcomm::MPIInitGuard extra;
         REQUIRE(!extra.is_active());
         REQUIRE(shamcomm::is_mpi_initialized());
 
