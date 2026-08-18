@@ -3,12 +3,26 @@ name: Compile & Unit tests
 
 on:
   workflow_call:
+    inputs:
+      light_ci:
+        description: "If true, keep only matrix entries with light_ci: true"
+        required: false
+        type: boolean
+        default: false
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      light_ci:
+        description: "If true, keep only matrix entries with light_ci: true"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
 
+  # matrix is not available in job-level if; filter here instead (same pattern as shamrock-dpcpp.yml).
+  # Entries with "light_ci": true are kept when inputs.light_ci is true. Unused until entries are tagged.
   set_matrix:
     name: Set env tests matrix
     runs-on: ubuntu-latest
@@ -117,6 +131,11 @@ jobs:
             ]
           }
           JSON
+
+          if [[ "${{ inputs.light_ci }}" == "true" ]]; then
+            jq '{include: [.include[] | select(.light_ci == true)]}' matrix.json > matrix.filtered.json
+            mv matrix.filtered.json matrix.json
+          fi
 
           {
             echo "matrix<<EOF"
