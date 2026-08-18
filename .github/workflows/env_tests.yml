@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
+      has_jobs: ${{ steps.set.outputs.has_jobs }}
     steps:
       - id: set
         shell: bash
@@ -163,11 +164,14 @@ jobs:
             echo "matrix<<EOF"
             cat matrix.json
             echo "EOF"
+            echo "has_jobs=$(jq -r '.include | length > 0' matrix.json)"
           } >> "$GITHUB_OUTPUT"
 
   compile_and_test:
     name: "${{ matrix.imagename }} -- ${{ matrix.machine }} -- ${{ matrix.args }}"
     needs: [set_matrix]
+    # Empty include lists fail strategy.matrix evaluation; skip instead.
+    if: ${{ needs.set_matrix.outputs.has_jobs == 'true' }}
     runs-on: ${{ matrix.runson }}
 
     container:
