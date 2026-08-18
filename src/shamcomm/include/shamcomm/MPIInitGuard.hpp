@@ -21,7 +21,8 @@ namespace shamcomm {
      * @brief RAII guard of the MPI library lifetime
      *
      * The constructor initializes MPI if it is not already initialized. The destructor (or
-     * `close()`) finalizes MPI if and only if this guard started it.
+     * `close()`) finalizes MPI if and only if this guard started it. If the destructor runs
+     * during exception unwinding, it calls `MPI_Abort` instead of `MPI_Finalize`.
      *
      * Copy and move are disabled: a process may initialize MPI only once, and ownership of that
      * session must stay unique.
@@ -36,7 +37,7 @@ namespace shamcomm {
          */
         explicit MPIInitGuard(int *argc = nullptr, char ***argv = nullptr);
 
-        /// Finalize MPI if this guard owns the session
+        /// Finalize MPI if this guard owns the session, or abort if destroying during a throw
         ~MPIInitGuard();
 
         MPIInitGuard(const MPIInitGuard &)            = delete;

@@ -17,6 +17,7 @@
 #include "shamcomm/logs.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/mpiErrorCheck.hpp"
+#include <exception>
 
 namespace shamcomm {
 
@@ -57,7 +58,16 @@ namespace shamcomm {
         owns_mpi = true;
     }
 
-    MPIInitGuard::~MPIInitGuard() { close(); }
+    MPIInitGuard::~MPIInitGuard() {
+        if (!owns_mpi) {
+            return;
+        }
+        if (std::uncaught_exceptions() > 0) {
+            logs::debug_mpi_ln("MPIInitGuard", "MPI_Abort(MPI_COMM_WORLD, 1)");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+        close();
+    }
 
     void MPIInitGuard::close() {
         if (!owns_mpi) {
