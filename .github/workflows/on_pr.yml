@@ -60,6 +60,12 @@ jobs:
   # completed in this PR run. Starts immediately (no needs) so the check
   # stays in_progress for the whole full-CI, and "all" cannot complete
   # before this job does.
+  #
+  # Uses `gh run list` / `gh run view --json jobs` to copy the job names
+  # from recent main-branch On Push and On Schedule runs, then polls this
+  # run until none of those jobs are missing, queued, or in_progress.
+  # The parent run `.status` stays in_progress while this job runs, so it
+  # cannot be used as the completion signal.
   wait_for_push_schedule:
     name: Wait for On Push and On Schedule jobs
     if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/') }}
@@ -73,15 +79,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Wait until On Push and On Schedule jobs have completed
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const path = require('path');
-            const wait = require(path.join(
-              process.env.GITHUB_WORKSPACE,
-              '.github/wait_for_push_schedule_jobs.js'
-            ));
-            await wait({ github, context, core });
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: bash .github/wait_for_push_schedule_jobs.sh
 
   # Mergify merge gate (merge_conditions: check-success = all). Runs only when
   # full CI ran (`full-ci` label or Mergify merge-queue branch). Other PRs use
