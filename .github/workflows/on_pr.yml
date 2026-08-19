@@ -57,11 +57,13 @@ jobs:
           path: ./report_______light_ci.md
 
   # Hang while any push/schedule jobs in the repo are queued or in_progress.
-  # Starts immediately so "all" / "all_light" cannot complete before this job does.
-  # Gives up with success after 1 hour.
+  # Runs after CI/metrics so it does not occupy a runner for the whole PR.
+  # all / all_light depend on this job. Gives up with success after 1 hour.
   # Temporarily also runs on light CI (not only full-ci / merge-queue).
   wait_for_push_schedule:
     name: Wait for On Push and On Schedule jobs
+    needs: [ main_workflow, upload_metrics_history ]
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
