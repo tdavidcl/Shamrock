@@ -56,11 +56,39 @@ jobs:
           name: report_light_ci
           path: ./report_______light_ci.md
 
+  # Hang until every job that On Push and On Schedule run on main has
+  # completed in this PR run. Starts immediately (no needs) so the check
+  # stays in_progress for the whole full-CI, and "all" cannot complete
+  # before this job does.
+  wait_for_push_schedule:
+    name: Wait for On Push and On Schedule jobs
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait until On Push and On Schedule jobs have completed
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const path = require('path');
+            const wait = require(path.join(
+              process.env.GITHUB_WORKSPACE,
+              '.github/wait_for_push_schedule_jobs.js'
+            ));
+            await wait({ github, context, core });
+
   # Mergify merge gate (merge_conditions: check-success = all). Runs only when
   # full CI ran (`full-ci` label or Mergify merge-queue branch). Other PRs use
   # all_light for queue entry instead.
   #
-  # needs.main_workflow.result / needs.upload_metrics_history.result can be:
+  # needs.main_workflow.result / needs.upload_metrics_history.result /
+  # needs.wait_for_push_schedule.result can be:
   #   - success   : reusable workflow completed without failure
   #   - failure   : at least one job in the called workflow failed
   #   - cancelled : workflow or caller job was cancelled (e.g. concurrency)
@@ -70,7 +98,7 @@ jobs:
   #                 still finishing (e.g. Mergify CI auto-retry). Treat as
   #                 non-success — do not whitelist only failure/cancelled.
   all:
-    needs: [ main_workflow, upload_metrics_history ]
+    needs: [ main_workflow, upload_metrics_history, wait_for_push_schedule ]
     # run always except for cancel, and only when full CI ran
     if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
     runs-on: ubuntu-latest
@@ -83,6 +111,10 @@ jobs:
         fi
         if [ "${{ needs.upload_metrics_history.result }}" != "success" ]; then
           echo "Upload metrics history did not succeed (result: ${{ needs.upload_metrics_history.result }})."
+          exit 1
+        fi
+        if [ "${{ needs.wait_for_push_schedule.result }}" != "success" ]; then
+          echo "Wait for On Push / On Schedule jobs did not succeed (result: ${{ needs.wait_for_push_schedule.result }})."
           exit 1
         fi
 
