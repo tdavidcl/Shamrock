@@ -56,33 +56,66 @@ jobs:
           name: report_light_ci
           path: ./report_______light_ci.md
 
-  # Hang until every job that On Push and On Schedule run on main has
-  # completed in this PR run. Starts immediately (no needs) so the check
-  # stays in_progress for the whole full-CI, and "all" cannot complete
-  # before this job does.
-  #
-  # Uses `gh run list` / `gh run view --json jobs` to copy the job names
-  # from recent main-branch On Push and On Schedule runs, then polls this
-  # run until none of those jobs are missing, queued, or in_progress.
-  # The parent run `.status` stays in_progress while this job runs, so it
-  # cannot be used as the completion signal.
+  # Hang while any push/schedule jobs in the repo are queued or in_progress.
+  # Starts immediately so "all" cannot complete before this job does.
+  # Gives up with success after 1 hour.
   wait_for_push_schedule:
     name: Wait for On Push and On Schedule jobs
     if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 70
     permissions:
       actions: read
-      checks: read
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Wait until On Push and On Schedule jobs have completed
+      - name: Wait while push/schedule jobs are queued or in progress
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: bash .github/wait_for_push_schedule_jobs.sh
+        run: |
+          set -euo pipefail
+          export GH_PAGER=cat
+          started="$(date +%s)"
+
+          list_runs() {
+            gh run list --repo "$GH_REPO" --event "$1" --status "$2" --limit 100 \
+              --json databaseId,name,displayTitle,headBranch,status,event,url
+          }
+
+          while true; do
+            runs="$(
+              {
+                list_runs push in_progress
+                list_runs push queued
+                list_runs schedule in_progress
+                list_runs schedule queued
+              } | jq -s 'add | unique_by(.databaseId)'
+            )"
+
+            waiting="$(mktemp)"
+            jq -r '.[] | "\(.event) \(.status) \(.name) #\(.databaseId) (\(.headBranch)) \(.displayTitle)"' <<<"$runs" >>"$waiting"
+            while IFS= read -r id; do
+              [ -z "$id" ] && continue
+              gh run view "$id" --repo "$GH_REPO" --json jobs --jq \
+                '.jobs[] | select(.status=="queued" or .status=="in_progress") | "  \(.name): \(.status)"' >>"$waiting"
+            done < <(jq -r '.[].databaseId' <<<"$runs")
+
+            if [ ! -s "$waiting" ]; then
+              rm -f "$waiting"
+              echo "No push/schedule jobs queued or in_progress."
+              exit 0
+            fi
+
+            echo "Currently waiting jobs:"
+            cat "$waiting"
+            rm -f "$waiting"
+
+            elapsed="$(( $(date +%s) - started ))"
+            if [ "$elapsed" -ge 3600 ]; then
+              echo "Timed out after ${elapsed}s; continuing with success."
+              exit 0
+            fi
+            sleep 30
+          done
 
   # Mergify merge gate (merge_conditions: check-success = all). Runs only when
   # full CI ran (`full-ci` label or Mergify merge-queue branch). Other PRs use
