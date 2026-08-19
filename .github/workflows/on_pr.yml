@@ -122,8 +122,7 @@ jobs:
   # full CI ran (`full-ci` label or Mergify merge-queue branch). Other PRs use
   # all_light for queue entry instead.
   #
-  # needs.main_workflow.result / needs.upload_metrics_history.result /
-  # needs.wait_for_push_schedule.result can be:
+  # needs.main_workflow.result / needs.upload_metrics_history.result can be:
   #   - success   : reusable workflow completed without failure
   #   - failure   : at least one job in the called workflow failed
   #   - cancelled : workflow or caller job was cancelled (e.g. concurrency)
