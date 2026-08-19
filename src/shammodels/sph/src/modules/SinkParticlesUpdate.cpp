@@ -15,9 +15,9 @@
  *
  */
 
-#include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/primitives/reduction.hpp"
 #include "shambackends/kernel_call.hpp"
