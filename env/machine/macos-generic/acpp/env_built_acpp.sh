@@ -30,7 +30,14 @@ echo "All required packages are installed."
 
 export ACPP_DEBUG_LEVEL=0
 
-ACPP_ROOT=$(brew list adaptivecpp | grep acpp-info | sed -E "s/\/bin\/.*//")
+# brew --prefix is stable (opt symlink). `brew list | grep` can point at a
+# Cellar version path and OMP_ROOT was previously unset, yielding -I/include.
+OMP_ROOT="$(brew --prefix libomp)"
+ACPP_ROOT="$(brew --prefix adaptivecpp)"
+
+if [ -z "${PYTHON_EXECUTABLE-}" ]; then
+    PYTHON_EXECUTABLE="$(python3 -c 'import sys; print(getattr(sys, "_base_executable", None) or sys.executable)')"
+fi
 
 echo " ------------- Environment activated ------------- "
 
@@ -42,11 +49,12 @@ function shamconfigure {
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DSHAMROCK_ENABLE_BACKEND=SYCL \
         -DSYCL_IMPLEMENTATION=ACPPDirect \
-        -DCMAKE_CXX_COMPILER="acpp" \
-        -DCMAKE_CXX_FLAGS="-I$OMP_ROOT/include" \
+        -DCMAKE_CXX_COMPILER="${ACPP_ROOT}/bin/acpp" \
+        -DCMAKE_CXX_FLAGS="-I${OMP_ROOT}/include" \
         -DACPP_PATH="${ACPP_ROOT}" \
         -DSHAMROCK_EXTERNAL_FMTLIB=ON \
         -DBUILD_TEST=Yes \
+        -DPYTHON_EXECUTABLE="${PYTHON_EXECUTABLE}" \
         "${CMAKE_OPT[@]}"
 }
 

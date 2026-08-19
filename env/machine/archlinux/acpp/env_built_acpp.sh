@@ -58,6 +58,10 @@ export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
 export ACPP_DEBUG_LEVEL=0
 export LLVM_INSTALL_DIR=/usr/lib/llvm20
 
+if [ -z "${PYTHON_EXECUTABLE-}" ]; then
+    PYTHON_EXECUTABLE="$(python3 -c 'import sys; print(getattr(sys, "_base_executable", None) or sys.executable)')"
+fi
+
 function setupcompiler {
     clone_acpp || return
     cmake -S ${ACPP_GIT_DIR} -B ${ACPP_BUILD_DIR} \
@@ -91,6 +95,7 @@ function shamconfigure {
         -DACPP_PATH="${ACPP_INSTALL_DIR}" \
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DBUILD_TEST=Yes \
+        -DPYTHON_EXECUTABLE="${PYTHON_EXECUTABLE}" \
         "${CMAKE_OPT[@]}" || return
 }
 

@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 import utils.acpp
 import utils.envscript
@@ -43,6 +44,10 @@ def setup(arg: SetupArg, envgen: EnvGen):
         "CMAKE_OPT": f"({cmake_extra_args})",
         "SHAMROCK_BUILD_TYPE": f"'{cmake_build_type}'",
         "SPHINX_VENV_DIR": builddir + "/.sphinxvenv",
+        # Pin the interpreter used at env creation. pip install later runs in a
+        # venv; re-detecting that python3 retargets pybind11 include dirs on
+        # macOS Homebrew and forces a full ninja rebuild.
+        "PYTHON_EXECUTABLE": f'"{sys.executable}"',
     }
 
     envgen.ext_script_list = [

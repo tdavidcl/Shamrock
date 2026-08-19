@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 import utils.acpp
 import utils.amd_arch
@@ -57,6 +58,7 @@ def setup(arg: SetupArg, envgen: EnvGen):
         "SHAMROCK_BUILD_TYPE": f"'{cmake_build_type}'",
         "SHAMROCK_CXX_FLAGS": "\" --acpp-targets='" + acpp_target + "'\"",
         "SPHINX_VENV_DIR": builddir + "/.sphinxvenv",
+        "PYTHON_EXECUTABLE": f'"{sys.executable}"',
     }
 
     envgen.ext_script_list = [

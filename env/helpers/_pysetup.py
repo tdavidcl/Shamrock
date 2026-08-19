@@ -67,9 +67,29 @@ class ShamEnvBuild(build_ext):
         cmake_cmd += " -DSHAMROCK_PATCH_LIB_RPATH=On"
         cmake_cmd += " -DSHAMROCK_PYLIB_ADD_SOURCE_DIR=Off"
         cmake_cmd += " -DSHAMROCK_PYLIB_ADD_INSTALL_DIR=Off"
+        # Keep pybind11 include dirs on the original interpreter. pip runs in a
+        # venv whose sys.executable is a different path; on macOS Homebrew that
+        # changes the include-path strings and ninja rebuilds every TU that
+        # sees pybind11 headers. Linux venvs share /usr/include/python* with
+        # the base interpreter, which is why Arch only relinks.
+        cmake_cmd += ' -DPYTHON_EXECUTABLE="${PYTHON_EXECUTABLE}"'
+        # pip install should not rebuild shamrock_test (install depends on all
+        # by default).
+        cmake_cmd += " -DCMAKE_SKIP_INSTALL_ALL_DEPENDENCY=On"
+
+        # Prefer PYTHON_EXECUTABLE baked by new-env; otherwise the venv base
+        # interpreter (not the venv copy of python3).
+        set_python_executable = (
+            'if [ -z "${PYTHON_EXECUTABLE-}" ]; then '
+            'export PYTHON_EXECUTABLE="$(python3 -c '
+            "'import sys; print(getattr(sys, \"_base_executable\", None) or sys.executable)'"
+            ')"; '
+            "fi"
+        )
 
         install_steps = [
             "source ./activate",
+            set_python_executable,
             "shamconfigure",
             cmake_cmd,
             "shammake install",
