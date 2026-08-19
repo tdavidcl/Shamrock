@@ -200,6 +200,7 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.set_matrix.outputs.matrix) }}
 
+    # In docker containers GitHub Actions defaults to sh, so set bash here.
     # conda.acpp needs a login shell so `conda activate` is available.
     defaults:
       run:
