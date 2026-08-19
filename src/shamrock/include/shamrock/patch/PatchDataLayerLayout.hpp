@@ -73,14 +73,6 @@ namespace shamrock::patch {
 
         std::vector<var_t> fields;
 
-        /**
-         * @brief Check whether a field with the given name already exists
-         *
-         * Implemented out of line so that `add_field<T>` does not instantiate
-         * `FieldVariant::visit` in every translation unit.
-         */
-        [[nodiscard]] bool has_field_name(const std::string &field_name) const;
-
         public:
         /**
          * @brief add a field of type T to the layout
@@ -92,6 +84,17 @@ namespace shamrock::patch {
         template<class T>
         void add_field(
             const std::string &field_name, u32 nvar, SourceLocation loc = SourceLocation{});
+
+        /**
+         * @brief Check whether a field with the given name already exists
+         *
+         * Implemented out of line so that `add_field<T>` does not instantiate
+         * `FieldVariant::visit` in every translation unit.
+         *
+         * @param field_name field name to look up
+         * @return true if a field with that name is already in the layout
+         */
+        [[nodiscard]] bool has_field_name(const std::string &field_name) const;
 
         /**
          * @brief Get the field description id if matching name & type
