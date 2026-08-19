@@ -19,8 +19,8 @@ on:
       - completed
 
 jobs:
-  post_comment:
-    name: Post workflow comment
+  post_workflow_report:
+    name: Post workflow report
     runs-on: ubuntu-latest
 
     steps:
