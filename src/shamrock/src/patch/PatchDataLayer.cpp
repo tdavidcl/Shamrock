@@ -24,6 +24,8 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamtree/kernels/geometry_utils.hpp"
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace shamrock::patch {
@@ -443,5 +445,32 @@ namespace shamrock::patch {
         std::array<i64_3, 8> min_box,
         std::array<i64_3, 8> max_box);
 #endif
+
+    bool operator==(PatchDataLayer &p1, PatchDataLayer &p2) {
+        if (p1.fields.size() != p2.fields.size()) {
+            return false;
+        }
+
+        for (u32 idx = 0; idx < p1.fields.size(); idx++) {
+            auto &v1 = p1.fields[idx].value;
+            auto &v2 = p2.fields[idx].value;
+
+            // Avoid the 18x18 binary std::visit vtable: mismatched types cannot match.
+            if (v1.index() != v2.index()) {
+                return false;
+            }
+
+            bool match = p1.fields[idx].visit_return([&](auto &pf1) {
+                using Field = std::remove_reference_t<decltype(pf1)>;
+                return pf1.check_field_match(std::get<Field>(v2));
+            });
+
+            if (!match) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
 } // namespace shamrock::patch
