@@ -531,9 +531,6 @@ namespace shamrock::patch {
 
     /**
      * @brief Compare two PatchDataLayer objects field by field
-     *
-     * Implemented out of line to avoid instantiating a binary std::visit
-     * (18x18 vtable) in every translation unit that includes this header.
      */
     bool operator==(PatchDataLayer &p1, PatchDataLayer &p2);
 
