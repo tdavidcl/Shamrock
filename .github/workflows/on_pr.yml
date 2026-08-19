@@ -57,11 +57,11 @@ jobs:
           path: ./report_______light_ci.md
 
   # Hang while any push/schedule jobs in the repo are queued or in_progress.
-  # Starts immediately so "all" cannot complete before this job does.
+  # Starts immediately so "all" / "all_light" cannot complete before this job does.
   # Gives up with success after 1 hour.
+  # Temporarily also runs on light CI (not only full-ci / merge-queue).
   wait_for_push_schedule:
     name: Wait for On Push and On Schedule jobs
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -156,7 +156,7 @@ jobs:
   # Runs for both light and full CI.
   # Same gate logic as all; see comment above for needs.*.result states.
   all_light:
-    needs: [ main_workflow, upload_metrics_history ]
+    needs: [ main_workflow, upload_metrics_history, wait_for_push_schedule ]
     # run always except for cancel
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
@@ -169,5 +169,9 @@ jobs:
         fi
         if [ "${{ needs.upload_metrics_history.result }}" != "success" ]; then
           echo "Upload metrics history did not succeed (result: ${{ needs.upload_metrics_history.result }})."
+          exit 1
+        fi
+        if [ "${{ needs.wait_for_push_schedule.result }}" != "success" ]; then
+          echo "Wait for On Push / On Schedule jobs did not succeed (result: ${{ needs.wait_for_push_schedule.result }})."
           exit 1
         fi
