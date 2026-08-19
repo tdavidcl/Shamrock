@@ -100,17 +100,19 @@ jobs:
                 '.jobs[] | select(.status=="queued" or .status=="in_progress") | "  \(.name): \(.status)"' >>"$waiting"
             done < <(jq -r '.[].databaseId' <<<"$runs")
 
+            elapsed="$(( $(date +%s) - started ))"
+
             if [ ! -s "$waiting" ]; then
               rm -f "$waiting"
               echo "No push/schedule jobs queued or in_progress."
               exit 0
             fi
 
-            echo "Currently waiting jobs:"
+            echo "Currently waiting jobs (${elapsed}s elapsed):"
             cat "$waiting"
             rm -f "$waiting"
+            echo "--------------------"
 
-            elapsed="$(( $(date +%s) - started ))"
             if [ "$elapsed" -ge 3600 ]; then
               echo "Timed out after ${elapsed}s; continuing with success."
               exit 0
