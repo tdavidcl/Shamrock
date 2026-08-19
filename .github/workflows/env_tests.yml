@@ -356,7 +356,7 @@ jobs:
         if: matrix.runtestpy
         run: |
           which python3 || true
-          python3 -m venv venv
+          "$(python3 -c "import sys; print(sys.executable)")" -m venv venv
           . venv/bin/activate
           pip install -U pip setuptools
 
