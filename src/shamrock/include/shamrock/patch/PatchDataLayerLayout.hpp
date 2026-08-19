@@ -88,9 +88,6 @@ namespace shamrock::patch {
         /**
          * @brief Check whether a field with the given name already exists
          *
-         * Implemented out of line so that `add_field<T>` does not instantiate
-         * `FieldVariant::visit` in every translation unit.
-         *
          * @param field_name field name to look up
          * @return true if a field with that name is already in the layout
          */
