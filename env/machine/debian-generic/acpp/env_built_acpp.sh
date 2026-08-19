@@ -14,10 +14,6 @@ export ACPP_BUILD_DIR=$BUILD_DIR/.env/acpp-builddir
 export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
 export ACPP_DEBUG_LEVEL=0
 
-if [ -z "${PYTHON_EXECUTABLE-}" ]; then
-    PYTHON_EXECUTABLE="$(python3 -c 'import sys; print(getattr(sys, "_base_executable", None) or sys.executable)')"
-fi
-
 function setupcompiler {
     clone_acpp || return
     cmake -S ${ACPP_GIT_DIR} -B ${ACPP_BUILD_DIR} ${CCACHE_CMAKE_ARG} -DCMAKE_INSTALL_PREFIX=${ACPP_INSTALL_DIR} || return
@@ -43,7 +39,6 @@ function shamconfigure {
         -DCMAKE_BUILD_TYPE="${SHAMROCK_BUILD_TYPE}" \
         -DCXX_FLAG_ARCH_NATIVE=off \
         -DBUILD_TEST=Yes \
-        -DPYTHON_EXECUTABLE="${PYTHON_EXECUTABLE}" \
         "${CMAKE_OPT[@]}" || return
 }
 
