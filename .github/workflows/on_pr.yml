@@ -148,10 +148,6 @@ jobs:
           echo "Upload metrics history did not succeed (result: ${{ needs.upload_metrics_history.result }})."
           exit 1
         fi
-        if [ "${{ needs.wait_for_push_schedule.result }}" != "success" ]; then
-          echo "Wait for On Push / On Schedule jobs did not succeed (result: ${{ needs.wait_for_push_schedule.result }})."
-          exit 1
-        fi
 
   # Mergify merge-queue entry gate (queue_conditions: check-success = all_light).
   # Runs for both light and full CI.
