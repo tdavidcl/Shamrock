@@ -72,6 +72,9 @@
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
+#include "shammodels/sph/modules/SinkParticlesAccreteQuantities.hpp"
+#include "shammodels/sph/modules/SinkParticlesEvictAccretedParticles.hpp"
+#include "shammodels/sph/modules/SinkParticlesFlagAccreteHard.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shammodels/sph/modules/UpdateViscosity.hpp"
@@ -99,15 +102,19 @@
 #include "shamrock/solvergraph/GetFieldRefFromLayer.hpp"
 #include "shamrock/solvergraph/GetObjCntFromLayer.hpp"
 #include "shamrock/solvergraph/IFieldRefs.hpp"
+#include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
 #include "shamrock/solvergraph/RankGetter.hpp"
+#include "shamrock/solvergraph/ScalarEdge.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
 #include "shamsolvergraph/SolverGraph.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
+#include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
 #include "shamsolvergraph/node/NodeFreeAlloc.hpp"
 #include "shamsolvergraph/node/NodeMapEdge.hpp"
 #include "shamsolvergraph/node/NodeSetEdge.hpp"
+#include "shamsolvergraph/node/OperationIf.hpp"
 #include "shamsolvergraph/node/OperationSequence.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
@@ -377,6 +384,76 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         solver_graph.register_node(
             "attach fields to scheduler",
             OperationSequence("attach fields", std::move(attach_field_sequence)));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // sink accretion
+    ////////////////////////////////////////////////////////////////////////////////////////
+    {
+        solver_graph.register_edge("has_sinks", IDataEdge<bool>("has_sinks", "has_sinks"));
+        solver_graph.register_edge(
+            "sink_accretion_table", Field<u32>(1, "sink_accretion_table", "\\mathrm{acc}"));
+
+        auto set_has_sinks = solver_graph.register_node(
+            "set_has_sinks", NodeSetEdge<IDataEdge<bool>>([&](IDataEdge<bool> &has_sinks_edge) {
+                has_sinks_edge.data = has_sinks<Tvec>(sync_data);
+            }));
+        shambase::get_check_ref(set_has_sinks)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<bool>>("has_sinks"));
+
+        auto flag_node = solver_graph.register_node(
+            "SinkParticlesFlagAccreteHard", modules::SinkParticlesFlagAccreteHard<Tvec>{});
+        shambase::get_check_ref(flag_node)
+            .set_edges(
+                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_accretion_radius"),
+                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"));
+
+        auto qty_node = solver_graph.register_node(
+            "SinkParticlesAccreteQuantities", modules::SinkParticlesAccreteQuantities<Tvec>{});
+        shambase::get_check_ref(qty_node)
+            .set_edges(
+                solver_graph.get_edge_ptr<ScalarEdge<Tscal>>("gpart_mass"),
+                sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
+                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"),
+                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_vel"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_acc_sph"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_angular_momentum"),
+                sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_mass"));
+
+        auto evict_node = solver_graph.register_node(
+            "SinkParticlesEvictAccretedParticles",
+            modules::SinkParticlesEvictAccretedParticles<Tvec>{});
+        shambase::get_check_ref(evict_node)
+            .set_edges(
+                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
+                solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"));
+
+        auto accretion_then = std::make_shared<OperationSequence>(
+            "sink accretion",
+            std::vector<std::shared_ptr<INode>>{flag_node, qty_node, evict_node});
+
+        auto if_accretion = solver_graph.register_node(
+            "sink accretion if", OperationIf("sink accretion", accretion_then));
+        shambase::get_check_ref(if_accretion)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<bool>>("has_sinks"));
+
+        solver_graph.register_node(
+            "sink accretion",
+            OperationSequence(
+                "sink accretion",
+                {
+                    set_has_sinks,
+                    if_accretion,
+                }));
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////
@@ -1898,7 +1975,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
     modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
 
-    sink_update.accrete_particles(dt);
+    storage.solver_graph.get_node_ref_base("sink accretion").evaluate();
     ext_forces.point_mass_accrete_particles();
 
     sink_update.predictor_step(dt);

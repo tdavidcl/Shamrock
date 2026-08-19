@@ -20,13 +20,14 @@
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
+#include "shamrock/solvergraph/ScalarEdge.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/node/INode.hpp"
 #include <vector>
 
 #define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* ------------------- (param) inputs ------------------- */                                   \
-    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
+    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, gpart_mass)                                     \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                              \
                                                                                                    \
     /* ------------------- (field) inputs ------------------- */                                   \
