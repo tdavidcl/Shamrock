@@ -447,30 +447,28 @@ namespace shamrock::patch {
 #endif
 
     bool operator==(PatchDataLayer &p1, PatchDataLayer &p2) {
+        bool check = true;
+
         if (p1.fields.size() != p2.fields.size()) {
             return false;
         }
 
         for (u32 idx = 0; idx < p1.fields.size(); idx++) {
-            auto &v1 = p1.fields[idx].value;
-            auto &v2 = p2.fields[idx].value;
+            bool ret = p1.fields[idx].visit_return([&](auto &pf1) -> bool {
+                using t1 = typename std::remove_reference<decltype(pf1)>::type::Field_type;
 
-            // Avoid the 18x18 binary std::visit vtable: mismatched types cannot match.
-            if (v1.index() != v2.index()) {
-                return false;
-            }
-
-            bool match = p1.fields[idx].visit_return([&](auto &pf1) {
-                using Field = std::remove_reference_t<decltype(pf1)>;
-                return pf1.check_field_match(std::get<Field>(v2));
+                if (PatchDataField<t1> *pf2
+                    = std::get_if<PatchDataField<t1>>(&p2.fields[idx].value)) {
+                    return pf1.check_field_match(*pf2);
+                } else {
+                    return false;
+                }
             });
 
-            if (!match) {
-                return false;
-            }
+            check = check && ret;
         }
 
-        return true;
+        return check;
     }
 
 } // namespace shamrock::patch
