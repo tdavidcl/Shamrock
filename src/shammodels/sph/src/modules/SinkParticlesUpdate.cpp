@@ -17,12 +17,12 @@
 
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
-#include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/primitives/reduction.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <shambackends/sycl.hpp>
