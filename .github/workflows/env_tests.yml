@@ -355,8 +355,9 @@ jobs:
         shell: bash # In docker container github action default to sh
         if: matrix.runtestpy
         run: |
-          which python3 || true
-          "$(python3 -c "import sys; print(sys.executable)")" -m venv venv
+          PYTHON_EXECUTABLE="$(python3 -c "import sys; print(sys.executable)")"
+          which "${PYTHON_EXECUTABLE}" || true
+          "${PYTHON_EXECUTABLE}" -m venv venv
           . venv/bin/activate
           pip install -U pip setuptools
 
