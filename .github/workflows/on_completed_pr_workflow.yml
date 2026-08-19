@@ -19,7 +19,8 @@ on:
       - completed
 
 jobs:
-  deploy:
+  post_comment:
+    name: Post workflow comment
     runs-on: ubuntu-latest
 
     steps:
