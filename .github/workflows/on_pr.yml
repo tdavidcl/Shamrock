@@ -60,7 +60,7 @@ jobs:
   # Runs after CI/metrics, then "all" depends on it. Gives up with success
   # after 1 hour.
   wait_for_push_schedule:
-    name: Wait for On Push and On Schedule jobs
+    name: Wait for push/schedule jobs
     needs: [ main_workflow, upload_metrics_history ]
     if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
     runs-on: ubuntu-latest
@@ -68,7 +68,7 @@ jobs:
     permissions:
       actions: read
     steps:
-      - name: Wait while push/schedule jobs are queued or in progress
+      - name: Wait for push/schedule jobs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
