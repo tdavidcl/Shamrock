@@ -16,8 +16,7 @@
  */
 
 #include "shambase/exception.hpp"
-#include "nlohmann/json.hpp"
-#include "shamrock/io/json_utils.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace shammodels::basegodunov {
 
@@ -30,12 +29,7 @@ namespace shammodels::basegodunov {
         Minmod      = 4, //< Minmod flux limiter (see shammath::minmod)
     };
 
-    SHAMROCK_JSON_SERIALIZE_ENUM(
-        SlopeMode,
-        {{SlopeMode::None, "none"},
-         {SlopeMode::VanLeer_f, "vanleer_f"},
-         {SlopeMode::VanLeer_std, "vanleer_std"},
-         {SlopeMode::VanLeer_sym, "vanleer_sym"},
-         {SlopeMode::Minmod, "minmod"}});
+    void to_json(nlohmann::json &j, const SlopeMode &e);
+    void from_json(const nlohmann::json &j, SlopeMode &e);
 
 } // namespace shammodels::basegodunov

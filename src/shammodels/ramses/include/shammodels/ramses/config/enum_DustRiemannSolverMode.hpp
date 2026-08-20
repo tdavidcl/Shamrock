@@ -18,8 +18,7 @@
  */
 
 #include "shambase/exception.hpp"
-#include "nlohmann/json.hpp"
-#include "shamrock/io/json_utils.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace shammodels::basegodunov {
 
@@ -33,10 +32,7 @@ namespace shammodels::basegodunov {
         HB = 2
     };
 
-    SHAMROCK_JSON_SERIALIZE_ENUM(
-        DustRiemannSolverMode,
-        {{DustRiemannSolverMode::NoDust, "no_dust"},
-         {DustRiemannSolverMode::DHLL, "dhll"},
-         {DustRiemannSolverMode::HB, "hb"}});
+    void to_json(nlohmann::json &j, const DustRiemannSolverMode &e);
+    void from_json(const nlohmann::json &j, DustRiemannSolverMode &e);
 
 } // namespace shammodels::basegodunov

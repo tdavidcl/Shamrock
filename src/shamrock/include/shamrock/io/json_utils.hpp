@@ -19,8 +19,16 @@
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamrock/io/json_print_diff.hpp"
+#include <nlohmann/json.hpp>
+#include <string>
 
 namespace shamrock {
+
+    /// Parse a JSON document. Lives in a .cpp so headers do not instantiate `json::parse`.
+    nlohmann::json parse_json(const std::string &s);
+
+    /// Dump a JSON document. Lives in a .cpp so headers do not instantiate `json::dump`.
+    std::string dump_json(const nlohmann::json &j, int indent = -1);
 
     /// Shown the changes between two JSON objects to log config changes
     std::string log_json_changes(

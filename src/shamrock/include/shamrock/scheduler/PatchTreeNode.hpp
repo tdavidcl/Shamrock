@@ -15,9 +15,9 @@
  * @brief
  */
 
+#include "nlohmann/json_fwd.hpp"
 #include "shamrock/patch/PatchCoord.hpp"
 #include "shamrock/patch/PatchCoordTransform.hpp"
-#include <nlohmann/json.hpp>
 
 namespace shamrock::scheduler {
 
@@ -143,15 +143,7 @@ namespace shamrock::scheduler {
      * @param j The JSON object to serialize to.
      * @param p The LinkedTreeNode object to serialize.
      */
-    inline void to_json(nlohmann::json &j, const LinkedTreeNode &p) {
-
-        j = nlohmann::json{
-            {"level", p.level},
-            {"parent_nid", p.parent_nid},
-            {"childs_nid", p.childs_nid},
-            {"is_leaf", p.is_leaf},
-            {"child_are_all_leafs", p.child_are_all_leafs}};
-    }
+    void to_json(nlohmann::json &j, const LinkedTreeNode &p);
 
     /**
      * @brief Deserializes a JSON object to a LinkedTreeNode object.
@@ -159,13 +151,7 @@ namespace shamrock::scheduler {
      * @param j The JSON object to deserialize from.
      * @param p The LinkedTreeNode object to deserialize to.
      */
-    inline void from_json(const nlohmann::json &j, LinkedTreeNode &p) {
-        j.at("level").get_to(p.level);
-        j.at("parent_nid").get_to(p.parent_nid);
-        j.at("childs_nid").get_to(p.childs_nid);
-        j.at("is_leaf").get_to(p.is_leaf);
-        j.at("child_are_all_leafs").get_to(p.child_are_all_leafs);
-    }
+    void from_json(const nlohmann::json &j, LinkedTreeNode &p);
 
     /**
      * @brief Serializes a PatchTreeNode object to a JSON object.
@@ -173,19 +159,7 @@ namespace shamrock::scheduler {
      * @param j The JSON object to serialize to.
      * @param p The PatchTreeNode object to serialize.
      */
-    inline void to_json(nlohmann::json &j, const PatchTreeNode &p) {
-
-        j = nlohmann::json{
-            {"linked_patchid", p.linked_patchid},
-            {"load_value", p.load_value},
-            {"tree_node", p.tree_node},
-            {"patch_coord",
-             {
-                 {"min", p.patch_coord.coord_min},
-                 {"max", p.patch_coord.coord_max},
-             }},
-        };
-    }
+    void to_json(nlohmann::json &j, const PatchTreeNode &p);
 
     /**
      * @brief Deserializes a JSON object to a PatchTreeNode object.
@@ -193,12 +167,6 @@ namespace shamrock::scheduler {
      * @param j The JSON object to deserialize from.
      * @param p The PatchTreeNode object to deserialize to.
      */
-    inline void from_json(const nlohmann::json &j, PatchTreeNode &p) {
-        j.at("linked_patchid").get_to(p.linked_patchid);
-        j.at("load_value").get_to(p.load_value);
-        j.at("tree_node").get_to(p.tree_node);
-        j.at("patch_coord").at("min").get_to(p.patch_coord.coord_min);
-        j.at("patch_coord").at("max").get_to(p.patch_coord.coord_max);
-    }
+    void from_json(const nlohmann::json &j, PatchTreeNode &p);
 
 } // namespace shamrock::scheduler

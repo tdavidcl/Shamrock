@@ -14,7 +14,7 @@
  */
 
 #include "shambase/stacktrace.hpp"
-#include "nlohmann/json_fwd.hpp"
+#include "nlohmann/json.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"

@@ -9,6 +9,7 @@
 
 #include "shamsolvergraph/JsonSerializable.hpp"
 #include "shamtest/shamtest.hpp"
+#include <nlohmann/json.hpp>
 #include <memory>
 #include <string>
 

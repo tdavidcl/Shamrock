@@ -17,6 +17,7 @@
 #include "shammodels/gsph/config/ForceFormulationConfig.hpp"
 #include "shammodels/gsph/config/RiemannConfig.hpp"
 #include "shamtest/shamtest.hpp"
+#include <nlohmann/json.hpp>
 
 namespace {
 

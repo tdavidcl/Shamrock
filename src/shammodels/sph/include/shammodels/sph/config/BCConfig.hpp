@@ -16,10 +16,9 @@
  *
  */
 
-#include "shambackends/type_convert.hpp"
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/vec.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <nlohmann/json.hpp>
 #include <variant>
 
 namespace shammodels::sph {
@@ -149,73 +148,9 @@ namespace shammodels::sph {
      * @param[in] p  The BCConfig to serialize
      */
     template<class Tvec>
-    inline void to_json(nlohmann::json &j, const BCConfig<Tvec> &p) {
-        using T = BCConfig<Tvec>;
+    void to_json(nlohmann::json &j, const BCConfig<Tvec> &p);
 
-        using Free             = typename T::Free;
-        using Periodic         = typename T::Periodic;
-        using ShearingPeriodic = typename T::ShearingPeriodic;
-
-        // Write the config type into the JSON object
-        if (const Free *v = std::get_if<Free>(&p.config)) {
-            j = {
-                {"bc_type", "free"},
-            };
-        } else if (const Periodic *v = std::get_if<Periodic>(&p.config)) {
-            j = {
-                {"bc_type", "periodic"},
-            };
-        } else if (const ShearingPeriodic *v = std::get_if<ShearingPeriodic>(&p.config)) {
-            // Write the shear base, direction, and speed into the JSON object
-            j = {
-                {"bc_type", "shearing_periodic"},
-                {"shear_base", v->shear_base},
-                {"shear_dir", v->shear_dir},
-                {"shear_speed", v->shear_speed},
-            };
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
-
-    /**
-     * @brief Deserialize a JSON object into a BCConfig
-     *
-     * @param[in] j  The JSON object to read from
-     * @param[out] p The BCConfig to deserialize
-     */
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, BCConfig<Tvec> &p) {
-        using T = BCConfig<Tvec>;
-
-        using Tscal = shambase::VecComponent<Tvec>;
-
-        // Check if the JSON object contains the "bc_type" field
-        if (!j.contains("bc_type")) {
-            shambase::throw_with_loc<std::runtime_error>("no field eos_type is found in this json");
-        }
-
-        // Read the config type from the JSON object
-        std::string bc_type;
-        j.at("bc_type").get_to(bc_type);
-
-        using Free             = typename T::Free;
-        using Periodic         = typename T::Periodic;
-        using ShearingPeriodic = typename T::ShearingPeriodic;
-
-        // Set the BCConfig based on the config type
-        if (bc_type == "free") {
-            p.set_free();
-        } else if (bc_type == "periodic") {
-            p.set_periodic();
-        } else if (bc_type == "shearing_periodic") {
-            p.set_shearing_periodic(
-                j.at("shear_base").get<i32_3>(),
-                j.at("shear_dir").get<i32_3>(),
-                j.at("speed").get<Tscal>());
-        } else {
-            shambase::throw_unimplemented("wtf !");
-        }
-    }
+    void from_json(const nlohmann::json &j, BCConfig<Tvec> &p);
 
 } // namespace shammodels::sph

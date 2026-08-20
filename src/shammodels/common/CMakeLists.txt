@@ -11,6 +11,7 @@ project(Shammodels_common CXX C)
 
 set(Sources
     src/EOSConfig.cpp
+    src/ExtForceConfig.cpp
     src/pyAMRTestModel.cpp
     src/pyAMRGrid.cpp
     src/pyCommonUtils.cpp

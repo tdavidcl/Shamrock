@@ -114,6 +114,7 @@
 #include "shamsys/system_metrics.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
+#include <nlohmann/json.hpp>
 #include <memory>
 #include <stdexcept>
 #include <vector>

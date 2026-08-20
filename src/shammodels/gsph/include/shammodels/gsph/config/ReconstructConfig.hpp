@@ -21,10 +21,10 @@
  * variables to particle interfaces for higher-order accuracy.
  */
 
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/type_traits.hpp"
 #include "shambackends/vec.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <nlohmann/json.hpp>
 #include <variant>
 
 namespace shammodels::gsph {
@@ -120,71 +120,9 @@ struct shammodels::gsph::ReconstructConfig {
 namespace shammodels::gsph {
 
     template<class Tvec>
-    inline void to_json(nlohmann::json &j, const ReconstructConfig<Tvec> &p) {
-        using T                 = ReconstructConfig<Tvec>;
-        using PiecewiseConstant = typename T::PiecewiseConstant;
-        using MUSCL             = typename T::MUSCL;
-        using Limiter           = typename T::Limiter;
-
-        if (std::get_if<PiecewiseConstant>(&p.config)) {
-            j = {
-                {"reconstruct_type", "piecewise_constant"},
-            };
-        } else if (const MUSCL *v = std::get_if<MUSCL>(&p.config)) {
-            std::string limiter_str;
-            switch (v->limiter) {
-            case Limiter::VanLeer : limiter_str = "vanleer"; break;
-            case Limiter::Minmod  : limiter_str = "minmod"; break;
-            case Limiter::Superbee: limiter_str = "superbee"; break;
-            case Limiter::MC      : limiter_str = "mc"; break;
-            }
-            j = {
-                {"reconstruct_type", "muscl"},
-                {"limiter", limiter_str},
-            };
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
+    void to_json(nlohmann::json &j, const ReconstructConfig<Tvec> &p);
 
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, ReconstructConfig<Tvec> &p) {
-        using T                 = ReconstructConfig<Tvec>;
-        using PiecewiseConstant = typename T::PiecewiseConstant;
-        using MUSCL             = typename T::MUSCL;
-        using Limiter           = typename T::Limiter;
-
-        if (!j.contains("reconstruct_type")) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "no field reconstruct_type is found in this json");
-        }
-
-        std::string reconstruct_type;
-        j.at("reconstruct_type").get_to(reconstruct_type);
-
-        if (reconstruct_type == "piecewise_constant") {
-            p.set(PiecewiseConstant{});
-        } else if (reconstruct_type == "muscl") {
-            std::string limiter_str;
-            j.at("limiter").get_to(limiter_str);
-
-            Limiter limiter;
-            if (limiter_str == "vanleer") {
-                limiter = Limiter::VanLeer;
-            } else if (limiter_str == "minmod") {
-                limiter = Limiter::Minmod;
-            } else if (limiter_str == "superbee") {
-                limiter = Limiter::Superbee;
-            } else if (limiter_str == "mc") {
-                limiter = Limiter::MC;
-            } else {
-                shambase::throw_unimplemented("Unknown limiter type: " + limiter_str);
-            }
-
-            p.set(MUSCL{limiter});
-        } else {
-            shambase::throw_unimplemented("Unknown reconstruction type: " + reconstruct_type);
-        }
-    }
+    void from_json(const nlohmann::json &j, ReconstructConfig<Tvec> &p);
 
 } // namespace shammodels::gsph

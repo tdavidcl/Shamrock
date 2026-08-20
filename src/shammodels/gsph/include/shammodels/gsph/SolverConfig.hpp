@@ -27,6 +27,7 @@
  */
 
 #include "shambase/exception.hpp"
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/type_traits.hpp"
@@ -39,15 +40,11 @@
 #include "shammodels/gsph/config/ReconstructConfig.hpp"
 #include "shammodels/gsph/config/RiemannConfig.hpp"
 #include "shammodels/sph/config/BCConfig.hpp" // Reuse boundary conditions from SPH
-#include "shamrock/io/json_std_optional.hpp"
-#include "shamrock/io/json_utils.hpp"
-#include "shamrock/io/units_json.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
-#include <nlohmann/json.hpp>
 #include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
 #include <variant>
@@ -336,100 +333,15 @@ struct shammodels::gsph::SolverConfig {
 namespace shammodels::gsph {
 
     template<class Tscal>
-    inline void to_json(nlohmann::json &j, const CFLConfig<Tscal> &p) {
-        j = nlohmann::json{
-            {"cfl_cour", p.cfl_cour},
-            {"cfl_force", p.cfl_force},
-        };
-    }
+    void to_json(nlohmann::json &j, const CFLConfig<Tscal> &p);
 
     template<class Tscal>
-    inline void from_json(const nlohmann::json &j, CFLConfig<Tscal> &p) {
-        j.at("cfl_cour").get_to(p.cfl_cour);
-        j.at("cfl_force").get_to(p.cfl_force);
-    }
+    void from_json(const nlohmann::json &j, CFLConfig<Tscal> &p);
 
     template<class Tvec, template<class> class SPHKernel>
-    inline void to_json(nlohmann::json &j, const SolverConfig<Tvec, SPHKernel> &p) {
-        using T       = SolverConfig<Tvec, SPHKernel>;
-        using Tkernel = typename T::Kernel;
-
-        std::string kernel_id = shambase::get_type_name<Tkernel>();
-        std::string type_id   = shambase::get_type_name<Tvec>();
-
-        j = nlohmann::json{
-            {"solver_type", "gsph"},
-            {"kernel_id", kernel_id},
-            {"type_id", type_id},
-            {"scheduler_config", p.scheduler_conf},
-            {"gpart_mass", p.gpart_mass},
-            {"cfl_config", p.cfl_config},
-            {"unit_sys", p.unit_sys},
-            {"riemann_config", p.riemann_config},
-            {"reconstruct_config", p.reconstruct_config},
-            {"force_formulation_config", p.force_formulation_config},
-            {"eos_config", p.eos_config},
-            {"boundary_config", p.boundary_config},
-            {"tree_reduction_level", p.tree_reduction_level},
-            {"use_two_stage_search", p.use_two_stage_search},
-            {"htol_up_coarse_cycle", p.htol_up_coarse_cycle},
-            {"htol_up_fine_cycle", p.htol_up_fine_cycle},
-            {"epsilon_h", p.epsilon_h},
-            {"h_iter_per_subcycles", p.h_iter_per_subcycles},
-            {"h_max_subcycles_count", p.h_max_subcycles_count},
-        };
-    }
+    void to_json(nlohmann::json &j, const SolverConfig<Tvec, SPHKernel> &p);
 
     template<class Tvec, template<class> class SPHKernel>
-    inline void from_json(const nlohmann::json &j, SolverConfig<Tvec, SPHKernel> &p) {
-        using T       = SolverConfig<Tvec, SPHKernel>;
-        using Tkernel = typename T::Kernel;
-
-        std::string kernel_id = j.at("kernel_id").get<std::string>();
-        if (kernel_id != shambase::get_type_name<Tkernel>()) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Invalid kernel type: expected " + shambase::get_type_name<Tkernel>() + " but got "
-                + kernel_id);
-        }
-
-        std::string type_id = j.at("type_id").get<std::string>();
-        if (type_id != shambase::get_type_name<Tvec>()) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "Invalid vector type: expected " + shambase::get_type_name<Tvec>() + " but got "
-                + type_id);
-        }
-
-        bool has_used_defaults  = false;
-        bool has_updated_config = false;
-
-        auto _get_to_if_contains = [&](const std::string &key, auto &value) {
-            shamrock::get_to_if_contains(j, key, value, has_used_defaults);
-        };
-
-        _get_to_if_contains("scheduler_config", p.scheduler_conf);
-        _get_to_if_contains("gpart_mass", p.gpart_mass);
-        _get_to_if_contains("cfl_config", p.cfl_config);
-        _get_to_if_contains("unit_sys", p.unit_sys);
-        _get_to_if_contains("riemann_config", p.riemann_config);
-        _get_to_if_contains("reconstruct_config", p.reconstruct_config);
-        _get_to_if_contains("force_formulation_config", p.force_formulation_config);
-        _get_to_if_contains("eos_config", p.eos_config);
-        _get_to_if_contains("boundary_config", p.boundary_config);
-        _get_to_if_contains("tree_reduction_level", p.tree_reduction_level);
-        _get_to_if_contains("use_two_stage_search", p.use_two_stage_search);
-        _get_to_if_contains("htol_up_coarse_cycle", p.htol_up_coarse_cycle);
-        _get_to_if_contains("htol_up_fine_cycle", p.htol_up_fine_cycle);
-        _get_to_if_contains("epsilon_h", p.epsilon_h);
-        _get_to_if_contains("h_iter_per_subcycles", p.h_iter_per_subcycles);
-        _get_to_if_contains("h_max_subcycles_count", p.h_max_subcycles_count);
-
-        if (has_used_defaults || has_updated_config) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln(
-                    "GSPH::SolverConfig",
-                    shamrock::log_json_changes(p, j, has_used_defaults, has_updated_config));
-            }
-        }
-    }
+    void from_json(const nlohmann::json &j, SolverConfig<Tvec, SPHKernel> &p);
 
 } // namespace shammodels::gsph

@@ -44,6 +44,7 @@
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 #include "shamsys/NodeInstance.hpp"
+#include <nlohmann/json.hpp>
 #include <mpi.h>
 #include <vector>
 

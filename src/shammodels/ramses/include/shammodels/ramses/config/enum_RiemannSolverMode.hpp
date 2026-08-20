@@ -17,17 +17,13 @@
  */
 
 #include "shambase/exception.hpp"
-#include "nlohmann/json.hpp"
-#include "shamrock/io/json_utils.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace shammodels::basegodunov {
 
     enum RiemannSolverMode { Rusanov = 0, HLL = 1, HLLC = 2 };
 
-    SHAMROCK_JSON_SERIALIZE_ENUM(
-        RiemannSolverMode,
-        {{RiemannSolverMode::Rusanov, "rusanov"},
-         {RiemannSolverMode::HLL, "hll"},
-         {RiemannSolverMode::HLLC, "hllc"}});
+    void to_json(nlohmann::json &j, const RiemannSolverMode &e);
+    void from_json(const nlohmann::json &j, RiemannSolverMode &e);
 
 } // namespace shammodels::basegodunov

@@ -18,8 +18,7 @@
  */
 
 #include "shambase/exception.hpp"
-#include "nlohmann/json.hpp"
-#include "shamrock/io/json_utils.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace shammodels::basegodunov {
 
@@ -30,11 +29,7 @@ namespace shammodels::basegodunov {
         EXPO   = 3  // Matrix exponential
     };
 
-    SHAMROCK_JSON_SERIALIZE_ENUM(
-        DragSolverMode,
-        {{DragSolverMode::NoDrag, "no_drag"},
-         {DragSolverMode::IRK1, "irk1"},
-         {DragSolverMode::IRK2, "irk2"},
-         {DragSolverMode::EXPO, "expo"}});
+    void to_json(nlohmann::json &j, const DragSolverMode &e);
+    void from_json(const nlohmann::json &j, DragSolverMode &e);
 
 } // namespace shammodels::basegodunov

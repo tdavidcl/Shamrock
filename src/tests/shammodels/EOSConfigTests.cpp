@@ -12,6 +12,7 @@
 #include "shammodels/common/EOSConfig.hpp"
 #include "shamphys/eos_config.hpp"
 #include "shamtest/shamtest.hpp"
+#include <nlohmann/json.hpp>
 
 void test_serialize_adiabatic() {
 

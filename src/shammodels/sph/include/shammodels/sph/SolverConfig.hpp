@@ -21,6 +21,7 @@
 #include "shambase/exception.hpp"
 #include "config/AVConfig.hpp"
 #include "config/BCConfig.hpp"
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/type_traits.hpp"
@@ -31,10 +32,6 @@
 #include "shammodels/common/ExtForceConfig.hpp"
 #include "shammodels/sph/config/MHDConfig.hpp"
 #include "shamrock/experimental_features.hpp"
-#include "shamrock/io/json_print_diff.hpp"
-#include "shamrock/io/json_std_optional.hpp"
-#include "shamrock/io/json_utils.hpp"
-#include "shamrock/io/units_json.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
@@ -164,48 +161,9 @@ namespace shammodels::sph {
             return shambase::get_check_ref(std::get_if<MonofluidTVA>(&current_mode));
         }
 
-        inline void mode_to_json(nlohmann::json &j) const {
-            if (const None *cfg = std::get_if<None>(&current_mode)) {
-                j = {{"type", "none"}};
-            } else if (const MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
-                j
-                    = {{"type", "monofluid_tva"},
-                       {"ndust", cfg->ndust},
-                       {"pure_diffusion_mode", cfg->pure_diffusion_mode},
-                       {"C_1_fluid", cfg->C_1_fluid},
-                       {"C_drift", cfg->C_drift},
-                       {"cfl_density_threshold", cfg->cfl_density_threshold},
-                       {"ensure_s_j_positivity", cfg->ensure_s_j_positivity},
-                       {"smooth_s_positivity_limiter", cfg->smooth_s_positivity_limiter},
-                       {"dust_corrected_av", cfg->dust_corrected_av}};
-            } else if (
-                const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
-                j = {{"type", "monofluid_complete"}, {"ndust", cfg->ndust}};
-            } else {
-                shambase::throw_unimplemented();
-            }
-        }
+        void mode_to_json(nlohmann::json &j) const;
 
-        inline void mode_from_json(const nlohmann::json &j) {
-            const std::string type = j.at("type").get<std::string>();
-            if (type == "none") {
-                set_none();
-            } else if (type == "monofluid_tva") {
-                set_monofluid_tva(
-                    j.at("ndust").get<u32>(),
-                    j.at("pure_diffusion_mode").get<bool>(),
-                    j.at("C_1_fluid").get<Tscal>(),
-                    j.at("C_drift").get<Tscal>(),
-                    j.at("cfl_density_threshold").get<Tscal>(),
-                    j.at("ensure_s_j_positivity").get<bool>(),
-                    j.value("smooth_s_positivity_limiter", false),
-                    j.value("dust_corrected_av", false));
-            } else if (type == "monofluid_complete") {
-                set_monofluid_complete(j.at("ndust").get<u32>());
-            } else {
-                shambase::throw_unimplemented();
-            }
-        }
+        void mode_from_json(const nlohmann::json &j);
 
         inline bool has_s_j_field() {
             return is_monofluid_tva(); // S_j = sqrt(\rho \epsilon_j)
@@ -256,39 +214,9 @@ namespace shammodels::sph {
 
         bool ballabio_ts_limiter = false;
 
-        inline void drag_mode_to_json(nlohmann::json &j) const {
-            if (std::holds_alternative<None>(dust_drag_mode)) {
-                j = {{"type", "none"}};
-            } else if (
-                const ConstantStoppingTimes *cfg
-                = std::get_if<ConstantStoppingTimes>(&dust_drag_mode)) {
-                j = {{"type", "constant_stopping_times"}, {"stopping_times", cfg->stopping_times}};
-            } else if (const EpsteinDrag *cfg = std::get_if<EpsteinDrag>(&dust_drag_mode)) {
-                j
-                    = {{"type", "epstein_drag"},
-                       {"gamma", cfg->gamma},
-                       {"grains_sizes", cfg->grains_sizes},
-                       {"grains_densities", cfg->grains_densities}};
-            } else {
-                shambase::throw_unimplemented();
-            }
-        }
+        void drag_mode_to_json(nlohmann::json &j) const;
 
-        inline void drag_mode_from_json(const nlohmann::json &j) {
-            if (j.at("type").get<std::string>() == "none") {
-                dust_drag_mode = None{};
-            } else if (j.at("type").get<std::string>() == "constant_stopping_times") {
-                dust_drag_mode
-                    = ConstantStoppingTimes{j.at("stopping_times").get<std::vector<Tscal>>()};
-            } else if (j.at("type").get<std::string>() == "epstein_drag") {
-                dust_drag_mode = EpsteinDrag{
-                    j.at("gamma").get<Tscal>(),
-                    j.at("grains_sizes").get<std::vector<Tscal>>(),
-                    j.at("grains_densities").get<std::vector<Tscal>>()};
-            } else {
-                shambase::throw_unimplemented();
-            }
-        }
+        void drag_mode_from_json(const nlohmann::json &j);
 
         inline void set_drag_constant(ConstantStoppingTimes in) { dust_drag_mode = std::move(in); }
 
@@ -1015,14 +943,7 @@ struct shammodels::sph::SolverConfig {
     inline void use_luminosity(bool enable) { compute_luminosity = enable; }
 
     /// Print the current status of the solver config
-    inline void print_status() {
-        if (shamcomm::world_rank() != 0) {
-            return;
-        }
-        logger::raw_ln("----- SPH Solver configuration -----");
-        logger::raw_ln(nlohmann::json{*this}.dump(4));
-        logger::raw_ln("------------------------------------");
-    }
+    void print_status();
 
     inline void check_config() {
         dust_config.check_config();
@@ -1048,359 +969,34 @@ struct shammodels::sph::SolverConfig {
 
 namespace shammodels::sph {
 
-    /**
-     * @brief Converts a CFLConfig object to a JSON object.
-     *
-     * @param j The JSON object to be populated.
-     * @param p The CFLConfig object to be converted.
-     */
     template<class Tscal>
-    inline void to_json(nlohmann::json &j, const CFLConfig<Tscal> &p) {
-        j = nlohmann::json{
-            {"cfl_cour", p.cfl_cour},
-            {"cfl_force", p.cfl_force},
-            {"cfl_multiplier_stiffness", p.cfl_multiplier_stiffness},
-            {"eta_sink", p.eta_sink}};
-    }
+    void to_json(nlohmann::json &j, const CFLConfig<Tscal> &p);
 
-    /**
-     * @brief Deserializes a CFLConfig object from a JSON object.
-     *
-     * @param j The JSON object to deserialize from.
-     * @param p The CFLConfig object to populate.
-     */
     template<class Tscal>
-    inline void from_json(const nlohmann::json &j, CFLConfig<Tscal> &p) {
-        j.at("cfl_cour").get_to<Tscal>(p.cfl_cour);
-        j.at("cfl_force").get_to<Tscal>(p.cfl_force);
-        j.at("cfl_multiplier_stiffness").get_to<Tscal>(p.cfl_multiplier_stiffness);
-
-        if (j.contains("eta_sink")) {
-            j.at("eta_sink").get_to<Tscal>(p.eta_sink);
-        } else {
-            // Already set to default value
-            ON_RANK_0(shamlog_warn_ln(
-                "SPHConfig", "eta_sink not found when deserializing, defaulting to", p.eta_sink));
-        }
-    }
-
-    // JSON serialization for ParticleKillingConfig
-    template<class Tvec>
-    inline void to_json(nlohmann::json &j, const ParticleKillingConfig<Tvec> &p) {
-        j = nlohmann::json::array();
-        for (const auto &kill : p.kill_list) {
-            if (std::holds_alternative<typename ParticleKillingConfig<Tvec>::Sphere>(kill)) {
-                const auto &sphere = std::get<typename ParticleKillingConfig<Tvec>::Sphere>(kill);
-                j.push_back(
-                    {{"type", "sphere"}, {"center", sphere.center}, {"radius", sphere.radius}});
-            }
-            // If more types are added to kill_t, handle them here
-        }
-    }
+    void from_json(const nlohmann::json &j, CFLConfig<Tscal> &p);
 
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, ParticleKillingConfig<Tvec> &p) {
-        p.kill_list.clear();
-        for (const auto &item : j) {
-            std::string type = item.at("type").get<std::string>();
-            if (type == "sphere") {
-                typename ParticleKillingConfig<Tvec>::Sphere sphere;
-                item.at("center").get_to(sphere.center);
-                item.at("radius").get_to(sphere.radius);
-                p.kill_list.push_back(sphere);
-            }
-            // If more types are added to kill_t, handle them here
-        }
-    }
-
-    // JSON serialization for SmoothingLengthConfig
-    inline void to_json(nlohmann::json &j, const SmoothingLengthConfig &p) {
-        if (const SmoothingLengthConfig::DensityBased *conf
-            = std::get_if<SmoothingLengthConfig::DensityBased>(&p.config)) {
-            j = {
-                {"type", "density_based"},
-            };
-
-        } else if (
-            const SmoothingLengthConfig::DensityBasedNeighLim *conf
-            = std::get_if<SmoothingLengthConfig::DensityBasedNeighLim>(&p.config)) {
-
-            j = {
-                {"type", "density_based_neigh_lim"},
-                {"max_neigh_count", conf->max_neigh_count},
-            };
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
-
-    inline void from_json(const nlohmann::json &j, SmoothingLengthConfig &p) {
-        if (j.at("type").get<std::string>() == "density_based") {
-            p.config = SmoothingLengthConfig::DensityBased{};
-        } else if (j.at("type").get<std::string>() == "density_based_neigh_lim") {
-            p.config
-                = SmoothingLengthConfig::DensityBasedNeighLim{j.at("max_neigh_count").get<u32>()};
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
-
-    /// JSON serialization for SelfGravConfig
-    inline void to_json(nlohmann::json &j, const SelfGravConfig &p) {
-        if (const SelfGravConfig::SFMM *conf = std::get_if<SelfGravConfig::SFMM>(&p.config)) {
-            j = {
-                {"type", "sfmm"},
-                {"order", conf->order},
-                {"opening_angle", conf->opening_angle},
-                {"reduction_level", conf->reduction_level},
-                {"leaf_lowering", conf->leaf_lowering},
-            };
-        } else if (const SelfGravConfig::FMM *conf = std::get_if<SelfGravConfig::FMM>(&p.config)) {
-            j = {
-                {"type", "fmm"},
-                {"order", conf->order},
-                {"opening_angle", conf->opening_angle},
-                {"reduction_level", conf->reduction_level},
-            };
-        } else if (const SelfGravConfig::MM *conf = std::get_if<SelfGravConfig::MM>(&p.config)) {
-            j = {
-                {"type", "mm"},
-                {"order", conf->order},
-                {"opening_angle", conf->opening_angle},
-                {"reduction_level", conf->reduction_level},
-            };
-        } else if (
-            const SelfGravConfig::Direct *conf = std::get_if<SelfGravConfig::Direct>(&p.config)) {
-            j = {
-                {"type", "direct"},
-                {"reference_mode", conf->reference_mode},
-            };
-        } else if (
-            const SelfGravConfig::None *conf = std::get_if<SelfGravConfig::None>(&p.config)) {
-            j = {
-                {"type", "none"},
-            };
-        }
-
-        if (const SelfGravConfig::SofteningPlummer *conf
-            = std::get_if<SelfGravConfig::SofteningPlummer>(&p.softening_mode)) {
-            j["softening_mode"]   = "plummer";
-            j["softening_length"] = conf->epsilon;
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
-
-    /// JSON deserialization for SelfGravConfig
-    inline void from_json(const nlohmann::json &j, SelfGravConfig &p) {
-        if (j.at("type").get<std::string>() == "sfmm") {
-            p.config = SelfGravConfig::SFMM{
-                .order           = j.at("order").get<u32>(),
-                .opening_angle   = j.at("opening_angle").get<f64>(),
-                .leaf_lowering   = j.at("leaf_lowering").get<bool>(),
-                .reduction_level = j.at("reduction_level").get<u32>()};
-        } else if (j.at("type").get<std::string>() == "fmm") {
-            p.config = SelfGravConfig::FMM{
-                .order           = j.at("order").get<u32>(),
-                .opening_angle   = j.at("opening_angle").get<f64>(),
-                .reduction_level = j.at("reduction_level").get<u32>()};
-        } else if (j.at("type").get<std::string>() == "mm") {
-            p.config = SelfGravConfig::MM{
-                .order           = j.at("order").get<u32>(),
-                .opening_angle   = j.at("opening_angle").get<f64>(),
-                .reduction_level = j.at("reduction_level").get<u32>()};
-        } else if (j.at("type").get<std::string>() == "direct") {
-            p.config = SelfGravConfig::Direct{j.at("reference_mode").get<bool>()};
-        } else if (j.at("type").get<std::string>() == "none") {
-            p.config = SelfGravConfig::None{};
-        } else {
-            throw shambase::make_except_with_loc<std::runtime_error>(
-                "Invalid self gravity type: " + j.at("type").get<std::string>());
-        }
-
-        if (j.contains("softening_mode")) {
-            std::string softening_mode = j.at("softening_mode").get<std::string>();
-            if (softening_mode == "plummer") {
-                p.softening_mode
-                    = SelfGravConfig::SofteningPlummer{j.at("softening_length").get<f64>()};
-            } else {
-                throw shambase::make_except_with_loc<std::runtime_error>(
-                    "Invalid softening mode: " + softening_mode);
-            }
-        }
-    }
-
-    // JSON serialization for DustConfig
-    template<class Tvec>
-    inline void to_json(nlohmann::json &j, const DustConfig<Tvec> &p) {
-        j = {};
-
-        p.mode_to_json(j["mode"]);
-        p.drag_mode_to_json(j["drag_mode"]);
-        j["ballabio_ts_limiter"] = p.ballabio_ts_limiter;
-    }
+    void to_json(nlohmann::json &j, const ParticleKillingConfig<Tvec> &p);
 
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, DustConfig<Tvec> &p) {
-        p.mode_from_json(j.at("mode"));
-        p.drag_mode_from_json(j.at("drag_mode"));
-        p.ballabio_ts_limiter = j.value("ballabio_ts_limiter", false);
-    }
+    void from_json(const nlohmann::json &j, ParticleKillingConfig<Tvec> &p);
 
-    /**
-     * @brief Serializes a SolverConfig object to a JSON object.
-     *
-     * @param j The JSON object to serialize to.
-     * @param p The SolverConfig object to serialize.
-     */
+    void to_json(nlohmann::json &j, const SmoothingLengthConfig &p);
+    void from_json(const nlohmann::json &j, SmoothingLengthConfig &p);
+
+    void to_json(nlohmann::json &j, const SelfGravConfig &p);
+    void from_json(const nlohmann::json &j, SelfGravConfig &p);
+
+    template<class Tvec>
+    void to_json(nlohmann::json &j, const DustConfig<Tvec> &p);
+
+    template<class Tvec>
+    void from_json(const nlohmann::json &j, DustConfig<Tvec> &p);
+
     template<class Tvec, template<class> class SPHKernel>
-    inline void to_json(nlohmann::json &j, const SolverConfig<Tvec, SPHKernel> &p) {
-        using T       = SolverConfig<Tvec, SPHKernel>;
-        using Tkernel = typename T::Kernel;
+    void to_json(nlohmann::json &j, const SolverConfig<Tvec, SPHKernel> &p);
 
-        std::string kernel_id = shambase::get_type_name<Tkernel>();
-        std::string type_id   = shambase::get_type_name<Tvec>();
-
-        j = nlohmann::json{
-            // used for type checking
-            {"kernel_id", kernel_id},
-            {"type_id", type_id},
-            // scheduler config
-            {"scheduler_config", p.scheduler_conf},
-            // actual data stored in the json
-            {"gpart_mass", p.gpart_mass},
-            {"cfl_config", p.cfl_config},
-            {"unit_sys", p.unit_sys},
-            {"show_cfl_detail", p.show_cfl_detail},
-            // mhd config
-            {"mhd_config", p.mhd_config},
-            // dust config
-            {"dust_config", p.dust_config},
-            // self gravity config
-            {"self_grav_config", p.self_grav_config},
-            // tree config
-            {"tree_reduction_level", p.tree_reduction_level},
-            {"use_two_stage_search", p.use_two_stage_search},
-            {"show_neigh_stats", p.show_neigh_stats},
-            // solver behavior config
-            {"combined_dtdiv_divcurlv_compute", p.combined_dtdiv_divcurlv_compute},
-            {"htol_up_coarse_cycle", p.htol_up_coarse_cycle},
-            {"htol_up_fine_cycle", p.htol_up_fine_cycle},
-            {"epsilon_h", p.epsilon_h},
-            {"smoothing_length_config", p.smoothing_length_config},
-            {"h_iter_per_subcycles", p.h_iter_per_subcycles},
-            {"h_max_subcycles_count", p.h_max_subcycles_count},
-
-            {"enable_particle_reordering", p.enable_particle_reordering},
-            {"particle_reordering_step_freq", p.particle_reordering_step_freq},
-
-            {"save_dt_to_fields", p.save_dt_to_fields},
-            {"show_ghost_zone_graph", p.show_ghost_zone_graph},
-
-            {"eos_config", p.eos_config},
-
-            {"artif_viscosity", p.artif_viscosity},
-            {"boundary_config", p.boundary_config},
-            {"ext_force_config", p.ext_force_config},
-
-            {"do_debug_dump", p.do_debug_dump},
-            {"debug_dump_filename", p.debug_dump_filename},
-            // particle killing config
-            {"particle_killing", p.particle_killing},
-        };
-    }
-
-    /**
-     * @brief Deserializes a SolverConfig object from a JSON object.
-     *
-     * @param j The JSON object to deserialize from.
-     * @param p The SolverConfig object to populate.
-     */
     template<class Tvec, template<class> class SPHKernel>
-    inline void from_json(const nlohmann::json &j, SolverConfig<Tvec, SPHKernel> &p) {
-        using T       = SolverConfig<Tvec, SPHKernel>;
-        using Tkernel = typename T::Kernel;
-
-        // type checking
-        if (j.contains("kernel_id")) {
-
-            std::string kernel_id = j.at("kernel_id").get<std::string>();
-
-            if (kernel_id != shambase::get_type_name<Tkernel>()) {
-                shambase::throw_with_loc<std::runtime_error>(
-                    "Invalid type to deserialize, wanted " + shambase::get_type_name<Tvec>()
-                    + " but got " + kernel_id);
-            }
-        }
-
-        if (j.contains("type_id")) {
-
-            std::string type_id = j.at("type_id").get<std::string>();
-
-            if (type_id != shambase::get_type_name<Tvec>()) {
-                shambase::throw_with_loc<std::runtime_error>(
-                    "Invalid type to deserialize, wanted " + shambase::get_type_name<Tvec>()
-                    + " but got " + type_id);
-            }
-        }
-
-        bool has_used_defaults  = false;
-        bool has_updated_config = false;
-
-        auto _get_to_if_contains = [&](const std::string &key, auto &value) {
-            shamrock::get_to_if_contains(j, key, value, has_used_defaults);
-        };
-
-        auto _get_to_if_contains_fallbacks = [&](const std::string &key,
-                                                 auto &value,
-                                                 std::initializer_list<const char *> fallbacks) {
-            shamrock::get_to_if_contains_fallbacks(
-                j, key, value, fallbacks, has_used_defaults, has_updated_config);
-        };
-
-        _get_to_if_contains("scheduler_config", p.scheduler_conf);
-
-        // actual data stored in the json
-        _get_to_if_contains("gpart_mass", p.gpart_mass);
-        _get_to_if_contains("cfl_config", p.cfl_config);
-        _get_to_if_contains("unit_sys", p.unit_sys);
-        _get_to_if_contains("show_cfl_detail", p.show_cfl_detail);
-        _get_to_if_contains("mhd_config", p.mhd_config);
-        _get_to_if_contains("dust_config", p.dust_config);
-        _get_to_if_contains("self_grav_config", p.self_grav_config);
-        _get_to_if_contains("tree_reduction_level", p.tree_reduction_level);
-        _get_to_if_contains("use_two_stage_search", p.use_two_stage_search);
-        _get_to_if_contains("show_neigh_stats", p.show_neigh_stats);
-        _get_to_if_contains("combined_dtdiv_divcurlv_compute", p.combined_dtdiv_divcurlv_compute);
-
-        // Try new names first, fall back to old names for backward compatibility
-        _get_to_if_contains_fallbacks(
-            "htol_up_coarse_cycle", p.htol_up_coarse_cycle, {"htol_up_tol"});
-        _get_to_if_contains_fallbacks("htol_up_fine_cycle", p.htol_up_fine_cycle, {"htol_up_iter"});
-
-        _get_to_if_contains("epsilon_h", p.epsilon_h);
-        _get_to_if_contains("smoothing_length_config", p.smoothing_length_config);
-        _get_to_if_contains("h_iter_per_subcycles", p.h_iter_per_subcycles);
-        _get_to_if_contains("h_max_subcycles_count", p.h_max_subcycles_count);
-        _get_to_if_contains("enable_particle_reordering", p.enable_particle_reordering);
-        _get_to_if_contains("particle_reordering_step_freq", p.particle_reordering_step_freq);
-        _get_to_if_contains("save_dt_to_fields", p.save_dt_to_fields);
-        _get_to_if_contains("show_ghost_zone_graph", p.show_ghost_zone_graph);
-        _get_to_if_contains("eos_config", p.eos_config);
-        _get_to_if_contains("artif_viscosity", p.artif_viscosity);
-        _get_to_if_contains("boundary_config", p.boundary_config);
-        _get_to_if_contains("ext_force_config", p.ext_force_config);
-        _get_to_if_contains("do_debug_dump", p.do_debug_dump);
-        _get_to_if_contains("debug_dump_filename", p.debug_dump_filename);
-        _get_to_if_contains("particle_killing", p.particle_killing);
-
-        if (has_used_defaults || has_updated_config) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln(
-                    "SPH::SolverConfig",
-                    shamrock::log_json_changes(p, j, has_used_defaults, has_updated_config));
-            }
-        }
-    }
+    void from_json(const nlohmann::json &j, SolverConfig<Tvec, SPHKernel> &p);
 
 } // namespace shammodels::sph

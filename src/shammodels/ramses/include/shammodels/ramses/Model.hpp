@@ -132,75 +132,8 @@ namespace shammodels::basegodunov {
         /////// I/O
         ////////////////////////////////////////////////////////////////////////////////////////////
 
-        inline void dump(std::string fname) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln("Godunov", "Dumping state to", fname);
-            }
-
-            nlohmann::json metadata;
-            metadata["solver_config"] = solver.solver_config;
-
-            shamrock::write_shamrock_dump(
-                fname, metadata.dump(4), shambase::get_check_ref(ctx.sched));
-        }
-
-        /**
-         * @brief Load the state of the Godunov model from a dump file.
-         *
-         * @param fname The name of the dump file.
-         */
-        inline void load_from_dump(std::string fname) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln("Godunov", "Loading state from dump", fname);
-            }
-
-            // Load the context state and recover user metadata
-            std::string metadata_user{};
-            shamrock::load_shamrock_dump(fname, metadata_user, ctx);
-
-            nlohmann::json j = nlohmann::json::parse(metadata_user);
-            j.at("solver_config").get_to(solver.solver_config);
-
-            // modules::GhostZones gz(ctx, solver.solver_config, storage);
-            // gz.build_ghost_cache();
-
-            PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
-
-            // Migrate old dumps that stored time/dt in solver_config.time_state (before PR #1932)
-            auto sync_names = sched.synchronized_data.get_edge_names();
-
-            // Checking for time is equivalent to dumps written after this migration
-            bool had_time_edge
-                = std::find(sync_names.begin(), sync_names.end(), "time") != sync_names.end();
-
-            // create time/dt synchronization edges if not present
-            solver.ensure_time_state_edges();
-
-            if (!had_time_edge) {
-                if (j.at("solver_config").contains("time_state")) {
-                    ON_RANK_0(
-                        logger::warn_ln(
-                            "Godunov",
-                            "Migrated time/dt from solver_config.time_state into scheduler "
-                            "edges"));
-                    const auto &ts = j.at("solver_config").at("time_state");
-                    solver.set_time(ts.at("time").get<Tscal>());
-                    solver.set_next_dt(ts.at("dt").get<Tscal>());
-                } else {
-                    throw shambase::make_except_with_loc<std::runtime_error>(
-                        "this should never happen: dump has neither time edges nor "
-                        "solver_config.time_state");
-                }
-            }
-
-            shamlog_debug_ln("Sys", "build local scheduler tables");
-            sched.owned_patch_id = sched.patch_list.build_local();
-            sched.patch_list.build_local_idx_map();
-            sched.patch_list.build_global_idx_map();
-            sched.update_local_load_value([&](shamrock::patch::Patch p) {
-                return sched.patch_data.owned_data.get(p.id_patch).get_obj_cnt();
-            });
-        }
+        void dump(std::string fname);
+        void load_from_dump(std::string fname);
     };
 
 } // namespace shammodels::basegodunov

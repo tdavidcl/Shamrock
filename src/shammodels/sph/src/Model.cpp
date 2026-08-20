@@ -31,11 +31,14 @@
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
+#include "shamrock/io/json_utils.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include <nlohmann/json.hpp>
+#include <algorithm>
 #include <functional>
 #include <random>
 #include <stdexcept>
@@ -1632,6 +1635,80 @@ shammodels::sph::PhantomDump shammodels::sph::Model<Tvec, SPHKernel>::make_phant
     }
 
     return dump;
+}
+
+template<class Tvec, template<class> class SPHKernel>
+void shammodels::sph::Model<Tvec, SPHKernel>::load_from_dump(std::string fname) {
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("SPH", "Loading state from dump", fname);
+    }
+
+    std::string metadata_user{};
+    shamrock::load_shamrock_dump(fname, metadata_user, ctx);
+
+    nlohmann::json j = shamrock::parse_json(metadata_user);
+    j.at("solver_config").get_to(solver.solver_config);
+
+    PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
+
+    ensure_sink_edges<Tvec>(sched.synchronized_data);
+    if (j.contains("sinks") && !j.at("sinks").is_null()) {
+        std::vector<SinkParticle<Tvec>> out;
+        j.at("sinks").get_to(out);
+        auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
+        set_sink_particles(edges, out);
+    }
+
+    auto sync_names = sched.synchronized_data.get_edge_names();
+
+    bool had_time_edge
+        = std::find(sync_names.begin(), sync_names.end(), "time") != sync_names.end();
+
+    solver.ensure_time_state_edges();
+
+    if (!had_time_edge) {
+        if (j.at("solver_config").contains("time_state")) {
+            ON_RANK_0(
+                logger::warn_ln(
+                    "SPH",
+                    "Migrated time/dt/cfl from solver_config.time_state into scheduler "
+                    "edges"));
+            const auto &ts = j.at("solver_config").at("time_state");
+            solver.set_time(ts.at("time").get<Tscal>());
+            solver.set_next_dt(ts.at("dt_sph").get<Tscal>());
+            solver.set_cfl_multipler(ts.at("cfl_multiplier").get<Tscal>());
+        } else {
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "this should never happen: dump has neither time edges nor "
+                "solver_config.time_state");
+        }
+    }
+
+    solver.init_ghost_layout();
+    solver.init_solver_graph();
+
+    shamlog_debug_ln("Sys", "build local scheduler tables");
+    sched.owned_patch_id = sched.patch_list.build_local();
+    sched.patch_list.build_local_idx_map();
+    sched.patch_list.build_global_idx_map();
+    sched.update_local_load_value([&](shamrock::patch::Patch p) {
+        return sched.patch_data.owned_data.get(p.id_patch).get_obj_cnt();
+    });
+}
+
+template<class Tvec, template<class> class SPHKernel>
+void shammodels::sph::Model<Tvec, SPHKernel>::dump(std::string fname) {
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("SPH", "Dumping state to", fname);
+    }
+
+    solver.update_sync_load_values();
+
+    nlohmann::json metadata;
+    metadata["solver_config"] = solver.solver_config;
+
+    shamrock::write_shamrock_dump(
+        fname, shamrock::dump_json(metadata, 4), shambase::get_check_ref(ctx.sched));
 }
 
 using namespace shammath;

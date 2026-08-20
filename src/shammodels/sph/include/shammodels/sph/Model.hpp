@@ -903,92 +903,14 @@ namespace shammodels::sph {
          *
          * @param fname The name of the dump file.
          */
-        inline void load_from_dump(std::string fname) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln("SPH", "Loading state from dump", fname);
-            }
-
-            // Load the context state and recover user metadata
-            std::string metadata_user{};
-            shamrock::load_shamrock_dump(fname, metadata_user, ctx);
-
-            /// TODO: load solver config from metadata
-            nlohmann::json j = nlohmann::json::parse(metadata_user);
-            // std::cout << j << std::endl;
-            j.at("solver_config").get_to(solver.solver_config);
-
-            PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
-
-            ensure_sink_edges<Tvec>(sched.synchronized_data);
-            if (j.contains("sinks") && !j.at("sinks").is_null()) {
-                std::vector<SinkParticle<Tvec>> out;
-                j.at("sinks").get_to(out);
-                auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
-                set_sink_particles(edges, out);
-            }
-
-            // Migrate old dumps that stored time/dt/cfl in solver_config.time_state
-            auto sync_names = sched.synchronized_data.get_edge_names();
-
-            // PR #1928 introduces time/dt/cfl synchronization edges
-            // so checking for time is equivalent to commit >= PR #1928
-            bool had_time_edge
-                = std::find(sync_names.begin(), sync_names.end(), "time") != sync_names.end();
-
-            // create time/dt/cfl synchronization edges if not present
-            solver.ensure_time_state_edges();
-
-            if (!had_time_edge) { // before PR #1928
-                if (j.at("solver_config").contains("time_state")) {
-                    ON_RANK_0(
-                        logger::warn_ln(
-                            "SPH",
-                            "Migrated time/dt/cfl from solver_config.time_state into scheduler "
-                            "edges"));
-                    const auto &ts = j.at("solver_config").at("time_state");
-                    solver.set_time(ts.at("time").get<Tscal>());
-                    solver.set_next_dt(ts.at("dt_sph").get<Tscal>());
-                    solver.set_cfl_multipler(ts.at("cfl_multiplier").get<Tscal>());
-                } else {
-                    throw shambase::make_except_with_loc<std::runtime_error>(
-                        "this should never happen: dump has neither time edges nor "
-                        "solver_config.time_state");
-                }
-            }
-
-            solver.init_ghost_layout();
-
-            solver.init_solver_graph();
-
-            shamlog_debug_ln("Sys", "build local scheduler tables");
-            sched.owned_patch_id = sched.patch_list.build_local();
-            sched.patch_list.build_local_idx_map();
-            sched.patch_list.build_global_idx_map();
-            sched.update_local_load_value([&](shamrock::patch::Patch p) {
-                return sched.patch_data.owned_data.get(p.id_patch).get_obj_cnt();
-            });
-        }
+        void load_from_dump(std::string fname);
 
         /**
          * @brief Dump the state of the SPH model to a file.
          *
          * @param fname The name of the dump file.
          */
-        inline void dump(std::string fname) {
-            if (shamcomm::world_rank() == 0) {
-                logger::info_ln("SPH", "Dumping state to", fname);
-            }
-
-            solver.update_sync_load_values();
-
-            nlohmann::json metadata;
-            metadata["solver_config"] = solver.solver_config;
-
-            // Dump the state of the SPH model to a file
-            /// TODO: replace supplied metadata by solver config json
-            shamrock::write_shamrock_dump(
-                fname, metadata.dump(4), shambase::get_check_ref(ctx.sched));
-        }
+        void dump(std::string fname);
 
         ////////////////////////////////////////////////////////////////////////////////////////////
         /////// Simulation control
