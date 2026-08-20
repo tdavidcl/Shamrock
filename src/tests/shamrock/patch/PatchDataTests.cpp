@@ -305,10 +305,12 @@ NEW_TEST(Unittest, "shamrock/patch/PatchDataLayer::copy_constructor", 1) {
     REQUIRE_NAMED("duplicate equal", a == c);
     REQUIRE_EQUAL(a.get_obj_cnt(), b.get_obj_cnt());
     REQUIRE_EQUAL(a.memsize(), b.memsize());
-    REQUIRE_EQUAL(a.has_nan(), false);
-    REQUIRE_EQUAL(b.has_nan(), false);
-    REQUIRE_EQUAL(a.has_inf(), false);
-    REQUIRE_EQUAL(a.has_nan_or_inf(), false);
+    // mock_patchdata samples the full type range, so fields can contain inf
+    REQUIRE_EQUAL(a.has_nan(), b.has_nan());
+    REQUIRE_EQUAL(a.has_inf(), b.has_inf());
+    REQUIRE_EQUAL(a.has_nan_or_inf(), b.has_nan_or_inf());
+    REQUIRE_EQUAL(c.has_nan(), a.has_nan());
+    REQUIRE_EQUAL(c.has_inf(), a.has_inf());
 
     a.check_field_obj_cnt_match();
     b.check_field_obj_cnt_match();
