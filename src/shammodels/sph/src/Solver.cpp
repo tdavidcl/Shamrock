@@ -403,30 +403,28 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
         auto flag_node = solver_graph.register_node(
             "SinkParticlesFlagAccreteHard", modules::SinkParticlesFlagAccreteHard<Tvec>{});
-        shambase::get_check_ref(flag_node)
-            .set_edges(
-                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
-                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_accretion_radius"),
-                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"));
+        shambase::get_check_ref(flag_node).set_edges(
+            solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+            solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_accretion_radius"),
+            solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"));
 
         auto qty_node = solver_graph.register_node(
             "SinkParticlesAccreteQuantities", modules::SinkParticlesAccreteQuantities<Tvec>{});
-        shambase::get_check_ref(qty_node)
-            .set_edges(
-                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("gpart_mass"),
-                sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
-                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
-                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
-                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
-                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"),
-                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_vel"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_acc_sph"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_angular_momentum"),
-                sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_mass"));
+        shambase::get_check_ref(qty_node).set_edges(
+            solver_graph.get_edge_ptr<IDataEdge<Tscal>>("gpart_mass"),
+            sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
+            solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+            solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+            solver_graph.get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
+            solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"),
+            solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_pos"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_vel"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_acc_sph"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tvec>>>("sink_angular_momentum"),
+            sync_data.get_edge_ptr<IDataEdge<std::vector<Tscal>>>("sink_mass"));
 
         auto evict_node = solver_graph.register_node(
             "SinkParticlesEvictAccretedParticles",
@@ -438,8 +436,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"));
 
         auto accretion_then = std::make_shared<OperationSequence>(
-            "sink accretion",
-            std::vector<std::shared_ptr<INode>>{flag_node, qty_node, evict_node});
+            "sink accretion", std::vector<std::shared_ptr<INode>>{flag_node, qty_node, evict_node});
 
         auto if_accretion = solver_graph.register_node(
             "sink accretion if", OperationIf("sink accretion", accretion_then));
