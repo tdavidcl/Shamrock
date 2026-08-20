@@ -15,6 +15,9 @@ jobs:
   # branches (e.g. mergify/merge-queue/7da018d0ff). Every other PR uses light CI.
   # The `profile-build` label runs the compile-time build profile job in either
   # mode (it is already part of full CI).
+  # The `skip-compile` label skips compile jobs (lint/docs still run). Ignored
+  # on Mergify merge-queue branches so the merge gate still compiles. The
+  # `all_light` job still reports in either case.
   main_workflow:
     name: CI
     uses: ./.github/workflows/main_workflow.yml
@@ -22,6 +25,7 @@ jobs:
       run_build_push_docker: true
       light_ci: ${{ !(contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
       run_build_profile: ${{ contains(github.event.pull_request.labels.*.name, 'profile-build') }}
+      skip_compile: ${{ contains(github.event.pull_request.labels.*.name, 'skip-compile') && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
 
   collect_metrics:
     name: Collect metrics
@@ -49,6 +53,7 @@ jobs:
           Light CI is enabled (the default for pull requests). This will only run the basic tests and not the full tests.
           Full CI runs if the `full-ci` label is set, or automatically on Mergify merge-queue branches (`mergify/merge-queue/*`).
           The merge gate job "on PR / all" is skipped in this case. Queue entry uses "on PR / all_light"; full CI runs in the merge queue.
+          Add the `skip-compile` label to skip compile jobs while still reporting all_light.
           EOF
 
       - uses: actions/upload-artifact@v4
@@ -56,13 +61,32 @@ jobs:
           name: report_light_ci
           path: ./report_______light_ci.md
 
+  skip_compile:
+    name: Notify skip-compile
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'skip-compile') && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo message
+        run: |
+          cat >> report_______skip_compile.md <<'EOF'
+
+
+          The `skip-compile` label is set. Compile jobs are skipped; linting and documentation still run.
+          The merge-queue entry gate "on PR / all_light" still reports. Compile jobs always run on Mergify merge-queue branches.
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report_skip_compile
+          path: ./report_______skip_compile.md
+
   # Hang while any push/schedule jobs in the repo are queued or in_progress.
   # Runs after CI/metrics, then "all" depends on it. Gives up with success
   # after 1 hour.
   wait_for_push_schedule:
     name: Wait for push/schedule jobs
     needs: [ main_workflow, upload_metrics_history ]
-    if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+    if: ${{ always() && !cancelled() && !(contains(github.event.pull_request.labels.*.name, 'skip-compile') && !startsWith(github.head_ref, 'mergify/merge-queue/')) && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -135,8 +159,8 @@ jobs:
   #                 non-success — do not whitelist only failure/cancelled.
   all:
     needs: [ main_workflow, upload_metrics_history, wait_for_push_schedule ]
-    # run always except for cancel, and only when full CI ran
-    if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+    # run always except for cancel, and only when full CI ran (not skip-compile)
+    if: ${{ always() && !cancelled() && !(contains(github.event.pull_request.labels.*.name, 'skip-compile') && !startsWith(github.head_ref, 'mergify/merge-queue/')) && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
     runs-on: ubuntu-latest
     steps:
     - name: Status summary
@@ -151,7 +175,8 @@ jobs:
         fi
 
   # Mergify merge-queue entry gate (queue_conditions: check-success = all_light).
-  # Runs for both light and full CI.
+  # Runs for both light and full CI, including when `skip-compile` skipped the
+  # compile jobs (lint/docs in main_workflow still have to succeed).
   # Same gate logic as all; see comment above for needs.*.result states.
   all_light:
     needs: [ main_workflow, upload_metrics_history ]
@@ -161,6 +186,9 @@ jobs:
     steps:
     - name: Status summary
       run: |
+        if [ "${{ contains(github.event.pull_request.labels.*.name, 'skip-compile') && !startsWith(github.head_ref, 'mergify/merge-queue/') }}" = "true" ]; then
+          echo "skip-compile label set; compile jobs were skipped."
+        fi
         if [ "${{ needs.main_workflow.result }}" != "success" ]; then
           echo "CI did not succeed (result: ${{ needs.main_workflow.result }})."
           exit 1
