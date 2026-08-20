@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/exception.hpp"
 #include "shambase/profiling/profiling.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/time.hpp"
