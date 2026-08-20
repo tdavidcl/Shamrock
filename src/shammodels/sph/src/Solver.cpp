@@ -415,7 +415,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             "SinkParticlesAccreteQuantities", modules::SinkParticlesAccreteQuantities<Tvec>{});
         shambase::get_check_ref(qty_node)
             .set_edges(
-                solver_graph.get_edge_ptr<ScalarEdge<Tscal>>("gpart_mass"),
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("gpart_mass"),
                 sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
                 solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
                 solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),

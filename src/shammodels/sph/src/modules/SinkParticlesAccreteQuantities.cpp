@@ -39,7 +39,7 @@ namespace shammodels::sph::modules {
         auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
         auto &q        = shambase::get_check_ref(dev_sched).get_queue();
 
-        Tscal gpart_mass = edges.gpart_mass.value;
+        Tscal gpart_mass = edges.gpart_mass.data;
         Tscal dt         = edges.dt.data;
 
         sham::DeviceBuffer<u32> acc_flag(0, dev_sched);
