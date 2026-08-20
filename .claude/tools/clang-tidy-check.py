@@ -5,9 +5,8 @@ clang-tidy can't invoke the AdaptiveCpp `acpp` compiler wrapper directly, so
 this strips the SYCL/acpp-only flags (the same ones .clangd removes for
 clangd) and swaps the compiler for plain clang++ before calling clang-tidy.
 
-Uses the LLVM 20 toolchain (clang-tidy-20/clang++-20) — a separate, newer
-install from the LLVM 18 that AdaptiveCpp itself is built against, so
-upgrading this dev tool never touches the build toolchain.
+Uses the LLVM 20 toolchain (clang-tidy-20/clang++-20), the same version
+AdaptiveCpp itself is built against in this environment.
 
 Usage: .claude/tools/clang-tidy-check.py <path/to/file.cpp>
 """

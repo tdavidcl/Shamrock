@@ -7,10 +7,11 @@ the OpenMP backend. Automated by `.claude/hooks/session-start.sh`; the
 condensed steps it runs:
 
 ```bash
-# System packages (Boost.context/fiber + LLVM-18 for AdaptiveCpp, OpenMPI,
-# pre-commit, LLVM-20 dev tooling — see below)
-apt-get install -y libboost-context-dev libboost-fiber-dev llvm-18-dev \
-  libclang-18-dev libomp-18-dev libopenmpi-dev openmpi-bin pre-commit \
+# System packages (Boost.context/fiber + LLVM 20 for AdaptiveCpp, OpenMPI,
+# pre-commit, clangd/clang-tidy for dev tooling — one shared LLVM 20
+# toolchain, see below)
+apt-get install -y libboost-context-dev libboost-fiber-dev llvm-20-dev \
+  libclang-20-dev libomp-20-dev libopenmpi-dev openmpi-bin pre-commit \
   clang-20 clangd-20 clang-tidy-20
 
 # Submodules
@@ -24,14 +25,16 @@ pre-commit hook venvs also need `SETUPTOOLS_USE_DISTUTILS=stdlib` exported —
 Debian's patched sysconfig scheme otherwise breaks setuptools' vendored
 distutils with `AttributeError: install_layout`.
 
-`clang-20`/`clangd-20`/`clang-tidy-20` are a **separate** toolchain from the
-`llvm-18-dev` one AdaptiveCpp itself is built and cached against — kept
-apart deliberately, so upgrading dev tooling can never affect the build.
-20 is the newest available directly from Ubuntu noble's own repos;
-apt.llvm.org (which would offer newer releases closer to the clang-format
-v22.1.8 the `pre-commit` config pins to, matching the `.clangd` file's
-`>= clangd-21`/`>= clangd-22` comments) is blocked by this environment's
-network policy.
+A single LLVM 20 toolchain backs both the AdaptiveCpp build and dev tooling
+(clangd/clang-tidy) — AdaptiveCpp's `CMakeLists.txt` supports up to LLVM 20
+(`LLVM_VERSION_MAJOR GREATER 20` is a hard `SEND_ERROR`), so there's no need
+to keep an older LLVM around just for the build; verified end-to-end
+(`shamconfigure` + `shammake shamrock` + running the binary) after purging
+all LLVM/clang 18 packages. 20 is the newest available directly from Ubuntu
+noble's own repos; apt.llvm.org (which would offer newer releases closer to
+the clang-format v22.1.8 the `pre-commit` config pins to, matching the
+`.clangd` file's `>= clangd-21`/`>= clangd-22` comments) is blocked by this
+environment's network policy.
 
 `clangd-20` only installs a versioned `/usr/bin/clangd-20` binary, so the
 hook also symlinks it to `/usr/local/bin/clangd`. It picks up

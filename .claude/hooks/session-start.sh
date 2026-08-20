@@ -15,15 +15,16 @@ if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
 fi
 
 # --- System dependencies -----------------------------------------------
-# AdaptiveCpp (SYCL) needs Boost.context/fiber and an LLVM-18 install (kept
-# pinned to 18 since that's what AdaptiveCpp was built and cached against);
-# Shamrock needs an MPI implementation; pre-commit is used for linting.
-# clang-tidy-20/clangd-20 back dev-tooling (see below) — deliberately a
-# *separate* toolchain from llvm-18-dev so upgrading it can't affect the
-# AdaptiveCpp build. Ubuntu noble's own repos stop at 20; apt.llvm.org
-# (which would offer newer releases matching the clang-format v22.1.8
-# pre-commit pins to) is blocked by this environment's network policy.
-NEEDED_PKGS="libboost-context-dev libboost-fiber-dev llvm-18-dev libclang-18-dev libomp-18-dev libopenmpi-dev openmpi-bin pre-commit clang-20 clangd-20 clang-tidy-20"
+# AdaptiveCpp (SYCL) needs Boost.context/fiber and an LLVM install; Shamrock
+# needs an MPI implementation; pre-commit is used for linting; clang-tidy-20/
+# clangd-20 back dev-tooling. A single LLVM 20 toolchain backs both the
+# AdaptiveCpp build and dev tooling (AdaptiveCpp supports up to LLVM 20 per
+# its CMakeLists.txt) — 20 is the newest available directly from Ubuntu
+# noble's own repos; apt.llvm.org (which would offer newer releases closer
+# to the clang-format v22.1.8 the `pre-commit` config pins to, matching the
+# `.clangd` file's `>= clangd-21`/`>= clangd-22` comments) is blocked by
+# this environment's network policy.
+NEEDED_PKGS="libboost-context-dev libboost-fiber-dev llvm-20-dev libclang-20-dev libomp-20-dev libopenmpi-dev openmpi-bin pre-commit clang-20 clangd-20 clang-tidy-20"
 MISSING_PKGS=""
 for pkg in $NEEDED_PKGS; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
