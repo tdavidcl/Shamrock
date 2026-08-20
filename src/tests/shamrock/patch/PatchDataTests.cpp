@@ -285,3 +285,31 @@ NEW_TEST(Unittest, "shamrock/patch/PatchDataLayer::operator==", 1) {
         REQUIRE_NAMED("object count mismatch", !(a == b));
     }
 }
+
+NEW_TEST(Unittest, "shamrock/patch/PatchDataLayer::copy_constructor", 1) {
+    using namespace shamrock::patch;
+
+    constexpr u32 obj_cnt = 16;
+    constexpr u64 seed    = 0x222;
+
+    std::shared_ptr<PatchDataLayerLayout> pdl_ptr = std::make_shared<PatchDataLayerLayout>();
+    pdl_ptr->add_field<f32>("a", 1);
+    pdl_ptr->add_field<f64_3>("b", 2);
+    pdl_ptr->add_field<u32>("c", 1);
+
+    PatchDataLayer a = PatchDataLayer::mock_patchdata(seed, obj_cnt, pdl_ptr);
+    PatchDataLayer b{a};
+    PatchDataLayer c = a.duplicate();
+
+    REQUIRE_NAMED("copy equal", a == b);
+    REQUIRE_NAMED("duplicate equal", a == c);
+    REQUIRE_EQUAL(a.get_obj_cnt(), b.get_obj_cnt());
+    REQUIRE_EQUAL(a.memsize(), b.memsize());
+    REQUIRE_EQUAL(a.has_nan(), false);
+    REQUIRE_EQUAL(b.has_nan(), false);
+    REQUIRE_EQUAL(a.has_inf(), false);
+    REQUIRE_EQUAL(a.has_nan_or_inf(), false);
+
+    a.check_field_obj_cnt_match();
+    b.check_field_obj_cnt_match();
+}
