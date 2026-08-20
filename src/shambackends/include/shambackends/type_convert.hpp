@@ -14,16 +14,15 @@
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Contains functions for converting between SYCL vector types and
  *        C++ standard library array types.
+ *
+ * JSON ADL serializers for `sycl::vec` live in `type_convert_json.hpp` so that
+ * TUs which only convert arrays do not parse nlohmann.
  */
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/type_traits.hpp"
 #include "shambackends/typeAliasFp16.hpp"
 #include "shambackends/typeAliasVec.hpp"
-
-#if __has_include(<nlohmann/json.hpp>)
-    #include <nlohmann/json.hpp>
-#endif
 
 namespace sham {
 
@@ -110,16 +109,3 @@ namespace sham {
     }
 
 } // namespace sham
-
-#if __has_include(<nlohmann/json.hpp>)
-NLOHMANN_JSON_NAMESPACE_BEGIN
-template<typename T, int n>
-struct adl_serializer<sycl::vec<T, n>> {
-    static void to_json(json &j, const sycl::vec<T, n> &p) { j = sham::sycl_vec_to_array(p); }
-
-    static void from_json(const json &j, sycl::vec<T, n> &p) {
-        p = sham::array_to_sycl_vec(j.get<std::array<T, n>>());
-    }
-};
-NLOHMANN_JSON_NAMESPACE_END
-#endif

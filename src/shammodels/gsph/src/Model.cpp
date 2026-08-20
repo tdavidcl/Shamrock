@@ -26,11 +26,14 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/common/setup/generators.hpp"
 #include "shammodels/gsph/Model.hpp"
+#include "shamrock/io/json_utils.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/DataInserterUtility.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include <nlohmann/json.hpp>
+#include <algorithm>
 #include <functional>
 #include <stdexcept>
 #include <utility>
@@ -313,6 +316,70 @@ void shammodels::gsph::Model<Tvec, SPHKernel>::add_cube_hcp_3d(
     });
 
     shamlog_debug_ln("setup", log);
+}
+
+template<class Tvec, template<class> class SPHKernel>
+void shammodels::gsph::Model<Tvec, SPHKernel>::load_from_dump(std::string fname) {
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("GSPH", "Loading state from dump", fname);
+    }
+
+    std::string metadata_user{};
+    shamrock::load_shamrock_dump(fname, metadata_user, ctx);
+
+    nlohmann::json j = shamrock::parse_json(metadata_user);
+    j.at("solver_config").get_to(solver.solver_config);
+
+    PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
+
+    auto sync_names = sched.synchronized_data.get_edge_names();
+
+    bool had_time_edge
+        = std::find(sync_names.begin(), sync_names.end(), "time") != sync_names.end();
+
+    solver.ensure_time_state_edges();
+
+    if (!had_time_edge) {
+        if (j.at("solver_config").contains("time_state")) {
+            ON_RANK_0(
+                logger::warn_ln(
+                    "GSPH",
+                    "Migrated time/dt from solver_config.time_state into scheduler "
+                    "edges"));
+            const auto &ts = j.at("solver_config").at("time_state");
+            solver.set_time(ts.at("time").get<Tscal>());
+            solver.set_next_dt(ts.at("dt").get<Tscal>());
+        } else {
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "this should never happen: dump has neither time edges nor "
+                "solver_config.time_state");
+        }
+    }
+
+    solver.init_ghost_layout();
+    solver.init_solver_graph();
+
+    sched.owned_patch_id = sched.patch_list.build_local();
+    sched.patch_list.build_local_idx_map();
+    sched.patch_list.build_global_idx_map();
+    sched.update_local_load_value([&](shamrock::patch::Patch p) {
+        return sched.patch_data.owned_data.get(p.id_patch).get_obj_cnt();
+    });
+}
+
+template<class Tvec, template<class> class SPHKernel>
+void shammodels::gsph::Model<Tvec, SPHKernel>::dump(std::string fname) {
+    if (shamcomm::world_rank() == 0) {
+        logger::info_ln("GSPH", "Dumping state to", fname);
+    }
+
+    solver.update_sync_load_values();
+
+    nlohmann::json metadata;
+    metadata["solver_config"] = solver.solver_config;
+
+    shamrock::write_shamrock_dump(
+        fname, shamrock::dump_json(metadata, 4), shambase::get_check_ref(ctx.sched));
 }
 
 // Explicit template instantiations for all supported kernel types

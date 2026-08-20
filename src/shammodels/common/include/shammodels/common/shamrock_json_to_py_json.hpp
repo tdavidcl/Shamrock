@@ -19,21 +19,21 @@
 #include "nlohmann/json.hpp"
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pytypealias.hpp"
+#include "shamrock/io/json_utils.hpp"
 
 namespace shammodels::common {
 
     template<class T>
     inline py::object to_py_json(const T &self) {
-        auto json_loads  = py::module_::import("json").attr("loads");
-        nlohmann::json j = self;
-        return json_loads(j.dump());
+        auto json_loads = py::module_::import("json").attr("loads");
+        return json_loads(shamrock::dump_json(nlohmann::json(self)));
     }
 
     template<class T>
     inline T from_py_json(py::object json_data) {
         auto json_dumps = py::module_::import("json").attr("dumps");
         std::string j   = json_dumps(json_data).cast<std::string>();
-        return nlohmann::json::parse(j).get<T>();
+        return shamrock::parse_json(j).get<T>();
     }
 
     template<class TConfig>

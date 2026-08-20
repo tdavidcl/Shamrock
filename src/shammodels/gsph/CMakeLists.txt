@@ -12,6 +12,7 @@ project(Shammodels_gsph CXX C)
 # Sources: GSPH solver, Model, VTK I/O, and Python bindings
 set(Sources
     src/SolverConfig.cpp
+    src/GSPHConfigJson.cpp
     src/Solver.cpp
     src/Model.cpp
     src/pyGSPHModel.cpp

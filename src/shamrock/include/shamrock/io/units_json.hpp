@@ -18,6 +18,7 @@
  */
 
 #include "shamrock/scheduler/SerialPatchTree.hpp"
+#include <nlohmann/json.hpp>
 #include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
 

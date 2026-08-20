@@ -19,6 +19,10 @@ set(Sources
     src/io/Phantom2Shamrock.cpp
     src/io/PhantomDumpEOSUtils.cpp
     src/SolverConfig.cpp
+    src/SinkPartStruct.cpp
+    src/config/AVConfig.cpp
+    src/config/BCConfig.cpp
+    src/config/MHDConfig.cpp
     src/pySPHModel.cpp
     src/pyPhantomDump.cpp
     src/modules/AnalysisBarycenter.cpp

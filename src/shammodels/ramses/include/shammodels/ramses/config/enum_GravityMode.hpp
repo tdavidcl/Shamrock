@@ -17,8 +17,7 @@
  */
 
 #include "shambase/exception.hpp"
-#include "nlohmann/json.hpp"
-#include "shamrock/io/json_utils.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace shammodels::basegodunov {
 
@@ -30,12 +29,7 @@ namespace shammodels::basegodunov {
         MULTIGRID = 4  // multigrid
     };
 
-    SHAMROCK_JSON_SERIALIZE_ENUM(
-        GravityMode,
-        {{GravityMode::NoGravity, "no_gravity"},
-         {GravityMode::CG, "cg"},
-         {GravityMode::PCG, "pcg"},
-         {GravityMode::BICGSTAB, "bicgstab"},
-         {GravityMode::MULTIGRID, "multigrid"}});
+    void to_json(nlohmann::json &j, const GravityMode &e);
+    void from_json(const nlohmann::json &j, GravityMode &e);
 
 } // namespace shammodels::basegodunov

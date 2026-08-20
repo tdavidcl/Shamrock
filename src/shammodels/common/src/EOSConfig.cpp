@@ -18,6 +18,7 @@
 
 #include "shammodels/common/EOSConfig.hpp"
 #include "shambackends/typeAliasVec.hpp"
+#include <nlohmann/json.hpp>
 
 namespace shammodels {
 

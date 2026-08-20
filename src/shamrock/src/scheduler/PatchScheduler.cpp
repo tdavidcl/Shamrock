@@ -1030,3 +1030,15 @@ nlohmann::json PatchScheduler::serialize_patch_metadata() {
         {"crit_patch_merge", crit_patch_merge},
         {"synchronized_data", synchronized_data}};
 }
+
+void to_json(nlohmann::json &j, const PatchSchedulerConfig &p) {
+    j = nlohmann::json{
+        {"split_load_value", p.split_load_value},
+        {"merge_load_value", p.merge_load_value},
+    };
+}
+
+void from_json(const nlohmann::json &j, PatchSchedulerConfig &p) {
+    j.at("split_load_value").get_to<u64>(p.split_load_value);
+    j.at("merge_load_value").get_to<u64>(p.merge_load_value);
+}

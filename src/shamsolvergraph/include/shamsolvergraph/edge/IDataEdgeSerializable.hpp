@@ -19,7 +19,7 @@
 #include "shambase/exception.hpp"
 #include "shambase/pre_main_call.hpp"
 #include "shambase/type_name_info.hpp"
-#include "nlohmann/json_fwd.hpp"
+#include "nlohmann/json.hpp"
 #include "shamsolvergraph/JsonSerializable.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include <stdexcept>

@@ -24,10 +24,10 @@
  *   Inutsuka (2002), reconstructed here with linear (1st order) face interpolation.
  */
 
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/type_traits.hpp"
 #include "shambackends/vec.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <nlohmann/json.hpp>
 #include <variant>
 
 namespace shammodels::gsph {
@@ -89,45 +89,9 @@ struct shammodels::gsph::ForceFormulationConfig {
 namespace shammodels::gsph {
 
     template<class Tvec>
-    inline void to_json(nlohmann::json &j, const ForceFormulationConfig<Tvec> &p) {
-        using T            = ForceFormulationConfig<Tvec>;
-        using ChaWhitworth = typename T::ChaWhitworth;
-        using InutsukaV2   = typename T::InutsukaV2;
-
-        if (std::get_if<ChaWhitworth>(&p.config)) {
-            j = {
-                {"force_formulation", "cha_whitworth"},
-            };
-        } else if (std::get_if<InutsukaV2>(&p.config)) {
-            j = {
-                {"force_formulation", "inutsuka_v2"},
-            };
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
+    void to_json(nlohmann::json &j, const ForceFormulationConfig<Tvec> &p);
 
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, ForceFormulationConfig<Tvec> &p) {
-        using T            = ForceFormulationConfig<Tvec>;
-        using ChaWhitworth = typename T::ChaWhitworth;
-        using InutsukaV2   = typename T::InutsukaV2;
-
-        if (!j.contains("force_formulation")) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "no field force_formulation is found in this json");
-        }
-
-        std::string force_formulation;
-        j.at("force_formulation").get_to(force_formulation);
-
-        if (force_formulation == "cha_whitworth") {
-            p.set(ChaWhitworth{});
-        } else if (force_formulation == "inutsuka_v2") {
-            p.set(InutsukaV2{});
-        } else {
-            shambase::throw_unimplemented("Unknown force formulation type: " + force_formulation);
-        }
-    }
+    void from_json(const nlohmann::json &j, ForceFormulationConfig<Tvec> &p);
 
 } // namespace shammodels::gsph

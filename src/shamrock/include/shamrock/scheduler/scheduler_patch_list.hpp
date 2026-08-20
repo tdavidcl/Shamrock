@@ -18,8 +18,8 @@
 
 #include "shambase/SourceLocation.hpp"
 #include "shambase/exception.hpp"
+#include "nlohmann/json_fwd.hpp"
 #include "shamrock/patch/Patch.hpp"
-#include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <unordered_set>
 #include <array>

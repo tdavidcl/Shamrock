@@ -24,7 +24,6 @@
 #include "shambackends/vec.hpp"
 #include "shamphys/eos_config.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <nlohmann/json.hpp>
 #include <type_traits>
 #include <stdexcept>
 #include <string>

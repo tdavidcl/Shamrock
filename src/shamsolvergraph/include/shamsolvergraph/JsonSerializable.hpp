@@ -19,8 +19,8 @@
  */
 
 #include "shambase/SourceLocation.hpp"
+#include "nlohmann/json_fwd.hpp"
 #include "sham/format/format.hpp"
-#include <nlohmann/json.hpp>
 #include <source_location>
 #include <unordered_map>
 #include <concepts>
@@ -81,10 +81,7 @@ namespace shamrock::solvergraph {
          *
          * @param j JSON object to fill
          */
-        void to_json(nlohmann::json &j) const {
-            _impl_to_json(j);
-            j["type"] = type_name();
-        }
+        void to_json(nlohmann::json &j) const;
 
         /**
          * @brief Return the type discriminator string for this class.
@@ -204,14 +201,5 @@ namespace shamrock::solvergraph {
             return it->second(data);
         }
     };
-
-    inline std::unique_ptr<JsonSerializable> JsonSerializable::from_json(const nlohmann::json &j) {
-        if (!j.is_object() || !j.contains("type") || !j["type"].is_string()) {
-            throw std::runtime_error(
-                "Invalid JSON for deserialization: expected an object with a string 'type' field.");
-        }
-        const std::string type = j.at("type").get<std::string>();
-        return JsonSerializable_registry::instance().create(type, j);
-    }
 
 } // namespace shamrock::solvergraph

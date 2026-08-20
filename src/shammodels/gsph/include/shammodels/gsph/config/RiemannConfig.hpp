@@ -25,10 +25,10 @@
  *   with Riemann Solver"
  */
 
+#include "nlohmann/json_fwd.hpp"
 #include "shambackends/type_traits.hpp"
 #include "shambackends/vec.hpp"
 #include "shamsys/legacy/log.hpp"
-#include <nlohmann/json.hpp>
 #include <variant>
 
 namespace shammodels::gsph {
@@ -147,70 +147,9 @@ struct shammodels::gsph::RiemannConfig {
 namespace shammodels::gsph {
 
     template<class Tvec>
-    inline void to_json(nlohmann::json &j, const RiemannConfig<Tvec> &p) {
-        using T         = RiemannConfig<Tvec>;
-        using Iterative = typename T::Iterative;
-        using Exact     = typename T::Exact;
-        using HLLC      = typename T::HLLC;
-        using Roe       = typename T::Roe;
-
-        if (const Iterative *v = std::get_if<Iterative>(&p.config)) {
-            j = {
-                {"riemann_type", "iterative"},
-                {"tol", v->tol},
-                {"max_iter", v->max_iter},
-            };
-        } else if (const Exact *v = std::get_if<Exact>(&p.config)) {
-            j = {
-                {"riemann_type", "exact"},
-                {"tol", v->tol},
-                {"max_iter", v->max_iter},
-            };
-        } else if (std::get_if<HLLC>(&p.config)) {
-            j = {
-                {"riemann_type", "hllc"},
-            };
-        } else if (const Roe *v = std::get_if<Roe>(&p.config)) {
-            j = {
-                {"riemann_type", "roe"},
-                {"entropy_fix", v->entropy_fix},
-            };
-        } else {
-            shambase::throw_unimplemented();
-        }
-    }
+    void to_json(nlohmann::json &j, const RiemannConfig<Tvec> &p);
 
     template<class Tvec>
-    inline void from_json(const nlohmann::json &j, RiemannConfig<Tvec> &p) {
-        using T     = RiemannConfig<Tvec>;
-        using Tscal = shambase::VecComponent<Tvec>;
-
-        if (!j.contains("riemann_type")) {
-            shambase::throw_with_loc<std::runtime_error>(
-                "no field riemann_type is found in this json");
-        }
-
-        std::string riemann_type;
-        j.at("riemann_type").get_to(riemann_type);
-
-        using Iterative = typename T::Iterative;
-        using Exact     = typename T::Exact;
-        using HLLC      = typename T::HLLC;
-        using Roe       = typename T::Roe;
-
-        if (riemann_type == "iterative") {
-            p.set(Iterative{j.at("tol").get<Tscal>(), j.at("max_iter").get<u32>()});
-        } else if (riemann_type == "exact") {
-            // max_iter is read with a fallback default so configs saved before
-            // this field existed (tol-only) still load instead of throwing.
-            p.set(Exact{j.at("tol").get<Tscal>(), j.value("max_iter", Exact{}.max_iter)});
-        } else if (riemann_type == "hllc") {
-            p.set(HLLC{});
-        } else if (riemann_type == "roe") {
-            p.set(Roe{j.at("entropy_fix").get<Tscal>()});
-        } else {
-            shambase::throw_unimplemented("Unknown Riemann solver type: " + riemann_type);
-        }
-    }
+    void from_json(const nlohmann::json &j, RiemannConfig<Tvec> &p);
 
 } // namespace shammodels::gsph
