@@ -43,27 +43,15 @@ fi
 export SETUPTOOLS_USE_DISTUTILS=stdlib
 
 # --- Submodules ----------------------------------------------------------
-git submodule update --init --recursive
+git submodule update --init --recursive --jobs "$(nproc)"
 
 # --- Build environment -----------------------------------------------
 # CPU-only container: use AdaptiveCpp's OpenMP backend (no GPU present).
+# Deliberately stop here: `shamenv_do shamconfigure` builds AdaptiveCpp
+# from source on its first invocation (a few minutes), so it's left for
+# whenever a build/test is actually needed rather than blocking every
+# session start. That first `shamconfigure`/`shammake` call will pay the
+# one-time cost inline; every session after that reuses the cached build.
 if [ ! -f build/shamenv_do ]; then
   ./env/new-env --machine debian-generic.acpp --builddir build -- --backend omp
-fi
-
-cd build
-
-# shamconfigure builds AdaptiveCpp from source on first run (a few minutes,
-# cached after that) and then configures Shamrock with CMake. It does NOT
-# compile Shamrock itself: a full `shammake` of every target takes ~40min,
-# so it is intentionally left for later, on demand. Prefer building only
-# the target(s) touched by a change, e.g.:
-#   ./shamenv_do shammake shammodels_sph
-# and reserve a full `./shamenv_do shammake` (or `shammake shamrock_test`)
-# for when tests actually need to run or the binary needs to execute.
-./shamenv_do shamconfigure
-
-# --- Reference files (needed for unit tests) ----------------------------
-if [ ! -d reference-files ]; then
-  ./shamenv_do pull_reffiles
 fi
