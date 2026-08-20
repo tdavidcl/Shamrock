@@ -44,7 +44,9 @@ and `.clang-tidy` findings are silently dropped from its output, even with
 `.claude/tools/clang-tidy-check.py <path/to/file.cpp>` instead: it reads
 the file's entry from `build/compile_commands.json`, strips the SYCL/acpp
 flags clang-tidy can't parse (mirroring `.clangd`'s `CompileFlags.Remove`
-list), and runs `clang-tidy-20` directly.
+list), and runs it through the newest `clang-tidy`/`clang++` pair found on
+`PATH` (not hardcoded to 20, so it also works on a host with a different
+LLVM version).
 
 The hook deliberately stops there: `./shamenv_do shamconfigure` builds
 AdaptiveCpp from source on its first invocation (a few minutes), so that
