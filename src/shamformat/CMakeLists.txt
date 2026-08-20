@@ -28,4 +28,4 @@ target_include_directories(
 
 # Lib linking
 
-target_link_libraries(shamformat PUBLIC fmt::fmt)
+target_link_libraries(shamformat PUBLIC ${SHAMROCK_FMT_TARGET})
