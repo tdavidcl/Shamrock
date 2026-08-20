@@ -38,6 +38,9 @@ if(NOT SHAMROCK_EXTERNAL_FMTLIB)
         message(STATUS "Manual inclusion path ${CMAKE_CURRENT_LIST_DIR}/external/fmt/include")
         add_library(fmt-header-only INTERFACE)
         add_library(fmt::fmt-header-only ALIAS fmt-header-only)
+        # Keep fmt::fmt available so shamformat can always link the compiled target
+        # name. This path stays header-only (the point of the escape hatch).
+        add_library(fmt::fmt ALIAS fmt-header-only)
         target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
         target_compile_features(fmt-header-only INTERFACE cxx_std_11)
         target_include_directories(
@@ -45,6 +48,8 @@ if(NOT SHAMROCK_EXTERNAL_FMTLIB)
         )
     else()
         add_subdirectory(external/fmt)
+        # Shared shamformat / python modules need PIC objects from static libfmt
+        set_target_properties(fmt PROPERTIES POSITION_INDEPENDENT_CODE ON)
     endif()
 
     # I got many clang-tidy warning because of those headers, so now they are system headers
@@ -56,6 +61,10 @@ if(NOT SHAMROCK_EXTERNAL_FMTLIB)
     set_target_properties(
         fmt-header-only PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${fmtlib_IID}"
     )
+    if(TARGET fmt)
+        get_target_property(fmt_IID fmt INTERFACE_INCLUDE_DIRECTORIES)
+        set_target_properties(fmt PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${fmt_IID}")
+    endif()
 
 else()
     message(STATUS "Using system fmtlib")
