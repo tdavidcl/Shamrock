@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/string.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shamcomm/logs.hpp"
