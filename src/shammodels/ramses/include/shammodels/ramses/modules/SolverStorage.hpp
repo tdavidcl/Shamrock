@@ -39,13 +39,13 @@
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
-#include "shamrock/solvergraph/OperationSequence.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
 #include "shamrock/solvergraph/PatchDataLayerEdge.hpp"
 #include "shamrock/solvergraph/RankGetter.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
 #include "shamrock/solvergraph/ScalarsEdge.hpp"
-#include "shamrock/solvergraph/SolverGraph.hpp"
+#include "shamsolvergraph/SolverGraph.hpp"
+#include "shamsolvergraph/node/OperationSequence.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/RadixTree.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
@@ -92,6 +92,7 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel_dust;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_primitive;
 
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> block_cell_sizes;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> cell0block_aabb_lower;

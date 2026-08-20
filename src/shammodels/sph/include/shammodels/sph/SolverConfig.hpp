@@ -59,14 +59,6 @@ namespace shammodels::sph {
     struct SolverConfig;
 
     /**
-     * @brief Solver status variables
-     *
-     * @tparam Tvec the type of the vector used to represent the particles
-     */
-    template<class Tvec>
-    struct SolverStatusVar;
-
-    /**
      * @brief The configuration for the CFL condition
      *
      * @tparam Tscal the type of the scalar used to represent the quantities
@@ -115,9 +107,20 @@ namespace shammodels::sph {
 
         struct None {};
 
-        struct MonofluidTVI {
+        struct MonofluidTVA {
             u32 ndust;
             bool pure_diffusion_mode = false;
+
+            Tscal C_1_fluid             = 0.1;
+            Tscal C_drift               = 1.0;
+            Tscal cfl_density_threshold = shambase::get_epsilon<Tscal>();
+
+            bool ensure_s_j_positivity = true;
+
+            bool smooth_s_positivity_limiter = false;
+
+            // use the corrected q_AV from Hutchison 2018 & Price Laibe 15
+            bool dust_corrected_av = false;
         };
 
         struct MonofluidComplete {
@@ -125,30 +128,56 @@ namespace shammodels::sph {
         };
 
         /// Variant type to store the EOS configuration
-        using Variant = std::variant<None, MonofluidTVI, MonofluidComplete>;
+        using Variant = std::variant<None, MonofluidTVA, MonofluidComplete>;
 
         Variant current_mode = None{};
 
         inline void set_none() { current_mode = None{}; }
-        inline void set_monofluid_tvi(u32 nvar, bool pure_diffusion_mode = false) {
-            current_mode = MonofluidTVI{nvar, pure_diffusion_mode};
+        inline void set_monofluid_tva(
+            u32 nvar,
+            bool pure_diffusion_mode         = false,
+            Tscal C_1_fluid                  = 0.1,
+            Tscal C_drift                    = 1.0,
+            Tscal cfl_density_threshold      = shambase::get_epsilon<Tscal>(),
+            bool ensure_s_j_positivity       = true,
+            bool smooth_s_positivity_limiter = false,
+            bool dust_corrected_av           = false) {
+            current_mode = MonofluidTVA{
+                nvar,
+                pure_diffusion_mode,
+                C_1_fluid,
+                C_drift,
+                cfl_density_threshold,
+                ensure_s_j_positivity,
+                smooth_s_positivity_limiter,
+                dust_corrected_av};
         }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
         inline bool is_none() { return std::holds_alternative<None>(current_mode); }
-        inline bool is_monofluid_tvi() { return bool(std::get_if<MonofluidTVI>(&current_mode)); }
+        inline bool is_monofluid_tva() { return bool(std::get_if<MonofluidTVA>(&current_mode)); }
         inline bool is_monofluid_complete() {
             return bool(std::get_if<MonofluidComplete>(&current_mode));
+        }
+
+        inline MonofluidTVA &get_monofluid_tva() {
+            return shambase::get_check_ref(std::get_if<MonofluidTVA>(&current_mode));
         }
 
         inline void mode_to_json(nlohmann::json &j) const {
             if (const None *cfg = std::get_if<None>(&current_mode)) {
                 j = {{"type", "none"}};
-            } else if (const MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
+            } else if (const MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
                 j
-                    = {{"type", "monofluid_tvi"},
+                    = {{"type", "monofluid_tva"},
                        {"ndust", cfg->ndust},
-                       {"pure_diffusion_mode", cfg->pure_diffusion_mode}};
+                       {"pure_diffusion_mode", cfg->pure_diffusion_mode},
+                       {"C_1_fluid", cfg->C_1_fluid},
+                       {"C_drift", cfg->C_drift},
+                       {"cfl_density_threshold", cfg->cfl_density_threshold},
+                       {"ensure_s_j_positivity", cfg->ensure_s_j_positivity},
+                       {"smooth_s_positivity_limiter", cfg->smooth_s_positivity_limiter},
+                       {"dust_corrected_av", cfg->dust_corrected_av}};
             } else if (
                 const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 j = {{"type", "monofluid_complete"}, {"ndust", cfg->ndust}};
@@ -161,9 +190,16 @@ namespace shammodels::sph {
             const std::string type = j.at("type").get<std::string>();
             if (type == "none") {
                 set_none();
-            } else if (type == "monofluid_tvi") {
-                set_monofluid_tvi(
-                    j.at("ndust").get<u32>(), j.at("pure_diffusion_mode").get<bool>());
+            } else if (type == "monofluid_tva") {
+                set_monofluid_tva(
+                    j.at("ndust").get<u32>(),
+                    j.at("pure_diffusion_mode").get<bool>(),
+                    j.at("C_1_fluid").get<Tscal>(),
+                    j.at("C_drift").get<Tscal>(),
+                    j.at("cfl_density_threshold").get<Tscal>(),
+                    j.at("ensure_s_j_positivity").get<bool>(),
+                    j.value("smooth_s_positivity_limiter", false),
+                    j.value("dust_corrected_av", false));
             } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
             } else {
@@ -172,7 +208,14 @@ namespace shammodels::sph {
         }
 
         inline bool has_s_j_field() {
-            return is_monofluid_tvi(); // S_j = sqrt(\rho \epsilon_j)
+            return is_monofluid_tva(); // S_j = sqrt(\rho \epsilon_j)
+        }
+
+        inline bool should_use_dust_av() {
+            if (!is_monofluid_tva()) {
+                return false;
+            }
+            return get_monofluid_tva().dust_corrected_av;
         }
 
         inline bool has_epsilon_field() {
@@ -188,7 +231,7 @@ namespace shammodels::sph {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "Querying a dust nvar with no dust as config is ... discutable ...");
                 return 0;
-            } else if (MonofluidTVI *cfg = std::get_if<MonofluidTVI>(&current_mode)) {
+            } else if (MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
                 return cfg->ndust;
             } else if (MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 return cfg->ndust;
@@ -210,6 +253,8 @@ namespace shammodels::sph {
         };
 
         std::variant<None, ConstantStoppingTimes, EpsteinDrag> dust_drag_mode = None{};
+
+        bool ballabio_ts_limiter = false;
 
         inline void drag_mode_to_json(nlohmann::json &j) const {
             if (std::holds_alternative<None>(dust_drag_mode)) {
@@ -385,18 +430,6 @@ namespace shammodels::sph {
 
 } // namespace shammodels::sph
 
-template<class Tvec>
-struct shammodels::sph::SolverStatusVar {
-
-    /// The type of the scalar used to represent the quantities
-    using Tscal = shambase::VecComponent<Tvec>;
-
-    Tscal time   = 0; ///< Current time
-    Tscal dt_sph = 0; ///< Current time step
-
-    Tscal cfl_multiplier = 1e-2; ///< Current cfl multiplier
-};
-
 template<class Tvec, template<class> class SPHKernel>
 struct shammodels::sph::SolverConfig {
 
@@ -414,8 +447,7 @@ struct shammodels::sph::SolverConfig {
     /// The radius of the sph kernel
     static constexpr Tscal Rkern = Kernel::Rkern;
 
-    Tscal gpart_mass;            ///< The mass of each gas particle
-    CFLConfig<Tscal> cfl_config; ///< The configuration for the CFL condition
+    Tscal gpart_mass; ///< The mass of each gas particle
 
     bool track_particles_id = false;
 
@@ -481,32 +513,10 @@ struct shammodels::sph::SolverConfig {
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    // Solver status variables
+    // CFL Configuration (config)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Alias to SolverStatusVar type
-    using SolverStatusVar = SolverStatusVar<Tvec>;
-
-    /// The time sate of the simulation
-    SolverStatusVar time_state;
-
-    /// Set the current time
-    inline void set_time(Tscal t) { time_state.time = t; }
-
-    /// Set the time step for the next iteration
-    inline void set_next_dt(Tscal dt) { time_state.dt_sph = dt; }
-
-    /// Get the current time
-    inline Tscal get_time() { return time_state.time; }
-
-    /// Get the time step for the next iteration
-    inline Tscal get_dt_sph() { return time_state.dt_sph; }
-
-    /// Set the CFL multiplier for the time step
-    inline void set_cfl_multipler(Tscal lambda) { time_state.cfl_multiplier = lambda; }
-
-    /// Get the CFL multiplier for the time step
-    inline Tscal get_cfl_multipler() { return time_state.cfl_multiplier; }
+    CFLConfig<Tscal> cfl_config; ///< The configuration for the CFL condition
 
     /// Set the CFL multiplier for the stiffness
     inline void set_cfl_mult_stiffness(Tscal cstiff) {
@@ -519,7 +529,7 @@ struct shammodels::sph::SolverConfig {
     bool show_cfl_detail = false;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    // Solver status variables (END)
+    // CFL Configuration (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -891,6 +901,16 @@ struct shammodels::sph::SolverConfig {
     }
 
     /**
+     * @brief Add a post-newtonian Paczynski-Wiita potential
+     *
+     * @param[in] central_mass The mass of the central object
+     * @param[in] Racc The accretion radius of the central object
+     */
+    inline void add_ext_force_paczynski_wiita(Tscal central_mass, Tvec central_pos, Tscal Racc) {
+        ext_force_config.add_paczynski_wiita(central_mass, central_pos, Racc);
+    }
+
+    /**
      * @brief Add a Lense-Thirring external force
      *
      * @param[in] central_mass The mass of the central object
@@ -1064,32 +1084,6 @@ namespace shammodels::sph {
         }
     }
 
-    /**
-     * @brief Converts a SolverStatusVar object to a JSON object.
-     *
-     * @param j The JSON object to be populated.
-     * @param p The SolverStatusVar object to be converted.
-     */
-    template<class Tvec>
-    inline void to_json(nlohmann::json &j, const SolverStatusVar<Tvec> &p) {
-        j = nlohmann::json{
-            {"time", p.time}, {"dt_sph", p.dt_sph}, {"cfl_multiplier", p.cfl_multiplier}};
-    }
-
-    /**
-     * @brief Deserializes a SolverStatusVar object from a JSON object.
-     *
-     * @param j The JSON object to deserialize from.
-     * @param p The SolverStatusVar object to populate.
-     */
-    template<class Tvec>
-    inline void from_json(const nlohmann::json &j, SolverStatusVar<Tvec> &p) {
-        using Tscal = typename SolverStatusVar<Tvec>::Tscal;
-        j.at("time").get_to<Tscal>(p.time);
-        j.at("dt_sph").get_to<Tscal>(p.dt_sph);
-        j.at("cfl_multiplier").get_to<Tscal>(p.cfl_multiplier);
-    }
-
     // JSON serialization for ParticleKillingConfig
     template<class Tvec>
     inline void to_json(nlohmann::json &j, const ParticleKillingConfig<Tvec> &p) {
@@ -1243,12 +1237,14 @@ namespace shammodels::sph {
 
         p.mode_to_json(j["mode"]);
         p.drag_mode_to_json(j["drag_mode"]);
+        j["ballabio_ts_limiter"] = p.ballabio_ts_limiter;
     }
 
     template<class Tvec>
     inline void from_json(const nlohmann::json &j, DustConfig<Tvec> &p) {
         p.mode_from_json(j.at("mode"));
         p.drag_mode_from_json(j.at("drag_mode"));
+        p.ballabio_ts_limiter = j.value("ballabio_ts_limiter", false);
     }
 
     /**
@@ -1275,7 +1271,6 @@ namespace shammodels::sph {
             {"gpart_mass", p.gpart_mass},
             {"cfl_config", p.cfl_config},
             {"unit_sys", p.unit_sys},
-            {"time_state", p.time_state},
             {"show_cfl_detail", p.show_cfl_detail},
             // mhd config
             {"mhd_config", p.mhd_config},
@@ -1369,7 +1364,6 @@ namespace shammodels::sph {
         _get_to_if_contains("gpart_mass", p.gpart_mass);
         _get_to_if_contains("cfl_config", p.cfl_config);
         _get_to_if_contains("unit_sys", p.unit_sys);
-        _get_to_if_contains("time_state", p.time_state);
         _get_to_if_contains("show_cfl_detail", p.show_cfl_detail);
         _get_to_if_contains("mhd_config", p.mhd_config);
         _get_to_if_contains("dust_config", p.dust_config);

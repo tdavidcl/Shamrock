@@ -28,12 +28,14 @@
 #include "shammodels/sph/math/mhd.hpp"
 #include "shammodels/sph/math/q_ab.hpp"
 #include "shammodels/sph/modules/ComputeDustTtilde.hpp"
-#include "shammodels/sph/modules/MonoFluidTVIDeltav.hpp"
+#include "shammodels/sph/modules/MonoFluidTVADeltav.hpp"
 #include "shammodels/sph/modules/NodeComputePressureGrad.hpp"
 #include "shammodels/sph/modules/NodeEvolveDustCOALASourceTerm.hpp"
-#include "shammodels/sph/modules/NodeMonofluidTVIAddSourceTerm.hpp"
-#include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVI.hpp"
+#include "shammodels/sph/modules/NodeMonofluidTVAAddSourceTerm.hpp"
+#include "shammodels/sph/modules/NodeMonofluidTVASmoothSPositivityLimiter.hpp"
+#include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVA.hpp"
 #include "shammodels/sph/modules/NodeUpdateDerivsVaryingAlphaAV.hpp"
+#include "shammodels/sph/modules/NodeUpdateDerivsVaryingAlphaAVDustTVA.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
@@ -43,6 +45,7 @@
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/ScalarEdge.hpp"
+#include "shamsolvergraph/edge/IDataEdge.hpp"
 #include <memory>
 #include <vector>
 
@@ -75,7 +78,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs(Tsca
 
     if (cfg_dust.has_s_j_field()) {
         // we can do it separately because the backreaction is done only through the pressure
-        update_derivs_dust_monofluid_tvi_Sj(cfg_dust, dt_hydro);
+        update_derivs_dust_monofluid_tva_Sj(cfg_dust, dt_hydro);
     }
 }
 
@@ -372,7 +375,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_mm97
     auto axyz_refs  = solver_graph.get_edge_ptr<shamrock::solvergraph::FieldRefs<Tvec>>("axyz");
     auto duint_refs = solver_graph.get_edge_ptr<shamrock::solvergraph::FieldRefs<Tscal>>("duint");
     auto gpart_mass
-        = solver_graph.get_edge_ptr<shamrock::solvergraph::ScalarEdge<Tscal>>("gpart_mass");
+        = solver_graph.get_edge_ptr<shamrock::solvergraph::IDataEdge<Tscal>>("gpart_mass");
 
     std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> alpha_u
         = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("alpha_u", "alpha_u");
@@ -497,7 +500,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
     auto axyz_refs  = solver_graph.get_edge_ptr<shamrock::solvergraph::FieldRefs<Tvec>>("axyz");
     auto duint_refs = solver_graph.get_edge_ptr<shamrock::solvergraph::FieldRefs<Tscal>>("duint");
     auto gpart_mass
-        = solver_graph.get_edge_ptr<shamrock::solvergraph::ScalarEdge<Tscal>>("gpart_mass");
+        = solver_graph.get_edge_ptr<shamrock::solvergraph::IDataEdge<Tscal>>("gpart_mass");
 
     std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> alpha_u
         = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("alpha_u", "alpha_u");
@@ -510,28 +513,67 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         shambase::get_check_ref(beta_AV).value = cfg.beta_AV;
     }
 
-    std::shared_ptr<NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>> node
-        = std::make_shared<NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>>();
-    {
-        node->set_edges(
-            gpart_mass,
-            alpha_u,
-            beta_AV,
-            part_counts,
-            part_counts_with_ghost,
-            xyz_refs,
-            hpart_refs,
-            vxyz_refs,
-            uint_refs,
-            omega_refs,
-            pressure_field,
-            soundspeed_field,
-            alpha_av_refs,
-            storage.neigh_cache,
-            axyz_refs,
-            duint_refs);
+    if (solver_config.dust_config.should_use_dust_av()) {
+        u32 ndust       = solver_config.dust_config.get_dust_nvar();
+        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
+
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> s_j_refs
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("s_j", "s_j");
+        {
+            shambase::get_check_ref(s_j_refs).set_refs(
+                mpdats.map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                    [&](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
+                        return std::ref(mpdat.get_field<Tscal>(is_j_interf));
+                    }));
+        }
+
+        std::shared_ptr<NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKernel>> node
+            = std::make_shared<NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKernel>>(ndust);
+        {
+            node->set_edges(
+                gpart_mass,
+                alpha_u,
+                beta_AV,
+                part_counts,
+                part_counts_with_ghost,
+                xyz_refs,
+                hpart_refs,
+                vxyz_refs,
+                uint_refs,
+                omega_refs,
+                pressure_field,
+                soundspeed_field,
+                alpha_av_refs,
+                s_j_refs,
+                storage.neigh_cache,
+                axyz_refs,
+                duint_refs);
+        }
+        node->evaluate();
+    } else {
+        std::shared_ptr<NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>> node
+            = std::make_shared<NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>>();
+        {
+            node->set_edges(
+                gpart_mass,
+                alpha_u,
+                beta_AV,
+                part_counts,
+                part_counts_with_ghost,
+                xyz_refs,
+                hpart_refs,
+                vxyz_refs,
+                uint_refs,
+                omega_refs,
+                pressure_field,
+                soundspeed_field,
+                alpha_av_refs,
+                storage.neigh_cache,
+                axyz_refs,
+                duint_refs);
+        }
+        node->evaluate();
     }
-    node->evaluate();
 }
 
 template<class Tvec, template<class> class SPHKernel>
@@ -1069,10 +1111,10 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_MHD(
 }
 
 template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust_monofluid_tvi_Sj(
+void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust_monofluid_tva_Sj(
     DustConfig cfg, Tscal dt_hydro) {
 
-    using MonofluidTVI = typename DustConfig::MonofluidTVI;
+    using MonofluidTVA = typename DustConfig::MonofluidTVA;
 
     StackEntry stack_loc{};
 
@@ -1108,7 +1150,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
     shamrock::solvergraph::SolverGraph &solver_graph = storage.solver_graph;
     auto gpart_mass
-        = solver_graph.get_edge_ptr<shamrock::solvergraph::ScalarEdge<Tscal>>("gpart_mass");
+        = solver_graph.get_edge_ptr<shamrock::solvergraph::IDataEdge<Tscal>>("gpart_mass");
 
     std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> vxyz_refs
         = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("vxyz", "v");
@@ -1151,60 +1193,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
                 }));
     }
 
-    std::shared_ptr<shamrock::solvergraph::Field<Tscal>> t_j_field
-        = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "t_j", "t_j");
-
-    using None                  = typename DustConfig::None;
-    using ConstantStoppingTimes = typename DustConfig::ConstantStoppingTimes;
-    using EpsteinDrag           = typename DustConfig::EpsteinDrag;
-
-    if (std::holds_alternative<None>(cfg.dust_drag_mode)) {
-
-        throw "bro WTF";
-
-    } else if (
-        ConstantStoppingTimes *cfg_drag = std::get_if<ConstantStoppingTimes>(&cfg.dust_drag_mode)) {
-
-        std::shared_ptr<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>> input_t_j
-            = std::make_shared<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>>("", "");
-        input_t_j->value = cfg_drag->stopping_times;
-
-        std::shared_ptr<SetDustStoppingTimeConstant<Tvec>> node_set_tj
-            = std::make_shared<SetDustStoppingTimeConstant<Tvec>>(ndust);
-        {
-            node_set_tj->set_edges(input_t_j, part_counts_with_ghost, t_j_field);
-        }
-        node_set_tj->evaluate();
-
-    } else if (EpsteinDrag *cfg_drag = std::get_if<EpsteinDrag>(&cfg.dust_drag_mode)) {
-
-        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> input_gamma
-            = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("", "");
-        input_gamma->value = cfg_drag->gamma;
-
-        std::shared_ptr<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>> input_sgrain_j
-            = std::make_shared<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>>("", "");
-        input_sgrain_j->value = cfg_drag->grains_sizes;
-
-        std::shared_ptr<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>> input_rho_grain_j
-            = std::make_shared<shamrock::solvergraph::ScalarEdge<std::vector<Tscal>>>("", "");
-        input_rho_grain_j->value = cfg_drag->grains_densities;
-
-        std::shared_ptr<SetDustStoppingTimeEpstein<Tvec, SPHKernel>> node_set_tj
-            = std::make_shared<SetDustStoppingTimeEpstein<Tvec, SPHKernel>>(ndust);
-        {
-            node_set_tj->set_edges(
-                gpart_mass,
-                input_gamma,
-                input_sgrain_j,
-                input_rho_grain_j,
-                part_counts_with_ghost,
-                hpart_refs,
-                storage.soundspeed,
-                t_j_field);
-        }
-        node_set_tj->evaluate();
-    }
+    auto t_j_field
+        = storage.solver_graph.template get_edge_ptr<shamrock::solvergraph::Field<Tscal>>("Ts_j");
 
     std::shared_ptr<shamrock::solvergraph::Field<Tscal>> Ttilde_sj_field
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "Ttilde_sj", "Ttilde_sj");
@@ -1220,8 +1210,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     }
     node_tj->evaluate();
 
-    std::shared_ptr<NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>> node
-        = std::make_shared<NodeUpdateDerivsMonofluidTVI<Tvec, SPHKernel>>(ndust);
+    std::shared_ptr<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>> node
+        = std::make_shared<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>>(ndust);
     {
         node->set_edges(
             gpart_mass,
@@ -1239,10 +1229,19 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     }
     node->evaluate();
 
-    MonofluidTVI &cfg_monofluid_tvi
-        = shambase::get_check_ref((std::get_if<MonofluidTVI>(&cfg.current_mode)));
+    MonofluidTVA &cfg_monofluid_tva
+        = shambase::get_check_ref((std::get_if<MonofluidTVA>(&cfg.current_mode)));
 
-    if (cfg_monofluid_tvi.pure_diffusion_mode) {
+    if (cfg_monofluid_tva.smooth_s_positivity_limiter) {
+        std::shared_ptr<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>> node_limiter
+            = std::make_shared<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>>(ndust);
+        {
+            node_limiter->set_edges(part_counts, s_j_refs, Ttilde_sj_field, ds_j_dt_refs);
+        }
+        node_limiter->evaluate();
+    }
+
+    if (cfg_monofluid_tva.pure_diffusion_mode) {
         // reset accelerations & du/dt to 0
 
         const u32 iaxyz  = pdl.get_field_idx<Tvec>("axyz");
