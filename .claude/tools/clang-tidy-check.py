@@ -52,7 +52,7 @@ def main():
     build_dir = os.path.join(repo_root, "build")
     cdb_path = os.path.join(build_dir, "compile_commands.json")
     if not os.path.exists(cdb_path):
-        print(f"error: {cdb_path} not found — run shamconfigure first", file=sys.stderr)
+        print(f"error: {cdb_path} not found - run shamconfigure first", file=sys.stderr)
         return 1
 
     mod_dir = os.path.join(build_dir, "clang-tidy.mod")
