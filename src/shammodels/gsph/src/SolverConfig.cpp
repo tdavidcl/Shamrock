@@ -16,9 +16,10 @@
  */
 
 #include "shambase/type_name_info.hpp"
-#include "shammodels/gsph/SolverConfig.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/gsph/SolverConfig.hpp"
 #include "shammodels/gsph/config/FieldNames.hpp"
+#include "shamrock/io/json_std_optional.hpp"
 #include "shamrock/io/json_utils.hpp"
 #include "shamrock/io/units_json.hpp"
 #include <nlohmann/json.hpp>

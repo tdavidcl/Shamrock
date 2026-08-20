@@ -182,8 +182,8 @@ namespace shammodels::sph {
         logger::raw_ln("------------------------------------");
     }
 
-    template<class Tvec>
-    void DustConfig<Tvec>::mode_to_json(nlohmann::json &j) const {
+    template<class Tscal>
+    void DustConfig<Tscal>::mode_to_json(nlohmann::json &j) const {
         if (const None *cfg = std::get_if<None>(&current_mode)) {
             j = {{"type", "none"}};
         } else if (const MonofluidTVA *cfg = std::get_if<MonofluidTVA>(&current_mode)) {
@@ -204,8 +204,8 @@ namespace shammodels::sph {
         }
     }
 
-    template<class Tvec>
-    void DustConfig<Tvec>::mode_from_json(const nlohmann::json &j) {
+    template<class Tscal>
+    void DustConfig<Tscal>::mode_from_json(const nlohmann::json &j) {
         const std::string type = j.at("type").get<std::string>();
         if (type == "none") {
             set_none();
@@ -226,8 +226,8 @@ namespace shammodels::sph {
         }
     }
 
-    template<class Tvec>
-    void DustConfig<Tvec>::drag_mode_to_json(nlohmann::json &j) const {
+    template<class Tscal>
+    void DustConfig<Tscal>::drag_mode_to_json(nlohmann::json &j) const {
         if (std::holds_alternative<None>(dust_drag_mode)) {
             j = {{"type", "none"}};
         } else if (
@@ -245,8 +245,8 @@ namespace shammodels::sph {
         }
     }
 
-    template<class Tvec>
-    void DustConfig<Tvec>::drag_mode_from_json(const nlohmann::json &j) {
+    template<class Tscal>
+    void DustConfig<Tscal>::drag_mode_from_json(const nlohmann::json &j) {
         if (j.at("type").get<std::string>() == "none") {
             dust_drag_mode = None{};
         } else if (j.at("type").get<std::string>() == "constant_stopping_times") {
@@ -587,10 +587,10 @@ template void shammodels::sph::to_json<f64_3>(
 template void shammodels::sph::from_json<f64_3>(
     const nlohmann::json &j, shammodels::sph::ParticleKillingConfig<f64_3> &p);
 
-template void shammodels::sph::to_json<f64_3>(
-    nlohmann::json &j, const shammodels::sph::DustConfig<f64_3> &p);
-template void shammodels::sph::from_json<f64_3>(
-    const nlohmann::json &j, shammodels::sph::DustConfig<f64_3> &p);
+template void shammodels::sph::to_json<f64>(
+    nlohmann::json &j, const shammodels::sph::DustConfig<f64> &p);
+template void shammodels::sph::from_json<f64>(
+    const nlohmann::json &j, shammodels::sph::DustConfig<f64> &p);
 
 #define SHAM_INSTANTIATE_SPH_SOLVERCONFIG_JSON(Kern)                                               \
     template void shammodels::sph::to_json<f64_3, Kern>(                                           \
