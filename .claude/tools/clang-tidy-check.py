@@ -5,7 +5,11 @@ clang-tidy can't invoke the AdaptiveCpp `acpp` compiler wrapper directly, so
 this strips the SYCL/acpp-only flags (the same ones .clangd removes for
 clangd) and swaps the compiler for plain clang++ before calling clang-tidy.
 
-Usage: .claude/scripts/clang-tidy-check.py <path/to/file.cpp>
+Uses the LLVM 20 toolchain (clang-tidy-20/clang++-20) — a separate, newer
+install from the LLVM 18 that AdaptiveCpp itself is built against, so
+upgrading this dev tool never touches the build toolchain.
+
+Usage: .claude/tools/clang-tidy-check.py <path/to/file.cpp>
 """
 
 import json
@@ -52,14 +56,14 @@ def main():
 
     parts = shlex.split(entry["command"])
     parts = [p for p in parts if not any(p.startswith(b) for b in BAD_PREFIXES)]
-    parts[0] = "clang++-18"
+    parts[0] = "clang++-20"
     new_entry = dict(entry)
     new_entry["command"] = " ".join(shlex.quote(p) for p in parts)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, "compile_commands.json"), "w") as f:
             json.dump([new_entry], f)
-        return subprocess.run(["clang-tidy-18", "-p", tmpdir, target]).returncode
+        return subprocess.run(["clang-tidy-20", "-p", tmpdir, target]).returncode
 
 
 if __name__ == "__main__":
