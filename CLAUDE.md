@@ -14,11 +14,15 @@ apt-get install -y libboost-context-dev libboost-fiber-dev llvm-18-dev \
 # Submodules
 git submodule update --init --recursive
 
-# Env + configure (builds the AdaptiveCpp compiler on first run)
+# Env (does NOT build AdaptiveCpp yet)
 ./env/new-env --machine debian-generic.acpp --builddir build -- --backend omp
-cd build && ./shamenv_do shamconfigure
 ```
 
 pre-commit hook venvs also need `SETUPTOOLS_USE_DISTUTILS=stdlib` exported —
 Debian's patched sysconfig scheme otherwise breaks setuptools' vendored
 distutils with `AttributeError: install_layout`.
+
+The hook deliberately stops there: `./shamenv_do shamconfigure` builds
+AdaptiveCpp from source on its first invocation (a few minutes), so that
+cost is paid inline the first time a build/test is actually needed rather
+than blocking every session start.
