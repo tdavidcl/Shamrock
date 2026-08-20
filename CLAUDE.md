@@ -41,12 +41,13 @@ for one-shot parse-error feedback on a file without a live LSP session.
 Note: `--check` only surfaces hard parse errors — plain compiler warnings
 and `.clang-tidy` findings are silently dropped from its output, even with
 `--clang-tidy` forced. For actual clang-tidy diagnostics on a file, use
-`.claude/tools/clang-tidy-check.py <path/to/file.cpp>` instead: it reads
-the file's entry from `build/compile_commands.json`, strips the SYCL/acpp
-flags clang-tidy can't parse (mirroring `.clangd`'s `CompileFlags.Remove`
-list), and runs it through the newest `clang-tidy`/`clang++` pair found on
-`PATH` (not hardcoded to 20, so it also works on a host with a different
-LLVM version).
+`.claude/tools/clang-tidy-check.py <path/to/file.cpp>` instead: it
+regenerates `build/clang-tidy.mod` when missing or stale (via the repo's
+own `buildbot/make_clang_tidy_db.py`, which expands each compile command
+through `acpp --acpp-dryrun` into the plain-clang form clang-tidy can
+parse — the same database CI's clang-tidy job uses), then runs the newest
+`clang-tidy` found on `PATH` against it (not hardcoded to 20, so this also
+works on a host with a different LLVM install).
 
 The hook deliberately stops there: `./shamenv_do shamconfigure` builds
 AdaptiveCpp from source on its first invocation (a few minutes), so that
