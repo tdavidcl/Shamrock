@@ -27,14 +27,11 @@ distutils with `AttributeError: install_layout`.
 
 A single LLVM 20 toolchain backs both the AdaptiveCpp build and dev tooling
 (clangd/clang-tidy) — AdaptiveCpp's `CMakeLists.txt` supports up to LLVM 20
-(`LLVM_VERSION_MAJOR GREATER 20` is a hard `SEND_ERROR`), so there's no need
-to keep an older LLVM around just for the build; verified end-to-end
-(`shamconfigure` + `shammake shamrock` + running the binary) after purging
-all LLVM/clang 18 packages. 20 is the newest available directly from Ubuntu
-noble's own repos; apt.llvm.org (which would offer newer releases closer to
-the clang-format v22.1.8 the `pre-commit` config pins to, matching the
-`.clangd` file's `>= clangd-21`/`>= clangd-22` comments) is blocked by this
-environment's network policy.
+(`LLVM_VERSION_MAJOR GREATER 20` is a hard `SEND_ERROR`). 20 is the newest
+available directly from Ubuntu noble's own repos; apt.llvm.org (which would
+offer newer releases closer to the clang-format v22.1.8 the `pre-commit`
+config pins to, matching the `.clangd` file's `>= clangd-21`/`>= clangd-22`
+comments) is blocked by this environment's network policy.
 
 `clangd-20` only installs a versioned `/usr/bin/clangd-20` binary, so the
 hook also symlinks it to `/usr/local/bin/clangd`. It picks up
@@ -43,12 +40,11 @@ repo's `.clangd` config automatically — use `clangd --check=<path/to/file>`
 for one-shot parse-error feedback on a file without a live LSP session.
 Note: `--check` only surfaces hard parse errors — plain compiler warnings
 and `.clang-tidy` findings are silently dropped from its output, even with
-`--clang-tidy` forced; verified this holds on both clangd-18 and clangd-20,
-so it's not a version quirk. For actual clang-tidy diagnostics on a file,
-use `.claude/tools/clang-tidy-check.py <path/to/file.cpp>` instead: it
-reads the file's entry from `build/compile_commands.json`, strips the
-SYCL/acpp flags clang-tidy can't parse (mirroring `.clangd`'s
-`CompileFlags.Remove` list), and runs `clang-tidy-20` directly.
+`--clang-tidy` forced. For actual clang-tidy diagnostics on a file, use
+`.claude/tools/clang-tidy-check.py <path/to/file.cpp>` instead: it reads
+the file's entry from `build/compile_commands.json`, strips the SYCL/acpp
+flags clang-tidy can't parse (mirroring `.clangd`'s `CompileFlags.Remove`
+list), and runs `clang-tidy-20` directly.
 
 The hook deliberately stops there: `./shamenv_do shamconfigure` builds
 AdaptiveCpp from source on its first invocation (a few minutes), so that
