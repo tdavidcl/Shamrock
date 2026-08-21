@@ -92,9 +92,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
     auto sink_accr_radii = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
         "sink_accretion_radius");
 
-    auto has_sinks_edge  = IDataEdge<bool>::make_shared("has_sinks", "has_sinks");
-    has_sinks_edge->data = has_sinks<Tvec>(sync);
-
     auto flag_node = std::make_shared<SinkParticlesFlagAccreteHard<Tvec>>();
     flag_node->set_edges(
         part_counts, positions, sink_positions, sink_accr_radii, sink_accretion_table);
@@ -126,7 +123,7 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         });
 
     OperationIf if_node("sink accretion", accretion_seq);
-    if_node.set_edges(has_sinks_edge);
+    if_node.set_edges(storage.solver_graph.template get_edge_ptr<IDataEdge<bool>>("has_sinks"));
     if_node.evaluate();
 
     flag_node->free_alloc();
