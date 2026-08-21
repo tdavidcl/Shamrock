@@ -175,7 +175,7 @@ jobs:
     if: ${{ !inputs.light_ci }}
     uses: ./.github/workflows/shamrock-acpp-phys-test.yml
     with:
-      fail-fast: ${{ inputs.is_mergify_queue }}
+      fail_fast: ${{ inputs.is_mergify_queue }}
 
   shamrock_linux_acpp_pylib:
     needs: [src_check]
