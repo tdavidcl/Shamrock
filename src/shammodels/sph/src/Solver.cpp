@@ -724,10 +724,10 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
                 solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"));
 
-        auto if_accretion = solver_graph.register_node(
-            "if_accretion",
+        auto if_has_sinks = solver_graph.register_node(
+            "if_has_sinks",
             OperationSequence(
-                "if_accretion",
+                "if_has_sinks",
                 {
                     // the "time_step" sequence (set_gpart_mass, attach fields to scheduler, ...)
                     // has not run yet at this stage of the timestep
@@ -754,7 +754,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 "sink accretion",
                 {
                     set_has_sinks,
-                    if_accretion,
+                    if_has_sinks,
                 }));
     }
 }
