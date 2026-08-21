@@ -84,5 +84,7 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     with:
-      run_build_push_docker: true
+      # This workflow only re-tests already-published commits, so it never
+      # touches the images; On Push publishes for any actual change.
+      run_build_push_docker: false
       light_ci: false
