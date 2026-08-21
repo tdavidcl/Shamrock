@@ -550,9 +550,15 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             }
         }
 
-       sham::DeviceBuffer<u64> stack_move_count(leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
-u64 total_stack_move_count = 0;
-u64 max_stack_move_count_thread = 0;
+       sham::DeviceBuffer<u64> stack_move_count_push(leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+       sham::DeviceBuffer<u64> stack_move_count_pop(leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+       sham::DeviceBuffer<u64> stack_move_count_cursor(leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+u64 total_stack_move_count_push = 0;
+u64 total_stack_move_count_pop = 0;
+u64 total_stack_move_count_cursor = 0;
+u64 max_stack_move_count_thread_push = 0;
+u64 max_stack_move_count_thread_pop = 0;
+u64 max_stack_move_count_thread_cursor = 0;
 
         { // count the number of stack move that did happens
 
@@ -564,7 +570,9 @@ u64 max_stack_move_count_thread = 0;
             auto rint_tree   = tree_field_rint.get_read_access(depends_list);
             auto neigh_cnt   = neigh_count_leaf.get_write_access(depends_list);
             auto leaf_looper = leaf_it.get_read_access(depends_list);
-            auto stack_move_count_ptr = stack_move_count.get_write_access(depends_list);
+            auto stack_move_count_push_ptr = stack_move_count_push.get_write_access(depends_list);
+            auto stack_move_count_pop_ptr = stack_move_count_pop.get_write_access(depends_list);
+            auto stack_move_count_cursor_ptr = stack_move_count_cursor.get_write_access(depends_list);
 
             auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
@@ -587,7 +595,9 @@ u64 max_stack_move_count_thread = 0;
                 shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
                     u32 id_a = (u32) gid;
 
-                    u32 stack_move_counter = 0;
+                    u32 stack_move_counter_push = 0;
+                    u32 stack_move_counter_pop = 0;
+                    u32 stack_move_counter_cursor = 0;
 
                     static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
 
@@ -716,11 +726,15 @@ u64 max_stack_move_count_thread = 0;
                         // until the stack is empty
                         while (stack_cursor < tree_depth) {
 
+                            stack_move_counter_cursor += 1;
+
                             // Pop the top of the stack
                             u32 current_node_id
                                 = oob_check_stack(id_stack, stack_cursor, "id_stack");
                             oob_check_stack(id_stack, stack_cursor, "id_stack") = _nindex;
                             stack_cursor++;
+
+                            stack_move_counter_pop += 1;
 
                             // check iteraction creteria
                             bool cur_id_valid = traverse_condition(current_node_id);
@@ -742,7 +756,7 @@ u64 max_stack_move_count_thread = 0;
                                     oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
                                     stack_cursor--;
 
-                                    stack_move_counter+= 2;
+                                    stack_move_counter_push += 2;
                                 }
                             } else {
                                 // This does not satisfy the criteria => excluded case (gravity for
@@ -753,7 +767,9 @@ u64 max_stack_move_count_thread = 0;
                     }
 
                     oob_check(neigh_cnt, id_a, neigh_count_leaf_size, "neigh_count_leaf") = cnt;
-                    stack_move_count_ptr[id_a] = stack_move_counter;
+                    stack_move_count_push_ptr[id_a] = stack_move_counter_push;
+                    stack_move_count_pop_ptr[id_a] = stack_move_counter_pop;
+                    stack_move_count_cursor_ptr[id_a] = stack_move_counter_cursor;
                 });
             });
 
@@ -762,46 +778,87 @@ u64 max_stack_move_count_thread = 0;
             tree_field_rint.complete_event_state(e);
             neigh_count_leaf.complete_event_state(e);
             leaf_it.complete_event_state(e);
-            stack_move_count.complete_event_state(e);
+            stack_move_count_push.complete_event_state(e);
+            stack_move_count_pop.complete_event_state(e);
+            stack_move_count_cursor.complete_event_state(e);
 
             NamedStackEntry stack_loc1ccccc{"wait queue"};
 
             shamsys::instance::get_compute_queue().wait_and_throw();
 
-            std::vector<u64> stack_move_count_host = stack_move_count.copy_to_stdvec();
-            
-            for (u64 i = 0; i < stack_move_count_host.size(); i++) {
-                total_stack_move_count += stack_move_count_host[i];
-                max_stack_move_count_thread = std::max(max_stack_move_count_thread, stack_move_count_host[i]);
+            std::vector<u64> stack_move_count_push_host = stack_move_count_push.copy_to_stdvec();
+            std::vector<u64> stack_move_count_pop_host = stack_move_count_pop.copy_to_stdvec();
+            std::vector<u64> stack_move_count_cursor_host = stack_move_count_cursor.copy_to_stdvec();
+
+            for (u64 i = 0; i < stack_move_count_push_host.size(); i++) {
+                total_stack_move_count_push += stack_move_count_push_host[i];
+                max_stack_move_count_thread_push = std::max(max_stack_move_count_thread_push, stack_move_count_push_host[i]);
+            }
+            for (u64 i = 0; i < stack_move_count_pop_host.size(); i++) {
+                total_stack_move_count_pop += stack_move_count_pop_host[i];
+                max_stack_move_count_thread_pop = std::max(max_stack_move_count_thread_pop, stack_move_count_pop_host[i]);
+            }
+            for (u64 i = 0; i < stack_move_count_cursor_host.size(); i++) {
+                total_stack_move_count_cursor += stack_move_count_cursor_host[i];
+                max_stack_move_count_thread_cursor = std::max(max_stack_move_count_thread_cursor, stack_move_count_cursor_host[i]);
             }
 
-            logger::raw_ln(shambase::format("total_stack_move_count: {}", total_stack_move_count));
-            logger::raw_ln(shambase::format("max_stack_move_count_thread: {}", max_stack_move_count_thread));
+            logger::raw_ln(shambase::format("total_stack_move_count_push: {}", total_stack_move_count_push));
+            logger::raw_ln(shambase::format("max_stack_move_count_thread_push: {}", max_stack_move_count_thread_push));
+            logger::raw_ln(shambase::format("total_stack_move_count_pop: {}", total_stack_move_count_pop));
+            logger::raw_ln(shambase::format("max_stack_move_count_thread_pop: {}", max_stack_move_count_thread_pop));
+            logger::raw_ln(shambase::format("total_stack_move_count_cursor: {}", total_stack_move_count_cursor));
+            logger::raw_ln(shambase::format("max_stack_move_count_thread_cursor: {}", max_stack_move_count_thread_cursor));
         }
 
-        // here the layout of the stack history will be tid*max_stack_move_count_thread + loc_index
-        sham::DeviceBuffer<u64> stack_history(max_stack_move_count_thread * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
-        sham::DeviceBuffer<u64> stack_history_ref(max_stack_move_count_thread * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        // here the layout of the stack history will be tid*max_stack_move_count_thread_{push,pop,cursor} + loc_index
+        sham::DeviceBuffer<u64> stack_history_push(max_stack_move_count_thread_push * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_push_ref(max_stack_move_count_thread_push * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_pop(max_stack_move_count_thread_pop * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_pop_ref(max_stack_move_count_thread_pop * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_cursor(max_stack_move_count_thread_cursor * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<u64> stack_history_cursor_ref(max_stack_move_count_thread_cursor * leaf_cnt, shamsys::instance::get_compute_scheduler_ptr());
 
         {
             sham::EventList depends_list;
-            auto stack_history_ptr = stack_history.get_write_access(depends_list);
-            auto stack_history_ref_ptr = stack_history_ref.get_write_access(depends_list);
+            auto stack_history_push_ptr = stack_history_push.get_write_access(depends_list);
+            auto stack_history_push_ref_ptr = stack_history_push_ref.get_write_access(depends_list);
+            auto stack_history_pop_ptr = stack_history_pop.get_write_access(depends_list);
+            auto stack_history_pop_ref_ptr = stack_history_pop_ref.get_write_access(depends_list);
+            auto stack_history_cursor_ptr = stack_history_cursor.get_write_access(depends_list);
+            auto stack_history_cursor_ref_ptr = stack_history_cursor_ref.get_write_access(depends_list);
             depends_list.wait_and_throw();
             //print pointer
-            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_ptr));
-            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_ref_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_push_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_push_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_push_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_push_ref_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_pop_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_pop_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_pop_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_pop_ref_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_cursor_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_cursor_ptr));
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history_cursor_ref_ptr: {}", shamcomm::world_rank(), patch_id, (void*)stack_history_cursor_ref_ptr));
+            // gdb print helpers: p *(uint64_t (*)[<max_stack_move>])(<ptr> + <max_stack_move> * <tid>)
+            logger::raw_ln(shambase::format("print stack_history_push -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_push, (void*)stack_history_push_ptr, max_stack_move_count_thread_push));
+            logger::raw_ln(shambase::format("print stack_history_push_ref -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_push, (void*)stack_history_push_ref_ptr, max_stack_move_count_thread_push));
+            logger::raw_ln(shambase::format("print stack_history_pop -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_pop, (void*)stack_history_pop_ptr, max_stack_move_count_thread_pop));
+            logger::raw_ln(shambase::format("print stack_history_pop_ref -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_pop, (void*)stack_history_pop_ref_ptr, max_stack_move_count_thread_pop));
+            logger::raw_ln(shambase::format("print stack_history_cursor -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_cursor, (void*)stack_history_cursor_ptr, max_stack_move_count_thread_cursor));
+            logger::raw_ln(shambase::format("print stack_history_cursor_ref -> p *(uint64_t (*)[{}])({} + {} * <tid>)", max_stack_move_count_thread_cursor, (void*)stack_history_cursor_ref_ptr, max_stack_move_count_thread_cursor));
             // print offset leaf
             logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, offset_leaf: {}", shamcomm::world_rank(), patch_id, intnode_cnt));
             // print stack_history.get_size()
-            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history.get_size(): {}", shamcomm::world_rank(), patch_id, stack_history.get_size()));
-            stack_history.complete_event_state(sycl::event{});
-            stack_history_ref.complete_event_state(sycl::event{});
+            logger::raw_ln(shambase::format("world rank: {}, patch_id: {}, stack_history.get_size(): {}", shamcomm::world_rank(), patch_id, stack_history_push.get_size()));
+            stack_history_push.complete_event_state(sycl::event{});
+            stack_history_push_ref.complete_event_state(sycl::event{});
+            stack_history_pop.complete_event_state(sycl::event{});
+            stack_history_pop_ref.complete_event_state(sycl::event{});
+            stack_history_cursor.complete_event_state(sycl::event{});
+            stack_history_cursor_ref.complete_event_state(sycl::event{});
         }
 
         // replay the kernel like a madman
         for (u32 i = 0; i < 100000; i++) {
-            stack_history.fill(0);
+            stack_history_push.fill(0);
+            stack_history_pop.fill(0);
+            stack_history_cursor.fill(0);
 
             if (shamcomm::world_rank() == 0 && i % 1000 == 0) {
                 logger::raw_ln(shambase::format("replay the kernel {}/100000 xxx forhang4", i));
@@ -815,7 +872,9 @@ u64 max_stack_move_count_thread = 0;
             auto rint_tree   = tree_field_rint.get_read_access(depends_list);
             auto neigh_cnt   = neigh_count_leaf.get_write_access(depends_list);
             auto leaf_looper = leaf_it.get_read_access(depends_list);
-            auto stack_history_ptr = stack_history.get_write_access(depends_list);
+            auto stack_history_push_ptr = stack_history_push.get_write_access(depends_list);
+            auto stack_history_pop_ptr = stack_history_pop.get_write_access(depends_list);
+            auto stack_history_cursor_ptr = stack_history_cursor.get_write_access(depends_list);
 
             auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
@@ -838,7 +897,9 @@ u64 max_stack_move_count_thread = 0;
                 shambase::parallel_for(cgh, leaf_cnt, "compute neigh cache 1", [=](u64 gid) {
                     u32 id_a = (u32) gid;
 
-                    u64 stack_history_index = id_a * max_stack_move_count_thread;
+                    u64 stack_history_push_index = id_a * max_stack_move_count_thread_push;
+                    u64 stack_history_pop_index = id_a * max_stack_move_count_thread_pop;
+                    u64 stack_history_cursor_index = id_a * max_stack_move_count_thread_cursor;
 
                     static constexpr u32 tree_depth = decltype(leaf_looper)::tree_depth_max;
 
@@ -858,12 +919,12 @@ u64 max_stack_move_count_thread = 0;
 
                         if ( idx == mymax ) {
 
-                          for (;;) { 
+                          for (;;) {
                             counter += 12345678;
                           }
                         }
-                        
-                        for (;;) { 
+
+                        for (;;) {
                           counter += 12345678;
                           counter += idx;
                           counter += 78910;
@@ -1009,11 +1070,17 @@ u64 max_stack_move_count_thread = 0;
                         // until the stack is empty
                         while (stack_cursor < tree_depth) {
 
+                            stack_history_cursor_ptr[stack_history_cursor_index] = stack_cursor;
+                            stack_history_cursor_index ++;
+
                             // Pop the top of the stack
                             u32 current_node_id
                                 = oob_check_stack(id_stack, stack_cursor, "id_stack");
                             oob_check_stack(id_stack, stack_cursor, "id_stack") = _nindex;
                             stack_cursor++;
+
+                            stack_history_pop_ptr[stack_history_pop_index] = current_node_id;
+                            stack_history_pop_index ++;
 
                             // check iteraction creteria
                             bool cur_id_valid = traverse_condition(current_node_id);
@@ -1035,11 +1102,11 @@ u64 max_stack_move_count_thread = 0;
                                     oob_check_stack(id_stack, stack_cursor - 1, "id_stack") = lid;
                                     stack_cursor--;
 
-                                        stack_history_ptr[stack_history_index] = rid;
-                                        stack_history_index ++;
+                                        stack_history_push_ptr[stack_history_push_index] = rid;
+                                        stack_history_push_index ++;
 
-                                    stack_history_ptr[stack_history_index] = lid;
-                                    stack_history_index ++;
+                                    stack_history_push_ptr[stack_history_push_index] = lid;
+                                    stack_history_push_index ++;
                                 }
                             } else {
                                 // This does not satisfy the criteria => excluded case (gravity for
@@ -1058,7 +1125,9 @@ u64 max_stack_move_count_thread = 0;
             tree_field_rint.complete_event_state(e);
             neigh_count_leaf.complete_event_state(e);
             leaf_it.complete_event_state(e);
-            stack_history.complete_event_state(e);
+            stack_history_push.complete_event_state(e);
+            stack_history_pop.complete_event_state(e);
+            stack_history_cursor.complete_event_state(e);
 
             NamedStackEntry stack_loc1ccccc{"wait queue"};
 
@@ -1073,7 +1142,9 @@ u64 max_stack_move_count_thread = 0;
         //    }
 
             if(i == 0) {
-                stack_history_ref.copy_from(stack_history);
+                stack_history_push_ref.copy_from(stack_history_push);
+                stack_history_pop_ref.copy_from(stack_history_pop);
+                stack_history_cursor_ref.copy_from(stack_history_cursor);
             }
         }
 
