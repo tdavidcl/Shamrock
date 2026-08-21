@@ -11,17 +11,56 @@ concurrency:
 
 jobs:
 
+  # Single source of truth for Mergify merge-queue detection. Other jobs must
+  # consume these outputs instead of repeating startsWith(github.head_ref, ...).
   # Full CI runs when the `full-ci` label is set, or on Mergify merge-queue
   # branches (e.g. mergify/merge-queue/7da018d0ff). Every other PR uses light CI.
   # The `profile-build` label runs the compile-time build profile job in either
   # mode (it is already part of full CI).
+  detect_mergify_queue:
+    name: Detect Mergify queue
+    runs-on: ubuntu-latest
+    outputs:
+      is_mergify_queue: ${{ steps.detect.outputs.is_mergify_queue }}
+      run_full_ci: ${{ steps.detect.outputs.run_full_ci }}
+    steps:
+      - name: Detect Mergify merge-queue and full CI
+        id: detect
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HAS_FULL_CI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          set -euo pipefail
+
+          is_mergify_queue=false
+          if [[ "$HEAD_REF" == mergify/merge-queue/* ]]; then
+            is_mergify_queue=true
+          fi
+
+          run_full_ci=false
+          if [[ "$is_mergify_queue" == "true" || "$HAS_FULL_CI_LABEL" == "true" ]]; then
+            run_full_ci=true
+          fi
+
+          {
+            echo "is_mergify_queue=$is_mergify_queue"
+            echo "run_full_ci=$run_full_ci"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "head_ref=$HEAD_REF"
+          echo "has_full_ci_label=$HAS_FULL_CI_LABEL"
+          echo "is_mergify_queue=$is_mergify_queue"
+          echo "run_full_ci=$run_full_ci"
+
   main_workflow:
     name: CI
+    needs: [detect_mergify_queue]
     uses: ./.github/workflows/main_workflow.yml
     with:
       run_build_push_docker: true
-      light_ci: ${{ !(contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+      light_ci: ${{ needs.detect_mergify_queue.outputs.run_full_ci != 'true' }}
       run_build_profile: ${{ contains(github.event.pull_request.labels.*.name, 'profile-build') }}
+      is_mergify_queue: ${{ needs.detect_mergify_queue.outputs.is_mergify_queue == 'true' }}
 
   collect_metrics:
     name: Collect metrics
@@ -38,7 +77,8 @@ jobs:
 
   light_ci:
     name: Notify Light CI
-    if: ${{ !(contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+    needs: [detect_mergify_queue]
+    if: ${{ needs.detect_mergify_queue.outputs.run_full_ci != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Echo message
@@ -61,8 +101,8 @@ jobs:
   # after 1 hour.
   wait_for_push_schedule:
     name: Wait for push/schedule jobs
-    needs: [ main_workflow, upload_metrics_history ]
-    if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+    needs: [ detect_mergify_queue, main_workflow, upload_metrics_history ]
+    if: ${{ always() && !cancelled() && needs.detect_mergify_queue.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -134,9 +174,9 @@ jobs:
   #                 still finishing (e.g. Mergify CI auto-retry). Treat as
   #                 non-success — do not whitelist only failure/cancelled.
   all:
-    needs: [ main_workflow, upload_metrics_history, wait_for_push_schedule ]
+    needs: [ detect_mergify_queue, main_workflow, upload_metrics_history, wait_for_push_schedule ]
     # run always except for cancel, and only when full CI ran
-    if: ${{ always() && !cancelled() && (contains(github.event.pull_request.labels.*.name, 'full-ci') || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
+    if: ${{ always() && !cancelled() && needs.detect_mergify_queue.outputs.run_full_ci == 'true' }}
     runs-on: ubuntu-latest
     steps:
     - name: Status summary
