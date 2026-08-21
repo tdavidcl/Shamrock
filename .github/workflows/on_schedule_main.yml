@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Every 3 hours. CI jobs below are skipped whenever any workflow run in
-    # the repo is already queued or in_progress, to avoid stacking a new
-    # scheduled CI run on top of one already running.
-    - cron:  '0 */3 * * *'
+    # Every 6 hours. CI jobs below are skipped whenever a push or schedule
+    # workflow run in the repo is already queued or in_progress, to avoid
+    # stacking a new scheduled CI run on top of one already running.
+    - cron:  '0 */6 * * *'
 
 
 jobs:
@@ -38,19 +38,26 @@ jobs:
             exit 0
           fi
 
+          list_runs() {
+            gh run list --repo "$GH_REPO" --event "$1" --status "$2" --limit 100 \
+              --json databaseId,name,event,headBranch
+          }
+
           runs="$(
             {
-              gh run list --repo "$GH_REPO" --status in_progress --limit 100 --json databaseId,name,event,headBranch
-              gh run list --repo "$GH_REPO" --status queued --limit 100 --json databaseId,name,event,headBranch
+              list_runs push in_progress
+              list_runs push queued
+              list_runs schedule in_progress
+              list_runs schedule queued
             } | jq -s 'add | unique_by(.databaseId) | map(select(.databaseId != ${{ github.run_id }}))'
           )"
 
           if [ "$(jq 'length' <<<"$runs")" -eq 0 ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
-            echo "No other CI job queued or in_progress; running scheduled CI."
+            echo "No other push/schedule CI job queued or in_progress; running scheduled CI."
           else
             echo "run_ci=false" >> "$GITHUB_OUTPUT"
-            echo "A CI job is already queued or in_progress; skipping scheduled CI."
+            echo "A push/schedule CI job is already queued or in_progress; skipping scheduled CI."
             jq -r '.[] | "\(.event) \(.name) #\(.databaseId) (\(.headBranch))"' <<<"$runs"
           fi
 
