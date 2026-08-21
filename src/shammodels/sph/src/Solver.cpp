@@ -642,6 +642,30 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.ghost_layout);
     storage.exchange_gz_positions
         = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(storage.xyzh_ghost_layout);
+
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // sink accretion
+    ////////////////////////////////////////////////////////////////////////////////////////
+    {
+        solver_graph.register_edge("has_sinks", IDataEdge<bool>("has_sinks", "has_sinks"));
+
+        auto set_has_sinks = solver_graph.register_node(
+            "set_has_sinks", NodeSetEdge<IDataEdge<bool>>([&](IDataEdge<bool> &has_sinks_edge) {
+                has_sinks_edge.data = has_sinks<Tvec>(sync_data);
+            }));
+        shambase::get_check_ref(set_has_sinks)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<bool>>("has_sinks"));
+
+        // register the actual node that will be used
+        solver_graph.register_node(
+            "sink accretion",
+            OperationSequence(
+                "sink accretion",
+                {
+                    set_has_sinks,
+                    // if_accretion,
+                }));
+    }
 }
 
 template<class Tvec, template<class> class Kern>
@@ -1895,9 +1919,10 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     shamrock::SchedulerUtility utility(scheduler());
 
+    storage.solver_graph.get_node_ref_base("sink accretion").evaluate();
+
     modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
     modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
-
     sink_update.accrete_particles(dt);
     ext_forces.point_mass_accrete_particles();
 
