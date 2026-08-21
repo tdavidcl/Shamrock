@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Every 6 hours. CI jobs below are skipped whenever a push or schedule
+    # Every 3 hours. CI jobs below are skipped whenever a push or schedule
     # workflow run in the repo is already queued or in_progress, to avoid
     # stacking a new scheduled CI run on top of one already running.
-    - cron:  '0 */6 * * *'
+    - cron:  '0 */3 * * *'
 
 
 jobs:
