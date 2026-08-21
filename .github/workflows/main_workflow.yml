@@ -16,7 +16,7 @@ on:
         required: false
         default: false
         type: boolean
-      is_mergify_queue:
+      is_merge_queue:
         description: "Whether this run is a Mergify merge-queue CI"
         required: false
         default: false
@@ -175,7 +175,7 @@ jobs:
     if: ${{ !inputs.light_ci }}
     uses: ./.github/workflows/shamrock-acpp-phys-test.yml
     with:
-      fail_fast: ${{ inputs.is_mergify_queue }}
+      fail_fast: ${{ inputs.is_merge_queue }}
 
   shamrock_linux_acpp_pylib:
     needs: [src_check]
