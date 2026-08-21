@@ -854,11 +854,13 @@ u64 max_stack_move_count_thread_cursor = 0;
             stack_history_cursor_ref.complete_event_state(sycl::event{});
         }
 
+        u64 neigh_count_leaf_hash_ref = 0;
+
         // replay the kernel like a madman
         for (u32 i = 0; i < 100000; i++) {
-            stack_history_push.fill(0);
-            stack_history_pop.fill(0);
-            stack_history_cursor.fill(0);
+            stack_history_push.fill(0xDEADBEEFDEADBEEF);
+            stack_history_pop.fill(0xDEADBEEFDEADBEEF);
+            stack_history_cursor.fill(0xDEADBEEFDEADBEEF);
 
             if (shamcomm::world_rank() == 0 && i % 1000 == 0) {
                 logger::raw_ln(shambase::format("replay the kernel {}/100000 xxx forhang4", i));
@@ -1145,6 +1147,23 @@ u64 max_stack_move_count_thread_cursor = 0;
                 stack_history_push_ref.copy_from(stack_history_push);
                 stack_history_pop_ref.copy_from(stack_history_pop);
                 stack_history_cursor_ref.copy_from(stack_history_cursor);
+
+                neigh_count_leaf_hash_ref = shamalgs::buf_checksum(neigh_count_leaf);
+                logger::raw_ln(shambase::format("neigh_count_leaf_hash_ref: {}", neigh_count_leaf_hash_ref));
+            } else {
+                u64 neigh_count_leaf_hash = shamalgs::buf_checksum(neigh_count_leaf);
+                if (neigh_count_leaf_hash != neigh_count_leaf_hash_ref) {
+                    logger::raw_ln(shambase::format(
+                        "ERROR: neigh_count_leaf hash mismatch at i={} : {} != {}",
+                        i,
+                        neigh_count_leaf_hash,
+                        neigh_count_leaf_hash_ref));
+                    throw std::runtime_error(shambase::format(
+                        "neigh_count_leaf hash mismatch at replay i={} : {} != {}",
+                        i,
+                        neigh_count_leaf_hash,
+                        neigh_count_leaf_hash_ref));
+                }
             }
         }
 
