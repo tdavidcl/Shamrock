@@ -702,7 +702,9 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             OperationSequence(
                 "if_accretion",
                 {
-                    // reattach in case particle count or the set of non-empty patches changed
+                    // "attach fields to scheduler" has not run yet at this stage so we attach them
+                    solver_graph.get_node_ptr_base("set_scheduler_patchdata"),
+                    solver_graph.get_node_ptr_base("attach_part_counts"),
                     solver_graph.get_node_ptr_base("attach_xyz"),
                     solver_graph.get_node_ptr_base("attach_vxyz"),
                     solver_graph.get_node_ptr_base("attach_axyz"),

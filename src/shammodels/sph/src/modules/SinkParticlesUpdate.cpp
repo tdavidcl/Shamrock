@@ -19,7 +19,6 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/SinkParticlesAccreteQuantities.hpp"
 #include "shammodels/sph/modules/SinkParticlesEvictAccretedParticles.hpp"
-#include "shammodels/sph/modules/SinkParticlesFlagAccreteHard.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
@@ -53,7 +52,7 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
     auto velocities    = std::make_shared<FieldRefs<Tvec>>("vxyz", "\\mathbf{v}");
     auto accelerations = std::make_shared<FieldRefs<Tvec>>("axyz", "\\mathbf{a}");
     auto sink_accretion_table
-        = std::make_shared<Field<u32>>(1, "sink_accretion_table", "\\mathrm{acc}");
+        = storage.solver_graph.template get_edge_ptr<Field<u32>>("sink_accretion_table");
     auto pdats = std::make_shared<PatchDataLayerRefs>("patchdatas", "\\mathbb{U}");
 
     DDPatchDataFieldRef<Tvec> pos_dd;
@@ -89,12 +88,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
         "sink_angular_momentum");
     auto sink_mass
         = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>("sink_mass");
-    auto sink_accr_radii = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
-        "sink_accretion_radius");
-
-    auto flag_node = std::make_shared<SinkParticlesFlagAccreteHard<Tvec>>();
-    flag_node->set_edges(
-        part_counts, positions, sink_positions, sink_accr_radii, sink_accretion_table);
 
     auto qty_node = std::make_shared<SinkParticlesAccreteQuantities<Tvec>>();
     qty_node->set_edges(
@@ -117,7 +110,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
     auto accretion_seq = std::make_shared<OperationSequence>(
         "sink accretion",
         std::vector<std::shared_ptr<INode>>{
-            flag_node,
             qty_node,
             evict_node,
         });
@@ -125,8 +117,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_par
     OperationIf if_node("sink accretion", accretion_seq);
     if_node.set_edges(storage.solver_graph.template get_edge_ptr<IDataEdge<bool>>("has_sinks"));
     if_node.evaluate();
-
-    flag_node->free_alloc();
 }
 
 template<class Tvec, template<class> class SPHKernel>
