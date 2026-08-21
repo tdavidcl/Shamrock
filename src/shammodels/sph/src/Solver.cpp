@@ -73,6 +73,7 @@
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
 #include "shammodels/sph/modules/SinkParticlesAccreteQuantities.hpp"
+#include "shammodels/sph/modules/SinkParticlesEvictAccretedParticles.hpp"
 #include "shammodels/sph/modules/SinkParticlesFlagAccreteHard.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
@@ -715,6 +716,14 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 sink_angmom,
                 sink_mass);
 
+        auto evict_node = solver_graph.register_node(
+            "evict_accreted_particles", modules::SinkParticlesEvictAccretedParticles<Tvec>{});
+        shambase::get_check_ref(evict_node)
+            .set_edges(
+                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
+                solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"));
+
         auto if_accretion = solver_graph.register_node(
             "if_accretion",
             OperationSequence(
@@ -728,9 +737,10 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                     solver_graph.get_node_ptr_base("attach_xyz"),
                     solver_graph.get_node_ptr_base("attach_vxyz"),
                     solver_graph.get_node_ptr_base("attach_axyz"),
-                    // Actually perform the accretion (TODO: evict accreted particles)
+                    // Actually perform the accretion
                     flag_node,
                     qty_node,
+                    evict_node,
                     // free the refs since the particle counts may have changed
                     free_xyz,
                     free_vxyz,
@@ -2004,7 +2014,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
     modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
-    sink_update.accrete_particles(dt);
     ext_forces.point_mass_accrete_particles();
 
     sink_update.predictor_step(dt);

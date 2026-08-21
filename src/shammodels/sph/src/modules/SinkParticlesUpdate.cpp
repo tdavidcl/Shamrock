@@ -17,50 +17,8 @@
 
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammath/sphkernels.hpp"
-#include "shammodels/sph/modules/SinkParticlesEvictAccretedParticles.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
-#include "shamrock/solvergraph/Field.hpp"
-#include "shamrock/solvergraph/Indexes.hpp"
-#include "shamrock/solvergraph/PatchDataLayerRefs.hpp"
-#include "shamsolvergraph/edge/IDataEdge.hpp"
-#include "shamsolvergraph/node/INode.hpp"
-#include "shamsolvergraph/node/OperationIf.hpp"
-#include "shamsolvergraph/node/OperationSequence.hpp"
-#include <memory>
 #include <vector>
-
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::accrete_particles(Tscal dt) {
-    StackEntry stack_loc{};
-
-    using namespace shamrock;
-    using namespace shamrock::patch;
-    using namespace shamrock::solvergraph;
-
-    auto part_counts = Indexes<u32>::make_shared("part_counts", "N");
-    auto sink_accretion_table
-        = storage.solver_graph.template get_edge_ptr<Field<u32>>("sink_accretion_table");
-    auto pdats = std::make_shared<PatchDataLayerRefs>("patchdatas", "\\mathbb{U}");
-
-    scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
-        u64 id = cur_p.id_patch;
-        part_counts->indexes.add_obj(id, pdat.get_obj_cnt());
-        pdats->patchdatas.add_obj(id, std::ref(pdat));
-    });
-
-    auto evict_node = std::make_shared<SinkParticlesEvictAccretedParticles<Tvec>>();
-    evict_node->set_edges(part_counts, sink_accretion_table, pdats);
-
-    auto accretion_seq = std::make_shared<OperationSequence>(
-        "sink accretion",
-        std::vector<std::shared_ptr<INode>>{
-            evict_node,
-        });
-
-    OperationIf if_node("sink accretion", accretion_seq);
-    if_node.set_edges(storage.solver_graph.template get_edge_ptr<IDataEdge<bool>>("has_sinks"));
-    if_node.evaluate();
-}
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_step(Tscal dt) {
