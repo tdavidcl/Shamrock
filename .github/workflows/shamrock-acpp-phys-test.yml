@@ -3,8 +3,8 @@ name: Acpp/clang
 on:
   workflow_call:
     inputs:
-      is_mergify_queue:
-        description: "Whether this run is a Mergify merge-queue CI (enables matrix fail-fast)"
+      fail-fast:
+        description: "Cancel remaining matrix jobs when one fails"
         required: false
         type: boolean
         default: false
@@ -132,8 +132,7 @@ jobs:
             testfile: run_test_sink_synchro.py
           - worldsize: 2
             testfile: run_test_sink_synchro.py
-      # Keep all matrix legs on regular PRs; fail fast in the merge queue.
-      fail-fast: ${{ inputs.is_mergify_queue }}
+      fail-fast: ${{ inputs['fail-fast'] }}
 
     timeout-minutes: 60
     steps:
@@ -240,8 +239,7 @@ jobs:
           - testfile: "examples/tests_ci/run_compare_shamrock_ph_disc.py"
             artifact_name: gallery_tests_ci_run_compare_shamrock_ph_disc
 
-      # Keep all matrix legs on regular PRs; fail fast in the merge queue.
-      fail-fast: ${{ inputs.is_mergify_queue }}
+      fail-fast: ${{ inputs['fail-fast'] }}
 
     timeout-minutes: 60
     steps:
