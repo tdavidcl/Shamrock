@@ -72,6 +72,7 @@
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
+#include "shammodels/sph/modules/SinkParticlesAccreteQuantities.hpp"
 #include "shammodels/sph/modules/SinkParticlesFlagAccreteHard.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
@@ -697,20 +698,39 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 sink_accr_radii,
                 solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"));
 
+        auto qty_node = solver_graph.register_node(
+            "accrete_quantities", modules::SinkParticlesAccreteQuantities<Tvec>{});
+        shambase::get_check_ref(qty_node)
+            .set_edges(
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("gpart_mass"),
+                sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
+                solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
+                solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"),
+                solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
+                sink_positions,
+                sink_velocities,
+                sink_accelerations,
+                sink_angmom,
+                sink_mass);
+
         auto if_accretion = solver_graph.register_node(
             "if_accretion",
             OperationSequence(
                 "if_accretion",
                 {
-                    // "attach fields to scheduler" has not run yet at this stage so we attach them
+                    // the "time_step" sequence (set_gpart_mass, attach fields to scheduler, ...)
+                    // has not run yet at this stage of the timestep
+                    solver_graph.get_node_ptr_base("set_gpart_mass"),
                     solver_graph.get_node_ptr_base("set_scheduler_patchdata"),
                     solver_graph.get_node_ptr_base("attach_part_counts"),
                     solver_graph.get_node_ptr_base("attach_xyz"),
                     solver_graph.get_node_ptr_base("attach_vxyz"),
                     solver_graph.get_node_ptr_base("attach_axyz"),
-                    // Actually perform the accretion (TODO complete that part of the sequence)
+                    // Actually perform the accretion (TODO: evict accreted particles)
                     flag_node,
-                    // TODO: accrete quantities onto the sinks and evict accreted particles
+                    qty_node,
                     // free the refs since the particle counts may have changed
                     free_xyz,
                     free_vxyz,
