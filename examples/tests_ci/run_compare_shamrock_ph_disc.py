@@ -239,8 +239,8 @@ def run_shamrock_disc():
         random_seed=666,
     )
 
-    # Print the dot graph of the setup
-    print(gen_disc.get_dot())
+    # Show the dot graph of the setup
+    shamrock.utils.plot.show_dot_graph(gen_disc.get_dot())
 
     # Apply the setup
     setup.apply_setup(gen_disc, insert_step=1000000)

@@ -3,6 +3,7 @@ Shamrock plot utility functions.
 """
 
 import glob
+import io
 
 import shamrock.sys
 
@@ -24,6 +25,14 @@ try:
 except ImportError:
     _HAS_PIL = False
     # print("Warning: PIL is not installed, some Shamrock functions will not be available")
+
+try:
+    import graphviz
+
+    _HAS_GRAPHVIZ = True
+except ImportError:
+    _HAS_GRAPHVIZ = False
+    # print("Warning: graphviz is not installed, some Shamrock functions will not be available")
 
 if _HAS_MATPLOTLIB and _HAS_PIL:
     __all__.append("show_image_sequence")
@@ -99,3 +108,50 @@ if _HAS_MATPLOTLIB and _HAS_PIL:
         )
 
         return ani
+
+
+if _HAS_MATPLOTLIB and _HAS_GRAPHVIZ:
+    __all__.append("show_dot_graph")
+
+    def show_dot_graph(dot_source, dpi=150):
+        """
+        Render a Graphviz DOT graph as a matplotlib figure.
+
+        Useful to display the solver graphs produced by e.g.
+        ``model.get_solver_dot_graph()`` or ``setup_node.get_dot()`` directly
+        in the sphinx-gallery generated examples, since figures created this
+        way are automatically picked up by sphinx-gallery's matplotlib
+        scraper.
+
+        Available only if matplotlib and the graphviz python package (plus
+        the Graphviz ``dot`` executable) are installed.
+
+        Parameters
+        ----------
+        dot_source : str
+            Source of the graph in the DOT language.
+        dpi : int, optional
+            Dots per inch used to size the resulting figure.
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The created figure on rank 0, otherwise None.
+        """
+
+        if shamrock.sys.world_rank() != 0:
+            return None
+
+        png_bytes = graphviz.Source(dot_source).pipe(format="png")
+
+        with io.BytesIO(png_bytes) as buf:
+            image = plt.imread(buf, format="png")
+
+        height, width = image.shape[:2]
+
+        fig = plt.figure(dpi=dpi, figsize=(width / dpi, height / dpi))
+        ax = fig.add_axes((0, 0, 1, 1))
+        ax.imshow(image)
+        ax.axis("off")
+
+        return fig
