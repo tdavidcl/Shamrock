@@ -371,8 +371,7 @@ namespace shamrock::patch {
         for (auto &field_var : fields) {
             field_var.visit([&](auto &field) {
                 if (field.get_obj_cnt() != cnt) {
-                    throw shambase::make_except_with_loc<std::runtime_error>(
-                        "mismatch in obj cnt");
+                    throw shambase::make_except_with_loc<std::runtime_error>("mismatch in obj cnt");
                 }
             });
         }
