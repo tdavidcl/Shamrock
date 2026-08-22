@@ -234,12 +234,23 @@ namespace shamrock::patch {
         void append_subset_to(
             const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) const;
 
+        /**
+         * @brief get the number of objects (particles) stored in this layer
+         *
+         * @return u32 the object count
+         */
         u32 get_obj_cnt() const;
 
+        /**
+         * @brief get the memory size in bytes used by all fields
+         *
+         * @return u64 the memory size in bytes
+         */
         u64 memsize();
 
         inline bool is_empty() { return get_obj_cnt() == 0; }
 
+        /// synchronize the host/device buffers of all fields
         void synchronize_buf();
 
         void overwrite(PatchDataLayer &pdat, u32 obj_cnt);
@@ -392,8 +403,25 @@ namespace shamrock::patch {
 
         void fields_raz();
 
+        /**
+         * @brief check whether any field contains a NaN value
+         *
+         * @return bool true if a NaN was found
+         */
         bool has_nan();
+
+        /**
+         * @brief check whether any field contains an infinite value
+         *
+         * @return bool true if an infinite value was found
+         */
         bool has_inf();
+
+        /**
+         * @brief check whether any field contains a NaN or infinite value
+         *
+         * @return bool true if a NaN or infinite value was found
+         */
         bool has_nan_or_inf();
 
         /**
