@@ -3,7 +3,6 @@ Shamrock plot utility functions.
 """
 
 import glob
-import io
 
 import shamrock.sys
 
@@ -110,48 +109,36 @@ if _HAS_MATPLOTLIB and _HAS_PIL:
         return ani
 
 
-if _HAS_MATPLOTLIB and _HAS_GRAPHVIZ:
-    __all__.append("show_dot_graph")
+if _HAS_GRAPHVIZ:
+    __all__.append("DotGraph")
 
-    def show_dot_graph(dot_source, dpi=150):
+    class DotGraph:
         """
-        Render a Graphviz DOT graph as a matplotlib figure.
+        Wrap a Graphviz DOT graph source so it renders as inline SVG.
 
-        Useful to display the solver graphs produced by e.g.
-        ``model.get_solver_dot_graph()`` or ``setup_node.get_dot()`` directly
-        in the sphinx-gallery generated examples, since figures created this
-        way are automatically picked up by sphinx-gallery's matplotlib
-        scraper.
+        Meant to display the solver graphs produced by e.g.
+        ``model.get_solver_dot_graph()`` or ``setup_node.get_dot()`` in the
+        sphinx-gallery generated examples: sphinx-gallery captures the
+        ``_repr_html_`` of an expression left bare as the last statement of a
+        code block (the same mechanism Jupyter uses for rich display), so no
+        custom scraper is needed. See
+        https://stackoverflow.com/a/65117672 for the technique this is based
+        on.
 
-        Available only if matplotlib and the graphviz python package (plus
-        the Graphviz ``dot`` executable) are installed.
+        Available only if the graphviz python package (and the Graphviz
+        ``dot`` executable) are installed.
 
         Parameters
         ----------
         dot_source : str
             Source of the graph in the DOT language.
-        dpi : int, optional
-            Dots per inch used to size the resulting figure.
-
-        Returns
-        -------
-        matplotlib.figure.Figure or None
-            The created figure on rank 0, otherwise None.
         """
 
-        if shamrock.sys.world_rank() != 0:
-            return None
+        def __init__(self, dot_source):
+            self.dot_source = dot_source
 
-        png_bytes = graphviz.Source(dot_source).pipe(format="png")
+        def _repr_html_(self):
+            return graphviz.Source(self.dot_source).pipe(format="svg").decode("utf-8")
 
-        with io.BytesIO(png_bytes) as buf:
-            image = plt.imread(buf, format="png")
-
-        height, width = image.shape[:2]
-
-        fig = plt.figure(dpi=dpi, figsize=(width / dpi, height / dpi))
-        ax = fig.add_axes((0, 0, 1, 1))
-        ax.imshow(image)
-        ax.axis("off")
-
-        return fig
+        def __repr__(self):
+            return self.dot_source

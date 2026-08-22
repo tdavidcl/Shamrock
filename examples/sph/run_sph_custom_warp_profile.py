@@ -203,7 +203,7 @@ warp = setup.make_modifier_custom_warp(
     k_profile=k_profile,
 )
 # Show the dot graph of the setup
-shamrock.utils.plot.show_dot_graph(warp.get_dot())
+shamrock.utils.plot.DotGraph(warp.get_dot())
 
 # %%
 # Apply the setup

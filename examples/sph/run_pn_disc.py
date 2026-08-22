@@ -266,8 +266,8 @@ def setup_model():
         random_seed=666,
     )
 
-    # Show the dot graph of the setup
-    shamrock.utils.plot.show_dot_graph(gen_disc.get_dot())
+    # Print the dot graph of the setup
+    print(gen_disc.get_dot())
 
     # Apply the setup
     setup.apply_setup(gen_disc)

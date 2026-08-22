@@ -108,7 +108,7 @@ model.change_htolerance(1.1)
 # %%
 # Show the current solvergraph
 
-shamrock.utils.plot.show_dot_graph(model.get_solver_dot_graph())
+shamrock.utils.plot.DotGraph(model.get_solver_dot_graph())
 
 
 ####################################################
