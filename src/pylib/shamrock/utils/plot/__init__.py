@@ -109,36 +109,40 @@ if _HAS_MATPLOTLIB and _HAS_PIL:
         return ani
 
 
-if _HAS_GRAPHVIZ:
-    __all__.append("DotGraph")
+__all__.append("DotGraph")
 
-    class DotGraph:
-        """
-        Wrap a Graphviz DOT graph source so it renders as inline SVG.
 
-        Meant to display the solver graphs produced by e.g.
-        ``model.get_solver_dot_graph()`` or ``setup_node.get_dot()`` in the
-        sphinx-gallery generated examples: sphinx-gallery captures the
-        ``_repr_html_`` of an expression left bare as the last statement of a
-        code block (the same mechanism Jupyter uses for rich display), so no
-        custom scraper is needed. See
-        https://stackoverflow.com/a/65117672 for the technique this is based
-        on.
+class DotGraph:
+    """
+    Wrap a Graphviz DOT graph source so it renders as inline SVG.
 
-        Available only if the graphviz python package (and the Graphviz
-        ``dot`` executable) are installed.
+    Meant to display the solver graphs produced by e.g.
+    ``model.get_solver_dot_graph()`` or ``setup_node.get_dot()`` in the
+    sphinx-gallery generated examples: sphinx-gallery captures the
+    ``_repr_html_`` of an expression left bare as the last statement of a
+    code block (the same mechanism Jupyter uses for rich display), so no
+    custom scraper is needed. See https://stackoverflow.com/a/65117672 for
+    the technique this is based on.
 
-        Parameters
-        ----------
-        dot_source : str
-            Source of the graph in the DOT language.
-        """
+    ``_repr_html_`` is only defined if the graphviz python package (and the
+    Graphviz ``dot`` executable) are installed; otherwise this falls back to
+    ``__repr__``, i.e. the raw DOT source.
 
-        def __init__(self, dot_source):
-            self.dot_source = dot_source
+    Parameters
+    ----------
+    dot_source : str
+        Source of the graph in the DOT language.
+    """
 
-        def _repr_html_(self):
-            return graphviz.Source(self.dot_source).pipe(format="svg").decode("utf-8")
+    def __init__(self, dot_source):
+        self.dot_source = dot_source
 
-        def __repr__(self):
-            return self.dot_source
+    def _repr_html_(self):
+        return graphviz.Source(self.dot_source).pipe(format="svg").decode("utf-8")
+
+    def __repr__(self):
+        return self.dot_source
+
+
+if not _HAS_GRAPHVIZ:
+    del DotGraph._repr_html_
