@@ -138,7 +138,9 @@ class DotGraph:
         self.dot_source = dot_source
 
     def _repr_html_(self):
-        source = "digraph G {\n" + self.dot_source + "\n}"
+        source = self.dot_source
+        if not source.lstrip().startswith("digraph"):
+            source = "digraph G {\n" + source + "\n}"
         return graphviz.Source(source).pipe(format="svg").decode("utf-8")
 
     def __repr__(self):
