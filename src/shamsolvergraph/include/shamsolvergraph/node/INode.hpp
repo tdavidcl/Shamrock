@@ -273,6 +273,73 @@ namespace shamrock::solvergraph {
         return sham::format("n_{}", this->get_uuid());
     }
 
+    /// Cast a generic edge from a vector to the concrete type expected at a given slot, throwing
+    /// a message naming the slot, the edge name and the expected/actual type on any mismatch.
+    /// Used to implement the generic vector-based INode::set_edges() overload.
+    template<class T>
+    inline std::shared_ptr<T> __node_edge_cast_checked(
+        const std::vector<std::shared_ptr<IEdge>> &edges,
+        size_t slot,
+        const char *edge_name,
+        const char *type_name) {
+        if (slot >= edges.size()) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                "set_edges: missing edge for slot {} (\"{}\"): expected type {}, but only {} "
+                "edge(s) were provided",
+                slot,
+                edge_name,
+                type_name,
+                edges.size()));
+        }
+
+        const auto &edge = edges[slot];
+        if (!edge) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                "set_edges: edge at slot {} (\"{}\") is null: expected type {}",
+                slot,
+                edge_name,
+                type_name));
+        }
+
+        auto casted = std::dynamic_pointer_cast<T>(edge);
+        if (!casted) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                "set_edges: edge at slot {} (\"{}\") has the wrong type: expected {}, got {}",
+                slot,
+                edge_name,
+                type_name,
+                typeid(*edge).name()));
+        }
+
+        return casted;
+    }
+
+    /// Same as __node_edge_cast_checked, but for optional edge slots: a missing or null entry is
+    /// interpreted as "no value" and turned into a null-opt edge instead of raising an error.
+    template<class T>
+    inline std::shared_ptr<IEdge> __node_edge_cast_checked_optional(
+        const std::vector<std::shared_ptr<IEdge>> &edges,
+        size_t slot,
+        const char *edge_name,
+        const char *type_name) {
+        if (slot >= edges.size() || !edges[slot]) {
+            return make_null_opt_edge();
+        }
+        return __node_edge_cast_checked<T>(edges, slot, edge_name, type_name);
+    }
+
+    /// Ensure that all edges passed to the generic vector-based INode::set_edges() were consumed,
+    /// i.e. that neither too few nor too many edges were provided for a given side of the node.
+    inline void __node_edge_check_count(size_t provided, size_t expected, const char *side_name) {
+        if (provided != expected) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                "set_edges: wrong number of {} edges provided: expected {}, got {}",
+                side_name,
+                expected,
+                provided));
+        }
+    }
+
 } // namespace shamrock::solvergraph
 
 #define INODE_DECL_RO(type, name) const type &name;
@@ -286,6 +353,13 @@ namespace shamrock::solvergraph {
 #define INODE_GET_RO(type, name) get_ro_edge<type>(ro++),
 #define INODE_GET_RW(type, name) get_rw_edge<type>(rw++),
 
+#define INODE_CHECK_RO1(type, name)                                                               \
+    shamrock::solvergraph::__node_edge_cast_checked<type>(ro_edges_in, ro_idx++, #name, #type),
+#define INODE_CHECK_RW1(type, name)
+#define INODE_CHECK_RO2(type, name)
+#define INODE_CHECK_RW2(type, name)                                                                \
+    shamrock::solvergraph::__node_edge_cast_checked<type>(rw_edges_in, rw_idx++, #name, #type),
+
 #define INODE_DECL_RO_OPTIONAL(type, name)                                                         \
     const std::optional<std::reference_wrapper<const type>> name;
 #define INODE_DECL_RW_OPTIONAL(type, name) const std::optional<std::reference_wrapper<type>> name;
@@ -297,6 +371,15 @@ namespace shamrock::solvergraph {
 #define INODE_PUSH_RW2_OPTIONAL(type, name) shamrock::solvergraph::obsfucate_null_opt_edge(name),
 #define INODE_GET_RO_OPTIONAL(type, name) get_ro_edge_optional<type>(ro++),
 #define INODE_GET_RW_OPTIONAL(type, name) get_rw_edge_optional<type>(rw++),
+
+#define INODE_CHECK_RO1_OPTIONAL(type, name)                                                       \
+    shamrock::solvergraph::__node_edge_cast_checked_optional<type>(                                \
+        ro_edges_in, ro_idx++, #name, #type),
+#define INODE_CHECK_RW1_OPTIONAL(type, name)
+#define INODE_CHECK_RO2_OPTIONAL(type, name)
+#define INODE_CHECK_RW2_OPTIONAL(type, name)                                                       \
+    shamrock::solvergraph::__node_edge_cast_checked_optional<type>(                                \
+        rw_edges_in, rw_idx++, #name, #type),
 
 #define EXPAND_NODE_EDGES(EDGES)                                                                   \
                                                                                                    \
@@ -310,6 +393,28 @@ namespace shamrock::solvergraph {
                                                                                                    \
         __internal_set_ro_edges({EDGES(INODE_PUSH_RO1, INODE_PUSH_RW1)});                          \
         __internal_set_rw_edges({EDGES(INODE_PUSH_RO2, INODE_PUSH_RW2)});                          \
+    }                                                                                              \
+                                                                                                   \
+    inline void set_edges(                                                                         \
+        std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>> ro_edges_in,                    \
+        std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>> rw_edges_in,                    \
+        SourceLocation loc = SourceLocation{}) {                                                   \
+        __shamrock_log_callsite(loc);                                                              \
+                                                                                                   \
+        size_t ro_idx = 0;                                                                         \
+        size_t rw_idx = 0;                                                                         \
+        auto ro_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{               \
+            EDGES(INODE_CHECK_RO1, INODE_CHECK_RW1)};                                              \
+        auto rw_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{               \
+            EDGES(INODE_CHECK_RO2, INODE_CHECK_RW2)};                                              \
+                                                                                                   \
+        shamrock::solvergraph::__node_edge_check_count(                                            \
+            ro_edges_in.size(), ro_idx, "read-only");                                              \
+        shamrock::solvergraph::__node_edge_check_count(                                            \
+            rw_edges_in.size(), rw_idx, "read-write");                                             \
+                                                                                                   \
+        __internal_set_ro_edges(std::move(ro_casted));                                             \
+        __internal_set_rw_edges(std::move(rw_casted));                                             \
     }                                                                                              \
                                                                                                    \
     inline Edges get_edges() {                                                                     \
@@ -333,6 +438,28 @@ namespace shamrock::solvergraph {
             INODE_PUSH_RO1, INODE_PUSH_RW1, INODE_PUSH_RO1_OPTIONAL, INODE_PUSH_RW1_OPTIONAL)});   \
         __internal_set_rw_edges({EDGES(                                                            \
             INODE_PUSH_RO2, INODE_PUSH_RW2, INODE_PUSH_RO2_OPTIONAL, INODE_PUSH_RW2_OPTIONAL)});   \
+    }                                                                                              \
+                                                                                                   \
+    inline void set_edges(                                                                         \
+        std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>> ro_edges_in,                    \
+        std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>> rw_edges_in,                    \
+        SourceLocation loc = SourceLocation{}) {                                                   \
+        __shamrock_log_callsite(loc);                                                              \
+                                                                                                   \
+        size_t ro_idx = 0;                                                                         \
+        size_t rw_idx = 0;                                                                         \
+        auto ro_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{EDGES(         \
+            INODE_CHECK_RO1, INODE_CHECK_RW1, INODE_CHECK_RO1_OPTIONAL, INODE_CHECK_RW1_OPTIONAL)};\
+        auto rw_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{EDGES(         \
+            INODE_CHECK_RO2, INODE_CHECK_RW2, INODE_CHECK_RO2_OPTIONAL, INODE_CHECK_RW2_OPTIONAL)};\
+                                                                                                   \
+        shamrock::solvergraph::__node_edge_check_count(                                            \
+            ro_edges_in.size(), ro_idx, "read-only");                                              \
+        shamrock::solvergraph::__node_edge_check_count(                                            \
+            rw_edges_in.size(), rw_idx, "read-write");                                             \
+                                                                                                   \
+        __internal_set_ro_edges(std::move(ro_casted));                                             \
+        __internal_set_rw_edges(std::move(rw_casted));                                             \
     }                                                                                              \
                                                                                                    \
     inline Edges get_edges() {                                                                     \
