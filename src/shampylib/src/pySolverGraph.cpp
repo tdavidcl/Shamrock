@@ -172,21 +172,35 @@ ON_PYTHON_INIT {
         .def("get_dot_graph", &INode::get_dot_graph)
         .def("get_dot_graph_partial", &INode::get_dot_graph_partial)
         .def("print_node_info", &INode::print_node_info)
-        .def("get_ro_edges", [](INode &self) { return self.get_ro_edges(); })
-        .def("get_rw_edges", [](INode &self) { return self.get_rw_edges(); })
+        .def(
+            "get_ro_edges",
+            [](INode &self) {
+                return self.get_ro_edges();
+            })
+        .def(
+            "get_rw_edges",
+            [](INode &self) {
+                return self.get_rw_edges();
+            })
         .def("__repr__", &INode::print_node_info);
 
     py::class_<SolverGraph>(root_module, "SolverGraph")
         .def(py::init<>())
-        .def("register_node", &SolverGraph::register_node_ptr_base, py::arg("name"), py::arg("node"))
-        .def("register_edge", &SolverGraph::register_edge_ptr_base, py::arg("name"), py::arg("edge"))
+        .def(
+            "register_node", &SolverGraph::register_node_ptr_base, py::arg("name"), py::arg("node"))
+        .def(
+            "register_edge", &SolverGraph::register_edge_ptr_base, py::arg("name"), py::arg("edge"))
         .def(
             "get_node",
-            [](SolverGraph &self, const std::string &name) { return self.get_node_ptr_base(name); },
+            [](SolverGraph &self, const std::string &name) {
+                return self.get_node_ptr_base(name);
+            },
             py::arg("name"))
         .def(
             "get_edge",
-            [](SolverGraph &self, const std::string &name) { return self.get_edge_ptr_base(name); },
+            [](SolverGraph &self, const std::string &name) {
+                return self.get_edge_ptr_base(name);
+            },
             py::arg("name"))
         .def("has_node", &SolverGraph::has_node, py::arg("name"))
         .def("has_edge", &SolverGraph::has_edge, py::arg("name"))
