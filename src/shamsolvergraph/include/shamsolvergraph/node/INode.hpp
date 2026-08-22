@@ -334,7 +334,7 @@ namespace shamrock::solvergraph {
 #define INODE_GET_RO(type, name) get_ro_edge<type>(ro++),
 #define INODE_GET_RW(type, name) get_rw_edge<type>(rw++),
 
-/// Param type used by the untyped, per-slot set_edges_from_edges() overload: same slot
+/// Param type used by the untyped, per-slot set_edges_untyped() overload: same slot
 /// count/order as the typed setter, but every slot is a plain IEdge, cast to its concrete type
 /// before being forwarded to the typed setter. (Named differently from set_edges() itself: for a
 /// node whose edge type already is IEdge, e.g. NodeFreeAlloc, the two would otherwise be the same
@@ -387,7 +387,7 @@ namespace shamrock::solvergraph {
         __internal_set_rw_edges({EDGES(INODE_PUSH_RO2, INODE_PUSH_RW2)});                          \
     }                                                                                              \
                                                                                                    \
-    inline void set_edges_from_edges(                                                              \
+    inline void set_edges_untyped(                                                                 \
         EDGES(INODE_PARAM_EDGE, INODE_PARAM_EDGE) SourceLocation loc = SourceLocation{}) {         \
         __shamrock_log_callsite(loc);                                                              \
                                                                                                    \
@@ -411,7 +411,7 @@ namespace shamrock::solvergraph {
         size_t ro_idx = 0;                                                                         \
         size_t rw_idx = 0;                                                                         \
         EDGES(INODE_DECLARE_PICK_RO, INODE_DECLARE_PICK_RW)                                        \
-        set_edges_from_edges(EDGES(INODE_FORWARD_ARG, INODE_FORWARD_ARG) loc);                     \
+        set_edges_untyped(EDGES(INODE_FORWARD_ARG, INODE_FORWARD_ARG) loc);                        \
     }                                                                                              \
                                                                                                    \
     inline Edges get_edges() {                                                                     \
@@ -437,7 +437,7 @@ namespace shamrock::solvergraph {
             INODE_PUSH_RO2, INODE_PUSH_RW2, INODE_PUSH_RO2_OPTIONAL, INODE_PUSH_RW2_OPTIONAL)});   \
     }                                                                                              \
                                                                                                    \
-    inline void set_edges_from_edges(                                                              \
+    inline void set_edges_untyped(                                                                 \
         EDGES(INODE_PARAM_EDGE, INODE_PARAM_EDGE, INODE_PARAM_EDGE, INODE_PARAM_EDGE)              \
             SourceLocation loc = SourceLocation{}) {                                               \
         __shamrock_log_callsite(loc);                                                              \
@@ -470,7 +470,7 @@ namespace shamrock::solvergraph {
             INODE_DECLARE_PICK_RW,                                                                 \
             INODE_DECLARE_PICK_RO,                                                                 \
             INODE_DECLARE_PICK_RW)                                                                 \
-        set_edges_from_edges(EDGES(                                                                \
+        set_edges_untyped(EDGES(                                                                   \
             INODE_FORWARD_ARG, INODE_FORWARD_ARG, INODE_FORWARD_ARG, INODE_FORWARD_ARG) loc);      \
     }                                                                                              \
                                                                                                    \
