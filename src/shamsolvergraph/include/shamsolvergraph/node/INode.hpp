@@ -354,7 +354,7 @@ namespace shamrock::solvergraph {
 #define INODE_GET_RO(type, name) get_ro_edge<type>(ro++),
 #define INODE_GET_RW(type, name) get_rw_edge<type>(rw++),
 
-#define INODE_CHECK_RO1(type, name)                                                               \
+#define INODE_CHECK_RO1(type, name)                                                                \
     shamrock::solvergraph::__node_edge_cast_checked<type>(ro_edges_in, ro_idx++, #name, #type),
 #define INODE_CHECK_RW1(type, name)
 #define INODE_CHECK_RO2(type, name)
@@ -402,17 +402,15 @@ namespace shamrock::solvergraph {
         SourceLocation loc = SourceLocation{}) {                                                   \
         __shamrock_log_callsite(loc);                                                              \
                                                                                                    \
-        size_t ro_idx = 0;                                                                         \
-        size_t rw_idx = 0;                                                                         \
+        size_t ro_idx  = 0;                                                                        \
+        size_t rw_idx  = 0;                                                                        \
         auto ro_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{               \
             EDGES(INODE_CHECK_RO1, INODE_CHECK_RW1)};                                              \
         auto rw_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{               \
             EDGES(INODE_CHECK_RO2, INODE_CHECK_RW2)};                                              \
                                                                                                    \
-        shamrock::solvergraph::__node_edge_check_count(                                            \
-            ro_edges_in.size(), ro_idx, "read-only");                                              \
-        shamrock::solvergraph::__node_edge_check_count(                                            \
-            rw_edges_in.size(), rw_idx, "read-write");                                             \
+        shamrock::solvergraph::__node_edge_check_count(ro_edges_in.size(), ro_idx, "read-only");   \
+        shamrock::solvergraph::__node_edge_check_count(rw_edges_in.size(), rw_idx, "read-write");  \
                                                                                                    \
         __internal_set_ro_edges(std::move(ro_casted));                                             \
         __internal_set_rw_edges(std::move(rw_casted));                                             \
@@ -447,17 +445,21 @@ namespace shamrock::solvergraph {
         SourceLocation loc = SourceLocation{}) {                                                   \
         __shamrock_log_callsite(loc);                                                              \
                                                                                                    \
-        size_t ro_idx = 0;                                                                         \
-        size_t rw_idx = 0;                                                                         \
+        size_t ro_idx  = 0;                                                                        \
+        size_t rw_idx  = 0;                                                                        \
         auto ro_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{EDGES(         \
-            INODE_CHECK_RO1, INODE_CHECK_RW1, INODE_CHECK_RO1_OPTIONAL, INODE_CHECK_RW1_OPTIONAL)};\
+            INODE_CHECK_RO1,                                                                       \
+            INODE_CHECK_RW1,                                                                       \
+            INODE_CHECK_RO1_OPTIONAL,                                                              \
+            INODE_CHECK_RW1_OPTIONAL)};                                                            \
         auto rw_casted = std::vector<std::shared_ptr<shamrock::solvergraph::IEdge>>{EDGES(         \
-            INODE_CHECK_RO2, INODE_CHECK_RW2, INODE_CHECK_RO2_OPTIONAL, INODE_CHECK_RW2_OPTIONAL)};\
+            INODE_CHECK_RO2,                                                                       \
+            INODE_CHECK_RW2,                                                                       \
+            INODE_CHECK_RO2_OPTIONAL,                                                              \
+            INODE_CHECK_RW2_OPTIONAL)};                                                            \
                                                                                                    \
-        shamrock::solvergraph::__node_edge_check_count(                                            \
-            ro_edges_in.size(), ro_idx, "read-only");                                              \
-        shamrock::solvergraph::__node_edge_check_count(                                            \
-            rw_edges_in.size(), rw_idx, "read-write");                                             \
+        shamrock::solvergraph::__node_edge_check_count(ro_edges_in.size(), ro_idx, "read-only");   \
+        shamrock::solvergraph::__node_edge_check_count(rw_edges_in.size(), rw_idx, "read-write");  \
                                                                                                    \
         __internal_set_ro_edges(std::move(ro_casted));                                             \
         __internal_set_rw_edges(std::move(rw_casted));                                             \
