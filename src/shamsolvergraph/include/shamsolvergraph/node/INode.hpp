@@ -303,12 +303,13 @@ namespace shamrock::solvergraph {
 
         auto casted = std::dynamic_pointer_cast<T>(edge);
         if (!casted) {
+            const auto &e = *edge; // necessary to avoid -Wpotentially-evaluated-expression
             throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
                 "set_edges: edge at slot {} (\"{}\") has the wrong type: expected {}, got {}",
                 slot,
                 edge_name,
                 type_name,
-                typeid(*edge).name()));
+                typeid(e).name()));
         }
 
         return casted;
