@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solvergraph-viewer"
+version = "0.1.0"
+description = "GUI viewer for Shamrock solvergraph execution traces (live or replay)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "CeCILL-2.1" }
+dependencies = [
+    "dearpygui>=1.11",
+]
+
+[project.scripts]
+solvergraph-viewer = "solvergraph_viewer.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["solvergraph_viewer*"]
