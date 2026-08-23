@@ -22,6 +22,7 @@
 #include "shampylib/PatchDataToPy.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamsolvergraph/edge/IEdge.hpp"
+#include "shamsolvergraph/tracing.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <pybind11/complex.h>
 #include <pybind11/pybind11.h>
@@ -137,4 +138,55 @@ ON_PYTHON_INIT {
 
     register_field<f64>(root_module, "Field_f64");
     register_field<f64_3>(root_module, "Field_f64_3");
+
+    root_module.def(
+        "enable_solvergraph_tracing",
+        [](std::string prefix) {
+            if (!prefix.empty()) {
+                shamrock::solvergraph::tracing::set_outfile_prefix(prefix);
+            }
+            shamrock::solvergraph::tracing::enable();
+        },
+        py::arg("prefix") = "",
+        R"pbdoc(
+        Enable solvergraph execution tracing.
+
+        Node/edge creations & destructions, node topology updates and node evaluations are
+        recorded to an append-only JSON lines file (one file per MPI rank, named
+        "<prefix>_<rank>.jsonl"). The trace can be visualized with the viewer app in
+        tools/solvergraph_viewer.
+
+        Parameters
+        ----------
+        prefix : str, optional
+            Output file prefix. If empty, the value of the SHAM_SOLVERGRAPH_TRACE_PREFIX
+            environment variable is used (default "shamrock_sgtrace").
+        )pbdoc");
+
+    root_module.def(
+        "disable_solvergraph_tracing",
+        []() {
+            shamrock::solvergraph::tracing::disable();
+        },
+        R"pbdoc(
+        Disable solvergraph execution tracing, flushing pending events to the trace file.
+        )pbdoc");
+
+    root_module.def(
+        "is_solvergraph_tracing_enabled",
+        []() {
+            return shamrock::solvergraph::tracing::is_enabled();
+        },
+        R"pbdoc(
+        Return whether solvergraph execution tracing is currently enabled.
+        )pbdoc");
+
+    root_module.def(
+        "flush_solvergraph_tracing",
+        []() {
+            shamrock::solvergraph::tracing::flush();
+        },
+        R"pbdoc(
+        Force a flush of the buffered solvergraph trace events to the trace file.
+        )pbdoc");
 }

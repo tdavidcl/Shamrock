@@ -16,9 +16,9 @@
  *
  */
 
-#include "shambase/WithUUID.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shamsolvergraph/LifetimeTracker.hpp"
 #include "shamsolvergraph/edge/IEdge.hpp"
 #include "shamsolvergraph/edge/INullOptEdge.hpp"
 #include <memory>
@@ -26,14 +26,25 @@
 
 namespace shamrock::solvergraph {
 
+    /// Operation ids notified through LifetimeTracker<INode>::on_op
+    enum class NodeTraceOp : u64 {
+        evaluate_begin = 0, ///< emitted right before _impl_evaluate_internal()
+        evaluate_end   = 1, ///< emitted right after _impl_evaluate_internal()
+    };
+
     /// Inode is node between data edges, takes multiple inputs, multiple outputs
-    class INode : public std::enable_shared_from_this<INode>,
-                  public shambase::WithUUID<INode, u64> {
+    class INode : public std::enable_shared_from_this<INode> {
 
         /// Read only edges
         std::vector<std::shared_ptr<IEdge>> ro_edges;
         /// Read write edges
         std::vector<std::shared_ptr<IEdge>> rw_edges;
+
+        /// Tracks the lifetime of the node and holds its UUID.
+        /// Held as a shared_ptr member instead of a base class so that moved-from nodes carry a
+        /// null tracker and never emit a duplicate destroy notification.
+        std::shared_ptr<LifetimeTracker<INode>> tracker
+            = std::make_shared<LifetimeTracker<INode>>();
 
         public:
         INode() = default;
@@ -46,6 +57,9 @@ namespace shamrock::solvergraph {
 
         /// Move assignment - automatically delegates to base classes and members
         INode &operator=(INode &&) noexcept = default;
+
+        /// Get the UUID of the node
+        inline u64 get_uuid() const { return shambase::get_check_ref(tracker).get_uuid(); }
 
         /// Get a shared pointer to this node
         inline std::shared_ptr<INode> getptr_shared() { return shared_from_this(); }
@@ -70,8 +84,12 @@ namespace shamrock::solvergraph {
         template<class Func>
         void on_edge_rw_edges(Func &&f);
 
-        /// Destructor (virtual) & reset the edges
+        /// Destructor (virtual) & reset the edges.
+        /// The tracker is reset first so the destroy notification is emitted before the edges are
+        /// cleared, and so that clearing the edges does not notify a state update on a
+        /// partially-destroyed object (which would perform virtual dispatch during destruction).
         virtual ~INode() {
+            tracker.reset();
             __internal_set_ro_edges({});
             __internal_set_rw_edges({});
         }
@@ -143,7 +161,15 @@ namespace shamrock::solvergraph {
         }
 
         /// Evaluate the node
-        inline void evaluate() { _impl_evaluate_internal(); }
+        inline void evaluate() {
+            if (tracker) {
+                tracker->notify_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
+            }
+            _impl_evaluate_internal();
+            if (tracker) {
+                tracker->notify_op(static_cast<u64>(NodeTraceOp::evaluate_end));
+            }
+        }
 
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
         inline std::string get_dot_graph() { return get_dot_graph_partial(); };
@@ -215,6 +241,9 @@ namespace shamrock::solvergraph {
         for (auto e : ro_edges) {
             // shambase::get_check_ref(e).parent = getptr_weak();
         }
+        if (tracker) {
+            tracker->notify_update(*this);
+        }
     }
 
     inline void INode::__internal_set_rw_edges(std::vector<std::shared_ptr<IEdge>> new_rw_edges) {
@@ -224,6 +253,9 @@ namespace shamrock::solvergraph {
         this->rw_edges = new_rw_edges;
         for (auto e : rw_edges) {
             // shambase::get_check_ref(e).child = getptr_weak();
+        }
+        if (tracker) {
+            tracker->notify_update(*this);
         }
     }
 
