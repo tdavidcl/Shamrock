@@ -50,7 +50,10 @@ In the GUI:
   the DOT export colors);
 - during playback the node currently being evaluated lights up orange, and
   the edges it reads/writes pulse green/red (usage is inferred from the
-  topology and the evaluation intervals);
+  topology and the evaluation intervals). Highlighting starts at the
+  evaluation begin and ends at begin + duration; **min highlight (ms)**
+  floors that visible length (default 16 ms, scaled by playback speed) so
+  sub-frame evals still flash. 0 ms is exact `[start, end)` only;
 - each node overlays its evaluation count and cumulated evaluation time at
   the current playback time;
 - the **time slider** scrubs through the trace, **Play/Pause** + the speed

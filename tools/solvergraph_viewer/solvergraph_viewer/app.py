@@ -93,10 +93,10 @@ class ViewerApp:
         self.blob_store = BlobStore(os.path.dirname(os.path.abspath(paths[0])))
         self.preview_registry = default_registry
 
-        # afterglow: keep recently evaluated nodes highlighted for this
-        # fraction of the trace span (evaluations are usually far shorter
-        # than a display frame)
-        self.afterglow_frac = 0.02
+        # floor on how long a node/edge stays lit on screen (ms). 0 = exact
+        # [start, end) only. Scaled by playback speed so the pulse lasts this
+        # long in wall-clock time while playing.
+        self.min_highlight_ms = 16.0
 
         # gui item registries
         self.gui_items: dict[Item, int] = {}  # display item -> dpg node id
@@ -172,9 +172,9 @@ class ViewerApp:
                 dpg.add_slider_float(
                     label="speed",
                     default_value=self.clock.speed,
-                    min_value=0.1,
-                    max_value=100.0,
-                    format="%.1fx",
+                    min_value=0.001,
+                    max_value=2.0,
+                    format="%.3fx",
                     callback=self._on_speed_changed,
                     tag="speed_slider",
                 )
@@ -187,13 +187,13 @@ class ViewerApp:
                 )
                 dpg.add_text("t = 0.0 s", tag="time_label")
                 dpg.add_slider_float(
-                    label="afterglow",
-                    default_value=self.afterglow_frac,
+                    label="min highlight (ms)",
+                    default_value=self.min_highlight_ms,
                     min_value=0.0,
-                    max_value=0.2,
-                    format="%.3f of span",
-                    callback=self._on_afterglow_changed,
-                    tag="afterglow_slider",
+                    max_value=200.0,
+                    format="%.0f ms",
+                    callback=self._on_min_highlight_changed,
+                    tag="min_highlight_slider",
                 )
                 dpg.add_separator()
                 dpg.add_button(label="Re-layout", callback=self._on_relayout)
@@ -262,8 +262,8 @@ class ViewerApp:
     def _on_speed_changed(self, sender, app_data) -> None:
         self.clock.speed = float(app_data)
 
-    def _on_afterglow_changed(self, sender, app_data) -> None:
-        self.afterglow_frac = float(app_data)
+    def _on_min_highlight_changed(self, sender, app_data) -> None:
+        self.min_highlight_ms = float(app_data)
 
     def _on_seek(self, sender, app_data) -> None:
         self.clock.follow = False
@@ -538,9 +538,11 @@ class ViewerApp:
             if item is not None and item != self.selected_item:
                 self.selected_item = item
 
-        slack = self.afterglow_frac * (t_max - t_min)
-        active = model.active_nodes(t, slack)
-        reads, writes = model.edge_activity(t, slack)
+        hold_s = self.min_highlight_ms * 1e-3
+        if self.clock.playing and not self.clock.follow:
+            hold_s *= self.clock.speed
+        active = model.active_nodes(t, hold_s)
+        reads, writes = model.edge_activity(t, hold_s)
 
         for item, dpg_id in self.gui_items.items():
             kind, uuid = item
@@ -555,7 +557,10 @@ class ViewerApp:
                 self._bind_theme(dpg_id, theme)
                 count = state.evals.count_before(t)
                 cum_ms = state.evals.cumulative_time(t) * 1e3
-                dpg.set_value(self.gui_stats[item], f"n={count}  t={cum_ms:.2f} ms")
+                dt_ms = state.evals.duration_at(t) * 1e3
+                dpg.set_value(
+                    self.gui_stats[item], f"n={count}  t={cum_ms:.2f} ms  dt={dt_ms:.3f} ms"
+                )
             else:
                 state = model.edges[uuid]
                 if not state.exists_at(t):
