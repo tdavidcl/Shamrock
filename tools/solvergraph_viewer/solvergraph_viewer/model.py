@@ -54,11 +54,24 @@ class EvalIntervals:
         self.closed_at.append(t)
         self.closed_cum.append(prev + (t - self.starts[i]))
 
-    def is_active(self, t: float) -> bool:
-        """Is some evaluation interval containing time t ?"""
+    def is_active(self, t: float, slack: float = 0.0) -> bool:
+        """Is some evaluation interval containing time t ?
+
+        With a nonzero ``slack``, intervals that ended less than ``slack`` ago
+        also count: evaluations are typically much shorter than a display
+        frame, so viewers use the slack as an afterglow to keep recently
+        evaluated nodes visibly highlighted.
+        """
         i = bisect.bisect_right(self.starts, t)
         lo = max(0, i - _MAX_NESTING)
-        return any(self.ends[k] >= t for k in range(lo, i))
+        if any(self.ends[k] >= t for k in range(lo, i)):
+            return True
+        if slack > 0.0:
+            # some interval ended within [t - slack, t] ?
+            j = bisect.bisect_right(self.closed_at, t)
+            if j > 0 and self.closed_at[j - 1] >= t - slack:
+                return True
+        return False
 
     def count_before(self, t: float) -> int:
         """Number of evaluations started at or before time t."""
@@ -88,8 +101,8 @@ class NodeState:
             return False
         return not (self.destroyed_t is not None and t >= self.destroyed_t)
 
-    def is_active(self, t: float) -> bool:
-        return self.evals.is_active(t)
+    def is_active(self, t: float, slack: float = 0.0) -> bool:
+        return self.evals.is_active(t, slack)
 
 
 @dataclass
@@ -187,15 +200,16 @@ class GraphModel:
     # queries at a given playback time
     # ------------------------------------------------------------------ #
 
-    def active_nodes(self, t: float) -> set[int]:
-        """UUIDs of the nodes being evaluated at time t."""
-        return {u for u, n in self.nodes.items() if n.exists_at(t) and n.is_active(t)}
+    def active_nodes(self, t: float, slack: float = 0.0) -> set[int]:
+        """UUIDs of the nodes being evaluated at time t (or within the
+        ``slack`` afterglow window before t)."""
+        return {u for u, n in self.nodes.items() if n.exists_at(t) and n.is_active(t, slack)}
 
-    def edge_activity(self, t: float) -> tuple[set[int], set[int]]:
+    def edge_activity(self, t: float, slack: float = 0.0) -> tuple[set[int], set[int]]:
         """Inferred (read edge uuids, written edge uuids) at time t."""
         reads: set[int] = set()
         writes: set[int] = set()
-        for uuid in self.active_nodes(t):
+        for uuid in self.active_nodes(t, slack):
             node = self.nodes[uuid]
             reads.update(u for u, _ in node.ro_edges)
             writes.update(u for u, _ in node.rw_edges)

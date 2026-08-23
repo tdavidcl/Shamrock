@@ -145,6 +145,15 @@ class TestGraphModel(unittest.TestCase):
         self.assertEqual(node.evals.count_before(0.05), 0)
         self.assertAlmostEqual(node.evals.cumulative_time(0.5), 0.01, places=6)
 
+    def test_afterglow(self):
+        model = self.build_model()
+        # node 1 evaluates on [0.07, 0.08]; at t=0.15 it is inactive...
+        self.assertEqual(model.active_nodes(0.15), set())
+        # ...but within a 0.1 afterglow window it stays highlighted
+        self.assertIn(1, model.active_nodes(0.15, slack=0.1))
+        reads, _writes = model.edge_activity(0.15, slack=0.1)
+        self.assertIn(7, reads)
+
     def test_nested_intervals(self):
         model = GraphModel()
         from solvergraph_viewer.trace_reader import TraceRecord

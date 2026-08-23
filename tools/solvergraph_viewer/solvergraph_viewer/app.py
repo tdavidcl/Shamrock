@@ -93,8 +93,14 @@ class ViewerApp:
         self.blob_store = BlobStore(os.path.dirname(os.path.abspath(paths[0])))
         self.preview_registry = default_registry
 
+        # afterglow: keep recently evaluated nodes highlighted for this
+        # fraction of the trace span (evaluations are usually far shorter
+        # than a display frame)
+        self.afterglow_frac = 0.02
+
         # gui item registries
         self.gui_items: dict[Item, int] = {}  # display item -> dpg node id
+        self.gui_items_rev: dict[int, Item] = {}  # dpg node id -> display item
         self.gui_stats: dict[Item, int] = {}  # display item -> dpg text id
         self.gui_links: dict[tuple[Item, Item], int] = {}
         self.gui_in_attr: dict[Item, int] = {}
@@ -173,6 +179,15 @@ class ViewerApp:
                     tag="time_slider",
                 )
                 dpg.add_text("t = 0.0 s", tag="time_label")
+                dpg.add_slider_float(
+                    label="afterglow",
+                    default_value=self.afterglow_frac,
+                    min_value=0.0,
+                    max_value=0.2,
+                    format="%.3f of span",
+                    callback=self._on_afterglow_changed,
+                    tag="afterglow_slider",
+                )
                 dpg.add_separator()
                 dpg.add_button(label="Re-layout", callback=self._on_relayout)
                 dpg.add_separator()
@@ -212,6 +227,9 @@ class ViewerApp:
     def _on_speed_changed(self, sender, app_data) -> None:
         self.clock.speed = float(app_data)
 
+    def _on_afterglow_changed(self, sender, app_data) -> None:
+        self.afterglow_frac = float(app_data)
+
     def _on_seek(self, sender, app_data) -> None:
         self.clock.follow = False
         dpg.set_value("follow_checkbox", False)
@@ -228,10 +246,6 @@ class ViewerApp:
             if item in self.gui_items:
                 dpg.set_item_pos(self.gui_items[item], [pos[0], pos[1]])
 
-    def _on_item_clicked(self, sender, app_data, user_data: Item) -> None:
-        self.selected_item = user_data
-        self._update_selection_panel()
-
     # ------------------------------------------------------------------ #
     # editor sync
     # ------------------------------------------------------------------ #
@@ -242,6 +256,7 @@ class ViewerApp:
         for dpg_id in list(self.gui_items.values()):
             dpg.delete_item(dpg_id)
         self.gui_items.clear()
+        self.gui_items_rev.clear()
         self.gui_stats.clear()
         self.gui_links.clear()
         self.gui_in_attr.clear()
@@ -279,9 +294,6 @@ class ViewerApp:
                 theme = self.theme_edge_idle
             pos = positions.get(item, (0.0, 0.0))
             node_id = dpg.add_node(parent="node_editor", label=label, pos=[pos[0], pos[1]])
-            with dpg.item_handler_registry() as handlers:
-                dpg.add_item_clicked_handler(callback=self._on_item_clicked, user_data=item)
-            dpg.bind_item_handler_registry(node_id, handlers)
             in_attr = dpg.add_node_attribute(parent=node_id, attribute_type=dpg.mvNode_Attr_Input)
             static_attr = dpg.add_node_attribute(
                 parent=node_id, attribute_type=dpg.mvNode_Attr_Static
@@ -289,6 +301,7 @@ class ViewerApp:
             stats_id = dpg.add_text("", parent=static_attr)
             out_attr = dpg.add_node_attribute(parent=node_id, attribute_type=dpg.mvNode_Attr_Output)
             self.gui_items[item] = node_id
+            self.gui_items_rev[node_id] = item
             self.gui_stats[item] = stats_id
             self.gui_in_attr[item] = in_attr
             self.gui_out_attr[item] = out_attr
@@ -389,8 +402,16 @@ class ViewerApp:
         dpg.set_value("time_slider", t)
         dpg.set_value("time_label", f"t = {t:.6f} s")
 
-        active = model.active_nodes(t)
-        reads, writes = model.edge_activity(t)
+        # native node editor selection -> side panel details
+        selected = dpg.get_selected_nodes("node_editor")
+        if selected:
+            item = self.gui_items_rev.get(selected[0])
+            if item is not None and item != self.selected_item:
+                self.selected_item = item
+
+        slack = self.afterglow_frac * (t_max - t_min)
+        active = model.active_nodes(t, slack)
+        reads, writes = model.edge_activity(t, slack)
 
         for item, dpg_id in self.gui_items.items():
             kind, uuid = item
