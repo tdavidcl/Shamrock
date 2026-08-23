@@ -111,6 +111,13 @@ class ViewerApp:
         self._last_frame_time = time.monotonic()
         self._poll_countdown = 0
 
+        # canvas zoom: stock Dear PyGui/ImNodes cannot scale the node editor,
+        # so we scale node positions (and a few node styles) around a pivot.
+        self.zoom = 1.0
+        self._zoom_min = 0.25
+        self._zoom_max = 4.0
+        self._zoom_step = 1.1
+
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
@@ -190,16 +197,44 @@ class ViewerApp:
                 )
                 dpg.add_separator()
                 dpg.add_button(label="Re-layout", callback=self._on_relayout)
+                dpg.add_text("zoom 100%", tag="zoom_label")
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="-", width=40, callback=self._on_zoom_out)
+                    dpg.add_button(label="+", width=40, callback=self._on_zoom_in)
+                    dpg.add_button(label="Reset", callback=self._on_zoom_reset)
                 dpg.add_separator()
                 dpg.add_text("Selection", tag="selection_title")
                 dpg.add_text("(click a box)", tag="selection_info", wrap=310)
                 dpg.add_group(tag="preview_slot")
-            with dpg.child_window(tag="editor_panel"):
+            with dpg.child_window(
+                tag="editor_panel", no_scrollbar=True, no_scroll_with_mouse=True
+            ):
                 dpg.add_node_editor(
                     tag="node_editor",
                     minimap=True,
                     minimap_location=dpg.mvNodeMiniMap_Location_BottomRight,
                 )
+
+        with dpg.theme() as editor_zoom_theme, dpg.theme_component(dpg.mvAll):
+            self._style_grid = dpg.add_theme_style(
+                dpg.mvNodeStyleVar_GridSpacing, 24.0, category=dpg.mvThemeCat_Nodes
+            )
+            self._style_padding = dpg.add_theme_style(
+                dpg.mvNodeStyleVar_NodePadding, 8.0, 8.0, category=dpg.mvThemeCat_Nodes
+            )
+            self._style_pin = dpg.add_theme_style(
+                dpg.mvNodeStyleVar_PinCircleRadius, 4.0, category=dpg.mvThemeCat_Nodes
+            )
+            self._style_link = dpg.add_theme_style(
+                dpg.mvNodeStyleVar_LinkThickness, 3.0, category=dpg.mvThemeCat_Nodes
+            )
+        dpg.bind_item_theme("node_editor", editor_zoom_theme)
+
+        with dpg.handler_registry():
+            dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
+            dpg.add_key_press_handler(dpg.mvKey_Plus, callback=self._on_zoom_in_key)
+            dpg.add_key_press_handler(dpg.mvKey_Minus, callback=self._on_zoom_out_key)
+            dpg.add_key_press_handler(dpg.mvKey_0, callback=self._on_zoom_reset_key)
 
         dpg.set_primary_window("main_window", True)
         dpg.setup_dearpygui()
@@ -245,6 +280,97 @@ class ViewerApp:
         for item, pos in positions.items():
             if item in self.gui_items:
                 dpg.set_item_pos(self.gui_items[item], [pos[0], pos[1]])
+        self.zoom = 1.0
+        self._apply_zoom_theme()
+        self._update_zoom_label()
+
+    def _editor_hovered(self) -> bool:
+        return bool(
+            dpg.is_item_hovered("node_editor") or dpg.is_item_hovered("editor_panel")
+        )
+
+    def _screen_to_canvas(self, screen: tuple[float, float]) -> tuple[float, float] | None:
+        if not self.gui_items:
+            return None
+        ref_id = next(iter(self.gui_items.values()))
+        rect_min = dpg.get_item_rect_min(ref_id)
+        grid = dpg.get_item_pos(ref_id)
+        return (
+            screen[0] - rect_min[0] + grid[0],
+            screen[1] - rect_min[1] + grid[1],
+        )
+
+    def _editor_center_canvas(self) -> tuple[float, float] | None:
+        rect_min = dpg.get_item_rect_min("node_editor")
+        rect_max = dpg.get_item_rect_max("node_editor")
+        return self._screen_to_canvas(
+            ((rect_min[0] + rect_max[0]) * 0.5, (rect_min[1] + rect_max[1]) * 0.5)
+        )
+
+    def _apply_zoom_theme(self) -> None:
+        z = self.zoom
+        dpg.configure_item(self._style_grid, x=24.0 * z)
+        dpg.configure_item(self._style_padding, x=8.0 * z, y=8.0 * z)
+        dpg.configure_item(self._style_pin, x=4.0 * z)
+        dpg.configure_item(self._style_link, x=max(1.0, 3.0 * z))
+
+    def _update_zoom_label(self) -> None:
+        if dpg.does_item_exist("zoom_label"):
+            dpg.set_value("zoom_label", f"zoom {self.zoom:.0%}")
+
+    def _zoom_by(self, factor: float, pivot: tuple[float, float] | None = None) -> None:
+        new_zoom = max(self._zoom_min, min(self._zoom_max, self.zoom * factor))
+        applied = new_zoom / self.zoom
+        if abs(applied - 1.0) < 1e-6:
+            return
+        if pivot is None:
+            mouse = dpg.get_mouse_pos(local=False)
+            pivot = self._screen_to_canvas((mouse[0], mouse[1]))
+        if pivot is None:
+            self.zoom = new_zoom
+            self._apply_zoom_theme()
+            self._update_zoom_label()
+            return
+        px, py = pivot
+        for dpg_id in self.gui_items.values():
+            x, y = dpg.get_item_pos(dpg_id)
+            dpg.set_item_pos(
+                dpg_id, [px + (x - px) * applied, py + (y - py) * applied]
+            )
+        self.zoom = new_zoom
+        self._apply_zoom_theme()
+        self._update_zoom_label()
+
+    def _on_mouse_wheel(self, sender, app_data) -> None:
+        if not self._editor_hovered():
+            return
+        delta = float(app_data)
+        if delta == 0.0:
+            return
+        self._zoom_by(self._zoom_step**delta)
+
+    def _on_zoom_in(self) -> None:
+        self._zoom_by(self._zoom_step, self._editor_center_canvas())
+
+    def _on_zoom_out(self) -> None:
+        self._zoom_by(1.0 / self._zoom_step, self._editor_center_canvas())
+
+    def _on_zoom_reset(self) -> None:
+        if abs(self.zoom - 1.0) < 1e-6:
+            return
+        self._zoom_by(1.0 / self.zoom, self._editor_center_canvas())
+
+    def _on_zoom_in_key(self) -> None:
+        if self._editor_hovered():
+            self._on_zoom_in()
+
+    def _on_zoom_out_key(self) -> None:
+        if self._editor_hovered():
+            self._on_zoom_out()
+
+    def _on_zoom_reset_key(self) -> None:
+        if self._editor_hovered():
+            self._on_zoom_reset()
 
     # ------------------------------------------------------------------ #
     # editor sync
@@ -263,6 +389,9 @@ class ViewerApp:
         self.gui_out_attr.clear()
         self.bound_theme.clear()
         self._known_arcs.clear()
+        self.zoom = 1.0
+        self._apply_zoom_theme()
+        self._update_zoom_label()
         self._sync_editor(full_layout=True)
 
     def _sync_editor(self, full_layout: bool = False) -> None:

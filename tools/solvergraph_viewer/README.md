@@ -56,7 +56,11 @@ In the GUI:
 - the **time slider** scrubs through the trace, **Play/Pause** + the speed
   slider replay it (0.1x to 100x real time), **Live (follow)** sticks to the
   end of a growing trace;
-- clicking a box shows its details (type, bindings, stats) in the side panel.
+- clicking a box shows its details (type, bindings, stats) in the side panel;
+- **zoom** the graph with the mouse wheel over the canvas (or `+` / `-` /
+  `0` while hovered, or the side-panel buttons). This spreads or packs node
+  positions around the cursor — stock Dear PyGui cannot scale the node
+  editor itself, so box sizes stay constant. `Re-layout` resets zoom.
 
 ## Edge payload previews (future)
 
