@@ -206,9 +206,7 @@ class ViewerApp:
                 dpg.add_text("Selection", tag="selection_title")
                 dpg.add_text("(click a box)", tag="selection_info", wrap=310)
                 dpg.add_group(tag="preview_slot")
-            with dpg.child_window(
-                tag="editor_panel", no_scrollbar=True, no_scroll_with_mouse=True
-            ):
+            with dpg.child_window(tag="editor_panel", no_scrollbar=True, no_scroll_with_mouse=True):
                 dpg.add_node_editor(
                     tag="node_editor",
                     minimap=True,
@@ -285,9 +283,7 @@ class ViewerApp:
         self._update_zoom_label()
 
     def _editor_hovered(self) -> bool:
-        return bool(
-            dpg.is_item_hovered("node_editor") or dpg.is_item_hovered("editor_panel")
-        )
+        return bool(dpg.is_item_hovered("node_editor") or dpg.is_item_hovered("editor_panel"))
 
     def _screen_to_canvas(self, screen: tuple[float, float]) -> tuple[float, float] | None:
         if not self.gui_items:
@@ -334,9 +330,7 @@ class ViewerApp:
         px, py = pivot
         for dpg_id in self.gui_items.values():
             x, y = dpg.get_item_pos(dpg_id)
-            dpg.set_item_pos(
-                dpg_id, [px + (x - px) * applied, py + (y - py) * applied]
-            )
+            dpg.set_item_pos(dpg_id, [px + (x - px) * applied, py + (y - py) * applied])
         self.zoom = new_zoom
         self._apply_zoom_theme()
         self._update_zoom_label()

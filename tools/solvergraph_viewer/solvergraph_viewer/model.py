@@ -70,9 +70,7 @@ class EvalIntervals:
         lo = max(0, i - _MAX_NESTING)
         if min_duration > 0.0:
             lo = min(lo, bisect.bisect_right(self.starts, t - min_duration))
-        return any(
-            t < max(self.ends[k], self.starts[k] + min_duration) for k in range(lo, i)
-        )
+        return any(t < max(self.ends[k], self.starts[k] + min_duration) for k in range(lo, i))
 
     def count_before(self, t: float) -> int:
         """Number of evaluations started at or before time t."""
@@ -222,9 +220,7 @@ class GraphModel:
         ``min_duration`` floors each interval's visible length (see
         :meth:`EvalIntervals.is_active`).
         """
-        return {
-            u for u, n in self.nodes.items() if n.exists_at(t) and n.is_active(t, min_duration)
-        }
+        return {u for u, n in self.nodes.items() if n.exists_at(t) and n.is_active(t, min_duration)}
 
     def edge_activity(self, t: float, min_duration: float = 0.0) -> tuple[set[int], set[int]]:
         """Inferred (read edge uuids, written edge uuids) at time t."""
