@@ -4,7 +4,9 @@ Run with: python -m unittest discover tools/solvergraph_viewer/tests
 No GUI (dearpygui) required.
 """
 
+import itertools
 import json
+import math
 import os
 import sys
 import tempfile
@@ -238,6 +240,23 @@ class TestForceDirectedLayout(unittest.TestCase):
         positions = force_directed_layout(items, arcs)
         self.assertLess(positions[("edge", 7)][0], positions[("node", 1)][0])
         self.assertLess(positions[("node", 2)][0], positions[("edge", 7)][0])
+
+    def test_no_overlap_on_hub_and_disconnected_items(self):
+        # a hub with many leaves plus a separate disconnected chain and some
+        # fully isolated items: nothing here pulls the two components or the
+        # isolated items toward each other, so only the overlap-removal pass
+        # keeps every pair at least `spacing` apart.
+        spacing = 260.0
+        items = [("node", i) for i in range(30)]
+        arcs = [(("node", 0), ("node", i)) for i in range(1, 12)]
+        arcs += [(("node", i - 1), ("node", i)) for i in range(13, 25)]
+        # nodes 25..29 stay fully isolated
+        positions = force_directed_layout(items, arcs)
+        min_dist = min(
+            math.hypot(positions[a][0] - positions[b][0], positions[a][1] - positions[b][1])
+            for a, b in itertools.combinations(items, 2)
+        )
+        self.assertGreaterEqual(min_dist, spacing - 1.0)
 
 
 class TestPlayback(unittest.TestCase):

@@ -13,6 +13,7 @@ positions.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 
 import networkx as nx
@@ -109,34 +110,65 @@ def layered_layout(
     return positions
 
 
-def _apply_direction_bias(
+def _relax_positions(
     positions: dict[Item, tuple[float, float]],
     arcs: list[tuple[Item, Item]],
     min_gap: float,
-    iterations: int = 30,
-    step: float = 0.5,
+    min_dist: float,
+    iterations: int = 300,
 ) -> None:
-    """Nudge arc endpoints left-to-right in place, mutating `positions`.
+    """Jointly enforce left-to-right arc ordering and pairwise no-overlap.
 
-    Every displayed link is drawn from its source's output pin (right edge
-    of the box) to its destination's input pin (left edge of the box): ro
-    bindings as edge->node, rw bindings as node->edge (see
-    build_display_graph). Undirected spring forces don't preserve left/right
-    order, so a link can end up looping backward through its own box; this
-    relaxes positions so src.x + min_gap <= dst.x wherever the arc graph
-    isn't outright cyclic (cycles just settle on a compromise gap).
+    Two corrections run every iteration, in the same pass, so each reacts to
+    what the other just did instead of undoing it:
+
+    - direction: every displayed link is drawn from its source's output pin
+      (right edge of the box) to its destination's input pin (left edge of
+      the box): ro bindings as edge->node, rw as node->edge (see
+      build_display_graph). Undirected spring forces don't preserve that
+      left/right order, so this nudges src.x + min_gap <= dst.x wherever the
+      arc graph isn't outright cyclic (cycles settle on a compromise gap).
+    - overlap: the spring relaxation only pulls *connected* items toward an
+      equilibrium distance, so two unconnected items (or whole disconnected
+      components) can still end up overlapping. This treats every pair as a
+      hard-disk collision and separates any pair closer than min_dist.
+
+    Running direction correction first and overlap correction after in the
+    same loop, rather than as two separate passes, means an overlap fix that
+    nudges an arc endpoint gets immediately re-checked against its arc
+    partner on the next iteration instead of only after the fact.
     """
+    items = list(positions)
     for _ in range(iterations):
         moved = False
+
         for src, dst in arcs:
             sx, sy = positions[src]
             dx, dy = positions[dst]
             gap = dx - sx
             if gap < min_gap:
-                shortfall = (min_gap - gap) * step * 0.5
+                shortfall = (min_gap - gap) * 0.25
                 positions[src] = (sx - shortfall, sy)
                 positions[dst] = (dx + shortfall, dy)
                 moved = True
+
+        for i, a in enumerate(items):
+            ax, ay = positions[a]
+            for b in items[i + 1 :]:
+                bx, by = positions[b]
+                dx, dy = bx - ax, by - ay
+                dist = math.hypot(dx, dy)
+                if dist < min_dist:
+                    if dist < 1e-6:
+                        dx, dy, dist = 1.0, 0.0, 1.0
+                    shortfall = (min_dist - dist) * 0.5
+                    ux, uy = dx / dist, dy / dist
+                    ax, ay = ax - ux * shortfall, ay - uy * shortfall
+                    bx, by = bx + ux * shortfall, by + uy * shortfall
+                    positions[b] = (bx, by)
+                    moved = True
+            positions[a] = (ax, ay)
+
         if not moved:
             break
 
@@ -144,7 +176,7 @@ def _apply_direction_bias(
 def force_directed_layout(
     items: Iterable[Item],
     arcs: Iterable[tuple[Item, Item]],
-    spacing: float = 220.0,
+    spacing: float = 100.0,
     iterations: int = 100,
     seed: int = 0,
 ) -> dict[Item, tuple[float, float]]:
@@ -156,9 +188,10 @@ def force_directed_layout(
     pull on each other much more weakly than two leaves would.
 
     Seeded from layered_layout() positions for fast, stable convergence
-    instead of networkx's default random initialization. A direction-bias
-    pass after the spring relaxation restores the left-to-right ordering
-    the springs would otherwise scramble (see _apply_direction_bias).
+    instead of networkx's default random initialization. A final relaxation
+    pass restores left-to-right arc ordering and guarantees every pair of
+    items ends up at least `spacing` apart, since the springs alone only
+    pull *connected* items toward that distance (see _relax_positions).
     """
     items = list(items)
     arcs = list(arcs)
@@ -187,5 +220,5 @@ def force_directed_layout(
         seed=seed,
     )
     positions = {item: (float(x), float(y)) for item, (x, y) in raw.items()}
-    _apply_direction_bias(positions, arcs, min_gap=spacing)
+    _relax_positions(positions, arcs, min_gap=spacing, min_dist=spacing)
     return positions

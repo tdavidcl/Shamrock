@@ -18,7 +18,7 @@ import time
 
 import dearpygui.dearpygui as dpg
 
-from .layout import Item, build_display_graph, force_directed_layout
+from .layout import Item, build_display_graph, force_directed_layout, layered_layout
 from .model import GraphModel
 from .playback import PlaybackClock
 from .preview import BlobStore, default_registry
@@ -230,6 +230,7 @@ class ViewerApp:
 
         with dpg.handler_registry():
             dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
+            dpg.add_mouse_move_handler(callback=self._on_mouse_move)
             dpg.add_key_press_handler(dpg.mvKey_Plus, callback=self._on_zoom_in_key)
             dpg.add_key_press_handler(dpg.mvKey_Minus, callback=self._on_zoom_out_key)
             dpg.add_key_press_handler(dpg.mvKey_0, callback=self._on_zoom_reset_key)
@@ -270,6 +271,7 @@ class ViewerApp:
         self.clock.seek(float(app_data))
 
     def _on_relayout(self) -> None:
+        print("[zoom-debug] _on_relayout called")
         model = self.view.model
         if model is None:
             return
@@ -315,17 +317,25 @@ class ViewerApp:
             dpg.set_value("zoom_label", f"zoom {self.zoom:.0%}")
 
     def _zoom_by(self, factor: float, pivot: tuple[float, float] | None = None) -> None:
+        old_zoom = self.zoom
         new_zoom = max(self._zoom_min, min(self._zoom_max, self.zoom * factor))
         applied = new_zoom / self.zoom
+        print(
+            f"[zoom-debug] _zoom_by factor={factor!r} old_zoom={old_zoom!r} "
+            f"new_zoom={new_zoom!r} applied={applied!r} pivot_in={pivot!r}"
+        )
         if abs(applied - 1.0) < 1e-6:
+            print("[zoom-debug]   -> no-op (applied ~= 1.0)")
             return
         if pivot is None:
             mouse = dpg.get_mouse_pos(local=False)
             pivot = self._screen_to_canvas((mouse[0], mouse[1]))
+            print(f"[zoom-debug]   computed pivot from mouse={mouse!r} -> pivot={pivot!r}")
         if pivot is None:
             self.zoom = new_zoom
             self._apply_zoom_theme()
             self._update_zoom_label()
+            print(f"[zoom-debug]   -> no pivot, zoom set to {self.zoom!r}")
             return
         px, py = pivot
         for dpg_id in self.gui_items.values():
@@ -334,14 +344,26 @@ class ViewerApp:
         self.zoom = new_zoom
         self._apply_zoom_theme()
         self._update_zoom_label()
+        print(f"[zoom-debug]   -> zoom set to {self.zoom!r} using pivot={pivot!r}")
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
-        if not self._editor_hovered():
+        hovered = self._editor_hovered()
+        print(
+            f"[zoom-debug] _on_mouse_wheel sender={sender!r} app_data={app_data!r} "
+            f"hovered={hovered!r} zoom={self.zoom!r}"
+        )
+        if not hovered:
             return
         delta = float(app_data)
         if delta == 0.0:
             return
         self._zoom_by(self._zoom_step**delta)
+
+    def _on_mouse_move(self, sender, app_data) -> None:
+        print(
+            f"[zoom-debug] _on_mouse_move sender={sender!r} app_data={app_data!r} "
+            f"hovered={self._editor_hovered()!r} zoom={self.zoom!r}"
+        )
 
     def _on_zoom_in(self) -> None:
         self._zoom_by(self._zoom_step, self._editor_center_canvas())
@@ -350,6 +372,7 @@ class ViewerApp:
         self._zoom_by(1.0 / self._zoom_step, self._editor_center_canvas())
 
     def _on_zoom_reset(self) -> None:
+        print(f"[zoom-debug] _on_zoom_reset called, current zoom={self.zoom!r}")
         if abs(self.zoom - 1.0) < 1e-6:
             return
         self._zoom_by(1.0 / self.zoom, self._editor_center_canvas())
@@ -401,7 +424,13 @@ class ViewerApp:
             if not new_arcs:
                 return
 
-        positions = force_directed_layout(items, arcs)
+        # force_directed_layout is O(n^2) per relaxation sweep (worth it for
+        # a one-off full layout), but this path also runs on every poll tick
+        # that finds new records while live-tailing a growing trace; use the
+        # cheap layered_layout there so a busy trace doesn't stall the GUI.
+        positions = (
+            force_directed_layout(items, arcs) if full_layout else layered_layout(items, arcs)
+        )
 
         for item in items:
             if item in self.gui_items:
