@@ -117,6 +117,10 @@ class ViewerApp:
         self._zoom_min = 0.25
         self._zoom_max = 4.0
         self._zoom_step = 1.1
+        # edge-trigger state for the zoom key shortcuts (see _on_zoom_in_key)
+        self._zoom_plus_down = False
+        self._zoom_minus_down = False
+        self._zoom_zero_down = False
 
     # ------------------------------------------------------------------ #
     # helpers
@@ -230,10 +234,12 @@ class ViewerApp:
 
         with dpg.handler_registry():
             dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
-            dpg.add_mouse_move_handler(callback=self._on_mouse_move)
             dpg.add_key_press_handler(dpg.mvKey_Plus, callback=self._on_zoom_in_key)
+            dpg.add_key_release_handler(dpg.mvKey_Plus, callback=self._on_zoom_in_key_release)
             dpg.add_key_press_handler(dpg.mvKey_Minus, callback=self._on_zoom_out_key)
+            dpg.add_key_release_handler(dpg.mvKey_Minus, callback=self._on_zoom_out_key_release)
             dpg.add_key_press_handler(dpg.mvKey_0, callback=self._on_zoom_reset_key)
+            dpg.add_key_release_handler(dpg.mvKey_0, callback=self._on_zoom_reset_key_release)
 
         dpg.set_primary_window("main_window", True)
         dpg.setup_dearpygui()
@@ -271,7 +277,6 @@ class ViewerApp:
         self.clock.seek(float(app_data))
 
     def _on_relayout(self) -> None:
-        print("[zoom-debug] _on_relayout called")
         model = self.view.model
         if model is None:
             return
@@ -317,25 +322,17 @@ class ViewerApp:
             dpg.set_value("zoom_label", f"zoom {self.zoom:.0%}")
 
     def _zoom_by(self, factor: float, pivot: tuple[float, float] | None = None) -> None:
-        old_zoom = self.zoom
         new_zoom = max(self._zoom_min, min(self._zoom_max, self.zoom * factor))
         applied = new_zoom / self.zoom
-        print(
-            f"[zoom-debug] _zoom_by factor={factor!r} old_zoom={old_zoom!r} "
-            f"new_zoom={new_zoom!r} applied={applied!r} pivot_in={pivot!r}"
-        )
         if abs(applied - 1.0) < 1e-6:
-            print("[zoom-debug]   -> no-op (applied ~= 1.0)")
             return
         if pivot is None:
             mouse = dpg.get_mouse_pos(local=False)
             pivot = self._screen_to_canvas((mouse[0], mouse[1]))
-            print(f"[zoom-debug]   computed pivot from mouse={mouse!r} -> pivot={pivot!r}")
         if pivot is None:
             self.zoom = new_zoom
             self._apply_zoom_theme()
             self._update_zoom_label()
-            print(f"[zoom-debug]   -> no pivot, zoom set to {self.zoom!r}")
             return
         px, py = pivot
         for dpg_id in self.gui_items.values():
@@ -344,26 +341,14 @@ class ViewerApp:
         self.zoom = new_zoom
         self._apply_zoom_theme()
         self._update_zoom_label()
-        print(f"[zoom-debug]   -> zoom set to {self.zoom!r} using pivot={pivot!r}")
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
-        hovered = self._editor_hovered()
-        print(
-            f"[zoom-debug] _on_mouse_wheel sender={sender!r} app_data={app_data!r} "
-            f"hovered={hovered!r} zoom={self.zoom!r}"
-        )
-        if not hovered:
+        if not self._editor_hovered():
             return
         delta = float(app_data)
         if delta == 0.0:
             return
         self._zoom_by(self._zoom_step**delta)
-
-    def _on_mouse_move(self, sender, app_data) -> None:
-        print(
-            f"[zoom-debug] _on_mouse_move sender={sender!r} app_data={app_data!r} "
-            f"hovered={self._editor_hovered()!r} zoom={self.zoom!r}"
-        )
 
     def _on_zoom_in(self) -> None:
         self._zoom_by(self._zoom_step, self._editor_center_canvas())
@@ -372,22 +357,46 @@ class ViewerApp:
         self._zoom_by(1.0 / self._zoom_step, self._editor_center_canvas())
 
     def _on_zoom_reset(self) -> None:
-        print(f"[zoom-debug] _on_zoom_reset called, current zoom={self.zoom!r}")
         if abs(self.zoom - 1.0) < 1e-6:
             return
         self._zoom_by(1.0 / self.zoom, self._editor_center_canvas())
 
     def _on_zoom_in_key(self) -> None:
+        # add_key_press_handler has no way to opt out of repeat, and fires
+        # every frame the key registers as down; if a release event never
+        # arrives (observed under Xvfb, which has no real keyboard device
+        # backing its key state), that would otherwise slam zoom to its max
+        # the instant the mouse re-enters the editor. Track down/up
+        # ourselves so one physical press is exactly one step, like the
+        # +/- buttons.
+        if self._zoom_plus_down:
+            return
+        self._zoom_plus_down = True
         if self._editor_hovered():
             self._on_zoom_in()
 
+    def _on_zoom_in_key_release(self) -> None:
+        self._zoom_plus_down = False
+
     def _on_zoom_out_key(self) -> None:
+        if self._zoom_minus_down:
+            return
+        self._zoom_minus_down = True
         if self._editor_hovered():
             self._on_zoom_out()
 
+    def _on_zoom_out_key_release(self) -> None:
+        self._zoom_minus_down = False
+
     def _on_zoom_reset_key(self) -> None:
+        if self._zoom_zero_down:
+            return
+        self._zoom_zero_down = True
         if self._editor_hovered():
             self._on_zoom_reset()
+
+    def _on_zoom_reset_key_release(self) -> None:
+        self._zoom_zero_down = False
 
     # ------------------------------------------------------------------ #
     # editor sync

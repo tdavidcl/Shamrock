@@ -4,6 +4,7 @@ Run with: python -m unittest discover tools/solvergraph_viewer/tests
 No GUI (dearpygui) required.
 """
 
+import inspect
 import itertools
 import json
 import math
@@ -246,7 +247,7 @@ class TestForceDirectedLayout(unittest.TestCase):
         # fully isolated items: nothing here pulls the two components or the
         # isolated items toward each other, so only the overlap-removal pass
         # keeps every pair at least `spacing` apart.
-        spacing = 260.0
+        spacing = inspect.signature(force_directed_layout).parameters["spacing"].default
         items = [("node", i) for i in range(30)]
         arcs = [(("node", 0), ("node", i)) for i in range(1, 12)]
         arcs += [(("node", i - 1), ("node", i)) for i in range(13, 25)]
