@@ -36,14 +36,7 @@ namespace shamrock::solvergraph {
 
         inline std::string _impl_get_label() const { return name; }
 
-        std::string _impl_get_dot_graph_partial() const;
-
-        inline virtual std::string _impl_get_dot_graph_node_start() const {
-            return nodes[0]->get_dot_graph_node_start();
-        }
-        inline virtual std::string _impl_get_dot_graph_node_end() const {
-            return nodes[nodes.size() - 1]->get_dot_graph_node_end();
-        }
+        NodeSubgraph _impl_get_subgraph() const;
 
         std::string _impl_get_tex() const;
     };
