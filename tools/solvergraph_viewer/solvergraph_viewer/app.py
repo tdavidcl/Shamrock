@@ -18,7 +18,7 @@ import time
 
 import dearpygui.dearpygui as dpg
 
-from .layout import Item, build_display_graph, layered_layout
+from .layout import Item, build_display_graph, force_directed_layout
 from .model import GraphModel
 from .playback import PlaybackClock
 from .preview import BlobStore, default_registry
@@ -274,7 +274,7 @@ class ViewerApp:
         if model is None:
             return
         items, arcs = build_display_graph(model)
-        positions = layered_layout(items, arcs)
+        positions = force_directed_layout(items, arcs)
         for item, pos in positions.items():
             if item in self.gui_items:
                 dpg.set_item_pos(self.gui_items[item], [pos[0], pos[1]])
@@ -401,7 +401,7 @@ class ViewerApp:
             if not new_arcs:
                 return
 
-        positions = layered_layout(items, arcs)
+        positions = force_directed_layout(items, arcs)
 
         for item in items:
             if item in self.gui_items:

@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import networkx as nx
+
 from .model import GraphModel
 
 # displayed graph item ids: ("node", uuid) or ("edge", uuid) since node and
@@ -104,4 +106,86 @@ def layered_layout(
     for li, row in enumerate(ordered_layers):
         for i, it in enumerate(row):
             positions[it] = (li * dx, i * dy)
+    return positions
+
+
+def _apply_direction_bias(
+    positions: dict[Item, tuple[float, float]],
+    arcs: list[tuple[Item, Item]],
+    min_gap: float,
+    iterations: int = 30,
+    step: float = 0.5,
+) -> None:
+    """Nudge arc endpoints left-to-right in place, mutating `positions`.
+
+    Every displayed link is drawn from its source's output pin (right edge
+    of the box) to its destination's input pin (left edge of the box): ro
+    bindings as edge->node, rw bindings as node->edge (see
+    build_display_graph). Undirected spring forces don't preserve left/right
+    order, so a link can end up looping backward through its own box; this
+    relaxes positions so src.x + min_gap <= dst.x wherever the arc graph
+    isn't outright cyclic (cycles just settle on a compromise gap).
+    """
+    for _ in range(iterations):
+        moved = False
+        for src, dst in arcs:
+            sx, sy = positions[src]
+            dx, dy = positions[dst]
+            gap = dx - sx
+            if gap < min_gap:
+                shortfall = (min_gap - gap) * step * 0.5
+                positions[src] = (sx - shortfall, sy)
+                positions[dst] = (dx + shortfall, dy)
+                moved = True
+        if not moved:
+            break
+
+
+def force_directed_layout(
+    items: Iterable[Item],
+    arcs: Iterable[tuple[Item, Item]],
+    spacing: float = 220.0,
+    iterations: int = 100,
+    seed: int = 0,
+) -> dict[Item, tuple[float, float]]:
+    """Force-directed placement: connected items attract, all items repel.
+
+    Edge attraction is weighted down by 1/sqrt(deg(u)*deg(v)) so items with
+    many connections don't drag all their neighbors into one overlapping
+    clump: a hub and a leaf still keep roughly `spacing` apart, but two hubs
+    pull on each other much more weakly than two leaves would.
+
+    Seeded from layered_layout() positions for fast, stable convergence
+    instead of networkx's default random initialization. A direction-bias
+    pass after the spring relaxation restores the left-to-right ordering
+    the springs would otherwise scramble (see _apply_direction_bias).
+    """
+    items = list(items)
+    arcs = list(arcs)
+    if not items:
+        return {}
+
+    graph = nx.Graph()
+    graph.add_nodes_from(items)
+    graph.add_edges_from(arcs)
+
+    degree = dict(graph.degree())
+    for u, v in graph.edges():
+        graph.edges[u, v]["weight"] = 1.0 / (max(degree[u], 1) * max(degree[v], 1)) ** 0.5
+
+    seed_pos = layered_layout(items, arcs, dx=spacing, dy=spacing * 0.6)
+
+    box = spacing * max(1.0, len(items) ** 0.6)
+    raw = nx.spring_layout(
+        graph,
+        pos=seed_pos,
+        k=spacing * 1.5,
+        weight="weight",
+        iterations=iterations,
+        scale=box,
+        center=(box, box),
+        seed=seed,
+    )
+    positions = {item: (float(x), float(y)) for item, (x, y) in raw.items()}
+    _apply_direction_bias(positions, arcs, min_gap=spacing)
     return positions

@@ -11,6 +11,8 @@ requires-python = ">=3.9"
 license = { text = "CeCILL-2.1" }
 dependencies = [
     "dearpygui>=1.11",
+    "networkx>=3.0",
+    "numpy",
 ]
 
 [project.scripts]

@@ -12,7 +12,11 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from solvergraph_viewer.layout import build_display_graph, layered_layout
+from solvergraph_viewer.layout import (
+    build_display_graph,
+    force_directed_layout,
+    layered_layout,
+)
 from solvergraph_viewer.model import GraphModel
 from solvergraph_viewer.playback import PlaybackClock
 from solvergraph_viewer.trace_reader import TraceReader
@@ -200,6 +204,40 @@ class TestLayout(unittest.TestCase):
         arcs = [(("node", 1), ("edge", 1)), (("edge", 1), ("node", 1))]
         positions = layered_layout(items, arcs)
         self.assertEqual(len(positions), 2)
+
+
+class TestForceDirectedLayout(unittest.TestCase):
+    def test_every_item_placed(self):
+        model = TestGraphModel().build_model()
+        items, arcs = build_display_graph(model)
+        positions = force_directed_layout(items, arcs)
+        for it in items:
+            self.assertIn(it, positions)
+
+    def test_deterministic(self):
+        model = TestGraphModel().build_model()
+        items, arcs = build_display_graph(model)
+        first = force_directed_layout(items, arcs)
+        second = force_directed_layout(items, arcs)
+        self.assertEqual(first, second)
+
+    def test_empty_graph(self):
+        self.assertEqual(force_directed_layout([], []), {})
+
+    def test_isolated_item(self):
+        items = [("node", 1)]
+        positions = force_directed_layout(items, [])
+        self.assertIn(("node", 1), positions)
+
+    def test_links_flow_left_to_right(self):
+        # node 2 --rw--> edge 7 --ro--> node 1: each arc's source (drawn from
+        # an output/right pin) should end up left of its destination
+        # (drawn from an input/left pin), so links don't loop backward.
+        model = TestGraphModel().build_model()
+        items, arcs = build_display_graph(model)
+        positions = force_directed_layout(items, arcs)
+        self.assertLess(positions[("edge", 7)][0], positions[("node", 1)][0])
+        self.assertLess(positions[("node", 2)][0], positions[("edge", 7)][0])
 
 
 class TestPlayback(unittest.TestCase):
