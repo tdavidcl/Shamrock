@@ -21,6 +21,7 @@
 #include "shambase/stacktrace.hpp"
 #include "shamsolvergraph/edge/IEdge.hpp"
 #include "shamsolvergraph/edge/INullOptEdge.hpp"
+#include "shamsolvergraph/node/NodeSubgraph.hpp"
 #include <memory>
 #include <vector>
 
@@ -56,6 +57,11 @@ namespace shamrock::solvergraph {
         inline std::vector<std::shared_ptr<IEdge>> &get_ro_edges() { return ro_edges; }
         /// Get the read write edges
         inline std::vector<std::shared_ptr<IEdge>> &get_rw_edges() { return rw_edges; }
+
+        /// Get the read only edges (const)
+        inline const std::vector<std::shared_ptr<IEdge>> &get_ro_edges() const { return ro_edges; }
+        /// Get the read write edges (const)
+        inline const std::vector<std::shared_ptr<IEdge>> &get_rw_edges() const { return rw_edges; }
 
         /// Set the read only edges
         inline void __internal_set_ro_edges(std::vector<std::shared_ptr<IEdge>> new_ro_edges);
@@ -145,16 +151,17 @@ namespace shamrock::solvergraph {
         /// Evaluate the node
         inline void evaluate() { _impl_evaluate_internal(); }
 
+        /// Get a structured description of the node, and (if it is a meta node) everything
+        /// nested under it
+        inline NodeSubgraph get_subgraph() const { return _impl_get_subgraph(); }
+
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
         inline std::string get_dot_graph() { return get_dot_graph_partial(); };
 
         /// Get the dot graph of the subgraph corresponding to the node
-        inline std::string get_dot_graph_partial() { return _impl_get_dot_graph_partial(); };
-
-        /// Get the id of the node start in the dot graph
-        inline std::string get_dot_graph_node_start() { return _impl_get_dot_graph_node_start(); };
-        /// Get the id of the node end in the dot graph
-        inline std::string get_dot_graph_node_end() { return _impl_get_dot_graph_node_end(); };
+        inline std::string get_dot_graph_partial() {
+            return dot_graph_from_subgraph(get_subgraph());
+        };
 
         /// Get the TeX of the node
         inline std::string get_tex() { return _impl_get_tex(); };
@@ -196,12 +203,13 @@ namespace shamrock::solvergraph {
         /// get the label of the node
         virtual std::string _impl_get_label() const = 0;
 
-        /// get the dot graph of the node partial
-        virtual std::string _impl_get_dot_graph_partial() const;
-        /// get the dot graph of the node start
-        virtual std::string _impl_get_dot_graph_node_start() const;
-        /// get the dot graph of the node end
-        virtual std::string _impl_get_dot_graph_node_end() const;
+        /// get the free-form key/value metadata of the node (default: none)
+        inline virtual std::vector<std::pair<std::string, std::string>> _impl_get_metadata() const {
+            return {};
+        }
+
+        /// get the structured subgraph description of the node
+        virtual NodeSubgraph _impl_get_subgraph() const;
 
         /// get the tex of the node
         virtual std::string _impl_get_tex() const = 0;
@@ -241,36 +249,20 @@ namespace shamrock::solvergraph {
         }
     }
 
-    inline std::string INode::_impl_get_dot_graph_partial() const {
-        std::string node_str
-            = sham::format("n_{} [label=\"{}\"];\n", this->get_uuid(), _impl_get_label());
-
-        std::string edge_str = "";
-        for (auto &in : ro_edges) {
-            edge_str += sham::format(
-                "e_{} -> n_{} [style=\"dashed\", color=green];\n",
-                in->get_uuid(),
-                this->get_uuid());
-            edge_str += sham::format(
-                "e_{} [label=\"{}\",shape=rect, style=filled];\n", in->get_uuid(), in->get_label());
-        }
-        for (auto &out : rw_edges) {
-            edge_str += sham::format(
-                "n_{} -> e_{} [style=\"dashed\", color=red];\n", this->get_uuid(), out->get_uuid());
-            edge_str += sham::format(
-                "e_{} [label=\"{}\",shape=rect, style=filled];\n",
-                out->get_uuid(),
-                out->get_label());
-        }
-
-        return sham::format("{}{}", node_str, edge_str);
-    };
-
-    inline std::string INode::_impl_get_dot_graph_node_start() const {
-        return sham::format("n_{}", this->get_uuid());
-    }
-    inline std::string INode::_impl_get_dot_graph_node_end() const {
-        return sham::format("n_{}", this->get_uuid());
+    inline NodeSubgraph INode::_impl_get_subgraph() const {
+        NodeSubgraph sg;
+        sg.uuid             = get_uuid();
+        sg.label            = _impl_get_label();
+        sg.ro_edges         = ro_edges;
+        sg.rw_edges         = rw_edges;
+        sg.metadata         = _impl_get_metadata();
+        sg.is_meta          = false;
+        sg.meta_info        = {};
+        sg.dot_shape        = "";
+        sg.dot_start_id     = sham::format("n_{}", get_uuid());
+        sg.dot_end_id       = sg.dot_start_id;
+        sg.draws_own_anchor = true;
+        return sg;
     }
 
 } // namespace shamrock::solvergraph
