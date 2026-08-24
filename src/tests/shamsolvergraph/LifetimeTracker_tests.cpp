@@ -1,40 +1,156 @@
+// -------------------------------------------------------//
+//
+// SHAMROCK code for hydrodynamics
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
+//
+// -------------------------------------------------------//
+
 #include "shamsolvergraph/LifecycleTracer.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/node/NodeSetEdge.hpp"
 #include "shamtest/shamtest.hpp"
-
+#include <nlohmann/json.hpp>
 
 namespace {
-    void on_create(u64 uuid) {
 
+    // Recorded events, populated by the hooks below. LifetimeTracker's hooks are raw
+    // function pointers (not std::function), so they cannot capture `events` by reference -
+    // it has to live at namespace scope.
+    std::vector<nlohmann::json> events;
+
+    void on_create_node(u64 uuid) {
+        events.push_back({{"event", "create"}, {"type", "INode"}, {"uuid", uuid}});
+    }
+    void on_destroy_node(u64 uuid) {
+        events.push_back({{"event", "destroy"}, {"type", "INode"}, {"uuid", uuid}});
+    }
+    void on_state_update_node(shamrock::solvergraph::INode &node) {
+        events.push_back(
+            {{"event", "state_update"}, {"type", "INode"}, {"uuid", node.get_uuid()}});
+    }
+    void on_op_node(u64 uuid, u64 op_id) {
+        events.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", uuid}, {"op_id", op_id}});
     }
 
-    void on_destroy(u64 uuid) {
+    void on_create_edge(u64 uuid) {
+        events.push_back({{"event", "create"}, {"type", "IEdge"}, {"uuid", uuid}});
     }
-    
-    void on_state_update(shamrock::solvergraph::IEdge &edge) {
+    void on_destroy_edge(u64 uuid) {
+        events.push_back({{"event", "destroy"}, {"type", "IEdge"}, {"uuid", uuid}});
+    }
+    void on_state_update_edge(shamrock::solvergraph::IEdge &edge) {
+        events.push_back(
+            {{"event", "state_update"}, {"type", "IEdge"}, {"uuid", edge.get_uuid()}});
     }
 
-    void on_op(u64 uuid, u64 op_id) {
-    }
-}
+    // Installs the hooks above and clears `events` on construction, restores the hooks to
+    // nullptr on destruction. This keeps a failed REQUIRE_EQUAL from leaking dangling static
+    // hooks into whichever test runs next in the same binary.
+    struct ScopedHooks {
+        using INode = shamrock::solvergraph::INode;
+        using IEdge = shamrock::solvergraph::IEdge;
+
+        ScopedHooks() {
+            events.clear();
+
+            shamrock::solvergraph::LifetimeTracker<INode>::on_create       = &on_create_node;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_destroy      = &on_destroy_node;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_state_update = &on_state_update_node;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_op           = &on_op_node;
+
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_create       = &on_create_edge;
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_destroy      = &on_destroy_edge;
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_state_update = &on_state_update_edge;
+            // LifetimeTracker<IEdge>::on_op is intentionally left null: edges have no
+            // "operation" concept, so it must never be invoked. If it ever is, this test
+            // crashes on a null function-pointer call instead of silently passing.
+        }
+
+        ~ScopedHooks() {
+            shamrock::solvergraph::LifetimeTracker<INode>::on_create       = nullptr;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_destroy      = nullptr;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_state_update = nullptr;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_op           = nullptr;
+
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_create       = nullptr;
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_destroy      = nullptr;
+            shamrock::solvergraph::LifetimeTracker<IEdge>::on_state_update = nullptr;
+        }
+    };
+
+} // namespace
 
 NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
     using namespace shamrock::solvergraph;
 
-    auto edge = IDataEdge<f64>::make_shared("a", "a");
+    ScopedHooks hooks{};
+
+    std::vector<nlohmann::json> expected;
 
     using NodeT = NodeSetEdge<IDataEdge<f64>>;
-    NodeT set_edge([](IDataEdge<f64> &edge) {
-        edge.data = 1;
-    });
 
-    set_edge.set_edges(edge);
+    // uuid captured after each object is created rather than hardcoded: WithUUID's counters
+    // are global per-type and shared with every other test in the binary.
+    u64 edge_uuid = 0;
+    u64 node_uuid = 0;
 
-    std::shared_ptr<NodeT> ptr = std::make_shared<NodeT>(std::move(set_edge));
+    {
+        // Step 1: creating an edge fires exactly one create event for that edge.
+        auto edge = IDataEdge<f64>::make_shared("a", "a");
+        edge_uuid = edge->get_uuid();
+        expected.push_back({{"event", "create"}, {"type", "IEdge"}, {"uuid", edge_uuid}});
+        REQUIRE_EQUAL(events, expected);
 
-    ptr.reset();
-    edge.reset();
+        // Step 2: creating a node fires exactly one create event for that node.
+        NodeT set_edge([](IDataEdge<f64> &e) {
+            e.data = 1;
+        });
+        node_uuid = set_edge.get_uuid();
+        expected.push_back({{"event", "create"}, {"type", "INode"}, {"uuid", node_uuid}});
+        REQUIRE_EQUAL(events, expected);
 
+        // Step 3: binding the edge to the node fires one state_update for the node (its edge
+        // list changed) and one for the edge (it was rebound), in that order.
+        set_edge.set_edges(edge);
+        expected.push_back({{"event", "state_update"}, {"type", "INode"}, {"uuid", node_uuid}});
+        expected.push_back({{"event", "state_update"}, {"type", "IEdge"}, {"uuid", edge_uuid}});
+        REQUIRE_EQUAL(events, expected);
 
+        // Step 4: moving the node into a shared_ptr transfers its identity: the destination
+        // keeps the same uuid, no create event fires for it, and (checked in step 7 below) the
+        // moved-from husk must not fire a destroy event when it goes out of scope.
+        std::shared_ptr<NodeT> ptr = std::make_shared<NodeT>(std::move(set_edge));
+        REQUIRE_EQUAL(ptr->get_uuid(), node_uuid);
+        REQUIRE_EQUAL(events, expected);
+
+        // Step 5: evaluating the node brackets the operation, firing on_op with op_id 0 at
+        // the start and op_id 1 at the end.
+        ptr->evaluate();
+        expected.push_back(
+            {{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 0}});
+        expected.push_back(
+            {{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 1}});
+        REQUIRE_EQUAL(events, expected);
+        REQUIRE_EQUAL(edge->data, 1.0);
+
+        // Step 6: destroying the node fires exactly one destroy event for it. The edge is
+        // still alive (held by `edge` below), so no edge destroy event fires here.
+        ptr.reset();
+        expected.push_back({{"event", "destroy"}, {"type", "INode"}, {"uuid", node_uuid}});
+        REQUIRE_EQUAL(events, expected);
+
+        // Step 7: destroying the last reference to the edge fires exactly one destroy event
+        // for it.
+        edge.reset();
+        expected.push_back({{"event", "destroy"}, {"type", "IEdge"}, {"uuid", edge_uuid}});
+        REQUIRE_EQUAL(events, expected);
+
+        // `set_edge` (the moved-from husk from step 4) is destroyed here, at the end of this
+        // block, before the final assertion below runs.
+    }
+
+    // Step 8: the moved-from husk's destruction above must not add a 9th event.
+    REQUIRE_EQUAL(events, expected);
 }
