@@ -39,6 +39,8 @@ namespace shamrock::solvergraph {
         std::vector<std::shared_ptr<IEdge>> ro_edges;
         /// Read write edges
         std::vector<std::shared_ptr<IEdge>> rw_edges;
+        /// Nodes owned by this node (meta nodes only, e.g. OperationSequence), empty otherwise
+        std::vector<std::shared_ptr<INode>> child_nodes;
 
         /// Tracks the lifetime of the node and holds its UUID.
         /// Held as a plain value member instead of a base class (so trace_state_update() can
@@ -72,10 +74,19 @@ namespace shamrock::solvergraph {
         /// Get the read write edges
         inline std::vector<std::shared_ptr<IEdge>> &get_rw_edges() { return rw_edges; }
 
+        /// Get the child nodes
+        inline std::vector<std::shared_ptr<INode>> &get_child_nodes() { return child_nodes; }
+        /// Get the child nodes
+        inline const std::vector<std::shared_ptr<INode>> &get_child_nodes() const {
+            return child_nodes;
+        }
+
         /// Set the read only edges
         inline void __internal_set_ro_edges(std::vector<std::shared_ptr<IEdge>> new_ro_edges);
         /// Set the read write edges
         inline void __internal_set_rw_edges(std::vector<std::shared_ptr<IEdge>> new_rw_edges);
+        /// Set the child nodes
+        inline void __internal_set_child_nodes(std::vector<std::shared_ptr<INode>> new_children);
 
         /// Apply a function to the read only edges
         template<class Func>
@@ -91,12 +102,12 @@ namespace shamrock::solvergraph {
         /// edges being cleared, and so that clearing the edges does not notify a state update on
         /// a partially-destroyed object (which would perform virtual dispatch during
         /// destruction): trace_destroy() marks the tracker dead, so the trace_state_update()
-        /// calls inside __internal_set_ro_edges/__internal_set_rw_edges below are silently
-        /// skipped.
+        /// calls inside the __internal_set_* setters below are silently skipped.
         virtual ~INode() {
             tracker.trace_destroy();
             __internal_set_ro_edges({});
             __internal_set_rw_edges({});
+            __internal_set_child_nodes({});
         }
 
         /// Get a read only edge and cast it to the type T
@@ -167,6 +178,15 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
+            // A node must have published its state at least once before it is evaluated. Nodes
+            // do so when they are given some, through the __internal_set_* setters below; a node
+            // that has none (or whose author forgot to register them) would otherwise be
+            // evaluated without ever having been described. Publish it here instead: the object
+            // is fully constructed at this point, so the notification reports the true derived
+            // type -- which one fired from INode's own constructor could not.
+            if (!tracker.has_state_update()) {
+                tracker.trace_state_update(*this);
+            }
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             _impl_evaluate_internal();
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
@@ -217,15 +237,6 @@ namespace shamrock::solvergraph {
         };
 
         protected:
-        /// Fire a self state_update for this node. Meant to be called at the end of a derived
-        /// class's own constructor, once that class's members are fully initialized -- never
-        /// from INode's own constructor. typeid() during a base class's constructor body
-        /// reports the class currently under construction (INode), not the object's final
-        /// derived type, so a state_update fired from there would misreport its dynamic type.
-        /// This lets meta nodes that own no ro/rw edges of their own (e.g. OperationSequence)
-        /// still record a state_update before they can be evaluated.
-        inline void notify_self_state_update() { tracker.trace_state_update(*this); }
-
         /// evaluate the node
         virtual void _impl_evaluate_internal() = 0;
 
@@ -262,6 +273,12 @@ namespace shamrock::solvergraph {
         for (auto e : rw_edges) {
             // shambase::get_check_ref(e).child = getptr_weak();
         }
+        tracker.trace_state_update(*this);
+    }
+
+    inline void INode::__internal_set_child_nodes(
+        std::vector<std::shared_ptr<INode>> new_children) {
+        this->child_nodes = std::move(new_children);
         tracker.trace_state_update(*this);
     }
 

@@ -47,7 +47,18 @@ namespace shamrock::solvergraph {
             std::shared_ptr<INode> then_node = {},
             std::shared_ptr<INode> else_node = {})
             : then_node(std::move(then_node)), else_node(std::move(else_node)),
-              name(std::move(name)) {}
+              name(std::move(name)) {
+            // Register the nested nodes as this node's children (they are part of its state,
+            // and registering them notifies the state update, see INode::evaluate())
+            std::vector<std::shared_ptr<INode>> childs = {};
+            if (this->then_node) {
+                childs.push_back(this->then_node);
+            }
+            if (this->else_node) {
+                childs.push_back(this->else_node);
+            }
+            __internal_set_child_nodes(std::move(childs));
+        }
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 

@@ -44,6 +44,12 @@ namespace shamrock::solvergraph {
      */
     template<typename T>
     class LifetimeTracker : public shambase::WithUUID<LifetimeTracker<T>, u64> {
+
+        /// Set by the first trace_state_update() of the current identity. Recorded even when
+        /// on_state_update is null, so the invariant "the state was published at least once"
+        /// does not depend on tracking being enabled.
+        bool state_updated = false;
+
         public:
         /// Called when a tracked object is created
         inline static void (*on_create)(u64 uuid) = nullptr;
@@ -76,6 +82,7 @@ namespace shamrock::solvergraph {
             if (this != &other) {
                 trace_destroy();
                 shambase::WithUUID<LifetimeTracker, u64>::operator=(std::move(other));
+                state_updated = std::exchange(other.state_updated, false);
             }
             return *this;
         }
@@ -97,15 +104,22 @@ namespace shamrock::solvergraph {
             }
         }
         inline void trace_state_update(T &object) {
-            if (this->is_alive() && on_state_update) {
-                on_state_update(object);
+            if (this->is_alive()) {
+                state_updated = true;
+                if (on_state_update) {
+                    on_state_update(object);
+                }
             }
         }
+
         inline void trace_op(u64 op_id) {
             if (this->is_alive() && on_op) {
                 on_op(this->uuid, op_id);
             }
         }
+
+        /// True if a state update was already notified for the identity currently held
+        inline bool has_state_update() const { return state_updated; }
 
         /// Destructor, notifies the destruction of the tracked object (unless already notified,
         /// or this instance was moved from).

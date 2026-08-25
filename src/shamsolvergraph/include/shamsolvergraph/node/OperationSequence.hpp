@@ -21,21 +21,26 @@
 namespace shamrock::solvergraph {
 
     class OperationSequence : public INode {
-        std::vector<std::shared_ptr<INode>> nodes;
         std::string name;
+
+        /// The nodes evaluated by this sequence, owned by INode as child nodes
+        inline const std::vector<std::shared_ptr<INode>> &nodes() const {
+            return get_child_nodes();
+        }
 
         public:
         OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> &&_nodes)
-            : nodes(std::forward<std::vector<std::shared_ptr<INode>>>(_nodes)), name(name) {
-            if (nodes.size() == 0) {
+            : name(name) {
+            if (_nodes.size() == 0) {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "OperationSequence must have at least one node");
             }
-            // A sequence owns no ro/rw edges of its own, so it never goes through
-            // __internal_set_ro_edges/__internal_set_rw_edges. Fire the self state_update
-            // manually so a sequence is on record as up to date before it can be evaluated,
-            // same as any other node.
-            notify_self_state_update();
+            // A sequence owns no ro/rw edges of its own: its children are its state, so
+            // registering them is what puts it on record as up to date before it can be
+            // evaluated. Same mechanism as __internal_set_ro_edges for a regular node, and it
+            // runs in the derived constructor, where the notification sees the true derived
+            // type (one fired from INode's own constructor could not).
+            __internal_set_child_nodes(std::move(_nodes));
         }
         void _impl_evaluate_internal();
 
@@ -44,10 +49,10 @@ namespace shamrock::solvergraph {
         std::string _impl_get_dot_graph_partial() const;
 
         inline virtual std::string _impl_get_dot_graph_node_start() const {
-            return nodes[0]->get_dot_graph_node_start();
+            return nodes()[0]->get_dot_graph_node_start();
         }
         inline virtual std::string _impl_get_dot_graph_node_end() const {
-            return nodes[nodes.size() - 1]->get_dot_graph_node_end();
+            return nodes()[nodes().size() - 1]->get_dot_graph_node_end();
         }
 
         std::string _impl_get_tex() const;

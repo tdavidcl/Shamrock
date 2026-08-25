@@ -43,7 +43,11 @@ namespace shammodels::sph::modules {
             bool print_info)
             : iterate_smth_length_once_ptr(std::move(iterate_smth_length_once_ptr)),
               epsilon_h(epsilon_h), h_iter_per_subcycles(h_iter_per_subcycles),
-              print_info(print_info) {}
+              print_info(print_info) {
+            // The looped node is part of this node's state, registering it notifies the state
+            // update (see INode::evaluate())
+            __internal_set_child_nodes({this->iterate_smth_length_once_ptr});
+        }
 
         struct Edges {
             const shamrock::solvergraph::IFieldRefs<Tscal> &eps_h;
