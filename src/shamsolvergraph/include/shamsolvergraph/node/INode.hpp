@@ -165,18 +165,18 @@ namespace shamrock::solvergraph {
             return shambase::get_check_ref(rw_edges.at(slot));
         }
 
+        /// Fire a self state_update for this node. Meant to be used by meta nodes that own no
+        /// ro/rw edges of their own (e.g. OperationSequence), which therefore never go through
+        /// __internal_set_ro_edges/__internal_set_rw_edges: declare a
+        /// `NodeSelfStateUpdate<Derived>` as the last member of such a class (see
+        /// OperationSequence) instead of calling this directly. It must never be called from
+        /// INode's own constructor, nor from any base class constructor: typeid() at that point
+        /// reports the class currently under construction, not the object's final derived type,
+        /// so a state_update fired too early would misreport its dynamic type.
+        inline void notify_self_state_update() { tracker.trace_state_update(*this); }
+
         /// Evaluate the node
         inline void evaluate() {
-            // Guarantees a state_update was sent before the first evaluate(), even for meta
-            // nodes (e.g. OperationSequence) that own no ro/rw edges of their own and therefore
-            // never go through __internal_set_ro_edges/__internal_set_rw_edges. Firing it here
-            // rather than in INode's constructor is what makes typeid(*this) below report the
-            // true derived type: by the time evaluate() runs, the whole object (base and
-            // derived parts alike) is fully constructed, whereas a base class constructor body
-            // only ever sees the class currently under construction.
-            if (!tracker.has_been_updated()) {
-                tracker.trace_state_update(*this);
-            }
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             _impl_evaluate_internal();
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
@@ -242,6 +242,18 @@ namespace shamrock::solvergraph {
 
         /// get the tex of the node
         virtual std::string _impl_get_tex() const = 0;
+    };
+
+    /// Fires `Derived`'s self state_update as soon as it is constructed. Meant to be declared as
+    /// the last member of a meta node class that owns no ro/rw edges of its own (e.g.
+    /// OperationSequence), in place of a manual notify_self_state_update() call in the
+    /// constructor body: a class's own non-static data members are initialized only once that
+    /// class's vtable is already active, so by the time this member's constructor runs,
+    /// `self.notify_self_state_update()` correctly reports `Derived`, not a base class still
+    /// under construction.
+    template<class Derived>
+    struct NodeSelfStateUpdate {
+        explicit NodeSelfStateUpdate(Derived &self) { self.notify_self_state_update(); }
     };
 
     inline void INode::__internal_set_ro_edges(std::vector<std::shared_ptr<IEdge>> new_ro_edges) {

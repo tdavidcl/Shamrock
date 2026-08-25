@@ -55,18 +55,6 @@ namespace shamrock::solvergraph {
         /// Called when an operation is performed on a tracked object (e.g. evaluation)
         inline static void (*on_op)(u64 uuid, u64 op_id) = nullptr;
 
-        private:
-        /// Whether trace_state_update() has ever fired for this object. Lets evaluate() (see
-        /// INode) lazily fire a first state_update of its own right before the object's first
-        /// operation, so meta nodes that own no ro/rw edges (and therefore never go through
-        /// __internal_set_ro_edges/__internal_set_rw_edges) still get one without any manual
-        /// call in their constructor.
-        bool updated = false;
-
-        public:
-        /// Whether trace_state_update() has ever fired for this object
-        inline bool has_been_updated() const { return updated; }
-
         /// Constructor, notifies the creation of the tracked object
         LifetimeTracker() : shambase::WithUUID<LifetimeTracker, u64>() {
             if (on_create != nullptr) {
@@ -88,7 +76,6 @@ namespace shamrock::solvergraph {
             if (this != &other) {
                 trace_destroy();
                 shambase::WithUUID<LifetimeTracker, u64>::operator=(std::move(other));
-                updated = other.updated;
             }
             return *this;
         }
@@ -110,11 +97,8 @@ namespace shamrock::solvergraph {
             }
         }
         inline void trace_state_update(T &object) {
-            if (this->is_alive()) {
-                updated = true;
-                if (on_state_update) {
-                    on_state_update(object);
-                }
+            if (this->is_alive() && on_state_update) {
+                on_state_update(object);
             }
         }
         inline void trace_op(u64 op_id) {
