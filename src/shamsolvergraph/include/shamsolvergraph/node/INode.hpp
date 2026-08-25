@@ -34,10 +34,8 @@ namespace shamrock::solvergraph {
         /// Read write edges
         std::vector<std::shared_ptr<IEdge>> rw_edges;
 
-        /// Tracks the lifetime of the edge and holds its UUID.
-        /// Held as a plain value member to allow stack variables without extra allocations
-        /// LifetimeTracker handles move-safety internally, also avoid a duplicate destroy
-        /// notification on move.
+        /// Tracks the lifetime of the node and holds its UUID.
+        /// Held as a plain value member so trace_state_update() can take a `T&` to this object.
         LifetimeTracker<INode> tracker;
 
         public:
@@ -79,13 +77,8 @@ namespace shamrock::solvergraph {
         void on_edge_rw_edges(Func &&f);
 
         /// Destructor (virtual) & reset the edges.
-        /// The destroy notification is fired first (trace_destroy() is idempotent, so the
-        /// tracker's own destructor firing it again afterward is a no-op) so it precedes the
-        /// edges being cleared, and so that clearing the edges does not notify a state update on
-        /// a partially-destroyed object (which would perform virtual dispatch during
-        /// destruction): trace_destroy() marks the tracker dead, so the trace_state_update()
-        /// calls inside __internal_set_ro_edges/__internal_set_rw_edges below are silently
-        /// skipped.
+        /// trace_destroy() fires first so the edges below are cleared as already-dead, silencing
+        /// their state-update notifications during destruction.
         virtual ~INode() {
             tracker.trace_destroy();
             __internal_set_ro_edges({});

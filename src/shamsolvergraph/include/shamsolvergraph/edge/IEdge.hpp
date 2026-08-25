@@ -28,9 +28,7 @@ namespace shamrock::solvergraph {
     class IEdge : public IFreeable {
 
         /// Tracks the lifetime of the edge and holds its UUID.
-        /// Held as a plain value member to allow stack variables without extra allocations
-        /// LifetimeTracker handles move-safety internally, also avoid a duplicate destroy
-        /// notification on move.
+        /// Held as a plain value member so trace_state_update() can take a `T&` to this object.
         LifetimeTracker<IEdge> tracker;
 
         public:
