@@ -13,6 +13,7 @@
 #include "shamsolvergraph/node/OperationSequence.hpp"
 #include "shamtest/shamtest.hpp"
 #include <nlohmann/json.hpp>
+#include <typeinfo>
 
 namespace {
 
@@ -28,7 +29,15 @@ namespace {
         events.push_back({{"event", "destroy"}, {"type", "INode"}, {"uuid", uuid}});
     }
     void on_state_update_node(shamrock::solvergraph::INode &node) {
-        events.push_back({{"event", "state_update"}, {"type", "INode"}, {"uuid", node.get_uuid()}});
+        // `typeid(node)` reports the dynamic type of `node`. If a state_update is ever fired
+        // from a base class constructor (e.g. INode's own ctor) before the derived class's
+        // constructor has run, this reports the base class, not the true derived type -- that
+        // mismatch is exactly what the OperationSequence test below checks for.
+        events.push_back(
+            {{"event", "state_update"},
+             {"type", "INode"},
+             {"uuid", node.get_uuid()},
+             {"dynamic_type", std::string(typeid(node).name())}});
     }
     void on_op_node(u64 uuid, u64 op_id) {
         events.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", uuid}, {"op_id", op_id}});
@@ -41,7 +50,11 @@ namespace {
         events.push_back({{"event", "destroy"}, {"type", "IEdge"}, {"uuid", uuid}});
     }
     void on_state_update_edge(shamrock::solvergraph::IEdge &edge) {
-        events.push_back({{"event", "state_update"}, {"type", "IEdge"}, {"uuid", edge.get_uuid()}});
+        events.push_back(
+            {{"event", "state_update"},
+             {"type", "IEdge"},
+             {"uuid", edge.get_uuid()},
+             {"dynamic_type", std::string(typeid(edge).name())}});
     }
 
     // Installs the hooks above and clears `events` on construction, restores the hooks to
@@ -128,9 +141,18 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         // even if a state update was fired before we need a state update that register the new
         // edges so we check that at least one were added
         REQUIRE_EQUAL(events.size() > before_bind, true);
-        bool has_state_update = false;
+        // Check specifically for a state_update that is for `set_edge` itself: uuid alone would
+        // already narrow it down here (only one node exists), but also checking dynamic_type
+        // guards against a state_update fired too early (e.g. from a base class ctor), where
+        // typeid() would report the wrong class -- see the OperationSequence test below.
+        INode &node_ref               = set_edge;
+        std::string node_dynamic_type = typeid(node_ref).name();
+        bool has_state_update         = false;
         for (std::size_t i = before_bind; i < events.size(); i++) {
-            has_state_update = has_state_update || (events[i].at("event") == "state_update");
+            has_state_update
+                = has_state_update
+                  || (events[i].at("event") == "state_update" && events[i].at("uuid") == node_uuid
+                      && events[i].at("dynamic_type") == node_dynamic_type);
         }
         REQUIRE_EQUAL(has_state_update, true);
 
@@ -230,13 +252,20 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
 
     // Step 5: the rule under test - a state_update must be recorded before evaluate() fires -
     // holds even for meta nodes like OperationSequence, which delegate evaluation entirely to
-    // their children. Check specifically for a state_update whose uuid is the sequence's own
-    // uuid (not just any state_update in the history), right before evaluating the sequence.
+    // their children. Check for a state_update whose uuid is the sequence's own uuid AND whose
+    // reported dynamic_type is genuinely OperationSequence, not just INode. This second check
+    // matters because INode's own constructor runs before OperationSequence's: a naive fix that
+    // fires a self state_update from inside INode's base ctor would still pass the uuid check,
+    // but typeid() at that point reports the base class under construction (INode), not the
+    // true derived type -- this catches that class of bug.
+    INode &seq_ref                            = *seq;
+    std::string seq_dynamic_type              = typeid(seq_ref).name();
     bool seq_state_up_to_date_before_evaluate = false;
     for (auto &j : events) {
         seq_state_up_to_date_before_evaluate
             = seq_state_up_to_date_before_evaluate
-              || (j.at("event") == "state_update" && j.at("uuid") == seq_uuid);
+              || (j.at("event") == "state_update" && j.at("uuid") == seq_uuid
+                  && j.at("dynamic_type") == seq_dynamic_type);
     }
     REQUIRE_EQUAL(seq_state_up_to_date_before_evaluate, true);
 
