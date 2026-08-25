@@ -21,22 +21,29 @@
 namespace shamrock::solvergraph {
 
     class OperationSequence : public INode {
-        std::vector<std::shared_ptr<INode>> nodes;
         std::string name;
+        // Stored through INode::ChildNodes instead of a plain vector: constructing it fires
+        // the self state_update automatically, putting the sequence on record as up to date
+        // before it can be evaluated. A sequence owns no ro/rw edges of its own, so it never
+        // goes through __internal_set_ro_edges/__internal_set_rw_edges, which is how regular
+        // nodes get theirs fired. Declared after `name` so the node is fully readable
+        // (e.g. get_label()) by the time observers are notified.
+        ChildNodes nodes;
 
-        public:
-        OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> &&_nodes)
-            : nodes(std::forward<std::vector<std::shared_ptr<INode>>>(_nodes)), name(name) {
+        /// Validated before ChildNodes stores the children (and fires the self state_update):
+        /// an empty sequence must fail construction without notifying any state.
+        static std::vector<std::shared_ptr<INode>> check_not_empty(
+            std::vector<std::shared_ptr<INode>> &&nodes) {
             if (nodes.size() == 0) {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "OperationSequence must have at least one node");
             }
-            // A sequence owns no ro/rw edges of its own, so it never goes through
-            // __internal_set_ro_edges/__internal_set_rw_edges. Fire the self state_update
-            // manually so a sequence is on record as up to date before it can be evaluated,
-            // same as any other node.
-            notify_self_state_update();
+            return std::move(nodes);
         }
+
+        public:
+        OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> &&_nodes)
+            : name(name), nodes(*this, check_not_empty(std::move(_nodes))) {}
         void _impl_evaluate_internal();
 
         inline std::string _impl_get_label() const { return name; }

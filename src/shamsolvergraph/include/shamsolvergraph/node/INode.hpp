@@ -172,6 +172,40 @@ namespace shamrock::solvergraph {
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
         }
 
+        /// Storage for a meta node's child sub-nodes, meant to be declared as a data member
+        /// of the derived meta class itself (e.g. OperationSequence), never of INode.
+        /// Constructing it stores the children and immediately fires the owner's self
+        /// state_update (via INode::notify_self_state_update()): a meta node that owns no
+        /// ro/rw edges (and thus never goes through
+        /// __internal_set_ro_edges/__internal_set_rw_edges) cannot store its state without
+        /// also putting it on record, so the notification cannot be forgotten -- the same
+        /// coupling of "state stored => state_update fired" that set_edges gives regular
+        /// nodes.
+        ///
+        /// Firing from a derived-class member initializer is also what makes the reported
+        /// dynamic type correct: by the time a derived class's members are initialized the
+        /// object's dynamic type is already the derived class, so typeid() in the
+        /// on_state_update callback sees the true derived type. From INode's own constructor
+        /// it would see INode (a base ctor runs before the object becomes the derived type),
+        /// which is why INode cannot fire this notification itself.
+        class ChildNodes {
+            std::vector<std::shared_ptr<INode>> nodes;
+
+            public:
+            ChildNodes(INode &owner, std::vector<std::shared_ptr<INode>> &&nodes)
+                : nodes(std::move(nodes)) {
+                owner.notify_self_state_update();
+            }
+
+            /// Iteration & element access, mirroring the underlying vector
+            inline auto begin() { return nodes.begin(); }
+            inline auto end() { return nodes.end(); }
+            inline auto begin() const { return nodes.begin(); }
+            inline auto end() const { return nodes.end(); }
+            inline size_t size() const { return nodes.size(); }
+            inline const std::shared_ptr<INode> &operator[](size_t i) const { return nodes[i]; }
+        };
+
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
         inline std::string get_dot_graph() { return get_dot_graph_partial(); };
 
@@ -217,13 +251,14 @@ namespace shamrock::solvergraph {
         };
 
         protected:
-        /// Fire a self state_update for this node. Meant to be called at the end of a derived
-        /// class's own constructor, once that class's members are fully initialized -- never
-        /// from INode's own constructor. typeid() during a base class's constructor body
-        /// reports the class currently under construction (INode), not the object's final
-        /// derived type, so a state_update fired from there would misreport its dynamic type.
-        /// This lets meta nodes that own no ro/rw edges of their own (e.g. OperationSequence)
-        /// still record a state_update before they can be evaluated.
+        /// Fire a self state_update for this node. Meant to be called during a derived
+        /// class's own construction (normally through the ChildNodes member above, whose
+        /// constructor calls it automatically) -- never from INode's own constructor.
+        /// typeid() during a base class's constructor reports the class currently under
+        /// construction (INode), not the object's final derived type, so a state_update fired
+        /// from there would misreport its dynamic type. This lets meta nodes that own no
+        /// ro/rw edges of their own (e.g. OperationSequence) still record a state_update
+        /// before they can be evaluated.
         inline void notify_self_state_update() { tracker.trace_state_update(*this); }
 
         /// evaluate the node
