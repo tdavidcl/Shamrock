@@ -167,6 +167,9 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
+            // Guarantee a state_update before the first evaluate_begin. Must not be done from
+            // INode's constructor: typeid() would report INode rather than the derived type.
+            tracker.ensure_state_update(*this);
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             _impl_evaluate_internal();
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
@@ -217,15 +220,6 @@ namespace shamrock::solvergraph {
         };
 
         protected:
-        /// Fire a self state_update for this node. Meant to be called at the end of a derived
-        /// class's own constructor, once that class's members are fully initialized -- never
-        /// from INode's own constructor. typeid() during a base class's constructor body
-        /// reports the class currently under construction (INode), not the object's final
-        /// derived type, so a state_update fired from there would misreport its dynamic type.
-        /// This lets meta nodes that own no ro/rw edges of their own (e.g. OperationSequence)
-        /// still record a state_update before they can be evaluated.
-        inline void notify_self_state_update() { tracker.trace_state_update(*this); }
-
         /// evaluate the node
         virtual void _impl_evaluate_internal() = 0;
 

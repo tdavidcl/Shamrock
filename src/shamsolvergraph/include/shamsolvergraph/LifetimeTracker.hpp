@@ -44,6 +44,9 @@ namespace shamrock::solvergraph {
      */
     template<typename T>
     class LifetimeTracker : public shambase::WithUUID<LifetimeTracker<T>, u64> {
+        /// True once trace_state_update() has run on a live instance. Moved with the tracker.
+        bool has_traced_state_update = false;
+
         public:
         /// Called when a tracked object is created
         inline static void (*on_create)(u64 uuid) = nullptr;
@@ -71,11 +74,15 @@ namespace shamrock::solvergraph {
 
         /// Move assignment: `this` gives up whatever identity it held (firing its own destroy
         /// notification first, if still alive) before WithUUID's move assignment transfers
-        /// `other`'s uuid over and invalidates `other`.
+        /// `other`'s uuid over and invalidates `other`. The state_update flag travels with the
+        /// uuid so a node that already notified stays marked after move-assign.
         inline LifetimeTracker &operator=(LifetimeTracker &&other) noexcept {
             if (this != &other) {
                 trace_destroy();
+                bool other_has_traced         = other.has_traced_state_update;
+                other.has_traced_state_update = false;
                 shambase::WithUUID<LifetimeTracker, u64>::operator=(std::move(other));
+                has_traced_state_update = other_has_traced;
             }
             return *this;
         }
@@ -97,8 +104,19 @@ namespace shamrock::solvergraph {
             }
         }
         inline void trace_state_update(T &object) {
-            if (this->is_alive() && on_state_update) {
-                on_state_update(object);
+            if (this->is_alive()) {
+                if (on_state_update) {
+                    on_state_update(object);
+                }
+                has_traced_state_update = true;
+            }
+        }
+        /// Fire a state_update if none has been recorded yet. Used by INode::evaluate() so
+        /// meta-nodes that never rebind edges still emit one after the derived constructor has
+        /// run (typeid() in INode's own ctor would report INode, not the final type).
+        inline void ensure_state_update(T &object) {
+            if (!has_traced_state_update) {
+                trace_state_update(object);
             }
         }
         inline void trace_op(u64 op_id) {
