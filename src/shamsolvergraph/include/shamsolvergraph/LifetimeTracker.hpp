@@ -81,11 +81,13 @@ namespace shamrock::solvergraph {
             return *this;
         }
 
+        // fired by the CTOR (or then the one of the parent object)
         inline void trace_create() {
             if (on_create) {
                 on_create(this->uuid);
             }
         }
+
         /// Fires the destroy notification, if not already fired or moved from. Idempotent: safe
         /// to call explicitly (e.g. to control ordering relative to other teardown logic) and
         /// again later from the destructor.
@@ -97,14 +99,20 @@ namespace shamrock::solvergraph {
                 this->invalidate();
             }
         }
+
+        // notify and update of the owning object.
         inline void trace_state_update(T &object) {
             if (this->is_alive() && on_state_update) {
                 on_state_update(object);
             }
         }
-        inline void trace_event(std::string_view event_info) {
+
+        /// Use it like tracker.trace_event([]() {return "evaluate_begin";});
+        /// This patern allow for almost no overhead if tracing is disabled
+        template<class F>
+        inline void trace_event(F &&event_info_builder) {
             if (this->is_alive() && on_event) {
-                on_event(this->uuid, event_info);
+                on_event(this->uuid, event_info_builder());
             }
         }
 

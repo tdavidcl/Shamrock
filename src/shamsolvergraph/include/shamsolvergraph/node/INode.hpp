@@ -34,11 +34,10 @@ namespace shamrock::solvergraph {
         /// Read write edges
         std::vector<std::shared_ptr<IEdge>> rw_edges;
 
-        /// Tracks the lifetime of the node and holds its UUID.
-        /// Held as a plain value member instead of a base class (so trace_state_update() can
-        /// still take a `INode&` to this object) and instead of a `std::shared_ptr` member (to
-        /// avoid a heap allocation per node): LifetimeTracker handles move-safety internally, so
-        /// no indirection is needed here to avoid a duplicate destroy notification on move.
+        /// Tracks the lifetime of the edge and holds its UUID.
+        /// Held as a plain value member to allow stack variables without extra allocations
+        /// LifetimeTracker handles move-safety internally, also avoid a duplicate destroy
+        /// notification on move.
         LifetimeTracker<INode> tracker;
 
         public:
@@ -161,9 +160,14 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
-            tracker.trace_event("evaluate_begin");
+            // if solvergraph tracing is not enabled the .trace_event has the perf of a if statement
+            tracker.trace_event([]() {
+                return "evaluate_begin";
+            });
             _impl_evaluate_internal();
-            tracker.trace_event("evaluate_end");
+            tracker.trace_event([]() {
+                return "evaluate_end";
+            });
         }
 
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
