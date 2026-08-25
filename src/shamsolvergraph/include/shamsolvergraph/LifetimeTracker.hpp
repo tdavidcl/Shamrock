@@ -64,17 +64,24 @@ namespace shamrock::solvergraph {
         /// Move assignment
         LifetimeTracker &operator=(LifetimeTracker &&) noexcept = default;
 
-        /// Notify a state update of the tracked object
-        inline void notify_update(T &object) {
-            if (on_state_update != nullptr) {
+        inline void trace_create() {
+            if (on_create) {
+                on_create(this->uuid);
+            }
+        }
+        inline void trace_destroy() {
+            if (on_destroy) {
+                on_destroy(this->uuid);
+            }
+        }
+        inline void trace_state_update(T &object) {
+            if (on_state_update) {
                 on_state_update(object);
             }
         }
-
-        /// Notify an operation performed on the tracked object
-        inline void notify_op(u64 op_id) {
-            if (on_op != nullptr) {
-                on_op(this->get_uuid(), op_id);
+        inline void trace_op(u64 op_id) {
+            if (on_op) {
+                on_op(this->uuid, op_id);
             }
         }
 

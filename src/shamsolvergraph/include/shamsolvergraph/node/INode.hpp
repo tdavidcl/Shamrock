@@ -163,11 +163,11 @@ namespace shamrock::solvergraph {
         /// Evaluate the node
         inline void evaluate() {
             if (tracker) {
-                tracker->notify_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
+                tracker->trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             }
             _impl_evaluate_internal();
             if (tracker) {
-                tracker->notify_op(static_cast<u64>(NodeTraceOp::evaluate_end));
+                tracker->trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
             }
         }
 
@@ -242,7 +242,7 @@ namespace shamrock::solvergraph {
             // shambase::get_check_ref(e).parent = getptr_weak();
         }
         if (tracker) {
-            tracker->notify_update(*this);
+            tracker->trace_state_update(*this);
         }
     }
 
@@ -255,7 +255,7 @@ namespace shamrock::solvergraph {
             // shambase::get_check_ref(e).child = getptr_weak();
         }
         if (tracker) {
-            tracker->notify_update(*this);
+            tracker->trace_state_update(*this);
         }
     }
 
