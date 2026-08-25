@@ -31,7 +31,11 @@ namespace shamrock::solvergraph {
         public:
         using IEdgeNamed::IEdgeNamed;
 
-        virtual ~IPatchDataLayerRefs() = default;
+        // No destructor declared here on purpose: it would do nothing beyond being virtual
+        // (already guaranteed by IEdge's own virtual destructor), and declaring one -- even
+        // `= default` -- would suppress implicit move constructor/assignment generation, which
+        // (combined with IEdge's deleted copy constructor) would make IPatchDataLayerRefs (and
+        // PatchDataLayerRefs, which does not declare its own) neither movable nor copyable.
 
         virtual patch::PatchDataLayer &get(u64 id_patch)             = 0;
         virtual const patch::PatchDataLayer &get(u64 id_patch) const = 0;

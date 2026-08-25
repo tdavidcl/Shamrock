@@ -35,7 +35,11 @@ namespace shamrock::solvergraph {
 
         inline virtual void free_alloc() { data = {}; }
 
-        virtual ~IDataEdge() {}
+        // No destructor declared here on purpose: it would do nothing beyond being virtual
+        // (already guaranteed by IEdge's own virtual destructor), and declaring one -- even
+        // `= default` -- would suppress implicit move constructor/assignment generation, which
+        // (combined with IEdge's deleted copy constructor) would make IDataEdge neither movable
+        // nor copyable.
 
         static std::shared_ptr<IDataEdge<T>> make_shared(std::string name, std::string texsymbol) {
             return std::make_shared<IDataEdge<T>>(name, texsymbol);

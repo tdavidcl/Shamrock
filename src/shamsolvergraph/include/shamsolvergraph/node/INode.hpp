@@ -41,10 +41,11 @@ namespace shamrock::solvergraph {
         std::vector<std::shared_ptr<IEdge>> rw_edges;
 
         /// Tracks the lifetime of the node and holds its UUID.
-        /// Held as a shared_ptr member instead of a base class so that moved-from nodes carry a
-        /// null tracker and never emit a duplicate destroy notification.
-        std::shared_ptr<LifetimeTracker<INode>> tracker
-            = std::make_shared<LifetimeTracker<INode>>();
+        /// Held as a plain value member instead of a base class (so trace_state_update() can
+        /// still take a `INode&` to this object) and instead of a `std::shared_ptr` member (to
+        /// avoid a heap allocation per node): LifetimeTracker handles move-safety internally, so
+        /// no indirection is needed here to avoid a duplicate destroy notification on move.
+        LifetimeTracker<INode> tracker;
 
         public:
         INode() = default;
@@ -59,7 +60,7 @@ namespace shamrock::solvergraph {
         INode &operator=(INode &&) noexcept = default;
 
         /// Get the UUID of the node
-        inline u64 get_uuid() const { return shambase::get_check_ref(tracker).get_uuid(); }
+        inline u64 get_uuid() const { return tracker.get_uuid(); }
 
         /// Get a shared pointer to this node
         inline std::shared_ptr<INode> getptr_shared() { return shared_from_this(); }
@@ -85,11 +86,15 @@ namespace shamrock::solvergraph {
         void on_edge_rw_edges(Func &&f);
 
         /// Destructor (virtual) & reset the edges.
-        /// The tracker is reset first so the destroy notification is emitted before the edges are
-        /// cleared, and so that clearing the edges does not notify a state update on a
-        /// partially-destroyed object (which would perform virtual dispatch during destruction).
+        /// The destroy notification is fired first (trace_destroy() is idempotent, so the
+        /// tracker's own destructor firing it again afterward is a no-op) so it precedes the
+        /// edges being cleared, and so that clearing the edges does not notify a state update on
+        /// a partially-destroyed object (which would perform virtual dispatch during
+        /// destruction): trace_destroy() marks the tracker dead, so the trace_state_update()
+        /// calls inside __internal_set_ro_edges/__internal_set_rw_edges below are silently
+        /// skipped.
         virtual ~INode() {
-            tracker.reset();
+            tracker.trace_destroy();
             __internal_set_ro_edges({});
             __internal_set_rw_edges({});
         }
@@ -162,13 +167,9 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
-            if (tracker) {
-                tracker->trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
-            }
+            tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             _impl_evaluate_internal();
-            if (tracker) {
-                tracker->trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
-            }
+            tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
         }
 
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
@@ -223,11 +224,7 @@ namespace shamrock::solvergraph {
         /// derived type, so a state_update fired from there would misreport its dynamic type.
         /// This lets meta nodes that own no ro/rw edges of their own (e.g. OperationSequence)
         /// still record a state_update before they can be evaluated.
-        inline void notify_self_state_update() {
-            if (tracker) {
-                tracker->trace_state_update(*this);
-            }
-        }
+        inline void notify_self_state_update() { tracker.trace_state_update(*this); }
 
         /// evaluate the node
         virtual void _impl_evaluate_internal() = 0;
@@ -254,9 +251,7 @@ namespace shamrock::solvergraph {
         for (auto e : ro_edges) {
             // shambase::get_check_ref(e).parent = getptr_weak();
         }
-        if (tracker) {
-            tracker->trace_state_update(*this);
-        }
+        tracker.trace_state_update(*this);
     }
 
     inline void INode::__internal_set_rw_edges(std::vector<std::shared_ptr<IEdge>> new_rw_edges) {
@@ -267,9 +262,7 @@ namespace shamrock::solvergraph {
         for (auto e : rw_edges) {
             // shambase::get_check_ref(e).child = getptr_weak();
         }
-        if (tracker) {
-            tracker->trace_state_update(*this);
-        }
+        tracker.trace_state_update(*this);
     }
 
     template<class Func>

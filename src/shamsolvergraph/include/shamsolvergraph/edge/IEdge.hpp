@@ -17,10 +17,8 @@
  */
 
 #include "shambase/aliases_int.hpp"
-#include "shambase/memory.hpp"
 #include "shamsolvergraph/IFreeable.hpp"
 #include "shamsolvergraph/LifetimeTracker.hpp"
-#include <memory>
 #include <string>
 
 namespace shamrock::solvergraph {
@@ -30,12 +28,25 @@ namespace shamrock::solvergraph {
     class IEdge : public IFreeable {
 
         /// Tracks the lifetime of the edge and holds its UUID.
-        /// Held as a shared_ptr member instead of a base class so that moved-from edges carry a
-        /// null tracker and never emit a duplicate destroy notification.
-        std::shared_ptr<LifetimeTracker<IEdge>> tracker
-            = std::make_shared<LifetimeTracker<IEdge>>();
+        /// Held as a plain value member instead of a base class (so trace_state_update() can
+        /// still take a `IEdge&` to this object) and instead of a `std::shared_ptr` member (to
+        /// avoid a heap allocation per edge): LifetimeTracker handles move-safety internally, so
+        /// no indirection is needed here to avoid a duplicate destroy notification on move.
+        LifetimeTracker<IEdge> tracker;
 
         public:
+        IEdge() = default;
+
+        IEdge(const IEdge &)            = delete; /// would duplicate the UUID
+        IEdge &operator=(const IEdge &) = delete; /// would duplicate the UUID
+
+        /// Move constructor - transfers identity via LifetimeTracker's own move ctor. Must be
+        /// declared explicitly (not just left implicit): a user-declared destructor (below)
+        /// suppresses implicit move constructor generation.
+        IEdge(IEdge &&) noexcept = default;
+        /// Move assignment - transfers identity via LifetimeTracker's own move assignment
+        IEdge &operator=(IEdge &&) noexcept = default;
+
         inline std::string get_label() const { return _impl_get_dot_label(); }
         inline std::string get_tex_symbol() const { return _impl_get_tex_symbol(); }
 
@@ -43,7 +54,7 @@ namespace shamrock::solvergraph {
         virtual std::string _impl_get_tex_symbol() const = 0;
 
         /// Get the UUID of the edge
-        inline u64 get_uuid() const { return shambase::get_check_ref(tracker).get_uuid(); }
+        inline u64 get_uuid() const { return tracker.get_uuid(); }
 
         inline virtual ~IEdge() {}
     };

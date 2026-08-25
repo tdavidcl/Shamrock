@@ -18,6 +18,7 @@
 
 #include "shambase/WithUUID.hpp"
 #include "shambase/aliases_int.hpp"
+#include <utility>
 
 namespace shamrock::solvergraph {
 
@@ -25,11 +26,16 @@ namespace shamrock::solvergraph {
      * @brief Tracks the lifetime of an object of type T and notifies observers through static
      * callbacks.
      *
-     * The tracker is meant to be held by the tracked object as a `std::shared_ptr` member (not
-     * inherited). This makes lifetime notifications move-safe: when the tracked object is moved,
-     * the tracker pointer moves with it and the moved-from object is left with a null tracker,
-     * so the destroy notification is emitted exactly once (a plain UUID member would emit a
-     * duplicate destroy notification when the moved-from object is destroyed).
+     * The tracker is meant to be held by the tracked object as a plain value member (not
+     * inherited, so that trace_state_update()/trace_op() can still take a `T&` reference to the
+     * enclosing object rather than to the tracker itself). Holding it by value instead of behind
+     * a `std::shared_ptr` avoids a heap allocation per tracked object.
+     *
+     * Move-safety comes entirely from the base class: WithUUID's move constructor/assignment
+     * invalidate the source, so its is_alive() reports false afterward. Every notification
+     * method here (including the destructor) checks is_alive() first, so a moved-from instance's
+     * own eventual destruction is a silent no-op instead of emitting a duplicate destroy
+     * notification for a uuid whose ownership has already moved elsewhere.
      *
      * All callbacks are `nullptr` by default, so the cost when tracking is disabled is a single
      * null pointer check per notification site.
@@ -59,38 +65,51 @@ namespace shamrock::solvergraph {
         LifetimeTracker(const LifetimeTracker &)            = delete; ///< would duplicate the UUID
         LifetimeTracker &operator=(const LifetimeTracker &) = delete; ///< would duplicate the UUID
 
-        /// Move constructor
+        /// Move constructor: delegates entirely to WithUUID's own move constructor, which
+        /// transfers the uuid to `this` and invalidates `other`.
         LifetimeTracker(LifetimeTracker &&) noexcept = default;
-        /// Move assignment
-        LifetimeTracker &operator=(LifetimeTracker &&) noexcept = default;
+
+        /// Move assignment: `this` gives up whatever identity it held (firing its own destroy
+        /// notification first, if still alive) before WithUUID's move assignment transfers
+        /// `other`'s uuid over and invalidates `other`.
+        inline LifetimeTracker &operator=(LifetimeTracker &&other) noexcept {
+            if (this != &other) {
+                trace_destroy();
+                shambase::WithUUID<LifetimeTracker, u64>::operator=(std::move(other));
+            }
+            return *this;
+        }
 
         inline void trace_create() {
             if (on_create) {
                 on_create(this->uuid);
             }
         }
+        /// Fires the destroy notification, if not already fired or moved from. Idempotent: safe
+        /// to call explicitly (e.g. to control ordering relative to other teardown logic) and
+        /// again later from the destructor.
         inline void trace_destroy() {
-            if (on_destroy) {
-                on_destroy(this->uuid);
+            if (this->is_alive()) {
+                if (on_destroy) {
+                    on_destroy(this->uuid);
+                }
+                this->invalidate();
             }
         }
         inline void trace_state_update(T &object) {
-            if (on_state_update) {
+            if (this->is_alive() && on_state_update) {
                 on_state_update(object);
             }
         }
         inline void trace_op(u64 op_id) {
-            if (on_op) {
+            if (this->is_alive() && on_op) {
                 on_op(this->uuid, op_id);
             }
         }
 
-        /// Destructor, notifies the destruction of the tracked object
-        ~LifetimeTracker() {
-            if (on_destroy != nullptr) {
-                on_destroy(this->get_uuid());
-            }
-        };
+        /// Destructor, notifies the destruction of the tracked object (unless already notified,
+        /// or this instance was moved from).
+        ~LifetimeTracker() { trace_destroy(); };
     };
 
 } // namespace shamrock::solvergraph
