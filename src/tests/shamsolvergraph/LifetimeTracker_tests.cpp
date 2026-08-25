@@ -123,9 +123,9 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         expected.push_back({{"event", "create"}, {"type", "IEdge"}, {"uuid", edge_uuid}});
         REQUIRE_EQUAL(dump(events), dump(expected));
 
-        // Step 2: creating a node fires exactly one create event for that node, immediately
-        // followed by a state_update for itself (every node ctor ends with a self
-        // state_update), before anything else happens to it.
+        // Step 2: creating a node fires exactly one create event for that node, and nothing
+        // else: no state_update fires at construction time (it would misreport the dynamic
+        // type from a base class ctor -- see the OperationSequence test below).
         NodeT set_edge([](IDataEdge<f64> &e) {
             e.data = 1;
         });
@@ -167,11 +167,9 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         REQUIRE_EQUAL(ptr->get_uuid(), node_uuid);
         REQUIRE_EQUAL(dump(events), dump(expected));
 
-        // Note here the definition of lifetime tracing is that the state must be up to date before
-        // evaluation. Not sure how to enforce it though.
-
         // Step 5: evaluating the node brackets the operation, firing on_op with op_id 0 at
-        // the start and op_id 1 at the end.
+        // the start and op_id 1 at the end. The state was already reported up to date by
+        // set_edges in step 3, so evaluate()'s lazy self state_update does not fire here.
         ptr->evaluate();
         expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 0}});
         expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 1}});
@@ -242,12 +240,10 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
     REQUIRE_EQUAL(dump(events), dump(expected));
 
     // Step 4: wrapping the child into an OperationSequence fires one create event for the
-    // sequence, immediately followed by a state_update for itself. A sequence owns no ro/rw
-    // edges of its own (it only forwards evaluate() to its children), so it never goes through
-    // __internal_set_ro_edges/__internal_set_rw_edges; instead, its constructor explicitly
-    // fires this self state_update once its children are stored, via
-    // INode::notify_self_state_update() -- the same mechanism the rule under test (step 5)
-    // relies on.
+    // sequence, and nothing else. A sequence owns no ro/rw edges of its own (it only forwards
+    // evaluate() to its children), so it never goes through
+    // __internal_set_ro_edges/__internal_set_rw_edges: its self state_update is deferred to
+    // its first evaluate() -- checked in step 5.
     auto seq
         = std::make_shared<OperationSequence>("seq", std::vector<std::shared_ptr<INode>>{child});
     seq_uuid = seq->get_uuid();
@@ -258,39 +254,44 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
     INode &seq_ref               = *seq;
     std::string seq_dynamic_type = typeid(seq_ref).name();
     expected.push_back({{"event", "create"}, {"type", "INode"}, {"uuid", seq_uuid}});
+    REQUIRE_EQUAL(dump(events), dump(expected));
+
+    // Step 5: the rule under test - a state_update must be recorded before the first
+    // evaluate op fires - holds even for meta nodes like OperationSequence, which delegate
+    // evaluation entirely to their children and never had their state explicitly updated:
+    // evaluate() fires a lazy self state_update right before its evaluate_begin op. The
+    // expected dynamic_type is the true derived type (OperationSequence), not just INode.
+    // This second check matters because INode's own constructor runs before
+    // OperationSequence's: a naive fix that fires a self state_update from inside INode's
+    // base ctor would still pass the uuid check, but typeid() at that point reports the base
+    // class under construction (INode), not the true derived type -- the exact-match check
+    // below catches that class of bug (wrong dynamic_type, and wrong position: it would show
+    // up back in step 4, next to the create event).
+    //
+    // The op events then bracket both the sequence and the child: the sequence's
+    // evaluate_begin fires first, then the child's evaluate_begin/evaluate_end (as the
+    // sequence's _impl_evaluate_internal() calls child->evaluate()), then the sequence's
+    // evaluate_end. The child's state was already reported up to date by set_edges in step 3,
+    // so no lazy state_update fires for it.
+    seq->evaluate();
     expected.push_back(
         {{"event", "state_update"},
          {"type", "INode"},
          {"uuid", seq_uuid},
          {"dynamic_type", seq_dynamic_type}});
-    REQUIRE_EQUAL(dump(events), dump(expected));
-
-    // Step 5: the rule under test - a state_update must be recorded before evaluate() fires -
-    // holds even for meta nodes like OperationSequence, which delegate evaluation entirely to
-    // their children. Check for a state_update whose uuid is the sequence's own uuid AND whose
-    // reported dynamic_type is genuinely OperationSequence, not just INode. This second check
-    // matters because INode's own constructor runs before OperationSequence's: a naive fix that
-    // fires a self state_update from inside INode's base ctor would still pass the uuid check,
-    // but typeid() at that point reports the base class under construction (INode), not the
-    // true derived type -- this catches that class of bug.
-    bool seq_state_up_to_date_before_evaluate = false;
-    for (auto &j : events) {
-        seq_state_up_to_date_before_evaluate
-            = seq_state_up_to_date_before_evaluate
-              || (j.at("event") == "state_update" && j.at("uuid") == seq_uuid
-                  && j.at("dynamic_type") == seq_dynamic_type);
-    }
-    REQUIRE_EQUAL(seq_state_up_to_date_before_evaluate, true);
-
-    // Step 6: evaluating the sequence brackets both its own op events and the child's: the
-    // sequence's evaluate_begin fires first, then the child's evaluate_begin/evaluate_end (as
-    // the sequence's _impl_evaluate_internal() calls child->evaluate()), then the sequence's
-    // evaluate_end.
-    seq->evaluate();
     expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 0}});
     expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 0}});
     expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 1}});
     expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 1}});
     REQUIRE_EQUAL(dump(events), dump(expected));
     REQUIRE_EQUAL(edge->data, 1.0);
+
+    // Step 6: the lazy self state_update is a one-shot - a second evaluate() records only the
+    // op events.
+    seq->evaluate();
+    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 0}});
+    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 0}});
+    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 1}});
+    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 1}});
+    REQUIRE_EQUAL(dump(events), dump(expected));
 }

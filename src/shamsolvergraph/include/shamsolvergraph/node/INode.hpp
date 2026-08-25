@@ -167,6 +167,16 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
+            // Guarantees at least one state_update is on record before the first operation.
+            // Nodes whose edges were bound already fired one through
+            // __internal_set_ro_edges/__internal_set_rw_edges, making this a no-op; meta nodes
+            // that own no ro/rw edges of their own (e.g. OperationSequence) get theirs fired
+            // here. Firing it lazily instead of from INode's constructor matters because
+            // typeid() during a base class's constructor body reports the class currently
+            // under construction (INode), not the object's final derived type -- by the time
+            // evaluate() runs the object is fully constructed, so observers see the true
+            // dynamic type.
+            tracker.trace_state_update_if_unsent(*this);
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
             _impl_evaluate_internal();
             tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
@@ -217,15 +227,6 @@ namespace shamrock::solvergraph {
         };
 
         protected:
-        /// Fire a self state_update for this node. Meant to be called at the end of a derived
-        /// class's own constructor, once that class's members are fully initialized -- never
-        /// from INode's own constructor. typeid() during a base class's constructor body
-        /// reports the class currently under construction (INode), not the object's final
-        /// derived type, so a state_update fired from there would misreport its dynamic type.
-        /// This lets meta nodes that own no ro/rw edges of their own (e.g. OperationSequence)
-        /// still record a state_update before they can be evaluated.
-        inline void notify_self_state_update() { tracker.trace_state_update(*this); }
-
         /// evaluate the node
         virtual void _impl_evaluate_internal() = 0;
 
