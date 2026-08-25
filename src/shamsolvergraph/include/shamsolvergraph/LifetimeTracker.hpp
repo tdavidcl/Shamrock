@@ -76,7 +76,6 @@ namespace shamrock::solvergraph {
             if (this != &other) {
                 trace_destroy();
                 shambase::WithUUID<LifetimeTracker, u64>::operator=(std::move(other));
-                state_update_sent = other.state_update_sent;
             }
             return *this;
         }
@@ -100,16 +99,6 @@ namespace shamrock::solvergraph {
         inline void trace_state_update(T &object) {
             if (this->is_alive() && on_state_update) {
                 on_state_update(object);
-                state_update_sent = true;
-            }
-        }
-        /// Fires a state_update only if none was ever delivered for this identity. Used to
-        /// guarantee that at least one state_update precedes the first operation on the
-        /// tracked object, even for objects whose state is never explicitly updated (e.g.
-        /// meta nodes owning no edges of their own).
-        inline void trace_state_update_if_unsent(T &object) {
-            if (!state_update_sent) {
-                trace_state_update(object);
             }
         }
         inline void trace_op(u64 op_id) {
@@ -121,12 +110,6 @@ namespace shamrock::solvergraph {
         /// Destructor, notifies the destruction of the tracked object (unless already notified,
         /// or this instance was moved from).
         ~LifetimeTracker() { trace_destroy(); };
-
-        private:
-        /// Whether a state_update was actually delivered for this identity. Travels with the
-        /// uuid on move (copied by the defaulted move constructor and by the move assignment
-        /// above), so the destination knows the observers already saw the state.
-        bool state_update_sent = false;
     };
 
 } // namespace shamrock::solvergraph
