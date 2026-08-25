@@ -26,12 +26,6 @@
 
 namespace shamrock::solvergraph {
 
-    /// Operation ids notified through LifetimeTracker<INode>::on_op
-    enum class NodeTraceOp : u64 {
-        evaluate_begin = 0, ///< emitted right before _impl_evaluate_internal()
-        evaluate_end   = 1, ///< emitted right after _impl_evaluate_internal()
-    };
-
     /// Inode is node between data edges, takes multiple inputs, multiple outputs
     class INode : public std::enable_shared_from_this<INode> {
 
