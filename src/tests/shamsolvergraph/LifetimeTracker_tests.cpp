@@ -103,12 +103,15 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         expected.push_back({{"event", "create"}, {"type", "IEdge"}, {"uuid", edge_uuid}});
         REQUIRE_EQUAL(events, expected);
 
-        // Step 2: creating a node fires exactly one create event for that node.
+        // Step 2: creating a node fires exactly one create event for that node, immediately
+        // followed by a state_update for itself (every node ctor ends with a self
+        // state_update), before anything else happens to it.
         NodeT set_edge([](IDataEdge<f64> &e) {
             e.data = 1;
         });
         node_uuid = set_edge.get_uuid();
         expected.push_back({{"event", "create"}, {"type", "INode"}, {"uuid", node_uuid}});
+        expected.push_back({{"event", "state_update"}, {"type", "INode"}, {"uuid", node_uuid}});
         REQUIRE_EQUAL(events, expected);
 
         // Step 3: binding the edge to the node fires one state_update for the node (its edge
@@ -151,6 +154,6 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         // block, before the final assertion below runs.
     }
 
-    // Step 8: the moved-from husk's destruction above must not add a 9th event.
+    // Step 8: the moved-from husk's destruction above must not add a 10th event.
     REQUIRE_EQUAL(events, expected);
 }
