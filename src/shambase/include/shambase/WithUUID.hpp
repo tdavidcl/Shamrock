@@ -34,11 +34,8 @@ namespace shambase {
      *    std::cout << "Instance1 UUID: " << A1{}.get_uuid() << std::endl;
      * @endcode
      *
-     * Copying would duplicate a supposedly-unique uuid across two live instances, so the copy
-     * constructor/assignment are deleted. Moving transfers the uuid to the destination and
-     * invalidates the source (setting its uuid to `invalid_uuid`), so a moved-from instance
-     * never appears alive with a duplicate of the uuid it no longer owns -- check `is_alive()`
-     * rather than assuming a moved-from instance still holds a meaningful uuid.
+     * Copy is deleted (would duplicate the uuid). Move transfers the uuid and invalidates the
+     * source, so check `is_alive()` rather than assuming a moved-from instance still has one.
      */
     template<typename T, class Tint, bool thread_safe = true>
     class WithUUID {
@@ -50,8 +47,8 @@ namespace shambase {
         Tint uuid;
 
         public:
-        /// Sentinel uuid value marking an instance as moved-from / invalidated. Chosen as the
-        /// max representable Tint rather than e.g. 0, since 0 is a legitimately-assigned uuid.
+        /// Sentinel marking an invalidated/moved-from instance (0 is a valid uuid, so max is used
+        /// instead).
         static constexpr Tint invalid_uuid = std::numeric_limits<Tint>::max();
 
         /**
@@ -64,9 +61,7 @@ namespace shambase {
         /// Whether this instance still holds a valid uuid (false once moved from).
         inline bool is_alive() const { return uuid != invalid_uuid; }
 
-        /// Marks this instance's uuid as invalid. Meant for derived classes that need to give
-        /// up their identity outside of a move (e.g. after already having fired a one-time
-        /// notification tied to it).
+        /// Marks this instance's uuid as invalid, e.g. to give up identity outside of a move.
         inline void invalidate() { uuid = invalid_uuid; }
 
         /**

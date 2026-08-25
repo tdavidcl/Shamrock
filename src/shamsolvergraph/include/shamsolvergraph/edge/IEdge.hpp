@@ -37,14 +37,12 @@ namespace shamrock::solvergraph {
         public:
         IEdge() = default;
 
-        IEdge(const IEdge &)            = delete; /// would duplicate the UUID
-        IEdge &operator=(const IEdge &) = delete; /// would duplicate the UUID
+        IEdge(const IEdge &)            = delete; /// would duplicate the uuid
+        IEdge &operator=(const IEdge &) = delete; /// would duplicate the uuid
 
-        /// Move constructor - transfers identity via LifetimeTracker's own move ctor. Must be
-        /// declared explicitly (not just left implicit): a user-declared destructor (below)
-        /// suppresses implicit move constructor generation.
-        IEdge(IEdge &&) noexcept = default;
-        /// Move assignment - transfers identity via LifetimeTracker's own move assignment
+        /// Declared explicitly: the destructor below would otherwise suppress implicit move
+        /// generation, and copy is deleted, leaving IEdge neither movable nor copyable.
+        IEdge(IEdge &&) noexcept            = default;
         IEdge &operator=(IEdge &&) noexcept = default;
 
         inline std::string get_label() const { return _impl_get_dot_label(); }
