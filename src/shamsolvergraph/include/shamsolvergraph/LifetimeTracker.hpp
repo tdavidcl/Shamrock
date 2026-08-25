@@ -18,6 +18,7 @@
 
 #include "shambase/WithUUID.hpp"
 #include "shambase/aliases_int.hpp"
+#include <string_view>
 #include <utility>
 
 namespace shamrock::solvergraph {
@@ -53,7 +54,7 @@ namespace shamrock::solvergraph {
         /// Called when the state of a tracked object changes (e.g. edges are rebound)
         inline static void (*on_state_update)(T &object) = nullptr;
         /// Called when an operation is performed on a tracked object (e.g. evaluation)
-        inline static void (*on_op)(u64 uuid, u64 op_id) = nullptr;
+        inline static void (*on_event)(u64 uuid, std::string_view s) = nullptr;
 
         /// Constructor, notifies the creation of the tracked object
         LifetimeTracker() : shambase::WithUUID<LifetimeTracker, u64>() {
@@ -101,9 +102,9 @@ namespace shamrock::solvergraph {
                 on_state_update(object);
             }
         }
-        inline void trace_op(u64 op_id) {
-            if (this->is_alive() && on_op) {
-                on_op(this->uuid, op_id);
+        inline void trace_event(std::string_view event_info) {
+            if (this->is_alive() && on_event) {
+                on_event(this->uuid, event_info);
             }
         }
 

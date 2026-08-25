@@ -39,8 +39,8 @@ namespace {
              {"uuid", node.get_uuid()},
              {"dynamic_type", std::string(typeid(node).name())}});
     }
-    void on_op_node(u64 uuid, u64 op_id) {
-        events.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", uuid}, {"op_id", op_id}});
+    void on_event_node(u64 uuid, std::string_view event) {
+        events.push_back({{"event", event}, {"type", "INode"}, {"uuid", uuid}});
     }
 
     void on_create_edge(u64 uuid) {
@@ -70,12 +70,12 @@ namespace {
             shamrock::solvergraph::LifetimeTracker<INode>::on_create       = &on_create_node;
             shamrock::solvergraph::LifetimeTracker<INode>::on_destroy      = &on_destroy_node;
             shamrock::solvergraph::LifetimeTracker<INode>::on_state_update = &on_state_update_node;
-            shamrock::solvergraph::LifetimeTracker<INode>::on_op           = &on_op_node;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_event        = &on_event_node;
 
             shamrock::solvergraph::LifetimeTracker<IEdge>::on_create       = &on_create_edge;
             shamrock::solvergraph::LifetimeTracker<IEdge>::on_destroy      = &on_destroy_edge;
             shamrock::solvergraph::LifetimeTracker<IEdge>::on_state_update = &on_state_update_edge;
-            // LifetimeTracker<IEdge>::on_op is intentionally left null: edges have no
+            // LifetimeTracker<IEdge>::on_event is intentionally left null: edges have no
             // "operation" concept, so it must never be invoked. If it ever is, this test
             // crashes on a null function-pointer call instead of silently passing.
         }
@@ -84,7 +84,7 @@ namespace {
             shamrock::solvergraph::LifetimeTracker<INode>::on_create       = nullptr;
             shamrock::solvergraph::LifetimeTracker<INode>::on_destroy      = nullptr;
             shamrock::solvergraph::LifetimeTracker<INode>::on_state_update = nullptr;
-            shamrock::solvergraph::LifetimeTracker<INode>::on_op           = nullptr;
+            shamrock::solvergraph::LifetimeTracker<INode>::on_event        = nullptr;
 
             shamrock::solvergraph::LifetimeTracker<IEdge>::on_create       = nullptr;
             shamrock::solvergraph::LifetimeTracker<IEdge>::on_destroy      = nullptr;
@@ -173,8 +173,8 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker", 1) {
         // Step 5: evaluating the node brackets the operation, firing on_op with op_id 0 at
         // the start and op_id 1 at the end.
         ptr->evaluate();
-        expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 0}});
-        expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", node_uuid}, {"op_id", 1}});
+        expected.push_back({{"event", "evaluate_begin"}, {"type", "INode"}, {"uuid", node_uuid}});
+        expected.push_back({{"event", "evaluate_end"}, {"type", "INode"}, {"uuid", node_uuid}});
         REQUIRE_EQUAL(dump(events), dump(expected));
         REQUIRE_EQUAL(edge->data, 1.0);
 
@@ -287,10 +287,10 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
     // the sequence's _impl_evaluate_internal() calls child->evaluate()), then the sequence's
     // evaluate_end.
     seq->evaluate();
-    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 0}});
-    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 0}});
-    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", child_uuid}, {"op_id", 1}});
-    expected.push_back({{"event", "op"}, {"type", "INode"}, {"uuid", seq_uuid}, {"op_id", 1}});
+    expected.push_back({{"event", "evaluate_begin"}, {"type", "INode"}, {"uuid", seq_uuid}});
+    expected.push_back({{"event", "evaluate_begin"}, {"type", "INode"}, {"uuid", child_uuid}});
+    expected.push_back({{"event", "evaluate_end"}, {"type", "INode"}, {"uuid", child_uuid}});
+    expected.push_back({{"event", "evaluate_end"}, {"type", "INode"}, {"uuid", seq_uuid}});
     REQUIRE_EQUAL(dump(events), dump(expected));
     REQUIRE_EQUAL(edge->data, 1.0);
 }

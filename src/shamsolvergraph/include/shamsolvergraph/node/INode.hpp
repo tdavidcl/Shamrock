@@ -167,9 +167,9 @@ namespace shamrock::solvergraph {
 
         /// Evaluate the node
         inline void evaluate() {
-            tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_begin));
+            tracker.trace_event("evaluate_begin");
             _impl_evaluate_internal();
-            tracker.trace_op(static_cast<u64>(NodeTraceOp::evaluate_end));
+            tracker.trace_event("evaluate_end");
         }
 
         /// Get the dot graph of the node (Currently only an alias to get_dot_graph_partial)
