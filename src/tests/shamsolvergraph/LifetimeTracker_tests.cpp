@@ -242,12 +242,27 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
     REQUIRE_EQUAL(dump(events), dump(expected));
 
     // Step 4: wrapping the child into an OperationSequence fires one create event for the
-    // sequence. A sequence never owns ro/rw edges of its own (it only forwards evaluate() to
-    // its children), so it never fires a state_update for itself.
+    // sequence, immediately followed by a state_update for itself. A sequence owns no ro/rw
+    // edges of its own (it only forwards evaluate() to its children), so it never goes through
+    // __internal_set_ro_edges/__internal_set_rw_edges; instead, its constructor explicitly
+    // fires this self state_update once its children are stored, via
+    // INode::notify_self_state_update() -- the same mechanism the rule under test (step 5)
+    // relies on.
     auto seq
         = std::make_shared<OperationSequence>("seq", std::vector<std::shared_ptr<INode>>{child});
     seq_uuid = seq->get_uuid();
+    // Bound to a variable rather than written inline as typeid(*seq): typeid() only evaluates
+    // its operand when it names a polymorphic glvalue, but *seq (a function call to
+    // shared_ptr::operator*) trips a compiler warning about evaluating an expression with
+    // side effects as a typeid operand.
+    INode &seq_ref               = *seq;
+    std::string seq_dynamic_type = typeid(seq_ref).name();
     expected.push_back({{"event", "create"}, {"type", "INode"}, {"uuid", seq_uuid}});
+    expected.push_back(
+        {{"event", "state_update"},
+         {"type", "INode"},
+         {"uuid", seq_uuid},
+         {"dynamic_type", seq_dynamic_type}});
     REQUIRE_EQUAL(dump(events), dump(expected));
 
     // Step 5: the rule under test - a state_update must be recorded before evaluate() fires -
@@ -258,8 +273,6 @@ NEW_TEST(Unittest, "shamsolvergraph/LifetimeTracker_OperationSequence", 1) {
     // fires a self state_update from inside INode's base ctor would still pass the uuid check,
     // but typeid() at that point reports the base class under construction (INode), not the
     // true derived type -- this catches that class of bug.
-    INode &seq_ref                            = *seq;
-    std::string seq_dynamic_type              = typeid(seq_ref).name();
     bool seq_state_up_to_date_before_evaluate = false;
     for (auto &j : events) {
         seq_state_up_to_date_before_evaluate
