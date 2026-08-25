@@ -23,6 +23,7 @@ namespace shamrock::solvergraph {
     class OperationSequence : public INode {
         std::vector<std::shared_ptr<INode>> nodes;
         std::string name;
+        OnConstructed on_constructed{*this};
 
         public:
         OperationSequence(std::string name, std::vector<std::shared_ptr<INode>> &&_nodes)
