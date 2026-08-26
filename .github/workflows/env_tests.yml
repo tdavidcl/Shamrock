@@ -343,7 +343,6 @@ jobs:
           ../tools/test_sequence.sh
 
       - name: Create Python test script for next tests
-        shell: bash # In docker container github action default to sh
         if: matrix.runtest || matrix.runtestpy || matrix.runtestpypip
         run: |
           cat > /tmp/test_rscript.py << 'EOF'
@@ -393,7 +392,6 @@ jobs:
           rm -rf CMakeCache.txt
 
       - name: Create a Python venv
-        shell: bash # In docker container github action default to sh
         if: matrix.runtestpypip
         run: |
           PYTHON_EXECUTABLE="$(python3 -c "import sys; print(sys.executable)")"
@@ -403,7 +401,6 @@ jobs:
           pip install -U pip setuptools
 
       - name: Try pip install Shamrock
-        shell: bash # In docker container github action default to sh
         if: matrix.runtestpypip
         run: |
           . venv/bin/activate
@@ -411,7 +408,6 @@ jobs:
           pip install --verbose .
 
       - name: Try shamrock startup (pip install)
-        shell: bash # In docker container github action default to sh
         if: matrix.runtestpypip
         run: |
           . venv/bin/activate
@@ -420,7 +416,6 @@ jobs:
           python3 /tmp/test_rscript.py
 
       - name: Try shamrock startup (pip install)
-        shell: bash # In docker container github action default to sh
         if: matrix.runtestpypip
         run: |
           . venv/bin/activate
