@@ -11,6 +11,16 @@ on:
         description: "Whether to run the light CI"
         required: true
         type: boolean
+      run_build_profile:
+        description: "Run the build profile job even when light CI is enabled"
+        required: false
+        default: false
+        type: boolean
+      is_merge_queue:
+        description: "Whether this run is a Mergify merge-queue CI"
+        required: false
+        default: false
+        type: boolean
     secrets:
       CODECOV_TOKEN:
         description: "Codecov upload token"
@@ -114,13 +124,10 @@ jobs:
   shamrock_linux_acpp_build_profile:
     name: Tests
     needs: [src_check]
-    if: ${{ !inputs.light_ci }}
+    # Full CI always runs this job. Light CI runs it when the caller requests it
+    # (on PRs: the `profile-build` label).
+    if: ${{ !inputs.light_ci || inputs.run_build_profile }}
     uses: ./.github/workflows/shamrock-acpp-clang-build-profile.yml
-
-  shamrock_linux_acpp_conda:
-    name: Tests
-    needs: [src_check]
-    uses: ./.github/workflows/shamrock-acpp-conda.yml
 
   shamrock_linux_acpp_asan:
     name: Tests
@@ -167,6 +174,8 @@ jobs:
     needs: [src_check]
     if: ${{ !inputs.light_ci }}
     uses: ./.github/workflows/shamrock-acpp-phys-test.yml
+    with:
+      fail_fast: ${{ inputs.is_merge_queue }}
 
   shamrock_linux_acpp_pylib:
     needs: [src_check]

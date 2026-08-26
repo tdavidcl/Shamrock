@@ -157,7 +157,27 @@ jobs:
           ]
           JSON
 
-          jq -s '{include: add}' ubuntu.json arch.json macos.json > matrix.json
+          ##########################################################################################
+          # Conda (AdaptiveCpp)
+          ##########################################################################################
+          cat > conda.json <<'JSON'
+          [
+            {
+              "machine": "conda.acpp",
+              "args": "--backend omp --arch none",
+              "container": "continuumio/anaconda3",
+              "runson": "ubuntu-latest",
+              "imagename": "Anaconda3",
+              "runtest": true,
+              "mpiargs": "--allow-run-as-root --bind-to socket:overload-allowed --oversubscribe",
+              "ccache-key-extra": "omp",
+              "shell": "bash -el {0}",
+              "light_ci": true
+            }
+          ]
+          JSON
+
+          jq -s '{include: add}' ubuntu.json arch.json macos.json conda.json > matrix.json
 
           if [[ "${{ inputs.light_ci }}" == "true" ]]; then
             jq '{include: [.include[] | select(.light_ci == true)]}' matrix.json > matrix.filtered.json
@@ -186,6 +206,12 @@ jobs:
 
     strategy:
       matrix: ${{ fromJSON(needs.set_matrix.outputs.matrix) }}
+
+    # In docker containers GitHub Actions defaults to sh, so set bash here.
+    # conda.acpp needs a login shell so `conda activate` is available.
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'bash' }}
 
     timeout-minutes: 120
     steps:
@@ -255,6 +281,16 @@ jobs:
         run: |
           sudo pacman -Sy --noconfirm ccache
 
+      - name: Install ccache
+        if: matrix.machine == 'conda.acpp'
+        run: |
+          apt update
+          apt install -y ccache
+
+      - name: Run conda info
+        if: matrix.machine == 'conda.acpp'
+        run: conda info
+
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}-${{matrix.machine}}-${{matrix.ccache-key-extra}}
@@ -272,21 +308,25 @@ jobs:
           SHAMROCK_BUILD_NPROC: ${{ matrix.build_nproc }}
         run : ./env/new-env --machine ${{ matrix.machine }} --builddir build -- ${{ matrix.args }}
 
+      - name: Show current conda env
+        if: matrix.machine == 'conda.acpp'
+        run: |
+          cd build
+          source ./activate
+          conda env export
+
       - name: Configure
-        shell: bash # In docker container github action default to sh
         run: |
           cd build
           source ./activate && shamconfigure
 
       - name: Configure sham install
-        shell: bash # In docker container github action default to sh
         run: |
           cd build
           source ./activate &&  \
             cmake . -DCMAKE_INSTALL_PREFIX=$(pwd)/install_test -DCMAKE_INSTALL_PYTHONDIR=$(pwd)/pyinstall_test
 
       - name: Build & install
-        shell: bash # In docker container github action default to sh
         run: |
           cd build
           export NINJA_STATUS="[%f/%t j=%r] "
@@ -301,6 +341,7 @@ jobs:
         if: matrix.runtest
         run: |
           cd build
+          source ./activate
           export SYCLCFG=0:0
           export MPIARGS="${{ matrix.mpiargs }}"
           ../tools/test_sequence.sh
@@ -327,17 +368,18 @@ jobs:
         if: matrix.runtest
         run: |
           cd build
+          source ./activate
           ./shamrock --smi --sycl-cfg 0:0 --rscript /tmp/test_rscript.py
 
       - name: Try starting Shamrock (installed version)
-        shell: bash # In docker container github action default to sh
         if: matrix.runtest
         run: |
-          cd build/install_test/bin
+          cd build
+          source ./activate
+          cd install_test/bin
           LD_LIBRARY_PATH=../lib:$LD_LIBRARY_PATH ./shamrock --smi --sycl-cfg 0:0 --rscript /tmp/test_rscript.py
 
       - name: Try starting Shamrock (installed python libs)
-        shell: bash # In docker container github action default to sh
         if: matrix.runtestpy
         run: |
           cd build/install_test
