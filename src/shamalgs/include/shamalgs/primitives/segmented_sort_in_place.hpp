@@ -35,6 +35,9 @@ namespace shamalgs::primitives {
         /// Get the current implementation for segmented sort in place, as a config json string
         std::string get_current_impl_segmented_sort_in_place();
 
+        /// Check if an implementation has been selected for segmented sort in place
+        bool is_impl_set_segmented_sort_in_place();
+
         /// Set the implementation for segmented sort in place, from a config json string
         void set_impl_segmented_sort_in_place(const std::string &impl);
 

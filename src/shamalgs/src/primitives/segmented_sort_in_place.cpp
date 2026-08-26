@@ -130,6 +130,9 @@ namespace shamalgs::primitives {
             return segmented_sort_in_place_impl.get_current_config();
         }
 
+        /// Check if an implementation has been selected for segmented sort in place
+        bool is_impl_set_segmented_sort_in_place() { return segmented_sort_in_place_impl.is_set(); }
+
         /// Set the implementation for segmented sort in place
         void set_impl_segmented_sort_in_place(const std::string &impl) {
             shamlog_info_ln(
