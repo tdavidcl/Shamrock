@@ -160,10 +160,9 @@ ON_PYTHON_INIT {
             return timer.elapsed_sec();
         });
 
-        shamalgs_module.def(
-            "set_impl_reduction", [](const std::string &impl, const std::string &param = "") {
-                shamalgs::primitives::impl::set_impl_reduction(impl, param);
-            });
+        shamalgs_module.def("set_impl_reduction", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_reduction(impl);
+        });
 
         shamalgs_module.def("get_current_impl_reduction", []() {
             return shamalgs::primitives::impl::get_current_impl_reduction();

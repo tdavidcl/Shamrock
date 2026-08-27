@@ -7,6 +7,7 @@ This example benchmarks the reduction performance for the different algorithms a
 
 # sphinx_gallery_multi_image = "single"
 
+import json
 import random
 import time
 
@@ -102,16 +103,18 @@ print(all_default_impls)
 # Run the performance benchmarks for all implementations
 
 for impl in all_default_impls:
-    shamrock.algs.set_impl_reduction(impl.impl_name, impl.params)
+    shamrock.algs.set_impl_reduction(impl)
+
+    impl_name = json.loads(impl)["implementation"]
 
     print(f"Running reduction performance benchmarks for {impl}...")
 
     # Run the performance sweep
     particle_counts, results_f32, results_f64 = run_performance_sweep()
 
-    (line,) = plt.plot(particle_counts, results_f64, "--.", label=impl.impl_name + " (f64)")
+    (line,) = plt.plot(particle_counts, results_f64, "--.", label=impl_name + " (f64)")
     plt.plot(
-        particle_counts, results_f32, ":", color=line.get_color(), label=impl.impl_name + " (f32)"
+        particle_counts, results_f32, ":", color=line.get_color(), label=impl_name + " (f32)"
     )
 
 
