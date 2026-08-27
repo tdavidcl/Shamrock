@@ -32,12 +32,22 @@ Implementations are plain JSON config strings of the form
 back.
 
 ```python
-import json
 import shamrock
 
 current = shamrock.algs.get_current_impl_scan_exclusive_sum_in_place()
 print(current)
 # {"implementation":"decoupled_lookback_512","parameters":{}}
+
+shamrock.algs.set_impl_scan_exclusive_sum_in_place(
+    '{"implementation":"std_scan","parameters":{}}'
+)
+```
+
+If you want to test something against every available implementation, do:
+
+```python
+import json
+import shamrock
 
 for impl in shamrock.algs.get_default_impl_list_scan_exclusive_sum_in_place():
     shamrock.algs.set_impl_scan_exclusive_sum_in_place(impl)
