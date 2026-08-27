@@ -13,15 +13,9 @@ developer.
 ## Current status
 
 Implementation selection is built on `shamalgs::ImplVariantGlobal`
-(`shamalgs/include/shamalgs/ImplVariant.hpp`), a `std::variant`-based selector. Currently used by:
-
-| Algorithm | Files |
-|-----------|-------|
-| `shamalgs::primitives::segmented_sort_in_place` | `shamalgs/primitives/segmented_sort_in_place.{hpp,cpp}` |
-| `shamalgs::primitives::scan_exclusive_sum_in_place` | `shamalgs/primitives/scan_exclusive_sum_in_place.{hpp,cpp}` |
-
-This is the pattern to use for any algorithm that needs implementation selection, whether new or
-being added to an existing one.
+(`shamalgs/include/shamalgs/ImplVariant.hpp`), a `std::variant`-based selector. This is the
+pattern to use for any algorithm that needs implementation selection, whether new or being added
+to an existing one.
 
 :::{note}
 A third, unrelated mechanism, `shamalgs::primitives::ImplControl`
