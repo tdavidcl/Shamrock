@@ -70,8 +70,14 @@ namespace shamtree {
         /// Get the current implementation for dual tree traversal, as a config json string
         std::string get_current_impl_clbvh_dual_tree_traversal_impl();
 
+        /// Check if an implementation has been selected for dual tree traversal
+        bool is_impl_set_clbvh_dual_tree_traversal();
+
         /// Set the implementation for dual tree traversal, from a config json string
         void set_impl_clbvh_dual_tree_traversal(const std::string &impl);
+
+        /// Select the default implementation for dual tree traversal
+        void autoselect_impl_clbvh_dual_tree_traversal();
 
     } // namespace impl
 

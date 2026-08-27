@@ -101,6 +101,14 @@ inline void register_dtt_alg(py::module &m) {
     m.def("get_current_impl_clbvh_dual_tree_traversal_impl", []() {
         return shamtree::impl::get_current_impl_clbvh_dual_tree_traversal_impl();
     });
+
+    m.def("is_impl_set_clbvh_dual_tree_traversal", []() {
+        return shamtree::impl::is_impl_set_clbvh_dual_tree_traversal();
+    });
+
+    m.def("autoselect_impl_clbvh_dual_tree_traversal", []() {
+        shamtree::impl::autoselect_impl_clbvh_dual_tree_traversal();
+    });
 }
 
 ON_PYTHON_INIT {

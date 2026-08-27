@@ -230,6 +230,9 @@ def create_checkerboard_plot(
 
 # %%
 # List current implementation
+if not shamrock.tree.is_impl_set_clbvh_dual_tree_traversal():
+    shamrock.tree.autoselect_impl_clbvh_dual_tree_traversal()
+
 current_impl = shamrock.tree.get_current_impl_clbvh_dual_tree_traversal_impl()
 
 print(current_impl)

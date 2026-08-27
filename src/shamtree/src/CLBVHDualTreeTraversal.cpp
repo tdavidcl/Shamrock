@@ -41,11 +41,7 @@ namespace shamtree {
         };
 
         /// Currently selected dual tree traversal implementation
-        shamalgs::ImplVariantGlobal<Reference, ParallelSelect, ScanMultipass> dtt_impl = [] {
-            shamalgs::ImplVariantGlobal<Reference, ParallelSelect, ScanMultipass> v;
-            v.set(ScanMultipass{});
-            return v;
-        }();
+        shamalgs::ImplVariantGlobal<Reference, ParallelSelect, ScanMultipass> dtt_impl;
 
         /// Get list of available dual tree traversal implementations
         std::vector<std::string> get_default_impl_list_clbvh_dual_tree_traversal() {
@@ -57,10 +53,22 @@ namespace shamtree {
             return dtt_impl.get_current_config();
         }
 
+        /// Check if an implementation has been selected for dual tree traversal
+        bool is_impl_set_clbvh_dual_tree_traversal() { return dtt_impl.is_set(); }
+
         /// Set the implementation for dual tree traversal
         void set_impl_clbvh_dual_tree_traversal(const std::string &impl) {
             shamlog_info_ln("tree", "setting dtt implementation to impl :", impl);
             dtt_impl.set(impl);
+        }
+
+        /// Select the default implementation for dual tree traversal
+        void autoselect_impl_clbvh_dual_tree_traversal() {
+            dtt_impl.set(ScanMultipass{});
+            shamlog_info_ln(
+                "tree",
+                "defaulting dtt implementation to impl :",
+                get_current_impl_clbvh_dual_tree_traversal_impl());
         }
 
     } // namespace impl
@@ -81,6 +89,10 @@ namespace shamtree {
         using ImplRef = details::DTTCpuReference<Tmorton, Tvec, dim>;
         using ImplPar = details::DTTParallelSelect<Tmorton, Tvec, dim>;
         using ImplSca = details::DTTScanMultipass<Tmorton, Tvec, dim>;
+
+        if (!impl::dtt_impl.is_set()) {
+            impl::autoselect_impl_clbvh_dual_tree_traversal();
+        }
 
         bool ord  = ordered_result;
         bool llow = allow_leaf_lowering;
