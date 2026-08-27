@@ -17,13 +17,6 @@ Implementation selection is built on `shamalgs::ImplVariantGlobal`
 pattern to use for any algorithm that needs implementation selection, whether new or being added
 to an existing one.
 
-:::{note}
-A third, unrelated mechanism, `shamalgs::primitives::ImplControl`
-(`shamalgs/include/shamalgs/ImplControl.hpp`), also exists and is used by `compute_histogram`. It
-picks a config per `DeviceScheduler` (with an optional autotuning hook) rather than a single
-process-wide implementation, and is out of scope for this page.
-:::
-
 ## User side (Python)
 
 For every algorithm that supports it, three functions are exposed on the Python bindings, under
