@@ -18,15 +18,15 @@
  *
  */
 
-#include "shambackends/vec.hpp"
 #include "shambase/SourceLocation.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shambackends/vec.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/node/INode.hpp"
 #include <vector>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    /* ------------------- inputs ------------------- */                                          \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- inputs ------------------- */                                           \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                              \
     X_RO(shamrock::solvergraph::IDataEdge<std::vector<T>>, time_derivative)                        \
                                                                                                    \
