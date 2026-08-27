@@ -152,6 +152,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
         }
     };
 
+    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
+        shamalgs::primitives::impl::autoselect_impl_reduction();
+    }
     auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
 
     for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
@@ -297,6 +300,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
         }
     };
 
+    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
+        shamalgs::primitives::impl::autoselect_impl_reduction();
+    }
     auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
 
     for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
@@ -442,6 +448,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
         }
     };
 
+    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
+        shamalgs::primitives::impl::autoselect_impl_reduction();
+    }
     auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
 
     for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
@@ -644,6 +653,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
         }
     };
 
+    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
+        shamalgs::primitives::impl::autoselect_impl_reduction();
+    }
     auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
 
     for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {

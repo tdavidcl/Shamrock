@@ -145,8 +145,14 @@ namespace shamalgs::primitives {
         /// Get the current implementation for reduction, as a config json string
         std::string get_current_impl_reduction();
 
+        /// Check if an implementation has been selected for reduction
+        bool is_impl_set_reduction();
+
         /// Set the implementation for reduction, from a config json string
         void set_impl_reduction(const std::string &impl);
+
+        /// Select the default implementation for reduction
+        void autoselect_impl_reduction();
 
     } // namespace impl
 

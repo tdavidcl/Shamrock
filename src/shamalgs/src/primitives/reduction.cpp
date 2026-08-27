@@ -55,8 +55,7 @@ namespace shamalgs::primitives {
         };
 #endif
 
-        /// Type of the reduction implementation selector
-        using ReductionImpl = shamalgs::ImplVariantGlobal<
+        shamalgs::ImplVariantGlobal<
             Fallback
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
             ,
@@ -64,22 +63,8 @@ namespace shamalgs::primitives {
             GroupReduction128,
             GroupReduction256
 #endif
-            >;
-
-        namespace {
-            /// Build the reduction implementation selector, eagerly set to its default
-            ReductionImpl make_default_reduction_impl() {
-                ReductionImpl v;
-#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-                v.set(GroupReduction128{});
-#else
-                v.set(Fallback{});
-#endif
-                return v;
-            }
-        } // namespace
-
-        ReductionImpl reduction_impl = make_default_reduction_impl();
+            >
+            reduction_impl;
 
         /// Get list of available reduction implementations, as config json strings
         std::vector<std::string> get_default_impl_list_reduction() {
@@ -89,10 +74,26 @@ namespace shamalgs::primitives {
         /// Get the current implementation for reduction, as a config json string
         std::string get_current_impl_reduction() { return reduction_impl.get_current_config(); }
 
+        /// Check if an implementation has been selected for reduction
+        bool is_impl_set_reduction() { return reduction_impl.is_set(); }
+
         /// Set the implementation for reduction, from a config json string
         void set_impl_reduction(const std::string &impl) {
             shamlog_info_ln("algs", "setting reduction implementation to impl :", impl);
             reduction_impl.set(impl);
+        }
+
+        /// Select the default implementation for reduction
+        void autoselect_impl_reduction() {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            reduction_impl.set(GroupReduction128{});
+#else
+            reduction_impl.set(Fallback{});
+#endif
+            shamlog_info_ln(
+                "algs",
+                "defaulting reduction implementation to impl :",
+                get_current_impl_reduction());
         }
 
     } // namespace impl
@@ -105,6 +106,10 @@ namespace shamalgs::primitives {
         u32 end_id) {
 
         using namespace shamalgs::reduction::details;
+
+        if (!impl::reduction_impl.is_set()) {
+            impl::autoselect_impl_reduction();
+        }
 
         return std::visit(
             shambase::overloaded{
@@ -135,6 +140,10 @@ namespace shamalgs::primitives {
 
         using namespace shamalgs::reduction::details;
 
+        if (!impl::reduction_impl.is_set()) {
+            impl::autoselect_impl_reduction();
+        }
+
         return std::visit(
             shambase::overloaded{
                 [&](impl::Fallback) {
@@ -163,6 +172,10 @@ namespace shamalgs::primitives {
         u32 end_id) {
 
         using namespace shamalgs::reduction::details;
+
+        if (!impl::reduction_impl.is_set()) {
+            impl::autoselect_impl_reduction();
+        }
 
         return std::visit(
             shambase::overloaded{
