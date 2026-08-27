@@ -31,10 +31,11 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 
 # %%
 # Main benchmark functions
-def benchmark_u32(N, nb_repeat=10):
+def benchmark_u32(N, nb_repeat=10, max_cumulated_time=2.0):
     random.seed(111)
 
     times = []
+    cumulated_time = 0.0
     for _ in range(nb_repeat):
         keys = shamrock.algs.mock_buffer_u32(random.randint(0, 1000000), N, 0, 1000000)
 
@@ -42,8 +43,13 @@ def benchmark_u32(N, nb_repeat=10):
         values.resize(N)
         values.copy_from_stdvec(list(range(N)))
 
-        times.append(shamrock.algs.benchmark_sort_by_keys(keys, values, N))
-    return min(times), max(times), sum(times) / nb_repeat
+        t = shamrock.algs.benchmark_sort_by_keys(keys, values, N)
+        times.append(t)
+        cumulated_time += t
+
+        if cumulated_time > max_cumulated_time:
+            break
+    return min(times), max(times), sum(times) / len(times)
 
 
 # %%
