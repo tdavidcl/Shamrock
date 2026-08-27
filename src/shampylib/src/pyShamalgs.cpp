@@ -120,10 +120,9 @@ ON_PYTHON_INIT {
             return timer.elapsed_sec();
         });
 
-        shamalgs_module.def(
-            "set_impl_is_all_true", [](const std::string &impl, const std::string &param = "") {
-                shamalgs::primitives::impl::set_impl_is_all_true(impl, param);
-            });
+        shamalgs_module.def("set_impl_is_all_true", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_is_all_true(impl);
+        });
 
         shamalgs_module.def("get_current_impl_is_all_true", []() {
             return shamalgs::primitives::impl::get_current_impl_is_all_true();
