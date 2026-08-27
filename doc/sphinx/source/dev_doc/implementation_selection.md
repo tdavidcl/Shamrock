@@ -43,7 +43,7 @@ import shamrock
 
 current = shamrock.algs.get_current_impl_scan_exclusive_sum_in_place()
 print(current)
-# {"implementation":"decoupled_lookback_512","parameters":{}}
+# null (nothing selected yet, and the algorithm hasn't run)
 
 # two ways of selecting an implementation manually:
 
