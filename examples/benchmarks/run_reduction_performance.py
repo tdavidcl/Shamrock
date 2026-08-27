@@ -89,6 +89,8 @@ def run_performance_sweep():
 
 # %%
 # List current implementation
+if not shamrock.algs.is_impl_set_reduction():
+    shamrock.algs.autoselect_impl_reduction()
 current_impl = shamrock.algs.get_current_impl_reduction()
 
 print(current_impl)

@@ -171,6 +171,14 @@ ON_PYTHON_INIT {
         shamalgs_module.def("get_default_impl_list_reduction", []() {
             return shamalgs::primitives::impl::get_default_impl_list_reduction();
         });
+
+        shamalgs_module.def("is_impl_set_reduction", []() {
+            return shamalgs::primitives::impl::is_impl_set_reduction();
+        });
+
+        shamalgs_module.def("autoselect_impl_reduction", []() {
+            shamalgs::primitives::impl::autoselect_impl_reduction();
+        });
     }
 
     { // scan_exclusive_sum_in_place
