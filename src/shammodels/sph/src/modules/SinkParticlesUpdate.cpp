@@ -46,8 +46,10 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_s
     using namespace shamrock::solvergraph;
     using FEHost = shammodels::common::modules::ForwardEulerHost<Tvec>;
 
-    auto pos_edge = sync.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_pos");
-    auto vel_edge = sync.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_vel");
+    auto pos_edge = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>(
+        "sink_pos");
+    auto vel_edge = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>(
+        "sink_vel");
 
     auto acc_edge      = IDataEdge<std::vector<Tvec>>::make_shared("sink_acc_predictor", "a");
     acc_edge->data     = std::move(acc);
@@ -87,7 +89,8 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::corrector_s
     using namespace shamrock::solvergraph;
     using FEHost = shammodels::common::modules::ForwardEulerHost<Tvec>;
 
-    auto vel_edge = sync.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_vel");
+    auto vel_edge = sync.template get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>(
+        "sink_vel");
 
     auto acc_edge      = IDataEdge<std::vector<Tvec>>::make_shared("sink_acc_corrector", "a");
     acc_edge->data     = std::move(acc);
