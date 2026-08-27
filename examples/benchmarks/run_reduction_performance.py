@@ -113,9 +113,7 @@ for impl in all_default_impls:
     particle_counts, results_f32, results_f64 = run_performance_sweep()
 
     (line,) = plt.plot(particle_counts, results_f64, "--.", label=impl_name + " (f64)")
-    plt.plot(
-        particle_counts, results_f32, ":", color=line.get_color(), label=impl_name + " (f32)"
-    )
+    plt.plot(particle_counts, results_f32, ":", color=line.get_color(), label=impl_name + " (f32)")
 
 
 Nobj = np.array(particle_counts)

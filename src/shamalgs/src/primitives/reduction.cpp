@@ -108,7 +108,9 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::Fallback) { return sum_usm_fallback(sched, buf1, start_id, end_id); },
+                [&](impl::Fallback) {
+                    return sum_usm_fallback(sched, buf1, start_id, end_id);
+                },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
                 [&](impl::GroupReduction16) {
                     return sum_usm_group(sched, buf1, start_id, end_id, 16);
@@ -135,7 +137,9 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::Fallback) { return min_usm_fallback(sched, buf1, start_id, end_id); },
+                [&](impl::Fallback) {
+                    return min_usm_fallback(sched, buf1, start_id, end_id);
+                },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
                 [&](impl::GroupReduction16) {
                     return min_usm_group(sched, buf1, start_id, end_id, 16);
@@ -162,7 +166,9 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::Fallback) { return max_usm_fallback(sched, buf1, start_id, end_id); },
+                [&](impl::Fallback) {
+                    return max_usm_fallback(sched, buf1, start_id, end_id);
+                },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
                 [&](impl::GroupReduction16) {
                     return max_usm_group(sched, buf1, start_id, end_id, 16);
