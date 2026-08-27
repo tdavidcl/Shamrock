@@ -219,7 +219,9 @@ namespace shamalgs::primitives {
 
         std::visit(
             shambase::overloaded{
-                [&](impl::StdScan) { scan_exclusive_sum_in_place_fallback(buf1, len); },
+                [&](impl::StdScan) {
+                    scan_exclusive_sum_in_place_fallback(buf1, len);
+                },
 #ifdef __ACPP__
                 [&](impl::StdScanSingleTaskAcpp) {
                     scan_exclusive_sum_in_place_std_scan_single_task_acpp(buf1, len);
@@ -231,7 +233,9 @@ namespace shamalgs::primitives {
                 },
 #endif
 #ifdef ACPP_ALG_AVAILABLE
-                [&](impl::AdaptiveCppAlg) { scan_exclusive_sum_in_place_adaptivecpp(buf1, len); },
+                [&](impl::AdaptiveCppAlg) {
+                    scan_exclusive_sum_in_place_adaptivecpp(buf1, len);
+                },
 #endif
             },
             impl::scan_exclusive_sum_in_place_impl.get());
