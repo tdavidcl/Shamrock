@@ -26,10 +26,17 @@ traversal:
 - `get_default_impl_list_<algo>()` — the list of available implementations.
 - `get_current_impl_<algo>()` — the implementation currently selected.
 - `set_impl_<algo>(...)` — select an implementation.
+- `is_impl_set_<algo>()` — whether an implementation has been selected yet.
+- `autoselect_impl_<algo>()` — select the algorithm's default implementation.
 
 Implementations are plain JSON config strings of the form
 `{"implementation": "<name>", "parameters": {...}}`. `set_impl_<algo>` takes that whole string
 back.
+
+`is_impl_set_<algo>` / `autoselect_impl_<algo>` matter because `ImplVariantGlobal` has no notion
+of a default until something picks one: some algorithms only pick their default the first time
+they actually run, so `get_current_impl_<algo>()` returns `"null"` until then, unless you call
+`autoselect_impl_<algo>()` yourself first.
 
 ```python
 import shamrock
@@ -41,6 +48,9 @@ print(current)
 shamrock.algs.set_impl_scan_exclusive_sum_in_place(
     '{"implementation":"std_scan","parameters":{}}'
 )
+
+if not shamrock.algs.is_impl_set_scan_exclusive_sum_in_place():
+    shamrock.algs.autoselect_impl_scan_exclusive_sum_in_place()
 ```
 
 If you want to test something against every available implementation, do:
@@ -142,12 +152,14 @@ Once the selector and dispatch are in place, wire it up end to end:
 1. Header: declare `get_default_impl_list_<algo>`, `get_current_impl_<algo>`,
    `set_impl_<algo>`, and (if using the lazy-default pattern) `is_impl_set_<algo>` and
    `autoselect_impl_<algo>` in the algorithm's `impl` namespace.
-2. Python bindings (`shampylib/src/pyShamalgs.cpp` or `pyShamtree.cpp`): expose the three
-   user-facing functions under the relevant submodule.
+2. Python bindings (`shampylib/src/pyShamalgs.cpp` or `pyShamtree.cpp`): expose all the
+   user-facing functions declared in the header under the relevant submodule.
 3. Unit test: loop over `get_default_impl_list_<algo>()`, calling `set_impl_<algo>` before each
    run, then restore the implementation that was active before the loop.
 4. Benchmark script (`examples/benchmarks/`, if one exists for the algorithm): same loop,
-   extracting the implementation's display name with `json.loads(impl)["implementation"]`.
+   extracting the implementation's display name with `json.loads(impl)["implementation"]`; if
+   using the lazy-default pattern, call `autoselect_impl_<algo>()` first when
+   `is_impl_set_<algo>()` is `False`.
 
 ## Related files
 

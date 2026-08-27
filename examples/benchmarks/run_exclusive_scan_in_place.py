@@ -74,6 +74,9 @@ def run_performance_sweep():
 
 # %%
 # List current implementation
+if not shamrock.algs.is_impl_set_scan_exclusive_sum_in_place():
+    shamrock.algs.autoselect_impl_scan_exclusive_sum_in_place()
+
 current_impl = shamrock.algs.get_current_impl_scan_exclusive_sum_in_place()
 
 print(current_impl)

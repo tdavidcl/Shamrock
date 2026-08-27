@@ -203,6 +203,14 @@ ON_PYTHON_INIT {
         shamalgs_module.def("get_default_impl_list_scan_exclusive_sum_in_place", []() {
             return shamalgs::primitives::impl::get_default_impl_list_scan_exclusive_sum_in_place();
         });
+
+        shamalgs_module.def("is_impl_set_scan_exclusive_sum_in_place", []() {
+            return shamalgs::primitives::impl::is_impl_set_scan_exclusive_sum_in_place();
+        });
+
+        shamalgs_module.def("autoselect_impl_scan_exclusive_sum_in_place", []() {
+            shamalgs::primitives::impl::autoselect_impl_scan_exclusive_sum_in_place();
+        });
     }
 
     { // segmented_sort_in_place
