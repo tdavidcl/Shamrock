@@ -18,6 +18,7 @@
 #include "shamalgs/ImplControl.hpp"
 #include "shamalgs/collective/string_histogram.hpp"
 #include "shamalgs/details/random/random.hpp"
+#include "shamalgs/impl_utils.hpp"
 #include "shamalgs/primitives/compute_histogram.hpp"
 #include "shamalgs/primitives/is_all_true.hpp"
 #include "shamalgs/primitives/reduction.hpp"
