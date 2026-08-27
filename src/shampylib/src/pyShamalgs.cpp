@@ -131,6 +131,14 @@ ON_PYTHON_INIT {
         shamalgs_module.def("get_default_impl_list_is_all_true", []() {
             return shamalgs::primitives::impl::get_default_impl_list_is_all_true();
         });
+
+        shamalgs_module.def("is_impl_set_is_all_true", []() {
+            return shamalgs::primitives::impl::is_impl_set_is_all_true();
+        });
+
+        shamalgs_module.def("autoselect_impl_is_all_true", []() {
+            shamalgs::primitives::impl::autoselect_impl_is_all_true();
+        });
     }
 
     { // reductions
