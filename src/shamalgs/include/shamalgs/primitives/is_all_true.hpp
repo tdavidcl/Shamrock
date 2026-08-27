@@ -110,8 +110,14 @@ namespace shamalgs::primitives {
         /// Get the current implementation for is_all_true, as a config json string
         std::string get_current_impl_is_all_true();
 
+        /// Check if an implementation has been selected for is_all_true
+        bool is_impl_set_is_all_true();
+
         /// Set the implementation for is_all_true, from a config json string
         void set_impl_is_all_true(const std::string &impl);
+
+        /// Select the default implementation for is_all_true
+        void autoselect_impl_is_all_true();
 
     } // namespace impl
 

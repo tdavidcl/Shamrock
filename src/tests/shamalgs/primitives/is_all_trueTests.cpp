@@ -137,6 +137,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/is_all_true:USM", 1) {
         }
     };
 
+    if (!shamalgs::primitives::impl::is_impl_set_is_all_true()) {
+        shamalgs::primitives::impl::autoselect_impl_is_all_true();
+    }
     auto current_impl = shamalgs::primitives::impl::get_current_impl_is_all_true();
 
     for (const std::string &impl :
