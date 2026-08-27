@@ -922,7 +922,7 @@ u64 max_stack_move_count_thread_cursor = 0;
                         if ( idx == mymax ) {
 
                           for (;;) {
-                            counter += v;
+                            counter += id_a;
                           }
                         }
 
