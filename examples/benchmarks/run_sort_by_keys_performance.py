@@ -81,6 +81,9 @@ def run_performance_sweep():
 
 # %%
 # List current implementation
+if not shamrock.algs.is_impl_set_sort_by_keys():
+    shamrock.algs.autoselect_impl_sort_by_keys()
+
 current_impl = shamrock.algs.get_current_impl_sort_by_keys()
 
 print(current_impl)

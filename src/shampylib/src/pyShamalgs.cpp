@@ -286,6 +286,14 @@ ON_PYTHON_INIT {
         shamalgs_module.def("get_default_impl_list_sort_by_keys", []() {
             return shamalgs::primitives::impl::get_default_impl_list_sort_by_keys();
         });
+
+        shamalgs_module.def("is_impl_set_sort_by_keys", []() {
+            return shamalgs::primitives::impl::is_impl_set_sort_by_keys();
+        });
+
+        shamalgs_module.def("autoselect_impl_sort_by_keys", []() {
+            shamalgs::primitives::impl::autoselect_impl_sort_by_keys();
+        });
     }
 
     py::class_<shamalgs::primitives::ImplControl>(shamalgs_module, "ImplControl")
