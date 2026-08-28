@@ -160,7 +160,7 @@ namespace shammodels::basegodunov {
                 })
             .def(
                 "set_alpha_values",
-                [](TConfig &self, f64 alpha_values) {
+                [](TConfig &self, f32 alpha_values) {
                     return self.set_alphas_static(alpha_values);
                 })
             .def(

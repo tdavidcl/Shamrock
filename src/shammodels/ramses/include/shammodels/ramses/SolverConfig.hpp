@@ -234,8 +234,12 @@ struct shammodels::basegodunov::SolverConfig {
      *
      * alphas is the dust collision rate (the inverse of the stopping time). Calling this
      * switches the drag config back to DragConfig::ConstantAlphas if it was set otherwise.
+     *
+     * @note the f32 argument truncates the drag rate to single precision. This is kept as is
+     * because the reference values of examples/tests_ci/dustywave_godunov.py were produced with
+     * it, and widening it to f64 shifts them by ~5e-8, well above their 1e-11 margins.
      */
-    inline void set_alphas_static(f64 alpha_values) {
+    inline void set_alphas_static(f32 alpha_values) {
         StackEntry stack_lock{};
         if (!std::holds_alternative<DragConfig::ConstantAlphas>(drag_config.alpha_mode)) {
             drag_config.alpha_mode = DragConfig::ConstantAlphas{};

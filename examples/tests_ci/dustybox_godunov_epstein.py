@@ -19,10 +19,15 @@ regime (``set_dust_drag_epstein``), in which case
 
 with :math:`\\rho_{\\rm g}` the **gas** density, as required by the two fluid formulation.
 
-This test runs the dusty box twice, with the two drag configurations, choosing the grain sizes
-so that the Epstein rates match the constant rates at the initial gas state. The first step must
-then agree to machine precision, and the whole trajectory to within the drift of the sound speed
-caused by the frictional heating of the gas.
+The dusty box keeps a uniform state, so the Epstein rates stay constant in time (the drag work
+term leaves the gas internal energy, hence the sound speed, unchanged). The test exploits that
+to compare an Epstein run against a constant rate run that must be exactly equivalent:
+
+1. at a reference gas density, with the grain sizes calibrated so that :math:`1/t_s` equals the
+   constant rates,
+2. at twice that gas density, where the Epstein rates must double on their own while the
+   constant rates would not move -- this is what checks that the drag rate really is derived
+   from the local gas state.
 """
 
 from math import *
@@ -35,26 +40,33 @@ import shamrock
 
 gamma = 1.4
 cs_0 = 1.4
-rho_0 = 1.0
+rho_ref = 1.0
 
-press_0 = (cs_0 * rho_0) / gamma
-cs_init = sqrt(gamma * press_0 / rho_0)
+# reference thermodynamic state, of sound speed cs_init
+press_ref = (cs_0 * rho_ref) / gamma
+cs_init = sqrt(gamma * press_ref / rho_ref)
 
-# constant drag rates of the dustybox test B
-alphas = [100.0, 500.0]
+# constant drag rates of the dustybox test B, at the reference gas density
+alphas_ref = [100.0, 500.0]
 
-# unit intrinsic grain density, grain sizes picked so that 1 / t_s == alpha at the initial state
+# unit intrinsic grain density, grain sizes picked so that 1 / t_s == alpha at (rho_ref, cs_init)
 grain_densities = [1.0, 1.0]
 grain_sizes = [
-    rho_grain * rho_0 * cs_init / alpha * sqrt(8.0 / (pi * gamma))
-    for alpha, rho_grain in zip(alphas, grain_densities)
+    rho_grain * rho_ref * cs_init / alpha * sqrt(8.0 / (pi * gamma))
+    for alpha, rho_grain in zip(alphas_ref, grain_densities)
 ]
 
 dt = 0.005
 nstep = 12
 
 
-def run_sim(use_epstein):
+def run_sim(rho_gas, alphas, drag_mode="irk1"):
+    """Run the dusty box at a given gas density.
+
+    ``alphas`` is either a list of constant drag rates, or None to use the Epstein regime.
+    The pressure is scaled with the density so that the sound speed stays ``cs_init``.
+    """
+
     ctx = shamrock.Context()
     ctx.pdata_layout_new()
 
@@ -68,10 +80,15 @@ def run_sim(use_epstein):
     cfg.set_Csafe(0.44)
     cfg.set_eos_gamma(gamma)
     cfg.set_dust_mode_dhll(2)
-    cfg.set_drag_mode_irk1(True)
+    if drag_mode == "irk1":
+        cfg.set_drag_mode_irk1(True)
+    elif drag_mode == "expo":
+        cfg.set_drag_mode_expo(True)
+    else:
+        raise ValueError(f"unknown drag mode {drag_mode}")
     cfg.set_face_time_interpolation(False)
 
-    if use_epstein:
+    if alphas is None:
         cfg.set_dust_drag_epstein(
             grain_sizes=grain_sizes,
             grain_densities=grain_densities,
@@ -84,11 +101,14 @@ def run_sim(use_epstein):
     model.init_scheduler(int(1e7), 1)
     model.make_base_grid((0, 0, 0), (sz, sz, sz), (base, base, base))
 
-    model.set_field_value_lambda_f64("rho", lambda rmin, rmax: rho_0)
+    # constant sound speed across the density variants
+    press = cs_init * cs_init * rho_gas / gamma
+
+    model.set_field_value_lambda_f64("rho", lambda rmin, rmax: rho_gas)
     model.set_field_value_lambda_f64(
-        "rhoetot", lambda rmin, rmax: press_0 / (gamma - 1.0) + 0.5 * rho_0
+        "rhoetot", lambda rmin, rmax: press / (gamma - 1.0) + 0.5 * rho_gas
     )
-    model.set_field_value_lambda_f64_3("rhovel", lambda rmin, rmax: (1, 0, 0))
+    model.set_field_value_lambda_f64_3("rhovel", lambda rmin, rmax: (rho_gas, 0, 0))
 
     model.set_field_value_lambda_f64("rho_dust", lambda rmin, rmax: 1, 0)
     model.set_field_value_lambda_f64_3("rhovel_dust", lambda rmin, rmax: (2, 0, 0), 0)
@@ -111,56 +131,67 @@ def run_sim(use_epstein):
     return times, np.array(vg), np.array(vd1), np.array(vd2)
 
 
-# ============ run both configurations ======================
+def compare(label, run_cst, run_eps, tol=1e-13):
+    _, vg_c, vd1_c, vd2_c = run_cst
+    _, vg_e, vd1_e, vd2_e = run_eps
 
-times, vg_cst, vd1_cst, vd2_cst = run_sim(use_epstein=False)
-_, vg_eps, vd1_eps, vd2_eps = run_sim(use_epstein=True)
+    ok = True
+    for name, cst, eps in [("vg", vg_c, vg_e), ("vd1", vd1_c, vd1_e), ("vd2", vd2_c, vd2_e)]:
+        err = float(np.max(np.abs(cst - eps)))
+        print(f"{label} {name}: max |constant - epstein| = {err}")
+        if not (err < tol):
+            print(f"  -> constant = {list(cst)}")
+            print(f"  -> epstein  = {list(eps)}")
+            ok = False
+    return ok
+
+
+# ============ run the configurations ======================
 
 print(f"grain_sizes     = {grain_sizes}")
 print(f"grain_densities = {grain_densities}")
-print(f"times   = {times}")
-print(f"vg_cst  = {list(vg_cst)}")
-print(f"vg_eps  = {list(vg_eps)}")
-print(f"vd1_cst = {list(vd1_cst)}")
-print(f"vd1_eps = {list(vd1_eps)}")
-print(f"vd2_cst = {list(vd2_cst)}")
-print(f"vd2_eps = {list(vd2_eps)}")
+
+# 1. reference density: the calibrated Epstein rates must reproduce the constant rates
+run_cst_ref = run_sim(rho_ref, alphas_ref)
+run_eps_ref = run_sim(rho_ref, None)
+
+# 2. twice the density at the same sound speed: the Epstein rates must double on their own
+run_cst_2x = run_sim(2.0 * rho_ref, [2.0 * a for a in alphas_ref])
+run_eps_2x = run_sim(2.0 * rho_ref, None)
+
+# The exponential integrator (drag_mode="expo") would be the natural third case here, but it
+# cannot run on a CPU backend: it sizes its shared memory work group as
+# local_mem_size / (5 (ndust+1)^2 sizeof(Tscal)), which asks for a local_accessor as large as the
+# whole reported local memory and throws std::bad_alloc. That is independent of the drag rates
+# and reproduces on the constant rate path as well.
 
 # ============ CI test ======================
 
-# The initial state is uniform, so the fluxes vanish and the Epstein rates of the first step are
-# evaluated on exactly the state the grain sizes were calibrated on: the first step must match
-# the constant rate run to round-off.
-for name, cst, eps in [
-    ("vg", vg_cst, vg_eps),
-    ("vd1", vd1_cst, vd1_eps),
-    ("vd2", vd2_cst, vd2_eps),
-]:
-    err = abs(cst[1] - eps[1])
-    print(f"first step {name}: |constant - epstein| = {err}")
-    assert err < 1e-12, f"first step of {name} differs by {err}, drag rates are not consistent"
+test_pass = True
+test_pass &= compare("[rho = rho_ref]", run_cst_ref, run_eps_ref)
+test_pass &= compare("[rho = 2 rho_ref]", run_cst_2x, run_eps_2x)
 
-# Afterwards the two runs drift apart, because the drag heats the gas up, which raises the sound
-# speed, which raises the Epstein rates. That drift stays small over this test.
-for name, cst, eps in [
-    ("vg", vg_cst, vg_eps),
-    ("vd1", vd1_cst, vd1_eps),
-    ("vd2", vd2_cst, vd2_eps),
-]:
-    err = np.max(np.abs(cst - eps) / np.abs(cst))
-    print(f"trajectory {name}: max relative deviation = {err}")
-    assert err < 5e-2, f"{name} deviates by {err}, more than the expected sound speed drift"
+# the two density variants must actually differ, otherwise the comparisons above are vacuous
+spread = float(np.max(np.abs(run_eps_ref[1] - run_eps_2x[1])))
+print(f"gas velocity spread between the two densities = {spread}")
+if not (spread > 1e-3):
+    print("the two density variants gave the same result, the test is vacuous")
+    test_pass = False
 
-# The rates must actually depend on the gas state: doubling the gas density doubles alpha. Check
-# the formula the solver uses against the standalone physics binding.
+# cross check of the formula itself against the standalone physics binding
 ts_ref = shamrock.phys.epstein_stopping_time(
     rho_grain=grain_densities[0],
     s_grain=grain_sizes[0],
-    rho=rho_0,
+    rho=rho_ref,
     cs=cs_init,
     gamma=gamma,
 )
-print(f"1 / t_s = {1.0 / ts_ref} (target {alphas[0]})")
-assert abs(1.0 / ts_ref - alphas[0]) < 1e-10 * alphas[0]
+print(f"1 / t_s = {1.0 / ts_ref} (target {alphas_ref[0]})")
+if not (abs(1.0 / ts_ref - alphas_ref[0]) < 1e-10 * alphas_ref[0]):
+    print("the stopping time formula does not match the calibrated rate")
+    test_pass = False
+
+if not test_pass:
+    exit("Test did not pass")
 
 print("dustybox_godunov_epstein: OK")
