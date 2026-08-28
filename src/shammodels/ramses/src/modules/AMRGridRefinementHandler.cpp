@@ -737,7 +737,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
     enforce_two_to_one_refinement_new(
-        shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags) {
+        shambase::DistributedData<sham::DeviceBuffer<u32>> &dd_refine_flags) {
 
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
         sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
@@ -891,8 +891,8 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
     check_geometrical_validity(
-        shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags,
-        shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_derefine_flags) {
+        shambase::DistributedData<sham::DeviceBuffer<u32>> &dd_refine_flags,
+        shambase::DistributedData<sham::DeviceBuffer<u32>> &dd_derefine_flags) {
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
@@ -1018,8 +1018,8 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>::
     enforce_two_to_one_derefinement_new(
-        shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_derefine_flags,
-        shambase::DistributedData<sham::DeviceBuffer<u32>> &&dd_refine_flags) {
+        shambase::DistributedData<sham::DeviceBuffer<u32>> &dd_derefine_flags,
+        shambase::DistributedData<sham::DeviceBuffer<u32>> &dd_refine_flags) {
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
@@ -2612,11 +2612,11 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
         }
 
         ///// enforce 2:1 for refinement ///////
-        enforce_two_to_one_refinement_new(std::move(refine_list));
+        enforce_two_to_one_refinement_new(refine_list);
         ///// check geometriy validity
-        check_geometrical_validity(std::move(refine_list), std::move(derefine_list));
+        check_geometrical_validity(refine_list, derefine_list);
         /////// enforce 2:1 for derefinement //////
-        enforce_two_to_one_derefinement_new(std::move(derefine_list), std::move(refine_list));
+        enforce_two_to_one_derefinement_new(derefine_list, refine_list);
         //////// apply refine ////////
         // Note that this only add new blocks at the end of the patchdata
         const AMRInterpMode amr_ref_interp_mode = solver_config.amr_interp_mode;
