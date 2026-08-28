@@ -429,6 +429,10 @@ namespace shammath {
         }
 
         // wave speed Toro from Equation (10.59)
+        Tscal SL = velxL - csL * qL;
+        Tscal SR = velxR + csR * qR;
+
+        // Davis estimate, but we'll see later
         Tscal SL = sham::min(velxL - csL, velxR - csR);
         Tscal SR = sham::max(velxL + csL, velxR + csR);
 
