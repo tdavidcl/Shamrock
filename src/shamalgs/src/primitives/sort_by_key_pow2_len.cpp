@@ -118,8 +118,13 @@ namespace shamalgs::primitives {
         std::visit(
             shambase::overloaded{
                 [&](impl::BitonicUpdated) {
-                    shamalgs::algorithm::details::sort_by_key_bitonic_updated<Tkey, Tval, 16>(
-                        q, buf_key, buf_values, len);
+                    if (len < 5e3) {
+                        shamalgs::algorithm::details::sort_by_key_bitonic_fallback(
+                            q, buf_key, buf_values, len);
+                    } else {
+                        shamalgs::algorithm::details::sort_by_key_bitonic_updated<Tkey, Tval, 16>(
+                            q, buf_key, buf_values, len);
+                    }
                 },
                 [&](impl::StdSort) {
                     shamalgs::algorithm::details::sort_by_key_bitonic_fallback(
