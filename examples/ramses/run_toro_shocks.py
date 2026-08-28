@@ -32,6 +32,7 @@ import numpy as np
 
 import shamrock
 
+
 # If we use the shamrock executable to run this script instead of the python interpreter,
 # we should not initialize the system as the shamrock executable needs to handle specific MPI logic
 if not shamrock.sys.is_initialized():

@@ -429,8 +429,8 @@ namespace shammath {
         }
 
         // wave speed Toro from Equation (10.59)
-        Tscal SL = velxL - csL * qL;
-        Tscal SR = velxR + csR * qR;
+        Tscal SL = sham::min(velxL - csL, velxR - csR);
+        Tscal SR = sham::max(velxL + csL, velxR + csR);
 
         // lagrangian sound speed
         const Tscal var_L = rhoL * (SL - velxL);
