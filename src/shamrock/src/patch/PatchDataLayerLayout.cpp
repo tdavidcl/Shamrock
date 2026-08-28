@@ -261,11 +261,11 @@ namespace shamrock::patch {
 //////////////////////////////////////////////////////////////////////////
 
 #ifndef DOXYGEN
-    #define X(a)                                                                                 \
-        template void shamrock::patch::PatchDataLayerLayout::add_field<a>(                        \
-            const std::string &field_name, u32 nvar, SourceLocation loc);                         \
+    #define X(a)                                                                                   \
+        template void shamrock::patch::PatchDataLayerLayout::add_field<a>(                         \
+            const std::string &field_name, u32 nvar, SourceLocation loc);                          \
         template u32 shamrock::patch::PatchDataLayerLayout::get_field_idx<a>(                      \
-            const std::string &field_name) const;                                                 \
+            const std::string &field_name) const;                                                  \
         template u32 shamrock::patch::PatchDataLayerLayout::get_field_idx<a>(                      \
             const std::string &field_name, u32 nvar) const;
 XMAC_LIST_ENABLED_FIELD
