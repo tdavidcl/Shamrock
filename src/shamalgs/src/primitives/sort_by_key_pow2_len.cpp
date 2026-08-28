@@ -8,7 +8,7 @@
 // -------------------------------------------------------//
 
 /**
- * @file sort_by_keys.cpp
+ * @file sort_by_key_pow2_len.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Sort by keys algorithms
  *
@@ -17,7 +17,7 @@
 #include "shambase/exception.hpp"
 #include "shamalgs/details/algorithm/bitonicSort.hpp"
 #include "shamalgs/details/algorithm/bitonicSort_updated_usm.hpp"
-#include "shamalgs/primitives/sort_by_keys.hpp"
+#include "shamalgs/primitives/sort_by_key_pow2_len.hpp"
 
 namespace shamalgs::primitives {
 

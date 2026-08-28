@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file sort_by_keys.hpp
+ * @file sort_by_key_pow2_len.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Sort by keys algorithms
  *
