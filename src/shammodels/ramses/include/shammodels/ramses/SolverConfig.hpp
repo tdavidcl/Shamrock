@@ -45,13 +45,53 @@
 namespace shammodels::basegodunov {
 
     /**
-     * @brief alphas is the dust collision rate (the inverse of the stopping time)
+     * @brief Configuration of the gas/dust drag operator
+     *
+     * The drag rate (called alpha here) is the dust collision rate, that is the inverse of the
+     * dust stopping time \f$ \alpha_i = 1 / t_{s,i} \f$, defined by the two fluid drag ODE
+     * solved by the drag integrators
+     * \f[ \frac{\partial v_{d,i}}{\partial t} = \alpha_i (v_g - v_{d,i}). \f]
+     *
+     * It can either be a user supplied constant per dust species (ConstantAlphas), or derived
+     * from the local gas state using the Epstein drag regime (EpsteinDrag).
      */
     struct DragConfig {
+
+        /// User supplied constant drag rate, one per dust species
+        struct ConstantAlphas {
+            std::vector<f64> alphas;
+        };
+
+        /**
+         * @brief Epstein drag regime, the drag rate is derived from the local gas state
+         *
+         * The stopping time is given by shamphys::epstein_stopping_time evaluated with the
+         * **gas** density (see the note in shamphys/Dust.hpp about the two fluid convention),
+         * the adiabatic index being SolverConfig::eos_gamma.
+         */
+        struct EpsteinDrag {
+            std::vector<f64> grains_sizes;      ///< grain sizes (code units), one per species
+            std::vector<f64> grains_densities;  ///< intrinsic grain densities (code units)
+            bool supersonic_correction = false; ///< apply shamphys::epstein_supersonic_correction
+        };
+
+        /// How the drag rate is obtained
+        std::variant<ConstantAlphas, EpsteinDrag> alpha_mode = ConstantAlphas{};
+
         DragSolverMode drag_solver_config = NoDrag;
-        std::vector<f64> alphas;
         bool enable_frictional_heating
             = false; // 0 to turn off and 1 when all dissipation is deposited to the gas
+
+        /// Select a user supplied constant drag rate per species
+        inline void set_drag_constant(ConstantAlphas cfg) { alpha_mode = std::move(cfg); }
+
+        /// Select the Epstein drag regime
+        inline void set_drag_epstein(EpsteinDrag cfg) { alpha_mode = std::move(cfg); }
+
+        /// Is the drag rate derived from the local gas state ?
+        inline bool is_alpha_mode_epstein() const {
+            return std::holds_alternative<EpsteinDrag>(alpha_mode);
+        }
     };
 
     struct DustConfig {
@@ -188,11 +228,19 @@ struct shammodels::basegodunov::SolverConfig {
     DragConfig drag_config{};
 
     inline bool is_dust_on() { return dust_config.is_dust_on(); }
-    // get alpha values from user
-    // alphas is the dust collision rate (the inverse of the stopping time)
-    inline void set_alphas_static(f32 alpha_values) {
+
+    /**
+     * @brief Append a constant drag rate for the next dust species
+     *
+     * alphas is the dust collision rate (the inverse of the stopping time). Calling this
+     * switches the drag config back to DragConfig::ConstantAlphas if it was set otherwise.
+     */
+    inline void set_alphas_static(f64 alpha_values) {
         StackEntry stack_lock{};
-        drag_config.alphas.push_back(alpha_values);
+        if (!std::holds_alternative<DragConfig::ConstantAlphas>(drag_config.alpha_mode)) {
+            drag_config.alpha_mode = DragConfig::ConstantAlphas{};
+        }
+        std::get<DragConfig::ConstantAlphas>(drag_config.alpha_mode).alphas.push_back(alpha_values);
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -266,6 +314,38 @@ struct shammodels::basegodunov::SolverConfig {
     // CFL Configuration (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
+    /**
+     * @brief Check that the drag config is consistent with the number of dust species
+     *
+     * Without this the drag integrators would read past the end of the drag rate vectors.
+     */
+    inline void check_drag_config() {
+        if (drag_config.drag_solver_config == NoDrag) {
+            // the drag rates are never read, no need for them to be set
+            return;
+        }
+
+        const u32 ndust = dust_config.ndust;
+
+        auto check_size = [&](const char *field_name, u64 got) {
+            if (got != ndust) {
+                shambase::throw_with_loc<std::invalid_argument>(sham::format(
+                    "the size of {} ({}) must match the number of dust species ndust = {}",
+                    field_name,
+                    got,
+                    ndust));
+            }
+        };
+
+        if (const auto *cfg = std::get_if<DragConfig::ConstantAlphas>(&drag_config.alpha_mode)) {
+            check_size("alphas", cfg->alphas.size());
+        } else if (
+            const auto *cfg = std::get_if<DragConfig::EpsteinDrag>(&drag_config.alpha_mode)) {
+            check_size("grains_sizes", cfg->grains_sizes.size());
+            check_size("grains_densities", cfg->grains_densities.size());
+        }
+    }
+
     inline void check_config() {
         if (grid_coord_to_pos_fact <= 0) {
             shambase::throw_with_loc<std::runtime_error>(
@@ -274,6 +354,7 @@ struct shammodels::basegodunov::SolverConfig {
 
         if (is_dust_on()) {
             ON_RANK_0(logger::warn_ln("Ramses::SolverConfig", "Dust is experimental"));
+            check_drag_config();
         }
 
         if (is_gravity_on()) {
@@ -351,17 +432,74 @@ namespace shammodels::basegodunov {
         j.at("ghost_type_z").get_to(p.ghost_type_z);
     }
 
+    inline void alpha_mode_to_json(
+        nlohmann::json &j,
+        const std::variant<DragConfig::ConstantAlphas, DragConfig::EpsteinDrag> &p) {
+        using T = DragConfig;
+        if (const T::ConstantAlphas *v = std::get_if<T::ConstantAlphas>(&p)) {
+            j = {{"alpha_mode", "constant"}, {"alphas", v->alphas}};
+        } else if (const T::EpsteinDrag *v = std::get_if<T::EpsteinDrag>(&p)) {
+            j
+                = {{"alpha_mode", "epstein"},
+                   {"grains_sizes", v->grains_sizes},
+                   {"grains_densities", v->grains_densities},
+                   {"supersonic_correction", v->supersonic_correction}};
+        } else {
+            shambase::throw_unimplemented();
+        }
+    }
+
+    inline void alpha_mode_from_json(
+        const nlohmann::json &j,
+        std::variant<DragConfig::ConstantAlphas, DragConfig::EpsteinDrag> &p) {
+        using T = DragConfig;
+
+        // Backward compatibility with dumps written before the alpha mode was introduced, where
+        // the drag rates were an unconditional "alphas" list.
+        if (!j.contains("alpha_mode")) {
+            T::ConstantAlphas tmp{};
+            j.at("alphas").get_to(tmp.alphas);
+            p = tmp;
+            return;
+        }
+
+        std::string mode;
+        j.at("alpha_mode").get_to(mode);
+
+        if (mode == "constant") {
+            T::ConstantAlphas tmp{};
+            j.at("alphas").get_to(tmp.alphas);
+            p = tmp;
+        } else if (mode == "epstein") {
+            T::EpsteinDrag tmp{};
+            j.at("grains_sizes").get_to(tmp.grains_sizes);
+            j.at("grains_densities").get_to(tmp.grains_densities);
+            if (j.contains("supersonic_correction")) {
+                j.at("supersonic_correction").get_to(tmp.supersonic_correction);
+            }
+            p = tmp;
+        } else {
+            shambase::throw_unimplemented("wrong alpha mode : " + mode);
+        }
+    }
+
     inline void to_json(nlohmann::json &j, const DragConfig &p) {
         j = nlohmann::json{
             {"drag_solver", p.drag_solver_config},
-            {"alphas", p.alphas},
             {"enable_frictional_heating", p.enable_frictional_heating}};
+        alpha_mode_to_json(j["alpha_config"], p.alpha_mode);
     }
 
     inline void from_json(const nlohmann::json &j, DragConfig &p) {
         j.at("drag_solver").get_to(p.drag_solver_config);
-        j.at("alphas").get_to(p.alphas);
         j.at("enable_frictional_heating").get_to(p.enable_frictional_heating);
+
+        // Old dumps stored the drag rates directly in the DragConfig object
+        if (j.contains("alpha_config")) {
+            alpha_mode_from_json(j.at("alpha_config"), p.alpha_mode);
+        } else {
+            alpha_mode_from_json(j, p.alpha_mode);
+        }
     }
 
     template<class Tvec, class TgridVec>

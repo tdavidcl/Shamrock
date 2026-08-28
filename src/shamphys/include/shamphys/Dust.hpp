@@ -57,15 +57,25 @@ namespace shamphys {
      *
      * Corresponds to Eq. 250 in the PHANTOM paper.
      *
-     * where \f$\rho = \rho_{\rm g} + \rho_{\rm d}\f$ is the total density,
+     * where
      * \f$f\f$ is the supersonic correction (1.0 for the subsonic case),
      * \f$\gamma\f$ is the adiabatic index,
      * \f$\rho_{\rm grain}\f$ is the grain internal density, and
      * \f$s_{\rm grain}\f$ is the grain radius.
      *
+     * @note Which density \f$\rho\f$ to pass depends on the dust formalism of the caller:
+     * - one fluid (mixture) formalism, as in the SPH solver: the total density
+     *   \f$\rho = \rho_{\rm g} + \rho_{\rm d}\f$, which gives the decay time of the
+     *   differential velocity of the mixture (Eq. 250 of the PHANTOM paper).
+     * - two fluid formalism, as in the Ramses solver: the gas density
+     *   \f$\rho = \rho_{\rm g}\f$, which gives the stopping time of a grain in the gas, i.e.
+     *   the time scale of \f$\partial_t v_{\rm d} = (v_{\rm g} - v_{\rm d}) / t_s\f$.
+     *
+     * The two differ by a factor \f$\rho_{\rm g} / \rho\f$.
+     *
      * @param rho_grain   Internal density of the dust grain
      * @param s_grain     Radius of the dust grain
-     * @param rho         Total density (\f$\rho_{\rm g} + \rho_{\rm d}\f$)
+     * @param rho         Density entering the drag (see the note above)
      * @param cs          Gas sound speed
      * @param gamma       Adiabatic index
      * @param f           Supersonic correction factor (default 1.0)

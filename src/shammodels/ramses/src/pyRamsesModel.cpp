@@ -160,9 +160,23 @@ namespace shammodels::basegodunov {
                 })
             .def(
                 "set_alpha_values",
-                [](TConfig &self, f32 alpha_values) {
+                [](TConfig &self, f64 alpha_values) {
                     return self.set_alphas_static(alpha_values);
                 })
+            .def(
+                "set_dust_drag_epstein",
+                [](TConfig &self,
+                   std::vector<f64> grain_sizes,
+                   std::vector<f64> grain_densities,
+                   bool supersonic_correction) {
+                    self.drag_config.set_drag_epstein(
+                        {.grains_sizes          = std::move(grain_sizes),
+                         .grains_densities      = std::move(grain_densities),
+                         .supersonic_correction = supersonic_correction});
+                },
+                py::arg("grain_sizes"),
+                py::arg("grain_densities"),
+                py::arg("supersonic_correction") = false)
             .def(
                 "set_drag_mode_no_drag",
                 [](TConfig &self) {

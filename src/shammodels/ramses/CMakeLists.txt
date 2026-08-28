@@ -14,7 +14,10 @@ set(Sources
     src/pyRamsesModel.cpp
     src/Solver.cpp
     src/modules/NodeComputeFlux.cpp
-    src/modules/DragIntegrator.cpp
+    src/modules/NodeDragIntegratorEXPO.cpp
+    src/modules/NodeDragIntegratorIRK1.cpp
+    src/modules/NodeDragUpdateNoSrc.cpp
+    src/modules/NodeSetDustAlphas.cpp
     src/modules/TimeIntegrator.cpp
     src/modules/AMRGridRefinementHandler.cpp
     src/modules/AnalysisSodTube.cpp

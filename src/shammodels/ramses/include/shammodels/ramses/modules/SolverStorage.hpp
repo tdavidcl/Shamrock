@@ -37,6 +37,7 @@
 #include "shamrock/solvergraph/DDSharedBuffers.hpp"
 #include "shamrock/solvergraph/DDSharedScalar.hpp"
 #include "shamrock/solvergraph/Field.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/FieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamrock/solvergraph/PatchDataLayerDDShared.hpp"
@@ -216,14 +217,31 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> dtrhov;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> dtrhoe;
 
-        Component<shamrock::ComputeField<Tscal>> rho_next_no_drag;
-        Component<shamrock::ComputeField<Tvec>> rhov_next_no_drag;
-        Component<shamrock::ComputeField<Tscal>> rhoe_next_no_drag;
+        // next time step gas state before drag
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_next_no_drag;
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> rhov_next_no_drag;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rhoe_next_no_drag;
 
         // next time step dust density before drag
-        Component<shamrock::ComputeField<Tscal>> rho_d_next_no_drag;
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_d_next_no_drag;
         // next time step dust momentum before drag
-        Component<shamrock::ComputeField<Tvec>> rhov_d_next_no_drag;
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> rhov_d_next_no_drag;
+
+        // dust collision rates (inverse stopping times), one value per cell per dust species
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> drag_alphas;
+
+        // refs to the conservative fields of the owned (source) patches, drag writes into them
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> src_refs_rho;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> src_refs_rhov;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> src_refs_rhoe;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> src_refs_rho_dust;
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tvec>> src_refs_rhov_dust;
+
+        // timestep of the current step, as a graph edge
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt_step;
+
+        // drag operator (no-op when drag is disabled)
+        std::shared_ptr<shamrock::solvergraph::OperationSequence> drag_sequence;
 
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>>
             rho_dust_face_xp;

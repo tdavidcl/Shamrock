@@ -34,13 +34,16 @@
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
 #include "shammodels/ramses/modules/ConsToPrimGas.hpp"
-#include "shammodels/ramses/modules/DragIntegrator.hpp"
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerIndices.hpp"
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
+#include "shammodels/ramses/modules/NodeDragIntegratorEXPO.hpp"
+#include "shammodels/ramses/modules/NodeDragIntegratorIRK1.hpp"
+#include "shammodels/ramses/modules/NodeDragUpdateNoSrc.hpp"
+#include "shammodels/ramses/modules/NodeSetDustAlphas.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
@@ -712,6 +715,38 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             AMRBlock::block_size * ndust, "dtrho_dust", "dtrho_dust");
         storage.dtrhov_dust = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
             AMRBlock::block_size * ndust, "dtrhov_dust", "dtrhov_dust");
+    }
+
+    if (solver_config.drag_config.drag_solver_config != DragSolverMode::NoDrag) {
+        u32 ndust = solver_config.dust_config.ndust;
+
+        storage.dt_step
+            = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_step", "dt");
+
+        storage.rho_next_no_drag = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "rho_next_no_drag", "\\rho^*");
+        storage.rhov_next_no_drag = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "rhov_next_no_drag", "(\\rho v)^*");
+        storage.rhoe_next_no_drag = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "rhoe_next_no_drag", "(\\rho e)^*");
+        storage.rho_d_next_no_drag = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size * ndust, "rho_d_next_no_drag", "\\rho_{\\rm d}^*");
+        storage.rhov_d_next_no_drag = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size * ndust, "rhov_d_next_no_drag", "(\\rho_{\\rm d} v)^*");
+
+        storage.drag_alphas = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size * ndust, "drag_alphas", "\\alpha");
+
+        storage.src_refs_rho
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("src_rho", "\\rho");
+        storage.src_refs_rhov
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>("src_rhov", "(\\rho v)");
+        storage.src_refs_rhoe
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("src_rhoe", "(\\rho e)");
+        storage.src_refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+            "src_rho_dust", "\\rho_{\\rm d}");
+        storage.src_refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+            "src_rhov_dust", "(\\rho_{\\rm d} v)");
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -1513,6 +1548,129 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Drag operator
+    ////////////////////////////////////////////////////////////////////////////////
+
+    if (solver_config.drag_config.drag_solver_config != DragSolverMode::NoDrag) {
+
+        const u32 ndust      = solver_config.dust_config.ndust;
+        const auto &drag_cfg = solver_config.drag_config;
+        auto &pdl            = scheduler().pdl_old();
+
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> drag_sequence;
+
+        { // attach spans to the conservative fields of the owned patches (drag writes them back)
+            auto attach = [&]<class T>(
+                              const std::string &field_name,
+                              std::shared_ptr<shamrock::solvergraph::FieldRefs<T>> out_ref) {
+                shamrock::solvergraph::GetFieldRefFromLayer<T> node(pdl, field_name);
+                node.set_edges(storage.source_patches, out_ref);
+                drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            };
+
+            attach("rho", storage.src_refs_rho);
+            attach("rhovel", storage.src_refs_rhov);
+            attach("rhoetot", storage.src_refs_rhoe);
+            attach("rho_dust", storage.src_refs_rho_dust);
+            attach("rhovel_dust", storage.src_refs_rhov_dust);
+        }
+
+        { // U* = U^n + dt L(U^n)
+            modules::NodeDragUpdateNoSrc<Tvec> node(AMRBlock::block_size, ndust);
+            node.set_edges(
+                storage.block_counts,
+                storage.dt_step,
+                storage.src_refs_rho,
+                storage.src_refs_rhov,
+                storage.src_refs_rhoe,
+                storage.src_refs_rho_dust,
+                storage.src_refs_rhov_dust,
+                storage.dtrho,
+                storage.dtrhov,
+                storage.dtrhoe,
+                storage.dtrho_dust,
+                storage.dtrhov_dust,
+                storage.rho_next_no_drag,
+                storage.rhov_next_no_drag,
+                storage.rhoe_next_no_drag,
+                storage.rho_d_next_no_drag,
+                storage.rhov_d_next_no_drag);
+            drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        { // per cell drag rates
+            if (const auto *cfg = std::get_if<DragConfig::EpsteinDrag>(&drag_cfg.alpha_mode)) {
+
+                modules::NodeSetDustAlphasEpstein<Tvec> node(
+                    AMRBlock::block_size,
+                    ndust,
+                    solver_config.eos_gamma,
+                    cfg->supersonic_correction,
+                    std::vector<Tscal>(cfg->grains_sizes.begin(), cfg->grains_sizes.end()),
+                    std::vector<Tscal>(cfg->grains_densities.begin(), cfg->grains_densities.end()));
+                node.set_edges(
+                    storage.block_counts,
+                    storage.rho_next_no_drag,
+                    storage.rhov_next_no_drag,
+                    storage.rhoe_next_no_drag,
+                    storage.rho_d_next_no_drag,
+                    storage.rhov_d_next_no_drag,
+                    storage.drag_alphas);
+                drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+
+            } else if (
+                const auto *cfg = std::get_if<DragConfig::ConstantAlphas>(&drag_cfg.alpha_mode)) {
+
+                modules::NodeSetDustAlphasConstant<Tscal> node(
+                    AMRBlock::block_size,
+                    ndust,
+                    std::vector<Tscal>(cfg->alphas.begin(), cfg->alphas.end()));
+                node.set_edges(storage.block_counts, storage.drag_alphas);
+                drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
+        { // drag source term
+            auto set_edges = [&](auto &node) {
+                node.set_edges(
+                    storage.block_counts,
+                    storage.dt_step,
+                    storage.drag_alphas,
+                    storage.rho_next_no_drag,
+                    storage.rhov_next_no_drag,
+                    storage.rhoe_next_no_drag,
+                    storage.rho_d_next_no_drag,
+                    storage.rhov_d_next_no_drag,
+                    storage.src_refs_rho,
+                    storage.src_refs_rhov,
+                    storage.src_refs_rhoe,
+                    storage.src_refs_rho_dust,
+                    storage.src_refs_rhov_dust);
+            };
+
+            if (drag_cfg.drag_solver_config == DragSolverMode::IRK1) {
+                modules::NodeDragIntegratorIRK1<Tvec> node(
+                    AMRBlock::block_size, ndust, drag_cfg.enable_frictional_heating);
+                set_edges(node);
+                drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else if (drag_cfg.drag_solver_config == DragSolverMode::EXPO) {
+                modules::NodeDragIntegratorEXPO<Tvec> node(
+                    AMRBlock::block_size, ndust, drag_cfg.enable_frictional_heating);
+                set_edges(node);
+                drag_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else {
+                shambase::throw_unimplemented();
+            }
+        }
+
+        shamrock::solvergraph::OperationSequence drag_seq("Drag", std::move(drag_sequence));
+        storage.drag_sequence = std::make_shared<decltype(drag_seq)>(std::move(drag_seq));
+    }
+
     if (false) {
         logger::raw_ln(" -- tex:\n" + shambase::get_check_ref(storage.solver_sequence).get_tex());
         logger::raw_ln(
@@ -1628,16 +1786,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (solver_config.drag_config.drag_solver_config == DragSolverMode::NoDrag) {
         modules::TimeIntegrator dt_integ(context, solver_config, storage);
         dt_integ.forward_euler(dt_input);
-    } else if (solver_config.drag_config.drag_solver_config == DragSolverMode::IRK1) {
-        modules::DragIntegrator drag_integ(context, solver_config, storage);
-        drag_integ.involve_with_no_src(dt_input);
-        drag_integ.enable_irk1_drag_integrator(dt_input);
-    } else if (solver_config.drag_config.drag_solver_config == DragSolverMode::EXPO) {
-        modules::DragIntegrator drag_integ(context, solver_config, storage);
-        drag_integ.involve_with_no_src(dt_input);
-        drag_integ.enable_expo_drag_integrator(dt_input);
     } else {
-        shambase::throw_unimplemented();
+        shambase::get_check_ref(storage.dt_step).value = dt_input;
+        shambase::get_check_ref(storage.drag_sequence).evaluate();
     }
 
     if (!solver_config.amr_mode.old_amr) {
@@ -1681,11 +1832,18 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     set_time(t_current + dt_input);
 
     if (solver_config.drag_config.drag_solver_config != DragSolverMode::NoDrag) {
-        storage.rho_next_no_drag.reset();
-        storage.rhov_next_no_drag.reset();
-        storage.rhoe_next_no_drag.reset();
-        storage.rho_d_next_no_drag.reset();
-        storage.rhov_d_next_no_drag.reset();
+        shambase::get_check_ref(storage.rho_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.rhov_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.rhoe_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.rho_d_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.rhov_d_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.drag_alphas).free_alloc();
+
+        shambase::get_check_ref(storage.src_refs_rho).free_alloc();
+        shambase::get_check_ref(storage.src_refs_rhov).free_alloc();
+        shambase::get_check_ref(storage.src_refs_rhoe).free_alloc();
+        shambase::get_check_ref(storage.src_refs_rho_dust).free_alloc();
+        shambase::get_check_ref(storage.src_refs_rhov_dust).free_alloc();
     }
 
     storage.merge_patch_bounds.reset();
