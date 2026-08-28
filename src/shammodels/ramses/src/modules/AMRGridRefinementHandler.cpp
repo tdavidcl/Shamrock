@@ -904,7 +904,6 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 
         u32 obj_cnt = pdat.get_obj_cnt();
 
-
         auto dev_buf_deref_0
             = shamalgs::numeric::stream_compact(dev_sched, patch_derefine_flag, obj_cnt);
 
@@ -1520,7 +1519,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
         const f64_3 *rho_vel_old_snap;
         const f64 *rhoE_old_snap;
         AMRInterpMode amr_ref_interp_mode;
-      
+
         // this will be needed for interpolation during refinement
         AMRGraphLinkiterator cell_graph_xp;
         AMRGraphLinkiterator cell_graph_xm;
@@ -1750,7 +1749,7 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 
                 int mul_second_order
                     = (acc.amr_ref_interp_mode == AMRInterpMode::SECOND_ORDER) ? 1 : 0;
-              
+
                 bool do_second_order = true;
 
                 for (u32 subdiv_lid = 0; subdiv_lid < 8; subdiv_lid++) {
@@ -2614,8 +2613,8 @@ void shammodels::basegodunov::modules::AMRGridRefinementHandler<Tvec, TgridVec>:
 
         ///// enforce 2:1 for refinement ///////
         enforce_two_to_one_refinement_new(std::move(refine_list));
-        ///// check geometriy validity 
-        check_geometrical_validity(std::move(refine_list),std::move(derefine_list));
+        ///// check geometriy validity
+        check_geometrical_validity(std::move(refine_list), std::move(derefine_list));
         /////// enforce 2:1 for derefinement //////
         enforce_two_to_one_derefinement_new(std::move(derefine_list), std::move(refine_list));
         //////// apply refine ////////

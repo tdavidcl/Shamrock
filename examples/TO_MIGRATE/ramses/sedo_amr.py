@@ -1,10 +1,10 @@
-""" 3D Sedov blast test
+"""3D Sedov blast test
 =======================
 
 """
 
-
 import os
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +26,7 @@ if not shamrock.sys.is_initialized():
 # Use shamrock documentation style for matplotlib
 shamrock.matplotlib.set_shamrock_mpl_style()
 
-#Setup parameters
+# Setup parameters
 multx = 1
 multy = 1
 multz = 1
@@ -38,14 +38,14 @@ scale_fact = 1 / (cell_size * base * multx)
 Rstart = 1.0 / (2 * base) + 1e-4
 
 
-#plot
+# plot
 nx, ny = 512, 512
 
 sim_folder = "_to_trash/ramses_sedov_amr/"
 
 
 dx = scale_fact
-Vcell = dx**3.
+Vcell = dx**3.0
 
 E0 = 10
 P0 = 1e-3
@@ -58,13 +58,13 @@ Ny = cell_size * base * multy
 Nz = cell_size * base * multz
 
 for k in range(Nz):
-    z = (k + 0.5) * dx - L/2.
+    z = (k + 0.5) * dx - L / 2.0
     for j in range(Ny):
-        y = (j + 0.5) * dx - L/2.
+        y = (j + 0.5) * dx - L / 2.0
         for i in range(Nx):
-            x = (i + 0.5) * dx - L/2.
+            x = (i + 0.5) * dx - L / 2.0
 
-            r = np.sqrt(x*x + y*y + z*z)
+            r = np.sqrt(x * x + y * y + z * z)
 
             if r < Rstart:
                 Ncells += 1
@@ -109,7 +109,7 @@ def make_cartesian_coords(nx, ny, z_val, min_x, max_x, min_y, max_y):
     return [tuple(pos) for pos in positions]
 
 
-positions = make_cartesian_coords(nx, ny, L*0.5, 0, L - 1e-6, 0, L - 1e-6)
+positions = make_cartesian_coords(nx, ny, L * 0.5, 0, L - 1e-6, 0, L - 1e-6)
 
 
 def plot_rho_slice_cartesian(metadata, arr_rho_pos, iplot, dpi=200):
@@ -138,7 +138,6 @@ def plot_rho_slice_cartesian(metadata, arr_rho_pos, iplot, dpi=200):
     plt.savefig(os.path.join(sim_folder, f"rho_{iplot:04d}.png"))
     plt.close()
 
-from shamrock.utils.plot import show_image_sequence
 
 def run_simulation(t_final, with_2to_1=True):
     ctx = shamrock.Context()
@@ -180,16 +179,16 @@ def run_simulation(t_final, with_2to_1=True):
         x_min, y_min, z_min = rmin
         x_max, y_max, z_max = rmax
 
-        x = (x_min + x_max) * 0.5 - L/2.
-        y = (y_min + y_max) * 0.5 - L/2.
-        z = (z_min + z_max) * 0.5 - L/2.
+        x = (x_min + x_max) * 0.5 - L / 2.0
+        y = (y_min + y_max) * 0.5 - L / 2.0
+        z = (z_min + z_max) * 0.5 - L / 2.0
         ## radius from box center
         r = np.sqrt(x * x + y * y + z * z)
 
         if r < Rstart:
             return rhoe_in
         else:
-            return P0/(gamma -1.)
+            return P0 / (gamma - 1.0)
 
     def rhovel_map(rmin, rmax):
         return (0.0, 0.0, 0.0)
@@ -208,52 +207,49 @@ def run_simulation(t_final, with_2to_1=True):
         arr_rho_pos = model.render_slice("rho", "f64", positions)
         plot_rho_slice_cartesian(metadata, arr_rho_pos, iplot)
 
-
-    
     current_time = 0.0
     for i, t in enumerate(all_t):
-        model.dump_vtk(os.path.join(sim_folder, f"sedov_blast_"f"{i:04d}.vtk"))
+        model.dump_vtk(os.path.join(sim_folder, f"sedov_blast_{i:04d}.vtk"))
         model.evolve_until(t)
         current_time = t
         plot(current_time, i)
 
     plot(current_time, len(all_t))
 
-     # If the animation is not returned only a static image will be shown in the doc
-    ani = show_image_sequence(os.path.join(sim_folder, f"rho_sedov_blast_*.png"), render_gif=True)
+    # If the animation is not returned only a static image will be shown in the doc
+    ani = show_image_sequence(os.path.join(sim_folder, "rho_sedov_blast_*.png"), render_gif=True)
 
     if shamrock.sys.world_rank() == 0:
         # To save the animation using Pillow as a gif
         writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-        ani.save(os.path.join(sim_folder, f"rho_sedov_blast.gif"), writer=writer)
+        ani.save(os.path.join(sim_folder, "rho_sedov_blast.gif"), writer=writer)
 
         return ani
     else:
         return None
-    
+
 
 run_simulation(t_final=0.01)
 plt.show()
 
 
+# dt = 0
+# t = 0
+# freq = 1
+# dX0 = []
+# for i in range(100000):
+#     next_dt = model.evolve_once_override_time(t, dt)
 
-    # dt = 0
-    # t = 0
-    # freq = 1
-    # dX0 = []
-    # for i in range(100000):
-    #     next_dt = model.evolve_once_override_time(t, dt)
+#     t += dt
+#     dt = next_dt
 
-    #     t += dt
-    #     dt = next_dt
+#     if i % freq == 0:
+#         # model.dump_vtk(f"test{t:.5f}.vtk")
+#         model.dump_vtk(f"test{i:05d}.vtk")
 
-    #     if i % freq == 0:
-    #         # model.dump_vtk(f"test{t:.5f}.vtk")
-    #         model.dump_vtk(f"test{i:05d}.vtk")
-
-    #     if tmax < t + next_dt:
-    #         dt = tmax - t
-    #     if t == tmax:
-    #         # model.dump_vtk(f"test{t:.5f}.vtk")
-    #         model.dump_vtk(f"test{i:05d}.vtk")
-    #         break
+#     if tmax < t + next_dt:
+#         dt = tmax - t
+#     if t == tmax:
+#         # model.dump_vtk(f"test{t:.5f}.vtk")
+#         model.dump_vtk(f"test{i:05d}.vtk")
+#         break
