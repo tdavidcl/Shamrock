@@ -308,143 +308,114 @@ ON_PYTHON_INIT {
         });
     }
 
-    py::class_<shamalgs::primitives::ImplControl>(shamalgs_module, "ImplControl")
-        .def(
-            "get_alg_name",
-            [](shamalgs::primitives::ImplControl &impl_control) {
-        return impl_control.get_alg_name();
-            })
-        .def(
-            "was_configured",
-            [](shamalgs::primitives::ImplControl &impl_control) {
-        return impl_control.was_configured(shamsys::instance::get_compute_scheduler_ptr());
-            })
-        .def(
-            "get_config",
-            [](shamalgs::primitives::ImplControl &impl_control) {
-        return impl_control.get_config(shamsys::instance::get_compute_scheduler_ptr());
-            })
-        .def(
-            "set_config",
-            [](shamalgs::primitives::ImplControl &impl_control, const std::string &config) {
-        impl_control.set_config(shamsys::instance::get_compute_scheduler_ptr(), config);
-            })
-        .def(
-            "get_default_config",
-            [](shamalgs::primitives::ImplControl &impl_control) {
-        return impl_control.get_default_config(shamsys::instance::get_compute_scheduler_ptr());
-            })
-        .def("get_avail_configs", [](shamalgs::primitives::ImplControl &impl_control) {
-        return impl_control.get_avail_configs(shamsys::instance::get_compute_scheduler_ptr());
-        { // compute_histogram
+    { // compute_histogram
 
-            shamalgs_module.def("set_impl_compute_histogram", [](const std::string &impl) {
-                shamalgs::primitives::impl::set_impl_compute_histogram(impl);
-            });
+        shamalgs_module.def("set_impl_compute_histogram", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_compute_histogram(impl);
+        });
 
-            shamalgs_module.def("get_current_impl_compute_histogram", []() {
-                return shamalgs::primitives::impl::get_current_impl_compute_histogram();
-            });
+        shamalgs_module.def("get_current_impl_compute_histogram", []() {
+            return shamalgs::primitives::impl::get_current_impl_compute_histogram();
+        });
 
-            shamalgs_module.def("get_default_impl_list_compute_histogram", []() {
-                return shamalgs::primitives::impl::get_default_impl_list_compute_histogram();
-            });
+        shamalgs_module.def("get_default_impl_list_compute_histogram", []() {
+            return shamalgs::primitives::impl::get_default_impl_list_compute_histogram();
+        });
 
-            shamalgs_module.def("is_impl_set_compute_histogram", []() {
-                return shamalgs::primitives::impl::is_impl_set_compute_histogram();
-            });
+        shamalgs_module.def("is_impl_set_compute_histogram", []() {
+            return shamalgs::primitives::impl::is_impl_set_compute_histogram();
+        });
 
-            shamalgs_module.def("autoselect_impl_compute_histogram", []() {
-                shamalgs::primitives::impl::autoselect_impl_compute_histogram(
-                    shamsys::instance::get_compute_scheduler_ptr());
-            });
-        }
+        shamalgs_module.def("autoselect_impl_compute_histogram", []() {
+            shamalgs::primitives::impl::autoselect_impl_compute_histogram(
+                shamsys::instance::get_compute_scheduler_ptr());
+        });
+    }
 
-        shamalgs_module.def(
-            "compute_histogram_basic_f64",
-            [](sham::DeviceBuffer<f64> &bin_edge_inf,
-               sham::DeviceBuffer<f64> &bin_edge_sup,
-               sham::DeviceBuffer<f64> &positions) {
-                return shamalgs::primitives::compute_histogram_basic<f64>(
+    shamalgs_module.def(
+        "compute_histogram_basic_f64",
+        [](sham::DeviceBuffer<f64> &bin_edge_inf,
+           sham::DeviceBuffer<f64> &bin_edge_sup,
+           sham::DeviceBuffer<f64> &positions) {
+            return shamalgs::primitives::compute_histogram_basic<f64>(
+                shamsys::instance::get_compute_scheduler_ptr(),
+                bin_edge_inf,
+                bin_edge_sup,
+                positions);
+        });
+    shamalgs_module.def(
+        "compute_histogram_basic_f32",
+        [](sham::DeviceBuffer<f32> &bin_edge_inf,
+           sham::DeviceBuffer<f32> &bin_edge_sup,
+           sham::DeviceBuffer<f32> &positions) {
+            return shamalgs::primitives::compute_histogram_basic<f32>(
+                shamsys::instance::get_compute_scheduler_ptr(),
+                bin_edge_inf,
+                bin_edge_sup,
+                positions);
+        });
+
+    shamalgs_module.def(
+        "benchmark_compute_histogram_basic_f64",
+        [](sham::DeviceBuffer<f64> &bin_edge_inf,
+           sham::DeviceBuffer<f64> &bin_edge_sup,
+           sham::DeviceBuffer<f64> &positions) {
+            bin_edge_inf.synchronize();
+            bin_edge_sup.synchronize();
+            positions.synchronize();
+
+            auto run = [&]() {
+                auto result = shamalgs::primitives::compute_histogram_basic<f64>(
                     shamsys::instance::get_compute_scheduler_ptr(),
                     bin_edge_inf,
                     bin_edge_sup,
                     positions);
-            });
-        shamalgs_module.def(
-            "compute_histogram_basic_f32",
-            [](sham::DeviceBuffer<f32> &bin_edge_inf,
-               sham::DeviceBuffer<f32> &bin_edge_sup,
-               sham::DeviceBuffer<f32> &positions) {
-                return shamalgs::primitives::compute_histogram_basic<f32>(
+                result.synchronize();
+            };
+
+            run();
+
+            return shambase::timeitfor(run);
+        });
+    shamalgs_module.def(
+        "benchmark_compute_histogram_basic_f32",
+        [](sham::DeviceBuffer<f32> &bin_edge_inf,
+           sham::DeviceBuffer<f32> &bin_edge_sup,
+           sham::DeviceBuffer<f32> &positions) {
+            bin_edge_inf.synchronize();
+            bin_edge_sup.synchronize();
+            positions.synchronize();
+
+            auto run = [&]() {
+                auto result = shamalgs::primitives::compute_histogram_basic<f32>(
                     shamsys::instance::get_compute_scheduler_ptr(),
                     bin_edge_inf,
                     bin_edge_sup,
                     positions);
-            });
+                result.synchronize();
+            };
 
-        shamalgs_module.def(
-            "benchmark_compute_histogram_basic_f64",
-            [](sham::DeviceBuffer<f64> &bin_edge_inf,
-               sham::DeviceBuffer<f64> &bin_edge_sup,
-               sham::DeviceBuffer<f64> &positions) {
-                bin_edge_inf.synchronize();
-                bin_edge_sup.synchronize();
-                positions.synchronize();
+            run();
 
-                auto run = [&]() {
-                    auto result = shamalgs::primitives::compute_histogram_basic<f64>(
-                        shamsys::instance::get_compute_scheduler_ptr(),
-                        bin_edge_inf,
-                        bin_edge_sup,
-                        positions);
-                    result.synchronize();
-                };
+            return shambase::timeitfor(run);
+        });
 
-                run();
+    shamalgs_module.def(
+        "string_histogram",
+        [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
+            return shamalgs::collective::string_histogram(inputs, std::move(delimiter), hash_based);
+        },
+        py::arg("inputs"),
+        py::arg("delimiter")  = "\n",
+        py::arg("hash_based") = false);
 
-                return shambase::timeitfor(run);
-            });
-        shamalgs_module.def(
-            "benchmark_compute_histogram_basic_f32",
-            [](sham::DeviceBuffer<f32> &bin_edge_inf,
-               sham::DeviceBuffer<f32> &bin_edge_sup,
-               sham::DeviceBuffer<f32> &positions) {
-                bin_edge_inf.synchronize();
-                bin_edge_sup.synchronize();
-                positions.synchronize();
-
-                auto run = [&]() {
-                    auto result = shamalgs::primitives::compute_histogram_basic<f32>(
-                        shamsys::instance::get_compute_scheduler_ptr(),
-                        bin_edge_inf,
-                        bin_edge_sup,
-                        positions);
-                    result.synchronize();
-                };
-
-                run();
-
-                return shambase::timeitfor(run);
-            });
-
-        shamalgs_module.def(
-            "string_histogram",
-            [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
-                return shamalgs::collective::string_histogram(
-                    inputs, std::move(delimiter), hash_based);
-            },
-            py::arg("inputs"),
-            py::arg("delimiter")  = "\n",
-            py::arg("hash_based") = false);
-
-        shamalgs_module.def(
-            "all_string_histogram",
-            [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
-                return shamalgs::collective::all_string_histogram(
-                    inputs, std::move(delimiter), hash_based);
-            },
-            py::arg("inputs"),
-            py::arg("delimiter")  = "\n",
-            py::arg("hash_based") = false);
+    shamalgs_module.def(
+        "all_string_histogram",
+        [](const std::vector<std::string> &inputs, std::string delimiter, bool hash_based) {
+            return shamalgs::collective::all_string_histogram(
+                inputs, std::move(delimiter), hash_based);
+        },
+        py::arg("inputs"),
+        py::arg("delimiter")  = "\n",
+        py::arg("hash_based") = false);
 }
