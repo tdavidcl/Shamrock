@@ -15,7 +15,6 @@
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/time.hpp"
-#include "shamalgs/ImplControl.hpp"
 #include "shamalgs/collective/string_histogram.hpp"
 #include "shamalgs/details/random/random.hpp"
 #include "shamalgs/primitives/compute_histogram.hpp"
@@ -161,10 +160,9 @@ ON_PYTHON_INIT {
             return timer.elapsed_sec();
         });
 
-        shamalgs_module.def(
-            "set_impl_reduction", [](const std::string &impl, const std::string &param = "") {
-                shamalgs::primitives::impl::set_impl_reduction(impl, param);
-            });
+        shamalgs_module.def("set_impl_reduction", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_reduction(impl);
+        });
 
         shamalgs_module.def("get_current_impl_reduction", []() {
             return shamalgs::primitives::impl::get_current_impl_reduction();
@@ -172,6 +170,14 @@ ON_PYTHON_INIT {
 
         shamalgs_module.def("get_default_impl_list_reduction", []() {
             return shamalgs::primitives::impl::get_default_impl_list_reduction();
+        });
+
+        shamalgs_module.def("is_impl_set_reduction", []() {
+            return shamalgs::primitives::impl::is_impl_set_reduction();
+        });
+
+        shamalgs_module.def("autoselect_impl_reduction", []() {
+            shamalgs::primitives::impl::autoselect_impl_reduction();
         });
     }
 
@@ -193,11 +199,9 @@ ON_PYTHON_INIT {
                 return timer.elapsed_sec();
             });
 
-        shamalgs_module.def(
-            "set_impl_scan_exclusive_sum_in_place",
-            [](const std::string &impl, const std::string &param = "") {
-                shamalgs::primitives::impl::set_impl_scan_exclusive_sum_in_place(impl, param);
-            });
+        shamalgs_module.def("set_impl_scan_exclusive_sum_in_place", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_scan_exclusive_sum_in_place(impl);
+        });
 
         shamalgs_module.def("get_current_impl_scan_exclusive_sum_in_place", []() {
             return shamalgs::primitives::impl::get_current_impl_scan_exclusive_sum_in_place();
@@ -205,6 +209,14 @@ ON_PYTHON_INIT {
 
         shamalgs_module.def("get_default_impl_list_scan_exclusive_sum_in_place", []() {
             return shamalgs::primitives::impl::get_default_impl_list_scan_exclusive_sum_in_place();
+        });
+
+        shamalgs_module.def("is_impl_set_scan_exclusive_sum_in_place", []() {
+            return shamalgs::primitives::impl::is_impl_set_scan_exclusive_sum_in_place();
+        });
+
+        shamalgs_module.def("autoselect_impl_scan_exclusive_sum_in_place", []() {
+            shamalgs::primitives::impl::autoselect_impl_scan_exclusive_sum_in_place();
         });
     }
 
@@ -325,14 +337,29 @@ ON_PYTHON_INIT {
             })
         .def("get_avail_configs", [](shamalgs::primitives::ImplControl &impl_control) {
             return impl_control.get_avail_configs(shamsys::instance::get_compute_scheduler_ptr());
+    { // compute_histogram
+
+        shamalgs_module.def("set_impl_compute_histogram", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_compute_histogram(impl);
         });
 
-    shamalgs_module.def(
-        "compute_histogram_impl",
-        []() -> shamalgs::primitives::ImplControl & {
-            return shamalgs::primitives::impl::compute_histogram_impl_control;
-        },
-        py::return_value_policy::reference);
+        shamalgs_module.def("get_current_impl_compute_histogram", []() {
+            return shamalgs::primitives::impl::get_current_impl_compute_histogram();
+        });
+
+        shamalgs_module.def("get_default_impl_list_compute_histogram", []() {
+            return shamalgs::primitives::impl::get_default_impl_list_compute_histogram();
+        });
+
+        shamalgs_module.def("is_impl_set_compute_histogram", []() {
+            return shamalgs::primitives::impl::is_impl_set_compute_histogram();
+        });
+
+        shamalgs_module.def("autoselect_impl_compute_histogram", []() {
+            shamalgs::primitives::impl::autoselect_impl_compute_histogram(
+                shamsys::instance::get_compute_scheduler_ptr());
+        });
+    }
 
     shamalgs_module.def(
         "compute_histogram_basic_f64",
