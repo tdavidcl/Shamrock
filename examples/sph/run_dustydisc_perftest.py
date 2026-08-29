@@ -10,13 +10,13 @@ Perform a dust settling test in a local stratified box.
 import os
 
 import matplotlib as mpl
-import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
-import shamrock.external.coala as coala
+from matplotlib import cm
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
+from shamrock.external import coala
 
 import shamrock
 

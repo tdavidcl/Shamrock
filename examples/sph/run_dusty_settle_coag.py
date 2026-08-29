@@ -7,13 +7,13 @@ CI test for Sod tube with SPH
 
 import os
 
-import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
-import shamrock.external.coala as coala
+from matplotlib import cm
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
+from shamrock.external import coala
 
 import shamrock
 
@@ -168,7 +168,7 @@ bmax = (box / 8, box / 8, box)
 
 N_target = 2e4
 scheduler_split_val = int(2e7)
-scheduler_merge_val = int(1)
+scheduler_merge_val = 1
 
 xm, ym, zm = bmin
 xM, yM, zM = bmax

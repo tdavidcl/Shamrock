@@ -10,16 +10,16 @@ Perform a dust settling test in a local stratified box.
 import os
 
 import matplotlib as mpl
-import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
-import shamrock.external.coala as coala
+from matplotlib import cm
 from matplotlib.lines import Line2D
 from scipy.special import erfinv
+from shamrock.external import coala
+from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.numba_helper import maybe_njit
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
-from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 
 import shamrock
 
@@ -147,7 +147,6 @@ massgrid_edges = mrn_distribution.massgrid_edges
 mrn_weight = mrn_distribution.mrn_weight
 
 if ndust > 0:
-
     print(f"massgrid = {mrn_distribution.massgrid} [code units]")
     print(f"massgrid = {mrn_distribution.massgrid * codeu.to('kg')} [kg]")
 
@@ -175,6 +174,7 @@ dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_prefix)
 
 # %%
 # Load the last dump if it exists, setup otherwise
+
 
 def compute_sj_new_j(patchdata, j):
     pmass = model.get_particle_mass()

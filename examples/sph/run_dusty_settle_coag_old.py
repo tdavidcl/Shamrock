@@ -13,7 +13,7 @@ import shamrock
 
 shamrock.enable_experimental_features()
 import numpy as np
-import shamrock.external.coala as coala
+from shamrock.external import coala
 
 print(f"coala path : {coala.__file__}")
 
@@ -107,7 +107,7 @@ bmax = (box / 4, box / 4, box)
 
 N_target = 2e4
 scheduler_split_val = int(2e7)
-scheduler_merge_val = int(1)
+scheduler_merge_val = 1
 
 xm, ym, zm = bmin
 xM, yM, zM = bmax

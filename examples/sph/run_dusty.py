@@ -55,7 +55,7 @@ bmax = (0.6, 0.6, 0.6)
 
 N_target = 1e4
 scheduler_split_val = int(2e7)
-scheduler_merge_val = int(1)
+scheduler_merge_val = 1
 
 xm, ym, zm = bmin
 xM, yM, zM = bmax
