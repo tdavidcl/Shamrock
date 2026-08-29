@@ -151,8 +151,8 @@ namespace shamalgs::primitives {
         /// Set the implementation for reduction, from a config json string
         void set_impl_reduction(const std::string &impl);
 
-        /// Select the default implementation for reduction
-        void autoselect_impl_reduction();
+        /// Select the default implementation for reduction, on the given device scheduler
+        void autoselect_impl_reduction(const sham::DeviceScheduler_ptr &sched);
 
     } // namespace impl
 

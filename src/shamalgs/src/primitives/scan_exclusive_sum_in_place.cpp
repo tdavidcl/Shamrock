@@ -136,7 +136,8 @@ namespace shamalgs::primitives {
         };
 #endif
 
-        shamalgs::ImplVariantGlobal<
+        /// The selector type of the scan_exclusive_sum_in_place algorithm
+        using ScanExclusiveSumInPlaceImplVariant = shamalgs::ImplVariantGlobal<
             StdScan
 #ifdef __ACPP__
             ,
@@ -150,8 +151,26 @@ namespace shamalgs::primitives {
             ,
             AdaptiveCppAlg
 #endif
-            >
-            scan_exclusive_sum_in_place_impl;
+            >;
+
+        /// Currently selected scan_exclusive_sum_in_place implementation
+        ScanExclusiveSumInPlaceImplVariant scan_exclusive_sum_in_place_impl{
+            "scan_exclusive_sum_in_place",
+            [](const sham::DeviceScheduler_ptr &) -> ScanExclusiveSumInPlaceImplVariant::Variant {
+#ifdef __MACH__     // decoupled lookback perf on mac os is awful
+    #ifdef __ACPP__ // for acpp we gain using enqueue custom operation instead of copying
+                return StdScanSingleTaskAcpp{};
+    #else
+                return StdScan{};
+    #endif
+#else
+    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                return DecoupledLookback512{};
+    #else
+                return StdScan{};
+    #endif
+#endif
+            }};
 
         /// Get list of available scan_exclusive_sum_in_place implementations
         std::vector<std::string> get_default_impl_list_scan_exclusive_sum_in_place() {
@@ -170,30 +189,13 @@ namespace shamalgs::primitives {
 
         /// Set the implementation for scan_exclusive_sum_in_place
         void set_impl_scan_exclusive_sum_in_place(const std::string &impl) {
-            shamlog_info_ln(
-                "algs", "setting scan_exclusive_sum_in_place implementation to impl :", impl);
             scan_exclusive_sum_in_place_impl.set(impl);
         }
 
-        /// Select the default implementation for scan_exclusive_sum_in_place
-        void autoselect_impl_scan_exclusive_sum_in_place() {
-#ifdef __MACH__     // decoupled lookback perf on mac os is awful
-    #ifdef __ACPP__ // for acpp we gain using enqueue custom operation instead of copying
-            scan_exclusive_sum_in_place_impl.set(StdScanSingleTaskAcpp{});
-    #else
-            scan_exclusive_sum_in_place_impl.set(StdScan{});
-    #endif
-#else
-    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-            scan_exclusive_sum_in_place_impl.set(DecoupledLookback512{});
-    #else
-            scan_exclusive_sum_in_place_impl.set(StdScan{});
-    #endif
-#endif
-            shamlog_info_ln(
-                "algs",
-                "defaulting scan_exclusive_sum_in_place implementation to impl :",
-                get_current_impl_scan_exclusive_sum_in_place());
+        /// Select the default implementation for scan_exclusive_sum_in_place, on the given device
+        /// scheduler
+        void autoselect_impl_scan_exclusive_sum_in_place(const sham::DeviceScheduler_ptr &sched) {
+            scan_exclusive_sum_in_place_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -214,7 +216,7 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::scan_exclusive_sum_in_place_impl.is_set()) {
-            impl::autoselect_impl_scan_exclusive_sum_in_place();
+            impl::autoselect_impl_scan_exclusive_sum_in_place(buf1.get_dev_scheduler_ptr());
         }
 
         std::visit(

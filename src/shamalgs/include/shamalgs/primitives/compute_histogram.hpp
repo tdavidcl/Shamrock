@@ -53,8 +53,19 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "gpu_oversubscribe";
         };
 
-        inline shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>
-            compute_histogram_impl;
+        /// The selector type of the compute_histogram algorithm
+        using ComputeHistogramImplVariant
+            = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
+
+        /// Currently selected compute_histogram implementation
+        inline ComputeHistogramImplVariant compute_histogram_impl{
+            "compute_histogram",
+            [](const sham::DeviceScheduler_ptr &dev_sched) -> ComputeHistogramImplVariant::Variant {
+                if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+                    return GpuOversubscribe{};
+                }
+                return NaiveGpu{}; // it is portable and fast everywhere
+            }};
 
         /// Get list of available compute_histogram implementations
         inline std::vector<std::string> get_default_impl_list_compute_histogram() {
@@ -71,21 +82,12 @@ namespace shamalgs::primitives {
 
         /// Set the implementation for compute_histogram
         inline void set_impl_compute_histogram(const std::string &impl) {
-            shamlog_info_ln("algs", "setting compute_histogram implementation to impl :", impl);
             compute_histogram_impl.set(impl);
         }
 
-        /// Select the default implementation for compute_histogram
+        /// Select the default implementation for compute_histogram, on the given device scheduler
         inline void autoselect_impl_compute_histogram(const sham::DeviceScheduler_ptr &dev_sched) {
-            if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
-                compute_histogram_impl.set(GpuOversubscribe{});
-            } else {
-                compute_histogram_impl.set(NaiveGpu{}); // it is portable and fast everywhere
-            }
-            shamlog_info_ln(
-                "algs",
-                "defaulting compute_histogram implementation to impl :",
-                get_current_impl_compute_histogram());
+            compute_histogram_impl.autoselect(dev_sched);
         }
 
         template<class T, class Tbins, class... Targs, class Tfunctor>

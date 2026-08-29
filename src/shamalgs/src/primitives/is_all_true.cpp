@@ -81,7 +81,11 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "sum_reduction";
         };
 
-        shamalgs::ImplVariantGlobal<Host, SumReduction> is_all_true_impl;
+        /// Currently selected is_all_true implementation
+        shamalgs::ImplVariantGlobal<Host, SumReduction> is_all_true_impl{
+            "is_all_true", [](const sham::DeviceScheduler_ptr &) {
+                return Host{};
+            }};
 
         /// Get list of available is_all_true implementations, as config json strings
         std::vector<std::string> get_default_impl_list_is_all_true() {
@@ -95,18 +99,11 @@ namespace shamalgs::primitives {
         bool is_impl_set_is_all_true() { return is_all_true_impl.is_set(); }
 
         /// Set the implementation for is_all_true, from a config json string
-        void set_impl_is_all_true(const std::string &impl) {
-            shamlog_info_ln("algs", "setting is_all_true implementation to impl :", impl);
-            is_all_true_impl.set(impl);
-        }
+        void set_impl_is_all_true(const std::string &impl) { is_all_true_impl.set(impl); }
 
-        /// Select the default implementation for is_all_true
-        void autoselect_impl_is_all_true() {
-            is_all_true_impl.set(Host{});
-            shamlog_info_ln(
-                "algs",
-                "defaulting is_all_true implementation to impl :",
-                get_current_impl_is_all_true());
+        /// Select the default implementation for is_all_true, on the given device scheduler
+        void autoselect_impl_is_all_true(const sham::DeviceScheduler_ptr &sched) {
+            is_all_true_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -115,7 +112,7 @@ namespace shamalgs::primitives {
     bool is_all_true(sham::DeviceBuffer<T> &buf, u32 cnt) {
 
         if (!impl::is_all_true_impl.is_set()) {
-            impl::autoselect_impl_is_all_true();
+            impl::autoselect_impl_is_all_true(buf.get_dev_scheduler_ptr());
         }
 
         return std::visit(

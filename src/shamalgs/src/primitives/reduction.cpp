@@ -55,7 +55,8 @@ namespace shamalgs::primitives {
         };
 #endif
 
-        shamalgs::ImplVariantGlobal<
+        /// The selector type of the reduction algorithm
+        using ReductionImplVariant = shamalgs::ImplVariantGlobal<
             Fallback
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
             ,
@@ -63,8 +64,17 @@ namespace shamalgs::primitives {
             GroupReduction128,
             GroupReduction256
 #endif
-            >
-            reduction_impl;
+            >;
+
+        /// Currently selected reduction implementation
+        ReductionImplVariant reduction_impl{
+            "reduction", [](const sham::DeviceScheduler_ptr &) -> ReductionImplVariant::Variant {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                return GroupReduction128{};
+#else
+                return Fallback{};
+#endif
+            }};
 
         /// Get list of available reduction implementations, as config json strings
         std::vector<std::string> get_default_impl_list_reduction() {
@@ -78,22 +88,11 @@ namespace shamalgs::primitives {
         bool is_impl_set_reduction() { return reduction_impl.is_set(); }
 
         /// Set the implementation for reduction, from a config json string
-        void set_impl_reduction(const std::string &impl) {
-            shamlog_info_ln("algs", "setting reduction implementation to impl :", impl);
-            reduction_impl.set(impl);
-        }
+        void set_impl_reduction(const std::string &impl) { reduction_impl.set(impl); }
 
-        /// Select the default implementation for reduction
-        void autoselect_impl_reduction() {
-#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-            reduction_impl.set(GroupReduction128{});
-#else
-            reduction_impl.set(Fallback{});
-#endif
-            shamlog_info_ln(
-                "algs",
-                "defaulting reduction implementation to impl :",
-                get_current_impl_reduction());
+        /// Select the default implementation for reduction, on the given device scheduler
+        void autoselect_impl_reduction(const sham::DeviceScheduler_ptr &sched) {
+            reduction_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -108,7 +107,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            impl::autoselect_impl_reduction(sched);
         }
 
         return std::visit(
@@ -141,7 +140,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            impl::autoselect_impl_reduction(sched);
         }
 
         return std::visit(
@@ -174,7 +173,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            impl::autoselect_impl_reduction(sched);
         }
 
         return std::visit(

@@ -22,6 +22,7 @@
  */
 
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include <string>
 #include <vector>
 
@@ -64,8 +65,8 @@ namespace shamalgs::primitives {
         /// Set the implementation for sort by keys, from a config json string
         void set_impl_sort_by_keys(const std::string &impl);
 
-        /// Select the default implementation for sort by keys
-        void autoselect_impl_sort_by_keys();
+        /// Select the default implementation for sort by keys, on the given device scheduler
+        void autoselect_impl_sort_by_keys(const sham::DeviceScheduler_ptr &sched);
 
     } // namespace impl
 

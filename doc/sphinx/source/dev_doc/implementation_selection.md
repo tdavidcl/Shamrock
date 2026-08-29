@@ -17,6 +17,13 @@ Implementation selection is built on `shamalgs::ImplVariantGlobal`
 pattern to use for any algorithm that needs implementation selection, whether new or being added
 to an existing one.
 
+Every such selector registers itself under its algorithm's name in the process-wide
+`shamalgs::ImplVariantRegistry` (`shamalgs/include/shamalgs/ImplVariantRegistry.hpp`), which
+hands it back through the non-templated `shamalgs::IImplVariant` base interface. That is what
+makes it possible to query or configure *any* algorithm by name, without knowing its
+alternatives at compile time. The registry is a side channel only: algorithms keep dispatching
+on their own concrete selector object, so nothing on their hot path goes through it.
+
 ## User side (Python)
 
 For every algorithm that supports it, three functions are exposed on the Python bindings, under
@@ -70,6 +77,30 @@ for impl in shamrock.algs.get_default_impl_list_scan_exclusive_sum_in_place():
     # ...
 ```
 
+### Querying every algorithm at once
+
+The same state is reachable by algorithm name through `shamrock.impl`, which does not need the
+algorithm to be known in advance:
+
+- `shamrock.impl.list_keys()` — the name of every algorithm supporting implementation selection.
+- `shamrock.impl.is_set(key)` / `get_current(key)` / `get_default_list(key)` / `set(key, config)`
+  / `autoselect(key)` — the per-algorithm functions above, taken by name.
+
+```python
+import shamrock
+
+for key in shamrock.impl.list_keys():
+    print(key, "->", shamrock.impl.get_current(key))
+
+shamrock.impl.set("is_all_true", '{"implementation":"sum_reduction","parameters":{}}')
+
+# same state as the per-algorithm function
+print(shamrock.algs.get_current_impl_is_all_true())
+```
+
+`list_keys()` only reports the algorithms whose translation unit is linked into the running
+binary, so it is a view of what this process can select, not of everything Shamrock implements.
+
 ### Where this is used in practice
 
 The benchmark scripts under `examples/benchmarks/` sweep over every available implementation of
@@ -89,7 +120,9 @@ the process restarts.
 Use `shamalgs::ImplVariantGlobal`, documented in detail in
 `shamalgs/include/shamalgs/ImplVariant.hpp`. Each implementation is a small tag struct exposing a
 `variant_type_name`; the selector is a `std::variant` of those, and dispatch is a plain
-`std::visit`. Skeleton, following `scan_exclusive_sum_in_place.cpp` as a reference:
+`std::visit`. Constructing the selector takes two things: the algorithm's name, which is the key
+it registers under, and a provider returning the algorithm's default implementation, which backs
+`autoselect`. Skeleton, following `is_all_true.cpp` as a reference:
 
 ```cpp
 #include "shamalgs/ImplVariant.hpp"
@@ -107,7 +140,11 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "alt_b";
         };
 
-        shamalgs::ImplVariantGlobal<AltA, AltB> my_algo_impl;
+        /// Currently selected my_algo implementation
+        shamalgs::ImplVariantGlobal<AltA, AltB> my_algo_impl{
+            "my_algo", [](const sham::DeviceScheduler_ptr &) {
+                return AltA{};
+            }};
 
         std::vector<std::string> get_default_impl_list_my_algo() {
             return my_algo_impl.get_default_config_list();
@@ -120,13 +157,15 @@ namespace shamalgs::primitives {
         void set_impl_my_algo(const std::string &impl) { my_algo_impl.set(impl); }
 
         /// Called lazily on first use if no implementation was selected yet
-        void autoselect_impl_my_algo() { my_algo_impl.set(AltA{}); }
+        void autoselect_impl_my_algo(const sham::DeviceScheduler_ptr &sched) {
+            my_algo_impl.autoselect(sched);
+        }
 
     } // namespace impl
 
-    void my_algo(...) {
+    void my_algo(sham::DeviceBuffer<T> &buf, ...) {
         if (!impl::my_algo_impl.is_set()) {
-            impl::autoselect_impl_my_algo();
+            impl::autoselect_impl_my_algo(buf.get_dev_scheduler_ptr());
         }
 
         std::visit(
@@ -140,26 +179,52 @@ namespace shamalgs::primitives {
 } // namespace shamalgs::primitives
 ```
 
+The name passed to the constructor is the key the algorithm is known by from
+`shamrock.impl` — use the same suffix as the `set_impl_<algo>` functions. Registering two
+selectors under one name throws, so a typo is caught at startup rather than silently shadowing
+another algorithm.
+
+Logging of every selection happens inside `ImplVariantGlobal`, under the `impl` log domain, so
+the forwarders above do not log themselves — that way a selection made through
+`shamrock.impl.set` is logged too.
+
 `ImplVariantGlobal` has no notion of a default at construction — `is_set()` starts `false`. It is
 up to each call site to decide what to do when unset: the lazy-default pattern above (check
 `is_set()`, autoselect right before dispatching) is what `segmented_sort_in_place` and
 `scan_exclusive_sum_in_place` do, but picking a default eagerly, right where the selector is
 declared, is just as valid when there is no reason to defer it.
 
-`autoselect_impl_<algo>` isn't required to take no arguments — `void autoselect_impl_my_algo()` is
-just the common case, when the default only depends on compile-time information (a `#ifdef`
-backend/platform check, e.g. `scan_exclusive_sum_in_place`'s). When the default instead depends on
-something only known at runtime, pass it in as a parameter and thread it through from every call
-site, including the dispatching function itself and the Python binding. `compute_histogram` does
-this: its default depends on the device type of the `sham::DeviceScheduler_ptr` it runs on (a GPU
-device picks a different default than a CPU one), so its autoselect function is
-`autoselect_impl_compute_histogram(const sham::DeviceScheduler_ptr &dev_sched)`, called as
-`impl::autoselect_impl_compute_histogram(dev_sched)` from within `compute_histogram(...)` (which
-already has `dev_sched` on hand), and the Python binding supplies it explicitly:
+The default provider always takes the `sham::DeviceScheduler_ptr` the algorithm will run on,
+because some defaults depend on the device: `compute_histogram` picks a different implementation
+on a GPU than on a CPU. Most defaults do not, and simply leave the parameter unnamed, as in the
+skeleton above. Defaults that only depend on compile-time information (a `#ifdef`
+backend/platform check, e.g. `scan_exclusive_sum_in_place`'s) do the same.
+
+When the provider has more than one `return`, the lambda needs an explicit return type. Give the
+selector type a name and use its `Variant` alias, as `compute_histogram` does:
 
 ```cpp
-shamalgs_module.def("autoselect_impl_compute_histogram", []() {
-    shamalgs::primitives::impl::autoselect_impl_compute_histogram(
+using ComputeHistogramImplVariant
+    = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
+
+inline ComputeHistogramImplVariant compute_histogram_impl{
+    "compute_histogram",
+    [](const sham::DeviceScheduler_ptr &dev_sched) -> ComputeHistogramImplVariant::Variant {
+        if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+            return GpuOversubscribe{};
+        }
+        return NaiveGpu{};
+    }};
+```
+
+The dispatching function already has a scheduler on hand, either as one of its own parameters or
+via `buf.get_dev_scheduler_ptr()`, so threading it into `autoselect_impl_<algo>` costs nothing.
+The Python binding supplies the current one, which keeps `autoselect_impl_<algo>()` argument-free
+on the Python side:
+
+```cpp
+shamalgs_module.def("autoselect_impl_my_algo", []() {
+    shamalgs::primitives::impl::autoselect_impl_my_algo(
         shamsys::instance::get_compute_scheduler_ptr());
 });
 ```
@@ -185,5 +250,8 @@ Once the selector and dispatch are in place, wire it up end to end:
 
 ## Related files
 
-- `shamalgs/include/shamalgs/ImplVariant.hpp` — authoritative reference for
+- `shamalgs/include/shamalgs/ImplVariant.hpp` — authoritative reference for `IImplVariant` and
   `ImplVariantGlobal`'s API.
+- `shamalgs/include/shamalgs/ImplVariantRegistry.hpp` — the by-name registry of every algorithm's
+  control variable.
+- `shampylib/src/pyImplVariantRegistry.cpp` — the `shamrock.impl` bindings.

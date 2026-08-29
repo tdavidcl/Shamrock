@@ -16,6 +16,7 @@
  */
 
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/kernel_call.hpp"
 #include <string>
 #include <vector>
@@ -41,8 +42,9 @@ namespace shamalgs::primitives {
         /// Set the implementation for segmented sort in place, from a config json string
         void set_impl_segmented_sort_in_place(const std::string &impl);
 
-        /// Select the default implementation for segmented sort in place
-        void autoselect_impl_segmented_sort_in_place();
+        /// Select the default implementation for segmented sort in place, on the given device
+        /// scheduler
+        void autoselect_impl_segmented_sort_in_place(const sham::DeviceScheduler_ptr &sched);
 
     } // namespace impl
 

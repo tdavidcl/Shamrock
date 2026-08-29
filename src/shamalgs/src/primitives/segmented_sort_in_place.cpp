@@ -118,7 +118,11 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "multi_std_sort";
         };
 
-        shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl;
+        /// Currently selected segmented sort in place implementation
+        shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl{
+            "segmented_sort_in_place", [](const sham::DeviceScheduler_ptr &) {
+                return MultiStdSort{};
+            }};
 
         /// Get list of available segmented sort in place implementations
         std::vector<std::string> get_default_impl_list_segmented_sort_in_place() {
@@ -135,18 +139,13 @@ namespace shamalgs::primitives {
 
         /// Set the implementation for segmented sort in place
         void set_impl_segmented_sort_in_place(const std::string &impl) {
-            shamlog_info_ln(
-                "algs", "setting segmented sort in place implementation to impl :", impl);
             segmented_sort_in_place_impl.set(impl);
         }
 
-        /// Select the default implementation for segmented sort in place
-        void autoselect_impl_segmented_sort_in_place() {
-            segmented_sort_in_place_impl.set(MultiStdSort{});
-            shamlog_info_ln(
-                "algs",
-                "defaulting segmented sort in place implementation to impl :",
-                get_current_impl_segmented_sort_in_place());
+        /// Select the default implementation for segmented sort in place, on the given device
+        /// scheduler
+        void autoselect_impl_segmented_sort_in_place(const sham::DeviceScheduler_ptr &sched) {
+            segmented_sort_in_place_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -164,7 +163,7 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::segmented_sort_in_place_impl.is_set()) {
-            impl::autoselect_impl_segmented_sort_in_place();
+            impl::autoselect_impl_segmented_sort_in_place(buf.get_dev_scheduler_ptr());
         }
 
         std::visit(

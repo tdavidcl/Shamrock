@@ -18,6 +18,7 @@
  * Bounding Volume Hierarchies (CLBVH).
  */
 
+#include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/vec.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include <string>
@@ -76,8 +77,8 @@ namespace shamtree {
         /// Set the implementation for dual tree traversal, from a config json string
         void set_impl_clbvh_dual_tree_traversal(const std::string &impl);
 
-        /// Select the default implementation for dual tree traversal
-        void autoselect_impl_clbvh_dual_tree_traversal();
+        /// Select the default implementation for dual tree traversal, on the given device scheduler
+        void autoselect_impl_clbvh_dual_tree_traversal(const sham::DeviceScheduler_ptr &sched);
 
     } // namespace impl
 

@@ -30,15 +30,26 @@
  * hold an algorithm's currently selected implementation; see its own doc
  * comment for the two ABI flavors it exposes and how the unset state works.
  *
+ * Each ImplVariantGlobal registers itself under its algorithm's name in the
+ * process-wide ImplVariantRegistry (ImplVariantRegistry.hpp), which hands it
+ * back as the non-templated IImplVariant declared below. That is what lets
+ * generic code query or configure any algorithm by name; algorithms
+ * themselves keep dispatching on their own concrete selector, so the registry
+ * never sits on their hot path.
+ *
  * Dispatch on the selected implementation is then a plain
  * `std::visit(shambase::overloaded{...}, variant)` instead of a switch.
  */
 
 #include "shambase/exception.hpp"
 #include "sham/format/format.hpp"
+#include "shamalgs/ImplVariantRegistry.hpp"
+#include "shambackends/DeviceScheduler.hpp"
+#include "shamcomm/logs.hpp"
 #include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
 #include <string_view>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -148,10 +159,21 @@ namespace shamalgs {
     /**
      * @brief Non-template virtual interface exposed by ImplVariantGlobal, for code that needs
      * to hold or pass around an implementation selector without knowing its alternative types.
+     *
+     * This is what ImplVariantRegistry hands out, so that generic code can enumerate every
+     * implementation-selectable algorithm and query or change its state by name. Algorithms
+     * themselves keep dispatching on their own concrete ImplVariantGlobal object, so none of
+     * these virtual calls sit on an algorithm's hot path.
      */
     class IImplVariant {
         public:
         virtual ~IImplVariant() = default;
+
+        /// The name this selector is registered under (the algorithm's name)
+        virtual const std::string &get_key() const = 0;
+
+        /// Whether an implementation has been selected yet
+        virtual bool is_set() const = 0;
 
         /// Get the currently selected implementation as a single config json string, or a json
         /// null if no implementation has been selected yet
@@ -162,6 +184,15 @@ namespace shamalgs {
 
         /// Select an implementation from a {"implementation": ..., "parameters": ...} json string
         virtual void set(std::string_view config_json) = 0;
+
+        /**
+         * @brief Select the algorithm's own default implementation
+         *
+         * @param sched the device scheduler the algorithm will run on, for the algorithms whose
+         * default depends on the device (e.g. compute_histogram). Algorithms whose default does
+         * not depend on it simply ignore it.
+         */
+        virtual void autoselect(const sham::DeviceScheduler_ptr &sched) = 0;
     };
 
     /**
@@ -175,12 +206,20 @@ namespace shamalgs {
      *   - get_current_config() / get_default_config_list() / set(string_view) : a single
      *     `{"implementation": ..., "parameters": ...}` json string ABI.
      *
-     * No implementation is selected at construction: this class has no notion of a default.
-     * is_set() reports whether one has been picked yet. It is up to each call site to decide
-     * what to do when unset - typically checking is_set() and calling set() with that
-     * algorithm's own default right before dispatching (see e.g.
-     * segmented_sort_in_place.cpp). get() assumes is_set(); get_current_config() is the one
-     * exception and safely returns a json null instead of dereferencing an unset selection.
+     * Construction takes the algorithm's name and a provider returning the algorithm's default
+     * implementation. The name registers the selector in the process-wide
+     * ImplVariantRegistry (see ImplVariantRegistry.hpp), so that generic code can reach it
+     * through IImplVariant without knowing Alts...; the provider backs autoselect(), so that
+     * "reset this algorithm to its default" also works generically. It takes the device
+     * scheduler the algorithm runs on, for the algorithms whose default depends on the device
+     * (compute_histogram); the others ignore it.
+     *
+     * No implementation is selected at construction: this class has no notion of a default
+     * until autoselect() or set() picks one. is_set() reports whether one has been picked yet.
+     * It is up to each call site to decide what to do when unset - typically checking is_set()
+     * and autoselecting right before dispatching (see e.g. segmented_sort_in_place.cpp). get()
+     * assumes is_set(); get_current_config() is the one exception and safely returns a json null
+     * instead of dereferencing an unset selection.
      *
      * @tparam Alts the alternative types, each requiring a
      * `static constexpr std::string_view variant_type_name`
@@ -190,8 +229,42 @@ namespace shamalgs {
         public:
         using Variant = std::variant<Alts...>;
 
+        /// Returns the algorithm's default implementation, given the device it will run on
+        using DefaultProvider = std::function<Variant(const sham::DeviceScheduler_ptr &)>;
+
+        /**
+         * @brief Build a selector and register it under the algorithm's name
+         *
+         * @param key the algorithm's name, e.g. "is_all_true"
+         * @param default_provider returns the algorithm's default implementation
+         * @throws std::invalid_argument if default_provider is empty, or if another selector is
+         * already registered under this name
+         */
+        inline ImplVariantGlobal(std::string key, DefaultProvider default_provider)
+            : key(std::move(key)), default_provider(std::move(default_provider)) {
+
+            if (!this->default_provider) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                    "the implementation selector of {} needs a default provider", this->key));
+            }
+
+            get_impl_variant_registry().register_control(this->key, *this);
+        }
+
+        /// Unregister the selector
+        inline ~ImplVariantGlobal() override {
+            get_impl_variant_registry().unregister_control(key);
+        }
+
+        // The registry holds a reference to this object, so it can not be relocated
+        ImplVariantGlobal(const ImplVariantGlobal &)            = delete;
+        ImplVariantGlobal &operator=(const ImplVariantGlobal &) = delete;
+
+        /// The algorithm's name, which this selector is registered under
+        inline const std::string &get_key() const override { return key; }
+
         /// Whether an implementation has been selected yet
-        inline bool is_set() const { return current.has_value(); }
+        inline bool is_set() const override { return current.has_value(); }
 
         /// Get the currently selected implementation. Requires is_set()
         inline const Variant &get() const { return *current; }
@@ -211,14 +284,27 @@ namespace shamalgs {
         }
 
         /// Directly select an alternative (e.g. to seed a default at the call site)
-        inline void set(Variant v) { current = std::move(v); }
+        inline void set(Variant v) {
+            current = std::move(v);
+            shamlog_info_ln("impl", "setting", key, "implementation to :", get_current_config());
+        }
 
         /// Select an implementation from a {"implementation": ..., "parameters": ...} json string
         inline void set(std::string_view config_json) override {
-            current = variant_from_config_string<Variant>(config_json);
+            set(variant_from_config_string<Variant>(config_json));
+        }
+
+        /// Select the algorithm's own default implementation, on the given device scheduler
+        inline void autoselect(const sham::DeviceScheduler_ptr &sched) override {
+            set(default_provider(sched));
         }
 
         private:
+        /// The algorithm's name, which this selector is registered under
+        std::string key;
+        /// Returns the algorithm's default implementation, backs autoselect()
+        DefaultProvider default_provider;
+        /// The currently selected implementation, empty until one is picked
         std::optional<Variant> current;
     };
 

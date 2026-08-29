@@ -41,7 +41,10 @@ namespace shamtree {
         };
 
         /// Currently selected dual tree traversal implementation
-        shamalgs::ImplVariantGlobal<Reference, ParallelSelect, ScanMultipass> dtt_impl;
+        shamalgs::ImplVariantGlobal<Reference, ParallelSelect, ScanMultipass> dtt_impl{
+            "clbvh_dual_tree_traversal", [](const sham::DeviceScheduler_ptr &) {
+                return ScanMultipass{};
+            }};
 
         /// Get list of available dual tree traversal implementations
         std::vector<std::string> get_default_impl_list_clbvh_dual_tree_traversal() {
@@ -57,18 +60,12 @@ namespace shamtree {
         bool is_impl_set_clbvh_dual_tree_traversal() { return dtt_impl.is_set(); }
 
         /// Set the implementation for dual tree traversal
-        void set_impl_clbvh_dual_tree_traversal(const std::string &impl) {
-            shamlog_info_ln("tree", "setting dtt implementation to impl :", impl);
-            dtt_impl.set(impl);
-        }
+        void set_impl_clbvh_dual_tree_traversal(const std::string &impl) { dtt_impl.set(impl); }
 
-        /// Select the default implementation for dual tree traversal
-        void autoselect_impl_clbvh_dual_tree_traversal() {
-            dtt_impl.set(ScanMultipass{});
-            shamlog_info_ln(
-                "tree",
-                "defaulting dtt implementation to impl :",
-                get_current_impl_clbvh_dual_tree_traversal_impl());
+        /// Select the default implementation for dual tree traversal, on the given device
+        /// scheduler
+        void autoselect_impl_clbvh_dual_tree_traversal(const sham::DeviceScheduler_ptr &sched) {
+            dtt_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -91,7 +88,7 @@ namespace shamtree {
         using ImplSca = details::DTTScanMultipass<Tmorton, Tvec, dim>;
 
         if (!impl::dtt_impl.is_set()) {
-            impl::autoselect_impl_clbvh_dual_tree_traversal();
+            impl::autoselect_impl_clbvh_dual_tree_traversal(dev_sched);
         }
 
         bool ord  = ordered_result;

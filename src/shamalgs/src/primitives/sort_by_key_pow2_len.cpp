@@ -49,7 +49,11 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "bitonic_sort";
         };
 
-        shamalgs::ImplVariantGlobal<BitonicSort> sort_by_key_pow2_len_impl;
+        /// Currently selected sort by key (pow2 len) implementation
+        shamalgs::ImplVariantGlobal<BitonicSort> sort_by_key_pow2_len_impl{
+            "sort_by_key_pow2_len", [](const sham::DeviceScheduler_ptr &) {
+                return BitonicSort{};
+            }};
 
         /// Get list of available sort by key (pow2 len) implementations
         std::vector<std::string> get_default_impl_list_sort_by_key_pow2_len() {
@@ -66,18 +70,13 @@ namespace shamalgs::primitives {
 
         /// Set the implementation for sort by key (pow2 len)
         void set_impl_sort_by_key_pow2_len(const std::string &impl) {
-            shamlog_info_ln(
-                "algs", "setting sort by key (pow2 len) implementation to impl :", impl);
             sort_by_key_pow2_len_impl.set(impl);
         }
 
-        /// Select the default implementation for sort by key (pow2 len)
-        void autoselect_impl_sort_by_key_pow2_len() {
-            sort_by_key_pow2_len_impl.set(BitonicSort{});
-            shamlog_info_ln(
-                "algs",
-                "defaulting sort by key (pow2 len) implementation to impl :",
-                get_current_impl_sort_by_key_pow2_len());
+        /// Select the default implementation for sort by key (pow2 len), on the given device
+        /// scheduler
+        void autoselect_impl_sort_by_key_pow2_len(const sham::DeviceScheduler_ptr &sched) {
+            sort_by_key_pow2_len_impl.autoselect(sched);
         }
 
     } // namespace impl
@@ -95,7 +94,7 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::sort_by_key_pow2_len_impl.is_set()) {
-            impl::autoselect_impl_sort_by_key_pow2_len();
+            impl::autoselect_impl_sort_by_key_pow2_len(sched);
         }
 
         std::visit(
