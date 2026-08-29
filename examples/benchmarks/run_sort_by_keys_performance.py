@@ -1,13 +1,15 @@
 """
-in place ex-scan performance benchmarks
-=======================================
+sort by keys performance benchmarks
+====================================
 
-This example benchmarks the scan exclusive sum in place performance for the different algorithms available in Shamrock
+This example benchmarks the sort by keys (general, non power-of-2 length) performance for
+the different algorithms available in Shamrock
 """
 
 # sphinx_gallery_multi_image = "single"
 
 import json
+import random
 import time
 
 import matplotlib.pyplot as plt
@@ -29,21 +31,32 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 
 # %%
 # Main benchmark functions
-def benchmark_u32(N, nb_repeat=10):
+def benchmark_u32(N, nb_repeat=10, max_cumulated_time=2.0):
+    random.seed(111)
+
     times = []
+    cumulated_time = 0.0
     for _ in range(nb_repeat):
-        buf = shamrock.backends.DeviceBuffer_u32()
-        buf.resize(N)
-        buf.fill(0)
-        times.append(shamrock.algs.benchmark_scan_exclusive_sum_in_place(buf, N))
-    return min(times), max(times), sum(times) / nb_repeat
+        keys = shamrock.algs.mock_buffer_u32(random.randint(0, 1000000), N, 0, 1000000)
+
+        values = shamrock.backends.DeviceBuffer_u32()
+        values.resize(N)
+        values.copy_from_stdvec(list(range(N)))
+
+        t = shamrock.algs.benchmark_sort_by_keys(keys, values, N)
+        times.append(t)
+        cumulated_time += t
+
+        if cumulated_time > max_cumulated_time:
+            break
+    return min(times), max(times), sum(times) / len(times)
 
 
 # %%
 # Run the performance test for all parameters
 def run_performance_sweep():
     # Define parameter ranges
-    # logspace as array
+    # logspace as array, deliberately not restricted to powers of 2
     particle_counts = np.logspace(2, 7, 20).astype(int).tolist()
 
     # Initialize results matrix
@@ -74,16 +87,16 @@ def run_performance_sweep():
 
 # %%
 # List current implementation
-if not shamrock.algs.is_impl_set_scan_exclusive_sum_in_place():
-    shamrock.algs.autoselect_impl_scan_exclusive_sum_in_place()
+if not shamrock.algs.is_impl_set_sort_by_keys():
+    shamrock.algs.autoselect_impl_sort_by_keys()
 
-current_impl = shamrock.algs.get_current_impl_scan_exclusive_sum_in_place()
+current_impl = shamrock.algs.get_current_impl_sort_by_keys()
 
 print(current_impl)
 
 # %%
 # List all implementations available
-all_default_impls = shamrock.algs.get_default_impl_list_scan_exclusive_sum_in_place()
+all_default_impls = shamrock.algs.get_default_impl_list_sort_by_keys()
 
 print(all_default_impls)
 
@@ -91,11 +104,11 @@ print(all_default_impls)
 # Run the performance benchmarks for all implementations
 
 for impl in all_default_impls:
-    shamrock.algs.set_impl_scan_exclusive_sum_in_place(impl)
+    shamrock.algs.set_impl_sort_by_keys(impl)
 
     impl_name = json.loads(impl)["implementation"]
 
-    print(f"Running ex-scan in place performance benchmarks for {impl}...")
+    print(f"Running sort by keys performance benchmarks for {impl}...")
 
     # Run the performance sweep
     particle_counts, results_u32 = run_performance_sweep()
@@ -110,7 +123,7 @@ plt.plot(particle_counts, Time100M, color="grey", linestyle="-", alpha=0.7, labe
 
 plt.xlabel("Number of elements")
 plt.ylabel("Time (s)")
-plt.title("ex-scan in place performance benchmarks")
+plt.title("sort by keys performance benchmarks")
 
 plt.xscale("log")
 plt.yscale("log")
