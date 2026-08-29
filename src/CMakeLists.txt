@@ -79,8 +79,6 @@ function(target_link_lib_and_install tgt)
 
     target_link_libraries(${tgt} PUBLIC ${as_subproject})
 
-    sham_pch_reuse(${tgt})
-
     target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/external")
 
@@ -88,6 +86,13 @@ endfunction()
 
 target_link_lib_and_install(shamrock_exe)
 target_link_lib_and_install(shamrock_pylib)
+
+# shamrock_pylib is a pybind11 module: pybind11_add_module forces
+# CXX_VISIBILITY_PRESET=hidden and (when supported) -flto on it specifically, neither of
+# which shambackends' PCH was built with, so it cannot reuse that PCH
+# ("default visibility for functions and variables [-fvisibility] differs in PCH file vs.
+# current file"). shamrock_exe is a plain executable and unaffected, so it still reuses it.
+sham_pch_reuse(shamrock_exe)
 
 set_property(TARGET shamrock_exe PROPERTY OUTPUT_NAME shamrock)
 set_property(TARGET shamrock_pylib PROPERTY OUTPUT_NAME pyshamrock)
