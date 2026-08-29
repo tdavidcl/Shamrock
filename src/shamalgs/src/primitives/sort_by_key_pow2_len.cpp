@@ -66,7 +66,8 @@ namespace shamalgs::primitives {
 
         /// Set the implementation for sort by key (pow2 len)
         void set_impl_sort_by_key_pow2_len(const std::string &impl) {
-            shamlog_info_ln("algs", "setting sort by key (pow2 len) implementation to impl :", impl);
+            shamlog_info_ln(
+                "algs", "setting sort by key (pow2 len) implementation to impl :", impl);
             sort_by_key_pow2_len_impl.set(impl);
         }
 
