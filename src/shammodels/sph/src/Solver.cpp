@@ -775,7 +775,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                     positions.push_back({0, 0, 0}); // no support for offset yet
                     radii.push_back(ext_force->Racc);
                 } else if (EF_PN_PW *ext_force = std::get_if<EF_PN_PW>(&var_force.val)) {
-                    positions.push_back({0, 0, 0}); // no support for offset yet
+                    positions.push_back(ext_force->central_pos);
                     radii.push_back(ext_force->Racc);
                 } else if (
                     EF_LenseThirring *ext_force = std::get_if<EF_LenseThirring>(&var_force.val)) {
