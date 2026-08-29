@@ -23,3 +23,14 @@ NEW_TEST(Unittest, "shambackends/sysinfo:getPhysicalMemory", 1) {
 
     REQUIRE(bool(phys_mem));
 }
+
+NEW_TEST(Unittest, "shambackends/sysinfo:getAvailableMemory", 1) {
+    auto avail_mem = sham::getAvailableMemory();
+
+    logger::raw_ln("Available memory: bool(result)", bool(avail_mem));
+    if (avail_mem) {
+        logger::raw_ln("Available memory: size =", shambase::readable_sizeof(*avail_mem));
+    }
+
+    REQUIRE(bool(avail_mem));
+}
