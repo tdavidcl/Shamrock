@@ -7,12 +7,13 @@ This example benchmarks the segmented sort in place performance for the differen
 
 # sphinx_gallery_multi_image = "single"
 
+import json
 import random
 import time
 
-import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors
 
 import shamrock
 
@@ -58,7 +59,7 @@ def run_performance_sweep_balanced():
     # Define parameter ranges
     # logspace as array
 
-    slice_sizes = [2**i for i in range(0, 14)]
+    slice_sizes = [2**i for i in range(14)]
 
     # Initialize results matrix
     results_u32_balanced = []
@@ -103,7 +104,9 @@ print(all_default_impls)
 # %%
 # Run the performance benchmarks for all implementations
 for impl in all_default_impls:
-    shamrock.algs.set_impl_segmented_sort_in_place(impl.impl_name, impl.params)
+    shamrock.algs.set_impl_segmented_sort_in_place(impl)
+
+    impl_name = json.loads(impl)["implementation"]
 
     print(f"Running segmented sort in place performance benchmarks for {impl}...")
 
@@ -114,7 +117,7 @@ for impl in all_default_impls:
         slice_sizes,
         results_u32_balanced,
         "--.",
-        label=impl.impl_name + " (u32)",
+        label=impl_name + " (u32)",
     )
 
 

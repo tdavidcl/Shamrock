@@ -255,7 +255,7 @@ for c in configs:
         cfg.set_eos_locally_isothermalLP07(cs0=cs0, q=q, r0=r0)
 
         if ndust > 0:
-            cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
+            cfg.set_dust_mode_monofluid_tva(nvar=ndust)
             cfg.set_dust_drag_epstein(grain_size, rho_grains)
             if use_coala:
                 cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)

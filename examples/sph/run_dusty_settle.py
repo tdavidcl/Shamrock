@@ -113,7 +113,7 @@ cfg = model.gen_default_config()
 cfg.set_artif_viscosity_VaryingCD10(
     alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
 )
-cfg.set_dust_mode_monofluid_tvi(ndust)
+cfg.set_dust_mode_monofluid_tva(ndust)
 cfg.set_dust_stopping_times(stopping_times)
 cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
 cfg.add_ext_force_velocity_dissipation(eta=10)

@@ -202,7 +202,7 @@ def setup_model():
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
 
-    cfg.set_dust_mode_monofluid_tvi(nvar=ndust)
+    cfg.set_dust_mode_monofluid_tva(nvar=ndust)
     cfg.set_dust_drag_epstein(grain_size, rho_grains)
     if do_coag:
         cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
