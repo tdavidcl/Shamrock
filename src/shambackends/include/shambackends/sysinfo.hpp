@@ -42,5 +42,5 @@ namespace sham {
      * @details This function is implemented for Mac OS X and Linux. Other platforms will
      *          return std::nullopt.
      */
-    std::optional<std::size_t> getAvailableMemory();
+    std::optional<std::size_t> getHostAvailableMemory();
 } // namespace sham

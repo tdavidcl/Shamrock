@@ -34,7 +34,7 @@ std::optional<std::size_t> sham::getPhysicalMemory() {
     return value;
 }
 
-std::optional<std::size_t> sham::getAvailableMemory() {
+std::optional<std::size_t> sham::getHostAvailableMemory() {
 
     vm_size_t page_size = 0;
     if (KERN_SUCCESS != host_page_size(mach_host_self(), &page_size)) {
@@ -71,7 +71,7 @@ std::optional<std::size_t> sham::getPhysicalMemory() {
     return info.totalram;
 }
 
-std::optional<std::size_t> sham::getAvailableMemory() {
+std::optional<std::size_t> sham::getHostAvailableMemory() {
     // Prefer /proc/meminfo's MemAvailable, which accounts for reclaimable caches/buffers
     // (unlike sysinfo's freeram field).
     std::ifstream meminfo("/proc/meminfo");
@@ -96,6 +96,6 @@ std::optional<std::size_t> sham::getAvailableMemory() {
 #else
 
 std::optional<std::size_t> sham::getPhysicalMemory() { return std::nullopt; }
-std::optional<std::size_t> sham::getAvailableMemory() { return std::nullopt; }
+std::optional<std::size_t> sham::getHostAvailableMemory() { return std::nullopt; }
 
 #endif

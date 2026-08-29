@@ -25,13 +25,13 @@ NEW_TEST(Unittest, "shambackends/sysinfo:getPhysicalMemory", 1) {
     REQUIRE(bool(phys_mem));
 }
 
-NEW_TEST(Unittest, "shambackends/sysinfo:getAvailableMemory", 1) {
-    auto avail_mem = sham::getAvailableMemory();
+NEW_TEST(Unittest, "shambackends/sysinfo:getHostAvailableMemory", 1) {
+    auto avail_mem = sham::getHostAvailableMemory();
 
     // TODO: for now throw if unavailable, revisit once more platforms are supported
     if (!avail_mem) {
         shambase::throw_with_loc<std::runtime_error>(
-            "sham::getAvailableMemory() returned no value on this platform");
+            "sham::getHostAvailableMemory() returned no value on this platform");
     }
 
     logger::raw_ln("Available memory: size =", shambase::readable_sizeof(*avail_mem));
