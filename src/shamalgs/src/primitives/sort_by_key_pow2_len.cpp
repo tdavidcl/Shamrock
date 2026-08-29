@@ -52,51 +52,6 @@ namespace shamalgs::primitives {
         }
     } // namespace details
 
-    /// namespace to control implementation behavior
-    namespace impl {
-
-        /// Bitonic sorting network kernel, tuned with a 16-element local stencil
-        struct BitonicUpdated {
-            static constexpr std::string_view variant_type_name = "bitonic_updated";
-        };
-
-        /// Copy the buffers to host, std::sort the zipped key/value pairs, and copy back
-        struct StdSort {
-            static constexpr std::string_view variant_type_name = "std_sort";
-        };
-
-        shamalgs::ImplVariantGlobal<BitonicUpdated, StdSort> sort_by_key_pow2_len_impl;
-
-        /// Get list of available sort by key pow2 len implementations
-        std::vector<std::string> get_default_impl_list_sort_by_key_pow2_len() {
-            return decltype(sort_by_key_pow2_len_impl)::get_default_config_list();
-        }
-
-        /// Get the current implementation for sort by key pow2 len
-        std::string get_current_impl_sort_by_key_pow2_len() {
-            return sort_by_key_pow2_len_impl.get_current_config();
-        }
-
-        /// Check if an implementation has been selected for sort by key pow2 len
-        bool is_impl_set_sort_by_key_pow2_len() { return sort_by_key_pow2_len_impl.is_set(); }
-
-        /// Set the implementation for sort by key pow2 len
-        void set_impl_sort_by_key_pow2_len(const std::string &impl) {
-            shamlog_info_ln("algs", "setting sort by key pow2 len implementation to impl :", impl);
-            sort_by_key_pow2_len_impl.set(impl);
-        }
-
-        /// Select the default implementation for sort by key pow2 len
-        void autoselect_impl_sort_by_key_pow2_len() {
-            sort_by_key_pow2_len_impl.set(BitonicUpdated{});
-            shamlog_info_ln(
-                "algs",
-                "defaulting sort by key pow2 len implementation to impl :",
-                get_current_impl_sort_by_key_pow2_len());
-        }
-
-    } // namespace impl
-
     template<class Tkey, class Tval>
     void sort_by_key_pow2_len(
         sycl::queue &q, sycl::buffer<Tkey> &buf_key, sycl::buffer<Tval> &buf_values, u32 len) {
@@ -122,7 +77,12 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "bitonic_sort";
         };
 
-        shamalgs::ImplVariantGlobal<BitonicSort> sort_by_key_pow2_len_impl;
+        /// Copy the buffers to host, std::sort the zipped key/value pairs, and copy back
+        struct StdSort {
+            static constexpr std::string_view variant_type_name = "std_sort";
+        };
+
+        shamalgs::ImplVariantGlobal<BitonicSort, StdSort> sort_by_key_pow2_len_impl;
 
         /// Get list of available sort by key (pow2 len) implementations
         std::vector<std::string> get_default_impl_list_sort_by_key_pow2_len() {
@@ -173,7 +133,7 @@ namespace shamalgs::primitives {
 
         std::visit(
             shambase::overloaded{
-                [&](impl::BitonicUpdated) {
+                [&](impl::BitonicSort) {
                     shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 16>(
                         sched, buf_key, buf_values, len);
                 },
