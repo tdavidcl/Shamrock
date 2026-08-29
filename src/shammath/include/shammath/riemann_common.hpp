@@ -215,14 +215,15 @@ namespace shammath {
         return cprime;
     }
 
+    template<class T>
+    concept HasRhovel = requires(T t) { t.rhovel; };
+
     template<class Tcons>
     inline constexpr Tcons invert_axis(const Tcons c) {
-        Tcons cprime;
-        cprime.rho       = c.rho;
-        cprime.rhoe      = c.rhoe;
-        cprime.rhovel[0] = -c.rhovel[0];
-        cprime.rhovel[1] = -c.rhovel[1];
-        cprime.rhovel[2] = -c.rhovel[2];
+        Tcons cprime = c;
+        if constexpr (HasRhovel<Tcons>) {
+            cprime.rhovel = -c.rhovel;
+        }
         return cprime;
     }
 
