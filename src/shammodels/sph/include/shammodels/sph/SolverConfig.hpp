@@ -922,11 +922,7 @@ struct shammodels::sph::SolverConfig {
      * @param[in] central_pos The position of the central object
      */
     inline void add_ext_force_lense_thirring(
-        Tscal central_mass,
-        Tscal Racc,
-        Tscal a_spin,
-        Tvec dir_spin,
-        Tvec central_pos = Tvec{}) {
+        Tscal central_mass, Tscal Racc, Tscal a_spin, Tvec dir_spin, Tvec central_pos = Tvec{}) {
         ext_force_config.add_lense_thirring(central_mass, Racc, a_spin, dir_spin, central_pos);
     }
 

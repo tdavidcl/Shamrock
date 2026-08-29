@@ -114,8 +114,7 @@ namespace shammodels {
         std::vector<ExtForceVariant<Tvec>> ext_forces;
 
         inline void add_point_mass(Tscal central_mass, Tscal Racc, Tvec central_pos = Tvec{}) {
-            ext_forces.push_back(
-                ExtForceVariant<Tvec>{PointMass{central_mass, Racc, central_pos}});
+            ext_forces.push_back(ExtForceVariant<Tvec>{PointMass{central_mass, Racc, central_pos}});
         }
 
         inline void add_paczynski_wiita(Tscal central_mass, Tvec central_pos, Tscal Racc) {
@@ -132,8 +131,9 @@ namespace shammodels {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "the sping direction should be a unit vector");
             }
-            ext_forces.push_back(ExtForceVariant<Tvec>{
-                LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos}});
+            ext_forces.push_back(
+                ExtForceVariant<Tvec>{
+                    LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos}});
         }
 
         /**
@@ -169,11 +169,11 @@ namespace shammodels {
         using VelocityDissipation   = typename T::VelocityDissipation;
 
         if (const PointMass *v = std::get_if<PointMass>(&p.val)) {
-            j = {
-                {"force_type", "point_mass"},
-                {"central_mass", v->central_mass},
-                {"Racc", v->Racc},
-                {"central_pos", v->central_pos}};
+            j
+                = {{"force_type", "point_mass"},
+                   {"central_mass", v->central_mass},
+                   {"Racc", v->Racc},
+                   {"central_pos", v->central_pos}};
 
         } else if (const PN_PW *v = std::get_if<PN_PW>(&p.val)) {
             j
