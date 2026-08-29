@@ -11,7 +11,7 @@ ARG CLANGVERSION=18
 # GitHub-hosted runners often can't route reliably, causing intermittent
 # "Network is unreachable" failures in apt/wget (including GPG key fetch).
 # Force IPv4 for apt and wget, and retry llvm.sh to absorb transient
-# Fastly edge failures. (Claud generated comment)
+# Fastly edge failures. (Claude generated comment)
 RUN sudo sh -c 'echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4' && \
     sudo apt update && \
     wget -4 https://apt.llvm.org/llvm.sh && \
