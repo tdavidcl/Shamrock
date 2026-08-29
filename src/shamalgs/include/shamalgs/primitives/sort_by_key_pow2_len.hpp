@@ -20,6 +20,10 @@
  *
  * `sort_by_key_pow2_len` only supports buffer lengths that are a power of 2
  * (callers must round up beforehand, e.g. with `shambase::roundup_pow2`).
+ *
+ * The USM (`sham::DeviceBuffer`) overload selects its implementation through
+ * the generic implementation selector mechanism (see ImplVariant.hpp), via
+ * the `impl` sub-namespace below.
  */
 
 #include "shambackends/DeviceBuffer.hpp"
