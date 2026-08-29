@@ -79,9 +79,7 @@ function(target_link_lib_and_install tgt)
 
     target_link_libraries(${tgt} PUBLIC ${as_subproject})
 
-    if(SHAMROCK_USE_PCH)
-        target_precompile_headers(${tgt} REUSE_FROM shamrock_lib)
-    endif()
+    sham_pch_reuse(${tgt})
 
     target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/external")
@@ -163,9 +161,7 @@ if("${BUILD_TEST}")
     target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/external")
 
-    if(SHAMROCK_USE_PCH)
-        target_precompile_headers(shamrock_test REUSE_FROM shamrock_lib)
-    endif()
+    sham_pch_reuse(shamrock_test)
 
     ########################################################################################
     # CTest integration ####################################################################
