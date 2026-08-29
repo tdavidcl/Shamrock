@@ -36,7 +36,7 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     gen, gen_opt, cmake_gen, cmake_build_type = utils.sysinfo.select_generator(args, buildtype)
 
-    cmake_extra_args = ""
+    cmake_extra_args = " -DSHAMROCK_USE_PCH=On"
     if lib_mode == "shared":
         cmake_extra_args += " -DSHAMROCK_USE_SHARED_LIB=On"
     elif lib_mode == "object":
