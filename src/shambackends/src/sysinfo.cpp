@@ -50,8 +50,8 @@ std::optional<std::size_t> sham::getHostAvailableMemory() {
     }
 
     // Free memory plus reclaimable (inactive) pages, as reported as "available" by most tools.
-    std::size_t available_pages
-        = static_cast<std::size_t>(vm_stats.free_count) + static_cast<std::size_t>(vm_stats.inactive_count);
+    std::size_t available_pages = static_cast<std::size_t>(vm_stats.free_count)
+                                  + static_cast<std::size_t>(vm_stats.inactive_count);
 
     return available_pages * static_cast<std::size_t>(page_size);
 }
@@ -61,9 +61,9 @@ std::optional<std::size_t> sham::getHostAvailableMemory() {
     || (defined(__DragonFly__) || defined(__FreeBSD__) || defined(__NetBSD__)                      \
         || defined(__OpenBSD__))
 
+    #include <sys/sysinfo.h>
     #include <fstream>
     #include <string>
-    #include <sys/sysinfo.h>
 
 std::optional<std::size_t> sham::getPhysicalMemory() {
     struct sysinfo info;
