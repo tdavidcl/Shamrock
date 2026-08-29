@@ -36,6 +36,7 @@
 
 #include "shambase/exception.hpp"
 #include "sham/format/format.hpp"
+#include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
 #include <string_view>
 #include <optional>
