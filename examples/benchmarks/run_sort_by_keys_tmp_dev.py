@@ -53,9 +53,9 @@ def _sorted_run_mask(values):
     """Flag indices that belong to a non-decreasing run of length >= 2."""
     mask = [False for i in range(len(values))]
 
-    for i,v in enumerate(values):
+    for i, v in enumerate(values):
         if i > 0:
-            if values[i-1] < values[i]:
+            if values[i - 1] < v:
                 mask[i] = True
         else:
             mask[i] = True
@@ -79,7 +79,7 @@ def print_key_val_table(keys, vals, labels=("i", "key", "val")):
     col_width = max(len(str(v)) for col in columns for v in col)
 
     def cell(v, highlight=None):
-        text = f"{str(v):>{col_width}}"
+        text = f"{v!s:>{col_width}}"
         if highlight is None:
             return text
         return f"{_GREEN}{text}{_RESET}" if highlight else f"{_RED}{text}{_RESET}"
@@ -98,6 +98,7 @@ def print_key_val_table(keys, vals, labels=("i", "key", "val")):
     print(key_line)
     print(val_line)
 
+
 def to_buf(lst):
     buf = shamrock.backends.DeviceBuffer_u32()
     buf.resize(len(lst))
@@ -105,9 +106,9 @@ def to_buf(lst):
     return buf
 
 
-#%%
+# %%
 # Dataset
-N = 25
+N = 100
 key_init = [i for i in range(N)][::-1]
 val_init = [i for i in range(N)]
 
@@ -115,11 +116,11 @@ print("Initial state:")
 print_key_val_table(key_init, val_init)
 
 
-#%%
+# %%
 # Switch impl
 shamrock.algs.set_impl_sort_by_keys('{"implementation":"modern_gpu_mergesort","parameters":{}}')
 
-#%%
+# %%
 # End state
 buffer_key = to_buf(key_init)
 buffer_val = to_buf(val_init)
@@ -129,7 +130,7 @@ shamrock.algs.sort_by_keys(buffer_key, buffer_val, N)
 print("End state:")
 print_key_val_table(buffer_key.copy_to_stdvec(), buffer_val.copy_to_stdvec())
 
-#%%
+# %%
 # Expected state
 buffer_key = to_buf(key_init)
 buffer_val = to_buf(val_init)

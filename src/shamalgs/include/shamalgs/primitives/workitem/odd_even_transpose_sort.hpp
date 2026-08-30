@@ -35,7 +35,7 @@ namespace shamalgs::primitives::workitem {
      * @param comp Comparator used to order the keys.
      */
     template<int VT, typename T, typename V, typename Comp>
-    inline void odd_even_transpose_sort(T *keys, V *values, Comp comp) {
+    inline void odd_even_transpose_sort(T keys[VT], V values[VT], Comp comp) {
 #pragma unroll
         for (int level = 0; level < VT; ++level) {
 

@@ -39,6 +39,94 @@ sham::kernel_call(
 - Read buffers → `const T*`; write buffers → `T*`
 - Prefer `const sham::DeviceBuffer&` for pure inputs
 
+## `sham::kernel_call_hndl`
+
+Same wrapper, but the functor doesn't get called per-thread directly: it takes the
+thread count and the buffer pointers, and must **return** a
+`[=](sycl::handler &cgh) { ... }` lambda — that's what actually gets submitted to the
+queue. Use this variant when the kernel needs the `sycl::handler` itself, e.g.
+`sycl::local_accessor`s, `cgh.depends_on(...)`, etc.
+
+```cpp
+sham::kernel_call_hndl(
+    queue,
+    sham::MultiRef{/* inputs */},
+    sham::MultiRef{/* outputs (in-out) */},
+    n,   // thread count
+    [](u32 n, /* input ptrs */, /* output ptrs */) {
+        return [=](sycl::handler &cgh) {
+            cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+                u32 i = item.get_linear_id();
+                // ...
+            });
+        };
+    });
+```
+
+Minimal example:
+
+```cpp
+sham::kernel_call_hndl(
+    q,
+    sham::MultiRef{buf_in},
+    sham::MultiRef{buf_out},
+    n,
+    [](u32 n, const T *in, T *out) {
+        return [=](sycl::handler &cgh) {
+            cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+                u32 i = item.get_linear_id();
+                out[i] = in[i];
+            });
+        };
+    });
+```
+
+- Functor first argument is the thread count (`u32 n`), not the index — the index
+  only shows up inside the `parallel_for` you write
+- The functor must return the `[=](sycl::handler &cgh) { ... }` lambda; nothing is
+  submitted for you
+- Pointers still follow in `MultiRef` order (inputs, then outputs), same as `kernel_call`
+
+## Side by side
+
+`kernel_call` is `kernel_call_hndl` with the `sycl::handler` boilerplate filled in
+for you — compare the minimal examples above:
+
+::::{grid} 2
+
+:::{grid-item-card} `kernel_call`
+```cpp
+sham::kernel_call(
+    q,
+    sham::MultiRef{buf_in},
+    sham::MultiRef{buf_out},
+    n,
+    [](u32 i, const T *in, T *out) {
+        out[i] = in[i];
+    });
+```
+:::
+
+:::{grid-item-card} `kernel_call_hndl`
+```cpp
+sham::kernel_call_hndl(
+    q,
+    sham::MultiRef{buf_in},
+    sham::MultiRef{buf_out},
+    n,
+    [](u32 n, const T *in, T *out) {
+        return [=](sycl::handler &cgh) {
+            cgh.parallel_for(sycl::range<1>{n}, [=](sycl::item<1> item) {
+                u32 i = item.get_linear_id();
+                out[i] = in[i];
+            });
+        };
+    });
+```
+:::
+
+::::
+
 ## `MultiRef`
 
 `MultiRef` holds references to buffer-like objects passed to `kernel_call`.
