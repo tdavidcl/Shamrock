@@ -698,6 +698,48 @@ namespace shamalgs::primitives::device::details {
         return range;
     }
 
+
+    template<int NT, int VT0, int VT1, typename InputIt1, typename InputIt2,
+	typename T>
+    inline void DeviceLoad2ToReg(InputIt1 a_global, int aCount,
+	InputIt2 b_global, int bCount, int tid, T* reg, bool sync=true)  {
+
+	b_global -= aCount;
+	int total = aCount + bCount;
+	if(total >= NT * VT0) {
+		#pragma unroll
+		for(int i = 0; i < VT0; ++i) {
+			int index = NT * i + tid;
+			if(index < aCount) reg[i] = a_global[index];
+			else reg[i] = b_global[index];
+		}
+	} else {
+		#pragma unroll
+		for(int i = 0; i < VT0; ++i) {
+			int index = NT * i + tid;
+			if(index < aCount) reg[i] = a_global[index];
+			else if(index < total) reg[i] = b_global[index];
+		}
+	}
+	#pragma unroll
+	for(int i = VT0; i < VT1; ++i) {
+		int index = NT * i + tid;
+		if(index < aCount) reg[i] = a_global[index];
+		else if(index < total) reg[i] = b_global[index];
+	}
+    }
+
+    template<int NT, int VT0, int VT1, typename InputIt1, typename InputIt2,
+	typename T>
+    inline void DeviceLoad2ToShared( sycl::nd_item<1> &item,InputIt1 a_global, int aCount,
+	InputIt2 b_global, int bCount, int tid, T* shared, bool sync) {
+
+	T reg[VT1];
+	DeviceLoad2ToReg<NT, VT0, VT1>(a_global, aCount, b_global, bCount, tid,
+		reg, false);
+	DeviceRegToShared<NT, VT1>(item ,reg, tid, shared, sync);
+    }
+
     template<
         int NT,
         int VT,
@@ -706,22 +748,22 @@ namespace shamalgs::primitives::device::details {
         typename It2,
         typename T,
         typename Comp>
-    MGPU_DEVICE void DeviceMergeKeysIndices(
+    inline void DeviceMergeKeysIndices(
         It1 a_global,
         int aCount,
         It2 b_global,
         int bCount,
-        int4 range,
+        sycl::vec<int,4> range,
         int tid,
         T *keys_shared,
         T *results,
         int *indices,
         Comp comp) {
 
-        int a0 = range.x;
-        int a1 = range.y;
-        int b0 = range.z;
-        int b1 = range.w;
+        int a0 = range.x();
+        int a1 = range.y();
+        int b0 = range.z();
+        int b1 = range.w();
 
         if (LoadExtended) {
             bool extended = (a1 < aCount) && (b1 < bCount);
