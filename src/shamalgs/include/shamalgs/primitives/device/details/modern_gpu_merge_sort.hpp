@@ -19,6 +19,7 @@
 #include "shamalgs/primitives/workitem/odd_even_transpose_sort.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shambackends/make_ndrange.hpp"
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -409,80 +410,77 @@ namespace shamalgs::primitives::device::details {
     }
 
     template<class Tkey, class Tval, int NT, int VT>
-    union Shared {
-        static constexpr int NV = NT * VT;
-
-        Tkey keys[NT * (VT + 1)];
-        Tval values[NV];
-    };
-
-    template<int NT, int VT, bool HasValues, typename Tkey, typename Tval, typename Comp>
-    inline void KernelBlocksort(
-        sycl::nd_item<1> &item,
-        int tid,
-        int block,
-        Shared<Tkey, Tval, NT, VT> &shared,
-        Tkey *keysSource_global,
-        Tval *valsSource_global,
-        int count,
-        Tkey *keysDest_global,
-        Tval *valsDest_global,
-        Comp comp) {
+    struct KernelBlocksort {
 
         static constexpr int NV = NT * VT;
 
-        int gid    = NV * block;
-        int count2 = std::min(NV, count - gid);
+        union Shared {
 
-        // Load the values into thread order.
-        Tval threadValues[VT];
-        if (HasValues) {
-            DeviceGlobalToShared<NT, VT>(item, count2, valsSource_global + gid, tid, shared.values);
-            DeviceSharedToThread<VT>(item, shared.values, tid, threadValues);
-        }
+            Tkey keys[NT * (VT + 1)];
+            Tval values[NV];
+        };
 
-        // Load keys into shared memory and transpose into register in thread order.
-        Tkey threadKeys[VT];
-        DeviceGlobalToShared<NT, VT>(item, count2, keysSource_global + gid, tid, shared.keys);
-        DeviceSharedToThread<VT>(item, shared.keys, tid, threadKeys);
+        template<bool HasValues, typename Comp>
+        inline void Kernel(
+            sycl::nd_item<1> &item,
+            int tid,
+            int block,
+            Shared &shared,
+            Tkey *keysSource_global,
+            Tval *valsSource_global,
+            int count,
+            Tkey *keysDest_global,
+            Tval *valsDest_global,
+            Comp comp) {
 
-        // If we're in the last tile, set the uninitialized keys for the thread with
-        // a partial number of keys.
-        int first = VT * tid;
-        if (first + VT > count2 && first < count2) {
-            Tkey maxKey = threadKeys[0];
+            int gid    = NV * block;
+            int count2 = std::min(NV, count - gid);
+
+            // Load the values into thread order.
+            Tval threadValues[VT];
+            if (HasValues) {
+                DeviceGlobalToShared<NT, VT>(
+                    item, count2, valsSource_global + gid, tid, shared.values);
+                DeviceSharedToThread<VT>(item, shared.values, tid, threadValues);
+            }
+
+            // Load keys into shared memory and transpose into register in thread order.
+            Tkey threadKeys[VT];
+            DeviceGlobalToShared<NT, VT>(item, count2, keysSource_global + gid, tid, shared.keys);
+            DeviceSharedToThread<VT>(item, shared.keys, tid, threadKeys);
+
+            // If we're in the last tile, set the uninitialized keys for the thread with
+            // a partial number of keys.
+            int first = VT * tid;
+            if (first + VT > count2 && first < count2) {
+                Tkey maxKey = threadKeys[0];
 #pragma unroll
-            for (int i = 1; i < VT; ++i)
-                if (first + i < count2)
-                    maxKey = comp(maxKey, threadKeys[i]) ? threadKeys[i] : maxKey;
+                for (int i = 1; i < VT; ++i)
+                    if (first + i < count2)
+                        maxKey = comp(maxKey, threadKeys[i]) ? threadKeys[i] : maxKey;
 
 // Fill in the uninitialized elements with max key.
 #pragma unroll
-            for (int i = 0; i < VT; ++i)
-                if (first + i >= count2)
-                    threadKeys[i] = maxKey;
+                for (int i = 0; i < VT; ++i)
+                    if (first + i >= count2)
+                        threadKeys[i] = maxKey;
+            }
+
+            CTAMergesort<NT, VT, HasValues>(
+                item, threadKeys, threadValues, shared.keys, shared.values, count2, tid, comp);
+
+            // Store the sorted keys to global.
+            DeviceSharedToGlobal<NT, VT>(item, count2, shared.keys, tid, keysDest_global + gid);
+
+            if (HasValues) {
+                DeviceThreadToShared<VT>(item, threadValues, tid, shared.values);
+                DeviceSharedToGlobal<NT, VT>(
+                    item, count2, shared.values, tid, valsDest_global + gid);
+            }
         }
-
-        CTAMergesort<NT, VT, HasValues>(
-            item, threadKeys, threadValues, shared.keys, shared.values, count2, tid, comp);
-
-        // Store the sorted keys to global.
-        DeviceSharedToGlobal<NT, VT>(item, count2, shared.keys, tid, keysDest_global + gid);
-
-        if (HasValues) {
-            DeviceThreadToShared<VT>(item, threadValues, tid, shared.values);
-            DeviceSharedToGlobal<NT, VT>(item, count2, shared.values, tid, valsDest_global + gid);
-        }
-    }
+    };
 
     ///// Fine //////
-
-    /// Builds an `nd_range` with work-group size `wg_size`, rounding `nthread` up to the next
-    /// multiple of `wg_size` so every work-group launched is full.
-    inline sycl::nd_range<1> ndrange(u32 wg_size, u32 nthread) {
-        u32 corrected_len = shambase::group_count(nthread, wg_size) * wg_size;
-        return sycl::nd_range<1>{corrected_len, wg_size};
-    }
 
     template<int NT, int VT, class Tkey, class Tval>
     inline void kernel_blocksort(
@@ -495,17 +493,19 @@ namespace shamalgs::primitives::device::details {
 
         u32 nthreads = len / VT + 1;
 
+        using Kernel = KernelBlocksort<Tkey, Tval, NT, VT>;
+
         sham::kernel_call_hndl(
             q,
             sham::MultiRef{},
             sham::MultiRef{buf_key, buf_values},
             [nthreads, len](Tkey *__restrict keys, Tval *__restrict vals) {
                 return [=](sycl::handler &cgh) {
-                    using Shared = Shared<Tkey, Tval, NT, VT>;
+                    using Shared = Kernel::Shared;
 
                     sycl::local_accessor<Shared> shared_mem(1, cgh);
 
-                    cgh.parallel_for(ndrange(NT, nthreads), [=](sycl::nd_item<1> item) {
+                    cgh.parallel_for(sham::make_ndrange(NT, nthreads), [=](sycl::nd_item<1> item) {
                         u32 gid   = item.get_global_linear_id();
                         u32 lid   = item.get_local_linear_id();
                         u32 block = item.get_group_linear_id();
@@ -531,7 +531,7 @@ namespace shamalgs::primitives::device::details {
                             }
                         }
 
-                        KernelBlocksort<NT, VT, true, Tkey, Tval>(
+                        Kernel::Kernel<true>(
                             item,
                             lid,
                             block,
@@ -623,10 +623,14 @@ namespace shamalgs::primitives::device::details {
         partitionsDevice.resize(numSearches);
 
         sham::kernel_call_hndl(
-            q, sham::MultiRef{}, sham::MultiRef{a_global, b_global,partitionsDevice}, [=](auto a, auto b, int *__restrict part_dev) {
+            q,
+            sham::MultiRef{},
+            sham::MultiRef{a_global, b_global, partitionsDevice},
+            [=](auto a, auto b, int *__restrict part_dev) {
                 return [=](sycl::handler &cgh) {
                     cgh.parallel_for(
-                        ndrange(NT, numPartitionBlocks * NT), [=](sycl::nd_item<1> item) {
+                        sham::make_ndrange(NT, numPartitionBlocks * NT),
+                        [=](sycl::nd_item<1> item) {
                             int block = static_cast<int>(item.get_group_linear_id());
                             int tid   = static_cast<int>(item.get_local_linear_id());
 
@@ -692,73 +696,84 @@ namespace shamalgs::primitives::device::details {
         return range;
     }
 
+    template<
+        int NT,
+        int VT,
+        bool LoadExtended,
+        typename It1,
+        typename It2,
+        typename T,
+        typename Comp>
+    MGPU_DEVICE void DeviceMergeKeysIndices(
+        It1 a_global,
+        int aCount,
+        It2 b_global,
+        int bCount,
+        int4 range,
+        int tid,
+        T *keys_shared,
+        T *results,
+        int *indices,
+        Comp comp) {
 
-    template<int NT, int VT, bool LoadExtended, typename It1, typename It2,
-	typename T, typename Comp>
-    MGPU_DEVICE void DeviceMergeKeysIndices(It1 a_global, int aCount, It2 b_global,
-	int bCount, int4 range, int tid, T* keys_shared, T* results, int* indices,
-	Comp comp) {
+        int a0 = range.x;
+        int a1 = range.y;
+        int b0 = range.z;
+        int b1 = range.w;
 
-	int a0 = range.x;
-	int a1 = range.y;
-	int b0 = range.z;
-	int b1 = range.w;
+        if (LoadExtended) {
+            bool extended = (a1 < aCount) && (b1 < bCount);
+            aCount        = a1 - a0;
+            bCount        = b1 - b0;
+            int aCount2   = aCount + (int) extended;
+            int bCount2   = bCount + (int) extended;
 
-	if(LoadExtended) {
-		bool extended = (a1 < aCount) && (b1 < bCount);
-		aCount = a1 - a0;
-		bCount = b1 - b0;
-		int aCount2 = aCount + (int)extended;
-		int bCount2 = bCount + (int)extended;
+            // Load one element past the end of each input to avoid having to use
+            // range checking in the merge loop.
+            DeviceLoad2ToShared<NT, VT, VT + 1>(
+                a_global + a0, aCount2, b_global + b0, bCount2, tid, keys_shared);
 
-		// Load one element past the end of each input to avoid having to use
-		// range checking in the merge loop.
-		DeviceLoad2ToShared<NT, VT, VT + 1>(a_global + a0, aCount2,
-			b_global + b0, bCount2, tid, keys_shared);
+            // Run a Merge Path search for each thread's starting point.
+            int diag = VT * tid;
+            int mp   = MergePath<MgpuBoundsLower>(
+                keys_shared, aCount, keys_shared + aCount2, bCount, diag, comp);
 
-		// Run a Merge Path search for each thread's starting point.
-		int diag = VT * tid;
-		int mp = MergePath<MgpuBoundsLower>(keys_shared, aCount,
-			keys_shared + aCount2, bCount, diag, comp);
+            // Compute the ranges of the sources in shared memory.
+            int a0tid = mp;
+            int b0tid = aCount2 + diag - mp;
+            if (extended) {
+                SerialMerge<VT, false>(keys_shared, a0tid, 0, b0tid, 0, results, indices, comp);
+            } else {
+                int a1tid = aCount;
+                int b1tid = aCount2 + bCount;
+                SerialMerge<VT, true>(
+                    keys_shared, a0tid, a1tid, b0tid, b1tid, results, indices, comp);
+            }
+        } else {
+            // Use the input intervals from the ranges between the merge path
+            // intersections.
+            aCount = a1 - a0;
+            bCount = b1 - b0;
 
-		// Compute the ranges of the sources in shared memory.
-		int a0tid = mp;
-		int b0tid = aCount2 + diag - mp;
-		if(extended) {
-			SerialMerge<VT, false>(keys_shared, a0tid, 0, b0tid, 0, results,
-				indices, comp);
-		} else {
-			int a1tid = aCount;
-			int b1tid = aCount2 + bCount;
-			SerialMerge<VT, true>(keys_shared, a0tid, a1tid, b0tid, b1tid,
-				results, indices, comp);
-		}
-	} else {
-		// Use the input intervals from the ranges between the merge path
-		// intersections.
-		aCount = a1 - a0;
-		bCount = b1 - b0;
+            // Load the data into shared memory.
+            DeviceLoad2ToShared<NT, VT, VT>(
+                a_global + a0, aCount, b_global + b0, bCount, tid, keys_shared);
 
-		// Load the data into shared memory.
-		DeviceLoad2ToShared<NT, VT, VT>(a_global + a0, aCount, b_global + b0,
-			bCount, tid, keys_shared);
+            // Run a merge path to find the start of the serial merge for each
+            // thread.
+            int diag = VT * tid;
+            int mp   = MergePath<MgpuBoundsLower>(
+                keys_shared, aCount, keys_shared + aCount, bCount, diag, comp);
 
-		// Run a merge path to find the start of the serial merge for each
-		// thread.
-		int diag = VT * tid;
-		int mp = MergePath<MgpuBoundsLower>(keys_shared, aCount,
-			keys_shared + aCount, bCount, diag, comp);
+            // Compute the ranges of the sources in shared memory.
+            int a0tid = mp;
+            int a1tid = aCount;
+            int b0tid = aCount + diag - mp;
+            int b1tid = aCount + bCount;
 
-		// Compute the ranges of the sources in shared memory.
-		int a0tid = mp;
-		int a1tid = aCount;
-		int b0tid = aCount + diag - mp;
-		int b1tid = aCount + bCount;
-
-		// Serial merge into register.
-		SerialMerge<VT, true>(keys_shared, a0tid, a1tid, b0tid, b1tid, results,
-			indices, comp);
-	}
+            // Serial merge into register.
+            SerialMerge<VT, true>(keys_shared, a0tid, a1tid, b0tid, b1tid, results, indices, comp);
+        }
     }
 
     template<
@@ -816,7 +831,7 @@ namespace shamalgs::primitives::device::details {
 
         // Copy the values.
         if (HasValues) {
-            DeviceThreadToShared<VT>(item,indices, tid, indices_shared);
+            DeviceThreadToShared<VT>(item, indices, tid, indices_shared);
 
             DeviceTransferMergeValuesShared<NT, VT>(
                 aCount + bCount,
@@ -944,13 +959,12 @@ namespace shamalgs::primitives::device::details {
                 sham::MultiRef{buf_key, buf_values, partitionsDevice, buf_key2, buf_values2},
                 [=](auto key, auto values, auto part_dev, auto key2, auto values2) {
                     return [=](sycl::handler &cgh) {
-
                         using Shared = Shared<Tkey, int, NT, VT>;
 
                         sycl::local_accessor<Shared> shared_mem(1, cgh);
 
                         cgh.parallel_for(ndrange(NT, numBlocks * NT), [=](sycl::nd_item<1> item) {
-                            KernelMerge<NT, VT, true, false,Tkey,Tval>(
+                            KernelMerge<NT, VT, true, false, Tkey, Tval>(
                                 item,
                                 item.get_local_linear_id(),
                                 item.get_group_linear_id(),
