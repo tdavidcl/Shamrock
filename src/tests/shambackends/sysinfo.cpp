@@ -8,7 +8,6 @@
 // -------------------------------------------------------//
 
 #include "shambackends/sysinfo.hpp"
-#include "shambase/exception.hpp"
 #include "shambase/string.hpp"
 #include "fmt/std.h"
 #include "shamcomm/logs.hpp"
@@ -28,13 +27,10 @@ NEW_TEST(Unittest, "shambackends/sysinfo:getHostPhysicalMemory", 1) {
 NEW_TEST(Unittest, "shambackends/sysinfo:getHostAvailableMemory", 1) {
     auto avail_mem = sham::getHostAvailableMemory();
 
-    // TODO: for now throw if unavailable, revisit once more platforms are supported
-    if (!avail_mem) {
-        shambase::throw_with_loc<std::runtime_error>(
-            "sham::getHostAvailableMemory() returned no value on this platform");
+    logger::raw_ln("Available memory: bool(result)", bool(avail_mem));
+    if (avail_mem) {
+        logger::raw_ln("Available memory: size =", shambase::readable_sizeof(*avail_mem));
     }
-
-    logger::raw_ln("Available memory: size =", shambase::readable_sizeof(*avail_mem));
 
     REQUIRE(bool(avail_mem));
 }
