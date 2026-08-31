@@ -22,7 +22,7 @@
     #include <sys/sysctl.h>
     #include <sys/types.h>
 
-std::optional<std::size_t> sham::getPhysicalMemory() {
+std::optional<std::size_t> sham::getHostPhysicalMemory() {
 
     int mib[]     = {CTL_HW, HW_MEMSIZE};
     int64_t value = 0;
@@ -65,7 +65,7 @@ std::optional<std::size_t> sham::getHostAvailableMemory() {
     #include <fstream>
     #include <string>
 
-std::optional<std::size_t> sham::getPhysicalMemory() {
+std::optional<std::size_t> sham::getHostPhysicalMemory() {
     struct sysinfo info;
     sysinfo(&info);
     return info.totalram;
@@ -95,7 +95,7 @@ std::optional<std::size_t> sham::getHostAvailableMemory() {
 
 #else
 
-std::optional<std::size_t> sham::getPhysicalMemory() { return std::nullopt; }
+std::optional<std::size_t> sham::getHostPhysicalMemory() { return std::nullopt; }
 std::optional<std::size_t> sham::getHostAvailableMemory() { return std::nullopt; }
 
 #endif

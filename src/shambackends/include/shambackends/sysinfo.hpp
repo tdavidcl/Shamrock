@@ -30,7 +30,7 @@ namespace sham {
      * @details This function is implemented for Mac OS X and Linux. Other platforms will
      *          return std::nullopt.
      */
-    std::optional<std::size_t> getPhysicalMemory();
+    std::optional<std::size_t> getHostPhysicalMemory();
 
     /**
      * @brief Get the amount of physical memory (RAM) currently available on the system, in
