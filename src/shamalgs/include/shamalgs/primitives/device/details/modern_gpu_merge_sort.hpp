@@ -495,6 +495,8 @@ namespace shamalgs::primitives::device::details {
 
         using Kernel = KernelBlocksort<Tkey, Tval, NT, VT>;
 
+        auto range = sham::make_check_ndrange(NT, nthreads, q);
+
         sham::kernel_call_hndl(
             q,
             sham::MultiRef{},
@@ -505,7 +507,7 @@ namespace shamalgs::primitives::device::details {
 
                     sycl::local_accessor<Shared> shared_mem(1, cgh);
 
-                    cgh.parallel_for(sham::make_ndrange(NT, nthreads), [=](sycl::nd_item<1> item) {
+                    cgh.parallel_for(range, [=](sycl::nd_item<1> item) {
                         u32 gid   = item.get_global_linear_id();
                         u32 lid   = item.get_local_linear_id();
                         u32 block = item.get_group_linear_id();
