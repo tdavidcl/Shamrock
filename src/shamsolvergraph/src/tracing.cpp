@@ -233,14 +233,14 @@ namespace {
     }
 
     /// Record a node operation (evaluate begin/end) and flush at depth-0 evaluate end
-    void cb_node_op(u64 uuid, u64 op_id) {
+    void cb_node_event(u64 uuid, std::string_view event) {
 
         TracerState &s = state();
 
-        if (op_id == static_cast<u64>(NodeTraceOp::evaluate_begin)) {
+        if (event == "evaluate_begin") {
             s.eval_depth++;
             record_pod(EventKind::node_evaluate_begin, uuid);
-        } else if (op_id == static_cast<u64>(NodeTraceOp::evaluate_end)) {
+        } else if (event == "evaluate_end") {
             record_pod(EventKind::node_evaluate_end, uuid);
             if (s.eval_depth > 0) {
                 s.eval_depth--;
@@ -277,7 +277,7 @@ void shamrock::solvergraph::tracing::enable() {
     LifetimeTracker<INode>::on_create       = cb_node_create;
     LifetimeTracker<INode>::on_destroy      = cb_node_destroy;
     LifetimeTracker<INode>::on_state_update = cb_node_update;
-    LifetimeTracker<INode>::on_op           = cb_node_op;
+    LifetimeTracker<INode>::on_event        = cb_node_event;
 
     LifetimeTracker<IEdge>::on_create  = cb_edge_create;
     LifetimeTracker<IEdge>::on_destroy = cb_edge_destroy;
@@ -293,7 +293,7 @@ void shamrock::solvergraph::tracing::disable() {
     LifetimeTracker<INode>::on_create       = nullptr;
     LifetimeTracker<INode>::on_destroy      = nullptr;
     LifetimeTracker<INode>::on_state_update = nullptr;
-    LifetimeTracker<INode>::on_op           = nullptr;
+    LifetimeTracker<INode>::on_event        = nullptr;
 
     LifetimeTracker<IEdge>::on_create  = nullptr;
     LifetimeTracker<IEdge>::on_destroy = nullptr;
