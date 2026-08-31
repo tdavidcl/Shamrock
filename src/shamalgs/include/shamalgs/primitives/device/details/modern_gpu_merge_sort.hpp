@@ -484,31 +484,19 @@ namespace shamalgs::primitives::device::details {
         return sycl::nd_range<1>{corrected_len, wg_size};
     }
 
-    template<class Tkey, class Tval>
-    inline void sort_by_keys_modern_gpu_mergesort(
-        sham::DeviceBuffer<Tkey> &buf_key, sham::DeviceBuffer<Tval> &buf_values, u32 len) {
+    template<int NT, int VT, class Tkey, class Tval>
+    inline void kernel_blocksort(
+        sham::DeviceQueue &q,
+        sham::DeviceBuffer<Tkey> &buf_key,
+        sham::DeviceBuffer<Tval> &buf_values,
+        u32 len) {
 
-        auto dev_sched = buf_key.get_dev_scheduler_ptr();
-
-        bool do_print = false;
-
-        if (do_print) {
-            std::cout << "-------------------------------------------------" << std::endl;
-            std::cout << "------- sort_by_keys_modern_gpu_mergesort -------" << std::endl;
-            std::cout << "-------------------------------------------------" << std::endl;
-
-            std::cout << "init state:" << std::endl;
-            print_key_val_table(buf_key.copy_to_stdvec(), buf_values.copy_to_stdvec());
-        }
-
-        static constexpr int VT = 7;
-        static constexpr int NT = 4;
         static constexpr int NV = NT * VT;
 
         u32 nthreads = len / VT + 1;
 
         sham::kernel_call_hndl(
-            dev_sched->get_queue(),
+            q,
             sham::MultiRef{},
             sham::MultiRef{buf_key, buf_values},
             [nthreads, len](Tkey *__restrict keys, Tval *__restrict vals) {
@@ -559,6 +547,361 @@ namespace shamalgs::primitives::device::details {
                     });
                 };
             });
+    }
+
+#define MGPU_DIV_UP(x, y) (((x) + (y) - 1) / (y))
+#define MGPU_IS_POW_2(x) (0 == ((x) & ((x) - 1)))
+
+    // Find log2(x) and optionally round up to the next integer logarithm.
+    inline int FindLog2(int x, bool roundUp = false) {
+        int a = 31 - sycl::clz(x);
+        if (roundUp)
+            a += !MGPU_IS_POW_2(x);
+        return a;
+    }
+
+    inline sycl::vec<int, 3> FindMergesortFrame(int coop, int block, int nv) {
+        // coop is the number of CTAs or threads cooperating to merge two lists into
+        // one. We round block down to the first CTA's ID that is working on this
+        // merge.
+        int start = ~(coop - 1) & block;
+        int size  = nv * (coop >> 1);
+        return {nv * start, nv * start + size, size};
+    }
+
+    template<int NT, MgpuBounds Bounds, typename It1, typename It2, typename Comp>
+    inline void KernelMergePartition(
+        int block,
+        int tid,
+        It1 a_global,
+        int aCount,
+        It2 b_global,
+        int bCount,
+        int nv,
+        int coop,
+        int *mp_global,
+        int numSearches,
+        Comp comp) {
+
+        int partition = NT * block + tid;
+        if (partition < numSearches) {
+            int a0 = 0, b0 = 0;
+            int gid = nv * partition;
+            if (coop) {
+                auto frame = FindMergesortFrame(coop, partition, nv);
+                a0         = frame.x();
+                b0         = std::min(aCount, frame.y());
+                bCount     = std::min(aCount, frame.y() + frame.z()) - b0;
+                aCount     = std::min(aCount, frame.x() + frame.z()) - a0;
+
+                // Put the cross-diagonal into the coordinate system of the input
+                // lists.
+                gid -= a0;
+            }
+            int mp = MergePath<Bounds>(
+                a_global + a0, aCount, b_global + b0, bCount, std::min(gid, aCount + bCount), comp);
+            mp_global[partition] = mp;
+        }
+    }
+
+    template<MgpuBounds Bounds, typename T1, typename T2, typename Comp>
+    inline void MergePathPartitions(
+        sham::DeviceQueue &q,
+        sham::DeviceBuffer<T1> &a_global,
+        int aCount,
+        sham::DeviceBuffer<T2> &b_global,
+        int bCount,
+        int nv,
+        int coop,
+        Comp comp,
+        sham::DeviceBuffer<int> &partitionsDevice) {
+
+        const int NT           = 64;
+        int numPartitions      = MGPU_DIV_UP(aCount + bCount, nv);
+        int numSearches        = numPartitions + 1;
+        int numPartitionBlocks = MGPU_DIV_UP(numSearches, NT);
+        partitionsDevice.resize(numSearches);
+
+        sham::kernel_call_hndl(
+            q, sham::MultiRef{}, sham::MultiRef{a_global, b_global,partitionsDevice}, [=](auto a, auto b, int *__restrict part_dev) {
+                return [=](sycl::handler &cgh) {
+                    cgh.parallel_for(
+                        ndrange(NT, numPartitionBlocks * NT), [=](sycl::nd_item<1> item) {
+                            int block = static_cast<int>(item.get_group_linear_id());
+                            int tid   = static_cast<int>(item.get_local_linear_id());
+
+                            KernelMergePartition<NT, Bounds>(
+                                block,
+                                tid,
+                                a,
+                                aCount,
+                                b,
+                                bCount,
+                                nv,
+                                coop,
+                                part_dev,
+                                numSearches,
+                                comp);
+                        });
+                };
+            });
+    }
+
+    // Returns (a0, a1, b0, b1) into mergesort input lists between mp0 and mp1.
+    inline sycl::vec<int, 4> FindMergesortInterval(
+        sycl::vec<int, 3> frame, int coop, int block, int nv, int count, int mp0, int mp1) {
+
+        // Locate diag from the start of the A sublist.
+        int diag = nv * block - frame.x();
+        int a0   = frame.x() + mp0;
+        int a1   = std::min(count, frame.x() + mp1);
+        int b0   = std::min(count, frame.y() + diag - mp0);
+        int b1   = std::min(count, frame.y() + diag + nv - mp1);
+
+        // The end partition of the last block for each merge operation is computed
+        // and stored as the begin partition for the subsequent merge. i.e. it is
+        // the same partition but in the wrong coordinate system, so its 0 when it
+        // should be listSize. Correct that by checking if this is the last block
+        // in this merge operation.
+        if (coop - 1 == ((coop - 1) & block)) {
+            a1 = std::min(count, frame.x() + frame.z());
+            b1 = std::min(count, frame.y() + frame.z());
+        }
+        return {a0, a1, b0, b1};
+    }
+
+    inline sycl::vec<int, 4> ComputeMergeRange(
+        int aCount, int bCount, int block, int coop, int NV, const int *mp_global) {
+
+        // Load the merge paths computed by the partitioning kernel.
+        int mp0 = mp_global[block];
+        int mp1 = mp_global[block + 1];
+        int gid = NV * block;
+
+        // Compute the ranges of the sources in global memory.
+        sycl::vec<int, 4> range;
+        if (coop) {
+            sycl::vec<int, 3> frame = FindMergesortFrame(coop, block, NV);
+            range = FindMergesortInterval(frame, coop, block, NV, aCount, mp0, mp1);
+        } else {
+            range.x() = mp0;                                             // a0
+            range.y() = mp1;                                             // a1
+            range.z() = gid - range.x();                                 // b0
+            range.w() = std::min(aCount + bCount, gid + NV) - range.y(); // b1
+        }
+        return range;
+    }
+
+
+    template<int NT, int VT, bool LoadExtended, typename It1, typename It2,
+	typename T, typename Comp>
+    MGPU_DEVICE void DeviceMergeKeysIndices(It1 a_global, int aCount, It2 b_global,
+	int bCount, int4 range, int tid, T* keys_shared, T* results, int* indices,
+	Comp comp) {
+
+	int a0 = range.x;
+	int a1 = range.y;
+	int b0 = range.z;
+	int b1 = range.w;
+
+	if(LoadExtended) {
+		bool extended = (a1 < aCount) && (b1 < bCount);
+		aCount = a1 - a0;
+		bCount = b1 - b0;
+		int aCount2 = aCount + (int)extended;
+		int bCount2 = bCount + (int)extended;
+
+		// Load one element past the end of each input to avoid having to use
+		// range checking in the merge loop.
+		DeviceLoad2ToShared<NT, VT, VT + 1>(a_global + a0, aCount2,
+			b_global + b0, bCount2, tid, keys_shared);
+
+		// Run a Merge Path search for each thread's starting point.
+		int diag = VT * tid;
+		int mp = MergePath<MgpuBoundsLower>(keys_shared, aCount,
+			keys_shared + aCount2, bCount, diag, comp);
+
+		// Compute the ranges of the sources in shared memory.
+		int a0tid = mp;
+		int b0tid = aCount2 + diag - mp;
+		if(extended) {
+			SerialMerge<VT, false>(keys_shared, a0tid, 0, b0tid, 0, results,
+				indices, comp);
+		} else {
+			int a1tid = aCount;
+			int b1tid = aCount2 + bCount;
+			SerialMerge<VT, true>(keys_shared, a0tid, a1tid, b0tid, b1tid,
+				results, indices, comp);
+		}
+	} else {
+		// Use the input intervals from the ranges between the merge path
+		// intersections.
+		aCount = a1 - a0;
+		bCount = b1 - b0;
+
+		// Load the data into shared memory.
+		DeviceLoad2ToShared<NT, VT, VT>(a_global + a0, aCount, b_global + b0,
+			bCount, tid, keys_shared);
+
+		// Run a merge path to find the start of the serial merge for each
+		// thread.
+		int diag = VT * tid;
+		int mp = MergePath<MgpuBoundsLower>(keys_shared, aCount,
+			keys_shared + aCount, bCount, diag, comp);
+
+		// Compute the ranges of the sources in shared memory.
+		int a0tid = mp;
+		int a1tid = aCount;
+		int b0tid = aCount + diag - mp;
+		int b1tid = aCount + bCount;
+
+		// Serial merge into register.
+		SerialMerge<VT, true>(keys_shared, a0tid, a1tid, b0tid, b1tid, results,
+			indices, comp);
+	}
+    }
+
+    template<
+        int NT,
+        int VT,
+        bool HasValues,
+        bool LoadExtended,
+        typename KeysIt1,
+        typename KeysIt2,
+        typename KeysIt3,
+        typename ValsIt1,
+        typename ValsIt2,
+        typename KeyType,
+        typename ValsIt3,
+        typename Comp>
+    inline void DeviceMerge(
+        sycl::nd_item<1> &item,
+        KeysIt1 aKeys_global,
+        ValsIt1 aVals_global,
+        int aCount,
+        KeysIt2 bKeys_global,
+        ValsIt2 bVals_global,
+        int bCount,
+        int tid,
+        int block,
+        sycl::vec<int, 4> range,
+        KeyType *keys_shared,
+        int *indices_shared,
+        KeysIt3 keys_global,
+        ValsIt3 vals_global,
+        Comp comp) {
+
+        KeyType results[VT];
+        int indices[VT];
+        DeviceMergeKeysIndices<NT, VT, LoadExtended>(
+            aKeys_global,
+            aCount,
+            bKeys_global,
+            bCount,
+            range,
+            tid,
+            keys_shared,
+            results,
+            indices,
+            comp);
+
+        // Store merge results back to shared memory.
+        DeviceThreadToShared<VT>(results, tid, keys_shared);
+
+        // Store merged keys to global memory.
+        aCount = range.y() - range.x();
+        bCount = range.w() - range.z();
+        DeviceSharedToGlobal<NT, VT>(
+            aCount + bCount, keys_shared, tid, keys_global + NT * VT * block);
+
+        // Copy the values.
+        if (HasValues) {
+            DeviceThreadToShared<VT>(item,indices, tid, indices_shared);
+
+            DeviceTransferMergeValuesShared<NT, VT>(
+                aCount + bCount,
+                aVals_global + range.x(),
+                bVals_global + range.z(),
+                aCount,
+                indices_shared,
+                tid,
+                vals_global + NT * VT * block);
+        }
+    }
+
+    template<
+        int NT,
+        int VT,
+        bool HasValues,
+        bool LoadExtended,
+        typename Tkey,
+        typename Tval,
+        typename Comp>
+    inline void KernelMerge(
+        sycl::nd_item<1> &item,
+        int tid,
+        int block,
+        Shared<Tkey, int, NT, VT> &shared,
+        Tkey *aKeys_global,
+        Tval *aVals_global,
+        int aCount,
+        Tkey *bKeys_global,
+        Tval *bVals_global,
+        int bCount,
+        const int *mp_global,
+        int coop,
+        Tkey *keys_global,
+        Tval *vals_global,
+        Comp comp) {
+
+        static constexpr int NV = NT * VT;
+
+        sycl::vec<int, 4> range
+            = ComputeMergeRange(aCount, bCount, block, coop, NT * VT, mp_global);
+
+        DeviceMerge<NT, VT, HasValues, LoadExtended>(
+            item,
+            aKeys_global,
+            aVals_global,
+            aCount,
+            bKeys_global,
+            bVals_global,
+            bCount,
+            tid,
+            block,
+            range,
+            shared.keys,
+            shared.values,
+            keys_global,
+            vals_global,
+            comp);
+    }
+
+    template<class Tkey, class Tval>
+    inline void sort_by_keys_modern_gpu_mergesort(
+        sham::DeviceBuffer<Tkey> &buf_key, sham::DeviceBuffer<Tval> &buf_values, u32 len) {
+
+        auto dev_sched = buf_key.get_dev_scheduler_ptr();
+
+        bool do_print = false;
+
+        static constexpr int VT = 7;
+        static constexpr int NT = 4; // 256
+        static constexpr int NV = NT * VT;
+
+        int numBlocks = MGPU_DIV_UP(len, NV);
+        int numPasses = FindLog2(numBlocks, true);
+
+        if (do_print) {
+            std::cout << "-------------------------------------------------" << std::endl;
+            std::cout << "------- sort_by_keys_modern_gpu_mergesort -------" << std::endl;
+            std::cout << "-------------------------------------------------" << std::endl;
+
+            std::cout << "init state:" << std::endl;
+            print_key_val_table(buf_key.copy_to_stdvec(), buf_values.copy_to_stdvec());
+        }
+
+        kernel_blocksort<NT, VT>(dev_sched->get_queue(), buf_key, buf_values, len);
 
         if (do_print) {
             std::cout << "after local sort state:" << std::endl;
@@ -567,6 +910,70 @@ namespace shamalgs::primitives::device::details {
             std::cout << "-------------------------------------------------" << std::endl;
             std::cout << "------- sort_by_keys_modern_gpu_mergesort end -------" << std::endl;
             std::cout << "-------------------------------------------------" << std::endl;
+        }
+
+        auto buf_key2    = sham::DeviceBuffer<Tkey>(len, dev_sched);
+        auto buf_values2 = sham::DeviceBuffer<Tval>(len, dev_sched);
+
+        if (1 & numPasses) {
+            std::swap(buf_key, buf_key2);
+            std::swap(buf_values, buf_values2);
+        }
+
+        auto partitionsDevice = sham::DeviceBuffer<int>(0, dev_sched);
+
+        for (int pass = 0; pass < numPasses; ++pass) {
+            int coop = 2 << pass;
+
+            MergePathPartitions<MgpuBoundsLower>(
+                dev_sched->get_queue(),
+                buf_key,
+                len,
+                buf_key,
+                0,
+                NV,
+                coop,
+                [](Tkey a, Tkey b) {
+                    return a < b;
+                },
+                partitionsDevice);
+
+            sham::kernel_call_hndl(
+                dev_sched->get_queue(),
+                sham::MultiRef{},
+                sham::MultiRef{buf_key, buf_values, partitionsDevice, buf_key2, buf_values2},
+                [=](auto key, auto values, auto part_dev, auto key2, auto values2) {
+                    return [=](sycl::handler &cgh) {
+
+                        using Shared = Shared<Tkey, int, NT, VT>;
+
+                        sycl::local_accessor<Shared> shared_mem(1, cgh);
+
+                        cgh.parallel_for(ndrange(NT, numBlocks * NT), [=](sycl::nd_item<1> item) {
+                            KernelMerge<NT, VT, true, false,Tkey,Tval>(
+                                item,
+                                item.get_local_linear_id(),
+                                item.get_group_linear_id(),
+                                shared_mem[0],
+                                key,
+                                values,
+                                len,
+                                key,
+                                values,
+                                0,
+                                part_dev,
+                                coop,
+                                key2,
+                                values2,
+                                [](Tkey a, Tkey b) {
+                                    return a < b;
+                                });
+                        });
+                    };
+                });
+
+            std::swap(buf_key, buf_key2);
+            std::swap(buf_values, buf_values2);
         }
     }
 
