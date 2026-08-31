@@ -30,7 +30,7 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 
 # %%
 # Recover microbenchmark results
-microbench_results = shamrock.sys.get_microbench_results()
+microbench_results = shamrock.sys.get_microbench_results(allow_run=True)
 if len(microbench_results) == 0:
     print("no microbench results, please run with --benchmark-mpi")
     raise ValueError("no microbench results")
