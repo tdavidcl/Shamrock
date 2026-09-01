@@ -14,6 +14,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colors
+from shamrock.utils.plot import make_std_bench_plot
 
 import shamrock
 
@@ -132,109 +133,52 @@ for impl in all_default_impls:
 # %%
 # Plot results (time)
 
-print_ref = True
-for label, item in dic_bench.items():
-    if print_ref:
-        Nobj = np.array(item["particle_counts"])
-        Time100M = Nobj / 1e8
-        plt.plot(
-            item["particle_counts"],
-            Time100M,
-            color="grey",
-            linestyle="-",
-            alpha=0.7,
-            label="100M obj/sec",
-        )
-        print_ref = False
+color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
-    (line,) = plt.plot(item["particle_counts"], item["results_f64"], "--.", label=label + " (f64)")
-    plt.plot(
-        item["particle_counts"],
-        item["results_f32"],
-        ":",
-        color=line.get_color(),
-        label=label + " (f32)",
+plot_data = {}
+for i, (label, item) in enumerate(dic_bench.items()):
+    color = color_cycle[i % len(color_cycle)]
+    plot_data[label + " (f64)"] = {
+        "x": item["particle_counts"],
+        "y": item["results_f64"],
+        "color": color,
+        "label": label + " (f64)",
+        "linestyle": "--",
+        "marker": ".",
+    }
+    plot_data[label + " (f32)"] = {
+        "x": item["particle_counts"],
+        "y": item["results_f32"],
+        "color": color,
+        "label": label + " (f32)",
+        "linestyle": ":",
+        "marker": None,
+    }
+
+
+def before_plot(ax_plot):
+    particle_counts = next(iter(dic_bench.values()))["particle_counts"]
+    Nobj = np.array(particle_counts)
+    Time100M = Nobj / 1e8
+    ax_plot.plot(
+        particle_counts,
+        Time100M,
+        color="grey",
+        linestyle="-",
+        alpha=0.7,
+        label="100M obj/sec",
     )
 
 
-plt.xlabel("Number of elements")
-plt.ylabel("Time (s)")
-plt.title("reduction performance benchmarks")
-
-plt.xscale("log")
-plt.yscale("log")
-
-plt.grid(True)
-
-plt.legend(fontsize=10)
+make_std_bench_plot(
+    plot_data,
+    xlabel="Number of elements",
+    ylabel="Time (s)",
+    title="reduction performance benchmarks",
+    end_label_fmt=lambda y: f"{y:.2e} s",
+    before_plot_func=before_plot,
+)
 plt.show()
-
-
-# %%
-# Helper to place non-overlapping value callouts outside the right edge of
-# the axes, each linked back to its line's last data point with a leader line
-def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
-    if not entries:
-        return
-
-    # Sort by data y-value and convert to display (pixel) coordinates so
-    # spacing can be reasoned about independently of the (log) data scale
-    order = sorted(range(len(entries)), key=lambda i: entries[i][1])
-    disp_y = [ax.transData.transform((0, entries[i][1]))[1] for i in order]
-
-    # Group overlapping labels into clusters and spread each cluster
-    # symmetrically around the mean of its members' true positions, rather
-    # than cascading everything upward when things get crammed
-    clusters = []  # each: {"center": mean y, "count": n}
-    for y in disp_y:
-        clusters.append({"center": y, "count": 1})
-        while len(clusters) >= 2:
-            a, b = clusters[-2], clusters[-1]
-            span_a = (a["count"] - 1) * min_gap_px
-            span_b = (b["count"] - 1) * min_gap_px
-            top_a = a["center"] + span_a / 2
-            bot_b = b["center"] - span_b / 2
-            if bot_b - top_a < min_gap_px:
-                count = a["count"] + b["count"]
-                center = (a["center"] * a["count"] + b["center"] * b["count"]) / count
-                clusters[-2:] = [{"center": center, "count": count}]
-            else:
-                break
-
-    disp_y = []
-    for c in clusters:
-        span = (c["count"] - 1) * min_gap_px
-        start = c["center"] - span / 2
-        disp_y.extend(start + k * min_gap_px for k in range(c["count"]))
-
-    inv = ax.transData.inverted()
-    for idx, y_disp in zip(order, disp_y):
-        x_data, y_data, text, color = entries[idx]
-        label_y_data = inv.transform((0, y_disp))[1]
-        # mirror the bend when the label lands below its point, otherwise the
-        # corner ends up on the wrong side and the leader line doubles back
-        angle_b = 60 if label_y_data >= y_data else -60
-        ax.annotate(
-            text,
-            xy=(x_data, y_data),
-            xycoords="data",
-            xytext=(x_frac, label_y_data),
-            textcoords=("axes fraction", "data"),
-            color=color,
-            fontsize=fontsize,
-            va="center",
-            ha="left",
-            annotation_clip=False,
-            bbox=dict(boxstyle="round", fc="0.8"),
-            arrowprops=dict(
-                arrowstyle="-",
-                color=color,
-                lw=0.8,
-                shrinkA=0,
-                shrinkB=2,
-                connectionstyle=f"angle,angleA=0,angleB={angle_b},rad=10",
-            ),
-        )
 
 
 # %%
@@ -242,7 +186,6 @@ def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
 
 peak_bw_f32 = microbench_results["saxpy_f32"]
 peak_bw_f64 = microbench_results["saxpy_f64"]
-
 
 color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
@@ -259,7 +202,7 @@ for i, (label, item) in enumerate(dic_bench.items()):
         "color": color,
         "label": label + " (f64)",
         "linestyle": "-",
-        "marker" : "x"
+        "marker": "x",
     }
 
     Bytes_f32 = 4 * Nobj  # 1 read f32 (sizeof = 4)
@@ -270,44 +213,31 @@ for i, (label, item) in enumerate(dic_bench.items()):
         "color": color,
         "label": label + " (f32)",
         "linestyle": ":",
-        "marker" : "x"
+        "marker": "x",
     }
 
-plt.figure(dpi=250,figsize=(10,6))
 
-plt.axhline(
-    y=peak_bw_f64,
-    color="black",
-    linestyle=":",
-    label="microbenchmark peak BW f64",
+def before_plot(ax_plot):
+    ax_plot.axhline(
+        y=peak_bw_f64,
+        color="black",
+        linestyle=":",
+        label="microbenchmark peak BW f64",
+    )
+    ax_plot.axhline(
+        y=peak_bw_f32,
+        color="black",
+        linestyle="--",
+        label="microbenchmark peak BW f32",
+    )
+
+
+make_std_bench_plot(
+    plot_data,
+    xlabel="Number of elements",
+    ylabel="Bandwidth (B.s^-1)",
+    title="reduction performance benchmarks",
+    end_label_fmt=lambda y: f"{y / 1e9:.2f} GB.s^-1",
+    before_plot_func=before_plot,
 )
-plt.axhline(
-    y=peak_bw_f32,
-    color="black",
-    linestyle="--",
-    label="microbenchmark peak BW f32",
-)
-
-end_labels = []
-for d in plot_data.values():
-    plt.plot(d["x"], d["y"], d["linestyle"], color=d["color"], label=d["label"], marker=d["marker"])
-    end_labels.append((d["x"][-1], d["y"][-1], f"{d['y'][-1] / 1e9:.2f} GB.s^-1", d["color"]))
-
-
-
-plt.xlabel("Number of elements")
-plt.ylabel("Bandwidth (B.s^-1)")
-plt.title("reduction performance benchmarks")
-
-plt.xscale("log")
-plt.yscale("log")
-
-plt.grid(True)
-
-add_end_labels(plt.gca(), end_labels, min_gap_px=75)
-
-plt.legend(fontsize=10, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2)
-plt.gcf().subplots_adjust(right=0.72, bottom=0.32)
-
-#plt.tight_layout()
 plt.show()
