@@ -170,11 +170,58 @@ plt.legend(fontsize=10)
 plt.show()
 
 # %%
+# Helper to place non-overlapping value callouts outside the right edge of
+# the axes, each linked back to its line's last data point with a leader line
+def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
+    if not entries:
+        return
+
+    # Sort by data y-value and convert to display (pixel) coordinates so
+    # spacing can be reasoned about independently of the (log) data scale
+    order = sorted(range(len(entries)), key=lambda i: entries[i][1])
+    disp_y = [ax.transData.transform((0, entries[i][1]))[1] for i in order]
+
+    # Push labels apart (bottom-up pass, then top-down pass) so that none
+    # overlap while keeping them as close as possible to their true value
+    for k in range(1, len(disp_y)):
+        disp_y[k] = max(disp_y[k], disp_y[k - 1] + min_gap_px)
+    for k in range(len(disp_y) - 2, -1, -1):
+        disp_y[k] = min(disp_y[k], disp_y[k + 1] - min_gap_px)
+
+    inv = ax.transData.inverted()
+    for idx, y_disp in zip(order, disp_y):
+        x_data, y_data, text, color = entries[idx]
+        label_y_data = inv.transform((0, y_disp))[1]
+        ax.annotate(
+            text,
+            xy=(x_data, y_data),
+            xycoords="data",
+            xytext=(x_frac, label_y_data),
+            textcoords=("axes fraction", "data"),
+            color=color,
+            fontsize=fontsize,
+            va="center",
+            ha="left",
+            annotation_clip=False,
+            bbox=dict(boxstyle="round", fc="0.8"),
+            arrowprops=dict(
+                arrowstyle="-",
+                color=color,
+                lw=0.8,
+                shrinkA=0,
+                shrinkB=2,
+                connectionstyle="angle,angleA=0,angleB=50,rad=10",
+            ),
+        )
+
+
+# %%
 # Plot results (bandwidth)
 
 peak_bw_f32 = microbench_results["saxpy_f32"]
 peak_bw_f64 = microbench_results["saxpy_f64"]
 
+end_labels = []
 for label, item in dic_bench.items():
     Nobj = np.array(item["particle_counts"])
     last_x = item["particle_counts"][-1]
@@ -182,38 +229,18 @@ for label, item in dic_bench.items():
     Bytes_f64 = 8 * Nobj  # 1 read f64 (sizeof = 8)
     BW_f64 = Bytes_f64 / np.array(item["results_f64"])
     (line,) = plt.plot(item["particle_counts"], BW_f64, "--.", label=label + " (f64)")
-    plt.text(
-        last_x,
-        BW_f64[-1],
-        f"{BW_f64[-1] / 1e9:.2f} GB.s^-1",
-        color=line.get_color(),
-        va="bottom",
-        ha="right",
-    )
+    end_labels.append((last_x, BW_f64[-1], f"{BW_f64[-1] / 1e9:.2f} GB.s^-1", line.get_color()))
 
     Bytes_f32 = 4 * Nobj  # 1 read f32 (sizeof = 4)
     BW_f32 = Bytes_f32 / np.array(item["results_f32"])
     plt.plot(item["particle_counts"], BW_f32, ":", color=line.get_color(), label=label + " (f32)")
-    plt.text(
-        last_x,
-        BW_f32[-1],
-        f"{BW_f32[-1] / 1e9:.2f} GB.s^-1",
-        color=line.get_color(),
-        va="bottom",
-        ha="right",
-    )
+    end_labels.append((last_x, BW_f32[-1], f"{BW_f32[-1] / 1e9:.2f} GB.s^-1", line.get_color()))
 
 plt.axhline(
-    y=peak_bw_f64,
+    y=max(peak_bw_f64,peak_bw_f32),
     color="black",
     linestyle=":",
-    label=f"microbenchmark peak BW f64 ({peak_bw_f64 / 1e9:.2f} GB.s^-1)",
-)
-plt.axhline(
-    y=peak_bw_f32,
-    color="black",
-    linestyle="--",
-    label=f"microbenchmark peak BW f32 ({peak_bw_f32 / 1e9:.2f} GB.s^-1)",
+    label="microbenchmark peak BW",
 )
 
 plt.xlabel("Number of elements")
@@ -224,6 +251,9 @@ plt.xscale("log")
 plt.yscale("log")
 
 plt.grid(True)
+
+add_end_labels(plt.gca(), end_labels)
+plt.gcf().subplots_adjust(right=0.72)
 
 plt.legend(fontsize=10)
 plt.show()
