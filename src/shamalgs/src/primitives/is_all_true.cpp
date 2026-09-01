@@ -105,13 +105,13 @@ namespace {
 
                         u32 gid = item.get_global_linear_id();
 
-                        u8 local = (gid < cnt) ? (buf[gid] != 0) : 1;
+                        bool local = (gid < cnt) ? (buf[gid] != 0) : true;
 
                         // reduce in lid==0 the sum of local
-                        u8 sum = sham::sum_over_group(grp, local);
+                        bool result = all_of_group(grp, local);
 
                         // if there is a false we set the stop flag
-                        if (sum != group_size) {
+                        if (!result) {
                             sycl::atomic_ref<
                                 u8,
                                 sycl::memory_order_relaxed,
