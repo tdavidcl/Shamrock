@@ -19,7 +19,9 @@
 #include "shambase/overloaded.hpp"
 #include "shamalgs/ImplVariant.hpp"
 #include "shamalgs/primitives/reduction.hpp"
+#include "shambackends/group_op.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shambackends/make_ndrange.hpp"
 
 namespace {
 
@@ -64,6 +66,58 @@ namespace {
         return count_true == cnt;
     }
 
+    template<class T>
+    bool is_all_true_early_group_exit(sham::DeviceBuffer<T> &buf, u32 cnt, u32 group_size){
+
+        auto dev_sched = buf.get_dev_scheduler_ptr();
+        auto & q = dev_sched->get_queue();
+
+        sham::DeviceBuffer<u32> stop_flag(1, dev_sched);
+        stop_flag.fill(0);
+
+        //TODO: switch to the check version when available
+        auto range = sham::make_ndrange(group_size, cnt);
+
+        sham::kernel_call_hndl(
+            q,
+            sham::MultiRef{buf},
+            sham::MultiRef{stop_flag},
+            u32{1}, // TODO that when we have the new variant without it
+            [=](u32 , const T *buf, u32 *stop) {
+                return [=](sycl::handler &cgh) {
+                    cgh.parallel_for(range, [=](sycl::nd_item<1> item) {
+
+                        // early exit if flag is set
+                        if(*stop){
+                            return;
+                        }
+
+                        u32 gid = item.get_global_linear_id();
+                        u32 lid = item.get_local_linear_id();
+
+                        u32 local = (gid < cnt) ? (buf[gid]!= 0) : 1;
+
+                        // reduce in lid==0 the sum of local
+                        u32 sum = sham::sum_over_group(item.get_group(), local);
+
+                        // if there is a false we set the stop flag
+                        if(sum != group_size){
+                            sycl::atomic_ref<
+                                u32,
+                                sycl::memory_order_relaxed,
+                                sycl::memory_scope_device,
+                                sycl::access::address_space::global_space>
+                                atom(*stop);
+                            atom |= 1;
+                        }
+                    });
+                };
+            });
+
+        return stop_flag.get_val_at_idx(0) == 0;
+
+    }
+
 } // namespace
 
 namespace shamalgs::primitives {
@@ -81,7 +135,13 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "sum_reduction";
         };
 
-        shamalgs::ImplVariantGlobal<Host, SumReduction> is_all_true_impl;
+        /// Check all elements via a sum reduction on device
+        struct AtomicEarlyExit {
+            static constexpr std::string_view variant_type_name = "atomic_early_exit";
+            u32 group_size = 32;
+        };
+
+        shamalgs::ImplVariantGlobal<Host, SumReduction,AtomicEarlyExit> is_all_true_impl;
 
         /// Get list of available is_all_true implementations, as config json strings
         std::vector<std::string> get_default_impl_list_is_all_true() {
@@ -125,6 +185,9 @@ namespace shamalgs::primitives {
                 },
                 [&](impl::SumReduction) {
                     return is_all_true_sum_reduction(buf, cnt);
+                },
+                [&](impl::AtomicEarlyExit cfg) {
+                    return is_all_true_early_group_exit(buf, cnt,cfg.group_size);
                 },
             },
             impl::is_all_true_impl.get());
