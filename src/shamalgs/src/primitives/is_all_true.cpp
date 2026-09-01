@@ -117,7 +117,7 @@ namespace {
             sham::MultiRef{buf},
             sham::MultiRef{stop_flag},
             u32{1}, // TODO that when we have the new variant without it
-            [=](u32, const T *buf, u8 *stop) {
+            [=](u32, const T *buf, u32 *stop) {
                 return [=](sycl::handler &cgh) {
                     cgh.parallel_for(range, [=](sycl::nd_item<1> item) {
                         auto grp = item.get_group();
