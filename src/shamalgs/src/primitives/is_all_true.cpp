@@ -76,7 +76,7 @@ namespace {
         auto dev_sched = buf.get_dev_scheduler_ptr();
         auto &q        = dev_sched->get_queue();
 
-        sham::DeviceBuffer<u32> stop_flag(1, dev_sched);
+        sham::DeviceBuffer<u8> stop_flag(1, dev_sched);
         stop_flag.fill(0);
 
         // TODO: switch to the check version when available
@@ -87,7 +87,7 @@ namespace {
             sham::MultiRef{buf},
             sham::MultiRef{stop_flag},
             u32{1}, // TODO that when we have the new variant without it
-            [=](u32, const T *buf, u32 *stop) {
+            [=](u32, const T *buf, u8 *stop) {
                 return [=](sycl::handler &cgh) {
                     cgh.parallel_for(range, [=](sycl::nd_item<1> item) {
                         auto grp = item.get_group();
@@ -96,7 +96,7 @@ namespace {
                         // Only the group leader reads the stop flag from device memory,
                         // then broadcast that single value to the rest of the group instead
                         // of every work-item issuing its own global memory load.
-                        u32 stop_val = sycl::group_broadcast(grp, (lid == 0) ? *stop : u32{0}, 0);
+                        u8 stop_val = sycl::group_broadcast(grp, (lid == 0) ? *stop : u8{0}, 0);
 
                         // early exit the whole group if the flag is set
                         if (stop_val) {
@@ -105,20 +105,20 @@ namespace {
 
                         u32 gid = item.get_global_linear_id();
 
-                        u32 local = (gid < cnt) ? (buf[gid] != 0) : 1;
+                        u8 local = (gid < cnt) ? (buf[gid] != 0) : 1;
 
                         // reduce in lid==0 the sum of local
-                        u32 sum = sham::sum_over_group(grp, local);
+                        u8 sum = sham::sum_over_group(grp, local);
 
                         // if there is a false we set the stop flag
                         if (sum != group_size) {
                             sycl::atomic_ref<
-                                u32,
+                                u8,
                                 sycl::memory_order_relaxed,
                                 sycl::memory_scope_device,
                                 sycl::access::address_space::global_space>
                                 atom(*stop);
-                            atom |= 1_u32;
+                            atom |= 1_u8;
                         }
                     });
                 };
