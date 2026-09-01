@@ -118,7 +118,7 @@ namespace {
                                 sycl::memory_scope_device,
                                 sycl::access::address_space::global_space>
                                 atom(*stop);
-                            atom |= 1;
+                            atom |= 1_u32;
                         }
                     });
                 };
