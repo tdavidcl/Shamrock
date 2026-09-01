@@ -243,21 +243,37 @@ def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
 peak_bw_f32 = microbench_results["saxpy_f32"]
 peak_bw_f64 = microbench_results["saxpy_f64"]
 
-end_labels = []
-for label, item in dic_bench.items():
+
+color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+plot_data = {}
+for i, (label, item) in enumerate(dic_bench.items()):
+    color = color_cycle[i % len(color_cycle)]
     Nobj = np.array(item["particle_counts"])
-    last_x = item["particle_counts"][-1]
 
     Bytes_f64 = 8 * Nobj  # 1 read f64 (sizeof = 8)
     BW_f64 = Bytes_f64 / np.array(item["results_f64"])
-    (line,) = plt.plot(item["particle_counts"], BW_f64, "--.", label=label + " (f64)")
-    end_labels.append((last_x, BW_f64[-1], f"{BW_f64[-1] / 1e9:.2f} GB.s^-1", line.get_color()))
+    plot_data[label + " (f64)"] = {
+        "x": item["particle_counts"],
+        "y": BW_f64,
+        "color": color,
+        "label": label + " (f64)",
+        "linestyle": "-",
+        "marker" : "x"
+    }
 
     Bytes_f32 = 4 * Nobj  # 1 read f32 (sizeof = 4)
     BW_f32 = Bytes_f32 / np.array(item["results_f32"])
-    plt.plot(item["particle_counts"], BW_f32, ":", color=line.get_color(), label=label + " (f32)")
-    end_labels.append((last_x, BW_f32[-1], f"{BW_f32[-1] / 1e9:.2f} GB.s^-1", line.get_color()))
+    plot_data[label + " (f32)"] = {
+        "x": item["particle_counts"],
+        "y": BW_f32,
+        "color": color,
+        "label": label + " (f32)",
+        "linestyle": ":",
+        "marker" : "x"
+    }
 
+plt.figure(dpi=250,figsize=(10,6))
 
 plt.axhline(
     y=peak_bw_f64,
@@ -272,6 +288,13 @@ plt.axhline(
     label="microbenchmark peak BW f32",
 )
 
+end_labels = []
+for d in plot_data.values():
+    plt.plot(d["x"], d["y"], d["linestyle"], color=d["color"], label=d["label"], marker=d["marker"])
+    end_labels.append((d["x"][-1], d["y"][-1], f"{d['y'][-1] / 1e9:.2f} GB.s^-1", d["color"]))
+
+
+
 plt.xlabel("Number of elements")
 plt.ylabel("Bandwidth (B.s^-1)")
 plt.title("reduction performance benchmarks")
@@ -281,8 +304,10 @@ plt.yscale("log")
 
 plt.grid(True)
 
-add_end_labels(plt.gca(), end_labels)
-plt.gcf().subplots_adjust(right=0.72)
+add_end_labels(plt.gca(), end_labels, min_gap_px=75)
 
-plt.legend(fontsize=10)
+plt.legend(fontsize=10, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2)
+plt.gcf().subplots_adjust(right=0.72, bottom=0.32)
+
+#plt.tight_layout()
 plt.show()
