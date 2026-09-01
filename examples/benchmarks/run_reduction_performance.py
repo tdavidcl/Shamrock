@@ -169,6 +169,7 @@ plt.grid(True)
 plt.legend(fontsize=10)
 plt.show()
 
+
 # %%
 # Helper to place non-overlapping value callouts outside the right edge of
 # the axes, each linked back to its line's last data point with a leader line
@@ -181,17 +182,38 @@ def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
     order = sorted(range(len(entries)), key=lambda i: entries[i][1])
     disp_y = [ax.transData.transform((0, entries[i][1]))[1] for i in order]
 
-    # Push labels apart (bottom-up pass, then top-down pass) so that none
-    # overlap while keeping them as close as possible to their true value
-    for k in range(1, len(disp_y)):
-        disp_y[k] = max(disp_y[k], disp_y[k - 1] + min_gap_px)
-    for k in range(len(disp_y) - 2, -1, -1):
-        disp_y[k] = min(disp_y[k], disp_y[k + 1] - min_gap_px)
+    # Group overlapping labels into clusters and spread each cluster
+    # symmetrically around the mean of its members' true positions, rather
+    # than cascading everything upward when things get crammed
+    clusters = []  # each: {"center": mean y, "count": n}
+    for y in disp_y:
+        clusters.append({"center": y, "count": 1})
+        while len(clusters) >= 2:
+            a, b = clusters[-2], clusters[-1]
+            span_a = (a["count"] - 1) * min_gap_px
+            span_b = (b["count"] - 1) * min_gap_px
+            top_a = a["center"] + span_a / 2
+            bot_b = b["center"] - span_b / 2
+            if bot_b - top_a < min_gap_px:
+                count = a["count"] + b["count"]
+                center = (a["center"] * a["count"] + b["center"] * b["count"]) / count
+                clusters[-2:] = [{"center": center, "count": count}]
+            else:
+                break
+
+    disp_y = []
+    for c in clusters:
+        span = (c["count"] - 1) * min_gap_px
+        start = c["center"] - span / 2
+        disp_y.extend(start + k * min_gap_px for k in range(c["count"]))
 
     inv = ax.transData.inverted()
     for idx, y_disp in zip(order, disp_y):
         x_data, y_data, text, color = entries[idx]
         label_y_data = inv.transform((0, y_disp))[1]
+        # mirror the bend when the label lands below its point, otherwise the
+        # corner ends up on the wrong side and the leader line doubles back
+        angle_b = 60 if label_y_data >= y_data else -60
         ax.annotate(
             text,
             xy=(x_data, y_data),
@@ -210,7 +232,7 @@ def add_end_labels(ax, entries, x_frac=1.1, min_gap_px=25, fontsize=9):
                 lw=0.8,
                 shrinkA=0,
                 shrinkB=2,
-                connectionstyle="angle,angleA=0,angleB=50,rad=10",
+                connectionstyle=f"angle,angleA=0,angleB={angle_b},rad=10",
             ),
         )
 
@@ -236,11 +258,18 @@ for label, item in dic_bench.items():
     plt.plot(item["particle_counts"], BW_f32, ":", color=line.get_color(), label=label + " (f32)")
     end_labels.append((last_x, BW_f32[-1], f"{BW_f32[-1] / 1e9:.2f} GB.s^-1", line.get_color()))
 
+
 plt.axhline(
-    y=max(peak_bw_f64,peak_bw_f32),
+    y=peak_bw_f64,
     color="black",
     linestyle=":",
-    label="microbenchmark peak BW",
+    label="microbenchmark peak BW f64",
+)
+plt.axhline(
+    y=peak_bw_f32,
+    color="black",
+    linestyle="--",
+    label="microbenchmark peak BW f32",
 )
 
 plt.xlabel("Number of elements")
