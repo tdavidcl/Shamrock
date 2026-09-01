@@ -67,15 +67,19 @@ namespace {
     }
 
     template<class T>
-    bool is_all_true_early_group_exit(sham::DeviceBuffer<T> &buf, u32 cnt, u32 group_size){
+    bool is_all_true_early_group_exit(sham::DeviceBuffer<T> &buf, u32 cnt, u32 group_size) {
+
+        if (cnt == 0) {
+            return true;
+        }
 
         auto dev_sched = buf.get_dev_scheduler_ptr();
-        auto & q = dev_sched->get_queue();
+        auto &q        = dev_sched->get_queue();
 
         sham::DeviceBuffer<u32> stop_flag(1, dev_sched);
         stop_flag.fill(0);
 
-        //TODO: switch to the check version when available
+        // TODO: switch to the check version when available
         auto range = sham::make_ndrange(group_size, cnt);
 
         sham::kernel_call_hndl(
@@ -83,25 +87,31 @@ namespace {
             sham::MultiRef{buf},
             sham::MultiRef{stop_flag},
             u32{1}, // TODO that when we have the new variant without it
-            [=](u32 , const T *buf, u32 *stop) {
+            [=](u32, const T *buf, u32 *stop) {
                 return [=](sycl::handler &cgh) {
                     cgh.parallel_for(range, [=](sycl::nd_item<1> item) {
+                        auto grp = item.get_group();
+                        u32 lid  = item.get_local_linear_id();
 
-                        // early exit if flag is set
-                        if(*stop){
+                        // Only the group leader reads the stop flag from device memory,
+                        // then broadcast that single value to the rest of the group instead
+                        // of every work-item issuing its own global memory load.
+                        u32 stop_val = sycl::group_broadcast(grp, (lid == 0) ? *stop : u32{0}, 0);
+
+                        // early exit the whole group if the flag is set
+                        if (stop_val) {
                             return;
                         }
 
                         u32 gid = item.get_global_linear_id();
-                        u32 lid = item.get_local_linear_id();
 
-                        u32 local = (gid < cnt) ? (buf[gid]!= 0) : 1;
+                        u32 local = (gid < cnt) ? (buf[gid] != 0) : 1;
 
                         // reduce in lid==0 the sum of local
-                        u32 sum = sham::sum_over_group(item.get_group(), local);
+                        u32 sum = sham::sum_over_group(grp, local);
 
                         // if there is a false we set the stop flag
-                        if(sum != group_size){
+                        if (sum != group_size) {
                             sycl::atomic_ref<
                                 u32,
                                 sycl::memory_order_relaxed,
@@ -115,33 +125,49 @@ namespace {
             });
 
         return stop_flag.get_val_at_idx(0) == 0;
-
     }
 
 } // namespace
+
+namespace shamalgs::primitives::impl {
+
+    /// Check all elements on host after copying the buffer back
+    struct Host {
+        static constexpr std::string_view variant_type_name = "host";
+    };
+
+    /// Check all elements via a sum reduction on device
+    struct SumReduction {
+        static constexpr std::string_view variant_type_name = "sum_reduction";
+    };
+
+    /// Check all elements via a sum reduction on device
+    struct AtomicEarlyExit {
+        static constexpr std::string_view variant_type_name = "atomic_early_exit";
+        u32 group_size                                      = 256;
+    };
+} // namespace shamalgs::primitives::impl
+
+template<>
+struct shamalgs::ImplVariantParams<shamalgs::primitives::impl::AtomicEarlyExit> {
+    static nlohmann::json to_json(const shamalgs::primitives::impl::AtomicEarlyExit &p) {
+        return {{"group_size", p.group_size}};
+    }
+    static shamalgs::primitives::impl::AtomicEarlyExit from_json(const nlohmann::json &j) {
+        shamalgs::primitives::impl::AtomicEarlyExit p{};
+        if (j.contains("group_size")) {
+            p.group_size = j.at("group_size").get<u32>();
+        }
+        return p;
+    }
+};
 
 namespace shamalgs::primitives {
 
     /// namespace to control implementation behavior
     namespace impl {
 
-        /// Check all elements on host after copying the buffer back
-        struct Host {
-            static constexpr std::string_view variant_type_name = "host";
-        };
-
-        /// Check all elements via a sum reduction on device
-        struct SumReduction {
-            static constexpr std::string_view variant_type_name = "sum_reduction";
-        };
-
-        /// Check all elements via a sum reduction on device
-        struct AtomicEarlyExit {
-            static constexpr std::string_view variant_type_name = "atomic_early_exit";
-            u32 group_size = 32;
-        };
-
-        shamalgs::ImplVariantGlobal<Host, SumReduction,AtomicEarlyExit> is_all_true_impl;
+        shamalgs::ImplVariantGlobal<Host, SumReduction, AtomicEarlyExit> is_all_true_impl;
 
         /// Get list of available is_all_true implementations, as config json strings
         std::vector<std::string> get_default_impl_list_is_all_true() {
@@ -187,7 +213,7 @@ namespace shamalgs::primitives {
                     return is_all_true_sum_reduction(buf, cnt);
                 },
                 [&](impl::AtomicEarlyExit cfg) {
-                    return is_all_true_early_group_exit(buf, cnt,cfg.group_size);
+                    return is_all_true_early_group_exit(buf, cnt, cfg.group_size);
                 },
             },
             impl::is_all_true_impl.get());
