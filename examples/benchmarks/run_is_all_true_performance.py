@@ -96,7 +96,7 @@ def run_performance_sweep():
         results_zeros.append(mean_time)
         elapsed = time.time() - start_time
 
-        print(f"mean={mean_time:.2e}s (took {elapsed:.1f}s)")
+        print(f"mean={mean_time:.3f}s (took {elapsed:.1f}s)")
 
     return particle_counts, results_random, results_ones, results_zeros
 
