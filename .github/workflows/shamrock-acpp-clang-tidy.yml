@@ -87,20 +87,23 @@ jobs:
         run: |
           sudo apt install clang-tidy-${{matrix.clang}}
 
-      #- run: git config --unset-all http.https://github.com/.extraheader
-      - name: Diagnose git credential issue
+      - name: Diagnose git credential issue (extended)
         shell: bash
         run: |
-          set +o pipefail   # <-- allow head to truncate curl's output without killing the step
-          echo "=== GIT/CREDENTIAL DIAGNOSTICS ==="
+          set +o pipefail
+          echo "=== EXTENDED DIAGNOSTICS ==="
+
           echo "--- git version ---"
           git --version
+
           echo "--- effective config (all scopes) ---"
           git config --list --show-origin
+
           echo "--- credential.* config specifically ---"
           git config --global --get-all credential.helper || true
           git config --system --get-all credential.helper || true
           env | grep -i GIT_ || true
+
           echo "--- relevant env vars ---"
           echo "HOME=$HOME"
           echo "GIT_TERMINAL_PROMPT=$GIT_TERMINAL_PROMPT"
@@ -108,19 +111,43 @@ jobs:
           echo "SSH_ASKPASS=$SSH_ASKPASS"
           echo "DISPLAY=$DISPLAY"
           id
+
           echo "--- .netrc / .git-credentials presence ---"
           ls -la "$HOME/.netrc" "$HOME/.git-credentials" 2>&1 || true
-          echo "--- test raw connectivity to github.com (no auth) ---"
-          curl -v https://github.com/AdaptiveCpp/AdaptiveCpp.git/info/refs?service=git-upload-pack 2>&1 | head -40
-          echo "--- force no-prompt to see the real underlying error ---"
+
+          echo "--- outbound public IP as seen by the internet ---"
+          curl -s https://api.ipify.org; echo
+          curl -s https://ifconfig.me; echo
+
+          echo "--- all resolved IPs for github.com ---"
+          getent hosts github.com || dig +short github.com || true
+
+          echo "--- anonymous REST API rate limit for this IP ---"
+          curl -s https://api.github.com/rate_limit
+          echo
+
+          echo "--- full response headers+body for the failing request ---"
+          curl -s -i https://github.com/AdaptiveCpp/AdaptiveCpp.git/info/refs?service=git-upload-pack \
+            -o /tmp/adaptivecpp_response.txt
+          cat /tmp/adaptivecpp_response.txt
+
+          echo "--- control test: does a DIFFERENT public repo also fail? ---"
+          curl -s -i https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack \
+            -o /tmp/control_response.txt
+          head -20 /tmp/control_response.txt
+
+          echo "--- response timing + remote IP actually connected to ---"
+          curl -o /dev/null -s -w "http_code=%{http_code} remote_ip=%{remote_ip} time_total=%{time_total}\n" \
+            https://github.com/AdaptiveCpp/AdaptiveCpp.git/info/refs?service=git-upload-pack
+
+          echo "--- traced clone at the REAL destination (the actual offending call) ---"
+          rm -rf /__w/Shamrock/Shamrock/build/.env/acpp-git
           GIT_TERMINAL_PROMPT=0 GIT_CURL_VERBOSE=1 GIT_TRACE=1 \
-            git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git /tmp/acpp-diag-test 2>&1 | tail -60
-          echo "=== END DIAGNOSTICS ==="
-      - name: Build acpp (offending clone)
-        shell: bash
-        run: |
-          GIT_TERMINAL_PROMPT=0 GIT_CURL_VERBOSE=1 GIT_TRACE=1 \
-            git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git /__w/Shamrock/Shamrock/build/.env/acpp-git
+            git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git \
+              /__w/Shamrock/Shamrock/build/.env/acpp-git 2>&1 | tail -80
+          echo "real clone exit code: ${PIPESTATUS[0]}"
+
+          echo "=== END EXTENDED DIAGNOSTICS ==="
 
       - name: configure Shamrock
         run: |
