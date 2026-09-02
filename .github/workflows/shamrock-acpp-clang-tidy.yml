@@ -91,6 +91,7 @@ jobs:
         run: |
           ./buildbot/check_clang_tidy_cfg.sh clang-tidy-${{matrix.clang}}
 
+      - run: git config --unset-all http.https://github.com/.extraheader
 
       - name: Diagnose git credential issue
         shell: bash
