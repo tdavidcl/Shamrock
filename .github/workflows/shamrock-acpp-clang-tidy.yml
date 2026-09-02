@@ -87,7 +87,7 @@ jobs:
         run: |
           sudo apt install clang-tidy-${{matrix.clang}}
 
-      - run: git config --unset-all http.https://github.com/.extraheader
+      #- run: git config --unset-all http.https://github.com/.extraheader
       - name: Diagnose git credential issue
         shell: bash
         run: |
@@ -119,7 +119,8 @@ jobs:
       - name: Build acpp (offending clone)
         shell: bash
         run: |
-          git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git /__w/Shamrock/Shamrock/build/.env/acpp-git
+          GIT_TERMINAL_PROMPT=0 GIT_CURL_VERBOSE=1 GIT_TRACE=1 \
+            git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git /__w/Shamrock/Shamrock/build/.env/acpp-git
 
       - name: configure Shamrock
         run: |
@@ -131,6 +132,9 @@ jobs:
         # with this docker image, i never saw this behavior before
         run: |
           cd build
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_CURL_VERBOSE=1
+          export GIT_TRACE=1
           source ./activate && shamconfigure && shamconfigure
 
       - name: Generate version file
