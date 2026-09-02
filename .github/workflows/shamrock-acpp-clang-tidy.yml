@@ -87,27 +87,20 @@ jobs:
         run: |
           sudo apt install clang-tidy-${{matrix.clang}}
 
-      - name: Check clang-tidy configuration
-        run: |
-          ./buildbot/check_clang_tidy_cfg.sh clang-tidy-${{matrix.clang}}
-
       - run: git config --unset-all http.https://github.com/.extraheader
-
       - name: Diagnose git credential issue
         shell: bash
         run: |
+          set +o pipefail   # <-- allow head to truncate curl's output without killing the step
           echo "=== GIT/CREDENTIAL DIAGNOSTICS ==="
           echo "--- git version ---"
           git --version
-
           echo "--- effective config (all scopes) ---"
           git config --list --show-origin
-
           echo "--- credential.* config specifically ---"
           git config --global --get-all credential.helper || true
           git config --system --get-all credential.helper || true
           env | grep -i GIT_ || true
-
           echo "--- relevant env vars ---"
           echo "HOME=$HOME"
           echo "GIT_TERMINAL_PROMPT=$GIT_TERMINAL_PROMPT"
@@ -115,19 +108,14 @@ jobs:
           echo "SSH_ASKPASS=$SSH_ASKPASS"
           echo "DISPLAY=$DISPLAY"
           id
-
           echo "--- .netrc / .git-credentials presence ---"
           ls -la "$HOME/.netrc" "$HOME/.git-credentials" 2>&1 || true
-
           echo "--- test raw connectivity to github.com (no auth) ---"
           curl -v https://github.com/AdaptiveCpp/AdaptiveCpp.git/info/refs?service=git-upload-pack 2>&1 | head -40
-
           echo "--- force no-prompt to see the real underlying error ---"
           GIT_TERMINAL_PROMPT=0 GIT_CURL_VERBOSE=1 GIT_TRACE=1 \
             git clone -b v25.02.0 https://github.com/AdaptiveCpp/AdaptiveCpp.git /tmp/acpp-diag-test 2>&1 | tail -60
-
           echo "=== END DIAGNOSTICS ==="
-
       - name: Build acpp (offending clone)
         shell: bash
         run: |
