@@ -27,7 +27,7 @@ namespace shammath {
         const auto fL = d_hydro_flux_x(d_primL);
         const auto fR = d_hydro_flux_x(d_primR);
 
-        decltype(fL) d_flux{};
+        DustConsState<typename Tprim::Tvec> d_flux{};
 
         if (d_primL.vel[0] > 0 && d_primR.vel[0] > 0)
             d_flux = fL;
