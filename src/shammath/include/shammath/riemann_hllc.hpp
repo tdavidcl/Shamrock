@@ -33,7 +33,7 @@ namespace shammath {
      * @param gamma adiabatic index
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+    inline constexpr Tcons hllc_adiab_toro_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
         Tcons flux;
         using Tscal = typename Tcons::Tscal;
         using Tvec  = typename Tcons::Tvec;
@@ -149,40 +149,43 @@ namespace shammath {
      * @brief HLLC flux in the +y direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_y(hllc_adiab_flux_x(y_to_x(cL), y_to_x(cR), gamma));
+    inline constexpr Tcons hllc_adiab_toro_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return x_to_y(hllc_adiab_toro_flux_x(y_to_x(cL), y_to_x(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the +z direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_z(hllc_adiab_flux_x(z_to_x(cL), z_to_x(cR), gamma));
+    inline constexpr Tcons hllc_adiab_toro_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return x_to_z(hllc_adiab_toro_flux_x(z_to_x(cL), z_to_x(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -x direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_mx(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_adiab_flux_x(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_adiab_toro_flux_mx(
+        Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_adiab_toro_flux_x(invert_axis(cL), invert_axis(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -y direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_my(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_adiab_flux_y(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_adiab_toro_flux_my(
+        Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_adiab_toro_flux_y(invert_axis(cL), invert_axis(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -z direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_adiab_flux_mz(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_adiab_flux_z(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_adiab_toro_flux_mz(
+        Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_adiab_toro_flux_z(invert_axis(cL), invert_axis(cR), gamma));
     }
 
     /**
@@ -198,7 +201,7 @@ namespace shammath {
      * @param gamma adiabatic index
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+    inline constexpr Tcons hllc_davis_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
         Tcons flux;
         using Tscal = typename Tcons::Tscal;
         using Tvec  = typename Tcons::Tvec;
@@ -278,40 +281,40 @@ namespace shammath {
      * @brief HLLC flux in the +y direction (Davis wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_y(hllc_general_flux_x(y_to_x(cL), y_to_x(cR), gamma));
+    inline constexpr Tcons hllc_davis_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return x_to_y(hllc_davis_flux_x(y_to_x(cL), y_to_x(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the +z direction (Davis wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_z(hllc_general_flux_x(z_to_x(cL), z_to_x(cR), gamma));
+    inline constexpr Tcons hllc_davis_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return x_to_z(hllc_davis_flux_x(z_to_x(cL), z_to_x(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -x direction (Davis wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_mx(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_general_flux_x(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_davis_flux_mx(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_davis_flux_x(invert_axis(cL), invert_axis(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -y direction (Davis wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_my(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_general_flux_y(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_davis_flux_my(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_davis_flux_y(invert_axis(cL), invert_axis(cR), gamma));
     }
 
     /**
      * @brief HLLC flux in the -z direction (Davis wave speed estimate)
      */
     template<class Tcons>
-    inline constexpr Tcons hllc_general_flux_mz(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hllc_general_flux_z(invert_axis(cL), invert_axis(cR), gamma));
+    inline constexpr Tcons hllc_davis_flux_mz(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        return invert_axis(hllc_davis_flux_z(invert_axis(cL), invert_axis(cR), gamma));
     }
 
 } // namespace shammath
