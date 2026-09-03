@@ -407,16 +407,31 @@ namespace shamalgs::algorithm::details {
         sham::DeviceBuffer<Tval> &buf_values,                                                      \
         u32 len);
 
+// Stencil sizes 2, 4 and 8 are currently disabled (see MaxStencilSize in
+// sort_by_key_pow2_len.cpp); their instantiations are commented out below, kept for easy
+// re-enabling if needed
 #define SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS(Tkey, Tval)                             \
-    SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(Tkey, Tval, 2)                                           \
-    SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(Tkey, Tval, 4)                                           \
-    SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(Tkey, Tval, 8)                                           \
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(Tkey, Tval, 16)                                          \
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(Tkey, Tval, 32)
 
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u32, u32, 2)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u32, u32, 4)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u32, u32, 8)
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS(u32, u32)
+
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u64, u32, 2)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u64, u32, 4)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(u64, u32, 8)
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS(u64, u32)
+
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f32, f32, 2)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f32, f32, 4)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f32, f32, 8)
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS(f32, f32)
+
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f64, f64, 2)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f64, f64, 4)
+    // SHAMROCK_INSTANTIATE_BITONIC_SORT_USM(f64, f64, 8)
     SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS(f64, f64)
 
 #undef SHAMROCK_INSTANTIATE_BITONIC_SORT_USM_ALL_STENCILS

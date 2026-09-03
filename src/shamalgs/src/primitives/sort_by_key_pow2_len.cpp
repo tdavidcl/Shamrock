@@ -26,10 +26,11 @@
 namespace shamalgs::primitives::impl {
 
     /// Max stencil size (tile width) used by the updated USM bitonic sort kernel
+    /// Sizes 2, 4 and 8 are currently disabled (kept for easy re-enabling if needed)
     enum class MaxStencilSize : u32 {
-        Size2  = 2,
-        Size4  = 4,
-        Size8  = 8,
+        // Size2  = 2,
+        // Size4  = 4,
+        // Size8  = 8,
         Size16 = 16,
         Size32 = 32,
     };
@@ -42,7 +43,7 @@ namespace shamalgs::primitives::impl {
         /// Expose the stencil sizes worth benchmarking as separate default implementations
         static std::vector<BitonicSort> variant_custom_defaults() {
             return {
-                BitonicSort{MaxStencilSize::Size8},
+                // BitonicSort{MaxStencilSize::Size8},
                 BitonicSort{MaxStencilSize::Size16},
                 BitonicSort{MaxStencilSize::Size32},
             };
@@ -135,18 +136,18 @@ namespace shamalgs::primitives {
             MaxStencilSize stencil_size) {
 
             switch (stencil_size) {
-            case MaxStencilSize::Size2:
-                shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 2>(
-                    sched, buf_key, buf_values, len);
-                return;
-            case MaxStencilSize::Size4:
-                shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 4>(
-                    sched, buf_key, buf_values, len);
-                return;
-            case MaxStencilSize::Size8:
-                shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 8>(
-                    sched, buf_key, buf_values, len);
-                return;
+            // case MaxStencilSize::Size2:
+            //     shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 2>(
+            //         sched, buf_key, buf_values, len);
+            //     return;
+            // case MaxStencilSize::Size4:
+            //     shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 4>(
+            //         sched, buf_key, buf_values, len);
+            //     return;
+            // case MaxStencilSize::Size8:
+            //     shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 8>(
+            //         sched, buf_key, buf_values, len);
+            //     return;
             case MaxStencilSize::Size16:
                 shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 16>(
                     sched, buf_key, buf_values, len);
