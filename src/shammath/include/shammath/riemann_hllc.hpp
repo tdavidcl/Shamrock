@@ -27,28 +27,39 @@ namespace shammath {
      *         The wave speeds estimates are based on Bernd Einfeldt (SIAM, 1988), On Godunov-Type
      *          Methods for Gas Dynamics, using the pressure in the star region estimated through
      *          the primitive variable solver (valid for an adiabatic equation of state).
-     * @tparam Tcons
-     * @param cL left  conservative state
-     * @param cR right conservative state
+     *
+     *        Generic over any HydroState (see riemann_common.hpp), except for the wave speed
+     *        estimate itself: it needs the raw adiabatic index gamma (that is precisely why the
+     *        EOS-agnostic hllc_davis_flux_x variant below exists), so gamma stays an explicit
+     *        extra parameter here. Requires Tprim to expose .rho/.press/.vel and Tcons to be
+     *        constructible from {rho, energy-like scalar, rhovel} (the compressible-Euler
+     *        conservative-vector shape that this solver's algebra is intrinsically built on).
+     * @tparam HS HydroState instantiation (see riemann_common.hpp)
+     * @param state HydroState bundle (cons_to_prim, prim_to_cons, soundspeed, flux_x)
+     * @param primL left  primitive state
+     * @param primR right primitive state
      * @param gamma adiabatic index
      */
-    template<class Tcons>
-    inline constexpr Tcons hllc_adiab_toro_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        Tcons flux;
-        using Tscal = typename Tcons::Tscal;
-        using Tvec  = typename Tcons::Tvec;
+    template<class HS>
+    inline constexpr typename HS::Tcons hllc_adiab_toro_flux_x(
+        const HS &state,
+        const typename HS::Tprim &primL,
+        const typename HS::Tprim &primR,
+        const typename HS::Tscal gamma) {
 
-        // const to prim
-        const auto primL = cons_to_prim(cL, gamma);
-        const auto primR = cons_to_prim(cR, gamma);
+        using Tscal = typename HS::Tscal;
+        using Tcons = typename HS::Tcons;
+        using Tvec  = typename HS::Tprim::Tvec;
 
         // sound speeds
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        const auto csL = state.soundspeed(primL);
+        const auto csR = state.soundspeed(primR);
 
-        // Left and right state fluxes
-        const auto FL = hydro_flux_x(cL, gamma);
-        const auto FR = hydro_flux_x(cR, gamma);
+        // conservative states and left/right fluxes
+        const Tcons cL = state.prim_to_cons(primL);
+        const Tcons cR = state.prim_to_cons(primR);
+        const Tcons FL = state.flux_x(cL);
+        const Tcons FR = state.flux_x(cR);
 
         // Left variables
         const auto rhoL   = primL.rho;
@@ -146,6 +157,19 @@ namespace shammath {
     }
 
     /**
+     * @brief Backward-compatible overload: same (cL, cR, gamma) signature as before,
+     *        implemented on top of the generic HydroState overload above via the ideal-gas
+     *        HydroState built by make_gas_hydro_state.
+     */
+    template<class Tcons>
+    inline constexpr Tcons hllc_adiab_toro_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        using Tvec = typename Tcons::Tvec;
+        auto state = make_gas_hydro_state<Tvec>(gamma);
+        return hllc_adiab_toro_flux_x(
+            state, cons_to_prim(cL, gamma), cons_to_prim(cR, gamma), gamma);
+    }
+
+    /**
      * @brief HLLC flux in the +y direction (adiabatic p* wave speed estimate)
      */
     template<class Tcons>
@@ -195,28 +219,33 @@ namespace shammath {
      *          SR = max(velxL + csL, velxR + csR)
      *        This estimate does not rely on an adiabatic equation of state for the pressure in
      *        the star region and can therefore be used for other equations of state.
-     * @tparam Tcons
-     * @param cL left  conservative state
-     * @param cR right conservative state
-     * @param gamma adiabatic index
+     *
+     *        Generic over any HydroState (see riemann_common.hpp) whose Tprim exposes
+     *        .rho/.press/.vel and whose Tcons is constructible from {rho, energy-like scalar,
+     *        rhovel} -- unlike hllc_adiab_toro_flux_x, this variant needs no raw gamma at all,
+     *        only what soundspeed(prim) already provides.
+     * @tparam HS HydroState instantiation (see riemann_common.hpp)
+     * @param state HydroState bundle (cons_to_prim, prim_to_cons, soundspeed, flux_x)
+     * @param primL left  primitive state
+     * @param primR right primitive state
      */
-    template<class Tcons>
-    inline constexpr Tcons hllc_davis_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        Tcons flux;
-        using Tscal = typename Tcons::Tscal;
-        using Tvec  = typename Tcons::Tvec;
+    template<class HS>
+    inline constexpr typename HS::Tcons hllc_davis_flux_x(
+        const HS &state, const typename HS::Tprim &primL, const typename HS::Tprim &primR) {
 
-        // const to prim
-        const auto primL = cons_to_prim(cL, gamma);
-        const auto primR = cons_to_prim(cR, gamma);
+        using Tscal = typename HS::Tscal;
+        using Tcons = typename HS::Tcons;
+        using Tvec  = typename HS::Tprim::Tvec;
 
         // sound speeds
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        const auto csL = state.soundspeed(primL);
+        const auto csR = state.soundspeed(primR);
 
-        // Left and right state fluxes
-        const auto FL = hydro_flux_x(cL, gamma);
-        const auto FR = hydro_flux_x(cR, gamma);
+        // conservative states and left/right fluxes
+        const Tcons cL = state.prim_to_cons(primL);
+        const Tcons cR = state.prim_to_cons(primR);
+        const Tcons FL = state.flux_x(cL);
+        const Tcons FR = state.flux_x(cR);
 
         // Left variables
         const auto rhoL   = primL.rho;
@@ -275,6 +304,18 @@ namespace shammath {
         };
 
         return hllc_flux();
+    }
+
+    /**
+     * @brief Backward-compatible overload: same (cL, cR, gamma) signature as before,
+     *        implemented on top of the generic HydroState overload above via the ideal-gas
+     *        HydroState built by make_gas_hydro_state.
+     */
+    template<class Tcons>
+    inline constexpr Tcons hllc_davis_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        using Tvec = typename Tcons::Tvec;
+        auto state = make_gas_hydro_state<Tvec>(gamma);
+        return hllc_davis_flux_x(state, cons_to_prim(cL, gamma), cons_to_prim(cR, gamma));
     }
 
     /**

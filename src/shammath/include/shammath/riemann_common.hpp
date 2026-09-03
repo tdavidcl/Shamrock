@@ -171,6 +171,60 @@ namespace shammath {
         return sycl::sqrt(gamma * prim.press / prim.rho);
     }
 
+    /**
+     * @brief Generic bundle tying together everything the Riemann solvers below need in order
+     *        to operate on a state without hardcoding gas or dust field layouts: the primitive
+     *        and conservative types, the conversions between them, the sound speed as a
+     *        function of the primitive state, and the physical flux as a function of the
+     *        conservative state (already expressed in the local x-aligned frame).
+     *
+     *        A new physics variant (e.g. a tracer field) does not need a new Riemann solver: it
+     *        only needs its own Prim/Cons structs -- with the usual +, -, * Tscal operators on
+     *        Cons -- plus these four callables, and the same hll_flux_x/hllc_*_flux_x/
+     *        rusanov_flux_x templates below apply to it unchanged.
+     */
+    template<class Prim_, class Cons_, class F_c2p, class F_p2c, class F_cs, class F_flux>
+    struct HydroState {
+        using Tprim = Prim_;
+        using Tcons = Cons_;
+        using Tscal = typename Tprim::Tscal;
+
+        F_c2p cons_to_prim; ///< Tcons -> Tprim
+        F_p2c prim_to_cons; ///< Tprim -> Tcons
+        F_cs soundspeed;    ///< Tprim -> Tscal
+        F_flux flux_x;      ///< Tcons -> Tcons, physical flux in the local x direction
+    };
+
+    template<class Prim, class Cons, class F_c2p, class F_p2c, class F_cs, class F_flux>
+    HydroState(F_c2p, F_p2c, F_cs, F_flux) -> HydroState<Prim, Cons, F_c2p, F_p2c, F_cs, F_flux>;
+
+    /**
+     * @brief Builds the HydroState for the ideal-gas Euler equations (the ConsState/PrimState
+     *        pair above). Used internally by the backward-compatible (consL, consR, gamma)
+     *        overloads of the solvers below so that existing call sites do not need to change.
+     */
+    template<class Tvec>
+    inline constexpr auto make_gas_hydro_state(const shambase::VecComponent<Tvec> gamma) {
+        using Prim = PrimState<Tvec>;
+        using Cons = ConsState<Tvec>;
+
+        auto c2p = [gamma](Cons c) {
+            return cons_to_prim(c, gamma);
+        };
+        auto p2c = [gamma](Prim p) {
+            return prim_to_cons(p, gamma);
+        };
+        auto cs = [gamma](Prim p) {
+            return sound_speed(p, gamma);
+        };
+        auto fx = [gamma](Cons c) {
+            return hydro_flux_x(c, gamma);
+        };
+
+        return HydroState<Prim, Cons, decltype(c2p), decltype(p2c), decltype(cs), decltype(fx)>{
+            c2p, p2c, cs, fx};
+    }
+
     template<class Tcons>
     inline constexpr Tcons y_to_x(const Tcons c) {
         Tcons cprime;

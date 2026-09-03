@@ -22,46 +22,53 @@
 
 namespace shammath {
 
-    template<class Tcons>
-    inline constexpr auto hll_flux_x(
-        const Tcons consL, const Tcons consR, const typename Tcons::Tscal gamma) {
-        const auto primL = cons_to_prim(consL, gamma);
-        const auto primR = cons_to_prim(consR, gamma);
+    /**
+     * @brief HLL flux, generic over any HydroState (see riemann_common.hpp): works for gas,
+     *        dust, or any future state that supplies cons_to_prim/prim_to_cons/soundspeed/
+     *        flux_x, as long as Tcons supports +, -, * Tscal.
+     *        Equation (10.26) from Toro 3rd Edition, Springer 2009, wave speeds estimated
+     *        following the Toro form, Equation (10.48).
+     */
+    template<class HS>
+    inline constexpr typename HS::Tcons hll_flux_x(
+        const HS &state, const typename HS::Tprim &primL, const typename HS::Tprim &primR) {
 
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        using Tcons = typename HS::Tcons;
 
-        // Teyssier form
-        // const auto S_L = sham::min(primL.vel[0], primR.vel[0]) - sham::max(csL, csR);
-        // const auto S_R = sham::max(primL.vel[0], primR.vel[0]) + sham::max(csL, csR);
+        const auto csL = state.soundspeed(primL);
+        const auto csR = state.soundspeed(primR);
 
         // Toro form Equation (10.48)
         const auto S_L = sham::min(primL.vel[0] - csL, primR.vel[0] - csR);
         const auto S_R = sham::max(primL.vel[0] + csL, primR.vel[0] + csR);
 
-        const auto fluxL = hydro_flux_x(consL, gamma);
-        const auto fluxR = hydro_flux_x(consR, gamma);
+        const Tcons consL = state.prim_to_cons(primL);
+        const Tcons consR = state.prim_to_cons(primR);
+        const Tcons fluxL = state.flux_x(consL);
+        const Tcons fluxR = state.flux_x(consR);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
-        auto hll_flux = [=]() {
-            // const auto S_L_upwind = sham::min(S_L, 0.0);
-            // const auto S_R_upwind = sham::max(S_R, 0.0);
-            // const auto S_norm     = 1.0 / (S_R_upwind - S_L_upwind);
-            // return (fluxL * S_R_upwind - fluxR * S_L_upwind
-            //         + (consR - consL) * S_R_upwind * S_L_upwind)
-            //        * S_norm;
+        if (S_L >= 0) {
+            return fluxL;
+        } else if (S_R <= 0) {
+            return fluxR;
+        } else {
+            const auto S_norm = 1.0 / (S_R - S_L);
+            return (fluxL * S_R - fluxR * S_L + (consR - consL) * S_R * S_L) * S_norm;
+        }
+    }
 
-            if (S_L >= 0)
-                return fluxL;
-            else if (S_R <= 0)
-                return fluxR;
-            else {
-                const auto S_norm = 1.0 / (S_R - S_L);
-                return (fluxL * S_R - fluxR * S_L + (consR - consL) * S_R * S_L) * S_norm;
-            }
-        };
-
-        return hll_flux();
+    /**
+     * @brief Backward-compatible overload: same (consL, consR, gamma) signature as before,
+     *        implemented on top of the generic HydroState overload above via the ideal-gas
+     *        HydroState built by make_gas_hydro_state.
+     */
+    template<class Tcons>
+    inline constexpr Tcons hll_flux_x(
+        const Tcons consL, const Tcons consR, const typename Tcons::Tscal gamma) {
+        using Tvec = typename Tcons::Tvec;
+        auto state = make_gas_hydro_state<Tvec>(gamma);
+        return hll_flux_x(state, cons_to_prim(consL, gamma), cons_to_prim(consR, gamma));
     }
 
     template<class Tcons>

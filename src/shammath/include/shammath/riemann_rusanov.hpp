@@ -42,24 +42,44 @@ namespace shammath {
     //     return (fL + fR) * 0.5 - (cR - cL) * S;
     // }
 
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        Tcons flux;
+    /**
+     * @brief Rusanov flux, generic over any HydroState (see riemann_common.hpp): works for gas,
+     *        dust, or any future state that supplies cons_to_prim/prim_to_cons/soundspeed/
+     *        flux_x, as long as Tcons supports +, -, * Tscal.
+     *        Equation (10.55) from Toro 3rd Edition , Springer 2009, wave speed estimated
+     *        following Equation (10.56).
+     */
+    template<class HS>
+    inline constexpr typename HS::Tcons rusanov_flux_x(
+        const HS &state, const typename HS::Tprim &primL, const typename HS::Tprim &primR) {
 
-        const auto primL = cons_to_prim(cL, gamma);
-        const auto primR = cons_to_prim(cR, gamma);
+        using Tcons = typename HS::Tcons;
 
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        const auto csL = state.soundspeed(primL);
+        const auto csR = state.soundspeed(primR);
 
         // Equation (10.56) from Toro 3rd Edition , Springer 2009
         const auto S = sham::max((sham::abs(primL.vel[0]) + csL), (sham::abs(primR.vel[0]) + csR));
 
-        const auto fL = hydro_flux_x(cL, gamma);
-        const auto fR = hydro_flux_x(cR, gamma);
+        const Tcons cL = state.prim_to_cons(primL);
+        const Tcons cR = state.prim_to_cons(primR);
+        const Tcons fL = state.flux_x(cL);
+        const Tcons fR = state.flux_x(cR);
 
         // Equation (10.55) from Toro 3rd Edition , Springer 2009
         return 0.5 * ((fL + fR) - (cR - cL) * S);
+    }
+
+    /**
+     * @brief Backward-compatible overload: same (cL, cR, gamma) signature as before,
+     *        implemented on top of the generic HydroState overload above via the ideal-gas
+     *        HydroState built by make_gas_hydro_state.
+     */
+    template<class Tcons>
+    inline constexpr Tcons rusanov_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
+        using Tvec = typename Tcons::Tvec;
+        auto state = make_gas_hydro_state<Tvec>(gamma);
+        return rusanov_flux_x(state, cons_to_prim(cL, gamma), cons_to_prim(cR, gamma));
     }
 
     template<class Tcons>
