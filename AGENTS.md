@@ -117,11 +117,22 @@ Show the device table from the `--smi` output and **ask the user to select which
 | Template parameter (type, e.g. `Tvec`) | CamelCase  |
 | Template parameter (non-type, e.g. `dim`) | lower_case |
 
-Note: `readability-identifier-naming`'s `CamelCase` check only rejects
-names with an underscore or a lowercase first letter — an all-caps token
-like `NVIDIA` or `BICGSTAB` passes it trivially. Existing all-caps enum
-values are therefore not auto-flagged; treat the table above as the target
-convention and fix those on sight.
+Enum values use **acronym-preserving CamelCase**: each word is
+capitalized, but a word that is itself a recognized acronym (a
+vendor/hardware name like `AMD`, `CPU`, `GPU`, or a numerical-method name
+like `CG`, `PCG`, `HLL`) is kept fully capitalized as that one word
+instead of only its first letter (`Nvidia`, but `AMD`, `CPU`, `CUDA`,
+`PCG`). A plain English word typed in caps for consistency (`UNKNOWN`,
+`MULTIGRID`) is not an acronym and should be normalized (`Unknown`,
+`Multigrid`). When the value names a specific external technology with
+its own established spelling (`OpenMP`, `ROCm`, `BiCGSTAB`), match that
+spelling rather than deriving one mechanically.
+
+Note: `readability-identifier-naming`'s `CamelCase` check only rejects a
+name with an underscore or a lowercase first letter, so it can't tell an
+acronym from a plain word typed in caps by mistake — it won't flag
+`UNKNOWN` even though the convention above says it should become
+`Unknown`. Treat the table above as the target and fix those on sight.
 
 ### File naming
 

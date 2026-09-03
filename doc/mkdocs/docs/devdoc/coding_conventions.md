@@ -17,10 +17,11 @@ The following coding conventions are followed when developing Shamrock. In pract
 Most of the rules below are checked by `readability-identifier-naming` in
 `.clang-tidy`, reported as **warnings** (not build-breaking errors) by the
 clang-tidy CI job. One caveat: that check's `CamelCase` style only rejects
-a name that has an underscore or a lowercase first letter, so an all-caps
-enumerator like `NVIDIA` or `BICGSTAB` passes it without a warning even
-though it doesn't follow the convention below — those have to be caught by
-hand until they're renamed.
+a name that has an underscore or a lowercase first letter — it can't tell
+a genuine acronym (`AMD`, `CUDA`, `CG` — fine as-is, see Enum Values below)
+from a plain word typed in caps by mistake (`UNKNOWN`, `MULTIGRID` — not
+fine, should be `Unknown`/`Multigrid`). It accepts both silently, so the
+second kind has to be caught by hand until renamed.
 
 ### Primitive Types
 
@@ -66,10 +67,26 @@ Preprocessor macros use `UPPER_CASE` (`MPICHECK`, `NODE_EDGES`).
 ### Enum Values
 
 Enum values (the enumerators inside a `class`/`enum class`) use
-`CamelCase`, same as the enum type itself (`Periodic`, `Reflective`,
-`VanLeer`). This applies even to enumerators that name an acronym or a
-vendor/hardware string — write `Nvidia`, `Cuda`, `Cpu`, not `NVIDIA`,
-`CUDA`, `CPU`.
+**acronym-preserving CamelCase**, same as the enum type itself
+(`Periodic`, `Reflective`, `VanLeer`):
+
+- Each word is capitalized.
+- A word that is a recognized acronym is kept fully capitalized as that
+  one word, instead of only capitalizing its first letter — e.g.
+  `AMD`, `CPU`, `GPU`, `CUDA`, `CG`, `PCG`, `HLL`.
+- A plain English word typed in caps only for visual consistency with its
+  neighbors is *not* an acronym and should be normalized to a single
+  capital letter — `UNKNOWN` → `Unknown`, `MULTIGRID` → `Multigrid`.
+- When the value names a specific external technology, library, or
+  published algorithm that already has its own established spelling,
+  match that spelling instead of deriving one mechanically — `OpenMP`
+  (never `OPENMP`/`Openmp`), `ROCm` (not `ROCM`), `BiCGSTAB` (not
+  `BICGSTAB`/`Bicgstab`).
+
+Note that `readability-identifier-naming`'s `CamelCase` check in
+`.clang-tidy` can't distinguish an acronym from a plain word typed in caps
+by mistake — it accepts both `AMD` and `UNKNOWN` without a warning, so the
+second bucket above has to be caught by hand.
 
 ### File Naming
 
