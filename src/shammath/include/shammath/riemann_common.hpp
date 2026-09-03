@@ -165,6 +165,31 @@ namespace shammath {
         return flux;
     }
 
+    /**
+     * @brief Same physical flux as hydro_flux_x(cons, gamma) above, computed directly from a
+     *        primitive state instead of a conservative one. Saves the cons_to_prim round trip
+     *        that hydro_flux_x(cons, gamma) otherwise has to redo internally whenever the
+     *        caller already holds the primitive state (which every Riemann solver below does).
+     */
+    template<class Tvec>
+    inline constexpr ConsState<Tvec> hydro_flux_x(
+        const PrimState<Tvec> prim, typename PrimState<Tvec>::Tscal gamma) {
+        ConsState<Tvec> flux;
+
+        const auto rhoeint = prim.press / (gamma - 1.0);
+        const auto rhoe    = rhoeint + rhoekin(prim.rho, prim.vel);
+
+        flux.rho = prim.rho * prim.vel[0];
+
+        flux.rhoe = (rhoe + prim.press) * prim.vel[0];
+
+        flux.rhovel[0] = prim.rho * prim.vel[0] * prim.vel[0] + prim.press;
+        flux.rhovel[1] = prim.rho * prim.vel[0] * prim.vel[1];
+        flux.rhovel[2] = prim.rho * prim.vel[0] * prim.vel[2];
+
+        return flux;
+    }
+
     template<class Tvec>
     inline constexpr shambase::VecComponent<Tvec> sound_speed(
         PrimState<Tvec> prim, shambase::VecComponent<Tvec> gamma) {
@@ -176,7 +201,9 @@ namespace shammath {
      *        to operate on a state without hardcoding gas or dust field layouts: the primitive
      *        and conservative types, the conversions between them, the sound speed as a
      *        function of the primitive state, and the physical flux as a function of the
-     *        conservative state (already expressed in the local x-aligned frame).
+     *        primitive state (already expressed in the local x-aligned frame). flux_x takes a
+     *        Tprim (not a Tcons) so the solvers below never have to round-trip a state they
+     *        already hold as a primitive through prim_to_cons/cons_to_prim just to get its flux.
      *
      *        A new physics variant (e.g. a tracer field) does not need a new Riemann solver: it
      *        only needs its own Prim/Cons structs -- with the usual +, -, * Tscal operators on
@@ -192,11 +219,22 @@ namespace shammath {
         F_c2p cons_to_prim; ///< Tcons -> Tprim
         F_p2c prim_to_cons; ///< Tprim -> Tcons
         F_cs soundspeed;    ///< Tprim -> Tscal
-        F_flux flux_x;      ///< Tcons -> Tcons, physical flux in the local x direction
+        F_flux flux_x;      ///< Tprim -> Tcons, physical flux in the local x direction
     };
 
+    /**
+     * @brief Builds a HydroState<Prim, Cons, ...> from its four callables, deducing their
+     *        (usually closure) types so callers only ever spell out Prim and Cons, e.g.
+     *        `make_hydro_state<MyPrim, MyCons>(my_cons_to_prim, my_prim_to_cons, my_soundspeed,
+     *        my_flux_x)`. This is the entry point a new physics variant (gas, dust, a tracer
+     *        field, ...) is expected to use.
+     */
     template<class Prim, class Cons, class F_c2p, class F_p2c, class F_cs, class F_flux>
-    HydroState(F_c2p, F_p2c, F_cs, F_flux) -> HydroState<Prim, Cons, F_c2p, F_p2c, F_cs, F_flux>;
+    inline constexpr auto make_hydro_state(
+        F_c2p cons_to_prim, F_p2c prim_to_cons, F_cs soundspeed, F_flux flux_x) {
+        return HydroState<Prim, Cons, F_c2p, F_p2c, F_cs, F_flux>{
+            cons_to_prim, prim_to_cons, soundspeed, flux_x};
+    }
 
     /**
      * @brief Builds the HydroState for the ideal-gas Euler equations (the ConsState/PrimState
@@ -208,21 +246,19 @@ namespace shammath {
         using Prim = PrimState<Tvec>;
         using Cons = ConsState<Tvec>;
 
-        auto c2p = [gamma](Cons c) {
-            return cons_to_prim(c, gamma);
-        };
-        auto p2c = [gamma](Prim p) {
-            return prim_to_cons(p, gamma);
-        };
-        auto cs = [gamma](Prim p) {
-            return sound_speed(p, gamma);
-        };
-        auto fx = [gamma](Cons c) {
-            return hydro_flux_x(c, gamma);
-        };
-
-        return HydroState<Prim, Cons, decltype(c2p), decltype(p2c), decltype(cs), decltype(fx)>{
-            c2p, p2c, cs, fx};
+        return make_hydro_state<Prim, Cons>(
+            [gamma](Cons c) {
+                return cons_to_prim(c, gamma);
+            },
+            [gamma](Prim p) {
+                return prim_to_cons(p, gamma);
+            },
+            [gamma](Prim p) {
+                return sound_speed(p, gamma);
+            },
+            [gamma](Prim p) {
+                return hydro_flux_x(p, gamma);
+            });
     }
 
     template<class Tcons>

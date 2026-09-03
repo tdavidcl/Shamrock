@@ -58,8 +58,8 @@ namespace shammath {
         // conservative states and left/right fluxes
         const Tcons cL = state.prim_to_cons(primL);
         const Tcons cR = state.prim_to_cons(primR);
-        const Tcons FL = state.flux_x(cL);
-        const Tcons FR = state.flux_x(cR);
+        const Tcons FL = state.flux_x(primL);
+        const Tcons FR = state.flux_x(primR);
 
         // Left variables
         const auto rhoL   = primL.rho;
@@ -244,8 +244,8 @@ namespace shammath {
         // conservative states and left/right fluxes
         const Tcons cL = state.prim_to_cons(primL);
         const Tcons cR = state.prim_to_cons(primR);
-        const Tcons FL = state.flux_x(cL);
-        const Tcons FR = state.flux_x(cR);
+        const Tcons FL = state.flux_x(primL);
+        const Tcons FR = state.flux_x(primR);
 
         // Left variables
         const auto rhoL   = primL.rho;

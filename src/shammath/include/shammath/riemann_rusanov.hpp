@@ -63,8 +63,8 @@ namespace shammath {
 
         const Tcons cL = state.prim_to_cons(primL);
         const Tcons cR = state.prim_to_cons(primR);
-        const Tcons fL = state.flux_x(cL);
-        const Tcons fR = state.flux_x(cR);
+        const Tcons fL = state.flux_x(primL);
+        const Tcons fR = state.flux_x(primR);
 
         // Equation (10.55) from Toro 3rd Edition , Springer 2009
         return 0.5 * ((fL + fR) - (cR - cL) * S);

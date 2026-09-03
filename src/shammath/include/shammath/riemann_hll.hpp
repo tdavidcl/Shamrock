@@ -44,8 +44,8 @@ namespace shammath {
 
         const Tcons consL = state.prim_to_cons(primL);
         const Tcons consR = state.prim_to_cons(primR);
-        const Tcons fluxL = state.flux_x(consL);
-        const Tcons fluxR = state.flux_x(consR);
+        const Tcons fluxL = state.flux_x(primL);
+        const Tcons fluxR = state.flux_x(primR);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
         if (S_L >= 0) {
