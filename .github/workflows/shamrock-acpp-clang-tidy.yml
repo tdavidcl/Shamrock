@@ -56,14 +56,14 @@ jobs:
         run:  |
           git config --global --add safe.directory '*'
           git config --global --list
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         if: github.event_name == 'pull_request_target'
         with:
           fetch-depth: 0
           submodules: recursive
           ref: "refs/pull/${{ github.event.number }}/merge"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         if: github.event_name != 'pull_request_target'
         with:
           fetch-depth: 0
@@ -74,7 +74,8 @@ jobs:
         run: git diff ${{ github.event.pull_request.base.sha }} HEAD
       #### End Checkout part ####
 
-      - name: Authenticate git for github.com (global, script-transparent)
+      # Avoids git clone failing with exit code 128 on the GitHub runner
+      - name: Authenticate git for github.com
         run: |
           git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
@@ -91,6 +92,10 @@ jobs:
         run: |
           sudo apt install clang-tidy-${{matrix.clang}}
 
+      - name: Check clang-tidy configuration
+        run: |
+          ./buildbot/check_clang_tidy_cfg.sh clang-tidy-${{matrix.clang}}
+
       - name: configure Shamrock
         run: |
           ./env/new-env --machine debian-generic.acpp --builddir build -- --backend omp
@@ -101,9 +106,6 @@ jobs:
         # with this docker image, i never saw this behavior before
         run: |
           cd build
-          export GIT_TERMINAL_PROMPT=0
-          export GIT_CURL_VERBOSE=1
-          export GIT_TRACE=1
           source ./activate && shamconfigure && shamconfigure
 
       - name: Generate version file
