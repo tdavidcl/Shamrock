@@ -31,6 +31,10 @@ void shambase::profiling::chrome::set_time_offset(f64 offset) { time_offset = of
 
 void shambase::profiling::chrome::set_chrome_pid(u32 pid) { chrome_pid = pid; }
 
+u32 shambase::profiling::chrome::get_chrome_pid() { return chrome_pid; }
+
+f64 shambase::profiling::chrome::get_time_offset() { return time_offset; }
+
 namespace {
 
     f64 to_prof_time(f64 in) { return (in - time_offset) * 1e6; };
