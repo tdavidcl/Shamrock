@@ -14,6 +14,14 @@ The following coding conventions are followed when developing Shamrock. In pract
 
 ## Naming Conventions
 
+Most of the rules below are checked by `readability-identifier-naming` in
+`.clang-tidy`, reported as **warnings** (not build-breaking errors) by the
+clang-tidy CI job. One caveat: that check's `CamelCase` style only rejects
+a name that has an underscore or a lowercase first letter, so an all-caps
+enumerator like `NVIDIA` or `BICGSTAB` passes it without a warning even
+though it doesn't follow the convention below — those have to be caught by
+hand until they're renamed.
+
 ### Primitive Types
 
 Primitive types are basic types representable by the actual hardware, typically integers, floats, and SYCL vectors.
@@ -36,7 +44,51 @@ Functions in Shamrock use snake_case to distinguish them from classes.
 
 **Example:** `is_this_informatics_or_physics(...)`
 
+### Variables, Members, and Constants
+
+Local variables, function parameters, and class/struct member variables
+use `lower_case`.
+
+This also applies to constants, including `static constexpr` class
+members that mirror a math/physics symbol (e.g. a kernel radius or a
+side count) — name the identifier `lower_case` like any other member
+(`rkern`, `nside`) rather than capitalizing it to look like the symbol.
+
+### Namespaces
+
+Namespaces use a single lowercase word, with no underscores
+(`shamrock`, `shammodels`, `solvergraph`).
+
+### Macros
+
+Preprocessor macros use `UPPER_CASE` (`MPICHECK`, `NODE_EDGES`).
+
+### Enum Values
+
+Enum values (the enumerators inside a `class`/`enum class`) use
+`CamelCase`, same as the enum type itself (`Periodic`, `Reflective`,
+`VanLeer`). This applies even to enumerators that name an acronym or a
+vendor/hardware string — write `Nvidia`, `Cuda`, `Cpu`, not `NVIDIA`,
+`CUDA`, `CPU`.
+
+### File Naming
+
+- A file that implements a single class or struct is named after that
+  type in CamelCase, matching the type name exactly (e.g.
+  `PatchDataField.hpp` for `class PatchDataField`).
+- A file that holds a free-function algorithm, a kernel, or a set of
+  related utility functions with no single owning type uses
+  `lower_case` (e.g. `compute_ranges.hpp`, `key_morton_sort.hpp`).
+- This isn't enforced by clang-tidy — there's no clang-tidy check for
+  file names — so it's a convention to apply during review, not a
+  generated warning.
+
 ## Template Conventions
+
+Type template parameters use `CamelCase`, usually prefixed with `T`
+(`Tvec`, `Tscal`, see below). Non-type template parameters (a `u32`,
+`int`, or `bool` template value) use `lower_case`, same as a regular
+variable (e.g. `template<class Tile, u32 group_size>`).
 
 ### Vector and Scalar Templates
 

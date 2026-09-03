@@ -103,13 +103,35 @@ Show the device table from the `--smi` output and **ask the user to select which
 - **Pre-commit hooks**: `.pre-commit-config.yaml`
 - Run `pre-commit run --all-files` before committing
 
-## Naming conventions (from `.clang-tidy` `CheckOptions`)
+## Naming conventions (enforced as warnings by `.clang-tidy` `CheckOptions`)
 
-| Entity                         | Case       |
-| ------------------------------ | ---------- |
-| Class/Enum/Union               | CamelCase  |
-| Function/Variable/Parameter    | lower_case |
-| Member                         | lower_case |
+| Entity                            | Case       |
+| --------------------------------- | ---------- |
+| Class/Struct/Enum/Union           | CamelCase  |
+| Function/Variable/Parameter       | lower_case |
+| Member                            | lower_case |
+| Constant (incl. class `static constexpr`) | lower_case |
+| Namespace                         | lower_case |
+| Macro                             | UPPER_CASE |
+| Enum value                        | CamelCase  |
+| Template parameter (type, e.g. `Tvec`) | CamelCase  |
+| Template parameter (non-type, e.g. `dim`) | lower_case |
+
+Note: `readability-identifier-naming`'s `CamelCase` check only rejects
+names with an underscore or a lowercase first letter — an all-caps token
+like `NVIDIA` or `BICGSTAB` passes it trivially. Existing all-caps enum
+values are therefore not auto-flagged; treat the table above as the target
+convention and fix those on sight.
+
+### File naming
+
+- A file that implements a single class/struct is named after that type
+  in CamelCase (e.g. `PatchDataField.hpp` for `class PatchDataField`).
+- A file that holds a free-function algorithm, a kernel, or a bag of
+  related utilities (no single owning type) is named in `lower_case`
+  (e.g. `compute_ranges.hpp`, `key_morton_sort.hpp`).
+- This is not enforced by clang-tidy (no such check exists there); it's a
+  review-time convention.
 
 ## Architecture overview
 
