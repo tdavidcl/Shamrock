@@ -333,20 +333,32 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal dv_max,
                std::vector<Tscal> massgrid,
                py::array_t<Tscal> tabflux_coag) {
+                if (massgrid.size() == 0) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "massgrid must not be empty");
+                }
+
                 u32 nbins = massgrid.size() - 1;
 
                 // tabflux_coag is a 3D array of shape (nbins ** 3)
 
                 // assert rank is 3
                 if (tabflux_coag.ndim() != 3) {
-                    throw std::runtime_error("tabflux_coag must be a 3D array");
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "tabflux_coag must be a 3D array, got ndim="
+                        + std::to_string(tabflux_coag.ndim()));
                 }
 
                 // assert shape is (nbins, nbins, nbins)
                 if (tabflux_coag.shape(0) != nbins || tabflux_coag.shape(1) != nbins
                     || tabflux_coag.shape(2) != nbins) {
-                    throw std::runtime_error(
-                        "tabflux_coag must be a 3D array of shape (nbins, nbins, nbins)");
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "tabflux_coag must be a 3D array of shape (nbins, nbins, nbins) with "
+                        "nbins="
+                        + std::to_string(nbins) + " (massgrid.size() - 1), got shape ("
+                        + std::to_string(tabflux_coag.shape(0)) + ", "
+                        + std::to_string(tabflux_coag.shape(1)) + ", "
+                        + std::to_string(tabflux_coag.shape(2)) + ")");
                 }
 
                 std::vector<Tscal> tabflux_coag_vec(nbins * nbins * nbins);

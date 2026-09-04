@@ -404,22 +404,28 @@ namespace shammodels::sph {
 
                     if (cfg->massgrid.size() - 1 != ndust) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
-                            "massgrid size does not match the number of dust bins");
+                            "massgrid must have ndust + 1 = " + std::to_string(ndust + 1)
+                            + " entries for ndust = " + std::to_string(ndust) + ", got "
+                            + std::to_string(cfg->massgrid.size()));
                     }
 
                     if (cfg->tabflux_coag.size() != ndust * ndust * ndust) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
-                            "tabflux_coag size does not match the number of dust bins");
+                            "tabflux_coag must have ndust^3 = "
+                            + std::to_string(ndust * ndust * ndust)
+                            + " entries for ndust = " + std::to_string(ndust) + ", got "
+                            + std::to_string(cfg->tabflux_coag.size()));
                     }
 
                     if (cfg->rhodust_eps <= 0) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
-                            "rhodust_eps must be positive");
+                            "rhodust_eps must be positive, got "
+                            + std::to_string(cfg->rhodust_eps));
                     }
 
                     if (cfg->dv_max <= 0) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
-                            "dv_max must be positive");
+                            "dv_max must be positive, got " + std::to_string(cfg->dv_max));
                     }
 
                 } else {
@@ -428,7 +434,8 @@ namespace shammodels::sph {
 
             } else if (!std::holds_alternative<None>(dust_evol_config) && is_none()) {
                 throw shambase::make_except_with_loc<std::invalid_argument>(
-                    "can not enable dust evol if dust not enabled");
+                    "cannot enable dust evolution because the dust mode is 'none', call "
+                    "set_dust_mode_* before set_dust_evol_coala");
             }
         }
     };
