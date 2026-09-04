@@ -86,7 +86,7 @@ dump_freq_stop = 2
 plot_freq_stop = 1
 
 dt_stop = 10
-dt_stop_fast = 0.1
+dt_stop_fast = 1
 
 # Sink parameters
 center_mass = 1.0
@@ -115,7 +115,7 @@ beta_AV = 2.0
 # Dust parameters
 kernel = "M6"
 gamma = 1.4
-t_inject = 0.0
+t_inject = 5.0
 
 if ndust > 0:
     mrn_pow = 3.5
@@ -360,7 +360,7 @@ class Simulation(SimulationRunner):
         for a in self.analysis_modules:
             self.ana_module_run(a, ianalysis)
 
-    @callback(iter_count_interval=1)  # Do the analysis every dt_stop
+    @callback(tsim_interval=dt_stop_fast)  # Do the analysis every dt_stop
     def analysis_fast(self, ianalysis):
         for a in self.analysis_modules_fast:
             self.ana_module_run(a, ianalysis)
@@ -400,18 +400,29 @@ class MassAnalysis:
 
     def analysis_save(self, iplot):
 
+        solver_config = model.get_current_config().to_json()
+        has_dust = not (solver_config["dust_config"]["mode"]["type"] == "none")
+
         barycenter, disc_mass = shamrock.model_sph.analysisBarycenter(model=model).get_barycenter()
 
-        dust_mass = shamrock.model_sph.analysisDustMass(model=model).get_dust_mass()
+        mass_hist_new = {
+            "time": self.model.get_time(),
+            "disc_mass": disc_mass,
+            "barycenter": barycenter,
+        }
+
+        if has_dust:
+            dust_mass = shamrock.model_sph.analysisDustMass(model=model).get_dust_mass()
+            mass_hist_new["dust_mass"] = dust_mass
+
+            drag_mode = solver_config["dust_config"]["drag_mode"]
+
+            if "grains_sizes" in drag_mode:
+                model_units = model.get_current_config().get_units()
+                g_size = [s * model_units.to("m") for s in drag_mode["grains_sizes"]]
+                mass_hist_new["grains_sizes_si"] = g_size
 
         if shamrock.sys.world_rank() == 0:
-            mass_hist_new = {
-                "time": self.model.get_time(),
-                "disc_mass": disc_mass,
-                "dust_mass": dust_mass,
-                "barycenter": barycenter,
-            }
-
             try:
                 with open(self.json_data_filename, "r") as fp:
                     mass_hist = json.load(fp)
@@ -432,23 +443,46 @@ class MassAnalysis:
     def digest_perf_history(self):
         mass_hist = self.load_analysis()
 
+        has_dust = any("dust_mass" in h for h in mass_hist["history"])
+
+        def time_gradient(arr, axis=0):
+            # np.gradient needs at least 2 samples along the gradient axis
+            if t.shape[0] < 2:
+                return np.array([])
+            return np.gradient(arr, t, axis=axis)
+
         t = [h["time"] for h in mass_hist["history"]]
         disc_mass = [h["disc_mass"] for h in mass_hist["history"]]
-        dust_mass = [h["dust_mass"] for h in mass_hist["history"]]
 
         t = np.array(t)
         disc_mass = np.array(disc_mass)
-        dust_mass = np.array(dust_mass)
-        dust_mass_all = np.nansum(dust_mass, axis=-1)
-        gas_mass = disc_mass - dust_mass_all
 
-        return {
+        result = {
             "t": t,
             "disc_mass": disc_mass,
-            "dust_mass": dust_mass,
-            "dust_mass_all": dust_mass_all,
-            "gas_mass": gas_mass,
+            "d_disc_mass_dt": time_gradient(disc_mass),
         }
+
+        if has_dust:
+            dust_mass = [h["dust_mass"] for h in mass_hist["history"]]
+            dust_mass = np.array(dust_mass)
+            dust_mass_all = np.nansum(dust_mass, axis=-1)
+            gas_mass = disc_mass - dust_mass_all
+
+            result["dust_mass"] = dust_mass
+            result["dust_mass_all"] = dust_mass_all
+            result["gas_mass"] = gas_mass
+
+            grains_sizes_si = next(
+                h["grains_sizes_si"] for h in mass_hist["history"] if "grains_sizes_si" in h
+            )
+            result["grains_sizes_si"] = np.array(grains_sizes_si)
+
+            result["d_dust_mass_dt"] = time_gradient(dust_mass)
+            result["d_dust_mass_all_dt"] = time_gradient(dust_mass_all)
+            result["d_gas_mass_dt"] = time_gradient(gas_mass)
+
+        return result
 
     def plot_history(self, close_plots=True, figsize=(8, 5), dpi=200):
         if not _HAS_MATPLOTLIB:
@@ -470,20 +504,38 @@ class MassAnalysis:
             if close_plots:
                 plt.close()
 
-            ndust = mass_hist["dust_mass"].shape[-1]
-            plt.figure(figsize=figsize, dpi=dpi)
-            plt.plot(t, mass_hist["disc_mass"], "+-", label="all")
-            plt.plot(t, mass_hist["gas_mass"], "+-", label="gas")
-            plt.plot(t, mass_hist["dust_mass_all"], "+-", label="dust")
-            for i in range(ndust):
-                plt.plot(t, mass_hist["dust_mass"][:, i], "+-", label=f"dust {i}")
+            if "dust_mass" in mass_hist:
+                ndust = mass_hist["dust_mass"].shape[-1]
 
-            plt.xlabel("t [code unit] (simulation)")
-            plt.ylabel("total mass [Sol mass] (real time)")
-            plt.legend()
-            plt.savefig(self.plot_filename + "_masses.png")
-            if close_plots:
-                plt.close()
+                grains_sizes_si = mass_hist["grains_sizes_si"]
+
+                dust_cmap = plt.colormaps["plasma"]
+                dust_norm = mcolors.LogNorm(
+                    vmin=grains_sizes_si.min(), vmax=grains_sizes_si.max() * 10
+                )
+                dust_colors = dust_cmap(dust_norm(grains_sizes_si))
+
+                fig = plt.figure(figsize=figsize, dpi=dpi)
+                ax = fig.gca()
+                ax.plot(t, mass_hist["disc_mass"], "+-", color="0.0", label="M")
+                ax.plot(t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"M_{\rm gas}")
+                ax.plot(t, mass_hist["dust_mass_all"], "+-", color="0.5", label=r"M_{\rm dust}")
+                for i in range(ndust):
+                    ax.plot(t, mass_hist["dust_mass"][:, i], "+-", color=dust_colors[i])
+
+                ax.set_xlabel("t [code unit] (simulation)")
+                ax.set_ylabel("mass [Sol mass] (real time)")
+                ax.set_yscale("log")
+                ax.legend()
+
+                dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+                dust_sm.set_array([])
+                cbar = fig.colorbar(dust_sm, ax=ax)
+                cbar.set_label("grain size [m]")
+
+                fig.savefig(self.plot_filename + "_masses.png")
+                if close_plots:
+                    plt.close(fig)
 
 
 mass_analysis = MassAnalysis(model, analysis_folder, "mass_history")
