@@ -7,6 +7,7 @@ A disc with dust
 
 # sphinx_gallery_multi_image = "single"
 
+import json
 import os
 
 import matplotlib as mpl
@@ -20,7 +21,6 @@ from shamrock.external import coala
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.numba_helper import maybe_njit
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
-import json
 
 try:
     import matplotlib
@@ -115,7 +115,7 @@ beta_AV = 2.0
 # Dust parameters
 kernel = "M6"
 gamma = 1.4
-t_inject = 0.4
+t_inject = 0.0
 
 if ndust > 0:
     mrn_pow = 3.5
@@ -222,7 +222,7 @@ def setup_model():
 
     if ndust > 0:
         cfg.set_dust_mode_monofluid_tva(
-            nvar=ndust, cfl_density_threshold=1e-22 * codeu_kg_m3#, clamp_dust_frac=0.95
+            nvar=ndust, cfl_density_threshold=1e-22 * codeu_kg_m3, clamp_dust_frac=0.95
         )
         cfg.set_dust_drag_epstein(gamma, grain_size, rho_grains)
         if use_coala:
@@ -358,15 +358,14 @@ class Simulation(SimulationRunner):
     @callback(tsim_interval=dt_stop)  # Do the analysis every dt_stop
     def analysis(self, ianalysis):
         for a in self.analysis_modules:
-            self.ana_module_run(a,ianalysis)
+            self.ana_module_run(a, ianalysis)
 
     @callback(iter_count_interval=1)  # Do the analysis every dt_stop
     def analysis_fast(self, ianalysis):
         for a in self.analysis_modules_fast:
-            self.ana_module_run(a,ianalysis)
+            self.ana_module_run(a, ianalysis)
 
         self.model.do_vtk_dump(self.dump_prefix + f"{ianalysis:07}" + ".vtk", True)
-
 
     @callback(walltime_interval=30)  # Checkpoint the simulation every 10 minutes
     def checkpoint(self, icheckpoint):
@@ -390,7 +389,6 @@ sim.analysis_modules_fast.append(perf_analysis)
 
 
 class MassAnalysis:
-
     def __init__(self, model, analysis_folder, analysis_prefix):
         self.model = model
 
@@ -431,7 +429,6 @@ class MassAnalysis:
             mass_hist = json.load(fp)
         return mass_hist
 
-
     def digest_perf_history(self):
         mass_hist = self.load_analysis()
 
@@ -439,13 +436,11 @@ class MassAnalysis:
         disc_mass = [h["disc_mass"] for h in mass_hist["history"]]
         dust_mass = [h["dust_mass"] for h in mass_hist["history"]]
 
-
         t = np.array(t)
         disc_mass = np.array(disc_mass)
         dust_mass = np.array(dust_mass)
         dust_mass_all = np.nansum(dust_mass, axis=-1)
         gas_mass = disc_mass - dust_mass_all
-
 
         return {
             "t": t,
@@ -454,7 +449,6 @@ class MassAnalysis:
             "dust_mass_all": dust_mass_all,
             "gas_mass": gas_mass,
         }
-
 
     def plot_history(self, close_plots=True, figsize=(8, 5), dpi=200):
         if not _HAS_MATPLOTLIB:
@@ -478,11 +472,11 @@ class MassAnalysis:
 
             ndust = mass_hist["dust_mass"].shape[-1]
             plt.figure(figsize=figsize, dpi=dpi)
-            plt.plot(t, mass_hist["disc_mass"], "+-",label="all")
-            plt.plot(t, mass_hist["gas_mass"], "+-",label="gas")
-            plt.plot(t, mass_hist["dust_mass_all"], "+-",label="dust")
+            plt.plot(t, mass_hist["disc_mass"], "+-", label="all")
+            plt.plot(t, mass_hist["gas_mass"], "+-", label="gas")
+            plt.plot(t, mass_hist["dust_mass_all"], "+-", label="dust")
             for i in range(ndust):
-                plt.plot(t, mass_hist["dust_mass"][:,i], "+-",label=f"dust {i}")
+                plt.plot(t, mass_hist["dust_mass"][:, i], "+-", label=f"dust {i}")
 
             plt.xlabel("t [code unit] (simulation)")
             plt.ylabel("total mass [Sol mass] (real time)")
