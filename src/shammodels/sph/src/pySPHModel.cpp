@@ -367,7 +367,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                      .dv_max       = dv_max,
                      .massgrid     = massgrid,
                      .tabflux_coag = tabflux_coag_vec});
-            })
+            },
+            py::arg("rhodust_eps"),
+            py::arg("dv_max"),
+            py::arg("massgrid"),
+            py::arg("tabflux_coag"))
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {

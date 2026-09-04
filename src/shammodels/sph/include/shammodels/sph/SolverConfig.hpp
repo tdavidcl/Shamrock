@@ -19,6 +19,7 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/overloaded.hpp"
 #include "config/AVConfig.hpp"
 #include "config/BCConfig.hpp"
 #include "shambackends/math.hpp"
@@ -324,20 +325,21 @@ namespace shammodels::sph {
         std::variant<None, DustEvolCoalaCoag<Tscal>> dust_evol_config = None{};
 
         inline void evol_mode_to_json(nlohmann::json &j) const {
-            if (std::holds_alternative<None>(dust_evol_config)) {
-                j = {"type", "none"};
-            } else if (
-                const DustEvolCoalaCoag<Tscal> *cfg
-                = std::get_if<DustEvolCoalaCoag<Tscal>>(&dust_evol_config)) {
-                j
-                    = {{"type", "coala_coag"},
-                       {"rhodust_eps", cfg->rhodust_eps},
-                       {"dv_max", cfg->dv_max},
-                       {"massgrid", cfg->massgrid},
-                       {"tabflux_coag", cfg->tabflux_coag}};
-            } else {
-                shambase::throw_unimplemented();
-            }
+            std::visit(
+                shambase::overloaded{
+                    [&](const None &) {
+                        j = {{"type", "none"}};
+                    },
+                    [&](const DustEvolCoalaCoag<Tscal> &cfg) {
+                        j
+                            = {{"type", "coala_coag"},
+                               {"rhodust_eps", cfg.rhodust_eps},
+                               {"dv_max", cfg.dv_max},
+                               {"massgrid", cfg.massgrid},
+                               {"tabflux_coag", cfg.tabflux_coag}};
+                    },
+                },
+                dust_evol_config);
         }
 
         inline void evol_mode_from_json(const nlohmann::json &j) {
@@ -1343,7 +1345,9 @@ namespace shammodels::sph {
     inline void from_json(const nlohmann::json &j, DustConfig<Tvec> &p) {
         p.mode_from_json(j.at("mode"));
         p.drag_mode_from_json(j.at("drag_mode"));
-        p.evol_mode_from_json(j.at("evol_mode"));
+        if (j.contains("evol_mode")) {
+            p.evol_mode_from_json(j.at("evol_mode"));
+        }
         p.ballabio_ts_limiter = j.value("ballabio_ts_limiter", false);
     }
 
