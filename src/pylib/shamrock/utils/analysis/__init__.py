@@ -21,6 +21,7 @@ from .BfieldPlots import (
     SliceBthetaPlot,
     SliceBVerticalShearGradient,
 )
+from .compute_field_dust import compute_s_mean_field,compute_dlog_s_mean_dt_field
 
 # Performance analysis
 from .PerfHistory import PerfHistory

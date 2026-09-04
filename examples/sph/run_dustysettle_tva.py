@@ -869,6 +869,7 @@ pmass = model.get_particle_mass()
 # Run simulation
 # ------------------------------------------
 
+from shamrock.utils.analysis.compute_field_dust import compute_s_mean_field
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
 
 
@@ -900,6 +901,9 @@ class Simulation(SimulationRunner):
     @callback(tsim_interval=0.1)  # Do the analysis every dt_stop
     def analysis_plots(self, j):
         global reference_dusty_settle
+
+        tmp = compute_s_mean_field(model)
+        print(tmp)
 
         model_time = self.model.get_time()
 
