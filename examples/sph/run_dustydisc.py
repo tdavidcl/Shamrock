@@ -31,6 +31,7 @@ except ImportError:
     _HAS_MATPLOTLIB = False
 
 import shamrock
+from shamrock.matplotlib import add_cmap_legend_entry
 
 shamrock.enable_experimental_features()
 
@@ -517,16 +518,24 @@ class MassAnalysis:
 
                 fig = plt.figure(figsize=figsize, dpi=dpi)
                 ax = fig.gca()
-                ax.plot(t, mass_hist["disc_mass"], "+-", color="0.0", label="M")
-                ax.plot(t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"M_{\rm gas}")
-                ax.plot(t, mass_hist["dust_mass_all"], "+-", color="0.5", label=r"M_{\rm dust}")
+                ax.plot(t, mass_hist["disc_mass"], "+-", color="0.0", label="$M$")
+                ax.plot(t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"$M_{\rm gas}$")
+                ax.plot(t, mass_hist["dust_mass_all"], "+-", color="0.5", label=r"$M_{\rm dust}$")
                 for i in range(ndust):
                     ax.plot(t, mass_hist["dust_mass"][:, i], "+-", color=dust_colors[i])
 
                 ax.set_xlabel("t [code unit] (simulation)")
                 ax.set_ylabel("mass [Sol mass] (real time)")
                 ax.set_yscale("log")
-                ax.legend()
+                handles, labels = ax.get_legend_handles_labels()
+                add_cmap_legend_entry(
+                    ax,
+                    dust_cmap,
+                    label=r"$M_{\rm dust}(s_{\rm grain})$",
+                    extra_handles=handles,
+                    extra_labels=labels,
+                    loc="best",
+                )
 
                 dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
                 dust_sm.set_array([])
