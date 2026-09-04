@@ -23,8 +23,8 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     // Riemann solvers now take primitive states directly (see riemann_hll.hpp,
     // riemann_hllc.hpp, riemann_rusanov.hpp), so the reference states below are converted
     // from conservative once, up front.
-    Tcons cons1 = {.rho = 1._f64, .rhoe = 1.2_f64, .rhovel = f64_3{1, 0, 0}};
-    Tcons cons2 = {.rho = 1.5_f64, .rhoe = 1._f64, .rhovel = f64_3{2, 0, 0}};
+    Tcons cons1  = {.rho = 1._f64, .rhoe = 1.2_f64, .rhovel = f64_3{1, 0, 0}};
+    Tcons cons2  = {.rho = 1.5_f64, .rhoe = 1._f64, .rhovel = f64_3{2, 0, 0}};
     Tprim state1 = shammath::cons_to_prim(cons1, gamma);
     Tprim state2 = shammath::cons_to_prim(cons2, gamma);
 

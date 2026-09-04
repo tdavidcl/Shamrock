@@ -166,8 +166,7 @@ namespace shammath {
      * @brief HLLC flux in the -x direction (adiabatic p* wave speed estimate)
      */
     template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_mx(
-        Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
+    inline constexpr auto hllc_adiab_toro_flux_mx(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
         return invert_axis(
             hllc_adiab_toro_flux_x(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
@@ -176,8 +175,7 @@ namespace shammath {
      * @brief HLLC flux in the -y direction (adiabatic p* wave speed estimate)
      */
     template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_my(
-        Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
+    inline constexpr auto hllc_adiab_toro_flux_my(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
         return invert_axis(
             hllc_adiab_toro_flux_y(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
@@ -186,8 +184,7 @@ namespace shammath {
      * @brief HLLC flux in the -z direction (adiabatic p* wave speed estimate)
      */
     template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_mz(
-        Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
+    inline constexpr auto hllc_adiab_toro_flux_mz(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
         return invert_axis(
             hllc_adiab_toro_flux_z(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
@@ -205,8 +202,7 @@ namespace shammath {
      * @param gamma adiabatic index
      */
     template<class Tprim>
-    inline constexpr auto hllc_davis_flux_x(
-        Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+    inline constexpr auto hllc_davis_flux_x(Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
         using Tscal = typename Tprim::Tscal;
         using Tvec  = typename Tprim::Tvec;
         using Tcons = ConsState<Tvec>;

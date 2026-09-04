@@ -153,7 +153,7 @@ namespace shammath {
         ConsState<Tvec> flux;
 
         const auto rhoeint = prim.press / (gamma - 1.0);
-        const auto rhoe     = rhoeint + rhoekin(prim.rho, prim.vel);
+        const auto rhoe    = rhoeint + rhoekin(prim.rho, prim.vel);
 
         flux.rho = prim.rho * prim.vel[0];
 
@@ -439,8 +439,8 @@ namespace shammath {
     template<class Tprim>
     inline constexpr Tprim d_prim_invert_axis(const Tprim p) {
         Tprim pprime;
-        pprime.rho    = p.rho;
-        pprime.vel    = -(p.vel);
+        pprime.rho = p.rho;
+        pprime.vel = -(p.vel);
         return pprime;
     }
 
