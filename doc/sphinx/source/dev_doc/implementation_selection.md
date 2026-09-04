@@ -48,9 +48,7 @@ print(current)
 # two ways of selecting an implementation manually:
 
 # 1. pick a specific one
-shamrock.algs.set_impl_scan_exclusive_sum_in_place(
-    '{"implementation":"std_scan","parameters":{}}'
-)
+shamrock.algs.set_impl_scan_exclusive_sum_in_place('{"implementation":"std_scan","parameters":{}}')
 
 # 2. or fall back to the algorithm's own default
 if not shamrock.algs.is_impl_set_scan_exclusive_sum_in_place():
@@ -110,7 +108,7 @@ namespace shamalgs::primitives {
         shamalgs::ImplVariantGlobal<AltA, AltB> my_algo_impl;
 
         std::vector<std::string> get_default_impl_list_my_algo() {
-            return decltype(my_algo_impl)::get_default_config_list();
+            return my_algo_impl.get_default_config_list();
         }
 
         std::string get_current_impl_my_algo() { return my_algo_impl.get_current_config(); }

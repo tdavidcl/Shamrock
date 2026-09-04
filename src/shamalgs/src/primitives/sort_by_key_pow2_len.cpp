@@ -15,9 +15,13 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/overloaded.hpp"
+#include "shamalgs/ImplVariant.hpp"
 #include "shamalgs/details/algorithm/bitonicSort.hpp"
 #include "shamalgs/details/algorithm/bitonicSort_updated_usm.hpp"
+#include "shamalgs/primitives/device/details/sort_by_keys_std_sort.hpp"
 #include "shamalgs/primitives/sort_by_key_pow2_len.hpp"
+#include "shamcomm/logs.hpp"
 
 namespace shamalgs::primitives {
 
@@ -38,6 +42,52 @@ namespace shamalgs::primitives {
         }
     }
 
+    /// namespace to control implementation behavior
+    namespace impl {
+
+        /// Bitonic sort, updated USM kernel (see bitonicSort_updated_usm.hpp)
+        struct BitonicSort {
+            static constexpr std::string_view variant_type_name = "bitonic_sort";
+        };
+
+        /// Copy the buffers to host, std::sort the zipped key/value pairs, and copy back
+        struct StdSort {
+            static constexpr std::string_view variant_type_name = "std_sort";
+        };
+
+        shamalgs::ImplVariantGlobal<BitonicSort, StdSort> sort_by_key_pow2_len_impl;
+
+        /// Get list of available sort by key (pow2 len) implementations
+        std::vector<std::string> get_default_impl_list_sort_by_key_pow2_len() {
+            return sort_by_key_pow2_len_impl.get_default_config_list();
+        }
+
+        /// Get the current implementation for sort by key (pow2 len)
+        std::string get_current_impl_sort_by_key_pow2_len() {
+            return sort_by_key_pow2_len_impl.get_current_config();
+        }
+
+        /// Check if an implementation has been selected for sort by key (pow2 len)
+        bool is_impl_set_sort_by_key_pow2_len() { return sort_by_key_pow2_len_impl.is_set(); }
+
+        /// Set the implementation for sort by key (pow2 len)
+        void set_impl_sort_by_key_pow2_len(const std::string &impl) {
+            shamlog_info_ln(
+                "algs", "setting sort by key (pow2 len) implementation to impl :", impl);
+            sort_by_key_pow2_len_impl.set(impl);
+        }
+
+        /// Select the default implementation for sort by key (pow2 len)
+        void autoselect_impl_sort_by_key_pow2_len() {
+            sort_by_key_pow2_len_impl.set(BitonicSort{});
+            shamlog_info_ln(
+                "algs",
+                "defaulting sort by key (pow2 len) implementation to impl :",
+                get_current_impl_sort_by_key_pow2_len());
+        }
+
+    } // namespace impl
+
     template<class Tkey, class Tval>
     void sort_by_key_pow2_len(
         const sham::DeviceScheduler_ptr &sched,
@@ -50,8 +100,21 @@ namespace shamalgs::primitives {
                 "Length must be a power of 2");
         }
 
-        shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 16>(
-            sched, buf_key, buf_values, len);
+        if (!impl::sort_by_key_pow2_len_impl.is_set()) {
+            impl::autoselect_impl_sort_by_key_pow2_len();
+        }
+
+        std::visit(
+            shambase::overloaded{
+                [&](impl::BitonicSort) {
+                    shamalgs::algorithm::details::sort_by_key_bitonic_updated_usm<Tkey, Tval, 16>(
+                        sched, buf_key, buf_values, len);
+                },
+                [&](impl::StdSort) {
+                    device::details::sort_by_keys_std_sort(buf_key, buf_values, len);
+                },
+            },
+            impl::sort_by_key_pow2_len_impl.get());
     }
 
     template void sort_by_key_pow2_len(
