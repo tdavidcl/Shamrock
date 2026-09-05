@@ -89,7 +89,7 @@ ON_PYTHON_INIT {
             "Converts the unit system to a json like dictionary")
         .def(
             "from_json",
-            [](UnitSystem &self, py::object json_data) {
+            [](UnitSystem &self, const py::object &json_data) {
                 auto json_dumps = py::module_::import("json").attr("dumps");
                 std::string s   = json_dumps(json_data).cast<std::string>();
                 self            = nlohmann::json::parse(s).get<UnitSystem>();
