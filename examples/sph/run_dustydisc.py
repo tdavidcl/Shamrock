@@ -30,8 +30,9 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
-import shamrock
 from shamrock.matplotlib import add_cmap_legend_entry
+
+import shamrock
 
 shamrock.enable_experimental_features()
 
@@ -446,7 +447,7 @@ class MassAnalysis:
             mass_hist = json.load(fp)
         return mass_hist
 
-    def digest_perf_history(self):
+    def digest_perf_history(self, remove_null, smooth_window):
         mass_hist = self.load_analysis()
 
         has_dust = any("dust_mass" in h for h in mass_hist["history"])
@@ -464,11 +465,23 @@ class MassAnalysis:
             mass_conv = 1.0
             length_conv = 1.0
 
+        def rolling_smooth(arr, axis=0):
+            # Average each sample with its neighbors within smooth_window
+            # (a duration, in time_unit) of it in time.
+            if smooth_window is None or arr.shape[axis] < 2:
+                return arr
+            half_window = smooth_window / 2.0
+            smoothed = np.empty_like(arr, dtype=float)
+            for i in range(t.shape[0]):
+                mask = np.abs(t - t[i]) <= half_window
+                smoothed[i] = np.mean(np.take(arr, np.nonzero(mask)[0], axis=axis), axis=axis)
+            return smoothed
+
         def time_gradient(arr, axis=0):
             # np.gradient needs at least 2 samples along the gradient axis
             if t.shape[0] < 2:
                 return np.array([])
-            return np.gradient(arr, t, axis=axis)
+            return rolling_smooth(np.gradient(arr, t, axis=axis), axis=axis)
 
         t = [h["time"] for h in mass_hist["history"]]
         disc_mass = [h["disc_mass"] for h in mass_hist["history"]]
@@ -484,8 +497,12 @@ class MassAnalysis:
 
         if has_dust:
             dust_mass = [h["dust_mass"] for h in mass_hist["history"]]
+
+            if remove_null:
+                dust_mass = [[np.nan for v in dm] if np.max(dm) == 0 else dm for dm in dust_mass]
+
             dust_mass = np.array(dust_mass) * mass_conv
-            dust_mass_all = np.nansum(dust_mass, axis=-1)
+            dust_mass_all = np.sum(dust_mass, axis=-1)
             gas_mass = disc_mass - dust_mass_all
 
             result["dust_mass"] = dust_mass
@@ -512,13 +529,17 @@ class MassAnalysis:
             return 1e-10
         return np.nanmax(abs_vals) * 1e-6
 
-    def plot_history(self, close_plots=True, figsize=(8, 5), dpi=200):
+    def plot_history(
+        self, close_plots=True, figsize=(8, 5), dpi=200, remove_null=True, smooth_window=None
+    ):
         if not _HAS_MATPLOTLIB:
             print("Warning: matplotlib is not installed, plot_perf_history is a no-op")
             return
 
         if shamrock.sys.world_rank() == 0:
-            mass_hist = self.digest_perf_history()
+            mass_hist = self.digest_perf_history(
+                remove_null=remove_null, smooth_window=smooth_window
+            )
 
             print(f"Plotting mass history from {self.json_data_filename}")
 
@@ -558,7 +579,9 @@ class MassAnalysis:
                 fig = plt.figure(figsize=figsize, dpi=dpi)
                 ax = fig.gca()
                 ax.plot(t, mass_hist["disc_mass"], "+-", color="0.0", label="$M$")
-                ax.plot(t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"$M_{\rm gas}$")
+                ax.plot(
+                    t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"$M_{\rm gas}$"
+                )
                 ax.plot(t, mass_hist["dust_mass_all"], "+-", color="0.5", label=r"$M_{\rm dust}$")
                 for i in range(ndust):
                     ax.plot(t, mass_hist["dust_mass"][:, i], "+-", color=dust_colors[i])
