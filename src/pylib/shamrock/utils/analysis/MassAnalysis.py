@@ -204,7 +204,9 @@ class MassAnalysis:
                 grains_sizes = mass_hist["grains_sizes"]
 
                 dust_cmap = plt.colormaps["plasma"]
-                dust_norm = mcolors.LogNorm(vmin=grains_sizes.min(), vmax=grains_sizes.max() * 10)
+                dust_vmin = 10 ** np.floor(np.log10(grains_sizes.min()))
+                dust_vmax = 10 ** np.ceil(np.log10(grains_sizes.max()))
+                dust_norm = mcolors.LogNorm(vmin=dust_vmin, vmax=dust_vmax)
                 dust_colors = dust_cmap(dust_norm(grains_sizes))
 
                 fig = plt.figure(figsize=figsize, dpi=dpi)
