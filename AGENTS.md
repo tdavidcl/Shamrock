@@ -188,12 +188,6 @@ before pushing (a plain amend re-runs the hook):
   change gitconfig.
 - Trailer = `Assisted-by: <agent>` only. No model names. No
   `Co-authored-by` (`Co-authored-by` is for extra human authors only).
-- **Never** include a link to the assistant session/conversation (e.g. a
-  `Claude-Session:` trailer or any `claude.ai/code/session_...` URL) in the
-  commit message. Session tooling may suggest appending one by default —
-  strip it during the `--no-verify` amend along with any injected
-  `Co-authored-by`/model-name lines. Session links belong in the harness
-  UI, not in permanent git history.
 
 Check `git log -1 --format='Author: %an <%ae>%n%B'` before push.
 
@@ -210,10 +204,6 @@ https://github.com/Shamrock-code/Shamrock/compare/main...<fork-owner>:Shamrock:<
 ```
 
 Replace `<fork-owner>` and `<branch>` with the fork owner and branch name.
-
-PR descriptions follow the same rule as commit messages: no session-link
-trailer (`Claude-Session:` or a `claude.ai/code/session_...` URL). Drop it
-from the body even if the session's default footer suggests adding one.
 
 PR lookups should also target upstream:
 
