@@ -187,33 +187,47 @@ class StandardPlotHelper:
 
         return dx, dy
 
-    def column_integ_render(self, field_name, field_type, custom_getter=None):
-        dx, dy = self.get_dx_dy()
-        arr_field = self.model.render_cartesian_column_integ(
-            field_name,
-            field_type,
+    def _render_cartesian(self, render_func, field, field_type, dx, dy, custom_getter=None):
+        """
+        Dispatch to render_func with either (name, field_type, ...) when field
+        is a field name string, or (field, ...) when field is a precomputed Field
+        object (e.g. from model.compute_field(...)), in which case field_type
+        and custom_getter are not forwarded since the Field already carries its type.
+        """
+        common_kwargs = dict(
             center=(self.center[0], self.center[1], self.center[2]),
             delta_x=dx,
             delta_y=dy,
             nx=self.nx,
             ny=self.ny,
+        )
+
+        if isinstance(field, str):
+            return render_func(field, field_type, custom_getter=custom_getter, **common_kwargs)
+
+        return render_func(field, **common_kwargs)
+
+    def column_integ_render(self, field, field_type=None, custom_getter=None):
+        dx, dy = self.get_dx_dy()
+        return self._render_cartesian(
+            self.model.render_cartesian_column_integ,
+            field,
+            field_type,
+            dx,
+            dy,
             custom_getter=custom_getter,
         )
 
-        return arr_field
-
     def column_average_render(
-        self, field_name, field_type, min_normalization=1e-9, custom_getter=None
+        self, field, field_type=None, min_normalization=1e-9, custom_getter=None
     ):
         dx, dy = self.get_dx_dy()
-        arr_field = self.model.render_cartesian_column_integ(
-            field_name,
+        arr_field = self._render_cartesian(
+            self.model.render_cartesian_column_integ,
+            field,
             field_type,
-            center=(self.center[0], self.center[1], self.center[2]),
-            delta_x=dx,
-            delta_y=dy,
-            nx=self.nx,
-            ny=self.ny,
+            dx,
+            dy,
             custom_getter=custom_getter,
         )
 
@@ -231,22 +245,20 @@ class StandardPlotHelper:
 
     def slice_render(
         self,
-        field_name,
-        field_type,
+        field,
+        field_type=None,
         do_normalization=True,
         min_normalization=1e-9,
         field_transform=None,
         custom_getter=None,
     ):
         dx, dy = self.get_dx_dy()
-        arr_field_data = self.model.render_cartesian_slice(
-            field_name,
+        arr_field_data = self._render_cartesian(
+            self.model.render_cartesian_slice,
+            field,
             field_type,
-            center=(self.center[0], self.center[1], self.center[2]),
-            delta_x=dx,
-            delta_y=dy,
-            nx=self.nx,
-            ny=self.ny,
+            dx,
+            dy,
             custom_getter=custom_getter,
         )
 

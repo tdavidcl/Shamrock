@@ -112,7 +112,7 @@ beta_AV = 2.0
 # Dust parameters
 kernel = "M6"
 gamma = 1.4
-t_inject = 5.0
+t_inject = 1.0
 
 if ndust > 0:
     mrn_pow = 3.5
@@ -376,10 +376,7 @@ class Simulation(SimulationRunner):
 sim = Simulation(model)
 
 
-from shamrock.utils.analysis import (
-    MassAnalysis,
-    PerfHistory,
-)
+from shamrock.utils.analysis import MassAnalysis, PerfHistory, StandardPlotHelper
 from shamrock.utils.analysis.compute_field_dust import compute_s_mean_field
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
@@ -387,5 +384,137 @@ sim.analysis_modules_fast.append(perf_analysis)
 
 mass_analysis = MassAnalysis(model, analysis_folder, "mass_history")
 sim.analysis_modules_fast.append(mass_analysis)
+
+
+def ColumnAverageDustSizePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+):
+    def compute_s_mean_integ(helper):
+        return helper.column_average_render(compute_s_mean_field(model), "f64")
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_integ,
+    )
+
+
+def SliceDustSizePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_s_mean_slice(helper):
+        return helper.slice_render(
+            compute_s_mean_field(model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_slice,
+    )
+
+
+face_on_render_kwargs = {
+    "x_unit": "au",
+    "y_unit": "au",
+    "time_unit": "year",
+    "x_label": "x",
+    "y_label": "y",
+}
+
+slice_params = {
+    "ext_r": disc.rout * 0.6 / (16.0 / 9.0),  # aspect ratio of 16:9
+    "nx": 1920,
+    "ny": 1080,
+    "ex": (1, 0, 0),
+    "ey": (0, 0, 1),
+    "center": ((disc.rin + disc.rout) / 2, 0, 0),
+}
+
+sink_params = {
+    "sink_scale_factor": 1,
+    "sink_color": "green",
+    "sink_linewidth": 1,
+    "sink_fill": False,
+}
+
+if ndust > 0:
+    col_smean_plot = ColumnAverageDustSizePlot(
+        model,
+        ext_r=disc.rout * 1.5,
+        nx=1024,
+        ny=1024,
+        ex=(1, 0, 0),
+        ey=(0, 1, 0),
+        center=(0, 0, 0),
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_column",
+    )
+    col_smean_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "m",
+        "field_label": "$\\langle s \\rangle$",
+        "vmin": mrn_distribution.grain_size_si.min(),
+        "vmax": mrn_distribution.grain_size_si.max(),
+        "contour_list": [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+        "norm": "log",
+    }
+
+    sim.analysis_modules_fast.append(col_smean_plot)
+
+    slice_smean_plot = SliceDustSizePlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_slice",
+    )
+
+    slice_smean_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "m",
+        "field_label": "$\\langle s \\rangle$",
+        "vmin": mrn_distribution.grain_size_si.min(),
+        "vmax": mrn_distribution.grain_size_si.max(),
+        "contour_list": [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+        "norm": "log",
+    }
+
+    sim.analysis_modules_fast.append(slice_smean_plot)
+
 
 sim.run()
