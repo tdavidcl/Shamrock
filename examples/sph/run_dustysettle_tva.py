@@ -975,6 +975,25 @@ if shamrock.sys.world_rank() == 0:
 # ------------------------------------------
 
 mass_analysis.plot_history(close_plots=False)
+
+mass_hist = mass_analysis.digest_perf_history(remove_null=True, smooth_window=None)
+dust_mass = mass_hist["dust_mass"]
+iinject = mass_hist["dust_start_idx"]
+tinject = mass_hist["t"][iinject]
+
+St = np.zeros(ndust)
+
+for k in range(ndust):
+    t_dyn = 1
+    ts = shamrock.phys.epstein_stopping_time(
+        rho_grain=mrn_distribution.rho_grains[k],
+        s_grain=mrn_distribution.grain_size[k],
+        rho=rho_i,
+        cs=cs,
+        gamma=gamma,
+    )
+    St[k] = ts / t_dyn
+
 plt.show()
 
 # %%
