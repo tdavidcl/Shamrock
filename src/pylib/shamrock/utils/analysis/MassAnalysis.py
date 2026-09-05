@@ -125,6 +125,9 @@ class MassAnalysis:
             "disc_mass": disc_mass,
             "d_disc_mass_dt": time_gradient(disc_mass),
             "delta_disc_mass": (disc_mass - disc_mass[0] if disc_mass.size > 0 else np.array([])),
+            "delta_disc_mass_rel": (
+                disc_mass / disc_mass[0] - 1 if disc_mass.size > 0 else np.array([])
+            ),
         }
 
         if has_dust:
@@ -151,6 +154,9 @@ class MassAnalysis:
             result["d_gas_mass_dt"] = time_gradient(gas_mass)
 
             result["delta_gas_mass"] = gas_mass - gas_mass[0] if gas_mass.size > 0 else gas_mass
+            result["delta_gas_mass_rel"] = (
+                gas_mass / gas_mass[0] - 1 if gas_mass.size > 0 else gas_mass
+            )
 
             # Dust starts at zero before injection, so its delta is measured from the
             # first snapshot where the total dust mass is non null rather than t=0.
@@ -160,6 +166,10 @@ class MassAnalysis:
             if dust_start_idx is not None:
                 result["delta_dust_mass_all"] = dust_mass_all - dust_mass_all[dust_start_idx]
                 result["delta_dust_mass"] = dust_mass - dust_mass[dust_start_idx]
+                result["delta_dust_mass_all_rel"] = (
+                    dust_mass_all / dust_mass_all[dust_start_idx] - 1
+                )
+                result["delta_dust_mass_rel"] = dust_mass / dust_mass[dust_start_idx] - 1
 
         return result
 
@@ -179,6 +189,83 @@ class MassAnalysis:
         if abs_vals.size == 0:
             return 1e-10
         return np.nanmax(abs_vals) * 1e-6
+
+    def _plot_mass_delta(
+        self,
+        mass_hist,
+        t,
+        key_suffix,
+        ylabel,
+        filename_suffix,
+        ndust,
+        dust_colors,
+        dust_cmap,
+        dust_norm,
+        figsize,
+        dpi,
+        close_plots,
+    ):
+        has_dust = f"delta_gas_mass{key_suffix}" in mass_hist
+        has_dust_delta = mass_hist.get("dust_start_idx") is not None
+
+        fig = plt.figure(figsize=figsize, dpi=dpi)
+        ax = fig.gca()
+        ax.plot(t, mass_hist[f"delta_disc_mass{key_suffix}"], "+-", color="0.0", label="$M$")
+
+        linthresh_arrays = [mass_hist[f"delta_disc_mass{key_suffix}"]]
+
+        if has_dust:
+            ax.plot(
+                t,
+                mass_hist[f"delta_gas_mass{key_suffix}"],
+                "+-",
+                color="cornflowerblue",
+                label=r"$M_{\rm gas}$",
+            )
+            linthresh_arrays.append(mass_hist[f"delta_gas_mass{key_suffix}"])
+
+        if has_dust_delta:
+            ax.plot(
+                t,
+                mass_hist[f"delta_dust_mass_all{key_suffix}"],
+                "+-",
+                color="0.5",
+                label=r"$M_{\rm dust}$",
+            )
+            for i in range(ndust):
+                ax.plot(
+                    t, mass_hist[f"delta_dust_mass{key_suffix}"][:, i], "+-", color=dust_colors[i]
+                )
+            linthresh_arrays += [
+                mass_hist[f"delta_dust_mass_all{key_suffix}"],
+                mass_hist[f"delta_dust_mass{key_suffix}"],
+            ]
+
+        ax.set_xlabel(f"t [{self.time_unit}]")
+        ax.set_ylabel(ylabel)
+        ax.set_yscale("symlog", linthresh=self._symlog_linthresh(*linthresh_arrays))
+
+        handles, labels = ax.get_legend_handles_labels()
+        if has_dust_delta:
+            shamrock.matplotlib.add_cmap_legend_entry(
+                ax,
+                dust_cmap,
+                label=r"$M_{\rm dust}(s_{\rm grain})$",
+                extra_handles=handles,
+                extra_labels=labels,
+                loc="best",
+            )
+
+            dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+            dust_sm.set_array([])
+            cbar = fig.colorbar(dust_sm, ax=ax)
+            cbar.set_label("grain size [m]")
+        else:
+            ax.legend(loc="best")
+
+        fig.savefig(self.plot_filename + filename_suffix)
+        if close_plots:
+            plt.close(fig)
 
     def plot_history(
         self, close_plots=True, figsize=(8, 5), dpi=200, remove_null=True, smooth_window=None
@@ -217,6 +304,8 @@ class MassAnalysis:
                 plt.savefig(self.plot_filename + "_total_mass_dot.png")
                 if close_plots:
                     plt.close()
+
+            ndust = dust_colors = dust_cmap = dust_norm = None
 
             if "dust_mass" in mass_hist:
                 ndust = mass_hist["dust_mass"].shape[-1]
@@ -312,69 +401,31 @@ class MassAnalysis:
                     if close_plots:
                         plt.close(fig)
 
-            # Mass conservation: relative change since the simulation start.
-            # Dust (and everything derived from it) is instead measured relative to the
-            # first snapshot where the total dust mass is non null, since dust starts at zero.
-            has_dust_delta = mass_hist.get("dust_start_idx") is not None
-
-            fig = plt.figure(figsize=figsize, dpi=dpi)
-            ax = fig.gca()
-            ax.plot(t, mass_hist["delta_disc_mass"], "+-", color="0.0", label="$M$")
-
-            if has_dust_delta:
-                ax.plot(
-                    t,
-                    mass_hist["delta_gas_mass"],
-                    "+-",
-                    color="cornflowerblue",
-                    label=r"$M_{\rm gas}$",
-                )
-                ax.plot(
-                    t,
-                    mass_hist["delta_dust_mass_all"],
-                    "+-",
-                    color="0.5",
-                    label=r"$M_{\rm dust}$",
-                )
-                for i in range(ndust):
-                    ax.plot(t, mass_hist["delta_dust_mass"][:, i], "+-", color=dust_colors[i])
-
-            ax.set_xlabel(f"t [{self.time_unit}]")
-            ax.set_ylabel(rf"$\delta M$ [{mass_unit_text}]")
-            ax.set_yscale(
-                "symlog",
-                linthresh=self._symlog_linthresh(
-                    *(
-                        [
-                            mass_hist["delta_disc_mass"],
-                            mass_hist["delta_gas_mass"],
-                            mass_hist["delta_dust_mass_all"],
-                            mass_hist["delta_dust_mass"],
-                        ]
-                        if has_dust_delta
-                        else [mass_hist["delta_disc_mass"]]
-                    )
-                ),
+            # Mass conservation since the simulation start, in both absolute and relative
+            # terms. Dust (and everything derived from it) is instead measured relative to
+            # the first snapshot where the total dust mass is non null, since dust starts
+            # at zero.
+            common_kwargs = dict(
+                mass_hist=mass_hist,
+                t=t,
+                ndust=ndust,
+                dust_colors=dust_colors,
+                dust_cmap=dust_cmap,
+                dust_norm=dust_norm,
+                figsize=figsize,
+                dpi=dpi,
+                close_plots=close_plots,
             )
 
-            handles, labels = ax.get_legend_handles_labels()
-            if has_dust_delta:
-                shamrock.matplotlib.add_cmap_legend_entry(
-                    ax,
-                    dust_cmap,
-                    label=r"$M_{\rm dust}(s_{\rm grain})$",
-                    extra_handles=handles,
-                    extra_labels=labels,
-                    loc="best",
-                )
-
-                dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
-                dust_sm.set_array([])
-                cbar = fig.colorbar(dust_sm, ax=ax)
-                cbar.set_label("grain size [m]")
-            else:
-                ax.legend(loc="best")
-
-            fig.savefig(self.plot_filename + "_mass_delta.png")
-            if close_plots:
-                plt.close(fig)
+            self._plot_mass_delta(
+                key_suffix="",
+                ylabel=rf"$\delta M$ [{mass_unit_text}]",
+                filename_suffix="_mass_delta.png",
+                **common_kwargs,
+            )
+            self._plot_mass_delta(
+                key_suffix="_rel",
+                ylabel=r"$\delta M / M_0$",
+                filename_suffix="_mass_delta_rel.png",
+                **common_kwargs,
+            )
