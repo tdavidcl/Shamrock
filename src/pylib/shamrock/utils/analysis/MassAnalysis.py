@@ -124,6 +124,9 @@ class MassAnalysis:
             "t": t,
             "disc_mass": disc_mass,
             "d_disc_mass_dt": time_gradient(disc_mass),
+            "delta_disc_mass": (
+                disc_mass / disc_mass[0] - 1 if disc_mass.size > 0 else np.array([])
+            ),
         }
 
         if has_dust:
@@ -149,7 +152,26 @@ class MassAnalysis:
             result["d_dust_mass_all_dt"] = time_gradient(dust_mass_all)
             result["d_gas_mass_dt"] = time_gradient(gas_mass)
 
+            result["delta_gas_mass"] = gas_mass / gas_mass[0] - 1 if gas_mass.size > 0 else gas_mass
+
+            # Dust starts at zero before injection, so its delta is measured from the
+            # first snapshot where the total dust mass is non null rather than t=0.
+            dust_start_idx = self._first_nonnull_index(dust_mass_all)
+            result["dust_start_idx"] = dust_start_idx
+
+            if dust_start_idx is not None:
+                result["delta_dust_mass_all"] = dust_mass_all / dust_mass_all[dust_start_idx] - 1
+                result["delta_dust_mass"] = dust_mass / dust_mass[dust_start_idx] - 1
+
         return result
+
+    @staticmethod
+    def _first_nonnull_index(arr):
+        """Index of the first entry that is neither NaN nor zero, or None if there is none."""
+        valid = ~np.isnan(arr) & (arr != 0)
+        if not valid.any():
+            return None
+        return int(np.argmax(valid))
 
     @staticmethod
     def _symlog_linthresh(*arrays):
@@ -291,3 +313,70 @@ class MassAnalysis:
                     fig.savefig(self.plot_filename + "_masses_dot.png")
                     if close_plots:
                         plt.close(fig)
+
+            # Mass conservation: relative change since the simulation start.
+            # Dust (and everything derived from it) is instead measured relative to the
+            # first snapshot where the total dust mass is non null, since dust starts at zero.
+            has_dust_delta = mass_hist.get("dust_start_idx") is not None
+
+            fig = plt.figure(figsize=figsize, dpi=dpi)
+            ax = fig.gca()
+            ax.plot(t, mass_hist["delta_disc_mass"], "+-", color="0.0", label="$M$")
+
+            if has_dust_delta:
+                ax.plot(
+                    t,
+                    mass_hist["delta_gas_mass"],
+                    "+-",
+                    color="cornflowerblue",
+                    label=r"$M_{\rm gas}$",
+                )
+                ax.plot(
+                    t,
+                    mass_hist["delta_dust_mass_all"],
+                    "+-",
+                    color="0.5",
+                    label=r"$M_{\rm dust}$",
+                )
+                for i in range(ndust):
+                    ax.plot(t, mass_hist["delta_dust_mass"][:, i], "+-", color=dust_colors[i])
+
+            ax.set_xlabel(f"t [{self.time_unit}]")
+            ax.set_ylabel(r"$\delta M / M_0$")
+            ax.set_yscale(
+                "symlog",
+                linthresh=self._symlog_linthresh(
+                    *(
+                        [
+                            mass_hist["delta_disc_mass"],
+                            mass_hist["delta_gas_mass"],
+                            mass_hist["delta_dust_mass_all"],
+                            mass_hist["delta_dust_mass"],
+                        ]
+                        if has_dust_delta
+                        else [mass_hist["delta_disc_mass"]]
+                    )
+                ),
+            )
+
+            handles, labels = ax.get_legend_handles_labels()
+            if has_dust_delta:
+                shamrock.matplotlib.add_cmap_legend_entry(
+                    ax,
+                    dust_cmap,
+                    label=r"$M_{\rm dust}(s_{\rm grain})$",
+                    extra_handles=handles,
+                    extra_labels=labels,
+                    loc="best",
+                )
+
+                dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+                dust_sm.set_array([])
+                cbar = fig.colorbar(dust_sm, ax=ax)
+                cbar.set_label("grain size [m]")
+            else:
+                ax.legend(loc="best")
+
+            fig.savefig(self.plot_filename + "_mass_delta.png")
+            if close_plots:
+                plt.close(fig)
