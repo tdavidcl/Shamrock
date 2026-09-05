@@ -125,6 +125,7 @@ reference_zrange = 3.5  # in units of H
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}/"
 dump_folder = sim_folder + "dump/"
+analysis_folder = sim_folder + "analysis/"
 
 # Plotting
 cmap = "plasma"
@@ -158,6 +159,21 @@ print(f"H = {H}")
 mrn_distribution = DustMRNDistribution(
     codeu, mrn_pow, mrn_cutoff_si, grain_size_si_edges, rho_grains_si_edges
 )
+
+St = np.zeros(ndust)
+
+for k in range(ndust):
+    t_dyn = 1
+    ts = shamrock.phys.epstein_stopping_time(
+        rho_grain=mrn_distribution.rho_grains[k],
+        s_grain=mrn_distribution.grain_size[k],
+        rho=rho_i,
+        cs=cs,
+        gamma=gamma,
+    )
+    St[k] = ts / t_dyn
+print(f"Stokes numbers : {St}")
+print("-" * 60)
 
 lmin = (-(lx // 2), -(ly // 2), -(lz // 2))
 lmax = (lx // 2, ly // 2, lz // 2)
@@ -658,14 +674,7 @@ def analyse_and_plot(j):
 
     save_analysis_data("l2_error.json", "l2_error", l2_error_all, j)
 
-    dust_mass = analysis_dust_mass.get_dust_mass()
-
-    # if all dust mass is zero replace by nans
-    if np.max(dust_mass) == 0:
-        print("all dust mass is zero, replacing by nans")
-        dust_mass = [np.nan for _ in range(ndust)]
-
-    save_analysis_data("dust_mass.json", "dust_mass", dust_mass, j)
+    mass_analysis.analysis_save(j)
 
     ax_rho.scatter(z, rho * to_dens, s=sz, color="0.0", edgecolors="none")
     ax_rho.scatter(z, rho_dust_all, s=sz, color="0.5", edgecolors="none")
@@ -793,6 +802,7 @@ def analyse_and_plot(j):
 if shamrock.sys.world_rank() == 0:
     os.makedirs(sim_folder, exist_ok=True)
     os.makedirs(dump_folder, exist_ok=True)
+    os.makedirs(analysis_folder, exist_ok=True)
 
 ctx = shamrock.Context()
 ctx.pdata_layout_new()
@@ -869,7 +879,6 @@ def setup_model():
     model.timestep()
 
 
-analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
 pmass = model.get_particle_mass()
 
 
@@ -877,8 +886,11 @@ pmass = model.get_particle_mass()
 # Run simulation
 # ------------------------------------------
 
+from shamrock.utils.analysis import MassAnalysis
 from shamrock.utils.analysis.compute_field_dust import compute_s_mean_field
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
+
+mass_analysis = MassAnalysis(model, analysis_folder, "mass_history")
 
 
 class Simulation(SimulationRunner):
@@ -962,57 +974,8 @@ if shamrock.sys.world_rank() == 0:
 # Plot dust mass conservation history
 # ------------------------------------------
 
-t, dust_mass = load_data_from_json("dust_mass.json", "dust_mass")
-dust_mass = np.array(dust_mass)
-
-# tinject = first non nan
-iinject = np.argmax(~np.isnan(dust_mass)[:, 0])
-tinject = np.array(t)[iinject]
-
-t = np.array(t) - tinject
-
-St = np.zeros(ndust)
-
-for k in range(ndust):
-    t_dyn = 1
-    ts = shamrock.phys.epstein_stopping_time(
-        rho_grain=mrn_distribution.rho_grains[k],
-        s_grain=mrn_distribution.grain_size[k],
-        rho=rho_i,
-        cs=cs,
-        gamma=gamma,
-    )
-    St[k] = ts / t_dyn
-
-plt.figure()
-for k in range(ndust):
-    mh = dust_mass[:, k]
-    deviation = (mh / mh[iinject]) - 1
-
-    plt.plot(
-        t,
-        deviation,
-        label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}",
-    )
-
-total_dust_mass = np.sum(dust_mass, axis=1)
-plt.plot(
-    t,
-    (total_dust_mass / total_dust_mass[iinject]) - 1,
-    color="grey",
-    label="total dust mass",
-    linestyle="--",
-)
-
-plt.xlabel("t")
-plt.ylabel("$\\delta M_{dust} / M_{dust,0}$")
-plt.yscale("symlog", linthresh=1e-8)
-plt.title("Dust mass conservation")
-plt.legend()
-plt.tight_layout()
-plt.savefig(f"{dump_folder}/plots/dust_mass_history.png")
+mass_analysis.plot_history(close_plots=False)
 plt.show()
-
 
 # %%
 # Plot L2 error history

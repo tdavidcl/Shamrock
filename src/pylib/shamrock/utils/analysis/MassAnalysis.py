@@ -124,9 +124,7 @@ class MassAnalysis:
             "t": t,
             "disc_mass": disc_mass,
             "d_disc_mass_dt": time_gradient(disc_mass),
-            "delta_disc_mass": (
-                disc_mass / disc_mass[0] - 1 if disc_mass.size > 0 else np.array([])
-            ),
+            "delta_disc_mass": (disc_mass - disc_mass[0] if disc_mass.size > 0 else np.array([])),
         }
 
         if has_dust:
@@ -152,7 +150,7 @@ class MassAnalysis:
             result["d_dust_mass_all_dt"] = time_gradient(dust_mass_all)
             result["d_gas_mass_dt"] = time_gradient(gas_mass)
 
-            result["delta_gas_mass"] = gas_mass / gas_mass[0] - 1 if gas_mass.size > 0 else gas_mass
+            result["delta_gas_mass"] = gas_mass - gas_mass[0] if gas_mass.size > 0 else gas_mass
 
             # Dust starts at zero before injection, so its delta is measured from the
             # first snapshot where the total dust mass is non null rather than t=0.
@@ -160,8 +158,8 @@ class MassAnalysis:
             result["dust_start_idx"] = dust_start_idx
 
             if dust_start_idx is not None:
-                result["delta_dust_mass_all"] = dust_mass_all / dust_mass_all[dust_start_idx] - 1
-                result["delta_dust_mass"] = dust_mass / dust_mass[dust_start_idx] - 1
+                result["delta_dust_mass_all"] = dust_mass_all - dust_mass_all[dust_start_idx]
+                result["delta_dust_mass"] = dust_mass - dust_mass[dust_start_idx]
 
         return result
 
@@ -342,7 +340,7 @@ class MassAnalysis:
                     ax.plot(t, mass_hist["delta_dust_mass"][:, i], "+-", color=dust_colors[i])
 
             ax.set_xlabel(f"t [{self.time_unit}]")
-            ax.set_ylabel(r"$\delta M / M_0$")
+            ax.set_ylabel(rf"$\delta M$ [{mass_unit_text}]")
             ax.set_yscale(
                 "symlog",
                 linthresh=self._symlog_linthresh(
