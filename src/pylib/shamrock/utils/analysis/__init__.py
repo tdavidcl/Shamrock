@@ -25,3 +25,4 @@ from .compute_field_dust import compute_s_mean_field, compute_dlog_s_mean_dt_fie
 
 # Performance analysis
 from .PerfHistory import PerfHistory
+from .MassAnalysis import MassAnalysis
