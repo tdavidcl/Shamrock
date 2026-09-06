@@ -479,8 +479,15 @@ class AnalysisHelper:
         Save the analysis data npy file
         """
         if shamrock.sys.world_rank() == 0:
-            print(f"Saving data to {self.npy_data_filename.format(iplot)}")
-            np.save(self.npy_data_filename.format(iplot), data)
+            filepath = self.npy_data_filename.format(iplot)
+
+            print(f"Saving data to {filepath}")
+            dir = os.path.dirname(filepath)
+            if dir:
+                os.makedirs(dir, exist_ok=True)
+
+            print(f"Saving data to {filepath}")
+            np.save(filepath, data)
 
     def load_analysis(self, iplot):
         """
