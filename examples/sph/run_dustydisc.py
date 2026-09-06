@@ -10,6 +10,7 @@ A disc with dust
 import os
 
 import matplotlib as mpl
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
@@ -378,7 +379,11 @@ sim = Simulation(model)
 
 from shamrock.utils.analysis import MassAnalysis, PerfHistory, StandardPlotHelper
 from shamrock.utils.analysis.compute_field_dust import (
+    compute_dlog_s_mean_dt_field,
     compute_effective_dust_col_speed_field,
+    compute_rho_d,
+    compute_rho_dj,
+    compute_rho_g,
     compute_s_mean_field,
 )
 
@@ -487,6 +492,149 @@ def SliceDVeffPlot(
     )
 
 
+def SliceDustEvolSizePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_dlog_s_dt_mean_slice(helper):
+        return helper.slice_render(
+            compute_dlog_s_mean_dt_field(model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_dlog_s_dt_mean_slice,
+    )
+
+
+def SliceRhoGasPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_rho_g_slice(helper):
+        return helper.slice_render(
+            compute_rho_g(model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_rho_g_slice,
+    )
+
+
+def SliceRhoDustPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_rho_d_slice(helper):
+        return helper.slice_render(
+            compute_rho_d(model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_rho_d_slice,
+    )
+
+
+def SliceRhoDustSpeciePlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    jdust,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_rho_dj_slice(helper):
+        return helper.slice_render(
+            compute_rho_dj(model, helper.jdust),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    tmp = StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_rho_dj_slice,
+    )
+    tmp.jdust = jdust
+    return tmp
+
+
 face_on_render_kwargs = {
     "x_unit": "au",
     "y_unit": "au",
@@ -572,6 +720,31 @@ if ndust > 0:
     }
 
     sim.analysis_modules_fast.append(slice_dveff)
+
+    slice_smean_evol_plot = SliceDustEvolSizePlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_evol_slice",
+    )
+
+    rnorm = mcolors.SymLogNorm(
+        vmin=-1e-2,
+        vmax=1e-2,
+        linthresh=1e-5,
+    )
+
+    slice_smean_evol_plot.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "yr^-1",
+        "field_label": r"$\partial_t{ \langle s \rangle}  / \langle s \rangle$",
+        "contour_list": [-1, -1e-1, -1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1],
+        "cmap": "seismic",
+        "cmap_bad_color": "white",
+        "norm": rnorm,
+    }
+
+    sim.analysis_modules_fast.append(slice_smean_evol_plot)
 
 
 sim.run()

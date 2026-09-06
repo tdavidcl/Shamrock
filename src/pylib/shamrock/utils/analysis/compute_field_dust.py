@@ -3,8 +3,56 @@ import numpy as np
 from shamrock.utils.numba_helper import maybe_njit
 
 
+def compute_rho_dj(model, j):
+
+    cfg_json = model.get_current_config().to_json()
+    ndust = cfg_json["dust_config"]["mode"]["ndust"]
+
+    if not j < ndust:
+        raise ValueError(f"dust bin index j={j} is out of range, expected j < ndust={ndust}")
+
+    def int_getter(size: int, dic_out: dict, ndust: int = ndust, jdust=j) -> np.array:
+        s = dic_out["s_j"].reshape(-1, ndust)
+        return s[:, jdust] ** 2  # rho dust
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
+def compute_rho_d(model):
+
+    cfg_json = model.get_current_config().to_json()
+    ndust = cfg_json["dust_config"]["mode"]["ndust"]
+
+    def int_getter(size: int, dic_out: dict, ndust: int = ndust) -> np.array:
+        s = dic_out["s_j"].reshape(-1, ndust)
+        return np.sum(s**2, axis=-1)  # rho dust
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
+def compute_rho_g(model):
+
+    cfg_json = model.get_current_config().to_json()
+    ndust = cfg_json["dust_config"]["mode"]["ndust"]
+
+    hfact = model.get_hfact()
+    pmass = model.get_particle_mass()
+
+    def int_getter(
+        size: int, dic_out: dict, ndust: int = ndust, hfact=hfact, pmass=pmass
+    ) -> np.array:
+
+        s = dic_out["s_j"].reshape(-1, ndust)
+
+        rho = pmass * (hfact / dic_out["hpart"]) ** 3
+        rho_dust = np.sum(s**2, axis=-1)  # rho dust
+
+        return rho - rho_dust
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
 def compute_s_mean_field(model):
-    codeu = model.get_units()
 
     cfg_json = model.get_current_config().to_json()
     drag_mode = cfg_json["dust_config"]["drag_mode"]
@@ -32,7 +80,6 @@ def compute_s_mean_field(model):
 
 
 def compute_dlog_s_mean_dt_field(model):
-    codeu = model.get_units()
 
     cfg_json = model.get_current_config().to_json()
     drag_mode = cfg_json["dust_config"]["drag_mode"]
@@ -69,13 +116,11 @@ def compute_dlog_s_mean_dt_field(model):
 
 
 def compute_effective_dust_col_speed_field(model):
-    codeu = model.get_units()
 
     cfg_json = model.get_current_config().to_json()
     drag_mode = cfg_json["dust_config"]["drag_mode"]
 
     ndust = cfg_json["dust_config"]["mode"]["ndust"]
-    grain_size = drag_mode["grains_sizes"]
 
     def int_getter(
         size: int,
