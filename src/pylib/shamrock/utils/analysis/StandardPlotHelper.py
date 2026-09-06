@@ -23,8 +23,14 @@ def analysis_save(iplot, data, metadata, npy_data_filename, json_data_filename):
     Save the analysis data to the json and npy files
     """
     if shamrock.sys.world_rank() == 0:
-        print(f"Saving data to {npy_data_filename.format(iplot)}")
-        np.save(npy_data_filename.format(iplot), data)
+        filepath = npy_data_filename.format(iplot)
+
+        print(f"Saving data to {filepath}")
+        dir = os.path.dirname(filepath)
+        if dir:
+            os.makedirs(dir, exist_ok=True)
+
+        np.save(filepath, data)
 
         with open(json_data_filename.format(iplot), "w") as fp:
             print(f"Saving metadata to {json_data_filename.format(iplot)}")
@@ -149,6 +155,7 @@ def init_analysis_plot_paths(obj, analysis_folder, analysis_prefix):
     obj.npy_data_filename = obj.analysis_prefix + "{:07}.npy"
     obj.json_data_filename = obj.analysis_prefix + "{:07}.json"
     obj.plot_filename = obj.plot_prefix + "{:07}.png"
+    obj.plot_filename_pdf = obj.plot_prefix + "{:07}.pdf"
     obj.glob_str_plot = obj.plot_prefix + "*.png"
     obj.glob_str_data = obj.analysis_prefix + "*.json"
 
@@ -360,6 +367,7 @@ class StandardPlotHelper:
         sink_linewidth=1,
         sink_fill=False,
         save_plot=True,
+        save_pdf=True,
         extra_title=None,
         **kwargs,
     ):
@@ -423,8 +431,18 @@ class StandardPlotHelper:
             cmap_label = f"{field_label} {field_unit_label}"
             self.figure_add_colorbar(res, cmap_label, holywood_mode)
 
-            print(f"Saving plot to {self.plot_filename.format(iplot)}")
-            plt.savefig(self.plot_filename.format(iplot))
+            png_filename = self.plot_filename.format(iplot)
+            print(f"Saving plot to {png_filename}")
+            png_dirname = os.path.dirname(png_filename)
+            if png_dirname:
+                os.makedirs(png_dirname, exist_ok=True)
+            plt.savefig(png_filename)
+
+            if save_pdf:
+                pdf_filename = self.plot_filename_pdf.format(iplot)
+                print(f"Saving plot to {pdf_filename}")
+                plt.savefig(pdf_filename)
+
             plt.close()
 
     def render_all(self, **kwargs):

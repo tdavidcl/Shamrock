@@ -377,7 +377,15 @@ class Simulation(SimulationRunner):
 sim = Simulation(model)
 
 
-from shamrock.utils.analysis import MassAnalysis, PerfHistory, StandardPlotHelper
+from shamrock.utils.analysis import (
+    ColumnParticleCount,
+    MassAnalysis,
+    PerfHistory,
+    SliceDiffVthetaProfile,
+    SliceDtPart,
+    SliceVzPlot,
+    StandardPlotHelper,
+)
 from shamrock.utils.analysis.compute_field_dust import (
     compute_dlog_s_mean_dt_field,
     compute_effective_dust_col_speed_field,
@@ -659,6 +667,9 @@ sink_params = {
     "sink_fill": False,
 }
 
+max_rho_plot = 1e-9
+min_rho_plot = 1e-16
+
 if ndust > 0:
     col_smean_plot = ColumnAverageDustSizePlot(
         model,
@@ -669,7 +680,7 @@ if ndust > 0:
         ey=(0, 1, 0),
         center=(0, 0, 0),
         analysis_folder=analysis_folder,
-        analysis_prefix="s_mean_column",
+        analysis_prefix="s_mean_column/plot",
     )
     col_smean_plot.render_args = {
         **face_on_render_kwargs,
@@ -687,7 +698,7 @@ if ndust > 0:
         model,
         **slice_params,
         analysis_folder=analysis_folder,
-        analysis_prefix="s_mean_slice",
+        analysis_prefix="s_mean_slice/plot",
     )
 
     slice_smean_plot.render_args = {
@@ -706,7 +717,7 @@ if ndust > 0:
         model,
         **slice_params,
         analysis_folder=analysis_folder,
-        analysis_prefix="delta_v_eff",
+        analysis_prefix="delta_v_eff/plot",
     )
 
     slice_dveff.render_args = {
@@ -725,7 +736,7 @@ if ndust > 0:
         model,
         **slice_params,
         analysis_folder=analysis_folder,
-        analysis_prefix="s_mean_evol_slice",
+        analysis_prefix="s_mean_evol_slice/plot",
     )
 
     rnorm = mcolors.SymLogNorm(
@@ -746,5 +757,152 @@ if ndust > 0:
 
     sim.analysis_modules_fast.append(slice_smean_evol_plot)
 
+    slice_rhog = SliceRhoGasPlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="rho_gas_slice/plot",
+    )
+
+    slice_rhog.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "kg.m^-3",
+        "field_label": "$\\rho_{{\\rm g}}$",
+        "vmin": min_rho_plot,
+        "vmax": max_rho_plot,
+        "norm": "log",
+        **sink_params,
+    }
+
+    sim.analysis_modules_fast.append(slice_rhog)
+
+    slice_rhod = SliceRhoDustPlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="rho_dust_slice_all/plot",
+    )
+
+    slice_rhod.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "kg.m^-3",
+        "field_label": "$\\rho_{{\\rm d}}$",
+        "vmin": 0.02 * min_rho_plot,
+        "vmax": 0.02 * max_rho_plot,
+        "norm": "log",
+        **sink_params,
+    }
+
+    sim.analysis_modules_fast.append(slice_rhod)
+
+    for j in range(ndust):
+        slice_rhodj = SliceRhoDustSpeciePlot(
+            model,
+            **slice_params,
+            analysis_folder=analysis_folder,
+            analysis_prefix=f"rho_dust_slice_{j}/plot",
+            jdust=j,
+        )
+
+        slice_rhodj.render_args = {
+            **face_on_render_kwargs,
+            "field_unit": "kg.m^-3",
+            "field_label": f"$\\rho_{{\\rm d , {j} }}$",
+            "vmin": 0.01 * min_rho_plot,
+            "vmax": 0.01 * max_rho_plot,
+            "norm": "log",
+            **sink_params,
+            "extra_title": f"[$s_{{grain}}$ = {mrn_distribution.grain_size_si[j]:.2e} m]",
+        }
+
+        sim.analysis_modules_fast.append(slice_rhodj)
+
+v_z_slice_plot = SliceVzPlot(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="v_z_slice/plot",
+    do_normalization=True,
+)
+
+v_z_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "m.s^-1",
+    "field_label": "$\\mathrm{v}_z$",
+    "cmap": "seismic",
+    "cmap_bad_color": "white",
+    "vmin": -300,
+    "vmax": 300,
+    **sink_params,
+}
+
+sim.analysis_modules_fast.append(v_z_slice_plot)
+
+relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="relative_azy_velocity_slice/plot",
+    velocity_profile=profiles.vtheta_kepler,
+    do_normalization=True,
+    min_normalization=1e-9,
+)
+
+relative_azy_velocity_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "m.s^-1",
+    "field_label": "$\\mathrm{v}_{\\theta} - v_k$",
+    "cmap": "seismic",
+    "cmap_bad_color": "white",
+    "vmin": -300,
+    "vmax": 300,
+}
+
+sim.analysis_modules_fast.append(relative_azy_velocity_slice_plot)
+
+dt_part_slice_plot = SliceDtPart(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="dt_part_slice/plot",
+)
+
+dt_part_slice_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": "year",
+    "field_label": "$\\Delta t$",
+    "vmin": 1e-4,
+    "vmax": 100,
+    "norm": "log",
+    "contour_list": [1e-2, 1e-1, 1, 10, 100],
+    **sink_params,
+}
+
+sim.analysis_modules_fast.append(dt_part_slice_plot)
+
+column_particle_count_plot = ColumnParticleCount(
+    model,
+    ext_r=disc.rout * 1.5,
+    nx=1024,
+    ny=1024,
+    ex=(1, 0, 0),
+    ey=(0, 1, 0),
+    center=(0, 0, 0),
+    analysis_folder=analysis_folder,
+    analysis_prefix="particle_count/plot",
+)
+
+column_particle_count_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": None,
+    "field_label": "$\\int \\frac{1}{h_\\mathrm{part}} \\, \\mathrm{{d}} z$",
+    "vmin": 1,
+    "vmax": 1e2,
+    "norm": "log",
+    "contour_list": [1, 10, 100, 1000],
+    **sink_params,
+}
+
+sim.analysis_modules_fast.append(column_particle_count_plot)
 
 sim.run()
