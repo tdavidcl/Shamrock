@@ -56,7 +56,7 @@ codeu_kg_m3 = codeu.get("kg") * codeu.get("m", power=-3)
 
 # CLI Parameters
 Npart = int(float(os.environ.get("NPART", "1e5")))
-ndust = int(os.environ.get("NDUST", 0))
+ndust = int(os.environ.get("NDUST", "0"))
 use_coala = os.environ.get("COALA", "False") == "True"
 
 if shamrock.sys.world_rank() == 0:
@@ -112,7 +112,7 @@ beta_AV = 2.0
 # Dust parameters
 kernel = "M6"
 gamma = 1.4
-t_inject = 1.0
+t_inject = 0.0
 
 if ndust > 0:
     mrn_pow = 3.5
@@ -377,7 +377,10 @@ sim = Simulation(model)
 
 
 from shamrock.utils.analysis import MassAnalysis, PerfHistory, StandardPlotHelper
-from shamrock.utils.analysis.compute_field_dust import compute_s_mean_field
+from shamrock.utils.analysis.compute_field_dust import (
+    compute_effective_dust_col_speed_field,
+    compute_s_mean_field,
+)
 
 perf_analysis = PerfHistory(model, analysis_folder, "perf_history")
 sim.analysis_modules_fast.append(perf_analysis)
@@ -430,6 +433,41 @@ def SliceDustSizePlot(
     def compute_s_mean_slice(helper):
         return helper.slice_render(
             compute_s_mean_field(model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_slice,
+    )
+
+
+def SliceDVeffPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_s_mean_slice(helper):
+        return helper.slice_render(
+            compute_effective_dust_col_speed_field(model),
             "f64",
             do_normalization=do_normalization,
             min_normalization=min_normalization,
@@ -515,6 +553,25 @@ if ndust > 0:
     }
 
     sim.analysis_modules_fast.append(slice_smean_plot)
+
+    slice_dveff = SliceDVeffPlot(
+        model,
+        **slice_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="delta_v_eff",
+    )
+
+    slice_dveff.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "m.s^-1",
+        "field_label": "$v_{\\rm eff}$",
+        "vmin": 1e-4,
+        "vmax": 1000,
+        "contour_list": [1e-4, 1e-3, 1e-2, 1e-1, 1e-0, 10, 100],
+        "norm": "log",
+    }
+
+    sim.analysis_modules_fast.append(slice_dveff)
 
 
 sim.run()
