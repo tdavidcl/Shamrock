@@ -10,13 +10,13 @@ def compute_s_mean_field(model):
     drag_mode = cfg_json["dust_config"]["drag_mode"]
 
     ndust = cfg_json["dust_config"]["mode"]["ndust"]
-    grain_size = drag_mode["grains_sizes"]
+    grain_size = np.asarray(drag_mode["grains_sizes"])
 
     def int_getter(
         size: int,
         dic_out: dict,
         ndust: int = ndust,
-        grain_size: np.ndarray = np.asarray(grain_size),
+        grain_size: np.ndarray = grain_size,
     ) -> np.array:
         s_j = dic_out["s_j"].reshape(-1, ndust)
 
@@ -38,13 +38,13 @@ def compute_dlog_s_mean_dt_field(model):
     drag_mode = cfg_json["dust_config"]["drag_mode"]
 
     ndust = cfg_json["dust_config"]["mode"]["ndust"]
-    grain_size = drag_mode["grains_sizes"]
+    grain_size = np.asarray(drag_mode["grains_sizes"])
 
     def int_getter(
         size: int,
         dic_out: dict,
         ndust: int = ndust,
-        grain_size: np.ndarray = np.asarray(grain_size),
+        grain_size: np.ndarray = grain_size,
     ) -> np.array:
         s_j = dic_out["s_j"].reshape(-1, ndust)
         ds_j_dt = dic_out["ds_j_dt"].reshape(-1, ndust)
@@ -81,7 +81,6 @@ def compute_effective_dust_col_speed_field(model):
         size: int,
         dic_out: dict,
         ndust: int = ndust,
-        grain_size: np.ndarray = np.asarray(grain_size),
     ) -> np.array:
         s_j = dic_out["s_j"].reshape(-1, ndust)
 
