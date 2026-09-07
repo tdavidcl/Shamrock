@@ -364,7 +364,7 @@ class Simulation(SimulationRunner):
 
         self.model.do_vtk_dump(self.dump_prefix + f"{ianalysis:07}" + ".vtk", True)
 
-    @callback(walltime_interval=30)  # Checkpoint the simulation every 10 minutes
+    @callback(walltime_interval=60 * 10)  # Checkpoint the simulation every 10 minutes
     def checkpoint(self, icheckpoint):
         self.do_checkpoint(icheckpoint, purge_old_dumps=True, keep_first=1, keep_last=3)
 
