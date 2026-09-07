@@ -7,6 +7,7 @@ A disc with dust
 
 # sphinx_gallery_multi_image = "single"
 
+import json
 import os
 
 import matplotlib as mpl
@@ -1021,7 +1022,7 @@ class radial_profile_plot:
         plt.xlim(np.min(bin_edges_x1d), np.max(bin_edges_x1d))
         plt.ylim(min_rho_plot, max_rho_plot)
 
-        text = f"t = {time:0.3f}"
+        text = f"t = {time:0.3f} [yr]"
         from matplotlib.offsetbox import AnchoredText
 
         anchored_text = AnchoredText(text, loc=2)
@@ -1353,6 +1354,9 @@ class vert_slices_plots:
             zr_cmap = plt.colormaps["plasma"]
             zr_norm = mcolors.Normalize(vmin=z_r_bins[0], vmax=z_r_bins[-1])
 
+            second_hand_plot_dat = {"grain_size_si": grain_size_si.tolist()}
+            z_r_bin_dat = []
+
             for ibin in range(len(z_r_bins) - 1):
                 z_r_min = z_r_bins[ibin]
                 z_r_max = z_r_bins[ibin + 1]
@@ -1360,9 +1364,40 @@ class vert_slices_plots:
 
                 # compute the average between z_r_min and z_r_max of im[:, :] to get a <rho_d> (jdust) curve
                 mask = (bin_center >= z_r_min) & (bin_center < z_r_max)
-                rho_avg_z_r = np.mean(im[:, mask], axis=1)
+                rho_avg_z_r = np.nanmean(im[:, mask], axis=1)
 
                 plt.plot(grain_size_si, rho_avg_z_r, color=zr_cmap(zr_norm(z_r_bin_center)))
+
+                z_r_bin_dat.append(
+                    {
+                        "rho_avg_z_r": rho_avg_z_r.tolist(),
+                        "z_r_min": z_r_min.tolist(),
+                        "z_r_max": z_r_max.tolist(),
+                    }
+                )
+
+            second_hand_plot_dat["z_r_bin_dat"] = z_r_bin_dat
+
+            mean_dist = np.nanmean(im, axis=1)
+            plt.plot(grain_size_si, mean_dist, linestyle="dashed", c="grey", label="mean")
+            second_hand_plot_dat["mean_dist"] = mean_dist.tolist()
+
+            with open(
+                self.profile_plot.analysis_prefix + f"_second_hand_plot_{rcenter}_{iplot:07}.json",
+                "w",
+            ) as f:
+                json.dump(second_hand_plot_dat, f)
+
+            handles, labels = plt.gca().get_legend_handles_labels()
+            shamrock.matplotlib.add_cmap_legend_entry(
+                plt.gca(),
+                dust_cmap,
+                label=r"$\rho_{z/r}(s_{\rm grain})$",
+                extra_handles=handles,
+                extra_labels=labels,
+                loc="best",
+                fontsize=12,
+            )
 
             zr_sm = cm.ScalarMappable(cmap=zr_cmap, norm=zr_norm)
             zr_sm.set_array([])
