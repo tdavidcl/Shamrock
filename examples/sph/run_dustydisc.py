@@ -81,7 +81,7 @@ scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-dt_stop = 2
+dt_stop = 10
 dt_stop_fast = 1
 
 # Sink parameters
@@ -1113,7 +1113,7 @@ class radial_profile_plot:
         cbar_rho = fig.colorbar(rho_sm, ax=axs[1], pad=0.03, fraction=0.025, aspect=20, shrink=0.85)
         cbar_rho.set_label(r"$\langle \rho(r,s_{{grain}}) \rangle_z$ [kg.m^-3]")
 
-        text = f"t = {time:0.3f}"
+        text = f"t = {time:0.3f} [yr]"
         from matplotlib.offsetbox import AnchoredText
 
         anchored_text = AnchoredText(text, loc=2)
@@ -1330,7 +1330,7 @@ class vert_slices_plots:
         )
         cbar_rho.set_label(r"$\langle \rho(z/r,s_{\mathrm{grain}}) \rangle_r$ [kg.m^-3]")
 
-        text = f"t = {time:0.3f}"
+        text = f"t = {time:0.3f} [yr]"
         from matplotlib.offsetbox import AnchoredText
 
         anchored_text = AnchoredText(text, loc=2)
@@ -1339,6 +1339,49 @@ class vert_slices_plots:
         plt.savefig(self.profile_plot.analysis_prefix + f"_vert_slices_{iplot:07}.png")
         plt.savefig(self.profile_plot.analysis_prefix + f"_vert_slices_{iplot:07}.pdf")
         plt.close()
+
+        for ir, rcenter in enumerate(self.rcenters):
+            plt.figure()
+
+            im = np.zeros((ndust, len(bin_center)))
+
+            for jdust in range(ndust):
+                im[jdust, :] = data["rcases"][ir]["histo_rho_d_j"][jdust]
+
+            z_r_bins = np.linspace(0, 0.25, 10)
+
+            zr_cmap = plt.colormaps["plasma"]
+            zr_norm = mcolors.Normalize(vmin=z_r_bins[0], vmax=z_r_bins[-1])
+
+            for ibin in range(len(z_r_bins) - 1):
+                z_r_min = z_r_bins[ibin]
+                z_r_max = z_r_bins[ibin + 1]
+                z_r_bin_center = 0.5 * (z_r_min + z_r_max)
+
+                # compute the average between z_r_min and z_r_max of im[:, :] to get a <rho_d> (jdust) curve
+                mask = (bin_center >= z_r_min) & (bin_center < z_r_max)
+                rho_avg_z_r = np.mean(im[:, mask], axis=1)
+
+                plt.plot(grain_size_si, rho_avg_z_r, color=zr_cmap(zr_norm(z_r_bin_center)))
+
+            zr_sm = cm.ScalarMappable(cmap=zr_cmap, norm=zr_norm)
+            zr_sm.set_array([])
+            cbar_zr = plt.colorbar(zr_sm, ax=plt.gca())
+            cbar_zr.set_label("z/r")
+
+            plt.xlabel("grain size [m]")
+            plt.ylabel(r"$\langle \rho_d \rangle_{z/r}$ [$kg.m^{-3}$]")
+            plt.xscale("log")
+            plt.yscale("log")
+            plt.xlim(np.min(grain_size_si), np.max(grain_size_si))
+            plt.ylim(1e-16, 2e-12)
+            plt.title(rf"r = {rcenter} [au] {text}")
+            plt.tight_layout(pad=0.2)
+
+            plt.savefig(self.profile_plot.analysis_prefix + f"_distrib_{rcenter}_{iplot:07}.png")
+            plt.savefig(self.profile_plot.analysis_prefix + f"_distrib_{rcenter}_{iplot:07}.pdf")
+
+            plt.close()
 
     def make_plot(self, iplot):
         self.profile_plot.make_plot(iplot, self.plot_func)
