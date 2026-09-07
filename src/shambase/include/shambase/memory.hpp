@@ -22,6 +22,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -260,6 +261,29 @@ namespace shambase {
         }
 
         return tmp;
+    }
+
+    /**
+     * @brief Move an rvalue into a std::shared_ptr without repeating the type.
+     *
+     * Constructs the shared object with std::make_shared, move-constructing from
+     * @p value. Use this for expressions such as `to_shared(MyNode{args})` as a
+     * shorter alternative to `std::make_shared<MyNode>(args)`.
+     *
+     * Lvalues are rejected so that an existing object is not copied by accident.
+     * Pass `std::move(obj)` if you already hold a named instance.
+     *
+     * @tparam T Deduced object type (must be an rvalue, not an array).
+     * @param value Object to move into the shared pointer.
+     * @return std::shared_ptr owning a moved instance of T.
+     */
+    template<class T>
+    inline std::shared_ptr<T> to_shared(T &&value) {
+        static_assert(
+            !std::is_lvalue_reference_v<T>,
+            "to_shared requires an rvalue; use std::move if you have an existing object");
+        static_assert(!std::is_array_v<T>, "to_shared does not support array types");
+        return std::make_shared<T>(std::forward<T>(value));
     }
 
 } // namespace shambase
