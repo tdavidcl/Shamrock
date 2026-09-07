@@ -105,8 +105,8 @@ namespace shammodels::sph::modules {
     auto CartesianRender<Tvec, Tfield, SPHKernel>::compute_slice(
         std::string field_name,
         const sham::DeviceBuffer<Tvec> &positions,
-        std::optional<std::function<py::array_t<Tfield>(size_t, pybind11::dict &)>> custom_getter)
-        -> sham::DeviceBuffer<Tfield> {
+        std::optional<std::function<py::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
+            custom_getter) -> sham::DeviceBuffer<Tfield> {
 
         if (shamcomm::world_rank() == 0) {
             logger::info_ln(
@@ -167,8 +167,8 @@ namespace shammodels::sph::modules {
     auto CartesianRender<Tvec, Tfield, SPHKernel>::compute_column_integ(
         std::string field_name,
         const sham::DeviceBuffer<shammath::Ray<Tvec>> &rays,
-        std::optional<std::function<py::array_t<Tfield>(size_t, pybind11::dict &)>> custom_getter)
-        -> sham::DeviceBuffer<Tfield> {
+        std::optional<std::function<py::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
+            custom_getter) -> sham::DeviceBuffer<Tfield> {
 
         if (shamcomm::world_rank() == 0) {
             logger::info_ln(
@@ -230,8 +230,8 @@ namespace shammodels::sph::modules {
     auto CartesianRender<Tvec, Tfield, SPHKernel>::compute_azymuthal_integ(
         std::string field_name,
         const sham::DeviceBuffer<shammath::RingRay<Tvec>> &ring_rays,
-        std::optional<std::function<py::array_t<Tfield>(size_t, pybind11::dict &)>> custom_getter)
-        -> sham::DeviceBuffer<Tfield> {
+        std::optional<std::function<py::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
+            custom_getter) -> sham::DeviceBuffer<Tfield> {
 
         if (shamcomm::world_rank() == 0) {
             logger::info_ln(
@@ -570,7 +570,8 @@ namespace shammodels::sph::modules {
         Tvec delta_y,
         u32 nx,
         u32 ny,
-        std::optional<std::function<pybind11::array_t<Tfield>(size_t, pybind11::dict &)>>
+        std::optional<
+            std::function<pybind11::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
             custom_getter) -> sham::DeviceBuffer<Tfield> {
         auto positions = pixel_to_positions(center, delta_x, delta_y, nx, ny);
         return compute_slice(field_name, positions, custom_getter);
@@ -584,7 +585,8 @@ namespace shammodels::sph::modules {
         Tvec delta_y,
         u32 nx,
         u32 ny,
-        std::optional<std::function<pybind11::array_t<Tfield>(size_t, pybind11::dict &)>>
+        std::optional<
+            std::function<pybind11::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
             custom_getter) -> sham::DeviceBuffer<Tfield> {
         auto rays = pixel_to_orthographic_rays(center, delta_x, delta_y, nx, ny);
         return compute_column_integ(field_name, rays, custom_getter);
