@@ -82,7 +82,7 @@ scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-dt_stop = 10
+dt_stop = 1
 dt_stop_fast = 1
 
 # Sink parameters
@@ -643,6 +643,230 @@ def SliceRhoDustSpeciePlot(
     return tmp
 
 
+def SliceAlphaAVPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_alpha_av_slice(helper):
+        return helper.slice_render(
+            "alpha_AV",
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_alpha_av_slice,
+    )
+
+
+def compute_vz_cs(model):
+
+    def int_getter(size: int, dic_out: dict, ndust: int = ndust, jdust=j) -> np.array:
+        return dic_out["vxyz"][:, 2] / dic_out["soundspeed"]
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
+def compute_delta_vtheta_cs(model):
+
+    vel_profile_jit = maybe_njit(profiles.vtheta_kepler)
+
+    def internal(
+        size: int, x: np.array, y: np.array, vx: np.array, vy: np.array, vz: np.array
+    ) -> np.array:
+        r = np.sqrt(x**2 + y**2)
+        r_safe = r + 1e-9
+        v_theta = (-y * vx + x * vy) / r_safe
+        v_relative = v_theta - vel_profile_jit(r)
+        return v_relative
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        return (
+            internal(
+                size,
+                dic_out["xyz"][:, 0],
+                dic_out["xyz"][:, 1],
+                dic_out["vxyz"][:, 0],
+                dic_out["vxyz"][:, 1],
+                dic_out["vxyz"][:, 2],
+            )
+            / dic_out["soundspeed"]
+        )
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
+def compute_angular_momt(model, Lprojection=(0.0, 0.0, 1.0)):
+
+    pmass = model.get_particle_mass()
+    hfact = model.get_hfact()
+
+    vel_profile_jit = maybe_njit(profiles.vtheta_kepler)
+
+    def internal(
+        x: np.array,
+        y: np.array,
+        z: np.array,
+        vx: np.array,
+        vy: np.array,
+        vz: np.array,
+        hpart: np.array,
+        cs: np.array,
+    ) -> np.array:
+        rho = pmass * (hfact / hpart) ** 3
+        P = cs**2 * rho  # TODO: use true pressure
+
+        r = np.sqrt(x**2 + y**2)
+        r_safe = r + 1e-9
+        v_r = (x * vx + y * vy) / r_safe
+        v_theta = (-y * vx + x * vy) / r_safe
+
+        delta_vtheta = v_theta - vel_profile_jit(r)
+        alpha = rho * v_r * delta_vtheta / P
+
+        return alpha
+
+    internal = maybe_njit(internal)
+
+    def int_getter(size: int, dic_out: dict) -> np.array:
+        return internal(
+            dic_out["xyz"][:, 0],
+            dic_out["xyz"][:, 1],
+            dic_out["xyz"][:, 2],
+            dic_out["vxyz"][:, 0],
+            dic_out["vxyz"][:, 1],
+            dic_out["vxyz"][:, 2],
+            dic_out["hpart"],
+            dic_out["soundspeed"],
+        )
+
+    return model.compute_field("custom", "f64", maybe_njit(int_getter))
+
+
+def SliceVzCs(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_alpha_av_slice(helper):
+        return helper.slice_render(
+            compute_vz_cs(helper.model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_alpha_av_slice,
+    )
+
+
+def SliceDVthetaCs(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_dvtheta_cs_slice(helper):
+        return helper.slice_render(
+            compute_delta_vtheta_cs(helper.model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_dvtheta_cs_slice,
+    )
+
+
+def SliceAlphaTransport(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    do_normalization=True,
+    min_normalization=1e-9,
+):
+    def compute_alpha_momt(helper):
+        return helper.slice_render(
+            compute_angular_momt(helper.model),
+            "f64",
+            do_normalization=do_normalization,
+            min_normalization=min_normalization,
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_alpha_momt,
+    )
+
+
 face_on_render_kwargs = {
     "x_unit": "au",
     "y_unit": "au",
@@ -817,7 +1041,7 @@ if ndust > 0:
 
         sim.analysis_modules.append(slice_rhodj)
 
-v_z_slice_plot = SliceVzPlot(
+v_z_slice_plot = SliceVzCs(
     model,
     **slice_params,
     analysis_folder=analysis_folder,
@@ -827,38 +1051,39 @@ v_z_slice_plot = SliceVzPlot(
 
 v_z_slice_plot.render_args = {
     **face_on_render_kwargs,
-    "field_unit": "m.s^-1",
-    "field_label": "$\\mathrm{v}_z$",
+    "field_unit": None,
+    "field_label": "$\\mathrm{v}_z / c_s$",
     "cmap": "seismic",
     "cmap_bad_color": "white",
-    "vmin": -300,
-    "vmax": 300,
+    "vmin": -0.2,
+    "vmax": 0.2,
     **sink_params,
 }
 
 sim.analysis_modules.append(v_z_slice_plot)
 
-relative_azy_velocity_slice_plot = SliceDiffVthetaProfile(
+
+dvtheta_cs_slice_plot = SliceDVthetaCs(
     model,
     **slice_params,
     analysis_folder=analysis_folder,
-    analysis_prefix="relative_azy_velocity_slice/plot",
-    velocity_profile=profiles.vtheta_kepler,
+    analysis_prefix="dvtheta_cs_slice/plot",
     do_normalization=True,
-    min_normalization=1e-9,
 )
 
-relative_azy_velocity_slice_plot.render_args = {
+dvtheta_cs_slice_plot.render_args = {
     **face_on_render_kwargs,
-    "field_unit": "m.s^-1",
-    "field_label": "$\\mathrm{v}_{\\theta} - v_k$",
+    "field_unit": None,
+    "field_label": "$(\\mathrm{v}_{\\theta} - v_k) / c_s$",
     "cmap": "seismic",
     "cmap_bad_color": "white",
-    "vmin": -300,
-    "vmax": 300,
+    "vmin": -0.4,
+    "vmax": 0.4,
+    **sink_params,
 }
 
-sim.analysis_modules.append(relative_azy_velocity_slice_plot)
+sim.analysis_modules.append(dvtheta_cs_slice_plot)
+
 
 dt_part_slice_plot = SliceDtPart(
     model,
@@ -904,6 +1129,49 @@ column_particle_count_plot.render_args = {
 }
 
 sim.analysis_modules.append(column_particle_count_plot)
+
+alpha_av_plot = SliceAlphaAVPlot(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="alpha_av_slice/plot",
+    do_normalization=True,
+)
+
+alpha_av_plot.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": None,
+    "field_label": "$\\alpha_{\\rm AV}$",
+    "vmin": 1e-6,
+    "vmax": 1,
+    "norm": "log",
+    "contour_list": [1e-4, 1e-3, 1e-2, 1e-1],
+    **sink_params,
+}
+
+sim.analysis_modules.append(alpha_av_plot)
+
+
+alpha_av_momt = SliceAlphaTransport(
+    model,
+    **slice_params,
+    analysis_folder=analysis_folder,
+    analysis_prefix="alpha_momt_slice/plot",
+    do_normalization=True,
+)
+
+alpha_av_momt.render_args = {
+    **face_on_render_kwargs,
+    "field_unit": None,
+    "field_label": "$\\alpha_{\\rm L}$",
+    "vmin": 1e-6,
+    "vmax": 1,
+    "norm": "log",
+    "contour_list": [1e-4, 1e-3, 1e-2, 1e-1],
+    **sink_params,
+}
+
+sim.analysis_modules.append(alpha_av_momt)
 
 
 class radial_profile_plot:
