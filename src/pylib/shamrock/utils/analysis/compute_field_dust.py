@@ -133,23 +133,20 @@ def compute_effective_dust_col_speed_field(model):
         rho_d = s_j**2
 
         Npart = rho_d.shape[0]
-        dveff = np.zeros(Npart)
-        for a in range(Npart):
-            delta_v_a = delta_v[a, :, :]
-            rho_d_a = rho_d[a, :]
 
-            diff = delta_v_a[:, None, :] - delta_v_a[None, :, :]  # shape (ndust, ndust, 3)
-            dv = np.linalg.norm(diff, axis=-1)  # shape (ndust, ndust)
+        # sum_i sum_j rho_i * rho_j == (sum_i rho_i)**2
+        denom = np.sum(rho_d, axis=1) ** 2
 
-            rho_outer = np.outer(rho_d_a, rho_d_a)
-            weighted = rho_outer * dv
+        # sum_i sum_j rho_i * rho_j * |dv_i - dv_j|, accumulated pair by pair
+        # over the (small) ndust axis instead of materializing a
+        # (Npart, ndust, ndust) array. dv_ii == 0 and dv_ij == dv_ji, so only
+        # the i<j pairs are needed, each counted twice.
+        numer = np.zeros(Npart)
+        for i in range(ndust):
+            for j in range(i + 1, ndust):
+                dv_ij = np.linalg.norm(delta_v[:, i, :] - delta_v[:, j, :], axis=-1)
+                numer += 2 * rho_d[:, i] * rho_d[:, j] * dv_ij
 
-            # if a==0:
-            #    print(f"rho_d_a = {rho_d_a}")
-            #    print(f"delta_v_a = {delta_v_a}")
-
-            dveff[a] = weighted.sum() / rho_outer.sum()
-
-        return dveff
+        return numer / denom
 
     return model.compute_field("custom", "f64", maybe_njit(int_getter))

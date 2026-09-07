@@ -82,8 +82,8 @@ scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
 # Dump and plot frequency and duration of the simulation
-dt_stop = 1
-dt_stop_fast = 1
+dt_stop = 50
+dt_stop_fast = 10
 
 # Sink parameters
 center_mass = 1.0
