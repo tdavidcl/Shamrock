@@ -174,6 +174,12 @@ class MassAnalysis:
         return result
 
     @staticmethod
+    def _savefig(fig, filename_png):
+        """Save a figure as png, and also as pdf at the same path."""
+        fig.savefig(filename_png)
+        fig.savefig(filename_png.replace(".png", ".pdf"))
+
+    @staticmethod
     def _first_nonnull_index(arr):
         """Index of the first entry that is neither NaN nor zero, or None if there is none."""
         valid = ~np.isnan(arr) & (arr != 0)
@@ -274,7 +280,7 @@ class MassAnalysis:
         else:
             ax.legend(loc="best")
 
-        fig.savefig(self.plot_filename + filename_suffix)
+        self._savefig(fig, self.plot_filename + filename_suffix)
         if close_plots:
             plt.close(fig)
 
@@ -298,23 +304,23 @@ class MassAnalysis:
             if mass_unit_text == "sol_mass":
                 mass_unit_text = "sol mass"
 
-            plt.figure(figsize=figsize, dpi=dpi)
+            fig = plt.figure(figsize=figsize, dpi=dpi)
             plt.plot(t, mass_hist["disc_mass"])
             plt.xlabel(f"t [{self.time_unit}]")
             plt.ylabel(f"total mass [{mass_unit_text}]")
-            plt.savefig(self.plot_filename + "_total_mass.png")
+            self._savefig(fig, self.plot_filename + "_total_mass.png")
             if close_plots:
-                plt.close()
+                plt.close(fig)
 
             if mass_hist["d_disc_mass_dt"].size > 0:
-                plt.figure(figsize=figsize, dpi=dpi)
+                fig = plt.figure(figsize=figsize, dpi=dpi)
                 plt.plot(t, mass_hist["d_disc_mass_dt"])
                 plt.xlabel(f"t [{self.time_unit}]")
                 plt.ylabel(rf"$dM/dt$ [{mass_unit_text} / {self.time_unit}]")
                 plt.yscale("symlog", linthresh=self._symlog_linthresh(mass_hist["d_disc_mass_dt"]))
-                plt.savefig(self.plot_filename + "_total_mass_dot.png")
+                self._savefig(fig, self.plot_filename + "_total_mass_dot.png")
                 if close_plots:
-                    plt.close()
+                    plt.close(fig)
 
             ndust = dust_colors = dust_cmap = dust_norm = None
 
@@ -362,7 +368,7 @@ class MassAnalysis:
                 cbar = fig.colorbar(dust_sm, ax=ax)
                 cbar.set_label("grain size [m]")
 
-                fig.savefig(self.plot_filename + "_masses.png")
+                self._savefig(fig, self.plot_filename + "_masses.png")
                 if close_plots:
                     plt.close(fig)
 
@@ -412,7 +418,7 @@ class MassAnalysis:
                     cbar = fig.colorbar(dust_sm, ax=ax)
                     cbar.set_label("grain size [m]")
 
-                    fig.savefig(self.plot_filename + "_masses_dot.png")
+                    self._savefig(fig, self.plot_filename + "_masses_dot.png")
                     if close_plots:
                         plt.close(fig)
 
