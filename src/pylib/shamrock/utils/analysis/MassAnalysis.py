@@ -190,6 +190,21 @@ class MassAnalysis:
             return 1e-10
         return np.nanmax(abs_vals) * 1e-6
 
+    @staticmethod
+    def _clamp_log_ylim(ax, *arrays, decades=10, margin_frac=0.1):
+        """Clamp a log-scale axis to at most `decades` below the max, so a handful of
+        near-zero samples don't stretch the y-axis over many empty decades. A margin
+        (in log space) is added on both sides to avoid clamping the plotted curves."""
+        vals = np.concatenate([np.asarray(a).ravel() for a in arrays if np.size(a) > 0])
+        vals = vals[np.isfinite(vals) & (vals > 0)]
+        if vals.size == 0:
+            return
+        ymin, ymax = vals.min(), vals.max()
+        if ymin >= ymax * 10**-decades:
+            return
+        margin = margin_frac * decades
+        ax.set_ylim(ymax * 10 ** (-decades - margin), ymax * 10**margin)
+
     def _plot_mass_delta(
         self,
         mass_hist,
@@ -231,9 +246,7 @@ class MassAnalysis:
                 label=r"$M_{\rm dust}$",
             )
             for i in range(ndust):
-                ax.plot(
-                    t, mass_hist[f"delta_dust_mass{key_suffix}"][:, i], color=dust_colors[i]
-                )
+                ax.plot(t, mass_hist[f"delta_dust_mass{key_suffix}"][:, i], color=dust_colors[i])
             linthresh_arrays += [
                 mass_hist[f"delta_dust_mass_all{key_suffix}"],
                 mass_hist[f"delta_dust_mass{key_suffix}"],
@@ -319,9 +332,7 @@ class MassAnalysis:
                 fig = plt.figure(figsize=figsize, dpi=dpi)
                 ax = fig.gca()
                 ax.plot(t, mass_hist["disc_mass"], color="0.0", label="$M$")
-                ax.plot(
-                    t, mass_hist["gas_mass"], color="cornflowerblue", label=r"$M_{\rm gas}$"
-                )
+                ax.plot(t, mass_hist["gas_mass"], color="cornflowerblue", label=r"$M_{\rm gas}$")
                 ax.plot(t, mass_hist["dust_mass_all"], color="0.5", label=r"$M_{\rm dust}$")
                 for i in range(ndust):
                     ax.plot(t, mass_hist["dust_mass"][:, i], color=dust_colors[i])
@@ -329,6 +340,13 @@ class MassAnalysis:
                 ax.set_xlabel(f"t [{self.time_unit}]")
                 ax.set_ylabel(f"mass [{mass_unit_text}]")
                 ax.set_yscale("log")
+                self._clamp_log_ylim(
+                    ax,
+                    mass_hist["disc_mass"],
+                    mass_hist["gas_mass"],
+                    mass_hist["dust_mass_all"],
+                    mass_hist["dust_mass"],
+                )
                 handles, labels = ax.get_legend_handles_labels()
                 shamrock.matplotlib.add_cmap_legend_entry(
                     ax,
