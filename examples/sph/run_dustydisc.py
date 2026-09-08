@@ -130,7 +130,7 @@ if ndust > 0:
 if ndust > 0 and use_coala is True:
     dv_max = 1000000 * codeu.get("m") / codeu.get("s")
     Q = 5
-    rhodust_eps = 1e-17
+    rhodust_eps = 1e-23 * codeu_kg_m3
     K0_multiplier = 1
 
 # Integrator parameters
