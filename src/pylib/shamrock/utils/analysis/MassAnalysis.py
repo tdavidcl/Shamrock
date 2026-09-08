@@ -210,7 +210,7 @@ class MassAnalysis:
 
         fig = plt.figure(figsize=figsize, dpi=dpi)
         ax = fig.gca()
-        ax.plot(t, mass_hist[f"delta_disc_mass{key_suffix}"], "+-", color="0.0", label="$M$")
+        ax.plot(t, mass_hist[f"delta_disc_mass{key_suffix}"], color="0.0", label="$M$")
 
         linthresh_arrays = [mass_hist[f"delta_disc_mass{key_suffix}"]]
 
@@ -218,7 +218,6 @@ class MassAnalysis:
             ax.plot(
                 t,
                 mass_hist[f"delta_gas_mass{key_suffix}"],
-                "+-",
                 color="cornflowerblue",
                 label=r"$M_{\rm gas}$",
             )
@@ -228,13 +227,12 @@ class MassAnalysis:
             ax.plot(
                 t,
                 mass_hist[f"delta_dust_mass_all{key_suffix}"],
-                "+-",
                 color="0.5",
                 label=r"$M_{\rm dust}$",
             )
             for i in range(ndust):
                 ax.plot(
-                    t, mass_hist[f"delta_dust_mass{key_suffix}"][:, i], "+-", color=dust_colors[i]
+                    t, mass_hist[f"delta_dust_mass{key_suffix}"][:, i], color=dust_colors[i]
                 )
             linthresh_arrays += [
                 mass_hist[f"delta_dust_mass_all{key_suffix}"],
@@ -288,7 +286,7 @@ class MassAnalysis:
                 mass_unit_text = "sol mass"
 
             plt.figure(figsize=figsize, dpi=dpi)
-            plt.plot(t, mass_hist["disc_mass"], "+-")
+            plt.plot(t, mass_hist["disc_mass"])
             plt.xlabel(f"t [{self.time_unit}]")
             plt.ylabel(f"total mass [{mass_unit_text}]")
             plt.savefig(self.plot_filename + "_total_mass.png")
@@ -297,7 +295,7 @@ class MassAnalysis:
 
             if mass_hist["d_disc_mass_dt"].size > 0:
                 plt.figure(figsize=figsize, dpi=dpi)
-                plt.plot(t, mass_hist["d_disc_mass_dt"], "+-")
+                plt.plot(t, mass_hist["d_disc_mass_dt"])
                 plt.xlabel(f"t [{self.time_unit}]")
                 plt.ylabel(rf"$dM/dt$ [{mass_unit_text} / {self.time_unit}]")
                 plt.yscale("symlog", linthresh=self._symlog_linthresh(mass_hist["d_disc_mass_dt"]))
@@ -320,13 +318,13 @@ class MassAnalysis:
 
                 fig = plt.figure(figsize=figsize, dpi=dpi)
                 ax = fig.gca()
-                ax.plot(t, mass_hist["disc_mass"], "+-", color="0.0", label="$M$")
+                ax.plot(t, mass_hist["disc_mass"], color="0.0", label="$M$")
                 ax.plot(
-                    t, mass_hist["gas_mass"], "+-", color="cornflowerblue", label=r"$M_{\rm gas}$"
+                    t, mass_hist["gas_mass"], color="cornflowerblue", label=r"$M_{\rm gas}$"
                 )
-                ax.plot(t, mass_hist["dust_mass_all"], "+-", color="0.5", label=r"$M_{\rm dust}$")
+                ax.plot(t, mass_hist["dust_mass_all"], color="0.5", label=r"$M_{\rm dust}$")
                 for i in range(ndust):
-                    ax.plot(t, mass_hist["dust_mass"][:, i], "+-", color=dust_colors[i])
+                    ax.plot(t, mass_hist["dust_mass"][:, i], color=dust_colors[i])
 
                 ax.set_xlabel(f"t [{self.time_unit}]")
                 ax.set_ylabel(f"mass [{mass_unit_text}]")
@@ -353,23 +351,22 @@ class MassAnalysis:
                 if mass_hist["d_dust_mass_dt"].size > 0:
                     fig = plt.figure(figsize=figsize, dpi=dpi)
                     ax = fig.gca()
-                    ax.plot(t, mass_hist["d_disc_mass_dt"], "+-", color="0.0", label=r"$\dot{M}$")
+                    ax.plot(t, mass_hist["d_disc_mass_dt"], color="0.0", label=r"$\dot{M}$")
                     ax.plot(
                         t,
                         mass_hist["d_gas_mass_dt"],
-                        "+-",
+                        "-",
                         color="cornflowerblue",
                         label=r"$\dot{M}_{\rm gas}$",
                     )
                     ax.plot(
                         t,
                         mass_hist["d_dust_mass_all_dt"],
-                        "+-",
                         color="0.5",
                         label=r"$\dot{M}_{\rm dust}$",
                     )
                     for i in range(ndust):
-                        ax.plot(t, mass_hist["d_dust_mass_dt"][:, i], "+-", color=dust_colors[i])
+                        ax.plot(t, mass_hist["d_dust_mass_dt"][:, i], color=dust_colors[i])
 
                     ax.set_xlabel(f"t [{self.time_unit}]")
                     ax.set_ylabel(rf"$dM/dt$ [{mass_unit_text} / {self.time_unit}]")
