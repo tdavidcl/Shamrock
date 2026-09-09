@@ -11,6 +11,7 @@
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/riemann.hpp"
+#include "shammath/riemann_dust.hpp"
 #include "shamtest/shamtest.hpp"
 
 NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
@@ -81,4 +82,138 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
         REQUIRE(sum.rhovel[1] == 0);
         REQUIRE(sum.rhovel[2] == 0);
     }
+}
+
+NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
+
+    using Tvec  = f64_3;
+    using Tcons = shammath::ConsState<Tvec>;
+    using Tprim = shammath::PrimState<Tvec>;
+
+    using DTcons = shammath::DustConsState<Tvec>;
+    using DTprim = shammath::DustPrimState<Tvec>;
+
+    constexpr f64 gamma = 1.6666;
+
+    // Every _n(..., n) call should reproduce the corresponding permutation-based
+    // _flux_<direction>(...) call bit-for-bit when n is one of the six axis-aligned unit
+    // vectors: hydro_flux_n / d_hydro_flux_n reduce to the exact same grouping of operations
+    // as hydro_flux_x / d_hydro_flux_x, so no floating point tolerance is needed here.
+
+    auto to_prim = [&](Tcons c) {
+        return shammath::cons_to_prim(c, gamma);
+    };
+
+    Tprim pL = to_prim({.rho = 1.2_f64, .rhoe = 1.1_f64, .rhovel = f64_3{0.3, -0.2, 0.5}});
+    Tprim pR = to_prim({.rho = 0.9_f64, .rhoe = 1.4_f64, .rhovel = f64_3{-0.1, 0.4, -0.3}});
+
+    DTprim dL{.rho = 1.1_f64, .vel = f64_3{0.2, -0.3, 0.1}};
+    DTprim dR{.rho = 0.8_f64, .vel = f64_3{-0.4, 0.1, 0.2}};
+
+    auto require_cons_equal = [&](Tcons a, Tcons b) {
+        REQUIRE_EQUAL_CUSTOM_COMP(a.rho, b.rho, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(a.rhovel, b.rhovel, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(a.rhoe, b.rhoe, sham::equals);
+    };
+
+    auto require_dust_cons_equal = [&](DTcons a, DTcons b) {
+        REQUIRE_EQUAL_CUSTOM_COMP(a.rho, b.rho, sham::equals);
+        REQUIRE_EQUAL_CUSTOM_COMP(a.rhovel, b.rhovel, sham::equals);
+    };
+
+    auto check_gas_solver = [&](auto solver_n,
+                                 Tcons fx,
+                                 Tcons fy,
+                                 Tcons fz,
+                                 Tcons fmx,
+                                 Tcons fmy,
+                                 Tcons fmz) {
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{1, 0, 0}), fx);
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 1, 0}), fy);
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, 1}), fz);
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{-1, 0, 0}), fmx);
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, -1, 0}), fmy);
+        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, -1}), fmz);
+    };
+
+    auto check_dust_solver = [&](auto solver_n,
+                                  DTcons fx,
+                                  DTcons fy,
+                                  DTcons fz,
+                                  DTcons fmx,
+                                  DTcons fmy,
+                                  DTcons fmz) {
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{1, 0, 0}), fx);
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 1, 0}), fy);
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, 1}), fz);
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{-1, 0, 0}), fmx);
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, -1, 0}), fmy);
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, -1}), fmz);
+    };
+
+    check_gas_solver(
+        [](Tprim a, Tprim b, f64 g, Tvec n) {
+            return shammath::rusanov_flux_n(a, b, g, n);
+        },
+        shammath::rusanov_flux_x(pL, pR, gamma),
+        shammath::rusanov_flux_y(pL, pR, gamma),
+        shammath::rusanov_flux_z(pL, pR, gamma),
+        shammath::rusanov_flux_mx(pL, pR, gamma),
+        shammath::rusanov_flux_my(pL, pR, gamma),
+        shammath::rusanov_flux_mz(pL, pR, gamma));
+
+    check_gas_solver(
+        [](Tprim a, Tprim b, f64 g, Tvec n) {
+            return shammath::hll_flux_n(a, b, g, n);
+        },
+        shammath::hll_flux_x(pL, pR, gamma),
+        shammath::hll_flux_y(pL, pR, gamma),
+        shammath::hll_flux_z(pL, pR, gamma),
+        shammath::hll_flux_mx(pL, pR, gamma),
+        shammath::hll_flux_my(pL, pR, gamma),
+        shammath::hll_flux_mz(pL, pR, gamma));
+
+    check_gas_solver(
+        [](Tprim a, Tprim b, f64 g, Tvec n) {
+            return shammath::hllc_adiab_toro_flux_n(a, b, g, n);
+        },
+        shammath::hllc_adiab_toro_flux_x(pL, pR, gamma),
+        shammath::hllc_adiab_toro_flux_y(pL, pR, gamma),
+        shammath::hllc_adiab_toro_flux_z(pL, pR, gamma),
+        shammath::hllc_adiab_toro_flux_mx(pL, pR, gamma),
+        shammath::hllc_adiab_toro_flux_my(pL, pR, gamma),
+        shammath::hllc_adiab_toro_flux_mz(pL, pR, gamma));
+
+    check_gas_solver(
+        [](Tprim a, Tprim b, f64 g, Tvec n) {
+            return shammath::hllc_davis_flux_n(a, b, g, n);
+        },
+        shammath::hllc_davis_flux_x(pL, pR, gamma),
+        shammath::hllc_davis_flux_y(pL, pR, gamma),
+        shammath::hllc_davis_flux_z(pL, pR, gamma),
+        shammath::hllc_davis_flux_mx(pL, pR, gamma),
+        shammath::hllc_davis_flux_my(pL, pR, gamma),
+        shammath::hllc_davis_flux_mz(pL, pR, gamma));
+
+    check_dust_solver(
+        [](DTprim a, DTprim b, Tvec n) {
+            return shammath::d_hll_flux_n(a, b, n);
+        },
+        shammath::d_hll_flux_x(dL, dR),
+        shammath::d_hll_flux_y(dL, dR),
+        shammath::d_hll_flux_z(dL, dR),
+        shammath::d_hll_flux_mx(dL, dR),
+        shammath::d_hll_flux_my(dL, dR),
+        shammath::d_hll_flux_mz(dL, dR));
+
+    check_dust_solver(
+        [](DTprim a, DTprim b, Tvec n) {
+            return shammath::huang_bai_flux_n(a, b, n);
+        },
+        shammath::huang_bai_flux_x(dL, dR),
+        shammath::huang_bai_flux_y(dL, dR),
+        shammath::huang_bai_flux_z(dL, dR),
+        shammath::huang_bai_flux_mx(dL, dR),
+        shammath::huang_bai_flux_my(dL, dR),
+        shammath::huang_bai_flux_mz(dL, dR));
 }

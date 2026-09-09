@@ -20,25 +20,38 @@
 
 namespace shammath {
 
-    // Huang & Bai, 2022 ,A Multifluid Dust Module in Athena++: Algorithms and Numerical Tests
-    // Equation (32)
+    /**
+     * @brief Huang & Bai dust flux across a face with unit normal n (n = (1,0,0) is
+     *        huang_bai_flux_x)
+     *
+     * Huang & Bai, 2022, A Multifluid Dust Module in Athena++: Algorithms and Numerical
+     * Tests, Equation (32)
+     */
     template<class Tprim>
-    inline constexpr auto huang_bai_flux_x(Tprim d_primL, Tprim d_primR) {
-        const auto fL = d_hydro_flux_x(d_primL);
-        const auto fR = d_hydro_flux_x(d_primR);
+    inline constexpr auto huang_bai_flux_n(Tprim d_primL, Tprim d_primR, typename Tprim::Tvec n) {
+        const auto fL = d_hydro_flux_n(d_primL, n);
+        const auto fR = d_hydro_flux_n(d_primR, n);
+
+        const auto vnL = n[0] * d_primL.vel[0] + n[1] * d_primL.vel[1] + n[2] * d_primL.vel[2];
+        const auto vnR = n[0] * d_primR.vel[0] + n[1] * d_primR.vel[1] + n[2] * d_primR.vel[2];
 
         DustConsState<typename Tprim::Tvec> d_flux{};
 
-        if (d_primL.vel[0] > 0 && d_primR.vel[0] > 0)
+        if (vnL > 0 && vnR > 0)
             d_flux = fL;
-        else if (d_primL.vel[0] < 0 && d_primR.vel[0] < 0)
+        else if (vnL < 0 && vnR < 0)
             d_flux = fR;
-        else if (d_primL.vel[0] < 0 && d_primR.vel[0] > 0)
+        else if (vnL < 0 && vnR > 0)
             d_flux *= 0;
-        else if (d_primL.vel[0] > 0 && d_primR.vel[0] < 0)
+        else if (vnL > 0 && vnR < 0)
             d_flux = (fL + fR);
 
         return d_flux;
+    }
+
+    template<class Tprim>
+    inline constexpr auto huang_bai_flux_x(Tprim d_primL, Tprim d_primR) {
+        return huang_bai_flux_n(d_primL, d_primR, typename Tprim::Tvec{1, 0, 0});
     }
 
     template<class Tprim>

@@ -22,22 +22,31 @@
 
 namespace shammath {
 
+    /**
+     * @brief HLL flux across a face with unit normal n (n = (1,0,0) is hll_flux_x)
+     */
     template<class Tprim>
-    inline constexpr auto hll_flux_x(
-        const Tprim primL, const Tprim primR, const typename Tprim::Tscal gamma) {
+    inline constexpr auto hll_flux_n(
+        const Tprim primL,
+        const Tprim primR,
+        const typename Tprim::Tscal gamma,
+        const typename Tprim::Tvec n) {
         const auto csL = sound_speed(primL, gamma);
         const auto csR = sound_speed(primR, gamma);
 
+        const auto vnL = n[0] * primL.vel[0] + n[1] * primL.vel[1] + n[2] * primL.vel[2];
+        const auto vnR = n[0] * primR.vel[0] + n[1] * primR.vel[1] + n[2] * primR.vel[2];
+
         // Teyssier form
-        // const auto S_L = sham::min(primL.vel[0], primR.vel[0]) - sham::max(csL, csR);
-        // const auto S_R = sham::max(primL.vel[0], primR.vel[0]) + sham::max(csL, csR);
+        // const auto S_L = sham::min(vnL, vnR) - sham::max(csL, csR);
+        // const auto S_R = sham::max(vnL, vnR) + sham::max(csL, csR);
 
         // Toro form Equation (10.48)
-        const auto S_L = sham::min(primL.vel[0] - csL, primR.vel[0] - csR);
-        const auto S_R = sham::max(primL.vel[0] + csL, primR.vel[0] + csR);
+        const auto S_L = sham::min(vnL - csL, vnR - csR);
+        const auto S_R = sham::max(vnL + csL, vnR + csR);
 
-        const auto fluxL = hydro_flux_x(primL, gamma);
-        const auto fluxR = hydro_flux_x(primR, gamma);
+        const auto fluxL = hydro_flux_n(primL, n, gamma);
+        const auto fluxR = hydro_flux_n(primR, n, gamma);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
         auto hll_flux = [=]() {
@@ -63,6 +72,12 @@ namespace shammath {
         };
 
         return hll_flux();
+    }
+
+    template<class Tprim>
+    inline constexpr auto hll_flux_x(
+        const Tprim primL, const Tprim primR, const typename Tprim::Tscal gamma) {
+        return hll_flux_n(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
     }
 
     template<class Tprim>

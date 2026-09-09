@@ -147,23 +147,39 @@ namespace shammath {
         return prim;
     }
 
+    /**
+     * @brief Physical Euler flux across a face with unit normal n
+     *
+     * Coordinate-free form of the Euler flux (rotational invariance of the Euler
+     * equations): flux.rho = rho*vn, flux.rhoe = (rhoe+p)*vn,
+     * flux.rhovel = rho*vn*v + p*n, with vn = dot(v, n). n is expected to be a
+     * unit vector. hydro_flux_x is the n = (1,0,0) special case.
+     */
     template<class Tvec>
-    inline constexpr ConsState<Tvec> hydro_flux_x(
-        const PrimState<Tvec> prim, typename PrimState<Tvec>::Tscal gamma) {
+    inline constexpr ConsState<Tvec> hydro_flux_n(
+        const PrimState<Tvec> prim, Tvec n, typename PrimState<Tvec>::Tscal gamma) {
         ConsState<Tvec> flux;
 
         const auto rhoeint = prim.press / (gamma - 1.0);
         const auto rhoe    = rhoeint + rhoekin(prim.rho, prim.vel);
 
-        flux.rho = prim.rho * prim.vel[0];
+        const auto vn = n[0] * prim.vel[0] + n[1] * prim.vel[1] + n[2] * prim.vel[2];
 
-        flux.rhoe = (rhoe + prim.press) * prim.vel[0];
+        flux.rho = prim.rho * vn;
 
-        flux.rhovel[0] = prim.rho * prim.vel[0] * prim.vel[0] + prim.press;
-        flux.rhovel[1] = prim.rho * prim.vel[0] * prim.vel[1];
-        flux.rhovel[2] = prim.rho * prim.vel[0] * prim.vel[2];
+        flux.rhoe = (rhoe + prim.press) * vn;
+
+        flux.rhovel[0] = prim.rho * vn * prim.vel[0] + prim.press * n[0];
+        flux.rhovel[1] = prim.rho * vn * prim.vel[1] + prim.press * n[1];
+        flux.rhovel[2] = prim.rho * vn * prim.vel[2] + prim.press * n[2];
 
         return flux;
+    }
+
+    template<class Tvec>
+    inline constexpr ConsState<Tvec> hydro_flux_x(
+        const PrimState<Tvec> prim, typename PrimState<Tvec>::Tscal gamma) {
+        return hydro_flux_n(prim, Tvec{1, 0, 0}, gamma);
     }
 
     template<class Tvec>
@@ -354,13 +370,26 @@ namespace shammath {
         return d_prim;
     }
 
+    /**
+     * @brief Pressureless (dust) flux across a face with unit normal n
+     *
+     * Same coordinate-free construction as hydro_flux_n, without the pressure
+     * term: flux.rho = rho*vn, flux.rhovel = rho*vn*v, with vn = dot(v, n).
+     * n is expected to be a unit vector. d_hydro_flux_x is the n = (1,0,0)
+     * special case.
+     */
+    template<class Tvec>
+    inline constexpr DustConsState<Tvec> d_hydro_flux_n(const DustPrimState<Tvec> d_prim, Tvec n) {
+        DustConsState<Tvec> d_flux;
+        const auto vn = n[0] * d_prim.vel[0] + n[1] * d_prim.vel[1] + n[2] * d_prim.vel[2];
+        d_flux.rho    = d_prim.rho * vn;
+        d_flux.rhovel = d_prim.vel * (d_prim.rho * vn);
+        return d_flux;
+    }
+
     template<class Tvec>
     inline constexpr DustConsState<Tvec> d_hydro_flux_x(const DustPrimState<Tvec> d_prim) {
-        DustConsState<Tvec> d_flux;
-        const typename DustPrimState<Tvec>::Tscal x_vel{d_prim.vel[0]};
-        d_flux.rho    = d_prim.rho * x_vel;
-        d_flux.rhovel = d_prim.vel * (d_prim.rho * x_vel);
-        return d_flux;
+        return d_hydro_flux_n(d_prim, Tvec{1, 0, 0});
     }
 
     template<class Tcons>
