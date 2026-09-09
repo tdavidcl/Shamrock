@@ -13,6 +13,7 @@
 #include "shammath/riemann.hpp"
 #include "shammath/riemann_dust.hpp"
 #include "shamtest/shamtest.hpp"
+#include <utility>
 
 NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
 
@@ -84,6 +85,118 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     }
 }
 
+namespace {
+
+    // Local stand-ins for the gas riemann_common.hpp _x/_y/_z/_mx/_my/_mz axis dispatch
+    // (riemann_rusanov.hpp etc.), rebuilt here from a plain "_n" solver so this test can
+    // keep validating axis-rotation vs. direct n-projection after those per-axis overloads
+    // are removed from the solvers themselves. flux_func is expected to have the same
+    // signature as the *_flux_n solvers: (primL, primR, gamma, n).
+    template<class Tprim, class Func>
+    inline auto _x_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return flux_func(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
+    }
+
+    template<class Tprim, class Func>
+    inline auto _y_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return shammath::x_to_y(_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::prim_y_to_x(primL),
+            shammath::prim_y_to_x(primR),
+            gamma));
+    }
+
+    template<class Tprim, class Func>
+    inline auto _z_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return shammath::x_to_z(_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::prim_z_to_x(primL),
+            shammath::prim_z_to_x(primR),
+            gamma));
+    }
+
+    template<class Tprim, class Func>
+    inline auto _mx_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return shammath::invert_axis(_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::prim_invert_axis(primL),
+            shammath::prim_invert_axis(primR),
+            gamma));
+    }
+
+    template<class Tprim, class Func>
+    inline auto _my_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return shammath::invert_axis(_y_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::prim_invert_axis(primL),
+            shammath::prim_invert_axis(primR),
+            gamma));
+    }
+
+    template<class Tprim, class Func>
+    inline auto _mz_dispatch(
+        Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
+        return shammath::invert_axis(_z_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::prim_invert_axis(primL),
+            shammath::prim_invert_axis(primR),
+            gamma));
+    }
+
+    // Same idea for the dust solvers, which take no gamma and use the d_-prefixed
+    // rotation helpers (d_prim_y_to_x, d_x_to_y, d_invert_axis, ...).
+    template<class Tprim, class Func>
+    inline auto d_x_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return flux_func(primL, primR, typename Tprim::Tvec{1, 0, 0});
+    }
+
+    template<class Tprim, class Func>
+    inline auto d_y_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return shammath::d_x_to_y(d_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::d_prim_y_to_x(primL),
+            shammath::d_prim_y_to_x(primR)));
+    }
+
+    template<class Tprim, class Func>
+    inline auto d_z_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return shammath::d_x_to_z(d_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::d_prim_z_to_x(primL),
+            shammath::d_prim_z_to_x(primR)));
+    }
+
+    template<class Tprim, class Func>
+    inline auto d_mx_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return shammath::d_invert_axis(d_x_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::d_prim_invert_axis(primL),
+            shammath::d_prim_invert_axis(primR)));
+    }
+
+    template<class Tprim, class Func>
+    inline auto d_my_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return shammath::d_invert_axis(d_y_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::d_prim_invert_axis(primL),
+            shammath::d_prim_invert_axis(primR)));
+    }
+
+    template<class Tprim, class Func>
+    inline auto d_mz_dispatch(Func &&flux_func, Tprim primL, Tprim primR) {
+        return shammath::d_invert_axis(d_z_dispatch(
+            std::forward<Func>(flux_func),
+            shammath::d_prim_invert_axis(primL),
+            shammath::d_prim_invert_axis(primR)));
+    }
+
+} // namespace
+
 NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
 
     using Tvec  = f64_3;
@@ -123,89 +236,51 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
         REQUIRE_FLOAT_EQUAL_CUSTOM_DIST_NAMED("", lhs.rhovel, rhs.rhovel, eps, sycl::length);
     };
 
-    auto check_gas_solver
-        = [&](auto solver_n, Tcons fx, Tcons fy, Tcons fz, Tcons fmx, Tcons fmy, Tcons fmz) {
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{1, 0, 0}), fx);
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 1, 0}), fy);
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, 1}), fz);
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{-1, 0, 0}), fmx);
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, -1, 0}), fmy);
-              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, -1}), fmz);
-          };
+    auto check_gas_solver = [&](auto solver_n) {
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{1, 0, 0}), _x_dispatch(solver_n, pL, pR, gamma));
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{0, 1, 0}), _y_dispatch(solver_n, pL, pR, gamma));
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{0, 0, 1}), _z_dispatch(solver_n, pL, pR, gamma));
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{-1, 0, 0}), _mx_dispatch(solver_n, pL, pR, gamma));
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{0, -1, 0}), _my_dispatch(solver_n, pL, pR, gamma));
+        require_cons_equal(
+            solver_n(pL, pR, gamma, Tvec{0, 0, -1}), _mz_dispatch(solver_n, pL, pR, gamma));
+    };
 
-    auto check_dust_solver
-        = [&](auto solver_n, DTcons fx, DTcons fy, DTcons fz, DTcons fmx, DTcons fmy, DTcons fmz) {
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{1, 0, 0}), fx);
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 1, 0}), fy);
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, 1}), fz);
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{-1, 0, 0}), fmx);
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, -1, 0}), fmy);
-              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, -1}), fmz);
-          };
+    auto check_dust_solver = [&](auto solver_n) {
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{1, 0, 0}), d_x_dispatch(solver_n, dL, dR));
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 1, 0}), d_y_dispatch(solver_n, dL, dR));
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, 1}), d_z_dispatch(solver_n, dL, dR));
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{-1, 0, 0}), d_mx_dispatch(solver_n, dL, dR));
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, -1, 0}), d_my_dispatch(solver_n, dL, dR));
+        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, -1}), d_mz_dispatch(solver_n, dL, dR));
+    };
 
-    check_gas_solver(
-        [](Tprim a, Tprim b, f64 g, Tvec n) {
-            return shammath::rusanov_flux_n(a, b, g, n);
-        },
-        shammath::rusanov_flux_x(pL, pR, gamma),
-        shammath::rusanov_flux_y(pL, pR, gamma),
-        shammath::rusanov_flux_z(pL, pR, gamma),
-        shammath::rusanov_flux_mx(pL, pR, gamma),
-        shammath::rusanov_flux_my(pL, pR, gamma),
-        shammath::rusanov_flux_mz(pL, pR, gamma));
+    check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
+        return shammath::rusanov_flux_n(a, b, g, n);
+    });
 
-    check_gas_solver(
-        [](Tprim a, Tprim b, f64 g, Tvec n) {
-            return shammath::hll_flux_n(a, b, g, n);
-        },
-        shammath::hll_flux_x(pL, pR, gamma),
-        shammath::hll_flux_y(pL, pR, gamma),
-        shammath::hll_flux_z(pL, pR, gamma),
-        shammath::hll_flux_mx(pL, pR, gamma),
-        shammath::hll_flux_my(pL, pR, gamma),
-        shammath::hll_flux_mz(pL, pR, gamma));
+    check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
+        return shammath::hll_flux_n(a, b, g, n);
+    });
 
-    check_gas_solver(
-        [](Tprim a, Tprim b, f64 g, Tvec n) {
-            return shammath::hllc_adiab_toro_flux_n(a, b, g, n);
-        },
-        shammath::hllc_adiab_toro_flux_x(pL, pR, gamma),
-        shammath::hllc_adiab_toro_flux_y(pL, pR, gamma),
-        shammath::hllc_adiab_toro_flux_z(pL, pR, gamma),
-        shammath::hllc_adiab_toro_flux_mx(pL, pR, gamma),
-        shammath::hllc_adiab_toro_flux_my(pL, pR, gamma),
-        shammath::hllc_adiab_toro_flux_mz(pL, pR, gamma));
+    check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
+        return shammath::hllc_adiab_toro_flux_n(a, b, g, n);
+    });
 
-    check_gas_solver(
-        [](Tprim a, Tprim b, f64 g, Tvec n) {
-            return shammath::hllc_davis_flux_n(a, b, g, n);
-        },
-        shammath::hllc_davis_flux_x(pL, pR, gamma),
-        shammath::hllc_davis_flux_y(pL, pR, gamma),
-        shammath::hllc_davis_flux_z(pL, pR, gamma),
-        shammath::hllc_davis_flux_mx(pL, pR, gamma),
-        shammath::hllc_davis_flux_my(pL, pR, gamma),
-        shammath::hllc_davis_flux_mz(pL, pR, gamma));
+    check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
+        return shammath::hllc_davis_flux_n(a, b, g, n);
+    });
 
-    check_dust_solver(
-        [](DTprim a, DTprim b, Tvec n) {
-            return shammath::d_hll_flux_n(a, b, n);
-        },
-        shammath::d_hll_flux_x(dL, dR),
-        shammath::d_hll_flux_y(dL, dR),
-        shammath::d_hll_flux_z(dL, dR),
-        shammath::d_hll_flux_mx(dL, dR),
-        shammath::d_hll_flux_my(dL, dR),
-        shammath::d_hll_flux_mz(dL, dR));
+    check_dust_solver([](DTprim a, DTprim b, Tvec n) {
+        return shammath::d_hll_flux_n(a, b, n);
+    });
 
-    check_dust_solver(
-        [](DTprim a, DTprim b, Tvec n) {
-            return shammath::huang_bai_flux_n(a, b, n);
-        },
-        shammath::huang_bai_flux_x(dL, dR),
-        shammath::huang_bai_flux_y(dL, dR),
-        shammath::huang_bai_flux_z(dL, dR),
-        shammath::huang_bai_flux_mx(dL, dR),
-        shammath::huang_bai_flux_my(dL, dR),
-        shammath::huang_bai_flux_mz(dL, dR));
+    check_dust_solver([](DTprim a, DTprim b, Tvec n) {
+        return shammath::huang_bai_flux_n(a, b, n);
+    });
 }
