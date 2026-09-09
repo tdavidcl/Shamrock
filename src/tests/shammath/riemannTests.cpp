@@ -100,7 +100,7 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     // Compared with a tolerance rather than exact equality: the two code paths group
     // floating point operations differently, so compiler-dependent choices (e.g. FMA
     // contraction) can make them differ by a ULP or two.
-    constexpr f64 eps = 1e-12;
+    constexpr f64 eps = 1e-15;
 
     auto to_prim = [&](Tcons c) {
         return shammath::cons_to_prim(c, gamma);
