@@ -121,35 +121,25 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
         REQUIRE_EQUAL_CUSTOM_COMP(a.rhovel, b.rhovel, sham::equals);
     };
 
-    auto check_gas_solver = [&](auto solver_n,
-                                 Tcons fx,
-                                 Tcons fy,
-                                 Tcons fz,
-                                 Tcons fmx,
-                                 Tcons fmy,
-                                 Tcons fmz) {
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{1, 0, 0}), fx);
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 1, 0}), fy);
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, 1}), fz);
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{-1, 0, 0}), fmx);
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, -1, 0}), fmy);
-        require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, -1}), fmz);
-    };
+    auto check_gas_solver
+        = [&](auto solver_n, Tcons fx, Tcons fy, Tcons fz, Tcons fmx, Tcons fmy, Tcons fmz) {
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{1, 0, 0}), fx);
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 1, 0}), fy);
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, 1}), fz);
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{-1, 0, 0}), fmx);
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, -1, 0}), fmy);
+              require_cons_equal(solver_n(pL, pR, gamma, Tvec{0, 0, -1}), fmz);
+          };
 
-    auto check_dust_solver = [&](auto solver_n,
-                                  DTcons fx,
-                                  DTcons fy,
-                                  DTcons fz,
-                                  DTcons fmx,
-                                  DTcons fmy,
-                                  DTcons fmz) {
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{1, 0, 0}), fx);
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 1, 0}), fy);
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, 1}), fz);
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{-1, 0, 0}), fmx);
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, -1, 0}), fmy);
-        require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, -1}), fmz);
-    };
+    auto check_dust_solver
+        = [&](auto solver_n, DTcons fx, DTcons fy, DTcons fz, DTcons fmx, DTcons fmy, DTcons fmz) {
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{1, 0, 0}), fx);
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 1, 0}), fy);
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, 1}), fz);
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{-1, 0, 0}), fmx);
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, -1, 0}), fmy);
+              require_dust_cons_equal(solver_n(dL, dR, Tvec{0, 0, -1}), fmz);
+          };
 
     check_gas_solver(
         [](Tprim a, Tprim b, f64 g, Tvec n) {
