@@ -574,7 +574,7 @@ namespace shammodels::sph::modules {
             std::function<pybind11::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
             custom_getter) -> sham::DeviceBuffer<Tfield> {
         auto positions = pixel_to_positions(center, delta_x, delta_y, nx, ny);
-        return compute_slice(field_name, positions, custom_getter);
+        return compute_slice(std::move(field_name), positions, std::move(custom_getter));
     }
 
     template<class Tvec, class Tfield, template<class> class SPHKernel>
@@ -589,7 +589,7 @@ namespace shammodels::sph::modules {
             std::function<pybind11::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
             custom_getter) -> sham::DeviceBuffer<Tfield> {
         auto rays = pixel_to_orthographic_rays(center, delta_x, delta_y, nx, ny);
-        return compute_column_integ(field_name, rays, custom_getter);
+        return compute_column_integ(std::move(field_name), rays, std::move(custom_getter));
     }
 
 } // namespace shammodels::sph::modules

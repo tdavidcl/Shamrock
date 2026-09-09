@@ -212,7 +212,7 @@ namespace shammodels::sph::modules {
         std::optional<std::function<py::array_t<Tfield>(size_t, shamrock::PatchDataLazyGetter &)>>
             custom_getter) -> sham::DeviceBuffer<Tfield> {
 
-        auto field = build_field(field_name, custom_getter);
+        auto field = build_field(std::move(field_name), std::move(custom_getter));
 
         auto field_source_getter
             = [&](const shamrock::patch::Patch cur_p,
