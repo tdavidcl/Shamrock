@@ -37,8 +37,8 @@ namespace shammath {
         // Equation (10.56) from Toro 3rd Edition , Springer 2009
         const auto S = sham::max((sham::abs(vnL) + csL), (sham::abs(vnR) + csR));
 
-        const auto fL = hydro_flux_n(primL, n, gamma);
-        const auto fR = hydro_flux_n(primR, n, gamma);
+        const auto fL = hydro_flux_n(primL, n, vnL, gamma);
+        const auto fR = hydro_flux_n(primR, n, vnR, gamma);
 
         const auto consL = prim_to_cons(primL, gamma);
         const auto consR = prim_to_cons(primR, gamma);

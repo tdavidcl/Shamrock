@@ -45,8 +45,8 @@ namespace shammath {
         const auto S_L = sham::min(vnL - csL, vnR - csR);
         const auto S_R = sham::max(vnL + csL, vnR + csR);
 
-        const auto fluxL = hydro_flux_n(primL, n, gamma);
-        const auto fluxR = hydro_flux_n(primR, n, gamma);
+        const auto fluxL = hydro_flux_n(primL, n, vnL, gamma);
+        const auto fluxR = hydro_flux_n(primR, n, vnR, gamma);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
         auto hll_flux = [=]() {

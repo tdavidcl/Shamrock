@@ -50,10 +50,6 @@ namespace shammath {
         const auto csL = sound_speed(primL, gamma);
         const auto csR = sound_speed(primR, gamma);
 
-        // Left and right state fluxes
-        const auto FL = hydro_flux_n(primL, n, gamma);
-        const auto FR = hydro_flux_n(primR, n, gamma);
-
         // Left variables
         const auto rhoL   = primL.rho;
         const auto pressL = primL.press;
@@ -63,6 +59,10 @@ namespace shammath {
         const auto rhoR   = primR.rho;
         const auto pressR = primR.press;
         const auto velxR  = n[0] * primR.vel[0] + n[1] * primR.vel[1] + n[2] * primR.vel[2];
+
+        // Left and right state fluxes
+        const auto FL = hydro_flux_n(primL, n, velxL, gamma);
+        const auto FR = hydro_flux_n(primR, n, velxR, gamma);
 
         /////////////////// Pressure based wave speed estimation //////////////
         // First compute the pressure estimation in the star region using the primitive variable
@@ -227,10 +227,6 @@ namespace shammath {
         const auto csL = sound_speed(primL, gamma);
         const auto csR = sound_speed(primR, gamma);
 
-        // Left and right state fluxes
-        const auto FL = hydro_flux_n(primL, n, gamma);
-        const auto FR = hydro_flux_n(primR, n, gamma);
-
         // Left variables
         const auto rhoL   = primL.rho;
         const auto pressL = primL.press;
@@ -240,6 +236,10 @@ namespace shammath {
         const auto rhoR   = primR.rho;
         const auto pressR = primR.press;
         const auto velxR  = n[0] * primR.vel[0] + n[1] * primR.vel[1] + n[2] * primR.vel[2];
+
+        // Left and right state fluxes
+        const auto FL = hydro_flux_n(primL, n, velxL, gamma);
+        const auto FR = hydro_flux_n(primR, n, velxR, gamma);
 
         // Davis estimate, but we'll see later
         Tscal SL = sham::min(velxL - csL, velxR - csR);

@@ -29,11 +29,11 @@ namespace shammath {
      */
     template<class Tprim>
     inline constexpr auto huang_bai_flux_n(Tprim d_primL, Tprim d_primR, typename Tprim::Tvec n) {
-        const auto fL = d_hydro_flux_n(d_primL, n);
-        const auto fR = d_hydro_flux_n(d_primR, n);
-
         const auto vnL = n[0] * d_primL.vel[0] + n[1] * d_primL.vel[1] + n[2] * d_primL.vel[2];
         const auto vnR = n[0] * d_primR.vel[0] + n[1] * d_primR.vel[1] + n[2] * d_primR.vel[2];
+
+        const auto fL = d_hydro_flux_n(d_primL, n, vnL);
+        const auto fR = d_hydro_flux_n(d_primR, n, vnR);
 
         DustConsState<typename Tprim::Tvec> d_flux{};
 

@@ -148,22 +148,25 @@ namespace shammath {
     }
 
     /**
-     * @brief Physical Euler flux across a face with unit normal n
+     * @brief Physical Euler flux across a face with unit normal n, given a precomputed
+     *        normal velocity vn = dot(prim.vel, n)
      *
      * Coordinate-free form of the Euler flux (rotational invariance of the Euler
      * equations): flux.rho = rho*vn, flux.rhoe = (rhoe+p)*vn,
-     * flux.rhovel = rho*vn*v + p*n, with vn = dot(v, n). n is expected to be a
-     * unit vector. hydro_flux_x is the n = (1,0,0) special case.
+     * flux.rhovel = rho*vn*v + p*n. n is expected to be a unit vector, and vn is expected
+     * to be dot(prim.vel, n) (callers that already have vn, e.g. for a wave speed
+     * estimate, can pass it directly instead of it being recomputed here).
      */
     template<class Tvec>
     inline constexpr ConsState<Tvec> hydro_flux_n(
-        const PrimState<Tvec> prim, Tvec n, typename PrimState<Tvec>::Tscal gamma) {
+        const PrimState<Tvec> prim,
+        Tvec n,
+        typename PrimState<Tvec>::Tscal vn,
+        typename PrimState<Tvec>::Tscal gamma) {
         ConsState<Tvec> flux;
 
         const auto rhoeint = prim.press / (gamma - 1.0);
         const auto rhoe    = rhoeint + rhoekin(prim.rho, prim.vel);
-
-        const auto vn = n[0] * prim.vel[0] + n[1] * prim.vel[1] + n[2] * prim.vel[2];
 
         flux.rho = prim.rho * vn;
 
@@ -174,6 +177,21 @@ namespace shammath {
         flux.rhovel[2] = prim.rho * vn * prim.vel[2] + prim.press * n[2];
 
         return flux;
+    }
+
+    /**
+     * @brief Physical Euler flux across a face with unit normal n
+     *
+     * Coordinate-free form of the Euler flux (rotational invariance of the Euler
+     * equations): flux.rho = rho*vn, flux.rhoe = (rhoe+p)*vn,
+     * flux.rhovel = rho*vn*v + p*n, with vn = dot(v, n). n is expected to be a
+     * unit vector. hydro_flux_x is the n = (1,0,0) special case.
+     */
+    template<class Tvec>
+    inline constexpr ConsState<Tvec> hydro_flux_n(
+        const PrimState<Tvec> prim, Tvec n, typename PrimState<Tvec>::Tscal gamma) {
+        const auto vn = n[0] * prim.vel[0] + n[1] * prim.vel[1] + n[2] * prim.vel[2];
+        return hydro_flux_n(prim, n, vn, gamma);
     }
 
     template<class Tvec>
@@ -378,13 +396,26 @@ namespace shammath {
      * n is expected to be a unit vector. d_hydro_flux_x is the n = (1,0,0)
      * special case.
      */
+    /**
+     * @brief Pressureless (dust) flux across a face with unit normal n, given a
+     *        precomputed normal velocity vn = dot(d_prim.vel, n)
+     *
+     * See d_hydro_flux_n(d_prim, n) below; callers that already have vn (e.g. for a
+     * wave speed estimate) can pass it directly instead of it being recomputed here.
+     */
     template<class Tvec>
-    inline constexpr DustConsState<Tvec> d_hydro_flux_n(const DustPrimState<Tvec> d_prim, Tvec n) {
+    inline constexpr DustConsState<Tvec> d_hydro_flux_n(
+        const DustPrimState<Tvec> d_prim, Tvec n, typename DustPrimState<Tvec>::Tscal vn) {
         DustConsState<Tvec> d_flux;
-        const auto vn = n[0] * d_prim.vel[0] + n[1] * d_prim.vel[1] + n[2] * d_prim.vel[2];
         d_flux.rho    = d_prim.rho * vn;
         d_flux.rhovel = d_prim.vel * (d_prim.rho * vn);
         return d_flux;
+    }
+
+    template<class Tvec>
+    inline constexpr DustConsState<Tvec> d_hydro_flux_n(const DustPrimState<Tvec> d_prim, Tvec n) {
+        const auto vn = n[0] * d_prim.vel[0] + n[1] * d_prim.vel[1] + n[2] * d_prim.vel[2];
+        return d_hydro_flux_n(d_prim, n, vn);
     }
 
     template<class Tvec>

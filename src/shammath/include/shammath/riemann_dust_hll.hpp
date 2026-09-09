@@ -32,8 +32,8 @@ namespace shammath {
         const auto vnR = n[0] * d_primR.vel[0] + n[1] * d_primR.vel[1] + n[2] * d_primR.vel[2];
         const auto S   = sham::max(sham::abs(vnL), sham::abs(vnR));
 
-        const auto fL = d_hydro_flux_n(d_primL, n);
-        const auto fR = d_hydro_flux_n(d_primR, n);
+        const auto fL = d_hydro_flux_n(d_primL, n, vnL);
+        const auto fR = d_hydro_flux_n(d_primR, n, vnR);
 
         const auto cL = d_prim_to_cons(d_primL);
         const auto cR = d_prim_to_cons(d_primR);
