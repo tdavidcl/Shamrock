@@ -148,14 +148,10 @@ namespace shammath {
     }
 
     /**
-     * @brief Physical Euler flux across a face with unit normal n, given a precomputed
-     *        normal velocity vn = dot(prim.vel, n)
+     * @brief Euler flux across a face of normal n, given a precomputed normal velocity
+     *        vn = dot(prim.vel, n)
      *
-     * Coordinate-free form of the Euler flux (rotational invariance of the Euler
-     * equations): flux.rho = rho*vn, flux.rhoe = (rhoe+p)*vn,
-     * flux.rhovel = rho*vn*v + p*n. n is expected to be a unit vector, and vn is expected
-     * to be dot(prim.vel, n) (callers that already have vn, e.g. for a wave speed
-     * estimate, can pass it directly instead of it being recomputed here).
+     * n is expected to be a unit vector, and vn is expected to be dot(prim.vel, n)
      */
     template<class Tvec>
     inline constexpr ConsState<Tvec> hydro_flux_n(
@@ -389,19 +385,10 @@ namespace shammath {
     }
 
     /**
-     * @brief Pressureless (dust) flux across a face with unit normal n
+     * @brief Pressureless (dust) flux across a face of normal n, given a precomputed
+     *        normal velocity vn = dot(d_prim.vel, n)
      *
-     * Same coordinate-free construction as hydro_flux_n, without the pressure
-     * term: flux.rho = rho*vn, flux.rhovel = rho*vn*v, with vn = dot(v, n).
-     * n is expected to be a unit vector. d_hydro_flux_x is the n = (1,0,0)
-     * special case.
-     */
-    /**
-     * @brief Pressureless (dust) flux across a face with unit normal n, given a
-     *        precomputed normal velocity vn = dot(d_prim.vel, n)
-     *
-     * See d_hydro_flux_n(d_prim, n) below; callers that already have vn (e.g. for a
-     * wave speed estimate) can pass it directly instead of it being recomputed here.
+     * n is expected to be a unit vector, and vn is expected to be dot(d_prim.vel, n)
      */
     template<class Tvec>
     inline constexpr DustConsState<Tvec> d_hydro_flux_n(
@@ -412,6 +399,14 @@ namespace shammath {
         return d_flux;
     }
 
+    /**
+     * @brief Pressureless (dust) flux across a face with unit normal n
+     *
+     * Same coordinate-free construction as hydro_flux_n, without the pressure
+     * term: flux.rho = rho*vn, flux.rhovel = rho*vn*v, with vn = dot(v, n).
+     * n is expected to be a unit vector. d_hydro_flux_x is the n = (1,0,0)
+     * special case.
+     */
     template<class Tvec>
     inline constexpr DustConsState<Tvec> d_hydro_flux_n(const DustPrimState<Tvec> d_prim, Tvec n) {
         const auto vn = n[0] * d_prim.vel[0] + n[1] * d_prim.vel[1] + n[2] * d_prim.vel[2];
