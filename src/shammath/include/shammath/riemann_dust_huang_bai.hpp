@@ -21,8 +21,7 @@
 namespace shammath {
 
     /**
-     * @brief Huang & Bai dust flux across a face with unit normal n (n = (1,0,0) is
-     *        huang_bai_flux_x)
+     * @brief Huang & Bai dust flux across a face with unit normal n
      *
      * Huang & Bai, 2022, A Multifluid Dust Module in Athena++: Algorithms and Numerical
      * Tests, Equation (32)
@@ -47,36 +46,6 @@ namespace shammath {
             d_flux = (fL + fR);
 
         return d_flux;
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_x(Tprim d_primL, Tprim d_primR) {
-        return huang_bai_flux_n(d_primL, d_primR, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_y(Tprim pL, Tprim pR) {
-        return d_x_to_y(huang_bai_flux_x(d_prim_y_to_x(pL), d_prim_y_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_z(Tprim pL, Tprim pR) {
-        return d_x_to_z(huang_bai_flux_x(d_prim_z_to_x(pL), d_prim_z_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_mx(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_x(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_my(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_y(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_mz(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_z(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
     }
 
 } // namespace shammath

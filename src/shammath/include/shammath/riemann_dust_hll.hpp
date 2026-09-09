@@ -21,7 +21,7 @@
 namespace shammath {
 
     /**
-     * @brief Dust HLL flux across a face with unit normal n (n = (1,0,0) is d_hll_flux_x)
+     * @brief Dust HLL flux across a face with unit normal n
      *
      * Krapp et al. 2024, A Fast second-order solver for stiff multifluid dust and gas
      * hydrodynamics, Appendice E
@@ -39,36 +39,6 @@ namespace shammath {
         const auto cR = d_prim_to_cons(d_primR);
 
         return 0.5 * ((fL + fR) - S * (cR - cL));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_x(Tprim d_primL, Tprim d_primR) {
-        return d_hll_flux_n(d_primL, d_primR, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_y(Tprim pL, Tprim pR) {
-        return d_x_to_y(d_hll_flux_x(d_prim_y_to_x(pL), d_prim_y_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_z(Tprim pL, Tprim pR) {
-        return d_x_to_z(d_hll_flux_x(d_prim_z_to_x(pL), d_prim_z_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_mx(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_x(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_my(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_y(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_mz(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_z(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
     }
 
 } // namespace shammath

@@ -23,7 +23,7 @@
 namespace shammath {
 
     /**
-     * @brief HLL flux across a face with unit normal n (n = (1,0,0) is hll_flux_x)
+     * @brief HLL flux across a face with unit normal n
      */
     template<class Tprim>
     inline constexpr auto hll_flux_n(
@@ -68,37 +68,6 @@ namespace shammath {
             const auto S_norm = 1.0 / (S_R - S_L);
             return (fluxL * S_R - fluxR * S_L + (consR - consL) * S_R * S_L) * S_norm;
         }
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_x(
-        const Tprim primL, const Tprim primR, const typename Tprim::Tscal gamma) {
-        return hll_flux_n(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_y(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_y(hll_flux_x(prim_y_to_x(pL), prim_y_to_x(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_z(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_z(hll_flux_x(prim_z_to_x(pL), prim_z_to_x(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_mx(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hll_flux_x(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_my(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hll_flux_y(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto hll_flux_mz(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hll_flux_z(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
 
 } // namespace shammath

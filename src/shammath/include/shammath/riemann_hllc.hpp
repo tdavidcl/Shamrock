@@ -27,8 +27,7 @@ namespace shammath {
      *         The wave speeds estimates are based on Bernd Einfeldt (SIAM, 1988), On Godunov-Type
      *          Methods for Gas Dynamics, using the pressure in the star region estimated through
      *          the primitive variable solver (valid for an adiabatic equation of state).
-     *        Computes the flux across a face with unit normal n (n = (1,0,0) is
-     *        hllc_adiab_toro_flux_x).
+     *        Computes the flux across a face with unit normal n.
      * @tparam Tprim
      * @param primL left  primitive state
      * @param primR right primitive state
@@ -144,55 +143,6 @@ namespace shammath {
             return FR;
     }
 
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_x(
-        Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
-        return hllc_adiab_toro_flux_n(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    /**
-     * @brief HLLC flux in the +y direction (adiabatic p* wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_y(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_y(hllc_adiab_toro_flux_x(prim_y_to_x(pL), prim_y_to_x(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the +z direction (adiabatic p* wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_z(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_z(hllc_adiab_toro_flux_x(prim_z_to_x(pL), prim_z_to_x(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -x direction (adiabatic p* wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_mx(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(
-            hllc_adiab_toro_flux_x(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -y direction (adiabatic p* wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_my(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(
-            hllc_adiab_toro_flux_y(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -z direction (adiabatic p* wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_mz(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(
-            hllc_adiab_toro_flux_z(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
     /**
      * @brief HLLC solver based on section 10.4 from Toro 3rd Edition , Springer 2009, using the
      *        Davis (1988) wave speed estimate instead of the pressure based (p*) estimate, i.e.
@@ -200,8 +150,7 @@ namespace shammath {
      *          SR = max(velxL + csL, velxR + csR)
      *        This estimate does not rely on an adiabatic equation of state for the pressure in
      *        the star region and can therefore be used for other equations of state.
-     *        Computes the flux across a face with unit normal n (n = (1,0,0) is
-     *        hllc_davis_flux_x).
+     *        Computes the flux across a face with unit normal n.
      * @tparam Tprim
      * @param primL left  primitive state
      * @param primR right primitive state
@@ -279,51 +228,6 @@ namespace shammath {
             return FR_star;
         } else
             return FR;
-    }
-
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_x(Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
-        return hllc_davis_flux_n(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    /**
-     * @brief HLLC flux in the +y direction (Davis wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_y(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_y(hllc_davis_flux_x(prim_y_to_x(pL), prim_y_to_x(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the +z direction (Davis wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_z(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_z(hllc_davis_flux_x(prim_z_to_x(pL), prim_z_to_x(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -x direction (Davis wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_mx(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hllc_davis_flux_x(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -y direction (Davis wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_my(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hllc_davis_flux_y(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    /**
-     * @brief HLLC flux in the -z direction (Davis wave speed estimate)
-     */
-    template<class Tprim>
-    inline constexpr auto hllc_davis_flux_mz(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(hllc_davis_flux_z(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
 
 } // namespace shammath

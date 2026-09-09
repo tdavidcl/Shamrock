@@ -31,24 +31,24 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     Tprim state2 = shammath::cons_to_prim(cons2, gamma);
 
     {
-        Tcons f1 = shammath::rusanov_flux_x(state1, state2, gamma);
-        Tcons f2 = shammath::rusanov_flux_mx(state2, state1, gamma);
+        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{1, 0, 0});
+        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{-1, 0, 0});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
-        Tcons f1 = shammath::rusanov_flux_y(state1, state2, gamma);
-        Tcons f2 = shammath::rusanov_flux_my(state2, state1, gamma);
+        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{0, 1, 0});
+        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{0, -1, 0});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
-        Tcons f1 = shammath::rusanov_flux_z(state1, state2, gamma);
-        Tcons f2 = shammath::rusanov_flux_mz(state2, state1, gamma);
+        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{0, 0, 1});
+        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{0, 0, -1});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
@@ -66,17 +66,17 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     Tprim state_ym = to_prim({.rho = 1._f64, .rhoe = 1._f64, .rhovel = f64_3{1, 0, 0}});
     Tprim state_zm = to_prim({.rho = 1._f64, .rhoe = 1._f64, .rhovel = f64_3{1, 0, 0}});
     {
-        Tcons fx = shammath::rusanov_flux_x(state_i, state_xp, gamma);
+        Tcons fx = shammath::rusanov_flux_n(state_i, state_xp, gamma, f64_3{1, 0, 0});
         shamlog_debug_ln("Riemann Solver", fx.rho, fx.rhovel, fx.rhoe);
-        Tcons fy = shammath::rusanov_flux_y(state_i, state_yp, gamma);
+        Tcons fy = shammath::rusanov_flux_n(state_i, state_yp, gamma, f64_3{0, 1, 0});
         shamlog_debug_ln("Riemann Solver", fy.rho, fy.rhovel, fy.rhoe);
-        Tcons fz = shammath::rusanov_flux_z(state_i, state_zp, gamma);
+        Tcons fz = shammath::rusanov_flux_n(state_i, state_zp, gamma, f64_3{0, 0, 1});
         shamlog_debug_ln("Riemann Solver", fz.rho, fz.rhovel, fz.rhoe);
-        Tcons fmx = shammath::rusanov_flux_mx(state_i, state_xm, gamma);
+        Tcons fmx = shammath::rusanov_flux_n(state_i, state_xm, gamma, f64_3{-1, 0, 0});
         shamlog_debug_ln("Riemann Solver", fmx.rho, fmx.rhovel, fmx.rhoe);
-        Tcons fmy = shammath::rusanov_flux_my(state_i, state_ym, gamma);
+        Tcons fmy = shammath::rusanov_flux_n(state_i, state_ym, gamma, f64_3{0, -1, 0});
         shamlog_debug_ln("Riemann Solver", fmy.rho, fmy.rhovel, fmy.rhoe);
-        Tcons fmz = shammath::rusanov_flux_mz(state_i, state_zm, gamma);
+        Tcons fmz = shammath::rusanov_flux_n(state_i, state_zm, gamma, f64_3{0, 0, -1});
         shamlog_debug_ln("Riemann Solver", fmz.rho, fmz.rhovel, fmz.rhoe);
         Tcons sum = fx + fy + fz + fmx + fmy + fmz;
         shamlog_debug_ln("Riemann Solver", "sum=", sum.rho, sum.rhovel, sum.rhoe);

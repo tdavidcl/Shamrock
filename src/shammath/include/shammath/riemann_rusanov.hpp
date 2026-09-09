@@ -23,7 +23,7 @@
 namespace shammath {
 
     /**
-     * @brief Rusanov flux across a face with unit normal n (n = (1,0,0) is rusanov_flux_x)
+     * @brief Rusanov flux across a face with unit normal n
      */
     template<class Tprim>
     inline constexpr auto rusanov_flux_n(
@@ -45,36 +45,6 @@ namespace shammath {
 
         // Equation (10.55) from Toro 3rd Edition , Springer 2009
         return 0.5 * ((fL + fR) - (consR - consL) * S);
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_x(Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
-        return rusanov_flux_n(primL, primR, gamma, typename Tprim::Tvec{1, 0, 0});
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_y(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_y(rusanov_flux_x(prim_y_to_x(pL), prim_y_to_x(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_z(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return x_to_z(rusanov_flux_x(prim_z_to_x(pL), prim_z_to_x(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_mx(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(rusanov_flux_x(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_my(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(rusanov_flux_y(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
-    }
-
-    template<class Tprim>
-    inline constexpr auto rusanov_flux_mz(Tprim pL, Tprim pR, typename Tprim::Tscal gamma) {
-        return invert_axis(rusanov_flux_z(prim_invert_axis(pL), prim_invert_axis(pR), gamma));
     }
 
 } // namespace shammath
