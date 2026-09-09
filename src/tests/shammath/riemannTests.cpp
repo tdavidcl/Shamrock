@@ -96,9 +96,11 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     constexpr f64 gamma = 1.6666;
 
     // Every _n(..., n) call should reproduce the corresponding permutation-based
-    // _flux_<direction>(...) call bit-for-bit when n is one of the six axis-aligned unit
-    // vectors: hydro_flux_n / d_hydro_flux_n reduce to the exact same grouping of operations
-    // as hydro_flux_x / d_hydro_flux_x, so no floating point tolerance is needed here.
+    // _flux_<direction>(...) call when n is one of the six axis-aligned unit vectors.
+    // Compared with a tolerance rather than exact equality: the two code paths group
+    // floating point operations differently, so compiler-dependent choices (e.g. FMA
+    // contraction) can make them differ by a ULP or two.
+    constexpr f64 eps = 1e-12;
 
     auto to_prim = [&](Tcons c) {
         return shammath::cons_to_prim(c, gamma);
@@ -110,15 +112,15 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     DTprim dL{.rho = 1.1_f64, .vel = f64_3{0.2, -0.3, 0.1}};
     DTprim dR{.rho = 0.8_f64, .vel = f64_3{-0.4, 0.1, 0.2}};
 
-    auto require_cons_equal = [&](Tcons a, Tcons b) {
-        REQUIRE_EQUAL_CUSTOM_COMP(a.rho, b.rho, sham::equals);
-        REQUIRE_EQUAL_CUSTOM_COMP(a.rhovel, b.rhovel, sham::equals);
-        REQUIRE_EQUAL_CUSTOM_COMP(a.rhoe, b.rhoe, sham::equals);
+    auto require_cons_equal = [&](Tcons lhs, Tcons rhs) {
+        REQUIRE_FLOAT_EQUAL(lhs.rho, rhs.rho, eps);
+        REQUIRE_FLOAT_EQUAL_CUSTOM_DIST_NAMED("", lhs.rhovel, rhs.rhovel, eps, sycl::length);
+        REQUIRE_FLOAT_EQUAL(lhs.rhoe, rhs.rhoe, eps);
     };
 
-    auto require_dust_cons_equal = [&](DTcons a, DTcons b) {
-        REQUIRE_EQUAL_CUSTOM_COMP(a.rho, b.rho, sham::equals);
-        REQUIRE_EQUAL_CUSTOM_COMP(a.rhovel, b.rhovel, sham::equals);
+    auto require_dust_cons_equal = [&](DTcons lhs, DTcons rhs) {
+        REQUIRE_FLOAT_EQUAL(lhs.rho, rhs.rho, eps);
+        REQUIRE_FLOAT_EQUAL_CUSTOM_DIST_NAMED("", lhs.rhovel, rhs.rhovel, eps, sycl::length);
     };
 
     auto check_gas_solver
