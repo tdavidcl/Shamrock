@@ -229,8 +229,10 @@ codegen at `-O2`.
 
 {download}`riemann_solver_axis_dispatch_sycl_bench.cpp` is the same comparison ported to real
 `sycl::vec<double, 3>` and run as an actual kernel launch, over `10^7` randomly generated face
-states, on whichever SYCL device you point it at. It checks that both variants agree exactly
-before timing them, then reports the best of 20 timed runs for each:
+states, on whichever SYCL device you point it at. Inputs and outputs are USM device allocations
+(`sycl::malloc_device`) on an in-order queue, not SYCL buffers/accessors, to avoid the
+buffer-accessor overhead that would otherwise dominate a kernel this cheap. It checks that both
+variants agree exactly before timing them, then reports the best of 20 timed runs for each:
 
 ```text
 $ acpp -O3 riemann_solver_axis_dispatch_sycl_bench.cpp -o bench && ./bench
@@ -239,11 +241,11 @@ N = 10000000 elements, 20 repeats per case (best of N reported)
 
 correctness: max |via_mz_dispatch - via_flux_n| = 0.000e+00  (PASS)
 
-via_mz_dispatch  : best of 20 runs =    56.400 ms  (5.640 ns/elem)
-via_flux_n       : best of 20 runs =    54.991 ms  (5.499 ns/elem)
+via_mz_dispatch  : best of 20 runs =    64.498 ms  (6.450 ns/elem)
+via_flux_n       : best of 20 runs =    61.616 ms  (6.162 ns/elem)
 ```
 
 On this OpenMP host device the kernel is memory-bandwidth-bound rather than compute-bound, so the
-gap is modest (~2.5%) compared to the single-call assembly diff above; a compute-bound device
+gap is modest (~4.5%) compared to the single-call assembly diff above; a compute-bound device
 (a discrete GPU with less bandwidth pressure per flux, or a solver with more arithmetic than this
 generic stand-in) should show a larger gap from the same extra sign-flip/shuffle instructions.

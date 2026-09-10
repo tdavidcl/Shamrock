@@ -5,8 +5,9 @@
 // Companion to riemann_solver_axis_dispatch_godbolt.cpp (same comparison,
 // CPU-only, single-call assembly diff): this file measures the actual
 // wall-clock cost of the pattern across a full kernel launch on whatever
-// SYCL device you point it at. See dev_doc/riemann_solver.md, section
-// "Axis permutation vs projection".
+// SYCL device you point it at. Uses USM device allocations + an in-order
+// queue rather than the buffer/accessor model. See
+// dev_doc/riemann_solver.md, section "Axis permutation vs projection".
 //
 // Build (pick whichever SYCL implementation you have):
 //   acpp -O3 riemann_solver_axis_dispatch_sycl_bench.cpp -o bench
@@ -27,9 +28,9 @@
 using Tscal = double;
 using Tvec  = sycl::vec<double, 3>;
 
-constexpr std::size_t N       = 10'000'000; // 10^7 elements
-constexpr int repeats         = 20;         // timed repeats per case (min is reported)
-constexpr Tscal validate_tol  = 1e-12;
+constexpr std::size_t N      = 10'000'000; // 10^7 elements
+constexpr int repeats        = 20;         // timed repeats per case (min is reported)
+constexpr Tscal validate_tol = 1e-12;
 
 struct PrimState {
     Tscal rho;
@@ -108,8 +109,28 @@ inline ConsState riemann_solver_flux_mz(PrimState pL, PrimState pR) {
     return invert_axis(riemann_solver_flux_z(prim_invert_axis(pL), prim_invert_axis(pR)));
 }
 
+// RAII wrapper around a device USM allocation, so every early return still frees it.
+template<class T>
+struct DeviceArray {
+    T *ptr = nullptr;
+    sycl::queue &q;
+
+    DeviceArray(sycl::queue &q_, std::size_t n) : q(q_) {
+        ptr = sycl::malloc_device<T>(n, q);
+    }
+    ~DeviceArray() {
+        sycl::free(ptr, q);
+    }
+    DeviceArray(const DeviceArray &)            = delete;
+    DeviceArray &operator=(const DeviceArray &) = delete;
+
+    T *get() const {
+        return ptr;
+    }
+};
+
 int main() {
-    sycl::queue q;
+    sycl::queue q{sycl::property::queue::in_order()};
     std::printf(
         "Device: %s\n",
         q.get_device().get_info<sycl::info::device::name>().c_str());
@@ -126,39 +147,35 @@ int main() {
         }
     }
 
-    sycl::buffer<PrimState, 1> bL(hL.data(), sycl::range<1>(N));
-    sycl::buffer<PrimState, 1> bR(hR.data(), sycl::range<1>(N));
+    DeviceArray<PrimState> dL(q, N), dR(q, N);
+    q.memcpy(dL.get(), hL.data(), N * sizeof(PrimState));
+    q.memcpy(dR.get(), hR.data(), N * sizeof(PrimState));
+    q.wait();
 
-    auto submit_mz = [&](sycl::buffer<ConsState, 1> &bOut) {
-        return q.submit([&](sycl::handler &cgh) {
-            sycl::accessor accL{bL, cgh, sycl::read_only};
-            sycl::accessor accR{bR, cgh, sycl::read_only};
-            sycl::accessor accOut{bOut, cgh, sycl::write_only, sycl::no_init};
-            cgh.parallel_for(sycl::range<1>(N), [=](sycl::id<1> i) {
-                accOut[i] = riemann_solver_flux_mz(accL[i], accR[i]);
-            });
+    PrimState *pL = dL.get();
+    PrimState *pR = dR.get();
+
+    auto submit_mz = [&](ConsState *out) {
+        return q.parallel_for(sycl::range<1>(N), [=](sycl::id<1> i) {
+            out[i] = riemann_solver_flux_mz(pL[i], pR[i]);
         });
     };
-    auto submit_n = [&](sycl::buffer<ConsState, 1> &bOut) {
-        return q.submit([&](sycl::handler &cgh) {
-            sycl::accessor accL{bL, cgh, sycl::read_only};
-            sycl::accessor accR{bR, cgh, sycl::read_only};
-            sycl::accessor accOut{bOut, cgh, sycl::write_only, sycl::no_init};
-            cgh.parallel_for(sycl::range<1>(N), [=](sycl::id<1> i) {
-                accOut[i] = riemann_solver_flux_n(accL[i], accR[i], Tvec{0, 0, -1});
-            });
+    auto submit_n = [&](ConsState *out) {
+        return q.parallel_for(sycl::range<1>(N), [=](sycl::id<1> i) {
+            out[i] = riemann_solver_flux_n(pL[i], pR[i], Tvec{0, 0, -1});
         });
     };
 
     // --- correctness check: both variants must agree everywhere ---
     {
-        sycl::buffer<ConsState, 1> bOutMz{sycl::range<1>(N)};
-        sycl::buffer<ConsState, 1> bOutN{sycl::range<1>(N)};
-        submit_mz(bOutMz).wait();
-        submit_n(bOutN).wait();
+        DeviceArray<ConsState> dOutMz(q, N), dOutN(q, N);
+        submit_mz(dOutMz.get()).wait();
+        submit_n(dOutN.get()).wait();
 
-        sycl::host_accessor hOutMz{bOutMz, sycl::read_only};
-        sycl::host_accessor hOutN{bOutN, sycl::read_only};
+        std::vector<ConsState> hOutMz(N), hOutN(N);
+        q.memcpy(hOutMz.data(), dOutMz.get(), N * sizeof(ConsState));
+        q.memcpy(hOutN.data(), dOutN.get(), N * sizeof(ConsState));
+        q.wait();
 
         Tscal max_diff = 0;
         for (std::size_t i = 0; i < N; ++i) {
@@ -175,14 +192,15 @@ int main() {
 
     // --- timing ---
     auto time_case = [&](const char *label, auto &&submit) {
-        sycl::buffer<ConsState, 1> bOut{sycl::range<1>(N)};
+        DeviceArray<ConsState> dOut(q, N);
+        ConsState *out = dOut.get();
 
-        submit(bOut).wait(); // warm-up (first-touch / JIT / allocator effects)
+        submit(out).wait(); // warm-up (JIT / allocator effects)
 
         double best_ms = 1e300;
         for (int r = 0; r < repeats; ++r) {
             auto t0 = std::chrono::steady_clock::now();
-            submit(bOut).wait();
+            submit(out).wait();
             auto t1 = std::chrono::steady_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
             best_ms = std::min(best_ms, ms);
