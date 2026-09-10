@@ -292,6 +292,7 @@ via_flux_n(DustPrimState<Vec3>, DustPrimState<Vec3>):
 :::
 ::::
 
+:::{admonition} Analysis according to claude
 Both keep the same control-flow shape (the solver's internal branch tree survives inlining
 unchanged), but `via_mz_dispatch` does strictly more work for the same result:
 
@@ -311,6 +312,7 @@ The compiler eliminates the literal-zero multiplies coming from `{1, 0, 0}` in b
 does not fully cancel the round trip's redundant sign flips and lane permutes. Calling `_n`
 directly with the target axis's unit vector is not just cleaner source — it is strictly cheaper
 codegen at `-O2`.
+:::
 
 ### On-device benchmark
 
