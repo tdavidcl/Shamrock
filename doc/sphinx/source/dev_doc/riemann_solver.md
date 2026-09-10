@@ -240,16 +240,16 @@ Interactive version, live on Compiler Explorer:
 #riemann-godbolt-iframe {
   width: 800px;
   height: 600px;
-  zoom: 0.8;
+  zoom: 0.6;
   border: 1px solid #ccc;
   display: block;
 }
 #riemann-godbolt-iframe.riemann-godbolt-expanded {
   position: fixed;
-  top: 3vh;
-  left: 3vw;
-  width: 94vw;
-  height: 94vh;
+  inset: 3vmin;
+  width: auto;
+  height: auto;
+  zoom: 1;
   z-index: 100000;
 }
 #riemann-godbolt-backdrop {
