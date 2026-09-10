@@ -1,4 +1,4 @@
-// Self-contained repro used to compare the "axis permutation" dispatch
+// Self-contained reproducer used to compare the "axis permutation" dispatch
 // (rotate to +x, solve, rotate back) against calling the "_n" solver
 // directly with the target face's unit normal.
 //

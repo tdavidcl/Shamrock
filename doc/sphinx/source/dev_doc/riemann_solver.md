@@ -35,7 +35,7 @@ are mathematically equivalent, but they are not equivalent *as generated code*.
 
 ### Comparing the assembly
 
-{download}`riemann_solver_axis_dispatch_godbolt.cpp` is a minimal, dependency-free repro (no
+{download}`riemann_solver_axis_dispatch_godbolt.cpp` is a minimal, dependency-free reproducer (no
 SYCL, just a plain `Vec3`) isolating exactly this comparison for one solver, with two entry
 points:
 
