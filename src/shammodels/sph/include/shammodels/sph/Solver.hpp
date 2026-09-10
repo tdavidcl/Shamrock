@@ -11,6 +11,7 @@
 
 /**
  * @file Solver.hpp
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr) --no git blame--
  * @brief
@@ -19,9 +20,9 @@
 #include "shambase/exception.hpp"
 #include "SolverConfig.hpp"
 #include "shambackends/vec.hpp"
+#include "shammodels/common/SolverLog.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/SPHUtilities.hpp"
-#include "shammodels/sph/SolverLog.hpp"
 #include "shammodels/sph/modules/SolverStorage.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
 #include "shamrock/scheduler/ComputeField.hpp"
