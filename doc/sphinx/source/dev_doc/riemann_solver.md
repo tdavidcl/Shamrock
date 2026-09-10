@@ -5,10 +5,8 @@ HLLC, dust HLL, Huang-Bai).
 
 ## Axis permutation vs projection
 
-The actual `shammath` solvers no longer carry an `_n` suffix (each solver has exactly one flux
-function now, so there is nothing left to disambiguate it from). This section still uses the
-`_n` suffix in its examples purely as a naming convention, to tell the projection variant apart
-from the permutation variant in the discussion below.
+This section adds an `_n` suffix to its examples to tell the projection variant apart from the
+permutation variant in the discussion below.
 
 Every Riemann solver is defined once as an `_n` variant that takes the face's unit normal `n`
 directly:
