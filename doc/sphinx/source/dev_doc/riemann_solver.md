@@ -246,9 +246,10 @@ Interactive version, live on Compiler Explorer:
 }
 #riemann-godbolt-iframe.riemann-godbolt-expanded {
   position: fixed;
-  inset: 3vmin;
-  width: auto;
-  height: auto;
+  top: 3vmin;
+  left: 3vmin;
+  width: calc(100vw - 6vmin);
+  height: calc(100vh - 6vmin);
   zoom: 1;
   z-index: 100000;
 }
