@@ -31,24 +31,24 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     Tprim state2 = shammath::cons_to_prim(cons2, gamma);
 
     {
-        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{1, 0, 0});
-        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{-1, 0, 0});
+        Tcons f1 = shammath::rusanov_flux(state1, state2, gamma, f64_3{1, 0, 0});
+        Tcons f2 = shammath::rusanov_flux(state2, state1, gamma, f64_3{-1, 0, 0});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
-        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{0, 1, 0});
-        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{0, -1, 0});
+        Tcons f1 = shammath::rusanov_flux(state1, state2, gamma, f64_3{0, 1, 0});
+        Tcons f2 = shammath::rusanov_flux(state2, state1, gamma, f64_3{0, -1, 0});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
     }
 
     {
-        Tcons f1 = shammath::rusanov_flux_n(state1, state2, gamma, f64_3{0, 0, 1});
-        Tcons f2 = shammath::rusanov_flux_n(state2, state1, gamma, f64_3{0, 0, -1});
+        Tcons f1 = shammath::rusanov_flux(state1, state2, gamma, f64_3{0, 0, 1});
+        Tcons f2 = shammath::rusanov_flux(state2, state1, gamma, f64_3{0, 0, -1});
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rho, -f2.rho, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhovel, -f2.rhovel, sham::equals);
         REQUIRE_EQUAL_CUSTOM_COMP(f1.rhoe, -f2.rhoe, sham::equals);
@@ -66,17 +66,17 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
     Tprim state_ym = to_prim({.rho = 1._f64, .rhoe = 1._f64, .rhovel = f64_3{1, 0, 0}});
     Tprim state_zm = to_prim({.rho = 1._f64, .rhoe = 1._f64, .rhovel = f64_3{1, 0, 0}});
     {
-        Tcons fx = shammath::rusanov_flux_n(state_i, state_xp, gamma, f64_3{1, 0, 0});
+        Tcons fx = shammath::rusanov_flux(state_i, state_xp, gamma, f64_3{1, 0, 0});
         shamlog_debug_ln("Riemann Solver", fx.rho, fx.rhovel, fx.rhoe);
-        Tcons fy = shammath::rusanov_flux_n(state_i, state_yp, gamma, f64_3{0, 1, 0});
+        Tcons fy = shammath::rusanov_flux(state_i, state_yp, gamma, f64_3{0, 1, 0});
         shamlog_debug_ln("Riemann Solver", fy.rho, fy.rhovel, fy.rhoe);
-        Tcons fz = shammath::rusanov_flux_n(state_i, state_zp, gamma, f64_3{0, 0, 1});
+        Tcons fz = shammath::rusanov_flux(state_i, state_zp, gamma, f64_3{0, 0, 1});
         shamlog_debug_ln("Riemann Solver", fz.rho, fz.rhovel, fz.rhoe);
-        Tcons fmx = shammath::rusanov_flux_n(state_i, state_xm, gamma, f64_3{-1, 0, 0});
+        Tcons fmx = shammath::rusanov_flux(state_i, state_xm, gamma, f64_3{-1, 0, 0});
         shamlog_debug_ln("Riemann Solver", fmx.rho, fmx.rhovel, fmx.rhoe);
-        Tcons fmy = shammath::rusanov_flux_n(state_i, state_ym, gamma, f64_3{0, -1, 0});
+        Tcons fmy = shammath::rusanov_flux(state_i, state_ym, gamma, f64_3{0, -1, 0});
         shamlog_debug_ln("Riemann Solver", fmy.rho, fmy.rhovel, fmy.rhoe);
-        Tcons fmz = shammath::rusanov_flux_n(state_i, state_zm, gamma, f64_3{0, 0, -1});
+        Tcons fmz = shammath::rusanov_flux(state_i, state_zm, gamma, f64_3{0, 0, -1});
         shamlog_debug_ln("Riemann Solver", fmz.rho, fmz.rhovel, fmz.rhoe);
         Tcons sum = fx + fy + fz + fmx + fmy + fmz;
         shamlog_debug_ln("Riemann Solver", "sum=", sum.rho, sum.rhovel, sum.rhoe);
@@ -88,10 +88,10 @@ NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
 namespace {
 
     // Local stand-ins for the gas riemann_common.hpp _x/_y/_z/_mx/_my/_mz axis dispatch
-    // (riemann_rusanov.hpp etc.), rebuilt here from a plain "_n" solver so this test can
+    // (riemann_rusanov.hpp etc.), rebuilt here from a plain n-taking solver so this test can
     // keep validating axis-rotation vs. direct n-projection after those per-axis overloads
     // are removed from the solvers themselves. flux_func is expected to have the same
-    // signature as the *_flux_n solvers: (primL, primR, gamma, n).
+    // signature as the solvers: (primL, primR, gamma, n).
     template<class Tprim, class Func>
     inline auto _x_dispatch(
         Func &&flux_func, Tprim primL, Tprim primR, typename Tprim::Tscal gamma) {
@@ -261,26 +261,26 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     };
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
-        return shammath::rusanov_flux_n(a, b, g, n);
+        return shammath::rusanov_flux(a, b, g, n);
     });
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
-        return shammath::hll_flux_n(a, b, g, n);
+        return shammath::hll_flux(a, b, g, n);
     });
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
-        return shammath::hllc_adiab_toro_flux_n(a, b, g, n);
+        return shammath::hllc_adiab_toro_flux(a, b, g, n);
     });
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
-        return shammath::hllc_davis_flux_n(a, b, g, n);
+        return shammath::hllc_davis_flux(a, b, g, n);
     });
 
     check_dust_solver([](DTprim a, DTprim b, Tvec n) {
-        return shammath::d_hll_flux_n(a, b, n);
+        return shammath::d_hll_flux(a, b, n);
     });
 
     check_dust_solver([](DTprim a, DTprim b, Tvec n) {
-        return shammath::huang_bai_flux_n(a, b, n);
+        return shammath::huang_bai_flux(a, b, n);
     });
 }

@@ -26,7 +26,7 @@ namespace shammath {
      * @brief HLL flux across a face with unit normal n
      */
     template<class Tprim>
-    inline constexpr auto hll_flux_n(
+    inline constexpr auto hll_flux(
         const Tprim primL,
         const Tprim primR,
         const typename Tprim::Tscal gamma,

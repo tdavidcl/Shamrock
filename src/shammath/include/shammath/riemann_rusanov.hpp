@@ -26,7 +26,7 @@ namespace shammath {
      * @brief Rusanov flux across a face with unit normal n
      */
     template<class Tprim>
-    inline constexpr auto rusanov_flux_n(
+    inline constexpr auto rusanov_flux(
         Tprim primL, Tprim primR, typename Tprim::Tscal gamma, typename Tprim::Tvec n) {
         const auto csL = sound_speed(primL, gamma);
         const auto csR = sound_speed(primR, gamma);

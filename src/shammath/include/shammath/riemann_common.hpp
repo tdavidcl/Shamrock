@@ -178,19 +178,13 @@ namespace shammath {
     /**
      * @brief Euler flux across a face of normal n
      *
-     * n is expected to be a unit vector. hydro_flux_x is the n = (1,0,0) special case.
+     * n is expected to be a unit vector.
      */
     template<class Tvec>
     inline constexpr ConsState<Tvec> hydro_flux_n(
         const PrimState<Tvec> prim, Tvec n, typename PrimState<Tvec>::Tscal gamma) {
         const auto vn = n[0] * prim.vel[0] + n[1] * prim.vel[1] + n[2] * prim.vel[2];
         return hydro_flux_n(prim, n, vn, gamma);
-    }
-
-    template<class Tvec>
-    inline constexpr ConsState<Tvec> hydro_flux_x(
-        const PrimState<Tvec> prim, typename PrimState<Tvec>::Tscal gamma) {
-        return hydro_flux_n(prim, Tvec{1, 0, 0}, gamma);
     }
 
     template<class Tvec>
@@ -399,17 +393,12 @@ namespace shammath {
     /**
      * @brief Pressureless (dust) flux across a face of normal n
      *
-     * n is expected to be a unit vector. d_hydro_flux_x is the n = (1,0,0) special case.
+     * n is expected to be a unit vector.
      */
     template<class Tvec>
     inline constexpr DustConsState<Tvec> d_hydro_flux_n(const DustPrimState<Tvec> d_prim, Tvec n) {
         const auto vn = n[0] * d_prim.vel[0] + n[1] * d_prim.vel[1] + n[2] * d_prim.vel[2];
         return d_hydro_flux_n(d_prim, n, vn);
-    }
-
-    template<class Tvec>
-    inline constexpr DustConsState<Tvec> d_hydro_flux_x(const DustPrimState<Tvec> d_prim) {
-        return d_hydro_flux_n(d_prim, Tvec{1, 0, 0});
     }
 
     template<class Tcons>

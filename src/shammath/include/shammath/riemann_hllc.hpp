@@ -35,7 +35,7 @@ namespace shammath {
      * @param n face unit normal
      */
     template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux_n(
+    inline constexpr auto hllc_adiab_toro_flux(
         Tprim primL, Tprim primR, typename Tprim::Tscal gamma, typename Tprim::Tvec n) {
         using Tscal = typename Tprim::Tscal;
         using Tvec  = typename Tprim::Tvec;
@@ -158,7 +158,7 @@ namespace shammath {
      * @param n face unit normal
      */
     template<class Tprim>
-    inline constexpr auto hllc_davis_flux_n(
+    inline constexpr auto hllc_davis_flux(
         Tprim primL, Tprim primR, typename Tprim::Tscal gamma, typename Tprim::Tvec n) {
         using Tscal = typename Tprim::Tscal;
         using Tvec  = typename Tprim::Tvec;

@@ -64,13 +64,13 @@ namespace shammodels::basegodunov::modules {
             const Tvec n = dir_normal<Tvec, dir>();
 
             if constexpr (mode == RiemannSolverMode::Rusanov) {
-                return shammath::rusanov_flux_n(pL, pR, gamma, n);
+                return shammath::rusanov_flux(pL, pR, gamma, n);
             }
             if constexpr (mode == RiemannSolverMode::HLL) {
-                return shammath::hll_flux_n(pL, pR, gamma, n);
+                return shammath::hll_flux(pL, pR, gamma, n);
             }
             if constexpr (mode == RiemannSolverMode::HLLC) {
-                return shammath::hllc_adiab_toro_flux_n(pL, pR, gamma, n);
+                return shammath::hllc_adiab_toro_flux(pL, pR, gamma, n);
             }
         }
     };
@@ -86,10 +86,10 @@ namespace shammodels::basegodunov::modules {
             const Tvec n = dir_normal<Tvec, dir>();
 
             if constexpr (mode == DustRiemannSolverMode::HB) {
-                return shammath::huang_bai_flux_n(pL, pR, n);
+                return shammath::huang_bai_flux(pL, pR, n);
             }
             if constexpr (mode == DustRiemannSolverMode::DHLL) {
-                return shammath::d_hll_flux_n(pL, pR, n);
+                return shammath::d_hll_flux(pL, pR, n);
             }
         }
     };
