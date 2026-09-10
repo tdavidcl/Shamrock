@@ -25,8 +25,34 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <concepts>
 #include <iostream>
 namespace shammath {
+
+    /**
+     * @brief An equation of state paired with the flux/wave-speed operations a Riemann solver
+     *        needs, so that solvers (see riemann_rusanov.hpp, riemann_hll.hpp) can be written
+     *        once and instantiated for any fluid state satisfying this interface.
+     */
+    template<class T>
+    concept FluidStateSpec = requires(
+        const T &self,
+        typename T::Tcons cons,
+        typename T::Tprim prim,
+        typename T::Tvec n,
+        typename T::Tscal vn) {
+        typename T::Tvec;
+        typename T::Tscal;
+        typename T::Tprim;
+        typename T::Tcons;
+        { self.cons_to_prim(cons) } -> std::convertible_to<typename T::Tprim>;
+        { self.prim_to_cons(prim) } -> std::convertible_to<typename T::Tcons>;
+        { self.sound_speed(prim) } -> std::convertible_to<typename T::Tscal>;
+        { self.vn(prim, n) } -> std::convertible_to<typename T::Tscal>;
+        { self.flux(prim, n) } -> std::convertible_to<typename T::Tcons>;
+        { self.flux(prim, n, vn) } -> std::convertible_to<typename T::Tcons>;
+        { self.flux(cons, n) } -> std::convertible_to<typename T::Tcons>;
+    };
 
     template<class Tvec_>
     struct ConsState {
@@ -481,5 +507,32 @@ namespace shammath {
         pprime.vel = -(p.vel);
         return pprime;
     }
+
+    /**
+     * @brief FluidStateSpec implementation for an ideal (adiabatic) gas equation of state
+     */
+    template<class Tvec_>
+    struct FluidStateAdiabatic {
+        using Tvec  = Tvec_;
+        using Tscal = shambase::VecComponent<Tvec>;
+        using Tprim = PrimState<Tvec>;
+        using Tcons = ConsState<Tvec>;
+
+        Tscal m_gamma; // need a different name than the methods below
+
+        Tprim cons_to_prim(Tcons c) const { return shammath::cons_to_prim(c, m_gamma); }
+        Tcons prim_to_cons(Tprim p) const { return shammath::prim_to_cons(p, m_gamma); }
+        Tscal sound_speed(Tprim p) const { return shammath::sound_speed(p, m_gamma); }
+        Tscal vn(Tprim p, Tvec n) const {
+            return n[0] * p.vel[0] + n[1] * p.vel[1] + n[2] * p.vel[2];
+        }
+        Tcons flux(Tprim p, Tvec n, Tscal vn) const {
+            return shammath::hydro_flux_n(p, n, vn, m_gamma);
+        }
+        Tcons flux(Tprim p, Tvec n) const { return shammath::hydro_flux_n(p, n, m_gamma); }
+        Tcons flux(Tcons c, Tvec n) const { return flux(shammath::cons_to_prim(c, m_gamma), n); }
+    };
+
+    static_assert(FluidStateSpec<FluidStateAdiabatic<f64_3>>);
 
 } // namespace shammath

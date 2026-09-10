@@ -64,10 +64,12 @@ namespace shammodels::basegodunov::modules {
             const Tvec n = dir_normal<Tvec, dir>();
 
             if constexpr (mode == RiemannSolverMode::Rusanov) {
-                return shammath::rusanov_flux(pL, pR, gamma, n);
+                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
+                return shammath::rusanov_flux(adiab_fluid, pL, pR, n);
             }
             if constexpr (mode == RiemannSolverMode::HLL) {
-                return shammath::hll_flux(pL, pR, gamma, n);
+                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
+                return shammath::hll_flux(adiab_fluid, pL, pR, n);
             }
             if constexpr (mode == RiemannSolverMode::HLLC) {
                 return shammath::hllc_adiab_toro_flux(pL, pR, gamma, n);
