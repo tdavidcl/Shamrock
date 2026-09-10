@@ -124,7 +124,7 @@ Try it live on [Compiler Explorer](https://godbolt.org):
 </script>
 ```
 
-Compiled with x86-64 clang at `-O2`, both fully inlined into a single leaf function, the pinned
+Compiled with x86-64 clang 23 at `-O3`, both fully inlined into a single leaf function, the pinned
 output disassembles to:
 
 ::::{grid} 2
