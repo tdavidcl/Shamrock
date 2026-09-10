@@ -54,7 +54,13 @@ Cons via_flux_n(Prim pL, Prim pR) {
 Compiled on [Compiler Explorer](https://godbolt.org) with x86-64 clang at `-O2`, both fully
 inlined into a single leaf function, the two disassemble to:
 
-```
+::::{grid} 2
+:gutter: 2
+
+:::{grid-item}
+**Axis permutation** — `via_mz_dispatch`
+
+```text
 .LCPI0_0:
         .quad   0x8000000000000000
         .quad   0x8000000000000000
@@ -133,7 +139,13 @@ via_mz_dispatch(DustPrimState<Vec3>, DustPrimState<Vec3>):
 .LBB0_13:
         xorpd   xmm4, xmm4
         jmp     .LBB0_7
+```
+:::
 
+:::{grid-item}
+**Direct projection** — `via_flux_n`
+
+```text
 .LCPI1_0:
         .quad   0x8000000000000000
         .quad   0x8000000000000000
@@ -204,6 +216,8 @@ via_flux_n(DustPrimState<Vec3>, DustPrimState<Vec3>):
         movupd  xmmword ptr [rax + 16], xmm2
         ret
 ```
+:::
+::::
 
 Both keep the same control-flow shape (the solver's internal branch tree survives inlining
 unchanged), but `via_mz_dispatch` does strictly more work for the same result:
