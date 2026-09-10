@@ -33,7 +33,7 @@ inline constexpr auto riemann_solver_flux_mz(Tprim pL, Tprim pR, typename Tprim:
 `riemann_solver_flux_mz(pL, pR, gamma)` and `riemann_solver_flux_n(pL, pR, gamma, {0, 0, -1})`
 are mathematically equivalent, but they are not equivalent *as generated code*.
 
-### A worked example
+### Comparing the assembly
 
 {download}`riemann_solver_axis_dispatch_godbolt.cpp` is a minimal, dependency-free repro (no
 SYCL, just a plain `Vec3`) isolating exactly this comparison for one solver, with two entry
