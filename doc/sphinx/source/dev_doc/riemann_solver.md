@@ -51,8 +51,83 @@ Cons via_flux_n(Prim pL, Prim pR) {
 }
 ```
 
-Compiled on [Compiler Explorer](https://godbolt.org) with x86-64 clang at `-O2`, both fully
-inlined into a single leaf function, the two disassemble to:
+Try it live on [Compiler Explorer](https://godbolt.org):
+
+```{raw} html
+<div id="riemann-godbolt-wrap">
+  <button id="riemann-godbolt-toggle" type="button">⤢ Expand</button>
+  <iframe id="riemann-godbolt-iframe"
+          src="https://godbolt.org/e#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAMzwBtMA7AQwFtMQByARg9KtQYEAysib0QXACx8BBAKoBnTAAUAHpwAMvAFYTStJg1DIApACYAQuYukl9ZATwDKjdAGFUtAK4sGIAOykrgAyeAyYAHI%2BAEaYxBIAzABspAAOqAqETgwe3r4BaRlZAqHhUSyx8VzJtpj2jgJCBEzEBLk%2BfoF2mA7ZTS0EpZExcYkpCs2t7fldk4NhwxWj1UkAlLaoXsTI7BwA9HsA1AC0p4csYXgsYocThujHYYf8xLcIrNFMyADWrgogIAAbj1DhAFABPZC0AHA0wJNzoTbReikBImBLYVYnU4mDQAQQmxC8DkOADUeglDiZ/FZ8Yd6YdEV5kZhDqpSIdwRyAF7o2l4hmHNAMCaYVSpV5Mln01CpOJMIjEEwAVisyoAIhAwgRDngscKJlSaYdiJgCFsGLqqQl1ej1YcNNaAGJsw4gUF4a22m2HLjOzluw7c1Z8o22ukMg0EMUSxlI%2BhUsxJWXyxUqtWa7W6rGC%2BnUiwms0Wq12u0O/2qQNar1lv3ol3gwPB0PU8N41t83F4qMx17k5CUlPEBUkY4QfuUpg53Mz/OF83ES0T/PHJgAOnZJ3XXK3a95/m9BY7%2BJ74r7FMOQ5HSss44vTA5E8O0WneeNpoXS4p%2BfXlesz43Dlt0TAtojXHd125ECAP3Q8wy7U9YyfK9FQAKjvAdDgfONmQTBRpznD9i2XGlf0OVDbiA8DyMorC9xohQOwSI8Dy7LsDmxY43lYa4CCQEB1S8CZlGIK5%2BmjQ4jkEiYPBFcTWQgAhRJYNh0CxU5ji7aMWFSAxo3RNwoSYBQFEOAAVWEAH10WwLtCWJHVpIIESxOaCT8y7QUhLCYBzNhL0/J6azmM8hkpQTYgEFQDzWJCiN6QskFgVoGLDzY2L%2BS0zAdL0zADKMkzAuQYLbPxeySSc2SFHko1%2BS8zIjCKgLEuKzt4pw6VIuimkmLqhkWpNKLktStr23axDXkqgRqrc1lzGTOVhzQu0IHC1kqCxDz2sFLryLLKhRpnekuuSgKTrqGiDrigUjqIxdyL4vBGOuwVj3bDK2PxbTdIVPL4QK0yWpshDpujM9DimuTZoMoGMUvRbr2sCAowhoS2mm%2BSYdhGzEySbCUchmbfqxnocfml9atC46i3uwnMfhWHbNItddv/MCuqo87aGg9mhrqXr0rbdijg0k08GywwGEstAVIENcEFSVJDgQOpFtMr5zTEWhGyEzB0EvS0%2BNZFgoNSBUEE4rKcuJ/6DEKxmuzCWgFiFUHe1RmSMehhnsbh9BLIQcF0GIVBLKobxVEshgICclyWHptxGcZSyJSuDkBoYDk1sOQEGE2nr2rp73E997Bk/DrxVEOsKw4jlmoten1/dTlh69QGjc%2Br%2Bl/Yr1Q29Ostm%2BUtdToo1aU%2BH3aKNzkMXoZO7LR7iPRre77cvyu3AdLx2GGd8JXZFMHYyLm2S9Jv2A6DkPa8rqOY7RuOE6Toe06avPKfG0GOoTXOAoYdMNAqntBRF%2BrdhqqkARqaC/9VRcCATRUBI9%2BawPgf%2BGBFgzDwJARPK4SCUqqkwRqLu85iz%2B0DsHUOvc76gI5JnHOecV6sXxFbH6%2BlbbGUBgaYG%2BInYuwmuZA0ydI5EEstyCAZlBHIHzn1BKgj/bIAmMQ%2BREw25HTLMgNuSjpYqK5gA1BPpjgaN0QQoBWiFEEH7sgiwcCoHqMsfg6xpi57d20RY4xGD9H2iMXzBxkC0rtQXsncxjC2xr1PgDAR01uF4l4fvfhEjprJzCMCVolkmCqCeuIyR0iqaRJFEExRziCluIbgyOxXUzE6J8QFMc3jUDJVnjIkh91lEEBCSw9e7D7Yt2ibE1k8SW7JxbqIyyIjVDiMGakHJ7UzKTJbn9JpitlKYFUWUn0qRNFFKWVcFZ4CLB%2BIChsvZhD/E3XpNstgeD0w2PtGWI5VibnEIubsqxJyan3N8U4ppgTnntK%2BtlVhf1DKb3Mj0jEO8979LduDWZykhnKUsskuIBA0kZIUBMuFUyP5nNBZi%2BZTz5mqLuZsxZhKB4GIgB8xpuSfn4uum9YWnExYSwYFLdAaMA5eEMMASynw8Dy0VqCYyuodRPUOEQdATAdyxBeKyU0LB6liHUjif51s2HAo4biq4vTd58OhbGJgXgiDKy5UYXlTA8A30jtHWFVx4VXGCOnQZoCABKHICDgjlMwNgWqWAAgztMnFKNDXGtzsEP%2BeioHYJbsEK5EDUGWEOOgm5CCcEsFjXslNaD0xvOjcpDNryvm5ODUa9uucXURvjVG%2B1LAXVxv2QmgsyasE1rrZmxtSac0ttdfWk5K9P6HywqW544bB6XwoVa6habHVJo5GG6lA7DQhvblQCtY7yHXyodHV1tC50MBdQusaOKT7qo9V61grJbV%2BpAM/K1I16XtTwFQUEYbrRl0dPNea9C11ww0CGbaNde4BSoMEYhdQlC6mfRAV9BlyyfqTN%2B60bgHT/pxYKJeldgMurA7QCDT6X0MFHfCODSYv3lrfSh3J6GrV7R9IAop4HWT4eg4RijH7SMIfI7Bv9VHAMRwCtQUdibV2HppTTRed76VMKPWE9VESr06shQfUU4Nl0mu5eay1VDxlXprTO3TrrA07XE%2Bps1fLJ3bunVnNNbrxWesYBe31/rsY0i4ByDQ7nWyiekx08JIKFPgp4bquJ%2BrXhqYQKanl5mqFiN06kfTkyD3YuM5%2BIRozQ5iIixp6LEdLLjNASMsZlLgjrBrYV0O4zUgHtWN5oWqrAUb01QF0qMTgtQsPu7cLkXNOTpNhiu18WnWYqS1tHFgT/ZItSekzJWWzMWsnWIgrk2UXTfRfF0rS2GApJW2iyl1XaufTxBxUWRtxUAHd26iFoNzTI0ZTLGvwFQZ9GkuzeUanHAKsdlIJ2XOC66b3fJVU%2B2jKqP3vx/cyswswCQn1YGfaSOB%2BIgeAjwEwSyJtLL4AUGbAgyAEAQA%2B4Nw4hORsFzGyZ2bUX5tUL60TqrB2ocJFcE%2Bw75gYdUDh2STBSPEko7R1ugnmKZ0k6M/PCn3Wcu32jnT2zJF9nuY5McOBB4Gftmh8zqgHB1jQg4MqXgfgOBaFIKgTgbhrD/gUJsbYc1oc8FIAQTQWv1jfBAMkNcZguBJA917z33uzBmH0JwSQ%2BvHfG84Lwf4HmHeG616QOAsAkAy1SHQOI5BKBJ5T/EIyRhbceZoLQaMxB/gQGiKH6IYQWjgk4Hb8vzBiDggAPLRG0D0aPduZZsEEA33eVeY%2BkCwNELwwA3Ba3%2BNwXgWBrhGHEH3/AppejAjH0bsUPQjW7Dt9qOoofnbRGHPXjwWBQ9KSuNX3gKTogZEwOqFlwA96gBj%2BscOTBgAKFJOLM7DevWn5kIIEQYh2BSA/7yBKBqCh66BuYGBGAoDm6WD6B4DRD/CQDrCygNAiicDHAN6UjHATDoB2imCWDWBmCOjHDqikhmC8D1JxCiRYCIEQDrDdC9DOAQCuDTB%2BBuYhALDlCVB6DpC3bZCsE8FFCoFDBcHLC1D1B9BzACFuYMGoH9CtAiEjBVC2BSGeAdB6B3AKGcFKESD0FW47C6GB664h594m4cBsgAAcSQxwSQkgQokBvk0Oa4XAa4joEAuAhAJAiYCQXAqwvA0eWg6wEAieqAOkmeaeyMoRye9AWeDhuefAdAhexepefetele3%2BaR9eTeLeDg3%2BHejABA3e2soeA%2BQ%2BI%2B12Y%2Bduk%2B3KM%2BRuc%2BreeAi%2BoeK%2ByAa%2B3%2Bm%2BOuRuO%2Be%2B4IB%2BuwRux%2Bfq4%2BpA5%2Bl%2B1%2BU%2Bt%2BPkjuj%2BBgL%2Bb%2BmAH%2BX%2Bwx/Av%2BV2AB0gKxwBKg6gfeugAeDh0BBBsBO%2BtByBqQqBY%2BGBWBOBeBMBGCxBpBdulBxA1BmApx4hDRTBLBah%2BQ7BDA6AihSwyhvBxQOQPxbBhQfBJQ2hQJGhdQnxDA8h6MeQEJshkhAwgJ3BMhqhKJGhcwmJywehWwBhvhRheupABuRuZhlh1hth9h3KhwThLhbhHhio3hvh/h0xceSAj2VAERmxf%2B4ggBmxig2x2%2BCA/wEBEpvJZ67AHmtAEpYoSkTAKB2Q4epAkU/wAempMp9mIAHmmpSpw4qpzgHAseOu5JlJFBnA6oT68O7%2BcQhwZuRxBYluxJNuPhNJNhdh2ejhCQzhrhJwmBJwNxNo%2BBVglgRBJwpBZgOcpkzpEZrp%2BhHpfoqgVh3p9JjUTJgZVxIZBAuBYZdxUZJBCOnJD%2BzuIASQ/p/gFhCQNZdZtZ9Z/g/gyoRhweFJoeZhEeIAAeARTuRh5BHZph6pfZNWIxcQmQzgkgQAA%3D%3D">
+  </iframe>
+</div>
+
+<div id="riemann-godbolt-backdrop"></div>
+
+<style>
+#riemann-godbolt-toggle {
+  margin-bottom: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+#riemann-godbolt-iframe {
+  width: 100%;
+  height: 600px;
+  zoom: 0.6;
+  border: 1px solid #ccc;
+  display: block;
+}
+#riemann-godbolt-iframe.riemann-godbolt-expanded {
+  position: fixed;
+  top: 3vmin;
+  left: 3vmin;
+  width: calc(100vw - 6vmin);
+  height: calc(100vh - 6vmin);
+  zoom: 1;
+  z-index: 100000;
+}
+#riemann-godbolt-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 99999;
+}
+#riemann-godbolt-backdrop.riemann-godbolt-visible {
+  display: block;
+}
+</style>
+
+<script>
+(function () {
+  var btn = document.getElementById("riemann-godbolt-toggle");
+  var frame = document.getElementById("riemann-godbolt-iframe");
+  var backdrop = document.getElementById("riemann-godbolt-backdrop");
+  var expanded = false;
+
+  function setExpanded(value) {
+    expanded = value;
+    frame.classList.toggle("riemann-godbolt-expanded", expanded);
+    backdrop.classList.toggle("riemann-godbolt-visible", expanded);
+    btn.textContent = expanded ? "✕ Close" : "⤢ Expand";
+  }
+
+  btn.addEventListener("click", function () {
+    setExpanded(!expanded);
+  });
+  backdrop.addEventListener("click", function () {
+    setExpanded(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      setExpanded(false);
+    }
+  });
+})();
+</script>
+```
+
+Compiled with x86-64 clang at `-O2`, both fully inlined into a single leaf function, the pinned
+output disassembles to:
 
 ::::{grid} 2
 :gutter: 2
@@ -218,81 +293,6 @@ via_flux_n(DustPrimState<Vec3>, DustPrimState<Vec3>):
 ```
 :::
 ::::
-
-Interactive version, live on Compiler Explorer:
-
-```{raw} html
-<div id="riemann-godbolt-wrap">
-  <button id="riemann-godbolt-toggle" type="button">⤢ Expand</button>
-  <iframe id="riemann-godbolt-iframe"
-          src="https://godbolt.org/e#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAMzwBtMA7AQwFtMQByARg9KtQYEAysib0QXACx8BBAKoBnTAAUAHpwAMvAFYTStJg1DIApACYAQuYukl9ZATwDKjdAGFUtAK4sGIAOykrgAyeAyYAHI%2BAEaYxBIAzABspAAOqAqETgwe3r4BaRlZAqHhUSyx8VzJtpj2jgJCBEzEBLk%2BfoF2mA7ZTS0EpZExcYkpCs2t7fldk4NhwxWj1UkAlLaoXsTI7BwA9HsA1AC0p4csYXgsYocThujHYYf8xLcIrNFMyADWrgogIAAbj1DhAFABPZC0AHA0wJNzoTbReikBImBLYVYnU4mDQAQQmxC8DkOADUeglDiZ/FZ8Yd6YdEV5kZhDqpSIdwRyAF7o2l4hmHNAMCaYVSpV5Mln01CpOJMIjEEwAVisyoAIhAwgRDngscKJlSaYdiJgCFsGLqqQl1ej1YcNNaAGJsw4gUF4a22m2HLjOzluw7c1Z8o22ukMg0EMUSxlI%2BhUsxJWXyxUqtWa7W6rGC%2BnUiwms0Wq12u0O/2qQNar1lv3ol3gwPB0PU8N41t83F4qMx17k5CUlPEBUkY4QfuUpg53Mz/OF83ES0T/PHJgAOnZJ3XXK3a95/m9BY7%2BJ74r7FMOQ5HSss44vTA5E8O0WneeNpoXS4p%2BfXlesz43Dlt0TAtojXHd125ECAP3Q8wy7U9YyfK9FQAKjvAdDgfONmQTBRpznD9i2XGlf0OVDbiA8DyMorC9xohQOwSI8Dy7LsDmxY43lYa4CCQEB1S8CZlGIK5%2BmjQ4jkEiYPBFcTWQgAhRJYNh0CxU5ji7aMWFSAxo3RNwoSYBQFEOAAVWEAH10WwLtCWJHVpIIESxOaCT8y7QUhLCYBzNhL0/J6azmM8hkpQTYgEFQDzWJCiN6QskFgVoGLDzY2L%2BS0zAdL0zADKMkzAuQYLbPxeySSc2SFHko1%2BS8zIjCKgLEuKzt4pw6VIuimkmLqhkWpNKLktStr23axDXkqgRqrc1lzGTOVhzQu0IHC1kqCxDz2sFLryLLKhRpnekuuSgKTrqGiDrigUjqIxdyL4vBGOuwVj3bDK2PxbTdIVPL4QK0yWpshDpujM9DimuTZoMoGMUvRbr2sCAowhoS2mm%2BSYdhGzEySbCUchmbfqxnocfml9atC46i3uwnMfhWHbNItddv/MCuqo87aGg9mhrqXr0rbdijg0k08GywwGEstAVIENcEFSVJDgQOpFtMr5zTEWhGyEzB0EvS0%2BNZFgoNSBUEE4rKcuJ/6DEKxmuzCWgFiFUHe1RmSMehhnsbh9BLIQcF0GIVBLKobxVEshgICclyWHptxGcZSyJSuDkBoYDk1sOQEGE2nr2rp73E997Bk/DrxVEOsKw4jlmoten1/dTlh69QGjc%2Br%2Bl/Yr1Q29Ostm%2BUtdToo1aU%2BH3aKNzkMXoZO7LR7iPRre77cvyu3AdLx2GGd8JXZFMHYyLm2S9Jv2A6DkPa8rqOY7RuOE6Toe06avPKfG0GOoTXOAoYdMNAqntBRF%2BrdhqqkARqaC/9VRcCATRUBI9%2BawPgf%2BGBFgzDwJARPK4SCUqqkwRqLu85iz%2B0DsHUOvc76gI5JnHOecV6sXxFbH6%2BlbbGUBgaYG%2BInYuwmuZA0ydI5EEstyCAZlBHIHzn1BKgj/bIAmMQ%2BREw25HTLMgNuSjpYqK5gA1BPpjgaN0QQoBWiFEEH7sgiwcCoHqMsfg6xpi57d20RY4xGD9H2iMXzBxkC0rtQXsncxjC2xr1PgDAR01uF4l4fvfhEjprJzCMCVolkmCqCeuIyR0iqaRJFEExRziCluIbgyOxXUzE6J8QFMc3jUDJVnjIkh91lEEBCSw9e7D7Yt2ibE1k8SW7JxbqIyyIjVDiMGakHJ7UzKTJbn9JpitlKYFUWUn0qRNFFKWVcFZ4CLB%2BIChsvZhD/E3XpNstgeD0w2PtGWI5VibnEIubsqxJyan3N8U4ppgTnntK%2BtlVhf1DKb3Mj0jEO8979LduDWZykhnKUsskuIBA0kZIUBMuFUyP5nNBZi%2BZTz5mqLuZsxZhKB4GIgB8xpuSfn4uum9YWnExYSwYFLdAaMA5eEMMASynw8Dy0VqCYyuodRPUOEQdATAdyxBeKyU0LB6liHUjif51s2HAo4biq4vTd58OhbGJgXgiDKy5UYXlTA8A30jtHWFVx4VXGCOnQZoCABKHICDgjlMwNgWqWAAgztMnFKNDXGtzsEP%2BeioHYJbsEK5EDUGWEOOgm5CCcEsFjXslNaD0xvOjcpDNryvm5ODUa9uucXURvjVG%2B1LAXVxv2QmgsyasE1rrZmxtSac0ttdfWk5K9P6HywqW544bB6XwoVa6habHVJo5GG6lA7DQhvblQCtY7yHXyodHV1tC50MBdQusaOKT7qo9V61grJbV%2BpAM/K1I16XtTwFQUEYbrRl0dPNea9C11ww0CGbaNde4BSoMEYhdQlC6mfRAV9BlyyfqTN%2B60bgHT/pxYKJeldgMurA7QCDT6X0MFHfCODSYv3lrfSh3J6GrV7R9IAop4HWT4eg4RijH7SMIfI7Bv9VHAMRwCtQUdibV2HppTTRed76VMKPWE9VESr06shQfUU4Nl0mu5eay1VDxlXprTO3TrrA07XE%2Bps1fLJ3bunVnNNbrxWesYBe31/rsY0i4ByDQ7nWyiekx08JIKFPgp4bquJ%2BrXhqYQKanl5mqFiN06kfTkyD3YuM5%2BIRozQ5iIixp6LEdLLjNASMsZlLgjrBrYV0O4zUgHtWN5oWqrAUb01QF0qMTgtQsPu7cLkXNOTpNhiu18WnWYqS1tHFgT/ZItSekzJWWzMWsnWIgrk2UXTfRfF0rS2GApJW2iyl1XaufTxBxUWRtxUAHd26iFoNzTI0ZTLGvwFQZ9GkuzeUanHAKsdlIJ2XOC66b3fJVU%2B2jKqP3vx/cyswswCQn1YGfaSOB%2BIgeAjwEwSyJtLL4AUGbAgyAEAQA%2B4Nw4hORsFzGyZ2bUX5tUL60TqrB2ocJFcE%2Bw75gYdUDh2STBSPEko7R1ugnmKZ0k6M/PCn3Wcu32jnT2zJF9nuY5McOBB4Gftmh8zqgHB1jQg4MqXgfgOBaFIKgTgbhrD/gUJsbYc1oc8FIAQTQWv1jfBAMkNcZguBJA917z33uzBmH0JwSQ%2BvHfG84Lwf4HmHeG616QOAsAkAy1SHQOI5BKBJ5T/EIyRhbceZoLQaMxB/gQGiKH6IYQWjgk4Hb8vzBiDggAPLRG0D0aPduZZsEEA33eVeY%2BkCwNELwwA3Ba3%2BNwXgWBrhGHEH3/AppejAjH0bsUPQjW7Dt9qOoofnbRGHPXjwWBQ9KSuNX3gKTogZEwOqFlwA96gBj%2BscOTBgAKFJOLM7DevWn5kIIEQYh2BSA/7yBKBqCh66BuYGBGAoDm6WD6B4DRD/CQDrCygNAiicDHAN6UjHATDoB2imCWDWBmCOjHDqikhmC8D1JxCiRYCIEQDrDdC9DOAQCuDTB%2BBuYhALDlCVB6DpC3bZCsE8FFCoFDBcHLC1D1B9BzACFuYMGoH9CtAiEjBVC2BSGeAdB6B3AKGcFKESD0FW47C6GB664h594m4cBsgAAcSQxwSQkgQokBvk0Oa4XAa4joEAuAhAJAiYCQXAqwvA0eWg6wEAieqAOkmeaeyMoRye9AWeDhuefAdAhexepefetele3%2BaR9eTeLeDg3%2BHejABA3e2soeA%2BQ%2BI%2B12Y%2Bduk%2B3KM%2BRuc%2BreeAi%2BoeK%2ByAa%2B3%2Bm%2BOuRuO%2Be%2B4IB%2BuwRux%2Bfq4%2BpA5%2Bl%2B1%2BU%2Bt%2BPkjuj%2BBgL%2Bb%2BmAH%2BX%2Bwx/Av%2BV2AB0gKxwBKg6gfeugAeDh0BBBsBO%2BtByBqQqBY%2BGBWBOBeBMBGCxBpBdulBxA1BmApx4hDRTBLBah%2BQ7BDA6AihSwyhvBxQOQPxbBhQfBJQ2hQJGhdQnxDA8h6MeQEJshkhAwgJ3BMhqhKJGhcwmJywehWwBhvhRheupABuRuZhlh1hth9h3KhwThLhbhHhio3hvh/h0xceSAj2VAERmxf%2B4ggBmxig2x2%2BCA/wEBEpvJZ67AHmtAEpYoSkTAKB2Q4epAkU/wAempMp9mIAHmmpSpw4qpzgHAseOu5JlJFBnA6oT68O7%2BcQhwZuRxBYluxJNuPhNJNhdh2ejhCQzhrhJwmBJwNxNo%2BBVglgRBJwpBZgOcpkzpEZrp%2BhHpfoqgVh3p9JjUTJgZVxIZBAuBYZdxUZJBCOnJD%2BzuIASQ/p/gFhCQNZdZtZ9Z/g/gyoRhweFJoeZhEeIAAeARTuRh5BHZph6pfZNWIxcQmQzgkgQAA%3D%3D">
-  </iframe>
-</div>
-
-<div id="riemann-godbolt-backdrop"></div>
-
-<style>
-#riemann-godbolt-toggle {
-  margin-bottom: 6px;
-  padding: 4px 12px;
-  cursor: pointer;
-}
-#riemann-godbolt-iframe {
-  width: 100%;
-  height: 600px;
-  zoom: 0.6;
-  border: 1px solid #ccc;
-  display: block;
-}
-#riemann-godbolt-iframe.riemann-godbolt-expanded {
-  position: fixed;
-  top: 3vmin;
-  left: 3vmin;
-  width: calc(100vw - 6vmin);
-  height: calc(100vh - 6vmin);
-  zoom: 1;
-  z-index: 100000;
-}
-#riemann-godbolt-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 99999;
-}
-#riemann-godbolt-backdrop.riemann-godbolt-visible {
-  display: block;
-}
-</style>
-
-<script>
-(function () {
-  var btn = document.getElementById("riemann-godbolt-toggle");
-  var frame = document.getElementById("riemann-godbolt-iframe");
-  var backdrop = document.getElementById("riemann-godbolt-backdrop");
-  var expanded = false;
-
-  function setExpanded(value) {
-    expanded = value;
-    frame.classList.toggle("riemann-godbolt-expanded", expanded);
-    backdrop.classList.toggle("riemann-godbolt-visible", expanded);
-    btn.textContent = expanded ? "✕ Close" : "⤢ Expand";
-  }
-
-  btn.addEventListener("click", function () {
-    setExpanded(!expanded);
-  });
-  backdrop.addEventListener("click", function () {
-    setExpanded(false);
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-      setExpanded(false);
-    }
-  });
-})();
-</script>
-```
 
 Both keep the same control-flow shape (the solver's internal branch tree survives inlining
 unchanged), but `via_mz_dispatch` does strictly more work for the same result:
