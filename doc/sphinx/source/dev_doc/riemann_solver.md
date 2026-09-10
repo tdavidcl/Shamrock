@@ -238,7 +238,7 @@ Interactive version, live on Compiler Explorer:
   cursor: pointer;
 }
 #riemann-godbolt-iframe {
-  width: 800px;
+  width: 100%;
   height: 600px;
   zoom: 0.6;
   border: 1px solid #ccc;
