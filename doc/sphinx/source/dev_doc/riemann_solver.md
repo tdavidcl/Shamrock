@@ -213,6 +213,7 @@ via_mz_dispatch(DustPrimState<Vec3>, DustPrimState<Vec3>):
         xorpd   xmm4, xmm4
         jmp     .LBB0_7
 ```
+
 :::
 
 :::{grid-item}
@@ -289,6 +290,7 @@ via_flux_n(DustPrimState<Vec3>, DustPrimState<Vec3>):
         movupd  xmmword ptr [rax + 16], xmm2
         ret
 ```
+
 :::
 ::::
 
@@ -317,23 +319,28 @@ codegen at `-O2`.
 ### On-device benchmark
 
 {download}`riemann_solver_axis_dispatch_sycl_bench.cpp` is the same comparison ported to real
-`sycl::vec<double, 3>` and run as an actual kernel launch, over $10^7$ randomly generated face
+`sycl::vec<double, 3>` and run as an actual kernel launch, over $2\cdot10^7$ randomly generated face
 states, on whichever SYCL device you point it at. Inputs and outputs are USM device allocations
 (`sycl::malloc_device`) on an in-order queue. It checks that both variants agree exactly before
 timing them, then reports the best of 20 timed runs for each:
 
 ```text
-$ acpp -O3 riemann_solver_axis_dispatch_sycl_bench.cpp -o bench && ./bench
+❯ ACPP_VISIBILITY_MASK=omp ./a.out
 Device: AdaptiveCpp OpenMP host device
-N = 10000000 elements, 20 repeats per case (best of N reported)
+N = 20000000 elements, 100 repeats per case (best of N reported)
 
 correctness: max |via_mz_dispatch - via_flux_n| = 0.000e+00  (PASS)
 
-via_mz_dispatch  : best of 20 runs =    64.498 ms  (6.450 ns/elem)
-via_flux_n       : best of 20 runs =    61.616 ms  (6.162 ns/elem)
+via_mz_dispatch  : best of 100 runs =    61.519 ms  (3.076 ns/elem)
+via_flux_n       : best of 100 runs =    60.624 ms  (3.031 ns/elem)
+❯ ACPP_VISIBILITY_MASK=cuda ./a.out
+Device: NVIDIA GeForce RTX 3070
+N = 20000000 elements, 100 repeats per case (best of N reported)
+
+correctness: max |via_mz_dispatch - via_flux_n| = 0.000e+00  (PASS)
+
+via_mz_dispatch  : best of 100 runs =     9.680 ms  (0.484 ns/elem)
+via_flux_n       : best of 100 runs =     9.682 ms  (0.484 ns/elem)
 ```
 
-On this OpenMP host device the kernel is memory-bandwidth-bound rather than compute-bound, so the
-gap is modest (~4.5%) compared to the single-call assembly diff above; a compute-bound device
-(a discrete GPU with less bandwidth pressure per flux, or a solver with more arithmetic than this
-generic stand-in) should show a larger gap from the same extra sign-flip/shuffle instructions.
+It seems that on CPU the use of projection yield a small gain thanks to the shorten assembly. On GPU the difference seems tiny (probably because it is still mostly memory bound).
