@@ -18,7 +18,6 @@
 //   ./bench
 
 #include <sycl/sycl.hpp>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -64,15 +63,11 @@ inline ConsState hydro_flux_n(PrimState prim, Tvec n) {
 inline ConsState x_to_z(ConsState c) {
     return ConsState{c.rho, Tvec{-c.rhovel[2], c.rhovel[1], c.rhovel[0]}};
 }
-inline ConsState invert_axis(ConsState c) {
-    return ConsState{c.rho, -c.rhovel};
-}
+inline ConsState invert_axis(ConsState c) { return ConsState{c.rho, -c.rhovel}; }
 inline PrimState prim_z_to_x(PrimState p) {
     return PrimState{p.rho, Tvec{p.vel[2], p.vel[1], -p.vel[0]}};
 }
-inline PrimState prim_invert_axis(PrimState p) {
-    return PrimState{p.rho, -p.vel};
-}
+inline PrimState prim_invert_axis(PrimState p) { return PrimState{p.rho, -p.vel}; }
 
 // --- a generic Riemann solver, standing in for any of Rusanov/HLL/HLLC/
 //     dust-HLL/Huang-Bai: only the "_n" variant does real physics, every
@@ -115,25 +110,17 @@ struct DeviceArray {
     T *ptr = nullptr;
     sycl::queue &q;
 
-    DeviceArray(sycl::queue &q_, std::size_t n) : q(q_) {
-        ptr = sycl::malloc_device<T>(n, q);
-    }
-    ~DeviceArray() {
-        sycl::free(ptr, q);
-    }
+    DeviceArray(sycl::queue &q_, std::size_t n) : q(q_) { ptr = sycl::malloc_device<T>(n, q); }
+    ~DeviceArray() { sycl::free(ptr, q); }
     DeviceArray(const DeviceArray &)            = delete;
     DeviceArray &operator=(const DeviceArray &) = delete;
 
-    T *get() const {
-        return ptr;
-    }
+    T *get() const { return ptr; }
 };
 
 int main() {
     sycl::queue q{sycl::property::queue::in_order()};
-    std::printf(
-        "Device: %s\n",
-        q.get_device().get_info<sycl::info::device::name>().c_str());
+    std::printf("Device: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
     std::printf("N = %zu elements, %d repeats per case (best of N reported)\n\n", N, repeats);
 
     std::vector<PrimState> hL(N), hR(N);
@@ -181,8 +168,7 @@ int main() {
         for (std::size_t i = 0; i < N; ++i) {
             max_diff = std::max(max_diff, std::abs(hOutMz[i].rho - hOutN[i].rho));
             for (int c = 0; c < 3; ++c)
-                max_diff
-                    = std::max(max_diff, std::abs(hOutMz[i].rhovel[c] - hOutN[i].rhovel[c]));
+                max_diff = std::max(max_diff, std::abs(hOutMz[i].rhovel[c] - hOutN[i].rhovel[c]));
         }
         std::printf(
             "correctness: max |via_mz_dispatch - via_flux_n| = %.3e  (%s)\n\n",
@@ -201,9 +187,9 @@ int main() {
         for (int r = 0; r < repeats; ++r) {
             auto t0 = std::chrono::steady_clock::now();
             submit(out).wait();
-            auto t1 = std::chrono::steady_clock::now();
+            auto t1   = std::chrono::steady_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-            best_ms = std::min(best_ms, ms);
+            best_ms   = std::min(best_ms, ms);
         }
         std::printf(
             "%-16s : best of %2d runs = %9.3f ms  (%.3f ns/elem)\n",

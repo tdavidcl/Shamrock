@@ -9,11 +9,11 @@
 // --- minimal stand-in for shambackends::vec (sycl::vec<double,3>) ---
 struct Vec3 {
     double x, y, z;
-    constexpr double  operator[](int i) const { return i == 0 ? x : (i == 1 ? y : z); }
-    constexpr double &operator[](int i)       { return i == 0 ? x : (i == 1 ? y : z); }
+    constexpr double operator[](int i) const { return i == 0 ? x : (i == 1 ? y : z); }
+    constexpr double &operator[](int i) { return i == 0 ? x : (i == 1 ? y : z); }
 };
-constexpr Vec3 operator-(Vec3 a)           { return Vec3{-a.x, -a.y, -a.z}; }
-constexpr Vec3 operator+(Vec3 a, Vec3 b)   { return Vec3{a.x + b.x, a.y + b.y, a.z + b.z}; }
+constexpr Vec3 operator-(Vec3 a) { return Vec3{-a.x, -a.y, -a.z}; }
+constexpr Vec3 operator+(Vec3 a, Vec3 b) { return Vec3{a.x + b.x, a.y + b.y, a.z + b.z}; }
 constexpr Vec3 operator*(Vec3 a, double s) { return Vec3{a.x * s, a.y * s, a.z * s}; }
 
 // --- shammath::DustPrimState / DustConsState (trimmed) ---
@@ -38,7 +38,8 @@ struct DustConsState {
 };
 
 template<class Tvec>
-constexpr DustConsState<Tvec> operator+(const DustConsState<Tvec> &a, const DustConsState<Tvec> &b) {
+constexpr DustConsState<Tvec> operator+(
+    const DustConsState<Tvec> &a, const DustConsState<Tvec> &b) {
     return DustConsState<Tvec>{a.rho + b.rho, a.rhovel + b.rhovel};
 }
 
@@ -133,10 +134,6 @@ inline constexpr auto riemann_solver_flux_mz(Tprim pL, Tprim pR) {
 using Prim = DustPrimState<Vec3>;
 using Cons = DustConsState<Vec3>;
 
-Cons via_mz_dispatch(Prim pL, Prim pR) {
-    return riemann_solver_flux_mz(pL, pR);
-}
+Cons via_mz_dispatch(Prim pL, Prim pR) { return riemann_solver_flux_mz(pL, pR); }
 
-Cons via_flux_n(Prim pL, Prim pR) {
-    return riemann_solver_flux_n(pL, pR, Vec3{0, 0, -1});
-}
+Cons via_flux_n(Prim pL, Prim pR) { return riemann_solver_flux_n(pL, pR, Vec3{0, 0, -1}); }
