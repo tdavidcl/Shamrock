@@ -317,7 +317,7 @@ codegen at `-O2`.
 ### On-device benchmark
 
 {download}`riemann_solver_axis_dispatch_sycl_bench.cpp` is the same comparison ported to real
-`sycl::vec<double, 3>` and run as an actual kernel launch, over `10^7` randomly generated face
+`sycl::vec<double, 3>` and run as an actual kernel launch, over $10^7$ randomly generated face
 states, on whichever SYCL device you point it at. Inputs and outputs are USM device allocations
 (`sycl::malloc_device`) on an in-order queue, not SYCL buffers/accessors, to avoid the
 buffer-accessor overhead that would otherwise dominate a kernel this cheap. It checks that both
