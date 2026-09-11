@@ -37,6 +37,29 @@ def f_df(rho_ha, rho_sum, sumdWdh, h_a):
     return f_iter, df_iter
 
 
+def f_kernel(q):
+    return shamrock.math.sphkernel.M4_f(q)
+
+
+def df_kernel(q):
+    return shamrock.math.sphkernel.M4_df(q)
+
+
+def plot_f_df_kernel():
+    q = np.linspace(0, 4, 1000)
+
+    f_values = np.array([f_kernel(x) for x in q])
+    df_values = np.array([df_kernel(x) for x in q])
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(q, f_values, label=r"$f(q)$")
+    ax.plot(q, df_values, label=r"$df(q)$")
+    ax.plot(q, f_values + df_values * q / 3, label=r"$f(q) + df(q) \cdot q / 3$")
+    ax.set_xlabel(r"$q$")
+    ax.legend()
+    plt.show()
+
+
 def newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a, h_max_evol_m, h_max_evol_p):
     f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
     new_h = h_a - f_iter / df_iter
@@ -44,14 +67,12 @@ def newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a, h_max_evol_m, h_max_evol
     print(
         f"new_h = {new_h}, h_a = {h_a}, f_iter = {f_iter}, df_iter = {df_iter}, lim m = {h_a * h_max_evol_m}, lim p = {h_a * h_max_evol_p}"
     )
-    if new_h < h_a * h_max_evol_m:
-        new_h = h_a * h_max_evol_m
+    new_h = max(new_h, h_a * h_max_evol_m)
 
-    if new_h > h_a * h_max_evol_p:
-        new_h = h_a * h_max_evol_p
+    new_h = min(new_h, h_a * h_max_evol_p)
 
-    if f_iter > 0 and f_iter / df_iter < 0:
-        new_h = h_a * h_max_evol_m
+    # if f_iter > 0 and f_iter / df_iter < 0:
+    # new_h = h_a * h_max_evol_m
 
     return new_h
 
@@ -87,7 +108,7 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float):
     axs[0].plot(h_a_test, rho_sum_values, label=r"$\rho_sum(m_a, h_a)$")
 
     # plt.ylim(-10, 10)
-    axs[0].set_yscale("symlog", linthresh=1e-6)
+    axs[0].set_yscale("symlog", linthresh=1e-4)
     axs[0].set_xscale("log")
     axs[0].set_xlabel("h_a")
     axs[0].legend()
@@ -107,6 +128,9 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float):
         axs[1].plot(history_h_a, label=f"init_h_a = {init_h_a}")
 
     axs[1].set_yscale("log")
+    axs[1].set_xlabel("iteration count")
+    axs[1].set_ylabel("h_a")
+    axs[1].legend()
 
     plt.show()
 
@@ -128,4 +152,5 @@ pmass = 1.0 / 1000.0
 
 positions = np.array(positions)
 
+plot_f_df_kernel()
 analyse_h_convergence(positions, id_a, pmass)
