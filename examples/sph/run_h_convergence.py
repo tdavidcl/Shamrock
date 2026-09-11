@@ -1,6 +1,6 @@
 """
-Showcase potential unstable behavior of smoothing length iteration
-==================================================================
+Showcase smoothing length iteration algorithlm
+==============================================
 """
 
 import matplotlib.pyplot as plt
