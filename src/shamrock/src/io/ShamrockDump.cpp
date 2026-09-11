@@ -15,6 +15,7 @@
  */
 
 #include "shambase/stacktrace.hpp"
+#include "shambase/string.hpp"
 #include "shamcmdopt/env.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamrock/io/ShamrockDump.hpp"
@@ -37,7 +38,7 @@ namespace shamrock {
         sched.patch_data.for_each_patchdata([&](u64 pid, PatchDataLayer &pdat) {
             auto ser_sz = pdat.serialize_buf_byte_size();
             shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
-            ser.allocate(ser_sz);
+            ser.allocate(ser_sz, true);
             pdat.serialize_buf(ser);
 
             auto tmp         = ser.finalize();
@@ -93,7 +94,7 @@ namespace shamrock {
 
         shamlog_debug_ln(
             "ShamrockDump",
-            shambase::format(
+            sham::format(
                 "table sizes {} {} {}", metadata_patch.size(), metadata_user.size(), sout.size()));
 
         if (/*do check*/ true) {
@@ -102,7 +103,7 @@ namespace shamrock {
                 if (out != s.size() * shamcomm::world_size()) {
                     logger::err_ln(
                         "ShamrockDump",
-                        shambase::format(
+                        sham::format(
                             "string size mismatch between all processes,\n    size : {}\nthe "
                             "string : {}\n",
                             s.size(),
@@ -138,7 +139,7 @@ namespace shamrock {
 
             shamcomm::CommunicationBuffer buf(data, shamsys::instance::get_compute_scheduler_ptr());
 
-            shamalgs::collective::write_at<u8>(mfile, buf.get_ptr(), bytecount, head_ptr + off);
+            shamalgs::collective::write_at_large(mfile, buf.get_ptr(), bytecount, head_ptr + off);
         }
 
         // write data to file
@@ -151,7 +152,7 @@ namespace shamrock {
             size_t max_head = all_offsets[plist_len - 1] + all_bytecounts[plist_len - 1] + head_ptr;
             logger::info_ln(
                 "Shamrock Dump",
-                shambase::format(
+                sham::format(
                     "dump to {}\n              - took {}, bandwidth = {}/s",
                     fname,
                     timer.get_time_str(),
@@ -200,6 +201,9 @@ namespace shamrock {
         sched.patch_list = jmeta_patch.at("patchlist").get<SchedulerPatchList>();
         sched.patch_tree = jmeta_patch.at("patchtree").get<scheduler::PatchTree>();
         sched.patch_data.sim_box.from_json(jmeta_patch.at("sim_box"));
+        if (jmeta_patch.contains("synchronized_data")) {
+            jmeta_patch.at("synchronized_data").get_to(sched.synchronized_data);
+        }
 
         // edit patch owner to fit in new world size, or spread if more processes now
         // a bit dirty but gets the job done for now
@@ -238,13 +242,13 @@ namespace shamrock {
             shamcomm::CommunicationBuffer buf(
                 loc_file_info.bytecount, shamsys::instance::get_compute_scheduler_ptr());
 
-            shamalgs::collective::read_at<u8>(
+            shamalgs::collective::read_at_large(
                 mfile, buf.get_ptr(), loc_file_info.bytecount, head_ptr + loc_file_info.offset);
 
             sham::DeviceBuffer<u8> out = shamcomm::CommunicationBuffer::convert_usm(std::move(buf));
 
             shamalgs::SerializeHelper ser(
-                shamsys::instance::get_compute_scheduler_ptr(), std::move(out));
+                shamsys::instance::get_compute_scheduler_ptr(), std::move(out), true);
 
             patch::PatchDataLayer pdat = patch::PatchDataLayer::deserialize_buf(ser, ctx.pdl);
 
@@ -259,7 +263,7 @@ namespace shamrock {
             size_t max_head = all_offsets[plist_len - 1] + all_bytecounts[plist_len - 1] + head_ptr;
             logger::info_ln(
                 "Shamrock Dump",
-                shambase::format(
+                sham::format(
                     "load dump from {}\n              - took {}, bandwidth = {}/s",
                     fname,
                     timer.get_time_str(),
