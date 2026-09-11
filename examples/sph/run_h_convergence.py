@@ -1,3 +1,8 @@
+"""
+Showcase potential unstable behavior of smoothing length iteration
+==================================================================
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
