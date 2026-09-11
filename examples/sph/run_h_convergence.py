@@ -115,6 +115,71 @@ def newton_iterate_new_h_lim(h_a, positions, state_vars: dict, h_max_evol_m=0.9,
     return new_h, is_done
 
 
+def bisect_iterate_new_h(h_a, positions, state_vars: dict, h_max_evol_m=0.5, h_max_evol_p=1.1):
+    if "ha_0" not in state_vars:
+        state_vars["ha_0"] = h_a
+        state_vars["lo"] = 0
+        state_vars["hi"] = np.inf
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, W, dhW, positions)
+    f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+
+    lo = state_vars["lo"]
+    hi = state_vars["hi"]
+
+    if f_iter < 0:
+        lo = h_a
+    else:
+        hi = h_a
+
+    new_h = (lo + hi) / 2
+    new_h = max(new_h, h_a * h_max_evol_m)
+    new_h = min(new_h, h_a * h_max_evol_p)
+
+    state_vars["lo"] = lo
+    state_vars["hi"] = hi
+
+    eps = abs(hi - lo) / new_h
+    is_done = eps < 1e-6
+    return new_h, is_done
+
+
+def bisect_NR_iterate_new_h(h_a, positions, state_vars: dict, h_max_evol_m=0.5, h_max_evol_p=1.1):
+    if "ha_0" not in state_vars:
+        state_vars["ha_0"] = h_a
+        state_vars["lo"] = 0
+        state_vars["hi"] = np.inf
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, W, dhW, positions)
+    f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+
+    lo = state_vars["lo"]
+    hi = state_vars["hi"]
+
+    if f_iter < 0:
+        lo = h_a
+    else:
+        hi = h_a
+
+    new_h_nr = h_a - f_iter / df_iter
+    if lo < new_h_nr < hi:
+        new_h = new_h_nr
+    else:
+        new_h = (lo + hi) / 2
+
+    new_h = max(new_h, h_a * h_max_evol_m)
+    new_h = min(new_h, h_a * h_max_evol_p)
+
+    state_vars["lo"] = lo
+    state_vars["hi"] = hi
+
+    eps = abs(hi - lo) / new_h
+    is_done = eps < 1e-6
+    return new_h, is_done
+
+
 def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterate_new_h):
 
     h_a_test = np.logspace(-2, 2, 1000)
@@ -151,8 +216,12 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
     axs[0].legend()
 
     # sample 10 equally spaced values in h_a_test indexes
-    test_h_values = h_a_test[np.linspace(0, h_a_test.shape[0] - 1, 4).astype(int)]
+    test_h_values = np.append(
+        h_a_test[np.linspace(0, h_a_test.shape[0] - 1, 4).astype(int)], 1.7039887744498599
+    )
 
+    found_h_a = None
+    histories = []
     for init_h_a in test_h_values:
         h_a = init_h_a
         history_h_a = [h_a]
@@ -165,24 +234,28 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
             )
             history_h_a.append(h_a)
             if is_done:
+                found_h_a = h_a
                 break
-        axs[1].plot(history_h_a, label=f"init_h_a = {init_h_a}")
+        histories.append((init_h_a, history_h_a))
 
-    axs[1].set_yscale("log")
+    for init_h_a, history_h_a in histories:
+        axs[1].plot(np.array(history_h_a) - found_h_a, label=f"init_h_a = {init_h_a}")
+
+    axs[1].set_yscale("symlog", linthresh=1e-3)
     axs[1].set_xlabel("iteration count")
-    axs[1].set_ylabel("h_a")
+    axs[1].set_ylabel(r"$\delta h_a$")
     axs[1].legend()
 
-    plt.show()
+    # plt.show()
 
 
 positions = []
 
 id_a = 0
-
-for ix in range(20):
-    for iy in range(20):
-        for iz in range(20):
+Nside = 10
+for ix in range(Nside):
+    for iy in range(Nside):
+        for iz in range(Nside):
             positions.append((ix, iy, iz))
             # positions.append(np.random.rand(3))
 
@@ -196,3 +269,6 @@ positions = np.array(positions)
 plot_f_df_kernel()
 analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h)
 analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h_lim)
+analyse_h_convergence(positions, id_a, pmass, bisect_iterate_new_h)
+analyse_h_convergence(positions, id_a, pmass, bisect_NR_iterate_new_h)
+plt.show()
