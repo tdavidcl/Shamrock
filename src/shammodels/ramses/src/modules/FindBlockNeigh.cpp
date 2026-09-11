@@ -28,19 +28,18 @@ namespace shammodels::basegodunov::modules {
         public:
         shamrock::tree::ObjectIterator<Tmorton, TgridVec> block_looper;
 
-        sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_min;
-        sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_max;
+        const TgridVec *acc_block_min;
+        const TgridVec *acc_block_max;
 
         TgridVec dir_offset;
 
         AMRBlockFinder(
             sycl::handler &cgh,
             const RTree &tree,
-            sycl::buffer<TgridVec> &buf_block_min,
-            sycl::buffer<TgridVec> &buf_block_max,
+            const TgridVec *acc_block_min,
+            const TgridVec *acc_block_max,
             TgridVec dir_offset)
-            : block_looper(tree, cgh), acc_block_min{buf_block_min, cgh, sycl::read_only},
-              acc_block_max{buf_block_max, cgh, sycl::read_only},
+            : block_looper(tree, cgh), acc_block_min(acc_block_min), acc_block_max(acc_block_max),
               dir_offset(std::move(dir_offset)) {}
 
         template<class IndexFunctor>
@@ -99,8 +98,15 @@ namespace shammodels::basegodunov::modules {
             PatchDataField<TgridVec> &block_min = edges.spans_block_min.get_refs().get(id);
             PatchDataField<TgridVec> &block_max = edges.spans_block_max.get_refs().get(id);
 
-            sycl::buffer<TgridVec> buf_block_min_sycl = block_min.get_buf().copy_to_sycl_buffer();
-            sycl::buffer<TgridVec> buf_block_max_sycl = block_max.get_buf().copy_to_sycl_buffer();
+            sham::DeviceBuffer<TgridVec> &buf_block_min = block_min.get_buf();
+            sham::DeviceBuffer<TgridVec> &buf_block_max = block_max.get_buf();
+
+            sham::EventList deps;
+            const TgridVec *ptr_block_min = buf_block_min.get_read_access(deps);
+            const TgridVec *ptr_block_max = buf_block_max.get_read_access(deps);
+            deps.set_consumed(true);
+
+            std::vector<sycl::event> block_minmax_events;
 
             for (u32 dir = 0; dir < 6; dir++) {
 
@@ -109,9 +115,11 @@ namespace shammodels::basegodunov::modules {
                 AMRGraph rslt = details::compute_neigh_graph_deprecated<AMRBlockFinder>(
                     shamsys::instance::get_compute_scheduler_ptr(),
                     edges.sizes.indexes.get(id),
+                    deps,
+                    block_minmax_events,
                     tree,
-                    buf_block_min_sycl,
-                    buf_block_max_sycl,
+                    ptr_block_min,
+                    ptr_block_max,
                     dir_offset);
 
                 shamlog_debug_ln(
@@ -121,6 +129,9 @@ namespace shammodels::basegodunov::modules {
 
                 result.graph_links[dir] = std::move(tmp_graph);
             }
+
+            buf_block_min.complete_event_state(block_minmax_events);
+            buf_block_max.complete_event_state(block_minmax_events);
 
             graph.add_obj(id, std::move(result));
         });

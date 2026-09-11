@@ -23,6 +23,7 @@
 #include "shammodels/common/amr/NeighGraph.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/TreeTraversal.hpp"
+#include <vector>
 
 namespace shammodels::basegodunov::modules::details {
 
@@ -115,18 +116,35 @@ namespace shammodels::basegodunov::modules::details {
      * @brief Create a neighbour graph using a class that will list the ids of the found neighbourgh
      * NeighFindKernel will list the index and that function will run it twice to generate the graph
      *
+     * Unlike compute_neigh_graph, NeighFindKernel is constructed with the sycl::handler of each
+     * kernel submission (instead of once up front), so that it can hold sycl::accessor members
+     * bound to a tree that is not yet USM. NeighFindKernel must therefore only take raw
+     * pointers/values in its constructor (no USM buffer access of its own): if it also reads a USM
+     * buffer, the caller must acquire that access (get_read_access) before calling this function,
+     * pass the resulting pointer through args, pass the resulting EventList as extra_deps, and
+     * complete that access (complete_event_state) after this function returns, using the events
+     * appended to out_events (see FindBlockNeigh.cpp for an example).
+     *
      * // TODO remove it when the tree will finally be USM
      *
      * @tparam NeighFindKernel the neigh find kernel
      * @tparam Args arguments that will be forwarded to the kernel
      * @param q the sycl queue
      * @param graph_nodes the number of graph nodes
+     * @param extra_deps events that both kernel submissions must wait on, in addition to their own
+     * internal dependencies (e.g. read access to USM buffers used by NeighFindKernel)
+     * @param out_events the completion event of each kernel submission is appended here, so the
+     * caller can complete the event state of any USM buffer access it acquired for extra_deps
      * @param args arguments that will be forwarded to the kernel
      * @return shammodels::basegodunov::modules::NeighGraph the neigh graph
      */
     template<class NeighFindKernel, class... Args>
     shammodels::basegodunov::modules::NeighGraph compute_neigh_graph_deprecated(
-        const sham::DeviceScheduler_ptr &dev_sched, u32 graph_nodes, Args &&...args) {
+        const sham::DeviceScheduler_ptr &dev_sched,
+        u32 graph_nodes,
+        sham::EventList &extra_deps,
+        std::vector<sycl::event> &out_events,
+        Args &&...args) {
 
         auto &q = dev_sched->get_queue();
 
@@ -138,6 +156,7 @@ namespace shammodels::basegodunov::modules::details {
 
         // fill buffer with number of link in the block graph
         auto e = q.submit(deps, [&](sycl::handler &cgh) {
+            extra_deps.apply_dependency(cgh);
             NeighFindKernel ker(cgh, std::forward<Args>(args)...);
             shambase::parallel_for(cgh, graph_nodes, "count block graph link", [=](u64 gid) {
                 u32 id_a              = (u32) gid;
@@ -152,6 +171,7 @@ namespace shammodels::basegodunov::modules::details {
         });
 
         link_counts.complete_event_state(e);
+        out_events.push_back(e);
 
         // set the last val to 0 so that the last slot after exclusive scan is the sum
         link_counts.set_val_at_idx(graph_nodes, 0);
@@ -169,6 +189,7 @@ namespace shammodels::basegodunov::modules::details {
 
         // find the neigh ids
         auto e2 = q.submit(deps2, [&](sycl::handler &cgh) {
+            extra_deps.apply_dependency(cgh);
             NeighFindKernel ker(cgh, std::forward<Args>(args)...);
             shambase::parallel_for(cgh, graph_nodes, "get ids block graph link", [=](u64 gid) {
                 u32 id_a = (u32) gid;
@@ -184,6 +205,7 @@ namespace shammodels::basegodunov::modules::details {
 
         link_cnt_offsets.complete_event_state(e2);
         ids_links.complete_event_state(e2);
+        out_events.push_back(e2);
 
         using Graph = shammodels::basegodunov::modules::NeighGraph;
         return Graph(
