@@ -36,6 +36,11 @@ def rho_h(m, h, hfact):
     return m * (hfact / h) * (hfact / h) * (hfact / h)
 
 
+hfact = 1.2  # shamrock.math.sphkernel.hfactd
+
+H_EVOL_MPI_MAX = 1.1
+
+
 def f_df(rho_ha, rho_sum, sumdWdh, h_a):
     f_iter = rho_sum - rho_ha
     df_iter = sumdWdh + 3 * rho_ha / h_a
@@ -65,7 +70,12 @@ def plot_f_df_kernel():
     plt.show()
 
 
-def newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a, h_max_evol_m, h_max_evol_p):
+def newton_iterate_new_h(h_a, positions, state_vars: dict, h_max_evol_m=0.9, h_max_evol_p=1.1):
+    if "ha_0" not in state_vars:
+        state_vars["ha_0"] = h_a
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, W, dhW, positions)
     f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
     new_h = h_a - f_iter / df_iter
 
@@ -76,13 +86,36 @@ def newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a, h_max_evol_m, h_max_evol
 
     new_h = min(new_h, h_a * h_max_evol_p)
 
-    # if f_iter > 0 and f_iter / df_iter < 0:
-    # new_h = h_a * h_max_evol_m
+    eps = abs(new_h - h_a) / state_vars["ha_0"]
+    is_done = eps < 1e-6
+    return new_h, is_done
 
-    return new_h
+
+def newton_iterate_new_h_lim(h_a, positions, state_vars: dict, h_max_evol_m=0.9, h_max_evol_p=1.1):
+    if "ha_0" not in state_vars:
+        state_vars["ha_0"] = h_a
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, W, dhW, positions)
+    f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+    new_h = h_a - f_iter / df_iter
+
+    print(
+        f"new_h = {new_h}, h_a = {h_a}, f_iter = {f_iter}, df_iter = {df_iter}, lim m = {h_a * h_max_evol_m}, lim p = {h_a * h_max_evol_p}"
+    )
+    new_h = max(new_h, h_a * h_max_evol_m)
+
+    new_h = min(new_h, h_a * h_max_evol_p)
+
+    if f_iter > 0 and f_iter / df_iter < 0:
+        new_h = h_a * h_max_evol_m
+
+    eps = abs(new_h - h_a) / state_vars["ha_0"]
+    is_done = eps < 1e-6
+    return new_h, is_done
 
 
-def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float):
+def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterate_new_h):
 
     h_a_test = np.logspace(-2, 2, 1000)
 
@@ -93,7 +126,6 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float):
     rho_h_values = np.zeros(h_a_test.shape)
 
     for i in range(h_a_test.shape[0]):
-        hfact = 1.2  # shamrock.math.sphkernel.hfactd
         rho_ha = rho_h(pmass, h_a_test[i], hfact)
         rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a_test[i], W, dhW, positions)
         rho_sum_values[i] = rho_sum
@@ -124,12 +156,16 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float):
     for init_h_a in test_h_values:
         h_a = init_h_a
         history_h_a = [h_a]
+        state_vars = {}
         for i in range(100):
-            rho_ha = rho_h(pmass, h_a, hfact)
-            rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, W, dhW, positions)
-            f_values[i], df_values[i] = f_df(rho_ha, rho_sum, sumdWdh, h_a)
-            h_a = newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a, 0.9, 1.1)
+            h_a_prev = h_a
+            h_a, is_done = iterate_new_h(h_a, positions, state_vars)
+            assert h_a <= H_EVOL_MPI_MAX * h_a_prev, (
+                f"h_a = {h_a} is larger than H_EVOL_MPI_MAX * h_a_prev = {H_EVOL_MPI_MAX * h_a_prev}"
+            )
             history_h_a.append(h_a)
+            if is_done:
+                break
         axs[1].plot(history_h_a, label=f"init_h_a = {init_h_a}")
 
     axs[1].set_yscale("log")
@@ -158,4 +194,5 @@ pmass = 1.0 / 1000.0
 positions = np.array(positions)
 
 plot_f_df_kernel()
-analyse_h_convergence(positions, id_a, pmass)
+analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h)
+analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h_lim)
