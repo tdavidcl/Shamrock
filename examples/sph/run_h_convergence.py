@@ -140,7 +140,7 @@ def bisect_iterate_new_h(h_a, positions, state_vars: dict, h_max_evol_m=0.5, h_m
     state_vars["lo"] = lo
     state_vars["hi"] = hi
 
-    eps = abs(hi - lo) / new_h
+    eps = abs(new_h - h_a) / state_vars["ha_0"]
     is_done = eps < 1e-6
     return new_h, is_done
 
@@ -175,7 +175,7 @@ def bisect_NR_iterate_new_h(h_a, positions, state_vars: dict, h_max_evol_m=0.5, 
     state_vars["lo"] = lo
     state_vars["hi"] = hi
 
-    eps = abs(hi - lo) / new_h
+    eps = abs(new_h - h_a) / state_vars["ha_0"]
     is_done = eps < 1e-6
     return new_h, is_done
 
@@ -226,6 +226,7 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
         h_a = init_h_a
         history_h_a = [h_a]
         state_vars = {}
+        converged = False
         for i in range(100):
             h_a_prev = h_a
             h_a, is_done = iterate_new_h(h_a, positions, state_vars)
@@ -235,10 +236,11 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
             history_h_a.append(h_a)
             if is_done:
                 found_h_a = h_a
+                converged = True
                 break
-        histories.append((init_h_a, history_h_a))
+        histories.append((init_h_a, history_h_a, converged))
 
-    for init_h_a, history_h_a in histories:
+    for init_h_a, history_h_a, converged in histories:
         axs[1].plot(np.array(history_h_a) - found_h_a, label=f"init_h_a = {init_h_a}")
 
     axs[1].set_yscale("symlog", linthresh=1e-3)
@@ -247,6 +249,20 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
     axs[1].legend()
 
     # plt.show()
+
+    iteration_counts = [
+        (len(history_h_a) - 1 if converged else np.nan) for _, history_h_a, converged in histories
+    ]
+
+    final_f_values = []
+    for _, history_h_a, converged in histories:
+        final_h_a = history_h_a[-1]
+        rho_ha = rho_h(pmass, final_h_a, hfact)
+        rho_sum, sumdWdh = compute_sums(pmass, id_a, final_h_a, W, dhW, positions)
+        final_f, _ = f_df(rho_ha, rho_sum, sumdWdh, final_h_a)
+        final_f_values.append(final_f)
+
+    return test_h_values, iteration_counts, final_f_values
 
 
 positions = []
@@ -267,8 +283,46 @@ pmass = 1.0 / 1000.0
 positions = np.array(positions)
 
 plot_f_df_kernel()
-analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h)
-analyse_h_convergence(positions, id_a, pmass, newton_iterate_new_h_lim)
-analyse_h_convergence(positions, id_a, pmass, bisect_iterate_new_h)
-analyse_h_convergence(positions, id_a, pmass, bisect_NR_iterate_new_h)
+
+algs = {
+    "Newton": newton_iterate_new_h,
+    "Newton (lim)": newton_iterate_new_h_lim,
+    "Bisection": bisect_iterate_new_h,
+    "Bisection + NR": bisect_NR_iterate_new_h,
+}
+
+scores = {}
+f_scores = {}
+for name, alg in algs.items():
+    test_h_values, iteration_counts, final_f_values = analyse_h_convergence(
+        positions, id_a, pmass, alg
+    )
+    scores[name] = iteration_counts
+    f_scores[name] = final_f_values
+
+fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+n_algs = len(scores)
+x = np.arange(len(test_h_values))
+bar_width = 0.8 / n_algs
+
+for i, (name, iteration_counts) in enumerate(scores.items()):
+    axs[0].bar(x + i * bar_width, iteration_counts, width=bar_width, label=name)
+
+axs[0].set_yscale("log")
+axs[0].set_ylabel("iteration count")
+axs[0].set_title("Convergence speed per strategy")
+axs[0].legend()
+
+for i, (name, final_f_values) in enumerate(f_scores.items()):
+    print(final_f_values)
+    axs[1].bar(x + i * bar_width, final_f_values, width=bar_width, label=name)
+
+axs[1].set_yscale("symlog", linthresh=1e-14)
+axs[1].set_xticks(x + bar_width * (n_algs - 1) / 2)
+axs[1].set_xticklabels([f"{v:.3g}" for v in test_h_values])
+axs[1].set_xlabel("init_h_a")
+axs[1].set_ylabel(r"$f(h_a)$")
+axs[1].set_title("Residual at convergence per strategy")
+axs[1].legend()
+
 plt.show()
