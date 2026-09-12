@@ -63,16 +63,15 @@ namespace shammodels::basegodunov::modules {
         inline static constexpr Tcons flux(Tprim pL, Tprim pR, typename Tcons::Tscal gamma) {
             const Tvec n = dir_normal<Tvec, dir>();
 
+            shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
+
             if constexpr (mode == RiemannSolverMode::Rusanov) {
-                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
                 return shammath::rusanov_flux(adiab_fluid, pL, pR, n);
             }
             if constexpr (mode == RiemannSolverMode::HLL) {
-                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
                 return shammath::hll_flux(adiab_fluid, pL, pR, n);
             }
             if constexpr (mode == RiemannSolverMode::HLLC) {
-                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
                 return shammath::hllc_adiab_toro_flux(adiab_fluid, pL, pR, n);
             }
         }

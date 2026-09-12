@@ -31,10 +31,14 @@ namespace shammath {
      * @param primR right primitive state
      * @param n face unit normal
      */
-    template<DustFluidStateSpec FSpec, class Tprim = FSpec::Tprim, class Tcons = FSpec::Tcons>
-    inline constexpr Tcons huang_bai_flux(
-        const FSpec &fspec, const Tprim &primL, const Tprim &primR, const typename FSpec::Tvec &n) {
+    template<DustFluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons huang_bai_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &primL,
+        const typename FSpec::Tprim &primR,
+        const typename FSpec::Tvec &n) {
         using Tscal = typename FSpec::Tscal;
+        using Tcons = typename FSpec::Tcons;
 
         const Tscal vnL = fspec.vn(primL, n);
         const Tscal vnR = fspec.vn(primR, n);

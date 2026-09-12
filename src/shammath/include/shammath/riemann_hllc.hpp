@@ -34,11 +34,15 @@ namespace shammath {
      * @param primR right primitive state
      * @param n face unit normal
      */
-    template<FluidStateAdiabaticSpec FSpec, class Tprim = FSpec::Tprim, class Tcons = FSpec::Tcons>
-    inline constexpr Tcons hllc_adiab_toro_flux(
-        const FSpec &fspec, const Tprim &primL, const Tprim &primR, const typename FSpec::Tvec &n) {
+    template<FluidStateAdiabaticSpec FSpec>
+    inline constexpr typename FSpec::Tcons hllc_adiab_toro_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &primL,
+        const typename FSpec::Tprim &primR,
+        const typename FSpec::Tvec &n) {
         using Tscal = typename FSpec::Tscal;
         using Tvec  = typename FSpec::Tvec;
+        using Tcons = typename FSpec::Tcons;
 
         // fspec.gamma() directly if defined, else gammaL/gammaR each from fspec.gamma(prim)
         const auto [gammaL, gammaR] = get_adiabatic_index_lr(fspec, primL, primR);
@@ -159,11 +163,15 @@ namespace shammath {
      * @param primR right primitive state
      * @param n face unit normal
      */
-    template<FluidStateSpec FSpec, class Tprim = FSpec::Tprim, class Tcons = FSpec::Tcons>
-    inline constexpr Tcons hllc_davis_flux(
-        const FSpec &fspec, const Tprim &primL, const Tprim &primR, const typename FSpec::Tvec &n) {
+    template<FluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons hllc_davis_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &primL,
+        const typename FSpec::Tprim &primR,
+        const typename FSpec::Tvec &n) {
         using Tscal = typename FSpec::Tscal;
         using Tvec  = typename FSpec::Tvec;
+        using Tcons = typename FSpec::Tcons;
 
         // Conservative form is only needed for the star-state algebra below.
         const Tcons cL = fspec.prim_to_cons(primL);

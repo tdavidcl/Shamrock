@@ -25,9 +25,12 @@ namespace shammath {
     /**
      * @brief HLL flux across a face with unit normal n
      */
-    template<FluidStateSpec FSpec, class Tprim = FSpec::Tprim, class Tcons = FSpec::Tcons>
-    inline constexpr Tcons hll_flux(
-        const FSpec &fspec, const Tprim &primL, const Tprim &primR, const typename FSpec::Tvec &n) {
+    template<FluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons hll_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &primL,
+        const typename FSpec::Tprim &primR,
+        const typename FSpec::Tvec &n) {
         const auto csL = fspec.sound_speed(primL);
         const auto csR = fspec.sound_speed(primR);
 

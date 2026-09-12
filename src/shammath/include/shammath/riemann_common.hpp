@@ -52,7 +52,6 @@ namespace shammath {
         { self.vn(prim, n) } -> std::convertible_to<typename T::Tscal>;
         { self.flux(prim, n) } -> std::convertible_to<typename T::Tcons>;
         { self.flux(prim, n, vn) } -> std::convertible_to<typename T::Tcons>;
-        { self.flux(cons, n) } -> std::convertible_to<typename T::Tcons>;
     };
 
     /**
@@ -77,7 +76,6 @@ namespace shammath {
         { self.vn(prim, n) } -> std::convertible_to<typename T::Tscal>;
         { self.flux(prim, n) } -> std::convertible_to<typename T::Tcons>;
         { self.flux(prim, n, vn) } -> std::convertible_to<typename T::Tcons>;
-        { self.flux(cons, n) } -> std::convertible_to<typename T::Tcons>;
     };
 
     namespace details {
@@ -594,14 +592,11 @@ namespace shammath {
         Tprim cons_to_prim(Tcons c) const { return shammath::cons_to_prim(c, m_gamma); }
         Tcons prim_to_cons(Tprim p) const { return shammath::prim_to_cons(p, m_gamma); }
         Tscal sound_speed(Tprim p) const { return shammath::sound_speed(p, m_gamma); }
-        Tscal vn(Tprim p, Tvec n) const {
-            return n[0] * p.vel[0] + n[1] * p.vel[1] + n[2] * p.vel[2];
-        }
+        Tscal vn(Tprim p, Tvec n) const { return sham::dot(p.vel, n); }
         Tcons flux(Tprim p, Tvec n, Tscal vn) const {
             return shammath::hydro_flux_n(p, n, vn, m_gamma);
         }
         Tcons flux(Tprim p, Tvec n) const { return shammath::hydro_flux_n(p, n, m_gamma); }
-        Tcons flux(Tcons c, Tvec n) const { return flux(shammath::cons_to_prim(c, m_gamma), n); }
         Tscal gamma() const { return m_gamma; }
     };
 
@@ -623,12 +618,9 @@ namespace shammath {
 
         Tprim cons_to_prim(Tcons c) const { return shammath::d_cons_to_prim(c); }
         Tcons prim_to_cons(Tprim p) const { return shammath::d_prim_to_cons(p); }
-        Tscal vn(Tprim p, Tvec n) const {
-            return n[0] * p.vel[0] + n[1] * p.vel[1] + n[2] * p.vel[2];
-        }
+        Tscal vn(Tprim p, Tvec n) const { return sham::dot(p.vel, n); }
         Tcons flux(Tprim p, Tvec n, Tscal vn) const { return shammath::d_hydro_flux_n(p, n, vn); }
         Tcons flux(Tprim p, Tvec n) const { return shammath::d_hydro_flux_n(p, n); }
-        Tcons flux(Tcons c, Tvec n) const { return flux(shammath::d_cons_to_prim(c), n); }
     };
 
     static_assert(DustFluidStateSpec<FluidStateDust<f64_3>>);
