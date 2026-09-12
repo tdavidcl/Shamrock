@@ -217,7 +217,7 @@ def analyse_h_convergence(positions: np.ndarray, id_a: int, pmass: float, iterat
 
     # sample 10 equally spaced values in h_a_test indexes
     test_h_values = np.append(
-        h_a_test[np.linspace(0, h_a_test.shape[0] - 1, 4).astype(int)], 1.7039887744498599
+        h_a_test[np.linspace(0, h_a_test.shape[0] - 1, 100).astype(int)], 1.7039887744498599
     )
 
     found_h_a = None

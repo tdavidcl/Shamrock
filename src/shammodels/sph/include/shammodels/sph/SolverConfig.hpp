@@ -442,8 +442,9 @@ namespace shammodels::sph {
         struct DensityBasedNeighLim {
             u32 max_neigh_count = 500;
         };
+        struct DensityBasedBisectingNR {};
 
-        using mode = std::variant<DensityBased, DensityBasedNeighLim>;
+        using mode = std::variant<DensityBased, DensityBasedNeighLim, DensityBasedBisectingNR>;
 
         mode config = DensityBased{};
 
@@ -451,9 +452,13 @@ namespace shammodels::sph {
         void set_density_based_neigh_lim(u32 max_neigh_count) {
             config = DensityBasedNeighLim{max_neigh_count};
         }
+        void set_density_based_bisecting_nr() { config = DensityBasedBisectingNR{}; }
 
         bool is_density_based_neigh_lim() const {
             return std::holds_alternative<DensityBasedNeighLim>(config);
+        }
+        bool is_density_based_bisecting_nr() const {
+            return std::holds_alternative<DensityBasedBisectingNR>(config);
         }
     };
 
@@ -1233,6 +1238,12 @@ namespace shammodels::sph {
                 {"type", "density_based_neigh_lim"},
                 {"max_neigh_count", conf->max_neigh_count},
             };
+        } else if (
+            const SmoothingLengthConfig::DensityBasedBisectingNR *conf
+            = std::get_if<SmoothingLengthConfig::DensityBasedBisectingNR>(&p.config)) {
+            j = {
+                {"type", "density_based_bisecting_nr"},
+            };
         } else {
             shambase::throw_unimplemented();
         }
@@ -1244,6 +1255,8 @@ namespace shammodels::sph {
         } else if (j.at("type").get<std::string>() == "density_based_neigh_lim") {
             p.config
                 = SmoothingLengthConfig::DensityBasedNeighLim{j.at("max_neigh_count").get<u32>()};
+        } else if (j.at("type").get<std::string>() == "density_based_bisecting_nr") {
+            p.config = SmoothingLengthConfig::DensityBasedBisectingNR{};
         } else {
             shambase::throw_unimplemented();
         }
