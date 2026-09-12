@@ -13,7 +13,8 @@
  * @file env.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Environment variable parsing for terminal color, size and UTF-8 support configuration
- * (TERM, COLORTERM, NO_COLOR, CLICOLOR_FORCE, COLUMN, LANG, LC_ALL, LC_CTYPE)
+ * (TERM, COLORTERM, NO_COLOR, CLICOLOR_FORCE, COLUMN, LANG, LC_ALL, LC_CTYPE, NO_UTF8,
+ * FORCE_UTF8)
  *
  */
 
@@ -24,7 +25,7 @@
 namespace sham::term {
 
     /// @brief Holds optional terminal environment variables (TERM, COLORTERM, NO_COLOR,
-    /// CLICOLOR_FORCE, COLUMN, LANG, LC_ALL, LC_CTYPE)
+    /// CLICOLOR_FORCE, COLUMN, LANG, LC_ALL, LC_CTYPE, NO_UTF8, FORCE_UTF8)
     ///
     /// Note: the LC_ALL/LC_CTYPE env vars are exposed as lc_all/lc_ctype here since LC_ALL and
     /// LC_CTYPE are reserved macro names defined by <locale.h>.
@@ -37,6 +38,8 @@ namespace sham::term {
         std::optional<std::string_view> LANG;
         std::optional<std::string_view> lc_all;
         std::optional<std::string_view> lc_ctype;
+        std::optional<std::string_view> NO_UTF8;
+        std::optional<std::string_view> FORCE_UTF8;
     };
 
     /// @brief Parses terminal environment variables to determine color support and set terminal

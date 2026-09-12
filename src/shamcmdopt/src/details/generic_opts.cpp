@@ -56,6 +56,8 @@ namespace shamcmdopt {
         register_env_var_doc(
             "LC_CTYPE", "Character classification locale, used to detect UTF-8 support");
         register_env_var_doc("LANG", "Default locale, used to detect UTF-8 support");
+        register_env_var_doc("NO_UTF8", "Disable UTF-8 output (overrides locale detection)");
+        register_env_var_doc("FORCE_UTF8", "Force UTF-8 output (overrides locale detection)");
     }
 
     /**
@@ -93,6 +95,9 @@ namespace shamcmdopt {
         auto lc_all   = getenv_str_view("LC_ALL");
         auto lc_ctype = getenv_str_view("LC_CTYPE");
 
+        auto NO_UTF8    = getenv_str_view("NO_UTF8");
+        auto FORCE_UTF8 = getenv_str_view("FORCE_UTF8");
+
         sham::term::parse_terminal_support(
             {
                 .TERM           = TERM,
@@ -103,6 +108,8 @@ namespace shamcmdopt {
                 .LANG           = LANG,
                 .lc_all         = lc_all,
                 .lc_ctype       = lc_ctype,
+                .NO_UTF8        = NO_UTF8,
+                .FORCE_UTF8     = FORCE_UTF8,
             },
             term_parse_error_callback);
 

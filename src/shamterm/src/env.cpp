@@ -153,6 +153,22 @@ namespace sham::term {
 
         sham::term::set_support_utf8(term_support_utf8(vars));
 
+        bool has_envvar_no_utf8    = bool(vars.NO_UTF8);
+        bool has_envvar_force_utf8 = bool(vars.FORCE_UTF8);
+
+        if (has_envvar_no_utf8 && has_envvar_force_utf8) {
+            throw error_callback(
+                "one can not set both NO_UTF8 and FORCE_UTF8", std::source_location::current());
+        }
+
+        if (has_envvar_no_utf8) {
+            sham::term::set_support_utf8(false);
+        }
+
+        if (has_envvar_force_utf8) {
+            sham::term::set_support_utf8(true);
+        }
+
         auto &res = vars.COLUMN;
 
         int min_sz = 10;
