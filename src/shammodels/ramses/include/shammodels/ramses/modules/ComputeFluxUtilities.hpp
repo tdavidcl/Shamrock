@@ -117,12 +117,12 @@ namespace shammodels::basegodunov::modules {
             link_count,
             [gamma](
                 u32 id_a,
-                const std::array<Tscal, 2> *rho,
-                const std::array<Tvec, 2> *vel,
-                const std::array<Tscal, 2> *press,
-                Tscal *flux_rho,
-                Tvec *flux_rhov,
-                Tscal *flux_rhoe) {
+                const std::array<Tscal, 2> *__restrict rho,
+                const std::array<Tvec, 2> *__restrict vel,
+                const std::array<Tscal, 2> *__restrict press,
+                Tscal *__restrict flux_rho,
+                Tvec *__restrict flux_rhov,
+                Tscal *__restrict flux_rhoe) {
                 auto rho_ij   = rho[id_a];
                 auto vel_ij   = vel[id_a];
                 auto press_ij = press[id_a];
@@ -157,10 +157,10 @@ namespace shammodels::basegodunov::modules {
             sham::MultiRef{flux_rho_dust_dir, flux_rhov_dust_dir},
             link_count * nvar,
             [](u32 id_var_a,
-               const std::array<Tscal, 2> *rho_dust,
-               const std::array<Tvec, 2> *vel_dust,
-               Tscal *flux_rho_dust,
-               Tvec *flux_rhov_dust) {
+               const std::array<Tscal, 2> *__restrict rho_dust,
+               const std::array<Tvec, 2> *__restrict vel_dust,
+               Tscal *__restrict flux_rho_dust,
+               Tvec *__restrict flux_rhov_dust) {
                 auto rho_ij = rho_dust[id_var_a];
                 auto vel_ij = vel_dust[id_var_a];
 
