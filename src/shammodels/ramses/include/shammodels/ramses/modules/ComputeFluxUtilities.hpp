@@ -88,11 +88,13 @@ namespace shammodels::basegodunov::modules {
         inline static constexpr Tcons dustflux(Tprim pL, Tprim pR) {
             const Tvec n = dir_normal<Tvec, dir>();
 
+            shammath::FluidStateDust<Tvec> dust_fluid{};
+
             if constexpr (mode == DustRiemannSolverMode::HB) {
-                return shammath::huang_bai_flux(pL, pR, n);
+                return shammath::huang_bai_flux(dust_fluid, pL, pR, n);
             }
             if constexpr (mode == DustRiemannSolverMode::DHLL) {
-                return shammath::d_hll_flux(pL, pR, n);
+                return shammath::d_hll_flux(dust_fluid, pL, pR, n);
             }
         }
     };

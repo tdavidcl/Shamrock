@@ -40,8 +40,8 @@ namespace shammath {
         using Tscal = typename FSpec::Tscal;
         using Tvec  = typename FSpec::Tvec;
 
-        // fspec.gamma() directly if defined, else (gammaL + gammaR) / 2 from fspec.gamma(prim)
-        const Tscal gamma = get_adiabatic_index(fspec, primL, primR);
+        // fspec.gamma() directly if defined, else gammaL/gammaR each from fspec.gamma(prim)
+        const auto [gammaL, gammaR] = get_adiabatic_index_lr(fspec, primL, primR);
 
         // Conservative form is only needed for the star-state algebra below.
         const Tcons cL = fspec.prim_to_cons(primL);
@@ -89,14 +89,14 @@ namespace shammath {
             qL = 1.;
         } else {
             qL = sycl::sqrt(
-                1. + (0.5 * (1. + gamma) / (Tscal) gamma) * (press_star / (Tscal) pressL - 1.));
+                1. + (0.5 * (1. + gammaL) / (Tscal) gammaL) * (press_star / (Tscal) pressL - 1.));
         }
 
         if (press_star <= pressR) {
             qR = 1.;
         } else {
             qR = sycl::sqrt(
-                1. + (0.5 * (1. + gamma) / (Tscal) gamma) * (press_star / (Tscal) pressR - 1.));
+                1. + (0.5 * (1. + gammaR) / (Tscal) gammaR) * (press_star / (Tscal) pressR - 1.));
         }
 
         // wave speed Toro from Equation (10.59)

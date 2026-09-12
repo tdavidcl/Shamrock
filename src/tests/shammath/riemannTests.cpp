@@ -283,10 +283,12 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     });
 
     check_dust_solver([](DTprim a, DTprim b, Tvec n) {
-        return shammath::d_hll_flux(a, b, n);
+        shammath::FluidStateDust<Tvec> fspec{};
+        return shammath::d_hll_flux(fspec, a, b, n);
     });
 
     check_dust_solver([](DTprim a, DTprim b, Tvec n) {
-        return shammath::huang_bai_flux(a, b, n);
+        shammath::FluidStateDust<Tvec> fspec{};
+        return shammath::huang_bai_flux(fspec, a, b, n);
     });
 }
