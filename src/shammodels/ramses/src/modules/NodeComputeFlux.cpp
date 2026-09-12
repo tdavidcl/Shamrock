@@ -48,8 +48,6 @@ void shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec,
               return graph.get().link_count; //* ndust;
           });
 
-    using Flux = FluxCompute<Tvec, mode, dir>;
-
     sham::distributed_data_kernel_call(
         dev_sched,
         sham::DDMultiRef{
@@ -71,11 +69,13 @@ void shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec,
             auto vel_ij   = vel_face[link_id];
             auto press_ij = press_face[link_id];
 
-            using Tprim   = shammath::PrimState<Tvec>;
-            auto flux_dir = Flux::flux(
+            using Tprim = shammath::PrimState<Tvec>;
+            shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
+
+            auto flux_dir = riemann_flux<decltype(adiab_fluid), mode, dir>(
+                adiab_fluid,
                 Tprim{rho_ij[0], press_ij[0], vel_ij[0]},
-                Tprim{rho_ij[1], press_ij[1], vel_ij[1]},
-                gamma);
+                Tprim{rho_ij[1], press_ij[1], vel_ij[1]});
 
             flux_rho_face[link_id]  = flux_dir.rho;
             flux_rhov_face[link_id] = flux_dir.rhovel;
@@ -111,8 +111,6 @@ void shammodels::basegodunov::modules::NodeComputeFluxDustDirMode<Tvec, TgridVec
               return graph.get().link_count * ndust;
           });
 
-    using Flux = DustFluxCompute<Tvec, mode, dir>;
-
     sham::distributed_data_kernel_call(
         dev_sched,
         sham::DDMultiRef{edges.rho_face.link_fields, edges.vel_face.link_fields},
@@ -127,8 +125,10 @@ void shammodels::basegodunov::modules::NodeComputeFluxDustDirMode<Tvec, TgridVec
             auto vel_ij = vel_face[link_id];
 
             using Tprim = shammath::DustPrimState<Tvec>;
-            auto flux_dust_dir
-                = Flux::dustflux(Tprim{rho_ij[0], vel_ij[0]}, Tprim{rho_ij[1], vel_ij[1]});
+            shammath::FluidStateDust<Tvec> dust_fluid{};
+
+            auto flux_dust_dir = riemann_dust_flux<decltype(dust_fluid), mode, dir>(
+                dust_fluid, Tprim{rho_ij[0], vel_ij[0]}, Tprim{rho_ij[1], vel_ij[1]});
 
             flux_rho_face[link_id]  = flux_dust_dir.rho;
             flux_rhov_face[link_id] = flux_dust_dir.rhovel;
