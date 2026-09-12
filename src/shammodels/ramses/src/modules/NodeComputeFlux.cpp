@@ -59,12 +59,12 @@ void shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec,
         counts_dir,
         [gamma = this->gamma](
             u32 link_id,
-            const std::array<Tscal, 2> *rho_face,
-            const std::array<Tvec, 2> *vel_face,
-            const std::array<Tscal, 2> *press_face,
-            Tscal *flux_rho_face,
-            Tvec *flux_rhov_face,
-            Tscal *flux_rhoe_face) {
+            const std::array<Tscal, 2> *__restrict rho_face,
+            const std::array<Tvec, 2> *__restrict vel_face,
+            const std::array<Tscal, 2> *__restrict press_face,
+            Tscal *__restrict flux_rho_face,
+            Tvec *__restrict flux_rhov_face,
+            Tscal *__restrict flux_rhoe_face) {
             auto rho_ij   = rho_face[link_id];
             auto vel_ij   = vel_face[link_id];
             auto press_ij = press_face[link_id];
@@ -117,10 +117,10 @@ void shammodels::basegodunov::modules::NodeComputeFluxDustDirMode<Tvec, TgridVec
         sham::DDMultiRef{edges.flux_rho_face.link_fields, edges.flux_rhov_face.link_fields},
         counts_dir,
         [](u32 link_id,
-           const std::array<Tscal, 2> *rho_face,
-           const std::array<Tvec, 2> *vel_face,
-           Tscal *flux_rho_face,
-           Tvec *flux_rhov_face) {
+           const std::array<Tscal, 2> *__restrict rho_face,
+           const std::array<Tvec, 2> *__restrict vel_face,
+           Tscal *__restrict flux_rho_face,
+           Tvec *__restrict flux_rhov_face) {
             auto rho_ij = rho_face[link_id];
             auto vel_ij = vel_face[link_id];
 
