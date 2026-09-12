@@ -1362,7 +1362,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
                                        IterateSmoothingLengthDensityBisectingNR<Tvec, Kernel>>(
                     solver_config.gpart_mass,
                     solver_config.htol_up_coarse_cycle,
-                    solver_config.htol_up_fine_cycle);
+                    solver_config.htol_up_fine_cycle,
+                    solver_config.epsilon_h);
             smth_h_iter_bisect_nr->set_edges(
                 sizes,
                 neigh_cache,

@@ -60,7 +60,8 @@ void IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_evaluate_i
         thread_counts,
         [gpart_mass      = this->gpart_mass,
          h_evol_max      = this->h_evol_max,
-         h_evol_iter_max = this->h_evol_iter_max](
+         h_evol_iter_max = this->h_evol_iter_max,
+         epsilon_h       = this->epsilon_h](
             u32 id_a,
             auto ploop_ptrs,
             const Tvec *__restrict r,
@@ -77,8 +78,7 @@ void IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_evaluate_i
             Tscal h_max_evol_p       = h_evol_iter_max;
             Tscal h_max_evol_m       = 0.5;
 
-            // TODO: make this tolerance configurable
-            if (eps[id_a] > 1e-6) {
+            if (eps[id_a] > epsilon_h) {
 
                 Tvec xyz_a = r[id_a]; // could be recovered from lambda
 
