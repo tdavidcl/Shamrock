@@ -726,6 +726,9 @@ struct shammodels::sph::SolverConfig {
     inline void set_smoothing_length_density_based_neigh_lim(u32 max_neigh_count) {
         smoothing_length_config.set_density_based_neigh_lim(max_neigh_count);
     }
+    inline void set_smoothing_length_density_based_bisecting_nr() {
+        smoothing_length_config.set_density_based_bisecting_nr();
+    }
 
     bool enable_particle_reordering = false;
     inline void set_enable_particle_reordering(bool enable) { enable_particle_reordering = enable; }
