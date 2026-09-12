@@ -75,7 +75,7 @@ void IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_evaluate_i
             Tscal part_mass          = gpart_mass;
             Tscal h_max_tot_max_evol = h_evol_max;
             Tscal h_max_evol_p       = h_evol_iter_max;
-            Tscal h_max_evol_m       = 1 / h_evol_iter_max;
+            Tscal h_max_evol_m       = 0.5;
 
             // TODO: make this tolerance configurable
             if (eps[id_a] > 1e-6) {
@@ -205,22 +205,16 @@ std::string IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_get
     return tex;
 }
 
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::M4<f64>>;
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::M6<f64>>;
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::M8<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::M4<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::M6<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::M8<f64>>;
 
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::C2<f64>>;
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::C4<f64>>;
-template class shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<
-    f64_3,
-    shammath::C6<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::C2<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::C4<f64>>;
+template class shammodels::sph::modules::
+    IterateSmoothingLengthDensityBisectingNR<f64_3, shammath::C6<f64>>;

@@ -1355,9 +1355,9 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
 
             std::shared_ptr<
                 shammodels::sph::modules::IterateSmoothingLengthDensityBisectingNR<Tvec, Kernel>>
-                smth_h_iter_bisect_nr = std::make_shared<
-                    shammodels::sph::modules::
-                        IterateSmoothingLengthDensityBisectingNR<Tvec, Kernel>>(
+                smth_h_iter_bisect_nr
+                = std::make_shared<shammodels::sph::modules::
+                                       IterateSmoothingLengthDensityBisectingNR<Tvec, Kernel>>(
                     solver_config.gpart_mass,
                     solver_config.htol_up_coarse_cycle,
                     solver_config.htol_up_fine_cycle);
