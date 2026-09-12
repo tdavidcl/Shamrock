@@ -273,7 +273,8 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
     });
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {
-        return shammath::hllc_adiab_toro_flux(a, b, g, n);
+        shammath::FluidStateAdiabatic<Tvec> fspec{.m_gamma = g};
+        return shammath::hllc_adiab_toro_flux(fspec, a, b, n);
     });
 
     check_gas_solver([](Tprim a, Tprim b, f64 g, Tvec n) {

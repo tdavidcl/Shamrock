@@ -72,7 +72,8 @@ namespace shammodels::basegodunov::modules {
                 return shammath::hll_flux(adiab_fluid, pL, pR, n);
             }
             if constexpr (mode == RiemannSolverMode::HLLC) {
-                return shammath::hllc_adiab_toro_flux(pL, pR, gamma, n);
+                shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
+                return shammath::hllc_adiab_toro_flux(adiab_fluid, pL, pR, n);
             }
         }
     };

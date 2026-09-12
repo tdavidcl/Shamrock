@@ -28,40 +28,42 @@ namespace shammath {
      *          Methods for Gas Dynamics, using the pressure in the star region estimated through
      *          the primitive variable solver (valid for an adiabatic equation of state).
      *        Computes the flux across a face with unit normal n.
-     * @tparam Tprim
+     * @tparam FSpec
+     * @param fspec fluid state spec (adiabatic equation of state + flux/wave-speed operations)
      * @param primL left  primitive state
      * @param primR right primitive state
-     * @param gamma adiabatic index
      * @param n face unit normal
      */
-    template<class Tprim>
-    inline constexpr auto hllc_adiab_toro_flux(
-        Tprim primL, Tprim primR, typename Tprim::Tscal gamma, typename Tprim::Tvec n) {
-        using Tscal = typename Tprim::Tscal;
-        using Tvec  = typename Tprim::Tvec;
-        using Tcons = ConsState<Tvec>;
+    template<FluidStateAdiabaticSpec FSpec, class Tprim = FSpec::Tprim, class Tcons = FSpec::Tcons>
+    inline constexpr Tcons hllc_adiab_toro_flux(
+        const FSpec &fspec, const Tprim &primL, const Tprim &primR, const typename FSpec::Tvec &n) {
+        using Tscal = typename FSpec::Tscal;
+        using Tvec  = typename FSpec::Tvec;
+
+        // fspec.gamma() directly if defined, else (gammaL + gammaR) / 2 from fspec.gamma(prim)
+        const Tscal gamma = get_adiabatic_index(fspec, primL, primR);
 
         // Conservative form is only needed for the star-state algebra below.
-        const Tcons cL = prim_to_cons(primL, gamma);
-        const Tcons cR = prim_to_cons(primR, gamma);
+        const Tcons cL = fspec.prim_to_cons(primL);
+        const Tcons cR = fspec.prim_to_cons(primR);
 
         // sound speeds
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        const auto csL = fspec.sound_speed(primL);
+        const auto csR = fspec.sound_speed(primR);
 
         // Left variables
         const auto rhoL   = primL.rho;
         const auto pressL = primL.press;
-        const auto velxL  = n[0] * primL.vel[0] + n[1] * primL.vel[1] + n[2] * primL.vel[2];
+        const auto velxL  = fspec.vn(primL, n);
 
         // Right variables
         const auto rhoR   = primR.rho;
         const auto pressR = primR.press;
-        const auto velxR  = n[0] * primR.vel[0] + n[1] * primR.vel[1] + n[2] * primR.vel[2];
+        const auto velxR  = fspec.vn(primR, n);
 
         // Left and right state fluxes
-        const auto FL = hydro_flux_n(primL, n, velxL, gamma);
-        const auto FR = hydro_flux_n(primR, n, velxR, gamma);
+        const auto FL = fspec.flux(primL, n, velxL);
+        const auto FR = fspec.flux(primR, n, velxR);
 
         /////////////////// Pressure based wave speed estimation //////////////
         // First compute the pressure estimation in the star region using the primitive variable

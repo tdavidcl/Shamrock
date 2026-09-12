@@ -54,6 +54,49 @@ namespace shammath {
         { self.flux(cons, n) } -> std::convertible_to<typename T::Tcons>;
     };
 
+    namespace details {
+        /// True if T exposes a single, state-independent adiabatic index via gamma()
+        template<class T>
+        concept HasGlobalGamma = requires(const T &self) {
+            { self.gamma() } -> std::convertible_to<typename T::Tscal>;
+        };
+
+        /// True if T exposes a per-primitive-state adiabatic index via gamma(prim)
+        template<class T>
+        concept HasPerStateGamma = requires(const T &self, typename T::Tprim prim) {
+            { self.gamma(prim) } -> std::convertible_to<typename T::Tscal>;
+        };
+    } // namespace details
+
+    /**
+     * @brief A FluidStateSpec that also exposes the adiabatic index, for solvers (e.g. HLLC)
+     *        that need gamma directly rather than only through cons_to_prim/prim_to_cons/flux.
+     *        Satisfied by a state-independent gamma() (a single constant adiabatic index) or a
+     *        per-state gamma(prim) (e.g. a spatially/species-varying index); see
+     *        get_adiabatic_index() for how solvers should read it.
+     */
+    template<class T>
+    concept FluidStateAdiabaticSpec
+        = FluidStateSpec<T> && (details::HasGlobalGamma<T> || details::HasPerStateGamma<T>);
+
+    /**
+     * @brief Read the adiabatic index a HLLC-style solver should use for a given L/R pair.
+     *
+     * If fspec exposes a single state-independent gamma() it is used directly; otherwise
+     * fspec is assumed to expose a per-state gamma(prim) and the L/R average is used.
+     */
+    template<FluidStateAdiabaticSpec FSpec>
+    inline constexpr typename FSpec::Tscal get_adiabatic_index(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &primL,
+        const typename FSpec::Tprim &primR) {
+        if constexpr (details::HasGlobalGamma<FSpec>) {
+            return fspec.gamma();
+        } else {
+            return 0.5 * (fspec.gamma(primL) + fspec.gamma(primR));
+        }
+    }
+
     template<class Tvec_>
     struct ConsState {
         using Tvec  = Tvec_;
@@ -531,8 +574,10 @@ namespace shammath {
         }
         Tcons flux(Tprim p, Tvec n) const { return shammath::hydro_flux_n(p, n, m_gamma); }
         Tcons flux(Tcons c, Tvec n) const { return flux(shammath::cons_to_prim(c, m_gamma), n); }
+        Tscal gamma() const { return m_gamma; }
     };
 
     static_assert(FluidStateSpec<FluidStateAdiabatic<f64_3>>);
+    static_assert(FluidStateAdiabaticSpec<FluidStateAdiabatic<f64_3>>);
 
 } // namespace shammath
