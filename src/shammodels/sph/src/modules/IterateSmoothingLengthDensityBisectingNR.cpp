@@ -22,6 +22,7 @@
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensityBisectingNR.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
+#include <cstdio>
 
 using namespace shammodels::sph::modules;
 
@@ -104,12 +105,15 @@ void IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_evaluate_i
 
                 using namespace shamrock::sph;
 
-                Tscal rho_ha  = rho_h(part_mass, h_a, SPHKernel::hfactd);
-                Tscal f_iter  = rho_sum - rho_ha;
-                Tscal df_iter = sumdWdh + 3 * rho_ha / h_a;
+                Tscal rho_ha   = rho_h(part_mass, h_a, SPHKernel::hfactd);
+                Tscal f_iter   = rho_sum - rho_ha;
+                Tscal df_iter  = sumdWdh + 3 * rho_ha / h_a;
+                Tscal new_h_nr = h_a - f_iter / df_iter;
 
                 Tscal lo = h_lo[id_a];
                 Tscal hi = h_hi[id_a];
+
+                bool accept_nr = lo < new_h_nr && new_h_nr < hi;
 
                 if (f_iter < 0) {
                     lo = h_a;
@@ -117,9 +121,8 @@ void IterateSmoothingLengthDensityBisectingNR<Tvec, SPHKernel>::_impl_evaluate_i
                     hi = h_a;
                 }
 
-                Tscal new_h_nr = h_a - f_iter / df_iter;
                 Tscal new_h;
-                if (lo < new_h_nr && new_h_nr < hi) {
+                if (accept_nr) {
                     new_h = new_h_nr;
                 } else {
                     new_h = (lo + hi) / 2;
