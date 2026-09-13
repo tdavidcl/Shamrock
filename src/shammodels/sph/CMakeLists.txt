@@ -47,6 +47,7 @@ set(Sources
     src/modules/IterateSmoothingLengthDensity.cpp
     src/modules/IterateSmoothingLengthDensityNeighLim.cpp
     src/modules/IterateSmoothingLengthDensityBisectingNR.cpp
+    src/modules/IterateSmoothingLengthDensityBisectingNRNeighLim.cpp
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/ComputeNeighStats.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAV.cpp

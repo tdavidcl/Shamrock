@@ -251,7 +251,7 @@ def setup_model():
 
     # Standard way to set the smoothing length (e.g. Price et al. 2018)
     cfg.set_smoothing_length_density_based()
-    cfg.set_smoothing_length_density_based_bisecting_nr()
+    cfg.set_smoothing_length_density_based_bisecting_nr_neigh_lim(max_neigh_count=500000)
     # Standard density based smoothing length but with a neighbor count limit
     # Use it if you have large slowdowns due to giant particles
     # I recommend to use it if you have a circumbinary discs as the issue is very likely to happen
