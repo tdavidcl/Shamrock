@@ -1301,9 +1301,9 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
 
         std::shared_ptr<shamrock::solvergraph::INode> smth_h_iter_ptr;
 
-        using h_conf_density_based   = typename SmoothingLengthConfig::DensityBased;
-        using h_conf_neigh_lim       = typename SmoothingLengthConfig::DensityBasedNeighLim;
-        using h_conf_bisect_nr       = typename SmoothingLengthConfig::DensityBasedBisectingNR;
+        using h_conf_density_based = typename SmoothingLengthConfig::DensityBased;
+        using h_conf_neigh_lim     = typename SmoothingLengthConfig::DensityBasedNeighLim;
+        using h_conf_bisect_nr     = typename SmoothingLengthConfig::DensityBasedBisectingNR;
         using h_conf_bisect_nr_neigh_lim =
             typename SmoothingLengthConfig::DensityBasedBisectingNRNeighLim;
 
@@ -1388,9 +1388,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
             init_h_bisect_bracket(hstep_cnt);
 
             std::shared_ptr<shammodels::sph::modules::
-                                 IterateSmoothingLengthDensityBisectingNRNeighLim<Tvec, Kernel>>
-                smth_h_iter_bisect_nr_neigh_lim
-                = std::make_shared<
+                                IterateSmoothingLengthDensityBisectingNRNeighLim<Tvec, Kernel>>
+                smth_h_iter_bisect_nr_neigh_lim = std::make_shared<
                     shammodels::sph::modules::
                         IterateSmoothingLengthDensityBisectingNRNeighLim<Tvec, Kernel>>(
                     solver_config.gpart_mass,
