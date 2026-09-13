@@ -25,48 +25,53 @@ namespace shammath {
     /**
      * @brief HLL flux across a face with unit normal n
      */
-    template<class Tprim>
-    inline constexpr auto hll_flux(
-        const Tprim primL,
-        const Tprim primR,
-        const typename Tprim::Tscal gamma,
-        const typename Tprim::Tvec n) {
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+    template<FluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons hll_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        const auto cs_l = fspec.sound_speed(prim_l);
+        const auto cs_r = fspec.sound_speed(prim_r);
 
-        const auto vnL = n[0] * primL.vel[0] + n[1] * primL.vel[1] + n[2] * primL.vel[2];
-        const auto vnR = n[0] * primR.vel[0] + n[1] * primR.vel[1] + n[2] * primR.vel[2];
+        const auto vn_l = fspec.vn(prim_l, n);
+        const auto vn_r = fspec.vn(prim_r, n);
+
+        // NOLINTBEGIN(readability-identifier-naming)
 
         // Teyssier form
-        // const auto S_L = sham::min(vnL, vnR) - sham::max(csL, csR);
-        // const auto S_R = sham::max(vnL, vnR) + sham::max(csL, csR);
+        // const auto S_l = sham::min(vn_l, vn_r) - sham::max(cs_l, cs_r);
+        // const auto S_r = sham::max(vn_l, vn_r) + sham::max(cs_l, cs_r);
 
         // Toro form Equation (10.48)
-        const auto S_L = sham::min(vnL - csL, vnR - csR);
-        const auto S_R = sham::max(vnL + csL, vnR + csR);
+        const auto S_l = sham::min(vn_l - cs_l, vn_r - cs_r);
+        const auto S_r = sham::max(vn_l + cs_l, vn_r + cs_r);
 
-        const auto fluxL = hydro_flux_n(primL, n, vnL, gamma);
-        const auto fluxR = hydro_flux_n(primR, n, vnR, gamma);
+        // NOLINTEND(readability-identifier-naming)
+
+        const auto flux_l = fspec.flux(prim_l, n, vn_l);
+        const auto flux_r = fspec.flux(prim_r, n, vn_r);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
-        // const auto S_L_upwind = sham::min(S_L, 0.0);
-        // const auto S_R_upwind = sham::max(S_R, 0.0);
-        // const auto S_norm     = 1.0 / (S_R_upwind - S_L_upwind);
-        // return (fluxL * S_R_upwind - fluxR * S_L_upwind
-        //         + (consR - consL) * S_R_upwind * S_L_upwind)
+        // const auto S_l_upwind = sham::min(S_l, 0.0);
+        // const auto S_r_upwind = sham::max(S_r, 0.0);
+        // const auto S_norm     = 1.0 / (S_r_upwind - S_l_upwind);
+        // return (flux_l * S_r_upwind - flux_r * S_l_upwind
+        //         + (cons_r - cons_l) * S_r_upwind * S_l_upwind)
         //        * S_norm;
 
-        if (S_L >= 0)
-            return fluxL;
-        else if (S_R <= 0)
-            return fluxR;
+        if (S_l >= 0)
+            return flux_l;
+        else if (S_r <= 0)
+            return flux_r;
         else {
             // Only the intermediate (star) state needs the conservative form, so it is
             // formed here rather than at the call site (which only has primitives).
-            const auto consL  = prim_to_cons(primL, gamma);
-            const auto consR  = prim_to_cons(primR, gamma);
-            const auto S_norm = 1.0 / (S_R - S_L);
-            return (fluxL * S_R - fluxR * S_L + (consR - consL) * S_R * S_L) * S_norm;
+            const auto cons_l = fspec.prim_to_cons(prim_l);
+            const auto cons_r = fspec.prim_to_cons(prim_r);
+            // NOLINTNEXTLINE(readability-identifier-naming)
+            const auto S_norm = 1.0 / (S_r - S_l);
+            return (flux_l * S_r - flux_r * S_l + (cons_r - cons_l) * S_r * S_l) * S_norm;
         }
     }
 

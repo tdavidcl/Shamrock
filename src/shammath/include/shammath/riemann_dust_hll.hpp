@@ -25,20 +25,35 @@ namespace shammath {
      *
      * Krapp et al. 2024, A Fast second-order solver for stiff multifluid dust and gas
      * hydrodynamics, Appendice E
+     * @tparam FSpec
+     * @param fspec dust state spec (flux/vn operations, no equation of state)
+     * @param prim_l left  primitive state
+     * @param prim_r right primitive state
+     * @param n face unit normal
      */
-    template<class Tprim>
-    inline constexpr auto d_hll_flux(Tprim d_primL, Tprim d_primR, typename Tprim::Tvec n) {
-        const auto vnL = n[0] * d_primL.vel[0] + n[1] * d_primL.vel[1] + n[2] * d_primL.vel[2];
-        const auto vnR = n[0] * d_primR.vel[0] + n[1] * d_primR.vel[1] + n[2] * d_primR.vel[2];
-        const auto S   = sham::max(sham::abs(vnL), sham::abs(vnR));
+    template<DustFluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons d_hll_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        using Tscal = typename FSpec::Tscal;
+        using Tcons = typename FSpec::Tcons;
 
-        const auto fL = d_hydro_flux_n(d_primL, n, vnL);
-        const auto fR = d_hydro_flux_n(d_primR, n, vnR);
+        const Tscal vn_l = fspec.vn(prim_l, n);
+        const Tscal vn_r = fspec.vn(prim_r, n);
 
-        const auto cL = d_prim_to_cons(d_primL);
-        const auto cR = d_prim_to_cons(d_primR);
+        // NOLINTBEGIN(readability-identifier-naming)
+        const Tscal S = sham::max(sham::abs(vn_l), sham::abs(vn_r));
+        // NOLINTEND(readability-identifier-naming)
 
-        return 0.5 * ((fL + fR) - S * (cR - cL));
+        const Tcons f_l = fspec.flux(prim_l, n, vn_l);
+        const Tcons f_r = fspec.flux(prim_r, n, vn_r);
+
+        const Tcons c_l = fspec.prim_to_cons(prim_l);
+        const Tcons c_r = fspec.prim_to_cons(prim_r);
+
+        return 0.5 * ((f_l + f_r) - S * (c_r - c_l));
     }
 
 } // namespace shammath
