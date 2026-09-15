@@ -26,10 +26,9 @@ namespace sham::term {
      *
      * Detected by parse_terminal_support() (see sham/term/env.hpp) from the TERM/COLORTERM
      * environment variables; COLORTERM is the override lever (COLORTERM=truecolor/24bit forces
-     * TrueColor regardless of TERM). This is independent from the overall color on/off switch
-     * (see enable_colors/disable_colors/are_colors_enabled): the switch decides whether any color
-     * escape is emitted at all, while the level decides which tiered palette
-     * (colors_8b/colors_256/colors_24b) the terminal can actually render.
+     * TrueColor regardless of TERM). This is the single source of truth for color output: it
+     * doubles as the overall on/off switch (are_colors_enabled() is level != NoColor) and decides
+     * which tiered palette (colors_8b/colors_256/colors_24b) the terminal can actually render.
      */
     enum class ColorLevel {
         /// No color support, plain ASCII output only.
@@ -120,11 +119,17 @@ namespace sham::term {
 
     /**
      * @brief Enable terminal color output.
+     *
+     * Bumps color_level() up to at least ColorLevel::Basic, so style/colors_8b escapes are
+     * emitted; any already detected/forced higher tier (ANSI256/TrueColor) is left untouched.
      */
     void enable_colors();
 
     /**
      * @brief Disable all terminal color output.
+     *
+     * Sets color_level() to ColorLevel::NoColor, so no tier is emitted anymore regardless of the
+     * previously detected/forced level.
      */
     void disable_colors();
 

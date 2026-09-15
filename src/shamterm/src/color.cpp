@@ -19,9 +19,9 @@
 
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
-    bool colors_enabled = true;
-
     /// Detected/forced terminal color support level, as set by sham::term::set_color_level.
+    /// Single source of truth for both "are colors enabled" (level != NoColor) and "which tiered
+    /// palette can be rendered".
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
     const char *_empty_str     = "";
@@ -47,30 +47,56 @@ namespace sham::term {
     void set_color_level(ColorLevel level) { color_level_value = level; }
 
     namespace style {
-        const char *reset() { return (colors_enabled) ? _reset : _empty_str; }
-        const char *bold() { return (colors_enabled) ? _bold : _empty_str; }
-        const char *faint() { return (colors_enabled) ? _faint : _empty_str; }
-        const char *underline() { return (colors_enabled) ? _underline : _empty_str; }
-        const char *blink() { return (colors_enabled) ? _blink : _empty_str; }
+        const char *reset() {
+            return (color_level_value != ColorLevel::NoColor) ? _reset : _empty_str;
+        }
+        const char *bold() {
+            return (color_level_value != ColorLevel::NoColor) ? _bold : _empty_str;
+        }
+        const char *faint() {
+            return (color_level_value != ColorLevel::NoColor) ? _faint : _empty_str;
+        }
+        const char *underline() {
+            return (color_level_value != ColorLevel::NoColor) ? _underline : _empty_str;
+        }
+        const char *blink() {
+            return (color_level_value != ColorLevel::NoColor) ? _blink : _empty_str;
+        }
     } // namespace style
 
     namespace colors_8b {
-        const char *black() { return (colors_enabled) ? _col8b_black : _empty_str; }
-        const char *red() { return (colors_enabled) ? _col8b_red : _empty_str; }
-        const char *green() { return (colors_enabled) ? _col8b_green : _empty_str; }
-        const char *yellow() { return (colors_enabled) ? _col8b_yellow : _empty_str; }
-        const char *blue() { return (colors_enabled) ? _col8b_blue : _empty_str; }
-        const char *magenta() { return (colors_enabled) ? _col8b_magenta : _empty_str; }
-        const char *cyan() { return (colors_enabled) ? _col8b_cyan : _empty_str; }
-        const char *white() { return (colors_enabled) ? _col8b_white : _empty_str; }
+        const char *black() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_black : _empty_str;
+        }
+        const char *red() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_red : _empty_str;
+        }
+        const char *green() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_green : _empty_str;
+        }
+        const char *yellow() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_yellow : _empty_str;
+        }
+        const char *blue() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_blue : _empty_str;
+        }
+        const char *magenta() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_magenta : _empty_str;
+        }
+        const char *cyan() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_cyan : _empty_str;
+        }
+        const char *white() {
+            return (color_level_value != ColorLevel::NoColor) ? _col8b_white : _empty_str;
+        }
     } // namespace colors_8b
 
     namespace colors_256 {
         namespace {
-            /// Build a \x1b[<mode>;5;Nm 256-color escape sequence, or an empty string if colors
-            /// are disabled or the terminal was not detected to support the 256-color palette.
+            /// Build a \x1b[<mode>;5;Nm 256-color escape sequence, or an empty string if the
+            /// terminal was not detected (or forced) to support the 256-color palette.
             std::string build(int mode, std::uint8_t index) {
-                if (!colors_enabled || color_level_value < ColorLevel::ANSI256) {
+                if (color_level_value < ColorLevel::ANSI256) {
                     return "";
                 }
                 return std::string(TERM_ESCAPTE_CHAR) + std::to_string(mode) + ";5;"
@@ -84,10 +110,10 @@ namespace sham::term {
 
     namespace colors_24b {
         namespace {
-            /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if
-            /// colors are disabled or the terminal was not detected to support truecolor.
+            /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if the
+            /// terminal was not detected (or forced) to support truecolor.
             std::string build(int mode, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
-                if (!colors_enabled || color_level_value < ColorLevel::TrueColor) {
+                if (color_level_value < ColorLevel::TrueColor) {
                     return "";
                 }
                 return std::string(TERM_ESCAPTE_CHAR) + std::to_string(mode) + ";2;"
@@ -104,13 +130,19 @@ namespace sham::term {
         }
     } // namespace colors_24b
 
-    /// Enable colors
-    void enable_colors() { colors_enabled = true; }
+    /// Enable colors: bump the level to at least Basic so basic/style escapes are emitted, while
+    /// keeping any already detected/forced higher tier (ANSI256/TrueColor) intact.
+    void enable_colors() {
+        if (color_level_value == ColorLevel::NoColor) {
+            color_level_value = ColorLevel::Basic;
+        }
+    }
 
-    /// Disable all colors
-    void disable_colors() { colors_enabled = false; }
+    /// Disable all colors: no tier is emitted anymore, regardless of the previously
+    /// detected/forced level.
+    void disable_colors() { color_level_value = ColorLevel::NoColor; }
 
     /// Are colors enabled
-    bool are_colors_enabled() { return colors_enabled; }
+    bool are_colors_enabled() { return color_level_value != ColorLevel::NoColor; }
 
 } // namespace sham::term

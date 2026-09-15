@@ -139,14 +139,7 @@ namespace {
 namespace sham::term {
 
     void parse_terminal_support(TermEnvVars vars, const term_parse_callback_t &error_callback) {
-        ColorLevel level = detect_color_level(vars);
-        sham::term::set_color_level(level);
-
-        if (level != ColorLevel::NoColor) {
-            enable_colors();
-        } else {
-            disable_colors();
-        }
+        sham::term::set_color_level(detect_color_level(vars));
 
         bool has_envvar_nocolor = bool(vars.NO_COLOR);
         bool has_envvar_color   = bool(vars.CLICOLOR_FORCE);
