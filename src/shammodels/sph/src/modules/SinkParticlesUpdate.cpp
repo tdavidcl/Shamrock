@@ -18,7 +18,98 @@
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
+#include "shamsolvergraph/edge/IDataEdge.hpp"
+#include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
+#include "shamsolvergraph/node/ForwardEulerHost.hpp"
+#include "shamsolvergraph/node/ForwardEulerHost2Deriv.hpp"
+#include "shamsolvergraph/node/OperationIf.hpp"
 #include <vector>
+
+#define NODE_EDGES(X_RO, X_RW) X_RW(shamrock::solvergraph::IDataEdge<std::vector<T>>, field)
+
+namespace shammodels::sph::modules {
+
+    /// Reset a host-side (std::vector) field to its default value: field[i] = T{}
+    template<class T>
+    class ResetFieldHost : public shamrock::solvergraph::INode {
+
+        public:
+        ResetFieldHost() = default;
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+            StackEntry stack_loc{};
+
+            auto edges = get_edges();
+
+            std::vector<T> &field = edges.field.data;
+
+            for (size_t i = 0; i < field.size(); i++) {
+                field[i] = T{};
+            }
+        }
+
+        inline virtual std::string _impl_get_label() const { return "ResetFieldHost"; }
+
+        inline virtual std::string _impl_get_tex() const { return "TODO"; }
+    };
+
+} // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, G)                                               \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, epsilon)                                         \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, positions)                           \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, masses)                             \
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, acc_ext)
+
+namespace shammodels::sph::modules {
+
+    /// Host-side pairwise (N^2) gravitational self-interaction between sink particles:
+    /// acc_ext[i] = -sum_j G*mass[j]*rij / (|rij|^3 + epsilon)
+    template<class Tvec>
+    class SinkSelfGravityHost : public shamrock::solvergraph::INode {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        public:
+        SinkSelfGravityHost() = default;
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+            StackEntry stack_loc{};
+
+            auto edges = get_edges();
+
+            Tscal G                        = edges.G.data;
+            Tscal epsilon                  = edges.epsilon.data;
+            const std::vector<Tvec> &pos   = edges.positions.data;
+            const std::vector<Tscal> &mass = edges.masses.data;
+            std::vector<Tvec> &acc_ext     = edges.acc_ext.data;
+
+            for (size_t i = 0; i < pos.size(); i++) {
+                Tvec sum{};
+                for (size_t j = 0; j < pos.size(); j++) {
+                    Tvec rij       = pos[i] - pos[j];
+                    Tscal rij_scal = sycl::length(rij);
+                    sum -= G * mass[j] * rij / (rij_scal * rij_scal * rij_scal + epsilon);
+                }
+                acc_ext[i] = sum;
+            }
+        }
+
+        inline virtual std::string _impl_get_label() const { return "SinkSelfGravityHost"; }
+
+        inline virtual std::string _impl_get_tex() const { return "TODO"; }
+    };
+
+} // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_step(Tscal dt) {
@@ -31,19 +122,30 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_s
         return;
     }
 
-    auto &vel     = get_sink_vel<Tvec>(sync);
-    auto &acc_sph = get_sink_acc_sph<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
-
     compute_ext_forces();
 
-    for (size_t i = 0; i < pos.size(); i++) {
-        vel[i] += (dt / 2) * (acc_sph[i] + acc_ext[i]);
-    }
+    using VecEdge = shamrock::solvergraph::IDataEdgeSerializable<std::vector<Tvec>>;
 
-    for (size_t i = 0; i < pos.size(); i++) {
-        pos[i] += dt * vel[i];
-    }
+    auto dt_half_edge  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("dt_half", "dt/2");
+    dt_half_edge->data = dt / 2;
+
+    shamrock::solvergraph::ForwardEulerHost2Deriv<Tvec, Tscal> vel_update{};
+    vel_update.set_edges(
+        dt_half_edge,
+        sync.template get_edge_ptr<VecEdge>("sink_acc_sph"),
+        sync.template get_edge_ptr<VecEdge>("sink_acc_ext"),
+        sync.template get_edge_ptr<VecEdge>("sink_vel"));
+    vel_update.evaluate();
+
+    auto dt_edge  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("dt", "dt");
+    dt_edge->data = dt;
+
+    shamrock::solvergraph::ForwardEulerHost<Tvec, Tscal> pos_update{};
+    pos_update.set_edges(
+        dt_edge,
+        sync.template get_edge_ptr<VecEdge>("sink_vel"),
+        sync.template get_edge_ptr<VecEdge>("sink_pos"));
+    pos_update.evaluate();
 }
 
 template<class Tvec, template<class> class SPHKernel>
@@ -177,25 +279,35 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_ext
         return;
     }
 
-    auto &mass    = get_sink_mass<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
+    using VecEdge  = shamrock::solvergraph::IDataEdgeSerializable<std::vector<Tvec>>;
+    using ScalEdge = shamrock::solvergraph::IDataEdgeSerializable<std::vector<Tscal>>;
 
-    for (size_t i = 0; i < pos.size(); i++) {
-        acc_ext[i] = Tvec{};
-    }
+    ResetFieldHost<Tvec> reset_acc_ext{};
+    reset_acc_ext.set_edges(sync.template get_edge_ptr<VecEdge>("sink_acc_ext"));
+    reset_acc_ext.evaluate();
 
-    Tscal G                 = solver_config.get_constant_G();
-    Tscal epsilon_grav_sink = 1e-9;
+    auto g_edge  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("G", "G");
+    g_edge->data = solver_config.get_constant_G();
 
-    for (size_t i = 0; i < pos.size(); i++) {
-        Tvec sum{};
-        for (size_t j = 0; j < pos.size(); j++) {
-            Tvec rij       = pos[i] - pos[j];
-            Tscal rij_scal = sycl::length(rij);
-            sum -= G * mass[j] * rij / (rij_scal * rij_scal * rij_scal + epsilon_grav_sink);
-        }
-        acc_ext[i] = sum;
-    }
+    auto epsilon_edge
+        = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("epsilon_grav_sink", "\\epsilon");
+    epsilon_edge->data = 1e-9;
+
+    auto self_gravity = std::make_shared<SinkSelfGravityHost<Tvec>>();
+    self_gravity->set_edges(
+        g_edge,
+        epsilon_edge,
+        sync.template get_edge_ptr<VecEdge>("sink_pos"),
+        sync.template get_edge_ptr<ScalEdge>("sink_mass"),
+        sync.template get_edge_ptr<VecEdge>("sink_acc_ext"));
+
+    auto has_sinks_edge
+        = shamrock::solvergraph::IDataEdge<bool>::make_shared("has_sinks", "\\rm has\\_sinks");
+    has_sinks_edge->data = !pos.empty();
+
+    shamrock::solvergraph::OperationIf if_has_sinks("if_has_sinks", self_gravity);
+    if_has_sinks.set_edges(has_sinks_edge);
+    if_has_sinks.evaluate();
 }
 
 using namespace shammath;

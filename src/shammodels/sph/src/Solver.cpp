@@ -2167,7 +2167,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     storage.solver_graph.get_node_ref_base("point mass accretion").evaluate();
 
     modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
-    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
 
     sink_update.predictor_step(dt);
 
@@ -2187,6 +2186,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     sink_update.compute_ext_forces();
 
+    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
     ext_forces.compute_ext_forces_indep_v();
 
     gen_serial_patch_tree();
