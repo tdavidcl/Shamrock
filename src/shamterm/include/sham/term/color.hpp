@@ -29,6 +29,7 @@ namespace sham::term {
      * @brief Query the currently detected/forced terminal color support level.
      */
     ColorLevel color_level();
+
     /**
      * @brief Set the terminal color support level.
      *
