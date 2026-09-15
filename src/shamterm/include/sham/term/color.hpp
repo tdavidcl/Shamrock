@@ -128,8 +128,7 @@ namespace sham::term {
     /**
      * @brief Disable all terminal color output.
      *
-     * Sets color_level() to ColorLevel::NoColor, so no tier is emitted anymore regardless of the
-     * previously detected/forced level.
+     * Sets color_level() to ColorLevel::NoColor.
      */
     void disable_colors();
 
