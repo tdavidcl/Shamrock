@@ -23,8 +23,8 @@
 #include "shamsolvergraph/node/INode.hpp"
 #include <memory>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    X_RO(shamrock::solvergraph::IFieldRefs<T>, original)                                          \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::IFieldRefs<T>, original)                                           \
     X_RW(shamrock::solvergraph::IFieldRefs<T>, target)
 
 namespace shamrock::solvergraph {

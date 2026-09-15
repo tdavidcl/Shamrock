@@ -29,8 +29,8 @@
 #include "shamsolvergraph/node/INode.hpp"
 #include <memory>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    X_RO(shamrock::solvergraph::IPatchDataLayerRefs, original)                                    \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::IPatchDataLayerRefs, original)                                     \
     X_RW(shamrock::solvergraph::IFieldRefs<T>, target)
 
 namespace shamrock::solvergraph {
