@@ -116,7 +116,6 @@
 #include "shamsolvergraph/node/NodeSetEdge.hpp"
 #include "shamsolvergraph/node/OperationIf.hpp"
 #include "shamsolvergraph/node/OperationSequence.hpp"
-#include "shamsolvergraph/node/ResetFieldHost.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/system_metrics.hpp"
@@ -805,8 +804,14 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         shambase::get_check_ref(set_epsilon)
             .set_edges(solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_ext_force_epsilon"));
 
-        auto reset_acc_ext
-            = solver_graph.register_node("reset_sink_acc_ext", ResetFieldHost<Tvec>{});
+        auto reset_acc_ext = solver_graph.register_node(
+            "reset_sink_acc_ext",
+            NodeSetEdge<IDataEdgeSerializable<std::vector<Tvec>>>(
+                [](IDataEdgeSerializable<std::vector<Tvec>> &acc_ext) {
+                    for (Tvec &a : acc_ext.data) {
+                        a = Tvec{};
+                    }
+                }));
         shambase::get_check_ref(reset_acc_ext)
             .set_edges(
                 sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_ext"));
