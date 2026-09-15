@@ -120,14 +120,14 @@ NEW_TEST(Unittest, "shamterm/color", 1) {
         const char *(*escape)();
     };
     const NamedColor colors[] = {
-        {"black", sham::term::colors_8b::black},
-        {"red", sham::term::colors_8b::red},
-        {"green", sham::term::colors_8b::green},
-        {"yellow", sham::term::colors_8b::yellow},
-        {"blue", sham::term::colors_8b::blue},
-        {"magenta", sham::term::colors_8b::magenta},
-        {"cyan", sham::term::colors_8b::cyan},
-        {"white", sham::term::colors_8b::white},
+        {.name = "black", .escape = sham::term::colors_8b::black},
+        {.name = "red", .escape = sham::term::colors_8b::red},
+        {.name = "green", .escape = sham::term::colors_8b::green},
+        {.name = "yellow", .escape = sham::term::colors_8b::yellow},
+        {.name = "blue", .escape = sham::term::colors_8b::blue},
+        {.name = "magenta", .escape = sham::term::colors_8b::magenta},
+        {.name = "cyan", .escape = sham::term::colors_8b::cyan},
+        {.name = "white", .escape = sham::term::colors_8b::white},
     };
 
     for (auto &c : colors) {
