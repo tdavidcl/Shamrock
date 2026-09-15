@@ -101,20 +101,20 @@ namespace sham::term {
 
     ColorLevel detect_color_level(TermEnvVars vars) {
 
-        if (vars.TERM) {
-            for (auto term : color_support_term) {
-                if (*vars.TERM == term) {
-                    return ColorLevel::Basic;
-                }
-            }
-        }
-
         if (vars.COLORTERM) {
             if (*vars.COLORTERM == "truecolor") {
                 return ColorLevel::Basic;
             }
             if (*vars.COLORTERM == "24bit") {
                 return ColorLevel::Basic;
+            }
+        }
+
+        if (vars.TERM) {
+            for (auto term : color_support_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::Basic;
+                }
             }
         }
 
