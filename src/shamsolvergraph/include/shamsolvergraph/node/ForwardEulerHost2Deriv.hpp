@@ -21,10 +21,10 @@
 #include "shamsolvergraph/node/INode.hpp"
 #include <vector>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                             \
-    X_RO(shamrock::solvergraph::IDataEdge<std::vector<T>>, field_dt1)                             \
-    X_RO(shamrock::solvergraph::IDataEdge<std::vector<T>>, field_dt2)                             \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                              \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<T>>, field_dt1)                              \
+    X_RO(shamrock::solvergraph::IDataEdge<std::vector<T>>, field_dt2)                              \
     X_RW(shamrock::solvergraph::IDataEdge<std::vector<T>>, field)
 
 namespace shamrock::solvergraph {
