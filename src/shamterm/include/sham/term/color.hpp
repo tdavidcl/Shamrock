@@ -50,8 +50,8 @@ namespace sham::term {
      * @brief Set the terminal color support level.
      *
      * Any non-NoColor value passed here is also remembered as the level enable_colors() restores
-     * to, so a later enable_colors() call brings back the actual detected/forced tier instead of
-     * unconditionally falling back to ColorLevel::Basic.
+     * to, taking precedence over the level detect_color_level() would derive from the real
+     * TERM/COLORTERM process environment variables.
      *
      * @param level the new color support level
      */
@@ -124,10 +124,11 @@ namespace sham::term {
     /**
      * @brief Enable terminal color output.
      *
-     * Restores color_level() to the last detected/forced non-NoColor level set via
-     * set_color_level() (or ColorLevel::Basic if none was ever detected), so escapes are emitted
-     * up to whatever tier the terminal actually supports rather than unconditionally dropping
-     * back to basic colors.
+     * Restores color_level() to the last non-NoColor level passed to set_color_level(), or, if
+     * none was ever set, lazily detects one from the real TERM/COLORTERM process environment
+     * variables (see sham::term::detect_color_level() in sham/term/env.hpp), so escapes are
+     * emitted up to whatever tier the terminal actually supports rather than unconditionally
+     * dropping back to basic colors.
      */
     void enable_colors();
 

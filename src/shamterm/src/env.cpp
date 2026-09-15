@@ -41,44 +41,6 @@ namespace {
         "xterm-truecolor", "xterm-direct", "xterm-kitty", "alacritty"};
 
     /**
-     * @brief detect the terminal emulator's color support level
-     *
-     * COLORTERM=truecolor/24bit is the override lever: it forces ColorLevel::TrueColor
-     * regardless of TERM. Otherwise the level is derived from a handful of known TERM idents,
-     * from highest to lowest tier.
-     *
-     * @return the detected color support level
-     */
-    sham::term::ColorLevel detect_color_level(sham::term::TermEnvVars vars) {
-
-        if (vars.COLORTERM) {
-            if (*vars.COLORTERM == "truecolor" || *vars.COLORTERM == "24bit") {
-                return sham::term::ColorLevel::TrueColor;
-            }
-        }
-
-        if (vars.TERM) {
-            for (auto term : truecolor_term) {
-                if (*vars.TERM == term) {
-                    return sham::term::ColorLevel::TrueColor;
-                }
-            }
-            for (auto term : ansi256_color_term) {
-                if (*vars.TERM == term) {
-                    return sham::term::ColorLevel::ANSI256;
-                }
-            }
-            for (auto term : basic_color_term) {
-                if (*vars.TERM == term) {
-                    return sham::term::ColorLevel::Basic;
-                }
-            }
-        }
-
-        return sham::term::ColorLevel::NoColor;
-    }
-
-    /**
      * @brief Case-insensitive substring search
      *
      * @return true if needle is found in haystack, ignoring case
@@ -137,6 +99,35 @@ namespace {
 } // namespace
 
 namespace sham::term {
+
+    ColorLevel detect_color_level(TermEnvVars vars) {
+
+        if (vars.COLORTERM) {
+            if (*vars.COLORTERM == "truecolor" || *vars.COLORTERM == "24bit") {
+                return ColorLevel::TrueColor;
+            }
+        }
+
+        if (vars.TERM) {
+            for (auto term : truecolor_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::TrueColor;
+                }
+            }
+            for (auto term : ansi256_color_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::ANSI256;
+                }
+            }
+            for (auto term : basic_color_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::Basic;
+                }
+            }
+        }
+
+        return ColorLevel::NoColor;
+    }
 
     void parse_terminal_support(TermEnvVars vars, const term_parse_callback_t &error_callback) {
         sham::term::set_color_level(detect_color_level(vars));

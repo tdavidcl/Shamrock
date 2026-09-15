@@ -15,6 +15,10 @@
  */
 
 #include <sham/term/color.hpp>
+#include <sham/term/env.hpp>
+#include <string_view>
+#include <cstdlib>
+#include <optional>
 #include <string>
 
 #define TERM_ESCAPTE_CHAR "\x1b["
@@ -24,11 +28,24 @@ namespace {
     /// palette can be rendered".
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
+    /// Read a raw process environment variable as an optional string_view, for the detection
+    /// performed by detected_color_level() below.
+    std::optional<std::string_view> getenv_view(const char *name) {
+        const char *value = std::getenv(name);
+        if (value == nullptr) {
+            return std::nullopt;
+        }
+        return std::string_view(value);
+    }
+
     /// Last non-NoColor level passed to set_color_level(), i.e. the last detected/forced
-    /// terminal capability, lazily initialized to ColorLevel::Basic on first use. enable_colors()
-    /// reads this to restore that level instead of unconditionally falling back to Basic.
+    /// terminal capability. Lazily detected on first use straight from the real TERM/COLORTERM
+    /// process environment variables (see sham::term::detect_color_level), so a program that
+    /// never calls parse_terminal_support()/set_color_level() still gets a sensible level for
+    /// enable_colors() to restore instead of unconditionally falling back to Basic.
     sham::term::ColorLevel &detected_color_level() {
-        static sham::term::ColorLevel level = sham::term::ColorLevel::Basic;
+        static sham::term::ColorLevel level = sham::term::detect_color_level(
+            {.TERM = getenv_view("TERM"), .COLORTERM = getenv_view("COLORTERM")});
         return level;
     }
 
