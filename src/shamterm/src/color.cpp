@@ -25,9 +25,12 @@ namespace {
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
     /// Last non-NoColor level passed to set_color_level(), i.e. the last detected/forced
-    /// terminal capability. Used by enable_colors() to restore that level instead of
-    /// unconditionally falling back to ColorLevel::Basic.
-    sham::term::ColorLevel last_detected_color_level = sham::term::ColorLevel::Basic;
+    /// terminal capability, lazily initialized to ColorLevel::Basic on first use. enable_colors()
+    /// reads this to restore that level instead of unconditionally falling back to Basic.
+    sham::term::ColorLevel &detected_color_level() {
+        static sham::term::ColorLevel level = sham::term::ColorLevel::Basic;
+        return level;
+    }
 
     const char *_empty_str     = "";
     const char *_esc_char      = TERM_ESCAPTE_CHAR;
@@ -52,7 +55,7 @@ namespace sham::term {
     void set_color_level(ColorLevel level) {
         color_level_value = level;
         if (level != ColorLevel::NoColor) {
-            last_detected_color_level = level;
+            detected_color_level() = level;
         }
     }
 
@@ -146,7 +149,7 @@ namespace sham::term {
     /// back to basic colors.
     void enable_colors() {
         if (color_level_value == ColorLevel::NoColor) {
-            color_level_value = last_detected_color_level;
+            color_level_value = detected_color_level();
         }
     }
 
