@@ -107,14 +107,14 @@ namespace shamcmdopt {
 
         sham::term::parse_terminal_support(
             {
-                .TERM           = TERM,
-                .COLORTERM      = COLORTERM,
-                .NO_COLOR       = NO_COLOR,
-                .CLICOLOR_FORCE = CLICOLOR_FORCE,
-                .COLUMN         = COLUMN,
-                .LANG           = LANG,
-                .lc_all         = lc_all,
-                .lc_ctype       = lc_ctype,
+                .TERM            = TERM,
+                .COLORTERM       = COLORTERM,
+                .NO_COLOR        = NO_COLOR,
+                .CLICOLOR_FORCE  = CLICOLOR_FORCE,
+                .COLUMN          = COLUMN,
+                .LANG            = LANG,
+                .lc_all          = lc_all,
+                .lc_ctype        = lc_ctype,
                 .NO_UTF8         = NO_UTF8,
                 .FORCE_UTF8      = FORCE_UTF8,
                 .NO_TRUECOLOR    = NO_TRUECOLOR,

@@ -71,10 +71,7 @@ namespace {
      * @brief List of known TERM idents that support 24-bit RGB truecolor output
      */
     static const std::vector<std::string_view> truecolor_support_term{
-        "xterm-truecolor",
-        "xterm-direct",
-        "xterm-kitty",
-        "alacritty"};
+        "xterm-truecolor", "xterm-direct", "xterm-kitty", "alacritty"};
 
     /**
      * @brief detect if terminal emulator supports 24-bit RGB truecolor output
