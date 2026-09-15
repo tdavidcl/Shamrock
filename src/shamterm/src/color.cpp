@@ -63,9 +63,7 @@ namespace sham::term {
     } // namespace colors_8b
 
     /// Enable colors
-    void enable_colors() {
-        color_level_value = ColorLevel::Basic;
-    }
+    void enable_colors() { color_level_value = ColorLevel::Basic; }
 
     /// Disable all colors
     void disable_colors() { color_level_value = ColorLevel::NoColor; }
