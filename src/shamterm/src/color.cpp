@@ -18,8 +18,7 @@
 
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
-    /// Detected/forced terminal color support level, as set by sham::term::set_color_level.
-    /// Single source of truth for "are colors enabled" (level != NoColor).
+    /// Currently set terminal color support level, as set by sham::term::set_color_level.
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
     const char *_empty_str     = "";
