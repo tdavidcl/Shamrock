@@ -13,7 +13,28 @@
 #include <cstdint>
 #include <string>
 
+namespace {
+
+    /// Saves/restores sham::term's color enable state and level, since both are process-global
+    /// singletons shared with every other test in this binary.
+    struct ColorStateGuard {
+        bool enabled                 = sham::term::are_colors_enabled();
+        sham::term::ColorLevel level = sham::term::color_level();
+
+        ~ColorStateGuard() {
+            if (enabled) {
+                sham::term::enable_colors();
+            } else {
+                sham::term::disable_colors();
+            }
+            sham::term::set_color_level(level);
+        }
+    };
+
+} // namespace
+
 NEW_TEST(Unittest, "shamterm/color", 1) {
+    ColorStateGuard guard{};
 
     // Truecolor (24-bit RGB, \x1b[38;2;r;g;bm)
     // Print a rainbow gradient bar, same idea as the classic
