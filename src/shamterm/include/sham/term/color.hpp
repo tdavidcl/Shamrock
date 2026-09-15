@@ -16,6 +16,9 @@
  *
  */
 
+#include <cstdint>
+#include <string>
+
 namespace sham::term {
 
     /**
@@ -55,6 +58,20 @@ namespace sham::term {
         /// Escape sequence to set white text color.
         const char *white();
     } // namespace colors_8b
+
+    /**
+     * @brief 24-bit RGB truecolor escape sequences (\x1b[38;2;r;g;bm / \x1b[48;2;r;g;bm).
+     *
+     * These are only emitted if colors are enabled (see enable_colors/disable_colors) and the
+     * current terminal was detected (or forced) to support truecolor output (see
+     * support_truecolor() in sham/term/tty.hpp); otherwise an empty string is returned.
+     */
+    namespace colors_24b {
+        /// Escape sequence to set the given RGB foreground text color.
+        std::string foreground(std::uint8_t r, std::uint8_t g, std::uint8_t b);
+        /// Escape sequence to set the given RGB background color.
+        std::string background(std::uint8_t r, std::uint8_t g, std::uint8_t b);
+    } // namespace colors_24b
 
     /**
      * @brief Enable terminal color output.

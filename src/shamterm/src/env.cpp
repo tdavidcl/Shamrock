@@ -68,6 +68,47 @@ namespace {
     }
 
     /**
+     * @brief List of known TERM idents that support 24-bit RGB truecolor output
+     */
+    static const std::vector<std::string_view> truecolor_support_term{
+        "xterm-truecolor",
+        "xterm-direct",
+        "xterm-kitty",
+        "alacritty"};
+
+    /**
+     * @brief detect if terminal emulator supports 24-bit RGB truecolor output
+     * (\x1b[38;2;r;g;bm escape sequences)
+     *
+     * Recognizes the COLORTERM=truecolor/24bit convention as well as a handful of TERM idents
+     * that are known to support truecolor.
+     *
+     * @return true
+     * @return false
+     */
+    bool term_support_truecolor(sham::term::TermEnvVars vars) {
+
+        if (vars.COLORTERM) {
+            if (*vars.COLORTERM == "truecolor") {
+                return true;
+            }
+            if (*vars.COLORTERM == "24bit") {
+                return true;
+            }
+        }
+
+        if (vars.TERM) {
+            for (auto term : truecolor_support_term) {
+                if (*vars.TERM == term) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @brief Case-insensitive substring search
      *
      * @return true if needle is found in haystack, ignoring case
@@ -167,6 +208,25 @@ namespace sham::term {
 
         if (has_envvar_force_utf8) {
             sham::term::set_support_utf8(true);
+        }
+
+        sham::term::set_support_truecolor(term_support_truecolor(vars));
+
+        bool has_envvar_no_truecolor    = bool(vars.NO_TRUECOLOR);
+        bool has_envvar_force_truecolor = bool(vars.FORCE_TRUECOLOR);
+
+        if (has_envvar_no_truecolor && has_envvar_force_truecolor) {
+            throw error_callback(
+                "one can not set both NO_TRUECOLOR and FORCE_TRUECOLOR",
+                std::source_location::current());
+        }
+
+        if (has_envvar_no_truecolor) {
+            sham::term::set_support_truecolor(false);
+        }
+
+        if (has_envvar_force_truecolor) {
+            sham::term::set_support_truecolor(true);
         }
 
         auto &res = vars.COLUMN;

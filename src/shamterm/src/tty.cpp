@@ -87,4 +87,11 @@ namespace sham::term {
     void set_support_utf8(bool support) { utf8_supported = support; }
     bool support_utf8() { return utf8_supported; }
 
+    /// Whether the current terminal supports 24-bit RGB truecolor output, as set by
+    /// set_support_truecolor.
+    bool truecolor_supported = false;
+
+    void set_support_truecolor(bool support) { truecolor_supported = support; }
+    bool support_truecolor() { return truecolor_supported; }
+
 } // namespace sham::term

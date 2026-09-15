@@ -17,6 +17,7 @@
  */
 
 #include "sham/term/color.hpp"
+#include <cstdint>
 #include <string>
 namespace shambase {
 
@@ -59,6 +60,15 @@ namespace shambase {
         inline const std::string col8b_cyan() { return sham::term::colors_8b::cyan(); };
         /// Get the white terminal escape char
         inline const std::string col8b_white() { return sham::term::colors_8b::white(); };
+
+        /// Get the 24-bit RGB truecolor foreground terminal escape char (empty if unsupported)
+        inline std::string rgb_foreground(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+            return sham::term::colors_24b::foreground(r, g, b);
+        };
+        /// Get the 24-bit RGB truecolor background terminal escape char (empty if unsupported)
+        inline std::string rgb_background(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+            return sham::term::colors_24b::background(r, g, b);
+        };
 
     } // namespace term_colors
 

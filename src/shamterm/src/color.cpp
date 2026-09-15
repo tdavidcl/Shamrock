@@ -15,6 +15,8 @@
  */
 
 #include <sham/term/color.hpp>
+#include <sham/term/tty.hpp>
+#include <string>
 
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
@@ -57,6 +59,28 @@ namespace sham::term {
         const char *cyan() { return (colors_enabled) ? _col8b_cyan : _empty_str; }
         const char *white() { return (colors_enabled) ? _col8b_white : _empty_str; }
     } // namespace colors_8b
+
+    namespace colors_24b {
+        namespace {
+            /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if
+            /// colors are disabled or the terminal was not detected to support truecolor.
+            std::string build(int mode, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+                if (!colors_enabled || !support_truecolor()) {
+                    return "";
+                }
+                return std::string(TERM_ESCAPTE_CHAR) + std::to_string(mode) + ";2;"
+                       + std::to_string(r) + ";" + std::to_string(g) + ";" + std::to_string(b)
+                       + "m";
+            }
+        } // namespace
+
+        std::string foreground(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+            return build(38, r, g, b);
+        }
+        std::string background(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+            return build(48, r, g, b);
+        }
+    } // namespace colors_24b
 
     /// Enable colors
     void enable_colors() { colors_enabled = true; }

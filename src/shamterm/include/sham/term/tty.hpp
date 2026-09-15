@@ -81,4 +81,23 @@ namespace sham::term {
      * @param support the new UTF-8 support state
      */
     void set_support_utf8(bool support);
+
+    /**
+     * @brief Query whether the current terminal supports 24-bit RGB truecolor output
+     * (\x1b[38;2;r;g;bm escape sequences)
+     *
+     * This reflects the result of the last call to parse_terminal_support() (see
+     * sham/term/env.hpp), which derives it from the TERM/COLORTERM environment variables.
+     *
+     * @return true if 24-bit RGB truecolor output is supported
+     * @return false otherwise
+     */
+    bool support_truecolor();
+
+    /**
+     * @brief Set whether the current terminal supports 24-bit RGB truecolor output
+     *
+     * @param support the new truecolor support state
+     */
+    void set_support_truecolor(bool support);
 } // namespace sham::term

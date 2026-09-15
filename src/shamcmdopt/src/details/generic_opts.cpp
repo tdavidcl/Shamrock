@@ -58,6 +58,10 @@ namespace shamcmdopt {
         register_env_var_doc("LANG", "Default locale, used to detect UTF-8 support");
         register_env_var_doc("NO_UTF8", "Disable UTF-8 output (overrides locale detection)");
         register_env_var_doc("FORCE_UTF8", "Force UTF-8 output (overrides locale detection)");
+        register_env_var_doc(
+            "NO_TRUECOLOR", "Disable 24-bit RGB truecolor output (overrides detection)");
+        register_env_var_doc(
+            "FORCE_TRUECOLOR", "Force 24-bit RGB truecolor output (overrides detection)");
     }
 
     /**
@@ -98,6 +102,9 @@ namespace shamcmdopt {
         auto NO_UTF8    = getenv_str_view("NO_UTF8");
         auto FORCE_UTF8 = getenv_str_view("FORCE_UTF8");
 
+        auto NO_TRUECOLOR    = getenv_str_view("NO_TRUECOLOR");
+        auto FORCE_TRUECOLOR = getenv_str_view("FORCE_TRUECOLOR");
+
         sham::term::parse_terminal_support(
             {
                 .TERM           = TERM,
@@ -108,8 +115,10 @@ namespace shamcmdopt {
                 .LANG           = LANG,
                 .lc_all         = lc_all,
                 .lc_ctype       = lc_ctype,
-                .NO_UTF8        = NO_UTF8,
-                .FORCE_UTF8     = FORCE_UTF8,
+                .NO_UTF8         = NO_UTF8,
+                .FORCE_UTF8      = FORCE_UTF8,
+                .NO_TRUECOLOR    = NO_TRUECOLOR,
+                .FORCE_TRUECOLOR = FORCE_TRUECOLOR,
             },
             term_parse_error_callback);
 
@@ -145,6 +154,12 @@ namespace shamcmdopt {
                 shambase::println("  utf8 = enabled");
             } else {
                 shambase::println("  utf8 = disabled");
+            }
+
+            if (sham::term::support_truecolor()) {
+                shambase::println("  truecolor = enabled");
+            } else {
+                shambase::println("  truecolor = disabled");
             }
 
             shambase::println(
