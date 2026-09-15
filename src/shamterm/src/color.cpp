@@ -20,6 +20,9 @@
 namespace {
     bool colors_enabled = true;
 
+    /// Detected/forced terminal color support level, as set by sham::term::set_color_level.
+    sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
+
     const char *_empty_str     = "";
     const char *_esc_char      = TERM_ESCAPTE_CHAR;
     const char *_reset         = TERM_ESCAPTE_CHAR "0m";
@@ -38,6 +41,9 @@ namespace {
 } // namespace
 
 namespace sham::term {
+
+    ColorLevel color_level() { return color_level_value; }
+    void set_color_level(ColorLevel level) { color_level_value = level; }
 
     namespace style {
         const char *reset() { return (colors_enabled) ? _reset : _empty_str; }
