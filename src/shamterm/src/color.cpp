@@ -70,48 +70,22 @@ namespace sham::term {
     void set_color_level(ColorLevel level) { color_level_value = level; }
 
     namespace style {
-        const char *reset() {
-            return (color_level_value != ColorLevel::NoColor) ? _reset : _empty_str;
-        }
-        const char *bold() {
-            return (color_level_value != ColorLevel::NoColor) ? _bold : _empty_str;
-        }
-        const char *faint() {
-            return (color_level_value != ColorLevel::NoColor) ? _faint : _empty_str;
-        }
-        const char *underline() {
-            return (color_level_value != ColorLevel::NoColor) ? _underline : _empty_str;
-        }
-        const char *blink() {
-            return (color_level_value != ColorLevel::NoColor) ? _blink : _empty_str;
-        }
+        const char *reset() { return are_colors_enabled() ? _reset : _empty_str; }
+        const char *bold() { return are_colors_enabled() ? _bold : _empty_str; }
+        const char *faint() { return are_colors_enabled() ? _faint : _empty_str; }
+        const char *underline() { return are_colors_enabled() ? _underline : _empty_str; }
+        const char *blink() { return are_colors_enabled() ? _blink : _empty_str; }
     } // namespace style
 
     namespace colors_8b {
-        const char *black() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_black : _empty_str;
-        }
-        const char *red() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_red : _empty_str;
-        }
-        const char *green() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_green : _empty_str;
-        }
-        const char *yellow() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_yellow : _empty_str;
-        }
-        const char *blue() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_blue : _empty_str;
-        }
-        const char *magenta() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_magenta : _empty_str;
-        }
-        const char *cyan() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_cyan : _empty_str;
-        }
-        const char *white() {
-            return (color_level_value != ColorLevel::NoColor) ? _col8b_white : _empty_str;
-        }
+        const char *black() { return are_colors_enabled() ? _col8b_black : _empty_str; }
+        const char *red() { return are_colors_enabled() ? _col8b_red : _empty_str; }
+        const char *green() { return are_colors_enabled() ? _col8b_green : _empty_str; }
+        const char *yellow() { return are_colors_enabled() ? _col8b_yellow : _empty_str; }
+        const char *blue() { return are_colors_enabled() ? _col8b_blue : _empty_str; }
+        const char *magenta() { return are_colors_enabled() ? _col8b_magenta : _empty_str; }
+        const char *cyan() { return are_colors_enabled() ? _col8b_cyan : _empty_str; }
+        const char *white() { return are_colors_enabled() ? _col8b_white : _empty_str; }
     } // namespace colors_8b
 
     namespace colors_256 {
