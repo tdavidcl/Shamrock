@@ -22,6 +22,39 @@
 namespace sham::term {
 
     /**
+     * @brief Terminal color support tiers, from no color support to 24-bit RGB truecolor.
+     *
+     * Detected by parse_terminal_support() (see sham/term/env.hpp) from the TERM/COLORTERM
+     * environment variables; COLORTERM is the override lever (COLORTERM=truecolor/24bit forces
+     * TrueColor regardless of TERM). This is independent from the overall color on/off switch
+     * (see enable_colors/disable_colors/are_colors_enabled): the switch decides whether any color
+     * escape is emitted at all, while the level decides which tiered palette
+     * (colors_8b/colors_256/colors_24b) the terminal can actually render.
+     */
+    enum class ColorLevel {
+        /// No color support, plain ASCII output only.
+        NoColor = 0,
+        /// ANSI/16 colors (basic SGR codes).
+        Basic = 1,
+        /// 256-color palette (16 ANSI + 216-color cube + 24 grayscale), \x1b[38;5;Nm.
+        ANSI256 = 2,
+        /// 24-bit RGB truecolor, \x1b[38;2;r;g;bm.
+        TrueColor = 3,
+    };
+
+    /**
+     * @brief Query the currently detected/forced terminal color support level.
+     */
+    ColorLevel color_level();
+
+    /**
+     * @brief Set the terminal color support level.
+     *
+     * @param level the new color support level
+     */
+    void set_color_level(ColorLevel level);
+
+    /**
      * @brief Terminal text styling escape sequences (bold, faint, underline, blink, reset).
      */
     namespace style {
@@ -60,11 +93,23 @@ namespace sham::term {
     } // namespace colors_8b
 
     /**
+     * @brief 256-color palette escape sequences (\x1b[38;5;Nm / \x1b[48;5;Nm).
+     *
+     * These are only emitted if colors are enabled (see enable_colors/disable_colors) and
+     * color_level() is at least ColorLevel::ANSI256; otherwise an empty string is returned.
+     */
+    namespace colors_256 {
+        /// Escape sequence to set the given palette index as foreground text color.
+        std::string foreground(std::uint8_t index);
+        /// Escape sequence to set the given palette index as background color.
+        std::string background(std::uint8_t index);
+    } // namespace colors_256
+
+    /**
      * @brief 24-bit RGB truecolor escape sequences (\x1b[38;2;r;g;bm / \x1b[48;2;r;g;bm).
      *
-     * These are only emitted if colors are enabled (see enable_colors/disable_colors) and the
-     * current terminal was detected (or forced) to support truecolor output (see
-     * support_truecolor() in sham/term/tty.hpp); otherwise an empty string is returned.
+     * These are only emitted if colors are enabled (see enable_colors/disable_colors) and
+     * color_level() is at least ColorLevel::TrueColor; otherwise an empty string is returned.
      */
     namespace colors_24b {
         /// Escape sequence to set the given RGB foreground text color.

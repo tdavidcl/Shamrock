@@ -15,12 +15,14 @@
  */
 
 #include <sham/term/color.hpp>
-#include <sham/term/tty.hpp>
 #include <string>
 
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
     bool colors_enabled = true;
+
+    /// Detected/forced terminal color support level, as set by sham::term::set_color_level.
+    sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
     const char *_empty_str     = "";
     const char *_esc_char      = TERM_ESCAPTE_CHAR;
@@ -41,6 +43,9 @@ namespace {
 
 namespace sham::term {
 
+    ColorLevel color_level() { return color_level_value; }
+    void set_color_level(ColorLevel level) { color_level_value = level; }
+
     namespace style {
         const char *reset() { return (colors_enabled) ? _reset : _empty_str; }
         const char *bold() { return (colors_enabled) ? _bold : _empty_str; }
@@ -60,12 +65,29 @@ namespace sham::term {
         const char *white() { return (colors_enabled) ? _col8b_white : _empty_str; }
     } // namespace colors_8b
 
+    namespace colors_256 {
+        namespace {
+            /// Build a \x1b[<mode>;5;Nm 256-color escape sequence, or an empty string if colors
+            /// are disabled or the terminal was not detected to support the 256-color palette.
+            std::string build(int mode, std::uint8_t index) {
+                if (!colors_enabled || color_level_value < ColorLevel::ANSI256) {
+                    return "";
+                }
+                return std::string(TERM_ESCAPTE_CHAR) + std::to_string(mode) + ";5;"
+                       + std::to_string(index) + "m";
+            }
+        } // namespace
+
+        std::string foreground(std::uint8_t index) { return build(38, index); }
+        std::string background(std::uint8_t index) { return build(48, index); }
+    } // namespace colors_256
+
     namespace colors_24b {
         namespace {
             /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if
             /// colors are disabled or the terminal was not detected to support truecolor.
             std::string build(int mode, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
-                if (!colors_enabled || !support_truecolor()) {
+                if (!colors_enabled || color_level_value < ColorLevel::TrueColor) {
                     return "";
                 }
                 return std::string(TERM_ESCAPTE_CHAR) + std::to_string(mode) + ";2;"

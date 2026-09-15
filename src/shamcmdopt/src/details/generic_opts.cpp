@@ -19,6 +19,7 @@
 #include "shambase/print.hpp"
 #include "shambase/string.hpp"
 #include "shambase/term_colors.hpp"
+#include "sham/term/color.hpp"
 #include "sham/term/env.hpp"
 #include "sham/term/tty.hpp"
 #include "shamcmdopt/cmdopt.hpp"
@@ -50,7 +51,9 @@ namespace shamcmdopt {
         register_env_var_doc("NO_COLOR", "Disable colors (if no color cli args are passed)");
         register_env_var_doc("CLICOLOR_FORCE", "Enable colors (if no color cli args are passed)");
         register_env_var_doc("TERM", "Terminal emulator identifier");
-        register_env_var_doc("COLORTERM", "Terminal color support identifier");
+        register_env_var_doc(
+            "COLORTERM",
+            "Terminal color support level override (truecolor/24bit forces 24-bit color)");
         register_env_var_doc("COLUMN", "Set tty assumed column count");
         register_env_var_doc("LC_ALL", "Locale override, used to detect UTF-8 support");
         register_env_var_doc(
@@ -58,10 +61,6 @@ namespace shamcmdopt {
         register_env_var_doc("LANG", "Default locale, used to detect UTF-8 support");
         register_env_var_doc("NO_UTF8", "Disable UTF-8 output (overrides locale detection)");
         register_env_var_doc("FORCE_UTF8", "Force UTF-8 output (overrides locale detection)");
-        register_env_var_doc(
-            "NO_TRUECOLOR", "Disable 24-bit RGB truecolor output (overrides detection)");
-        register_env_var_doc(
-            "FORCE_TRUECOLOR", "Force 24-bit RGB truecolor output (overrides detection)");
     }
 
     /**
@@ -102,23 +101,18 @@ namespace shamcmdopt {
         auto NO_UTF8    = getenv_str_view("NO_UTF8");
         auto FORCE_UTF8 = getenv_str_view("FORCE_UTF8");
 
-        auto NO_TRUECOLOR    = getenv_str_view("NO_TRUECOLOR");
-        auto FORCE_TRUECOLOR = getenv_str_view("FORCE_TRUECOLOR");
-
         sham::term::parse_terminal_support(
             {
-                .TERM            = TERM,
-                .COLORTERM       = COLORTERM,
-                .NO_COLOR        = NO_COLOR,
-                .CLICOLOR_FORCE  = CLICOLOR_FORCE,
-                .COLUMN          = COLUMN,
-                .LANG            = LANG,
-                .lc_all          = lc_all,
-                .lc_ctype        = lc_ctype,
-                .NO_UTF8         = NO_UTF8,
-                .FORCE_UTF8      = FORCE_UTF8,
-                .NO_TRUECOLOR    = NO_TRUECOLOR,
-                .FORCE_TRUECOLOR = FORCE_TRUECOLOR,
+                .TERM           = TERM,
+                .COLORTERM      = COLORTERM,
+                .NO_COLOR       = NO_COLOR,
+                .CLICOLOR_FORCE = CLICOLOR_FORCE,
+                .COLUMN         = COLUMN,
+                .LANG           = LANG,
+                .lc_all         = lc_all,
+                .lc_ctype       = lc_ctype,
+                .NO_UTF8        = NO_UTF8,
+                .FORCE_UTF8     = FORCE_UTF8,
             },
             term_parse_error_callback);
 
@@ -156,11 +150,14 @@ namespace shamcmdopt {
                 shambase::println("  utf8 = disabled");
             }
 
-            if (sham::term::support_truecolor()) {
-                shambase::println("  truecolor = enabled");
-            } else {
-                shambase::println("  truecolor = disabled");
+            const char *color_level_str = "unknown";
+            switch (sham::term::color_level()) {
+            case sham::term::ColorLevel::NoColor  : color_level_str = "0 (none)"; break;
+            case sham::term::ColorLevel::Basic    : color_level_str = "1 (ANSI/16 colors)"; break;
+            case sham::term::ColorLevel::ANSI256  : color_level_str = "2 (256 colors)"; break;
+            case sham::term::ColorLevel::TrueColor: color_level_str = "3 (truecolor)"; break;
             }
+            shambase::println(sham::format("  colorlevel = {}", color_level_str));
 
             shambase::println(
                 sham::format(
