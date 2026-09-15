@@ -38,13 +38,11 @@ namespace {
         return std::string_view(value);
     }
 
-    /// Last non-NoColor level passed to set_color_level(), i.e. the last detected/forced
-    /// terminal capability. Lazily detected on first use straight from the real TERM/COLORTERM
-    /// process environment variables (see sham::term::detect_color_level), so a program that
-    /// never calls parse_terminal_support()/set_color_level() still gets a sensible level for
-    /// enable_colors() to restore instead of unconditionally falling back to Basic.
-    sham::term::ColorLevel &detected_color_level() {
-        static sham::term::ColorLevel level = sham::term::detect_color_level(
+    /// The terminal's color support level, detected once from the real TERM/COLORTERM process
+    /// environment variables (see sham::term::detect_color_level); the environment does not
+    /// change during the process lifetime, so the result is cached in a static local.
+    sham::term::ColorLevel detected_color_level() {
+        static const sham::term::ColorLevel level = sham::term::detect_color_level(
             {.TERM = getenv_view("TERM"), .COLORTERM = getenv_view("COLORTERM")});
         return level;
     }
@@ -69,12 +67,7 @@ namespace {
 namespace sham::term {
 
     ColorLevel color_level() { return color_level_value; }
-    void set_color_level(ColorLevel level) {
-        color_level_value = level;
-        if (level != ColorLevel::NoColor) {
-            detected_color_level() = level;
-        }
-    }
+    void set_color_level(ColorLevel level) { color_level_value = level; }
 
     namespace style {
         const char *reset() {
@@ -160,15 +153,9 @@ namespace sham::term {
         }
     } // namespace colors_24b
 
-    /// Enable colors: restore the last detected/forced non-NoColor level (or ColorLevel::Basic
-    /// if none was ever detected), so style/colors_8b/colors_256/colors_24b escapes are emitted
-    /// up to whatever tier the terminal actually supports, instead of unconditionally dropping
-    /// back to basic colors.
-    void enable_colors() {
-        if (color_level_value == ColorLevel::NoColor) {
-            color_level_value = detected_color_level();
-        }
-    }
+    /// Enable colors: set the level based on detection from the real TERM/COLORTERM process
+    /// environment variables.
+    void enable_colors() { set_color_level(detected_color_level()); }
 
     /// Disable all colors: no tier is emitted anymore, regardless of the previously
     /// detected/forced level.

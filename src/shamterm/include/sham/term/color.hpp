@@ -49,10 +49,6 @@ namespace sham::term {
     /**
      * @brief Set the terminal color support level.
      *
-     * Any non-NoColor value passed here is also remembered as the level enable_colors() restores
-     * to, taking precedence over the level detect_color_level() would derive from the real
-     * TERM/COLORTERM process environment variables.
-     *
      * @param level the new color support level
      */
     void set_color_level(ColorLevel level);
