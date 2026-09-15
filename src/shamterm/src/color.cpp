@@ -24,6 +24,11 @@ namespace {
     /// palette can be rendered".
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
+    /// Last non-NoColor level passed to set_color_level(), i.e. the last detected/forced
+    /// terminal capability. Used by enable_colors() to restore that level instead of
+    /// unconditionally falling back to ColorLevel::Basic.
+    sham::term::ColorLevel last_detected_color_level = sham::term::ColorLevel::Basic;
+
     const char *_empty_str     = "";
     const char *_esc_char      = TERM_ESCAPTE_CHAR;
     const char *_reset         = TERM_ESCAPTE_CHAR "0m";
@@ -44,7 +49,12 @@ namespace {
 namespace sham::term {
 
     ColorLevel color_level() { return color_level_value; }
-    void set_color_level(ColorLevel level) { color_level_value = level; }
+    void set_color_level(ColorLevel level) {
+        color_level_value = level;
+        if (level != ColorLevel::NoColor) {
+            last_detected_color_level = level;
+        }
+    }
 
     namespace style {
         const char *reset() {
@@ -130,11 +140,13 @@ namespace sham::term {
         }
     } // namespace colors_24b
 
-    /// Enable colors: bump the level to at least Basic so basic/style escapes are emitted, while
-    /// keeping any already detected/forced higher tier (ANSI256/TrueColor) intact.
+    /// Enable colors: restore the last detected/forced non-NoColor level (or ColorLevel::Basic
+    /// if none was ever detected), so style/colors_8b/colors_256/colors_24b escapes are emitted
+    /// up to whatever tier the terminal actually supports, instead of unconditionally dropping
+    /// back to basic colors.
     void enable_colors() {
         if (color_level_value == ColorLevel::NoColor) {
-            color_level_value = ColorLevel::Basic;
+            color_level_value = last_detected_color_level;
         }
     }
 
