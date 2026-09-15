@@ -23,11 +23,11 @@
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 #include "shamsolvergraph/node/INode.hpp"
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                        \
-    X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                   \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, xyz)                                            \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                         \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, xyz)                                             \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, omega)
 
 namespace shammodels::sph::modules {
@@ -56,9 +56,9 @@ namespace shammodels::sph::modules {
 
 #undef NODE_EDGES
 
-#define NODE_EDGES(X_RO, X_RW)                                                                    \
-    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                        \
-    X_RO(shamrock::solvergraph::IFieldSpan<u32>, mask)                                            \
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shamrock::solvergraph::IFieldSpan<u32>, mask)                                             \
     X_RW(shamrock::solvergraph::IFieldSpan<T>, field_to_set)
 
 namespace shammodels::sph::modules {
