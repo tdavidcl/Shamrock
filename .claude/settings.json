@@ -1,4 +1,9 @@
 {
+  "attribution": {
+    "commit": "Generated with AI\n\nCo-Authored-By: AI <ai@example.com>",
+    "pr": "",
+    "sessionUrl": false
+  },
   "hooks": {
     "SessionStart": [
       {
