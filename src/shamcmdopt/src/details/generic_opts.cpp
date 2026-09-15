@@ -51,9 +51,7 @@ namespace shamcmdopt {
         register_env_var_doc("NO_COLOR", "Disable colors (if no color cli args are passed)");
         register_env_var_doc("CLICOLOR_FORCE", "Enable colors (if no color cli args are passed)");
         register_env_var_doc("TERM", "Terminal emulator identifier");
-        register_env_var_doc(
-            "COLORTERM",
-            "Terminal color support level override (truecolor/24bit forces 24-bit color)");
+        register_env_var_doc("COLORTERM", "Terminal color support identifier");
         register_env_var_doc("COLUMN", "Set tty assumed column count");
         register_env_var_doc("LC_ALL", "Locale override, used to detect UTF-8 support");
         register_env_var_doc(
