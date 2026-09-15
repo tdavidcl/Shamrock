@@ -42,6 +42,8 @@ NEW_TEST(Unittest, "shamterm/color", 1) {
     sham::term::enable_colors();
     sham::term::set_color_level(sham::term::ColorLevel::TrueColor);
 
+    shambase::println("truecolor:");
+
     constexpr int width = 77;
     for (int col = 0; col < width; col++) {
         int r = 255 - (col * 255 / (width - 1));
@@ -78,6 +80,8 @@ NEW_TEST(Unittest, "shamterm/color", 1) {
         sham::term::colors_24b::foreground(12, 34, 56),
         "");
 
+    shambase::println("ansi256:");
+
     // 216-color cube (indices 16-231), each cell paired with a contrasting foreground index.
     for (int i = 16; i <= 231; i++) {
         shambase::print(sham::term::colors_256::background(static_cast<std::uint8_t>(i)));
@@ -108,6 +112,8 @@ NEW_TEST(Unittest, "shamterm/color", 1) {
         "256-color escape is empty below ColorLevel::ANSI256",
         sham::term::colors_256::foreground(196),
         "");
+
+    shambase::println("basic:");
 
     struct NamedColor {
         const char *name;
