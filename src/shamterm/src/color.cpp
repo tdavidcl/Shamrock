@@ -62,16 +62,14 @@ namespace sham::term {
         const char *white() { return are_colors_enabled() ? _col8b_white : _empty_str; }
     } // namespace colors_8b
 
-    /// Enable colors: bump the level to at least Basic so basic/style escapes are emitted, while
-    /// keeping any already detected/forced higher tier intact.
+    /// Enable colors
     void enable_colors() {
         if (color_level_value == ColorLevel::NoColor) {
             color_level_value = ColorLevel::Basic;
         }
     }
 
-    /// Disable all colors: no tier is emitted anymore, regardless of the previously
-    /// detected/forced level.
+    /// Disable all colors
     void disable_colors() { color_level_value = ColorLevel::NoColor; }
 
     /// Are colors enabled
