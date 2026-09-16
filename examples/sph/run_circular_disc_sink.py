@@ -83,7 +83,7 @@ Npart = 100000
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
 scheduler_merge_val = scheduler_split_val // 16
 
-dt_stop = 0.02  # Interval between analysis
+dt_stop = 0.1  # Interval between analysis
 t_end = 30 * dt_stop  # So 30 analysis here
 
 # Sink parameters

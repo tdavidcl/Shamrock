@@ -17,8 +17,18 @@
  */
 
 #include <string_view>
+#include <cstdint>
 
 namespace shambase {
+
+    /**
+     * @brief Returns a counter incremented once per print()/println() call.
+     *
+     * Compare two readings (taken before and after some code runs) to detect
+     * whether anything was printed in between, e.g. to know if a progress bar
+     * line was interrupted by other log output.
+     */
+    std::uint64_t print_counter();
 
     /**
      * @brief Prints a string to the console.

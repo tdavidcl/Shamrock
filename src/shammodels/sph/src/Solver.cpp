@@ -2179,8 +2179,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     StackEntry stack_loc{};
 
     if (shamcomm::world_rank() == 0) {
-        shamcomm::logs::raw_ln(
-            sham::format("---------------- t = {}, dt = {} ----------------", t_current, dt));
+        // shamcomm::logs::raw_ln(
+        //    sham::format("---------------- t = {}, dt = {} ----------------", t_current, dt));
     }
 
     shambase::Timer tstep;

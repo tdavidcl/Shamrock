@@ -18,8 +18,11 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/print.hpp"
 #include "SolverConfig.hpp"
+#include "sham/format/format.hpp"
 #include "shambackends/vec.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/common/SolverLog.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/SPHUtilities.hpp"
@@ -32,6 +35,8 @@
 #include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/TreeTraversalCache.hpp"
+#include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -306,6 +311,8 @@ namespace shammodels::sph {
         inline EvolveUntilResults evolve_until(
             Tscal target_time, i32 niter_max, f64 max_walltime = -1) {
 
+            const Tscal t_start = get_time();
+
             const bool niter_limit_active    = (niter_max >= 0);
             const bool walltime_limit_active = (max_walltime >= 0);
 
@@ -349,7 +356,58 @@ namespace shammodels::sph {
 
             i32 iter_count = 0;
 
+            struct SelfUpdatingLogBlock {
+                uint64_t last_print_counter = shambase::get_max<u64>();
+
+                void print(const std::string &s, u64 line_count) {
+                    bool has_printed_since = last_print_counter != shambase::print_counter();
+
+                    if (has_printed_since) {
+                        logger::raw_ln("-----------------------------------");
+                    } else {
+                        std::string clear_seq = "\x1b[K";
+                        for (u64 i = 0; i < line_count + 1; i++) {
+                            clear_seq += "\x1b[1A\x1b[K";
+                        }
+                        shambase::print(clear_seq);
+                    }
+                    logger::raw_ln(s, "\n----------------------------");
+
+                    last_print_counter = shambase::print_counter();
+                }
+            };
+
+            static SelfUpdatingLogBlock block = {};
+
+            auto make_progress_bar = [](Tscal current, Tscal target, u32 width) -> std::string {
+                f64 frac = (target > 0) ? f64(current) / f64(target) : 0.0;
+                frac     = std::clamp(frac, 0.0, 1.0);
+
+                u32 filled = static_cast<u32>(frac * width);
+                std::string bar_str;
+                bar_str.reserve(width + 8);
+                bar_str += "[";
+                bar_str += std::string(filled, '#');
+                bar_str += std::string(width - filled, '-');
+                bar_str += "]";
+                bar_str += sham::format(" {:5.1f}%", frac * 100);
+                return bar_str;
+            };
+
+            auto update_state = [&]() {
+                block.print(
+                    sham::format(
+                        "t = {} dt = {}\n{}",
+                        get_time(),
+                        get_dt_sph(),
+                        make_progress_bar(get_time() - t_start, target_time - t_start, 40)),
+                    2);
+            };
+
             while (get_time() < target_time) {
+
+                update_state();
+
                 step();
                 iter_count++;
 
@@ -422,6 +480,8 @@ namespace shammodels::sph {
                     }
                 }
             }
+
+            update_state();
 
             print_timestep_logs();
 

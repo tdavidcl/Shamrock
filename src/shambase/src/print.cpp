@@ -15,6 +15,7 @@
  */
 
 #include "shambase/print.hpp"
+#include <atomic>
 #include <iostream>
 #include <ostream>
 
@@ -27,7 +28,13 @@ namespace shambase {
     static printer_t _printerln = nullptr; ///< The println function pointer to use if not null
     static flush_t _flush       = nullptr; ///< The flush function pointer to use if not null
 
+    /// Incremented once per print()/println() call, see print_counter().
+    static std::atomic<std::uint64_t> _print_counter{0};
+
+    std::uint64_t print_counter() { return _print_counter.load(std::memory_order_relaxed); }
+
     void print(std::string_view s) {
+        _print_counter.fetch_add(1, std::memory_order_relaxed);
         if (_printer == nullptr) {
             std::cout << s;
         } else {
@@ -35,6 +42,7 @@ namespace shambase {
         }
     }
     void println(std::string_view s) {
+        _print_counter.fetch_add(1, std::memory_order_relaxed);
         if (_printerln == nullptr) {
             std::cout << s << "\n";
         } else {
