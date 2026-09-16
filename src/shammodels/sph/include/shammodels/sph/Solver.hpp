@@ -346,7 +346,7 @@ namespace shammodels::sph {
                 if (t + dt > target_time) {
                     set_next_dt(target_time - t);
                 }
-                evolve_once();
+                return evolve_once();
             };
 
             f64 start_wall_time = (walltime_limit_active) ? synced_wtime() : 0;
@@ -394,13 +394,32 @@ namespace shammodels::sph {
                 return bar_str;
             };
 
+            std::optional<TimestepLog> last_step_log = {};
+
             auto update_state = [&]() {
+                std::string stats_str
+                    = last_step_log ? sham::format(
+                                          "rate = {:.3e} npart = {:.3e} tcompute = {:e}",
+                                          last_step_log->rate,
+                                          f64(last_step_log->npart),
+                                          last_step_log->tcompute)
+                                    : "rate = ....... npart = ....... tcompute = ....... [s]";
+
+                std::string tsimhr_str
+                    = (last_step_log && last_step_log->tcompute > 0)
+                          ? sham::format(
+                                " tsim/hr = {:.3e} [t/hr]",
+                                get_dt_sph() * (3600.0 / last_step_log->tcompute))
+                          : " tsim/hr = ....... [t/hr]";
+
                 block.print(
                     sham::format(
-                        "t = {} dt = {}\n{}",
+                        "t = {:.5e} dt = {:.5e} {}\n{}{}",
                         get_time(),
                         get_dt_sph(),
-                        make_progress_bar(get_time() - t_start, target_time - t_start, 40)),
+                        stats_str,
+                        make_progress_bar(get_time() - t_start, target_time - t_start, 40),
+                        tsimhr_str),
                     2);
             };
 
@@ -408,7 +427,7 @@ namespace shammodels::sph {
 
                 update_state();
 
-                step();
+                last_step_log = step();
                 iter_count++;
 
                 // if the iteration count is greater than the maximum iteration count
