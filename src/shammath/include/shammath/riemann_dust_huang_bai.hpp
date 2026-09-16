@@ -25,27 +25,39 @@ namespace shammath {
      *
      * Huang & Bai, 2022, A Multifluid Dust Module in Athena++: Algorithms and Numerical
      * Tests, Equation (32)
+     * @tparam FSpec
+     * @param fspec dust state spec (flux/vn operations, no equation of state)
+     * @param prim_l left  primitive state
+     * @param prim_r right primitive state
+     * @param n face unit normal
      */
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux(Tprim d_primL, Tprim d_primR, typename Tprim::Tvec n) {
-        const auto vnL = n[0] * d_primL.vel[0] + n[1] * d_primL.vel[1] + n[2] * d_primL.vel[2];
-        const auto vnR = n[0] * d_primR.vel[0] + n[1] * d_primR.vel[1] + n[2] * d_primR.vel[2];
+    template<DustFluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons huang_bai_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        using Tscal = typename FSpec::Tscal;
+        using Tcons = typename FSpec::Tcons;
 
-        const auto fL = d_hydro_flux_n(d_primL, n, vnL);
-        const auto fR = d_hydro_flux_n(d_primR, n, vnR);
+        const Tscal vn_l = fspec.vn(prim_l, n);
+        const Tscal vn_r = fspec.vn(prim_r, n);
 
-        DustConsState<typename Tprim::Tvec> d_flux{};
+        const Tcons f_l = fspec.flux(prim_l, n, vn_l);
+        const Tcons f_r = fspec.flux(prim_r, n, vn_r);
 
-        if (vnL > 0 && vnR > 0)
-            d_flux = fL;
-        else if (vnL < 0 && vnR < 0)
-            d_flux = fR;
-        else if (vnL < 0 && vnR > 0)
-            d_flux *= 0;
-        else if (vnL > 0 && vnR < 0)
-            d_flux = (fL + fR);
+        Tcons flux{};
 
-        return d_flux;
+        if (vn_l > 0 && vn_r > 0)
+            flux = f_l;
+        else if (vn_l < 0 && vn_r < 0)
+            flux = f_r;
+        else if (vn_l < 0 && vn_r > 0)
+            flux *= 0;
+        else if (vn_l > 0 && vn_r < 0)
+            flux = (f_l + f_r);
+
+        return flux;
     }
 
 } // namespace shammath
