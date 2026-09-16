@@ -36,9 +36,8 @@ namespace {
 NEW_TEST(Unittest, "shamterm/color", 1) {
     ColorStateGuard guard{};
 
-    // Truecolor (24-bit RGB, \x1b[38;2;r;g;bm)
-    // Print a rainbow gradient bar, same idea as the classic
-    // `awk 'BEGIN{...\033[38;2;r;g;bm...}'` truecolor terminal test.
+    // Truecolor (24-bit RGB, \x1b[38;2;r;g;bm): print a rainbow gradient bar exercising the
+    // full RGB range.
     sham::term::enable_colors();
     sham::term::set_color_level(sham::term::ColorLevel::TrueColor);
 
