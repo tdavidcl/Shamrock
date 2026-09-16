@@ -24,48 +24,21 @@
 namespace {
 
     /**
-     * @brief List of known terminal ident that support colors
+     * @brief List of known TERM idents that support basic ANSI/16 colors (SGR codes)
      */
-    static const std::vector<std::string_view> color_support_term{
-        "xterm",
-        "xterm-256",
-        "xterm-256color",
-        "xterm-truecolor",
-        "vt100",
-        "color",
-        "ansi",
-        "cygwin",
-        "linux",
-        "xterm-kitty",
-        "alacritty"};
+    static const std::vector<std::string_view> basic_color_term{
+        "xterm", "vt100", "color", "ansi", "cygwin", "linux"};
 
     /**
-     * @brief detect if terminal emulator support colored outputs
-     *
-     * @return true
-     * @return false
+     * @brief List of known TERM idents that support the 256-color palette (\x1b[38;5;Nm)
      */
-    bool term_support_color(sham::term::TermEnvVars vars) {
+    static const std::vector<std::string_view> ansi256_color_term{"xterm-256", "xterm-256color"};
 
-        if (vars.TERM) {
-            for (auto term : color_support_term) {
-                if (*vars.TERM == term) {
-                    return true;
-                }
-            }
-        }
-
-        if (vars.COLORTERM) {
-            if (*vars.COLORTERM == "truecolor") {
-                return true;
-            }
-            if (*vars.COLORTERM == "24bit") {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    /**
+     * @brief List of known TERM idents that support 24-bit RGB truecolor output (\x1b[38;2;r;g;bm)
+     */
+    static const std::vector<std::string_view> truecolor_term{
+        "xterm-truecolor", "xterm-direct", "xterm-kitty", "alacritty"};
 
     /**
      * @brief Case-insensitive substring search
@@ -127,12 +100,37 @@ namespace {
 
 namespace sham::term {
 
-    void parse_terminal_support(TermEnvVars vars, const term_parse_callback_t &error_callback) {
-        if (term_support_color(vars)) {
-            enable_colors();
-        } else {
-            disable_colors();
+    ColorLevel detect_color_level(TermEnvVars vars) {
+
+        if (vars.COLORTERM) {
+            if (*vars.COLORTERM == "truecolor" || *vars.COLORTERM == "24bit") {
+                return ColorLevel::TrueColor;
+            }
         }
+
+        if (vars.TERM) {
+            for (auto term : truecolor_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::TrueColor;
+                }
+            }
+            for (auto term : ansi256_color_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::ANSI256;
+                }
+            }
+            for (auto term : basic_color_term) {
+                if (*vars.TERM == term) {
+                    return ColorLevel::Basic;
+                }
+            }
+        }
+
+        return ColorLevel::NoColor;
+    }
+
+    void parse_terminal_support(TermEnvVars vars, const term_parse_callback_t &error_callback) {
+        sham::term::set_color_level(detect_color_level(vars));
 
         bool has_envvar_nocolor = bool(vars.NO_COLOR);
         bool has_envvar_color   = bool(vars.CLICOLOR_FORCE);
