@@ -308,6 +308,92 @@ namespace shammodels::sph {
             return get_dt_sph();
         }
 
+        private:
+        /**
+         * @brief Tracks the wall-clock budget for evolve_until(): decides when the next
+         * walltime check is due, and whether the limit has been exceeded.
+         *
+         * NFC extraction of logic previously inlined in evolve_until().
+         */
+        struct WalltimeLimiter {
+            bool active;
+            f64 max_walltime;
+            f64 start_wall_time;
+            i32 next_check_iter;
+
+            inline WalltimeLimiter(bool active, f64 max_walltime)
+                : active(active), max_walltime(max_walltime) {
+                start_wall_time = active ? synced_wtime() : 0;
+                next_check_iter = active ? 1 : std::numeric_limits<i32>::max();
+            }
+
+            inline f64 synced_wtime() {
+                if (active) {
+                    return shamalgs::collective::allreduce_max(shambase::details::get_wtime());
+                }
+                return 0;
+            }
+
+            /// True if the next walltime check is due at this iteration count
+            inline bool due(i32 iter_count) const {
+                return active && iter_count >= next_check_iter;
+            }
+
+            /// Must only be called when due(iter_count) is true. Returns true if the walltime
+            /// limit has been reached, otherwise updates the next check iteration estimate.
+            inline bool exceeded(i32 iter_count) {
+                f64 global_walltime = synced_wtime();
+
+                // if the global walltime is greater than the max walltime
+                if (global_walltime >= max_walltime) {
+                    if (shamcomm::world_rank() == 0) {
+                        logger::info_ln(
+                            "SPH",
+                            sham::format(
+                                "stopping evolve until because of "
+                                "max_walltime = {:.2f}s > {:.2f}s",
+                                global_walltime,
+                                max_walltime));
+                    }
+                    return true;
+                }
+
+                f64 sec_per_iter
+                    = (global_walltime - start_wall_time) / static_cast<f64>(iter_count);
+
+                auto get_remaining_iters = [&](f64 delta_walltime, f64 factor) -> i32 {
+                    if (sec_per_iter > 0) {
+                        f64 tmp = factor * delta_walltime / sec_per_iter;
+                        if (tmp > std::numeric_limits<i32>::max()) {
+                            return std::numeric_limits<i32>::max();
+                        }
+                        return static_cast<i32>(tmp);
+                    }
+                    return 1000; // default to 1000 iterations if sec_per_iter is 0
+                };
+
+                i32 iters_to_limit      = get_remaining_iters(max_walltime - global_walltime, 0.25);
+                i32 iters_to_next_check = iters_to_limit;
+
+                next_check_iter = iter_count + std::max(1, iters_to_next_check);
+
+                if (shamcomm::world_rank() == 0) {
+                    logger::info_ln(
+                        "SPH",
+                        sham::format(
+                            "next walltime check in {:.2f}s (niter = {}) global walltime = "
+                            "{:.2f}s (max_walltime = {:.2f}s)",
+                            iters_to_next_check * sec_per_iter,
+                            iters_to_next_check,
+                            global_walltime,
+                            max_walltime));
+                }
+
+                return false;
+            }
+        };
+
+        public:
         inline EvolveUntilResults evolve_until(
             Tscal target_time, i32 niter_max, f64 max_walltime = -1) {
 
@@ -327,13 +413,6 @@ namespace shammodels::sph {
                         max_walltime));
             }
 
-            auto synced_wtime = [&]() -> f64 {
-                if (walltime_limit_active) {
-                    return shamalgs::collective::allreduce_max(shambase::details::get_wtime());
-                }
-                return 0;
-            };
-
             auto step = [&]() {
                 Tscal dt = get_dt_sph();
                 Tscal t  = get_time();
@@ -349,10 +428,7 @@ namespace shammodels::sph {
                 return evolve_once();
             };
 
-            f64 start_wall_time = (walltime_limit_active) ? synced_wtime() : 0;
-
-            i32 next_walltime_check_iter
-                = walltime_limit_active ? 1 : std::numeric_limits<i32>::max();
+            WalltimeLimiter walltime_limiter(walltime_limit_active, max_walltime);
 
             i32 iter_count = 0;
 
@@ -445,58 +521,13 @@ namespace shammodels::sph {
                 }
 
                 // if walltime limit is active and the next walltime check is due
-                if (walltime_limit_active && iter_count >= next_walltime_check_iter) {
-                    f64 global_walltime = synced_wtime();
-
-                    // if the global walltime is greater than the max walltime
-                    if (global_walltime >= max_walltime) {
-                        if (shamcomm::world_rank() == 0) {
-                            logger::info_ln(
-                                "SPH",
-                                sham::format(
-                                    "stopping evolve until because of "
-                                    "max_walltime = {:.2f}s > {:.2f}s",
-                                    global_walltime,
-                                    max_walltime));
-                        }
-                        return {
-                            .reach_target_time  = false,
-                            .reach_niter_max    = false,
-                            .reach_max_walltime = true,
-                            .iter_count         = iter_count,
-                        };
-                    }
-
-                    f64 sec_per_iter
-                        = (global_walltime - start_wall_time) / static_cast<f64>(iter_count);
-
-                    auto get_remaining_iters = [&](f64 delta_walltime, f64 factor) -> i32 {
-                        if (sec_per_iter > 0) {
-                            f64 tmp = factor * delta_walltime / sec_per_iter;
-                            if (tmp > std::numeric_limits<i32>::max()) {
-                                return std::numeric_limits<i32>::max();
-                            }
-                            return static_cast<i32>(tmp);
-                        }
-                        return 1000; // default to 1000 iterations if sec_per_iter is 0
+                if (walltime_limiter.due(iter_count) && walltime_limiter.exceeded(iter_count)) {
+                    return {
+                        .reach_target_time  = false,
+                        .reach_niter_max    = false,
+                        .reach_max_walltime = true,
+                        .iter_count         = iter_count,
                     };
-
-                    i32 iters_to_limit = get_remaining_iters(max_walltime - global_walltime, 0.25);
-                    i32 iters_to_next_check = iters_to_limit;
-
-                    next_walltime_check_iter = iter_count + std::max(1, iters_to_next_check);
-
-                    if (shamcomm::world_rank() == 0) {
-                        logger::info_ln(
-                            "SPH",
-                            sham::format(
-                                "next walltime check in {:.2f}s (niter = {}) global walltime = "
-                                "{:.2f}s (max_walltime = {:.2f}s)",
-                                iters_to_next_check * sec_per_iter,
-                                iters_to_next_check,
-                                global_walltime,
-                                max_walltime));
-                    }
                 }
             }
 
