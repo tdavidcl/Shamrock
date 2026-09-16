@@ -117,19 +117,10 @@ namespace sham::term {
         std::string background(std::uint8_t r, std::uint8_t g, std::uint8_t b);
     } // namespace colors_24b
 
-    /**
-     * @brief Enable terminal color output.
-     *
-     * Sets color_level() based on detection from the real TERM/COLORTERM process environment
-     * variables (see sham::term::detect_color_level() in sham/term/env.hpp).
-     */
+    /// Enable colors
     void enable_colors();
 
-    /**
-     * @brief Disable all terminal color output.
-     *
-     * Sets color_level() to ColorLevel::NoColor.
-     */
+    /// Disable all colors
     void disable_colors();
 
     /**

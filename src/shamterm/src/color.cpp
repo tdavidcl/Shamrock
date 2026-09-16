@@ -15,37 +15,12 @@
  */
 
 #include <sham/term/color.hpp>
-#include <sham/term/env.hpp>
-#include <string_view>
-#include <cstdlib>
-#include <optional>
 #include <string>
 
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
-    /// Detected/forced terminal color support level, as set by sham::term::set_color_level.
-    /// Single source of truth for both "are colors enabled" (level != NoColor) and "which tiered
-    /// palette can be rendered".
+    /// Currently set terminal color support level, as set by sham::term::set_color_level.
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
-
-    /// Read a raw process environment variable as an optional string_view, for the detection
-    /// performed by detected_color_level() below.
-    std::optional<std::string_view> getenv_view(const char *name) {
-        const char *value = std::getenv(name);
-        if (value == nullptr) {
-            return std::nullopt;
-        }
-        return std::string_view(value);
-    }
-
-    /// The terminal's color support level, detected once from the real TERM/COLORTERM process
-    /// environment variables (see sham::term::detect_color_level); the environment does not
-    /// change during the process lifetime, so the result is cached in a static local.
-    sham::term::ColorLevel detected_color_level() {
-        static const sham::term::ColorLevel level = sham::term::detect_color_level(
-            {.TERM = getenv_view("TERM"), .COLORTERM = getenv_view("COLORTERM")});
-        return level;
-    }
 
     const char *_empty_str     = "";
     const char *_esc_char      = TERM_ESCAPTE_CHAR;
@@ -127,12 +102,10 @@ namespace sham::term {
         }
     } // namespace colors_24b
 
-    /// Enable colors: set the level based on detection from the real TERM/COLORTERM process
-    /// environment variables.
-    void enable_colors() { set_color_level(detected_color_level()); }
+    /// Enable colors
+    void enable_colors() { color_level_value = ColorLevel::Basic; }
 
-    /// Disable all colors: no tier is emitted anymore, regardless of the previously
-    /// detected/forced level.
+    /// Disable all colors
     void disable_colors() { color_level_value = ColorLevel::NoColor; }
 
     /// Are colors enabled
