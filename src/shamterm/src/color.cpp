@@ -20,6 +20,7 @@
 #define TERM_ESCAPTE_CHAR "\x1b["
 namespace {
     /// Currently set terminal color support level, as set by sham::term::set_color_level.
+    /// This variable should only be accessible through color_level() and set_color_level()
     sham::term::ColorLevel color_level_value = sham::term::ColorLevel::NoColor;
 
     const char *_empty_str     = "";
@@ -43,6 +44,16 @@ namespace sham::term {
 
     ColorLevel color_level() { return color_level_value; }
     void set_color_level(ColorLevel level) { color_level_value = level; }
+
+    /// Enable colors
+    /// TODO: should set to the result of the color max(color_detect(), Basic)
+    void enable_colors() { set_color_level(ColorLevel::Basic); }
+
+    /// Disable all colors
+    void disable_colors() { set_color_level(ColorLevel::NoColor); }
+
+    /// Are colors enabled
+    bool are_colors_enabled() { return color_level() != ColorLevel::NoColor; }
 
     namespace style {
         const char *reset() { return are_colors_enabled() ? _reset : _empty_str; }
@@ -101,14 +112,5 @@ namespace sham::term {
             return build(48, r, g, b);
         }
     } // namespace colors_24b
-
-    /// Enable colors
-    void enable_colors() { color_level_value = ColorLevel::Basic; }
-
-    /// Disable all colors
-    void disable_colors() { color_level_value = ColorLevel::NoColor; }
-
-    /// Are colors enabled
-    bool are_colors_enabled() { return color_level_value != ColorLevel::NoColor; }
 
 } // namespace sham::term

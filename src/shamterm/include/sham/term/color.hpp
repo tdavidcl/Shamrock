@@ -47,6 +47,15 @@ namespace sham::term {
      */
     void set_color_level(ColorLevel level);
 
+    /// Enable colors
+    void enable_colors();
+
+    /// Disable all colors
+    void disable_colors();
+
+    /// Query whether terminal color output is currently enabled.
+    bool are_colors_enabled();
+
     /**
      * @brief Terminal text styling escape sequences (bold, faint, underline, blink, reset).
      */
@@ -110,16 +119,5 @@ namespace sham::term {
         /// Escape sequence to set the given RGB background color.
         std::string background(std::uint8_t r, std::uint8_t g, std::uint8_t b);
     } // namespace colors_24b
-
-    /// Enable colors
-    void enable_colors();
-
-    /// Disable all colors
-    void disable_colors();
-
-    /**
-     * @brief Query whether terminal color output is currently enabled.
-     */
-    bool are_colors_enabled();
 
 } // namespace sham::term
