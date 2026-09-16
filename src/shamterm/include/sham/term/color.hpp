@@ -27,7 +27,7 @@ namespace sham::term {
     enum class ColorLevel {
         /// No color support, plain ASCII output only.
         NoColor = 0,
-        /// ANSI/16 colors (basic SGR codes).
+        /// ANSI/16 colors (basic SGR codes), \x1b[3Xm.
         Basic = 1,
         /// 256-color palette (16 ANSI + 216-color cube + 24 grayscale), \x1b[38;5;Nm.
         ANSI256 = 2,
