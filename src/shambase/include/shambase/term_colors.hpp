@@ -68,6 +68,7 @@ namespace shambase {
         inline std::string col256_foreground(std::uint8_t index) {
             return sham::term::colors_256::foreground(index);
         };
+
         /// Get the 256-color palette background terminal escape char (empty if unsupported)
         inline std::string col256_background(std::uint8_t index) {
             return sham::term::colors_256::background(index);
@@ -77,6 +78,7 @@ namespace shambase {
         inline std::string rgb_foreground(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
             return sham::term::colors_24b::foreground(r, g, b);
         };
+
         /// Get the 24-bit RGB truecolor background terminal escape char (empty if unsupported)
         inline std::string rgb_background(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
             return sham::term::colors_24b::background(r, g, b);
