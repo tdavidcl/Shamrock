@@ -65,8 +65,8 @@ namespace sham::term {
 
     namespace colors_256 {
         namespace {
-            /// Build a \x1b[<mode>;5;Nm 256-color escape sequence, or an empty string if the
-            /// terminal was not detected (or forced) to support the 256-color palette.
+            /// Build a \x1b[<mode>;5;Nm 256-color escape sequence, or an empty string if
+            /// color_level_value is set below ColorLevel::ANSI256.
             std::string build(int mode, std::uint8_t index) {
                 if (color_level_value < ColorLevel::ANSI256) {
                     return "";
@@ -82,8 +82,8 @@ namespace sham::term {
 
     namespace colors_24b {
         namespace {
-            /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if the
-            /// terminal was not detected (or forced) to support truecolor.
+            /// Build a \x1b[<mode>;2;r;g;bm truecolor escape sequence, or an empty string if
+            /// color_level_value is set below ColorLevel::TrueColor.
             std::string build(int mode, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
                 if (color_level_value < ColorLevel::TrueColor) {
                     return "";
