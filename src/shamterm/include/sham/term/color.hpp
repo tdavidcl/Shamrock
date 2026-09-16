@@ -22,13 +22,7 @@
 namespace sham::term {
 
     /**
-     * @brief Terminal color support tiers, from no color support to 24-bit RGB truecolor.
-     *
-     * Detected by parse_terminal_support() (see sham/term/env.hpp) from the TERM/COLORTERM
-     * environment variables; COLORTERM is the override lever (COLORTERM=truecolor/24bit forces
-     * TrueColor regardless of TERM). This is the single source of truth for color output: it
-     * doubles as the overall on/off switch (are_colors_enabled() is level != NoColor) and decides
-     * which tiered palette (colors_8b/colors_256/colors_24b) the terminal can actually render.
+     * @brief The possible levels of terminal color support.
      */
     enum class ColorLevel {
         /// No color support, plain ASCII output only.
