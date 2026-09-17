@@ -778,60 +778,6 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
 
 
 # %%
-# Figure eight
-# ------------
-# The one choreography here that is marginally stable (every Floquet multiplier
-# sits on the unit circle), so it can be run for many periods without drifting
-# off the loop.
-snapshots = run_choreography("figure_eight")
-
-# %%
-# Super eight (4 bodies)
-snapshots = run_choreography("super_eight")
-
-# %%
-# 5-body eight
-snapshots = run_choreography("eight_5body")
-
-# %%
-# 6-body eight
-snapshots = run_choreography("eight_6body")
-
-# %%
-# 5-body chain
-snapshots = run_choreography("chain_5body")
-
-# %%
-# 6-body chain (3 lobes)
-snapshots = run_choreography("chain_6body")
-
-# %%
-# 6-body chain (4 lobes)
-# The most unstable orbit of the set, at 12 e-folds per period, so it is only
-# run for a single period.
-snapshots = run_choreography("chain_6body_4")
-
-# %%
-# Lagrange equilateral triangle
-# -----------------------------
-# The simplest choreography of all: N equal masses on a circle, each one
-# following the same orbit a fraction of a period behind the previous one.
-snapshots = run_choreography("triangle_ring")
-
-# %%
-# Square ring (4 bodies)
-snapshots = run_choreography("square_ring")
-
-# %%
-# Pentagon ring (5 bodies)
-snapshots = run_choreography("pentagon_ring")
-
-# %%
-# Hexagon ring (6 bodies)
-snapshots = run_choreography("hexagon_ring")
-
-
-# %%
 # Comparing the drift with the growth predicted by the Floquet rate
 # =================================================================
 #
@@ -844,11 +790,11 @@ snapshots = run_choreography("hexagon_ring")
 #     E(t) \simeq E_0 \, e^{\lambda t}
 #
 # and the measured drift can be checked against it without fitting the rate.
-# The drift was already recorded while each orbit ran above, against the high
-# order reference, so nothing is integrated a second time here. In the panels
-# below only the offset of the predicted line is fitted; its slope is fixed by
-# ``lyapunov_rate``, and the line is only drawn at all when it describes the
-# measurement to within a factor of thirty.
+# ``run_choreography`` records that drift against the high order reference while
+# each orbit runs, so the deviation plotted underneath every trajectory below
+# costs no extra integration. Only the offset of the predicted line is fitted;
+# its slope is fixed by ``lyapunov_rate``, and the line is only drawn at all when
+# it describes the measurement to within a factor of thirty.
 #
 # The orbits fall into three groups:
 #
@@ -869,7 +815,12 @@ def plot_choreography_deviation(runs, ncols=4):
     import matplotlib.pyplot as plt
 
     nrows = int(np.ceil(len(runs) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.7 * ncols, 4.0 * nrows), squeeze=False)
+    # a lone panel gets more room, otherwise the axis labels crowd it out at the
+    # documentation style's font size
+    panel_w, panel_h = (6.6, 4.6) if len(runs) == 1 else (4.7, 4.0)
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(panel_w * ncols, panel_h * nrows), squeeze=False
+    )
     for unused in axes.ravel():
         unused.set_visible(False)
 
@@ -912,8 +863,77 @@ def plot_choreography_deviation(runs, ncols=4):
 
 
 # %%
-# Every orbit was already integrated once by ``run_choreography``, so the figure
-# is drawn straight from what those runs measured.
+# Figure eight
+# ------------
+# The one choreography here that is marginally stable (every Floquet multiplier
+# sits on the unit circle), so it can be run for many periods without drifting
+# off the loop.
+snapshots = run_choreography("figure_eight")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["figure_eight"]], ncols=1)
+
+# %%
+# Super eight (4 bodies)
+snapshots = run_choreography("super_eight")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["super_eight"]], ncols=1)
+
+# %%
+# 5-body eight
+snapshots = run_choreography("eight_5body")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["eight_5body"]], ncols=1)
+
+# %%
+# 6-body eight
+snapshots = run_choreography("eight_6body")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["eight_6body"]], ncols=1)
+
+# %%
+# 5-body chain
+snapshots = run_choreography("chain_5body")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["chain_5body"]], ncols=1)
+
+# %%
+# 6-body chain (3 lobes)
+snapshots = run_choreography("chain_6body")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["chain_6body"]], ncols=1)
+
+# %%
+# 6-body chain (4 lobes)
+# The most unstable orbit of the set, at 12 e-folds per period, so it is only
+# run for a single period.
+snapshots = run_choreography("chain_6body_4")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["chain_6body_4"]], ncols=1)
+
+# %%
+# Lagrange equilateral triangle
+# -----------------------------
+# The simplest choreography of all: N equal masses on a circle, each one
+# following the same orbit a fraction of a period behind the previous one.
+snapshots = run_choreography("triangle_ring")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["triangle_ring"]], ncols=1)
+
+# %%
+# Square ring (4 bodies)
+snapshots = run_choreography("square_ring")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["square_ring"]], ncols=1)
+
+# %%
+# Pentagon ring (5 bodies)
+snapshots = run_choreography("pentagon_ring")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["pentagon_ring"]], ncols=1)
+
+# %%
+# Hexagon ring (6 bodies)
+snapshots = run_choreography("hexagon_ring")
+plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["hexagon_ring"]], ncols=1)
+
+
+# %%
+# All of them together
+# --------------------
+#
+# The same measurements laid side by side, which is where the split into the
+# three groups above is easiest to see. Nothing is integrated again here: every
+# orbit was measured once, while it ran.
 plot_choreography_deviation(
     [CHOREOGRAPHY_DEVIATIONS[key] for key in CHOREOGRAPHIES if key in CHOREOGRAPHY_DEVIATIONS]
 )
