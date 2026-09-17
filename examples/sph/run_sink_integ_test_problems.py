@@ -700,7 +700,14 @@ def reference_solution(positions, velocities, sink_mass, tmax, stop_separation):
 
 # %%
 # Run a choreography, plot its trajectories and record how far it drifts
-def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_plot_points=2000):
+def run_choreography(
+    key,
+    length_scale=1.0,
+    sink_mass=1.0,
+    eta_sink=None,
+    max_plot_points=2000,
+    max_steps=100000,
+):
     choreography = CHOREOGRAPHIES[key]
     # Each entry carries its own eta_sink: the sink timestep has to shrink as
     # the Floquet rate grows, otherwise the orbit leaves the loop within the
@@ -739,9 +746,12 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
 
     times = []
     deviations = []
+    steps = 0
 
     def record_deviation(snapshot):
         """Measure the drift, and stop the run once it stops meaning anything."""
+        nonlocal steps
+        steps += 1
         current_time = snapshot["time"]
         if current_time > reference.t[-1]:
             return True
@@ -750,6 +760,13 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
         deviation = float(np.max(np.linalg.norm(pos - exact, axis=1)))
         times.append(current_time / period)
         deviations.append(deviation)
+        # A sink integrator that loses energy pulls the sinks together, and the
+        # CFL timestep collapses with the separations, so a broken one grinds
+        # away for as long as it is allowed to. The budget bounds that: the
+        # heaviest orbit here takes about 20000 steps when the integrator is
+        # healthy, so this leaves a factor of five.
+        if steps >= max_steps:
+            return True
         # past half a loop radius the orbit has left the choreography for good:
         # the comparison says nothing more and the timestep collapses into the
         # close encounters of the break-up. Never cut the orbit plot short.
@@ -757,12 +774,14 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
 
     snapshots = run_sim(model, tmax, use_dt=None, step_callback=record_deviation)
 
-    CHOREOGRAPHY_DEVIATIONS[key] = (
-        np.array(times),
-        np.array(deviations),
-        choreography,
-        loop_radius,
-    )
+    CHOREOGRAPHY_DEVIATIONS[key] = {
+        "times": np.array(times),
+        "deviations": np.array(deviations),
+        "choreography": choreography,
+        "loop_radius": loop_radius,
+        "steps": steps,
+        "reached_window": snapshots[-1]["time"] >= orbit_tmax,
+    }
 
     # these runs take many steps per period, so thin the trajectory before plotting
     stride = max(1, len(snapshots) // max_plot_points)
@@ -858,7 +877,11 @@ def plot_choreography_deviation(runs, ncols=4):
     for unused in axes.ravel():
         unused.set_visible(False)
 
-    for index, (times, deviations, choreography, loop_radius) in enumerate(runs):
+    for index, run in enumerate(runs):
+        times = run["times"]
+        deviations = run["deviations"]
+        choreography = run["choreography"]
+        loop_radius = run["loop_radius"]
         ax = axes[index // ncols][index % ncols]
         ax.set_visible(True)
         rate = choreography["lyapunov_rate"]
@@ -977,3 +1000,70 @@ plot_choreography_deviation([CHOREOGRAPHY_DEVIATIONS["hexagon_ring"]], ncols=1)
 plot_choreography_deviation(
     [CHOREOGRAPHY_DEVIATIONS[key] for key in CHOREOGRAPHIES if key in CHOREOGRAPHY_DEVIATIONS]
 )
+
+
+# %%
+# Check the runs, so this is a test and not just a picture
+# --------------------------------------------------------
+#
+# Every choreography has to still be on its loop at the end of the window its
+# trajectory was plotted over. This is what turns the example into an
+# integration test: the orbits are exact solutions, the initial conditions are
+# refined to round-off, and the reference is integrated to near machine
+# precision, so anything left is the sink integrator's own error.
+#
+# With the integrator as it stands the worst case is the four lobe chain, at
+# 7.3e-3 of a loop radius, so the tolerance below leaves a factor of about
+# seven. It was checked the other way too, by mutating the predictor's half
+# kick from ``dt / 2`` to ``dt / 1.5``: every one of the eleven orbits then
+# fails, the mildest of them drifting 0.18 of a loop radius, so the tolerance
+# sits with a factor of seven below it and a factor of three above the
+# weakest thing it has to catch.
+DEVIATION_TOLERANCE = 0.05
+
+
+def check_choreography_deviations(tolerance=DEVIATION_TOLERANCE):
+    """Raise if any choreography drifted too far over its plotted window."""
+    failures = []
+
+    for key, run in CHOREOGRAPHY_DEVIATIONS.items():
+        choreography = run["choreography"]
+        nper = choreography["n_periods"]
+        plotted = run["times"] <= nper
+
+        if not np.any(plotted):
+            failures.append(f"{key}: nothing was measured inside the plotted window")
+            continue
+
+        drift = float(run["deviations"][plotted][-1]) / run["loop_radius"]
+        # a run that never reached the end of its window ran out of timestep
+        # budget, which means the sinks were pulled together hard enough for the
+        # CFL condition to collapse
+        ran_out = not run["reached_window"]
+        status = "FAILED" if (drift > tolerance or ran_out) else "ok"
+        print(
+            "{:16s} {:>6d} steps, drift after {:>4} period(s): {:.2e} of a loop radius  [{}]".format(
+                key, run["steps"], nper, drift, status
+            )
+        )
+
+        if ran_out:
+            failures.append(
+                "{}: ran out of timestep budget after {} steps, only reaching {:.2f} of the "
+                "{} period(s) it should cover".format(
+                    key, run["steps"], float(run["times"][-1]), nper
+                )
+            )
+        elif drift > tolerance:
+            failures.append(
+                f"{key}: drifted {drift:.2e} of a loop radius after {nper} period(s), tolerance is {tolerance:g}"
+            )
+
+    if failures:
+        raise RuntimeError(
+            "the sink integrator is not accurate enough on:\n  " + "\n  ".join(failures)
+        )
+    print("\nall choreographies stayed on their loop")
+
+
+check_choreography_deviations()
