@@ -723,20 +723,38 @@ snapshots = run_choreography("hexagon_ring")
 #   a couple of periods.
 
 
-def reference_solution(positions, velocities, sink_mass, tmax):
-    """Integrate the same initial conditions to near machine precision."""
+def reference_solution(positions, velocities, sink_mass, tmax, stop_separation):
+    """Integrate the same initial conditions to near machine precision.
+
+    Once an unstable choreography has broken up the sinks start having close
+    encounters, which costs the reference integrator an enormous number of
+    steps for a stretch that is past the point of being interesting anyway.
+    ``stop_separation`` ends the integration there; it is set below the closest
+    approach of every intact orbit, so it only ever triggers after break-up.
+    """
     from scipy.integrate import solve_ivp
 
     nsink = len(positions)
     masses = np.full(nsink, sink_mass)
 
-    def rhs(_t, state):
+    def separations(state):
         pos = state[: 3 * nsink].reshape(nsink, 3)
         sep = pos[np.newaxis, :, :] - pos[:, np.newaxis, :]
         r_squared = np.sum(sep**2, axis=-1)
         np.fill_diagonal(r_squared, np.inf)
+        return sep, r_squared
+
+    def rhs(_t, state):
+        sep, r_squared = separations(state)
         acc = G * np.einsum("ij,ijk,j->ik", r_squared ** (-1.5), sep, masses)
         return np.concatenate([state[3 * nsink :], acc.ravel()])
+
+    def close_approach(_t, state):
+        _, r_squared = separations(state)
+        return np.sqrt(np.min(r_squared)) - stop_separation
+
+    close_approach.terminal = True
+    close_approach.direction = -1
 
     state0 = np.concatenate([np.asarray(positions).ravel(), np.asarray(velocities).ravel()])
     return solve_ivp(
@@ -747,6 +765,7 @@ def reference_solution(positions, velocities, sink_mass, tmax):
         rtol=3e-14,
         atol=1e-16,
         dense_output=True,
+        events=close_approach,
     )
 
 
@@ -769,7 +788,9 @@ def measure_choreography_deviation(key, n_periods, length_scale=1.0, sink_mass=1
     )
 
     tmax = n_periods * period
-    reference = reference_solution(positions, velocities, sink_mass, 1.02 * tmax)
+    reference = reference_solution(
+        positions, velocities, sink_mass, 1.02 * tmax, 0.05 * loop_radius
+    )
 
     times = []
     deviations = []
@@ -784,9 +805,10 @@ def measure_choreography_deviation(key, n_periods, length_scale=1.0, sink_mass=1
         deviation = float(np.max(np.linalg.norm(pos - exact, axis=1)))
         times.append(current_time / period)
         deviations.append(deviation)
-        if deviation > 2.0 * loop_radius:
-            # the orbit has broken up, comparing it to the reference stops
-            # meaning anything past this point
+        if deviation > 0.5 * loop_radius:
+            # the orbit has left the choreography for good; past this point the
+            # comparison says nothing and the timestep collapses into the close
+            # encounters of the break-up, which is expensive for no benefit
             break
 
     return np.array(times), np.array(deviations), choreography, loop_radius
@@ -794,12 +816,17 @@ def measure_choreography_deviation(key, n_periods, length_scale=1.0, sink_mass=1
 
 # %%
 # Plot the measured drift next to the predicted growth
-def plot_choreography_deviation(runs):
+def plot_choreography_deviation(runs, ncols=4):
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, len(runs), figsize=(5.2 * len(runs), 4.4), squeeze=False)
+    nrows = int(np.ceil(len(runs) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.7 * ncols, 4.0 * nrows), squeeze=False)
+    for unused in axes.ravel():
+        unused.set_visible(False)
 
-    for ax, (times, deviations, choreography, loop_radius) in zip(axes[0], runs):
+    for index, (times, deviations, choreography, loop_radius) in enumerate(runs):
+        ax = axes[index // ncols][index % ncols]
+        ax.set_visible(True)
         rate = choreography["lyapunov_rate"]
         ax.semilogy(times, np.maximum(deviations, 1e-18), lw=1.4, label="Shamrock")
 
@@ -823,21 +850,34 @@ def plot_choreography_deviation(runs):
         ax.set_ylim(1e-10, 10.0 * loop_radius)
         ax.set_xlim(0.0, times[-1])
         ax.grid(True, alpha=0.3)
-        ax.legend()
+        ax.legend(fontsize=8)
         ax.set_title(
-            "{}\n$\\lambda$ = {:.2f} e-folds/period{}".format(choreography["name"], rate, note)
+            "{}\n$\\lambda$ = {:.2f} e-folds/period{}".format(choreography["name"], rate, note),
+            fontsize=9,
         )
+        if index % ncols == 0:
+            ax.set_ylabel("deviation from the reference (AU)")
 
-    axes[0][0].set_ylabel("deviation from the reference (AU)")
     fig.tight_layout()
     plt.show()
 
 
 # %%
+# The number of periods is chosen per orbit: just past the point where the
+# unstable ones break up and the comparison saturates, and long enough for the
+# marginally stable figure eight to show that it does not.
 plot_choreography_deviation(
     [
-        measure_choreography_deviation("super_eight", 3.5),
         measure_choreography_deviation("figure_eight", 10),
+        measure_choreography_deviation("super_eight", 3.5),
+        measure_choreography_deviation("eight_5body", 2.5),
+        measure_choreography_deviation("eight_6body", 2.5),
+        measure_choreography_deviation("chain_5body", 2.5),
+        measure_choreography_deviation("chain_6body", 2.5),
+        measure_choreography_deviation("chain_6body_4", 2.0),
+        measure_choreography_deviation("triangle_ring", 5),
+        measure_choreography_deviation("square_ring", 5),
+        measure_choreography_deviation("pentagon_ring", 5),
         measure_choreography_deviation("hexagon_ring", 5),
     ]
 )
