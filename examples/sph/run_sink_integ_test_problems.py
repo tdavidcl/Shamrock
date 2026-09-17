@@ -691,3 +691,153 @@ snapshots = run_choreography("pentagon_ring")
 # %%
 # Hexagon ring (6 bodies)
 snapshots = run_choreography("hexagon_ring")
+
+
+# %%
+# Comparing the drift with the growth predicted by the Floquet rate
+# =================================================================
+#
+# ``lyapunov_rate`` in the table above is the largest Floquet exponent of the
+# orbit, in e-folds per period, taken from the monodromy matrix of the refined
+# solution. It is a property of the orbit and not of the solver, so it predicts
+# how fast *any* integration error gets amplified,
+#
+# .. math::
+#     E(t) \simeq E_0 \, e^{\lambda t}
+#
+# and the measured drift can be checked against it without fitting the rate.
+# Running the same initial conditions through a high order reference integrator
+# isolates the integration error from any error in the initial conditions, and
+# in the plots below only the offset of the dashed line is fitted: its slope is
+# fixed by ``lyapunov_rate``.
+#
+# The three cases are deliberately different:
+#
+# - the super eight follows the predicted growth over about six decades, until
+#   the orbit breaks up and the comparison saturates;
+# - the figure eight has ``lyapunov_rate = 0``, so nothing grows exponentially
+#   and its error just wanders around a small value for ten periods;
+# - the hexagon ring drifts far more slowly than its rate allows. Its error
+#   does eventually grow at exactly that rate, but the leapfrog error happens
+#   to overlap the unstable eigenvector only weakly, which delays the onset by
+#   a couple of periods.
+
+
+def reference_solution(positions, velocities, sink_mass, tmax):
+    """Integrate the same initial conditions to near machine precision."""
+    from scipy.integrate import solve_ivp
+
+    nsink = len(positions)
+    masses = np.full(nsink, sink_mass)
+
+    def rhs(_t, state):
+        pos = state[: 3 * nsink].reshape(nsink, 3)
+        sep = pos[np.newaxis, :, :] - pos[:, np.newaxis, :]
+        r_squared = np.sum(sep**2, axis=-1)
+        np.fill_diagonal(r_squared, np.inf)
+        acc = G * np.einsum("ij,ijk,j->ik", r_squared ** (-1.5), sep, masses)
+        return np.concatenate([state[3 * nsink :], acc.ravel()])
+
+    state0 = np.concatenate([np.asarray(positions).ravel(), np.asarray(velocities).ravel()])
+    return solve_ivp(
+        rhs,
+        (0.0, tmax),
+        state0,
+        method="DOP853",
+        rtol=3e-14,
+        atol=1e-16,
+        dense_output=True,
+    )
+
+
+# %%
+# Run a choreography and record how far it drifts from the reference
+def measure_choreography_deviation(key, n_periods, length_scale=1.0, sink_mass=1.0):
+    choreography = CHOREOGRAPHIES[key]
+    positions, velocities, period = scale_choreography(choreography, length_scale, sink_mass)
+    nsink = len(positions)
+    loop_radius = choreography["loop_radius"] * length_scale
+
+    ctx, model = build_sink_sph_model(
+        positions=positions,
+        velocities=velocities,
+        masses=[sink_mass] * nsink,
+        accretion_radii=[0.01 * loop_radius] * nsink,
+        box_extent=3.0 * loop_radius,
+        eta_sink=choreography["eta_sink"],
+        show_cfl_detail=False,
+    )
+
+    tmax = n_periods * period
+    reference = reference_solution(positions, velocities, sink_mass, 1.02 * tmax)
+
+    times = []
+    deviations = []
+    current_time = 0.0
+    while current_time < tmax:
+        model.timestep()
+        current_time = model.get_time()
+        if current_time > reference.t[-1]:
+            break
+        pos = np.array([sink["pos"] for sink in model.get_sinks()])
+        exact = reference.sol(current_time)[: 3 * nsink].reshape(nsink, 3)
+        deviation = float(np.max(np.linalg.norm(pos - exact, axis=1)))
+        times.append(current_time / period)
+        deviations.append(deviation)
+        if deviation > 2.0 * loop_radius:
+            # the orbit has broken up, comparing it to the reference stops
+            # meaning anything past this point
+            break
+
+    return np.array(times), np.array(deviations), choreography, loop_radius
+
+
+# %%
+# Plot the measured drift next to the predicted growth
+def plot_choreography_deviation(runs):
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, len(runs), figsize=(5.2 * len(runs), 4.4), squeeze=False)
+
+    for ax, (times, deviations, choreography, loop_radius) in zip(axes[0], runs):
+        rate = choreography["lyapunov_rate"]
+        ax.semilogy(times, np.maximum(deviations, 1e-18), lw=1.4, label="Shamrock")
+
+        # the slope is fixed by the Floquet rate, only the offset is fitted,
+        # over the stretch that is above round-off and below saturation
+        window = (deviations > 1e-6) & (deviations < 0.05 * loop_radius)
+        note = ""
+        if rate > 0 and np.count_nonzero(window) > 10:
+            offset = np.exp(np.median(np.log(deviations[window]) - rate * times[window]))
+            predicted = offset * np.exp(rate * times)
+            # only claim agreement when the fixed slope really does describe the
+            # measurement, otherwise the unstable mode has not taken over inside
+            # the window and drawing the line would be misleading
+            spread = np.max(np.abs(np.log(deviations[window] / predicted[window])))
+            if spread < np.log(30.0):
+                ax.semilogy(times, predicted, "k--", lw=1.2, label=r"$\propto e^{\lambda t}$")
+            else:
+                note = "\nunstable mode not yet dominant"
+
+        ax.set_xlabel("time / period")
+        ax.set_ylim(1e-10, 10.0 * loop_radius)
+        ax.set_xlim(0.0, times[-1])
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        ax.set_title(
+            "{}\n$\\lambda$ = {:.2f} e-folds/period{}".format(choreography["name"], rate, note)
+        )
+
+    axes[0][0].set_ylabel("deviation from the reference (AU)")
+    fig.tight_layout()
+    plt.show()
+
+
+# %%
+plot_choreography_deviation(
+    [
+        measure_choreography_deviation("super_eight", 3.5),
+        measure_choreography_deviation("figure_eight", 10),
+        measure_choreography_deviation("hexagon_ring", 5),
+    ]
+)
