@@ -480,7 +480,7 @@ namespace shammodels::sph {
             auto update_state = [&]() {
                 std::string stats_str
                     = last_step_log ? sham::format(
-                                          "rate = {:.3e} npart = {} tcompute = {:e}",
+                                          "rate = {:.3e} [part/s] npart = {} tcompute = {:e} [s]",
                                           last_step_log->rate,
                                           f64(last_step_log->npart),
                                           last_step_log->tcompute)
@@ -489,40 +489,41 @@ namespace shammodels::sph {
                 std::string tsimhr_str
                     = (last_step_log && last_step_log->tcompute > 0)
                           ? sham::format(
-                                " tsim/hr = {:.3e} [t/hr]",
+                                "tsim/hr = {:.3e} [t/hr]",
                                 get_dt_sph() * (3600.0 / last_step_log->tcompute))
-                          : " tsim/hr = ....... [t/hr]";
+                          : "tsim/hr = ....... [t/hr]";
 
                 std::vector<std::string> criteria;
                 criteria.push_back(
-                    sham::format("{:.3e}/{:.3e}", get_time() - t_start, target_time - t_start));
+                    sham::format("t: {:.2e}/{:.2e}", get_time() - t_start, target_time - t_start));
                 if (niter_limit_active) {
-                    criteria.push_back(sham::format("{}/{}", iter_count, niter_max));
+                    criteria.push_back(sham::format("n: {}/{}", iter_count, niter_max));
                 }
                 if (walltime_limit_active) {
                     criteria.push_back(
                         sham::format(
-                            "{:.2f}/{:.2f}",
+                            "wt: {:.2f}/{:.2f}",
                             walltime_limiter.elapsed_local(),
                             max_walltime - walltime_limiter.start_wall_time));
                 }
 
-                tsimhr_str += " ";
+                std::string criteria_stop = "";
                 for (size_t i = 0; i < criteria.size(); i++) {
                     if (i > 0) {
-                        tsimhr_str += " | ";
+                        criteria_stop += " | ";
                     }
-                    tsimhr_str += criteria[i];
+                    criteria_stop += criteria[i];
                 }
 
                 block.print(
                     sham::format(
-                        "t = {:.5e} dt = {:.5e} {}\n{}{}",
+                        "t = {:.5e} dt = {:.5e} | {}\n{} {} {}",
                         get_time(),
                         get_dt_sph(),
                         stats_str,
+                        tsimhr_str,
                         make_progress_bar(get_time() - t_start, target_time - t_start, 40),
-                        tsimhr_str),
+                        criteria_stop),
                     2);
             };
 
