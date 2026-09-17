@@ -109,8 +109,12 @@ def correct_sink_velocities_zero_momentum(velocities, masses):
 
 # %%
 # Run a simple orbit evolution and collect sink snapshots
-def run_sim(model, max_time, use_dt=None):
-    """Evolve binary orbit until max_time"""
+def run_sim(model, max_time, use_dt=None, step_callback=None):
+    """Evolve binary orbit until max_time
+
+    ``step_callback`` is handed each new snapshot as it is produced; returning
+    ``True`` from it ends the run early.
+    """
     snapshots = []
     current_time = 0.0
 
@@ -138,12 +142,22 @@ def run_sim(model, max_time, use_dt=None):
             }
         )
 
+        if step_callback is not None and step_callback(snapshots[-1]):
+            break
+
     return snapshots
 
 
 # %%
 # Plot complete orbital trajectories
-def plot_orbit_trajectory(snapshots, suptitle):
+def plot_orbit_trajectory(snapshots, suptitle, solid_steps=None):
+    """Plot the sink trajectories.
+
+    ``solid_steps`` splits the trace: the first ``solid_steps`` snapshots are
+    drawn solid and whatever follows is drawn dashed in the same colour. The
+    choreographies use it to show the extra stretch their deviation measurement
+    needs without cluttering the orbit itself.
+    """
     import matplotlib.pyplot as plt
 
     sinks_positions = np.array([snap["positions"] for snap in snapshots])
@@ -152,8 +166,11 @@ def plot_orbit_trajectory(snapshots, suptitle):
 
     print(sinks_positions.shape)
 
-    # Extract trajectories for both sinks
-    sink2_positions = np.array([snap["positions"][1] for snap in snapshots])
+    if solid_steps is None:
+        solid_steps = nstep
+    # the dashed part starts one step early so the two segments join up
+    dashed_start = max(solid_steps - 1, 0)
+    has_dashed = solid_steps < nstep
 
     fig = plt.figure(figsize=(12, 5))
     fig.suptitle(suptitle)
@@ -162,15 +179,24 @@ def plot_orbit_trajectory(snapshots, suptitle):
     ax3d = fig.add_subplot(121, projection="3d")
 
     for isink in range(nsink):
-        ax3d.plot(
-            sinks_positions[:, isink, 0],
-            sinks_positions[:, isink, 1],
-            sinks_positions[:, isink, 2],
+        (line,) = ax3d.plot(
+            sinks_positions[:solid_steps, isink, 0],
+            sinks_positions[:solid_steps, isink, 1],
+            sinks_positions[:solid_steps, isink, 2],
             "o-",
             label=f"Sink {isink + 1}",
             markersize=3,
             linewidth=1,
         )
+        if has_dashed:
+            ax3d.plot(
+                sinks_positions[dashed_start:, isink, 0],
+                sinks_positions[dashed_start:, isink, 1],
+                sinks_positions[dashed_start:, isink, 2],
+                "--",
+                color=line.get_color(),
+                linewidth=1,
+            )
     ax3d.set_xlabel("x (AU)")
     ax3d.set_ylabel("y (AU)")
     ax3d.set_zlabel("z (AU)")
@@ -182,14 +208,22 @@ def plot_orbit_trajectory(snapshots, suptitle):
     ax2d = fig.add_subplot(122)
 
     for isink in range(nsink):
-        ax2d.plot(
-            sinks_positions[:, isink, 0],
-            sinks_positions[:, isink, 1],
+        (line,) = ax2d.plot(
+            sinks_positions[:solid_steps, isink, 0],
+            sinks_positions[:solid_steps, isink, 1],
             "o-",
             label=f"Sink {isink + 1}",
             markersize=1,
             linewidth=1,
         )
+        if has_dashed:
+            ax2d.plot(
+                sinks_positions[dashed_start:, isink, 0],
+                sinks_positions[dashed_start:, isink, 1],
+                "--",
+                color=line.get_color(),
+                linewidth=1,
+            )
 
     ax2d.set_xlabel("x (AU)")
     ax2d.set_ylabel("y (AU)")
@@ -321,10 +355,16 @@ plot_orbit_trajectory(snapshots, "1 star multiple planets (resonance 3:2)")
 # time, so the numbers stay an exact solution whatever ``G`` is worth in the
 # unit system chosen above.
 
+# Filled in by run_choreography below, and consumed by the deviation figure at
+# the end: each entry is what one run measured, so the orbits are only ever
+# integrated once.
+CHOREOGRAPHY_DEVIATIONS = {}
+
 CHOREOGRAPHIES = {
     "figure_eight": {
         "name": "Figure eight (Chenciner-Montgomery)",
         "n_periods": 10,
+        "deviation_periods": 10,
         "eta_sink": 0.2,
         "lyapunov_rate": 0.0000,
         "loop_radius": 1.0761,
@@ -344,6 +384,7 @@ CHOREOGRAPHIES = {
     "super_eight": {
         "name": "Super eight",
         "n_periods": 1,
+        "deviation_periods": 3.5,
         "eta_sink": 0.05,
         "lyapunov_rate": 5.1177,
         "loop_radius": 1.3085,
@@ -365,6 +406,7 @@ CHOREOGRAPHIES = {
     "eight_5body": {
         "name": "5-body eight",
         "n_periods": 1,
+        "deviation_periods": 2.5,
         "eta_sink": 0.05,
         "lyapunov_rate": 7.6970,
         "loop_radius": 1.4487,
@@ -388,6 +430,7 @@ CHOREOGRAPHIES = {
     "eight_6body": {
         "name": "6-body eight",
         "n_periods": 1,
+        "deviation_periods": 2.5,
         "eta_sink": 0.05,
         "lyapunov_rate": 8.3237,
         "loop_radius": 1.6305,
@@ -413,6 +456,7 @@ CHOREOGRAPHIES = {
     "chain_5body": {
         "name": "5-body chain (3 lobes)",
         "n_periods": 1,
+        "deviation_periods": 2.5,
         "eta_sink": 0.05,
         "lyapunov_rate": 8.3182,
         "loop_radius": 1.5921,
@@ -436,6 +480,7 @@ CHOREOGRAPHIES = {
     "chain_6body": {
         "name": "6-body chain (3 lobes)",
         "n_periods": 1,
+        "deviation_periods": 2.5,
         "eta_sink": 0.05,
         "lyapunov_rate": 7.3180,
         "loop_radius": 1.7161,
@@ -461,6 +506,7 @@ CHOREOGRAPHIES = {
     "chain_6body_4": {
         "name": "6-body chain (4 lobes)",
         "n_periods": 1,
+        "deviation_periods": 2.0,
         "eta_sink": 0.05,
         "lyapunov_rate": 12.0551,
         "loop_radius": 1.7963,
@@ -486,6 +532,7 @@ CHOREOGRAPHIES = {
     "triangle_ring": {
         "name": "Lagrange equilateral triangle",
         "n_periods": 3,
+        "deviation_periods": 5,
         "eta_sink": 0.2,
         "lyapunov_rate": 4.4429,
         "loop_radius": 0.8327,
@@ -505,6 +552,7 @@ CHOREOGRAPHIES = {
     "square_ring": {
         "name": "Square ring",
         "n_periods": 3,
+        "deviation_periods": 5,
         "eta_sink": 0.2,
         "lyapunov_rate": 5.4006,
         "loop_radius": 0.9855,
@@ -526,6 +574,7 @@ CHOREOGRAPHIES = {
     "pentagon_ring": {
         "name": "Pentagon ring",
         "n_periods": 3,
+        "deviation_periods": 5,
         "eta_sink": 0.2,
         "lyapunov_rate": 5.9007,
         "loop_radius": 1.1124,
@@ -549,6 +598,7 @@ CHOREOGRAPHIES = {
     "hexagon_ring": {
         "name": "Hexagon ring",
         "n_periods": 3,
+        "deviation_periods": 5,
         "eta_sink": 0.2,
         "lyapunov_rate": 6.2163,
         "loop_radius": 1.2226,
@@ -595,7 +645,59 @@ def scale_choreography(choreography, length_scale=1.0, sink_mass=1.0):
 
 
 # %%
-# Run a choreography and plot the resulting trajectories
+# Reference solution used to measure how far a run drifts
+#
+# Shamrock's sink integrator is a second order leapfrog. Integrating the
+# same initial conditions with a high order scheme isolates its error from
+# any error in the initial conditions themselves.
+def reference_solution(positions, velocities, sink_mass, tmax, stop_separation):
+    """Integrate the same initial conditions to near machine precision.
+
+    Once an unstable choreography has broken up the sinks start having close
+    encounters, which costs the reference integrator an enormous number of
+    steps for a stretch that is past the point of being interesting anyway.
+    ``stop_separation`` ends the integration there; it is set below the closest
+    approach of every intact orbit, so it only ever triggers after break-up.
+    """
+    from scipy.integrate import solve_ivp
+
+    nsink = len(positions)
+    masses = np.full(nsink, sink_mass)
+
+    def separations(state):
+        pos = state[: 3 * nsink].reshape(nsink, 3)
+        sep = pos[np.newaxis, :, :] - pos[:, np.newaxis, :]
+        r_squared = np.sum(sep**2, axis=-1)
+        np.fill_diagonal(r_squared, np.inf)
+        return sep, r_squared
+
+    def rhs(_t, state):
+        sep, r_squared = separations(state)
+        acc = G * np.einsum("ij,ijk,j->ik", r_squared ** (-1.5), sep, masses)
+        return np.concatenate([state[3 * nsink :], acc.ravel()])
+
+    def close_approach(_t, state):
+        _, r_squared = separations(state)
+        return np.sqrt(np.min(r_squared)) - stop_separation
+
+    close_approach.terminal = True
+    close_approach.direction = -1
+
+    state0 = np.concatenate([np.asarray(positions).ravel(), np.asarray(velocities).ravel()])
+    return solve_ivp(
+        rhs,
+        (0.0, tmax),
+        state0,
+        method="DOP853",
+        rtol=3e-14,
+        atol=1e-16,
+        dense_output=True,
+        events=close_approach,
+    )
+
+
+# %%
+# Run a choreography, plot its trajectories and record how far it drifts
 def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_plot_points=2000):
     choreography = CHOREOGRAPHIES[key]
     # Each entry carries its own eta_sink: the sink timestep has to shrink as
@@ -624,17 +726,53 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
         show_cfl_detail=False,
     )
 
-    snapshots = run_sim(model, choreography["n_periods"] * period, use_dt=None)
+    # One run feeds both figures. The orbit plot only needs n_periods, while the
+    # deviation needs longer to climb through its exponential range, so the run
+    # goes to whichever is longer and the orbit plot draws the rest dashed.
+    orbit_tmax = choreography["n_periods"] * period
+    tmax = max(choreography["n_periods"], choreography["deviation_periods"]) * period
+    reference = reference_solution(
+        positions, velocities, sink_mass, 1.02 * tmax, 0.05 * loop_radius
+    )
+
+    times = []
+    deviations = []
+
+    def record_deviation(snapshot):
+        """Measure the drift, and stop the run once it stops meaning anything."""
+        current_time = snapshot["time"]
+        if current_time > reference.t[-1]:
+            return True
+        pos = np.array(snapshot["positions"])
+        exact = reference.sol(current_time)[: 3 * nsink].reshape(nsink, 3)
+        deviation = float(np.max(np.linalg.norm(pos - exact, axis=1)))
+        times.append(current_time / period)
+        deviations.append(deviation)
+        # past half a loop radius the orbit has left the choreography for good:
+        # the comparison says nothing more and the timestep collapses into the
+        # close encounters of the break-up. Never cut the orbit plot short.
+        return deviation > 0.5 * loop_radius and current_time >= orbit_tmax
+
+    snapshots = run_sim(model, tmax, use_dt=None, step_callback=record_deviation)
+
+    CHOREOGRAPHY_DEVIATIONS[key] = (
+        np.array(times),
+        np.array(deviations),
+        choreography,
+        loop_radius,
+    )
 
     # these runs take many steps per period, so thin the trajectory before plotting
     stride = max(1, len(snapshots) // max_plot_points)
+    plotted = snapshots[::stride]
+    solid_steps = sum(1 for snap in plotted if snap["time"] <= orbit_tmax)
     nper = choreography["n_periods"]
-    plot_orbit_trajectory(
-        snapshots[::stride],
-        "{} ({} sinks, {} period{})".format(
-            choreography["name"], nsink, nper, "s" if nper > 1 else ""
-        ),
+    title = "{} ({} sinks, {} period{})".format(
+        choreography["name"], nsink, nper, "s" if nper > 1 else ""
     )
+    if solid_steps < len(plotted):
+        title += f", dashed past {nper}"
+    plot_orbit_trajectory(plotted, title, solid_steps=solid_steps)
 
     return snapshots
 
@@ -706,112 +844,23 @@ snapshots = run_choreography("hexagon_ring")
 #     E(t) \simeq E_0 \, e^{\lambda t}
 #
 # and the measured drift can be checked against it without fitting the rate.
-# Running the same initial conditions through a high order reference integrator
-# isolates the integration error from any error in the initial conditions, and
-# in the plots below only the offset of the dashed line is fitted: its slope is
-# fixed by ``lyapunov_rate``.
+# The drift was already recorded while each orbit ran above, against the high
+# order reference, so nothing is integrated a second time here. In the panels
+# below only the offset of the predicted line is fitted; its slope is fixed by
+# ``lyapunov_rate``, and the line is only drawn at all when it describes the
+# measurement to within a factor of thirty.
 #
-# The three cases are deliberately different:
+# The orbits fall into three groups:
 #
-# - the super eight follows the predicted growth over about six decades, until
-#   the orbit breaks up and the comparison saturates;
+# - the six eights and chains follow the predicted growth over about six
+#   decades, until they break up and the comparison saturates;
 # - the figure eight has ``lyapunov_rate = 0``, so nothing grows exponentially
 #   and its error just wanders around a small value for ten periods;
-# - the hexagon ring drifts far more slowly than its rate allows. Its error
+# - the four rings drift far more slowly than their rate allows. Their error
 #   does eventually grow at exactly that rate, but the leapfrog error happens
-#   to overlap the unstable eigenvector only weakly, which delays the onset by
-#   a couple of periods.
-
-
-def reference_solution(positions, velocities, sink_mass, tmax, stop_separation):
-    """Integrate the same initial conditions to near machine precision.
-
-    Once an unstable choreography has broken up the sinks start having close
-    encounters, which costs the reference integrator an enormous number of
-    steps for a stretch that is past the point of being interesting anyway.
-    ``stop_separation`` ends the integration there; it is set below the closest
-    approach of every intact orbit, so it only ever triggers after break-up.
-    """
-    from scipy.integrate import solve_ivp
-
-    nsink = len(positions)
-    masses = np.full(nsink, sink_mass)
-
-    def separations(state):
-        pos = state[: 3 * nsink].reshape(nsink, 3)
-        sep = pos[np.newaxis, :, :] - pos[:, np.newaxis, :]
-        r_squared = np.sum(sep**2, axis=-1)
-        np.fill_diagonal(r_squared, np.inf)
-        return sep, r_squared
-
-    def rhs(_t, state):
-        sep, r_squared = separations(state)
-        acc = G * np.einsum("ij,ijk,j->ik", r_squared ** (-1.5), sep, masses)
-        return np.concatenate([state[3 * nsink :], acc.ravel()])
-
-    def close_approach(_t, state):
-        _, r_squared = separations(state)
-        return np.sqrt(np.min(r_squared)) - stop_separation
-
-    close_approach.terminal = True
-    close_approach.direction = -1
-
-    state0 = np.concatenate([np.asarray(positions).ravel(), np.asarray(velocities).ravel()])
-    return solve_ivp(
-        rhs,
-        (0.0, tmax),
-        state0,
-        method="DOP853",
-        rtol=3e-14,
-        atol=1e-16,
-        dense_output=True,
-        events=close_approach,
-    )
-
-
-# %%
-# Run a choreography and record how far it drifts from the reference
-def measure_choreography_deviation(key, n_periods, length_scale=1.0, sink_mass=1.0):
-    choreography = CHOREOGRAPHIES[key]
-    positions, velocities, period = scale_choreography(choreography, length_scale, sink_mass)
-    nsink = len(positions)
-    loop_radius = choreography["loop_radius"] * length_scale
-
-    ctx, model = build_sink_sph_model(
-        positions=positions,
-        velocities=velocities,
-        masses=[sink_mass] * nsink,
-        accretion_radii=[0.01 * loop_radius] * nsink,
-        box_extent=3.0 * loop_radius,
-        eta_sink=choreography["eta_sink"],
-        show_cfl_detail=False,
-    )
-
-    tmax = n_periods * period
-    reference = reference_solution(
-        positions, velocities, sink_mass, 1.02 * tmax, 0.05 * loop_radius
-    )
-
-    times = []
-    deviations = []
-    current_time = 0.0
-    while current_time < tmax:
-        model.timestep()
-        current_time = model.get_time()
-        if current_time > reference.t[-1]:
-            break
-        pos = np.array([sink["pos"] for sink in model.get_sinks()])
-        exact = reference.sol(current_time)[: 3 * nsink].reshape(nsink, 3)
-        deviation = float(np.max(np.linalg.norm(pos - exact, axis=1)))
-        times.append(current_time / period)
-        deviations.append(deviation)
-        if deviation > 0.5 * loop_radius:
-            # the orbit has left the choreography for good; past this point the
-            # comparison says nothing and the timestep collapses into the close
-            # encounters of the break-up, which is expensive for no benefit
-            break
-
-    return np.array(times), np.array(deviations), choreography, loop_radius
+#   to overlap the unstable eigenvector about a hundred thousand times more
+#   weakly than a random direction would, which delays the onset by roughly
+#   two periods and pushes it outside the window shown.
 
 
 # %%
@@ -863,21 +912,8 @@ def plot_choreography_deviation(runs, ncols=4):
 
 
 # %%
-# The number of periods is chosen per orbit: just past the point where the
-# unstable ones break up and the comparison saturates, and long enough for the
-# marginally stable figure eight to show that it does not.
+# Every orbit was already integrated once by ``run_choreography``, so the figure
+# is drawn straight from what those runs measured.
 plot_choreography_deviation(
-    [
-        measure_choreography_deviation("figure_eight", 10),
-        measure_choreography_deviation("super_eight", 3.5),
-        measure_choreography_deviation("eight_5body", 2.5),
-        measure_choreography_deviation("eight_6body", 2.5),
-        measure_choreography_deviation("chain_5body", 2.5),
-        measure_choreography_deviation("chain_6body", 2.5),
-        measure_choreography_deviation("chain_6body_4", 2.0),
-        measure_choreography_deviation("triangle_ring", 5),
-        measure_choreography_deviation("square_ring", 5),
-        measure_choreography_deviation("pentagon_ring", 5),
-        measure_choreography_deviation("hexagon_ring", 5),
-    ]
+    [CHOREOGRAPHY_DEVIATIONS[key] for key in CHOREOGRAPHIES if key in CHOREOGRAPHY_DEVIATIONS]
 )
