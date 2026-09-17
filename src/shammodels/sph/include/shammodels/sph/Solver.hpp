@@ -334,6 +334,11 @@ namespace shammodels::sph {
                 return 0;
             }
 
+            /// Rank-local elapsed walltime since start (no MPI reduction, for display only)
+            inline f64 elapsed_local() const {
+                return active ? (shambase::details::get_wtime() - start_wall_time) : 0;
+            }
+
             /// True if the next walltime check is due at this iteration count
             inline bool due(i32 iter_count) const {
                 return active && iter_count >= next_check_iter;
@@ -475,7 +480,7 @@ namespace shammodels::sph {
             auto update_state = [&]() {
                 std::string stats_str
                     = last_step_log ? sham::format(
-                                          "rate = {:.3e} npart = {:.3e} tcompute = {:e}",
+                                          "rate = {:.3e} npart = {} tcompute = {:e}",
                                           last_step_log->rate,
                                           f64(last_step_log->npart),
                                           last_step_log->tcompute)
@@ -487,6 +492,28 @@ namespace shammodels::sph {
                                 " tsim/hr = {:.3e} [t/hr]",
                                 get_dt_sph() * (3600.0 / last_step_log->tcompute))
                           : " tsim/hr = ....... [t/hr]";
+
+                std::vector<std::string> criteria;
+                criteria.push_back(
+                    sham::format("{:.3e}/{:.3e}", get_time() - t_start, target_time - t_start));
+                if (niter_limit_active) {
+                    criteria.push_back(sham::format("{}/{}", iter_count, niter_max));
+                }
+                if (walltime_limit_active) {
+                    criteria.push_back(
+                        sham::format(
+                            "{:.2f}/{:.2f}",
+                            walltime_limiter.elapsed_local(),
+                            max_walltime - walltime_limiter.start_wall_time));
+                }
+
+                tsimhr_str += " ";
+                for (size_t i = 0; i < criteria.size(); i++) {
+                    if (i > 0) {
+                        tsimhr_str += " | ";
+                    }
+                    tsimhr_str += criteria[i];
+                }
 
                 block.print(
                     sham::format(
