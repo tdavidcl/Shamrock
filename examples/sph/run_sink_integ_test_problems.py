@@ -534,7 +534,7 @@ CHOREOGRAPHIES = {
     "triangle_ring": {
         "name": "Lagrange equilateral triangle",
         "n_periods": 3,
-        "deviation_periods": 5,
+        "deviation_periods": 15,
         "eta_sink": 0.2,
         "lyapunov_rate": 4.4429,
         "loop_radius": 0.8327,
@@ -554,7 +554,7 @@ CHOREOGRAPHIES = {
     "square_ring": {
         "name": "Square ring",
         "n_periods": 3,
-        "deviation_periods": 5,
+        "deviation_periods": 15,
         "eta_sink": 0.2,
         "lyapunov_rate": 5.4006,
         "loop_radius": 0.9855,
@@ -576,7 +576,7 @@ CHOREOGRAPHIES = {
     "pentagon_ring": {
         "name": "Pentagon ring",
         "n_periods": 3,
-        "deviation_periods": 5,
+        "deviation_periods": 15,
         "eta_sink": 0.2,
         "lyapunov_rate": 5.9007,
         "loop_radius": 1.1124,
@@ -600,7 +600,7 @@ CHOREOGRAPHIES = {
     "hexagon_ring": {
         "name": "Hexagon ring",
         "n_periods": 3,
-        "deviation_periods": 5,
+        "deviation_periods": 15,
         "eta_sink": 0.2,
         "lyapunov_rate": 6.2163,
         "loop_radius": 1.2226,
@@ -795,20 +795,52 @@ def run_choreography(key, length_scale=1.0, sink_mass=1.0, eta_sink=None, max_pl
 # ``run_choreography`` records that drift against the high order reference while
 # each orbit runs, so the deviation plotted underneath every trajectory below
 # costs no extra integration. Only the offset of the predicted line is fitted;
-# its slope is fixed by ``lyapunov_rate``, and the line is only drawn at all when
-# it describes the measurement to within a factor of thirty.
+# its slope is fixed by ``lyapunov_rate``. The fit is taken over the stretch
+# that is genuinely growing at that rate, and the line is only drawn at all when
+# it describes that stretch to within a factor of thirty.
 #
 # The orbits fall into three groups:
 #
-# - the six eights and chains follow the predicted growth over about six
-#   decades, until they break up and the comparison saturates;
+# - the six eights and chains start growing at the predicted rate almost
+#   immediately and follow it over about six decades, until they break up and
+#   the comparison saturates;
 # - the figure eight has ``lyapunov_rate = 0``, so nothing grows exponentially
 #   and its error just wanders around a small value for ten periods;
-# - the four rings drift far more slowly than their rate allows. Their error
-#   does eventually grow at exactly that rate, but the leapfrog error happens
-#   to overlap the unstable eigenvector about a hundred thousand times more
-#   weakly than a random direction would, which delays the onset by roughly
-#   two periods and pushes it outside the window shown.
+# - the four rings sit on a plateau for several periods first. Their leapfrog
+#   error overlaps the unstable eigenvector roughly a hundred thousand times
+#   more weakly than a random direction would, so the growth only starts
+#   somewhere between four and seven periods in, and then runs at exactly the
+#   predicted rate. That is why they are given fifteen periods in the table
+#   while the eights and chains need only two or three; left at three they
+#   would show nothing but the plateau.
+
+
+# %%
+# Find the stretch that is actually growing at the Floquet rate
+def exponential_window(times, deviations, rate, saturation, floor=1e-6, fraction=0.7):
+    """Boolean mask over the stretch of growth at ``rate`` that ends at saturation.
+
+    The search runs backwards from the point where the drift saturates. Going
+    forwards instead would latch onto the steep transient of the first few
+    steps, or, for the rings, onto the rise into the plateau they sit on for
+    several periods before their unstable mode finally takes over.
+    """
+    if rate <= 0:
+        return None
+    reached = np.nonzero(deviations >= saturation)[0]
+    if reached.size == 0:
+        return None
+    end = int(reached[0])
+    log_dev = np.log(np.maximum(deviations, 1e-300))
+    for start in range(end):
+        if deviations[start] <= floor:
+            continue
+        elapsed = times[end] - times[start]
+        if elapsed <= 0.2:
+            break
+        if (log_dev[end] - log_dev[start]) / elapsed >= fraction * rate:
+            return (times >= times[start]) & (times <= times[end])
+    return None
 
 
 # %%
@@ -834,19 +866,25 @@ def plot_choreography_deviation(runs, ncols=4):
 
         # the slope is fixed by the Floquet rate, only the offset is fitted,
         # over the stretch that is above round-off and below saturation
-        window = (deviations > 1e-6) & (deviations < 0.05 * loop_radius)
-        note = ""
-        if rate > 0 and np.count_nonzero(window) > 10:
+        window = exponential_window(times, deviations, rate, 0.05 * loop_radius)
+        note = "\nunstable mode not yet dominant" if rate > 0 else ""
+        if window is not None and np.count_nonzero(window) > 10:
             offset = np.exp(np.median(np.log(deviations[window]) - rate * times[window]))
             predicted = offset * np.exp(rate * times)
             # only claim agreement when the fixed slope really does describe the
-            # measurement, otherwise the unstable mode has not taken over inside
-            # the window and drawing the line would be misleading
+            # stretch it was fitted over
             spread = np.max(np.abs(np.log(deviations[window] / predicted[window])))
             if spread < np.log(30.0):
-                ax.semilogy(times, predicted, "k--", lw=1.2, label=r"$\propto e^{\lambda t}$")
-            else:
-                note = "\nunstable mode not yet dominant"
+                # draw it from where the growth starts, not across the plateau
+                shown = times >= times[window][0]
+                ax.semilogy(
+                    times[shown],
+                    predicted[shown],
+                    "k--",
+                    lw=1.2,
+                    label=r"$\propto e^{\lambda t}$",
+                )
+                note = ""
 
         ax.set_xlabel("time / period")
         ax.set_ylim(1e-10, 10.0 * loop_radius)
