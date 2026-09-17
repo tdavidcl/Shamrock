@@ -4,7 +4,15 @@
 # The `llvm/20.1.6` module only ships LLVM's libraries, not the clang
 # driver/frontend, so LLVM is instead built through spack below (with
 # +clang) and AdaptiveCpp is compiled against that.
+
+# Bootstrap the `spack` command itself (single module purge covers this
+# and the rest of the module block below, so it doesn't wipe them out).
+export MODULE_NAME_SPACK=spack-user-5.0.0
 module purge
+export SPACK_USER_PREFIX="${WORKDIR}/${MODULE_NAME_SPACK}"
+module load develop
+module load ${MODULE_NAME_SPACK}
+
 module load craype-accel-amd-gfx90a craype-x86-trento
 module load rocm/6.4.3
 module load cray-python
