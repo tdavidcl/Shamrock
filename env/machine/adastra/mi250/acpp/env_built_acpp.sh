@@ -2,17 +2,14 @@
 
 # ---- Modules ----
 # The `llvm/20.1.6` module only ships LLVM's libraries, not the clang
-# driver/frontend, so (like lumi/g/acpp-custom-llvm) LLVM is instead
-# built from source below and AdaptiveCpp is compiled against that.
+# driver/frontend, so LLVM is instead built through spack below (with
+# +clang) and AdaptiveCpp is compiled against that.
 module purge
-module load cpe/25.09
 module load craype-accel-amd-gfx90a craype-x86-trento
-module load PrgEnv-cray
 module load rocm/6.4.3
 module load cray-python
 module load cmake
 module load ninja
-module load CCE-GPU-5.0.0
 module load boost/1.88.0-mpi
 
 # ---- AdaptiveCpp config ----
@@ -33,12 +30,6 @@ case "$ACPP_MODE" in
         return
         ;;
 esac
-
-# In acpp llvm version must be lower or equal to rocm llvm version
-export LLVM_VERSION=llvmorg-20.1.6
-export LLVM_GIT_DIR=/tmp/llvm-git
-export LLVM_BUILD_DIR=/tmp/llvm-build
-export LLVM_INSTALL_DIR=$BUILD_DIR/.env/llvm-install
 
 export C_INCLUDE_PATH=$ROCM_PATH/llvm/include
 export CPLUS_INCLUDE_PATH=$ROCM_PATH/llvm/include
@@ -65,48 +56,23 @@ setupboost
 
 export LD_LIBRARY_PATH="${BOOST_SYMLINK_DIR}:${BOOST_ROOT_PATH}/lib:${LD_LIBRARY_PATH}"
 
-# ---- LLVM setup ----
-function llvm_setup {
+# ---- LLVM setup (spack) ----
+# Driver/frontend LLVM used to build and drive AdaptiveCpp itself; kept
+# separate from ROCm's own llvm ($ROCM_PATH/llvm) which handles HIP
+# device codegen.
+export LLVM_SPACK_SPEC="llvm@20.1.6 +clang +lld ~lldb ~mlir ~flang ~offload ~libomptarget ~polly compiler-rt=runtime openmp=runtime libcxx=none libunwind=none targets=amdgpu,x86 %gcc"
 
-    echo " -> cleaning llvm build dirs ..."
-    rm -rf ${LLVM_GIT_DIR} ${LLVM_BUILD_DIR}
-    echo " -> done"
-
-    clone_llvm || return
-
-    cmake -S ${LLVM_GIT_DIR}/llvm -B ${LLVM_BUILD_DIR} \
-        -DCMAKE_C_COMPILER=gcc \
-        -DCMAKE_CXX_COMPILER=g++ \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=$LLVM_INSTALL_DIR \
-        -DCMAKE_INSTALL_RPATH=$LLVM_INSTALL_DIR/lib \
-        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-        -DLLVM_ENABLE_PROJECTS="clang;compiler-rt;lld;openmp" \
-        -DLLVM_TARGETS_TO_BUILD="AMDGPU;NVPTX;X86" \
-        -DLLVM_BUILD_LLVM_DYLIB=ON \
-        -DOPENMP_ENABLE_LIBOMPTARGET=OFF \
-        -DLLVM_ENABLE_ASSERTIONS=OFF \
-        -DCLANG_ANALYZER_ENABLE_Z3_SOLVER=0 \
-        -DLLVM_INCLUDE_BENCHMARKS=0 \
-        -DLLVM_ENABLE_OCAMLDOC=OFF \
-        -DLLVM_ENABLE_BINDINGS=OFF \
-        -DLLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN=OFF \
-        -DLLVM_ENABLE_DUMP=OFF  || return
-
-    (cd ${LLVM_BUILD_DIR} && $MAKE_EXEC "${MAKE_OPT[@]}" && $MAKE_EXEC install)  || return
-
-    echo "int main() { return 0; }" > test.cpp
-    ${LLVM_INSTALL_DIR}/bin/clang++ -O3 -fopenmp test.cpp  || return
-    ./a.out  || return
-    rm a.out test.cpp
-
-}
-
-if [ ! -f "$LLVM_INSTALL_DIR/bin/clang++" ]; then
-    echo " ----- llvm is not configured, compiling it ... -----"
-    llvm_setup || return
-    echo " ----- llvm configured ! -----"
+if ! spack find $LLVM_SPACK_SPEC &>/dev/null; then
+    echo " ----- llvm@20.1.6 (this spec) not found, installing ... -----"
+    spack install $LLVM_SPACK_SPEC || return
+    echo " ----- llvm@20.1.6 installed ! -----"
+else
+    echo " ----- llvm@20.1.6 (this spec) already installed ----- "
 fi
+
+eval `spack load --sh $LLVM_SPACK_SPEC`
+
+export LLVM_INSTALL_DIR=$(spack location -i $LLVM_SPACK_SPEC)
 
 # ---- Compiler setup ----
 function setupcompiler {
