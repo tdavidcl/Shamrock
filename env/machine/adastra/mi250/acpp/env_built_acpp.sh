@@ -14,7 +14,7 @@ module load develop
 module load ${MODULE_NAME_SPACK}
 
 module load craype-accel-amd-gfx90a craype-x86-trento
-module load rocm/6.4.3
+module load rocm/7.1.1
 module load cray-python
 module load cmake
 module load ninja
