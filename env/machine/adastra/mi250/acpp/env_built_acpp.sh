@@ -11,6 +11,7 @@ export MODULE_NAME_SPACK=spack-user-5.0.0
 module purge
 export SPACK_USER_PREFIX="${WORKDIR}/${MODULE_NAME_SPACK}"
 module load develop
+module load GCC-GPU-5.0.0
 module load ${MODULE_NAME_SPACK}
 
 module load craype-accel-amd-gfx90a craype-x86-trento
