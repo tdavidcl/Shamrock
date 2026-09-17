@@ -7,7 +7,7 @@ import utils.sysinfo
 from utils.oscmd import *
 from utils.setuparg import *
 
-NAME = "Adastra MI250 AdaptiveCpp (module LLVM/ROCm)"
+NAME = "Adastra MI250 AdaptiveCpp (custom LLVM)"
 PATH = "machine/adastra/mi250/acpp"
 
 
@@ -62,6 +62,7 @@ def setup(arg: SetupArg, envgen: EnvGen):
 
     envgen.ext_script_list = [
         shamrockdir + "/env/helpers/clone-acpp.sh",
+        shamrockdir + "/env/helpers/clone-llvm.sh",
         shamrockdir + "/env/helpers/pull_reffiles.sh",
     ]
 
