@@ -5,6 +5,8 @@ Sink integration test problems
 This example shows how to use the sink integration test problems.
 """
 
+# sphinx_gallery_multi_image = "single"
+
 import numpy as np
 
 import shamrock
