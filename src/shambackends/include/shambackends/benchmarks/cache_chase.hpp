@@ -103,11 +103,12 @@ namespace sham::benchmarks {
     struct cache_chase_result {
         std::string func_name; ///< Name of the function
         f64 seconds;           ///< Computation time in seconds
-        f64 latency;           ///< Amortized time of one dependent hop, in seconds
-        f64 hop_rate;          ///< Hops per second, summed over all chains
-        u64 working_set;       ///< Size of the working set in bytes
-        u32 nsteps;            ///< Number of hops per chain
-        u32 n_chains;          ///< Number of chains followed in parallel
+        f64 latency;     ///< Wall-clock time per hop with every chain in flight, in seconds. Not an
+                         ///< unloaded latency, use it to compare working set sizes on one device
+        f64 hop_rate;    ///< Hops per second, summed over all chains
+        u64 working_set; ///< Size of the working set in bytes
+        u32 nsteps;      ///< Number of hops per chain
+        u32 n_chains;    ///< Number of chains followed in parallel
     };
 
     /**
