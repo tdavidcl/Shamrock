@@ -21,32 +21,6 @@
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_step(Tscal dt) {
-
-    StackEntry stack_loc{};
-
-    auto &sync = scheduler().synchronized_data;
-    auto &pos  = get_sink_pos<Tvec>(sync);
-    if (pos.empty()) {
-        return;
-    }
-
-    auto &vel     = get_sink_vel<Tvec>(sync);
-    auto &acc_sph = get_sink_acc_sph<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
-
-    compute_ext_forces();
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        vel[i] += (dt / 2) * (acc_sph[i] + acc_ext[i]);
-    }
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        pos[i] += dt * vel[i];
-    }
-}
-
-template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::corrector_step(Tscal dt) {
 
     StackEntry stack_loc{};
@@ -163,38 +137,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph
         for (u32 rid = 0; rid < shamcomm::world_size(); rid++) {
             acc_sph[id_s] += gathered_result_acc_sinks[rid * pos.size() + id_s];
         }
-    }
-}
-
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_ext_forces() {
-
-    StackEntry stack_loc{};
-
-    auto &sync = scheduler().synchronized_data;
-    auto &pos  = get_sink_pos<Tvec>(sync);
-    if (pos.empty()) {
-        return;
-    }
-
-    auto &mass    = get_sink_mass<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        acc_ext[i] = Tvec{};
-    }
-
-    Tscal G                 = solver_config.get_constant_G();
-    Tscal epsilon_grav_sink = 1e-9;
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        Tvec sum{};
-        for (size_t j = 0; j < pos.size(); j++) {
-            Tvec rij       = pos[i] - pos[j];
-            Tscal rij_scal = sycl::length(rij);
-            sum -= G * mass[j] * rij / (rij_scal * rij_scal * rij_scal + epsilon_grav_sink);
-        }
-        acc_ext[i] = sum;
     }
 }
 
