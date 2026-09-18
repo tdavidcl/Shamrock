@@ -21,8 +21,11 @@
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/reduction.hpp"
 #include "shambackends/Device.hpp"
+#include "shambackends/benchmarks/cache_chase.hpp"
 #include "shambackends/benchmarks/fma_chains.hpp"
+#include "shambackends/benchmarks/int_chains.hpp"
 #include "shambackends/benchmarks/saxpy.hpp"
+#include "shambackends/benchmarks/warp_divergence.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
 #include "shambackends/math.hpp"
 #include "shamcomm/wrapper.hpp"
@@ -53,6 +56,16 @@ namespace shamsys::microbench {
     /// FMA chains benchmark to get the maximum floating point performance
     template<typename T>
     void fma_chains_rotation();
+
+    /// Integer chains benchmark to get the maximum integer performance
+    template<typename T, sham::benchmarks::IntChainOp op>
+    void int_chains_rotation();
+
+    /// Pointer chasing benchmark, to expose the cache tiers of the device
+    void cache_latency(u64 working_set_bytes, const std::string &label);
+
+    /// Branch divergence benchmark, to get the cost of a divergent branch
+    void branch_divergence(u32 n_paths);
 
     /// Vector allgather benchmark
     void vector_allgather(u32 el_per_rank);
@@ -89,6 +102,23 @@ void shamsys::run_micro_benchmark() {
     microbench::fma_chains_rotation<f64_3>();
     microbench::fma_chains_rotation<f32_4>();
     microbench::fma_chains_rotation<f64_4>();
+    microbench::int_chains_rotation<u32, sham::benchmarks::IntChainOp::Mul>();
+    microbench::int_chains_rotation<u64, sham::benchmarks::IntChainOp::Mul>();
+    microbench::int_chains_rotation<u32, sham::benchmarks::IntChainOp::Add>();
+    microbench::int_chains_rotation<u64, sham::benchmarks::IntChainOp::Add>();
+    microbench::cache_latency(16 * 1024, "16KiB");
+    microbench::cache_latency(128 * 1024, "128KiB");
+    microbench::cache_latency(1024 * 1024, "1MiB");
+    microbench::cache_latency(4 * 1024 * 1024, "4MiB");
+    microbench::cache_latency(16 * 1024 * 1024, "16MiB");
+    microbench::cache_latency(64 * 1024 * 1024, "64MiB");
+    microbench::cache_latency(256 * 1024 * 1024, "256MiB");
+    microbench::branch_divergence(2);
+    microbench::branch_divergence(4);
+    microbench::branch_divergence(8);
+    microbench::branch_divergence(16);
+    microbench::branch_divergence(32);
+    microbench::branch_divergence(64);
     microbench::vector_allgather(1);
     microbench::vector_allgather(8);
     microbench::vector_allgather(64);
@@ -397,6 +427,125 @@ void shamsys::microbench::fma_chains_rotation() {
                 avg_flop * flops_multiplier,
                 result.seconds * 1e3,
                 result.nrotations));
+    }
+}
+
+template<typename T, sham::benchmarks::IntChainOp op>
+void shamsys::microbench::int_chains_rotation() {
+    int N = (1 << 22);
+
+    auto result
+        = sham::benchmarks::int_chains_bench<T, op>(instance::get_compute_scheduler_ptr(), N, 0.2);
+
+    std::string type_name;
+    if constexpr (std::is_same_v<T, u32>) {
+        type_name = "u32";
+    } else if constexpr (std::is_same_v<T, u64>) {
+        type_name = "u64";
+    } else {
+        throw shambase::make_except_with_loc<std::invalid_argument>("unsupported type");
+    }
+
+    std::string op_name = (op == sham::benchmarks::IntChainOp::Mul) ? "mul" : "add";
+
+    f64 min_iops = shamalgs::collective::allreduce_min(result.iops);
+    f64 max_iops = shamalgs::collective::allreduce_max(result.iops);
+    f64 sum_iops = shamalgs::collective::allreduce_sum(result.iops);
+    f64 avg_iops = sum_iops / (f64) shamcomm::world_size();
+
+    microbench_results["int_" + op_name + "_chains_" + type_name] = sum_iops;
+
+    if (shamcomm::world_rank() == 0) {
+        auto hr_iops = sham::to_human_readable<false>(sum_iops);
+        logger::raw_ln(
+            sham::format(
+                " - int_{}_chains ({}) : {:.2f} {}iops (min = {:.1e}, max = {:.1e}, avg = {:.1e}) "
+                "({:.1e} ms, rotations = {})",
+                op_name,
+                type_name,
+                hr_iops.value,
+                hr_iops.prefix,
+                min_iops,
+                max_iops,
+                avg_iops,
+                result.seconds * 1e3,
+                result.nrotations));
+    }
+}
+
+void shamsys::microbench::cache_latency(u64 working_set_bytes, const std::string &label) {
+    StackEntry stack_loc{};
+
+    auto &dev_ctx = shambase::get_check_ref(instance::get_compute_scheduler().ctx);
+    auto &dev     = shambase::get_check_ref(dev_ctx.device);
+
+    u64 max_working_set
+        = std::min<u64>(dev.prop.max_mem_alloc_size_dev, dev.prop.global_mem_size / 4);
+
+    if (working_set_bytes > max_working_set) {
+        if (shamcomm::world_rank() == 0) {
+            logger::raw_ln(
+                sham::format(
+                    " - cache_chase ({:>6}) : skipped, larger than the device can hold", label));
+        }
+        return;
+    }
+
+    u32 n_elem   = u32(working_set_bytes / sizeof(u32));
+    u32 n_chains = 1 << 16;
+
+    auto result = sham::benchmarks::cache_chase_bench(
+        instance::get_compute_scheduler_ptr(), n_elem, n_chains, 0.1);
+
+    f64 sum_lat  = shamalgs::collective::allreduce_sum(result.latency);
+    f64 avg_lat  = sum_lat / (f64) shamcomm::world_size();
+    f64 sum_rate = shamalgs::collective::allreduce_sum(result.hop_rate);
+
+    microbench_results["cache_chase_lat_" + label]  = avg_lat;
+    microbench_results["cache_chase_rate_" + label] = sum_rate;
+
+    if (shamcomm::world_rank() == 0) {
+        auto hr_rate = sham::to_human_readable<false>(sum_rate);
+        logger::raw_ln(
+            sham::format(
+                " - cache_chase ({:>6}) : {:.3e} s/hop, {:.2f} {}hops.s^-1 (chains = {}, hops = "
+                "{})",
+                label,
+                avg_lat,
+                hr_rate.value,
+                hr_rate.prefix,
+                result.n_chains,
+                result.nsteps));
+    }
+}
+
+void shamsys::microbench::branch_divergence(u32 n_paths) {
+    StackEntry stack_loc{};
+
+    int N = (1 << 22);
+
+    // kept low on purpose: the divergent run costs up to n_paths times this
+    auto result = sham::benchmarks::divergence_bench<f32>(
+        instance::get_compute_scheduler_ptr(), N, n_paths, 0.05);
+
+    f64 min_penalty = shamalgs::collective::allreduce_min(result.penalty);
+    f64 max_penalty = shamalgs::collective::allreduce_max(result.penalty);
+    f64 sum_penalty = shamalgs::collective::allreduce_sum(result.penalty);
+    f64 avg_penalty = sum_penalty / (f64) shamcomm::world_size();
+
+    microbench_results["divergence_penalty_" + std::to_string(n_paths)] = avg_penalty;
+
+    if (shamcomm::world_rank() == 0) {
+        logger::raw_ln(
+            sham::format(
+                " - divergence (n_paths={:3}) : {:.3f} x slowdown (min = {:.2f}, max = {:.2f}) "
+                "({:.1e} ms uniform, {:.1e} ms divergent)",
+                n_paths,
+                avg_penalty,
+                min_penalty,
+                max_penalty,
+                result.seconds_uniform * 1e3,
+                result.seconds_divergent * 1e3));
     }
 }
 
