@@ -17,6 +17,8 @@
  */
 
 #include "shambackends/vec.hpp"
+#include "shambase/exception.hpp"
+#include "shamcomm/logs.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
 #include "shammodels/zeus/SolverConfig.hpp"
 #include "shammodels/zeus/modules/SolverStorage.hpp"
@@ -56,6 +58,52 @@ namespace shammodels::zeus {
         Solver(ShamrockCtx &context) : context(context) {}
 
         Tscal evolve_once(Tscal t_current, Tscal dt_input);
+
+        /**
+         * @brief Evolve the simulation until target_time is reached.
+         *
+         * t_current and dt_input are updated in place as the simulation progresses, so they can
+         * be read back by the caller (e.g. to resume with evolve_until again).
+         *
+         * @param t_current current simulation time, updated in place
+         * @param dt_input timestep to use for the next iteration, updated in place with the CFL
+         * timestep computed for the following iteration
+         * @param target_time time to reach
+         * @param niter_max maximum number of iterations to perform (-1 for no limit)
+         * @return true if target_time was reached, false if niter_max was reached first
+         */
+        inline bool evolve_until(
+            Tscal &t_current, Tscal &dt_input, Tscal target_time, i32 niter_max) {
+            auto step = [&]() {
+                if (t_current > target_time) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "the target time is lower than the current time");
+                }
+
+                if (t_current + dt_input > target_time) {
+                    dt_input = target_time - t_current;
+                }
+
+                Tscal next_dt = evolve_once(t_current, dt_input);
+                t_current += dt_input;
+                dt_input = next_dt;
+            };
+
+            i32 iter_count = 0;
+
+            while (t_current < target_time) {
+                step();
+                iter_count++;
+
+                if ((iter_count >= niter_max) && (niter_max != -1)) {
+                    logger::info_ln(
+                        "amr::Zeus", "stopping evolve until because of niter =", iter_count);
+                    return false;
+                }
+            }
+
+            return true;
+        }
     };
 
 } // namespace shammodels::zeus
