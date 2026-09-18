@@ -910,8 +910,6 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             "sink_corrector_vel_update", ForwardEulerHost2Deriv<Tvec, Tscal>{});
         shambase::get_check_ref(sink_corrector_vel_update)
             .set_edges(
-                // reuse the main solver's dt_half edge (already up to date by the time the
-                // corrector runs, since "dt_to_half_dt" is part of storage.solver_sequence)
                 solver_graph.get_edge_ptr<IDataEdge<Tscal>>("dt_half"),
                 sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_sph"),
                 sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_ext"),
