@@ -399,9 +399,9 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](TConfig &self, Tscal central_mass, Tscal Racc, Tvec central_pos) {
                 self.add_ext_force_point_mass(central_mass, Racc, central_pos);
             },
-            py::kw_only(),
             py::arg("central_mass"),
             py::arg("Racc"),
+            py::kw_only(),
             py::arg("central_pos") = Tvec{0, 0, 0})
         .def("add_ext_force_paczynski_wiita", &TConfig::add_ext_force_paczynski_wiita)
         .def(
