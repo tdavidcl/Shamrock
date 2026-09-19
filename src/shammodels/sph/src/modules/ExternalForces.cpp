@@ -532,6 +532,8 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces()
             add_ext_forces_seq.push_back(set_central_pos);
             add_ext_forces_seq.push_back(set_a_spin);
             add_ext_forces_seq.push_back(set_dir_spin);
+            // set_central_vel is intentionally not run: the external force's central object is
+            // stationary, so central_vel stays null.
             add_ext_forces_seq.push_back(solver_graph.get_node_ptr_base(prefix_lt));
 
         } else if (
