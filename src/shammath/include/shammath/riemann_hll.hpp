@@ -22,71 +22,57 @@
 
 namespace shammath {
 
-    template<class Tcons>
-    inline constexpr auto hll_flux_x(
-        const Tcons consL, const Tcons consR, const typename Tcons::Tscal gamma) {
-        const auto primL = cons_to_prim(consL, gamma);
-        const auto primR = cons_to_prim(consR, gamma);
+    /**
+     * @brief HLL flux across a face with unit normal n
+     */
+    template<FluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons hll_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        const auto cs_l = fspec.sound_speed(prim_l);
+        const auto cs_r = fspec.sound_speed(prim_r);
 
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        const auto vn_l = fspec.vn(prim_l, n);
+        const auto vn_r = fspec.vn(prim_r, n);
+
+        // NOLINTBEGIN(readability-identifier-naming)
 
         // Teyssier form
-        // const auto S_L = sham::min(primL.vel[0], primR.vel[0]) - sham::max(csL, csR);
-        // const auto S_R = sham::max(primL.vel[0], primR.vel[0]) + sham::max(csL, csR);
+        // const auto S_l = sham::min(vn_l, vn_r) - sham::max(cs_l, cs_r);
+        // const auto S_r = sham::max(vn_l, vn_r) + sham::max(cs_l, cs_r);
 
         // Toro form Equation (10.48)
-        const auto S_L = sham::min(primL.vel[0] - csL, primR.vel[0] - csR);
-        const auto S_R = sham::max(primL.vel[0] + csL, primR.vel[0] + csR);
+        const auto S_l = sham::min(vn_l - cs_l, vn_r - cs_r);
+        const auto S_r = sham::max(vn_l + cs_l, vn_r + cs_r);
 
-        const auto fluxL = hydro_flux_x(consL, gamma);
-        const auto fluxR = hydro_flux_x(consR, gamma);
+        // NOLINTEND(readability-identifier-naming)
+
+        const auto flux_l = fspec.flux(prim_l, n, vn_l);
+        const auto flux_r = fspec.flux(prim_r, n, vn_r);
 
         // Equation (10.26) from Toro 3rd Edition , Springer 2009
-        auto hll_flux = [=]() {
-            // const auto S_L_upwind = sham::min(S_L, 0.0);
-            // const auto S_R_upwind = sham::max(S_R, 0.0);
-            // const auto S_norm     = 1.0 / (S_R_upwind - S_L_upwind);
-            // return (fluxL * S_R_upwind - fluxR * S_L_upwind
-            //         + (consR - consL) * S_R_upwind * S_L_upwind)
-            //        * S_norm;
+        // const auto S_l_upwind = sham::min(S_l, 0.0);
+        // const auto S_r_upwind = sham::max(S_r, 0.0);
+        // const auto S_norm     = 1.0 / (S_r_upwind - S_l_upwind);
+        // return (flux_l * S_r_upwind - flux_r * S_l_upwind
+        //         + (cons_r - cons_l) * S_r_upwind * S_l_upwind)
+        //        * S_norm;
 
-            if (S_L >= 0)
-                return fluxL;
-            else if (S_R <= 0)
-                return fluxR;
-            else {
-                const auto S_norm = 1.0 / (S_R - S_L);
-                return (fluxL * S_R - fluxR * S_L + (consR - consL) * S_R * S_L) * S_norm;
-            }
-        };
-
-        return hll_flux();
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons hll_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_y(hll_flux_x(y_to_x(cL), y_to_x(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons hll_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_z(hll_flux_x(z_to_x(cL), z_to_x(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons hll_flux_mx(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hll_flux_x(invert_axis(cL), invert_axis(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons hll_flux_my(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hll_flux_y(invert_axis(cL), invert_axis(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons hll_flux_mz(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(hll_flux_z(invert_axis(cL), invert_axis(cR), gamma));
+        if (S_l >= 0)
+            return flux_l;
+        else if (S_r <= 0)
+            return flux_r;
+        else {
+            // Only the intermediate (star) state needs the conservative form, so it is
+            // formed here rather than at the call site (which only has primitives).
+            const auto cons_l = fspec.prim_to_cons(prim_l);
+            const auto cons_r = fspec.prim_to_cons(prim_r);
+            // NOLINTNEXTLINE(readability-identifier-naming)
+            const auto S_norm = 1.0 / (S_r - S_l);
+            return (flux_l * S_r - flux_r * S_l + (cons_r - cons_l) * S_r * S_l) * S_norm;
+        }
     }
 
 } // namespace shammath

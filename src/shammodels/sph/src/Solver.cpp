@@ -34,6 +34,7 @@
 #include "shamcomm/worldInfo.hpp"
 #include "shamcomm/wrapper.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/common/modules/ComputeGravWave.hpp"
 #include "shammodels/common/modules/ForwardEuler.hpp"
 #include "shammodels/common/modules/ForwardEulerPositive.hpp"
 #include "shammodels/common/timestep_report.hpp"
@@ -69,6 +70,7 @@
 #include "shammodels/sph/modules/MonoFluidTVADeltav.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shammodels/sph/modules/NodeComputePressureGrad.hpp"
+#include "shammodels/sph/modules/NodeMonofluidTVADustDensityClamp.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
@@ -76,6 +78,7 @@
 #include "shammodels/sph/modules/SinkParticlesEvictAccretedParticles.hpp"
 #include "shammodels/sph/modules/SinkParticlesFlagAccreteHard.hpp"
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
+#include "shammodels/sph/modules/SinkSelfGravityHost.hpp"
 #include "shammodels/sph/modules/UpdateDerivs.hpp"
 #include "shammodels/sph/modules/UpdateViscosity.hpp"
 #include "shammodels/sph/modules/io/VTKDump.hpp"
@@ -109,6 +112,8 @@
 #include "shamsolvergraph/SolverGraph.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
+#include "shamsolvergraph/node/ForwardEulerHost.hpp"
+#include "shamsolvergraph/node/ForwardEulerHost2Deriv.hpp"
 #include "shamsolvergraph/node/NodeFreeAlloc.hpp"
 #include "shamsolvergraph/node/NodeMapEdge.hpp"
 #include "shamsolvergraph/node/NodeSetEdge.hpp"
@@ -492,6 +497,28 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                             solver_graph.get_edge_ptr<FieldRefs<Tscal>>("s_j"));
                     half_step_sequence.push_back(half_step_s_j);
                 }
+
+                if (cfg.should_clamp_dust_density()) {
+                    auto hfactd_edge  = IDataEdge<Tscal>::make_shared("hfactd", "hfactd");
+                    hfactd_edge->data = Kernel::hfactd;
+
+                    auto clamp_frac_edge
+                        = IDataEdge<Tscal>::make_shared("clamp_frac", "clamp_frac");
+                    clamp_frac_edge->data = cfg.get_clamp_dust_frac();
+
+                    auto half_step_s_j_density_clamp = solver_graph.register_node(
+                        prefix + "_s_j_density_clamp",
+                        shammodels::sph::modules::NodeMonofluidTVADustDensityClamp<Tvec>(ndust));
+                    shambase::get_check_ref(half_step_s_j_density_clamp)
+                        .set_edges(
+                            solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                            solver_graph.get_edge_ptr<IDataEdge<Tscal>>("gpart_mass"),
+                            hfactd_edge,
+                            clamp_frac_edge,
+                            solver_graph.get_edge_ptr<FieldRefs<Tscal>>("hpart"),
+                            solver_graph.get_edge_ptr<FieldRefs<Tscal>>("s_j"));
+                    half_step_sequence.push_back(half_step_s_j_density_clamp);
+                }
             }
 
             return OperationSequence("half step", std::move(half_step_sequence));
@@ -591,21 +618,6 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             .set_edges(
                 sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
                 solver_graph.get_edge_ptr<IDataEdge<Tscal>>("dt_half"));
-    }
-
-    {
-        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> seq{};
-
-        seq.push_back(solver_graph.get_node_ptr_base("dt_to_half_dt"));
-        seq.push_back(solver_graph.get_node_ptr_base("set_gpart_mass"));
-        seq.push_back(solver_graph.get_node_ptr_base("attach fields to scheduler"));
-        seq.push_back(solver_graph.get_node_ptr_base("leapfrog predictor"));
-        if (do_part_killing_step) {
-            seq.push_back(solver_graph.get_node_ptr_base("part killing step"));
-        }
-
-        storage.solver_sequence = solver_graph.register_node(
-            "time_step", OperationSequence("time step", std::move(seq)));
     }
 
     storage.part_counts
@@ -758,6 +770,126 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////
+    // sink ext force (pairwise self-gravity between sink particles)
+    ////////////////////////////////////////////////////////////////////////////////////////
+    {
+        solver_graph.register_edge("sink_ext_force_G", IDataEdge<Tscal>("G", "G"));
+        solver_graph.register_edge(
+            "sink_ext_force_epsilon", IDataEdge<Tscal>("epsilon_grav_sink", "\\epsilon"));
+
+        auto set_G = solver_graph.register_node(
+            "set_sink_ext_force_G", NodeSetEdge<IDataEdge<Tscal>>([&](IDataEdge<Tscal> &g_edge) {
+                g_edge.data = solver_config.get_constant_G();
+            }));
+        shambase::get_check_ref(set_G).set_edges(
+            solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_ext_force_G"));
+
+        auto set_epsilon = solver_graph.register_node(
+            "set_sink_ext_force_epsilon",
+            NodeSetEdge<IDataEdge<Tscal>>([&](IDataEdge<Tscal> &epsilon_edge) {
+                epsilon_edge.data = 1e-9;
+            }));
+        shambase::get_check_ref(set_epsilon)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_ext_force_epsilon"));
+
+        auto reset_acc_ext = solver_graph.register_node(
+            "reset_sink_acc_ext",
+            NodeSetEdge<IDataEdgeSerializable<std::vector<Tvec>>>(
+                [](IDataEdgeSerializable<std::vector<Tvec>> &acc_ext) {
+                    for (Tvec &a : acc_ext.data) {
+                        a = Tvec{};
+                    }
+                }));
+        shambase::get_check_ref(reset_acc_ext)
+            .set_edges(
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_ext"));
+
+        auto self_gravity
+            = solver_graph.register_node("sink_self_gravity", modules::SinkSelfGravityHost<Tvec>{});
+        shambase::get_check_ref(self_gravity)
+            .set_edges(
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_ext_force_G"),
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_ext_force_epsilon"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_pos"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>("sink_mass"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_ext"));
+
+        auto ext_force_body = solver_graph.register_node(
+            "sink_ext_force_body",
+            OperationSequence(
+                "sink ext force body",
+                {
+                    set_G,
+                    set_epsilon,
+                    reset_acc_ext,
+                    self_gravity,
+                }));
+
+        // register the actual node that will be used, gated on the same "has_sinks" edge
+        // maintained by the "sink accretion" section above
+        auto sink_ext_force = solver_graph.register_node(
+            "sink ext force", OperationIf("sink ext force", ext_force_body));
+        shambase::get_check_ref(sink_ext_force)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<bool>>("has_sinks"));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // sink predictor step (leapfrog kick-drift of the sink particles themselves)
+    ////////////////////////////////////////////////////////////////////////////////////////
+    {
+        solver_graph.register_edge(
+            "sink_predictor_dt_half", IDataEdge<Tscal>("dt_half", "\\frac{dt}{2}"));
+
+        auto sink_predictor_dt_to_half_dt = solver_graph.register_node(
+            "sink_predictor_dt_to_half_dt",
+            NodeMapEdge<IDataEdge<Tscal>, IDataEdge<Tscal>>{
+                [](const IDataEdge<Tscal> &dt, IDataEdge<Tscal> &half_dt) {
+                    half_dt.data = dt.data / 2;
+                }});
+        shambase::get_check_ref(sink_predictor_dt_to_half_dt)
+            .set_edges(
+                sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_predictor_dt_half"));
+
+        auto sink_predictor_vel_update = solver_graph.register_node(
+            "sink_predictor_vel_update", ForwardEulerHost2Deriv<Tvec, Tscal>{});
+        shambase::get_check_ref(sink_predictor_vel_update)
+            .set_edges(
+                solver_graph.get_edge_ptr<IDataEdge<Tscal>>("sink_predictor_dt_half"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_sph"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_acc_ext"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_vel"));
+
+        auto sink_predictor_pos_update = solver_graph.register_node(
+            "sink_predictor_pos_update", ForwardEulerHost<Tvec, Tscal>{});
+        shambase::get_check_ref(sink_predictor_pos_update)
+            .set_edges(
+                sync_data.get_edge_ptr<IDataEdge<Tscal>>("dt"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_vel"),
+                sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tvec>>>("sink_pos"));
+
+        auto sink_predictor_body = solver_graph.register_node(
+            "sink_predictor_body",
+            OperationSequence(
+                "sink predictor body",
+                {
+                    // recompute the sink self-gravity at the current (pre-predictor) sink
+                    // positions before using it to kick the sink velocities
+                    solver_graph.get_node_ptr_base("sink ext force"),
+                    sink_predictor_dt_to_half_dt,
+                    sink_predictor_vel_update,
+                    sink_predictor_pos_update,
+                }));
+
+        // register the actual node that will be used, gated on the same "has_sinks" edge
+        // maintained by the "sink accretion" section above
+        auto sink_predictor = solver_graph.register_node(
+            "sink predictor", OperationIf("sink predictor", sink_predictor_body));
+        shambase::get_check_ref(sink_predictor)
+            .set_edges(solver_graph.get_edge_ptr<IDataEdge<bool>>("has_sinks"));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////
     // external force (point mass) accretion
     ////////////////////////////////////////////////////////////////////////////////////////
     {
@@ -884,6 +1016,25 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                     set_has_accretion,
                     if_has_accretion,
                 }));
+    }
+
+    {
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> seq{};
+
+        seq.push_back(solver_graph.get_node_ptr_base("sink accretion"));
+        seq.push_back(solver_graph.get_node_ptr_base("point mass accretion"));
+        seq.push_back(solver_graph.get_node_ptr_base("sink predictor"));
+        seq.push_back(solver_graph.get_node_ptr_base("dt_to_half_dt"));
+        seq.push_back(solver_graph.get_node_ptr_base("set_gpart_mass"));
+        seq.push_back(solver_graph.get_node_ptr_base("attach fields to scheduler"));
+        seq.push_back(solver_graph.get_node_ptr_base("leapfrog predictor"));
+        if (do_part_killing_step) {
+            seq.push_back(solver_graph.get_node_ptr_base("part killing step"));
+        }
+        seq.push_back(solver_graph.get_node_ptr_base("sink ext force"));
+
+        storage.solver_sequence = solver_graph.register_node(
+            "time_step", OperationSequence("time step", std::move(seq)));
     }
 }
 
@@ -1286,7 +1437,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
                     shammodels::sph::modules::IterateSmoothingLengthDensity<Tvec, Kernel>>(
                     solver_config.gpart_mass,
                     solver_config.htol_up_coarse_cycle,
-                    solver_config.htol_up_fine_cycle);
+                    solver_config.htol_up_fine_cycle,
+                    solver_config.epsilon_h);
             smth_h_iter->set_edges(sizes, neigh_cache, pos_merged, hold, hnew, eps_h);
             smth_h_iter_ptr = smth_h_iter;
         } else if (
@@ -1299,7 +1451,8 @@ void shammodels::sph::Solver<Tvec, Kern>::sph_prestep(Tscal time_val, Tscal dt) 
                     solver_config.gpart_mass,
                     solver_config.htol_up_coarse_cycle,
                     solver_config.htol_up_fine_cycle,
-                    conf->max_neigh_count);
+                    conf->max_neigh_count,
+                    solver_config.epsilon_h);
             smth_h_iter_neigh_lim->set_edges(
                 sizes, neigh_cache, pos_merged, hold, hnew, eps_h, should_set_omega_mask);
             smth_h_iter_ptr = smth_h_iter_neigh_lim;
@@ -2138,14 +2291,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     shamrock::SchedulerUtility utility(scheduler());
 
-    storage.solver_graph.get_node_ref_base("sink accretion").evaluate();
-    storage.solver_graph.get_node_ref_base("point mass accretion").evaluate();
-
-    modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
-    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
-
-    sink_update.predictor_step(dt);
-
     {
         // beginning of SolverGraph migration
 
@@ -2160,8 +2305,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         shambase::get_check_ref(storage.solver_sequence).evaluate();
     }
 
-    sink_update.compute_ext_forces();
-
+    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
     ext_forces.compute_ext_forces_indep_v();
 
     gen_serial_patch_tree();
@@ -2544,6 +2688,77 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         update_derivs(dt);
 
+        ////////////////////////////////////////////////////////////////////////////////////////
+        // Gravitational Wave emission
+        ////////////////////////////////////////////////////////////////////////////////////////
+        bool compute_GW = solver_config.compute_gw;
+
+        if (compute_GW) {
+            using namespace shamrock::solvergraph;
+            using GW = shammodels::common::modules::ComputeGravWave<Tvec>;
+
+            auto central_pos  = IDataEdge<Tvec>::make_shared("x_0", "\\mathbf{x}_0");
+            central_pos->data = Tvec{0, 0, 0};
+
+            auto central_vel  = IDataEdge<Tvec>::make_shared("v_0", "\\mathbf{v}_0");
+            central_vel->data = Tvec{0, 0, 0};
+
+            auto central_acc  = IDataEdge<Tvec>::make_shared("a_0", "\\mathbf{a}_0");
+            central_acc->data = Tvec{0, 0, 0};
+
+            auto gw_prefactor  = IDataEdge<Tscal>::make_shared("gw_prefactor", "gw_prefactor");
+            gw_prefactor->data = Tscal(1); // should be G/c^2D
+
+            auto theta_gw  = IDataEdge<Tscal>::make_shared("theta_gw", "\\theta_{\\rm gw}");
+            theta_gw->data = Tscal(0);
+
+            auto phi_gw  = IDataEdge<Tscal>::make_shared("phi_gw", "\\phi_{\\rm gw}");
+            phi_gw->data = Tscal(0);
+
+            ComputeField<Tscal> gw_mass_field
+                = utility.make_compute_field<Tscal>("gw_mass", 1, solver_config.gpart_mass);
+
+            auto spans_masses = std::make_shared<FieldRefs<Tscal>>("m", "m");
+            map_field_refs_ext(scheduler(), gw_mass_field, *spans_masses);
+
+            const u32 iaxyz_ext = pdl.get_field_idx<Tvec>("axyz_ext");
+            auto spans_accel_ext
+                = std::make_shared<FieldRefs<Tvec>>("axyz_ext", "\\mathbf{a}_{\\rm ext}");
+            map_field_refs(scheduler(), iaxyz_ext, *spans_accel_ext);
+
+            auto ddq    = IDataEdge<typename GW::Tddq>::make_shared("ddq", "\\ddot{Q}");
+            auto ddq_xy = IDataEdge<typename GW::Tddqxy>::make_shared("ddq_xy", "\\ddot{Q}_{xy}");
+            auto hx     = IDataEdge<typename GW::Th>::make_shared("hx", "h_x");
+            auto hp     = IDataEdge<typename GW::Th>::make_shared("hp", "h_+");
+
+            GW node_computeGW{};
+            node_computeGW.set_edges(
+                storage.solver_graph.template get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+                storage.solver_graph.template get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
+                storage.solver_graph.template get_edge_ptr<FieldRefs<Tvec>>("axyz"),
+                spans_masses,
+                spans_accel_ext,
+                central_pos,
+                central_vel,
+                central_acc,
+                gw_prefactor,
+                theta_gw,
+                phi_gw,
+                storage.part_counts,
+                ddq,
+                ddq_xy,
+                hx,
+                hp);
+
+            node_computeGW.evaluate();
+
+            // TODO: send that somewhere rather than doing a print
+            logger::raw_ln("################## hx = ", hx->data);
+            logger::raw_ln("################## hp = ", hp->data);
+            logger::raw_ln("################## ddq = ", ddq->data);
+            logger::raw_ln("################## ddq_xy = ", ddq_xy->data);
+        }
+
         bool has_luminosity = solver_config.compute_luminosity;
 
         if (has_luminosity) {
@@ -2557,8 +2772,6 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                                           1)); // hpart is at index 1 in merged_xyzh
                                   }));
 
-            auto uint_with_ghost = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
-
             shambase::get_check_ref(storage.hpart_with_ghosts)
                 .set_refs(storage.merged_xyzh.get()
                               .template map<std::reference_wrapper<PatchDataField<Tscal>>>(
@@ -2566,6 +2779,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                                       return std::ref(mpdat.get_field<Tscal>(1));
                                   }));
 
+            auto uint_with_ghost = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
             shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>>
                 set_uint_with_ghost_refs(
                     [&](shamrock::solvergraph::FieldRefs<Tscal> &field_uint_with_ghost_edge) {
@@ -2587,6 +2801,29 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                     });
 
             set_uint_with_ghost_refs.set_edges(uint_with_ghost);
+
+            auto omega_with_ghost = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
+            shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tscal>>
+                set_omega_with_ghost_refs([&](shamrock::solvergraph::FieldRefs<Tscal>
+                                                  &field_omega_with_ghost_edge) {
+                    shambase::DistributedData<PatchDataLayer> &mpdats
+                        = storage.merged_patchdata_ghost.get();
+
+                    shamrock::solvergraph::DDPatchDataFieldRef<Tscal> field_omega_with_ghost_refs
+                        = {};
+
+                    scheduler().for_each_patchdata_nonempty(
+                        [&](const Patch p, PatchDataLayer &pdat) {
+                            PatchDataLayer &mpdat = mpdats.get(p.id_patch);
+
+                            auto &field = mpdat.get_field<Tscal>(iomega_interf);
+                            field_omega_with_ghost_refs.add_obj(p.id_patch, std::ref(field));
+                        });
+
+                    field_omega_with_ghost_edge.set_refs(field_omega_with_ghost_refs);
+                });
+
+            set_omega_with_ghost_refs.set_edges(omega_with_ghost);
 
             auto luminosity = shamrock::solvergraph::FieldRefs<Tscal>::make_shared("", "");
 
@@ -2610,6 +2847,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             set_luminosity_refs.set_edges(luminosity);
 
             set_uint_with_ghost_refs.evaluate();
+            set_omega_with_ghost_refs.evaluate();
             set_luminosity_refs.evaluate();
 
             Tscal alpha_u = solver_config.artif_viscosity.get_alpha_u().value();
@@ -2619,10 +2857,11 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             compute_luminosity.set_edges(
                 storage.part_counts,
+                storage.part_counts_with_ghost,
                 storage.neigh_cache,
                 storage.positions_with_ghosts,
                 storage.hpart_with_ghosts,
-                storage.omega,
+                omega_with_ghost,
                 uint_with_ghost,
                 storage.pressure,
                 luminosity);
@@ -2683,6 +2922,33 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             } else {
                 utility.fields_leapfrog_corrector<Tscal>(
                     is_j, ids_j_dt, storage.old_ds_j_dt.get(), s_j_s_j_sq, dt / 2);
+            }
+
+            auto &monofluid_tva_cfg = solver_config.dust_config.get_monofluid_tva();
+            if (monofluid_tva_cfg.should_clamp_dust_density()) {
+                auto hfactd_edge
+                    = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("hfactd", "hfactd");
+                hfactd_edge->data = Kernel::hfactd;
+
+                auto clamp_frac_edge = shamrock::solvergraph::IDataEdge<Tscal>::make_shared(
+                    "clamp_frac", "clamp_frac");
+                clamp_frac_edge->data = monofluid_tva_cfg.get_clamp_dust_frac();
+
+                shammodels::sph::modules::NodeMonofluidTVADustDensityClamp<Tvec> density_clamp(
+                    solver_config.dust_config.get_dust_nvar());
+                density_clamp.set_edges(
+                    storage.solver_graph.template get_edge_ptr<shamrock::solvergraph::Indexes<u32>>(
+                        "part_counts"),
+                    storage.solver_graph
+                        .template get_edge_ptr<shamrock::solvergraph::IDataEdge<Tscal>>(
+                            "gpart_mass"),
+                    hfactd_edge,
+                    clamp_frac_edge,
+                    storage.solver_graph
+                        .template get_edge_ptr<shamrock::solvergraph::FieldRefs<Tscal>>("hpart"),
+                    storage.solver_graph
+                        .template get_edge_ptr<shamrock::solvergraph::FieldRefs<Tscal>>("s_j"));
+                density_clamp.evaluate();
             }
         }
 
@@ -2747,6 +3013,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         if (!need_rerun_corrector) {
 
+            modules::SinkParticlesUpdate<Tvec, Kern> sink_update(context, solver_config, storage);
             sink_update.corrector_step(dt);
 
             // write back alpha av field

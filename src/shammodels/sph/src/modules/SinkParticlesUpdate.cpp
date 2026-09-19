@@ -16,35 +16,10 @@
  */
 
 #include "shammodels/sph/modules/SinkParticlesUpdate.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
 #include <vector>
-
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::predictor_step(Tscal dt) {
-
-    StackEntry stack_loc{};
-
-    auto &sync = scheduler().synchronized_data;
-    auto &pos  = get_sink_pos<Tvec>(sync);
-    if (pos.empty()) {
-        return;
-    }
-
-    auto &vel     = get_sink_vel<Tvec>(sync);
-    auto &acc_sph = get_sink_acc_sph<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
-
-    compute_ext_forces();
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        vel[i] += (dt / 2) * (acc_sph[i] + acc_ext[i]);
-    }
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        pos[i] += dt * vel[i];
-    }
-}
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::corrector_step(Tscal dt) {
@@ -112,38 +87,33 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph
                 Tscal sink_racc = accretion_radius[sink_id];
                 Tvec sink_pos   = pos[sink_id];
 
-                sham::EventList depends_list;
-                auto xyz       = buf_xyz.get_read_access(depends_list);
-                auto axyz_ext  = buf_axyz_ext.get_write_access(depends_list);
-                auto axyz_sync = buf_sync_axyz.get_write_access(depends_list);
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{buf_xyz},
+                    sham::MultiRef{buf_axyz_ext, buf_sync_axyz},
+                    pdat.get_obj_cnt(),
+                    [G, sink_mass, sink_pos, sink_racc, gpart_mass](
+                        u32 id_a,
+                        const Tvec *__restrict xyz,
+                        Tvec *__restrict axyz_ext,
+                        Tvec *__restrict axyz_sync) {
+                        Tvec r_a = xyz[id_a];
 
-                auto e = q.submit(
-                    depends_list,
-                    [&, G, epsilon_grav, sink_mass, sink_pos, sink_racc](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, pdat.get_obj_cnt(), "sink-sph forces", [=](i32 id_a) {
-                                Tvec r_a = xyz[id_a];
+                        Tvec delta = r_a - sink_pos;
+                        Tscal d    = sycl::length(delta);
 
-                                Tvec delta = r_a - sink_pos;
-                                Tscal d    = sycl::length(delta);
+                        Tvec force = G * delta / (d * d * d);
 
-                                Tvec force = G * delta / (d * d * d);
+                        // This is a hack to avoid the sink kaboom effect
+                        // when the particle is being advected close to the sink before
+                        // being accreted
+                        if (d < sink_racc) {
+                            force = {0, 0, 0};
+                        }
 
-                                // This is a hack to avoid the sink kaboom effect
-                                // when the particle is being advected close to the sink before
-                                // being accreted
-                                if (d < sink_racc) {
-                                    force = {0, 0, 0};
-                                }
-
-                                axyz_sync[id_a] = force * gpart_mass;
-                                axyz_ext[id_a] += -force * sink_mass;
-                            });
+                        axyz_sync[id_a] = force * gpart_mass;
+                        axyz_ext[id_a] += -force * sink_mass;
                     });
-
-                buf_xyz.complete_event_state(e);
-                buf_axyz_ext.complete_event_state(e);
-                buf_sync_axyz.complete_event_state(e);
 
                 sph_acc_sink
                     += shamalgs::primitives::sum(dev_sched, buf_sync_axyz, 0, pdat.get_obj_cnt());
@@ -163,38 +133,6 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph
         for (u32 rid = 0; rid < shamcomm::world_size(); rid++) {
             acc_sph[id_s] += gathered_result_acc_sinks[rid * pos.size() + id_s];
         }
-    }
-}
-
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_ext_forces() {
-
-    StackEntry stack_loc{};
-
-    auto &sync = scheduler().synchronized_data;
-    auto &pos  = get_sink_pos<Tvec>(sync);
-    if (pos.empty()) {
-        return;
-    }
-
-    auto &mass    = get_sink_mass<Tvec>(sync);
-    auto &acc_ext = get_sink_acc_ext<Tvec>(sync);
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        acc_ext[i] = Tvec{};
-    }
-
-    Tscal G                 = solver_config.get_constant_G();
-    Tscal epsilon_grav_sink = 1e-9;
-
-    for (size_t i = 0; i < pos.size(); i++) {
-        Tvec sum{};
-        for (size_t j = 0; j < pos.size(); j++) {
-            Tvec rij       = pos[i] - pos[j];
-            Tscal rij_scal = sycl::length(rij);
-            sum -= G * mass[j] * rij / (rij_scal * rij_scal * rij_scal + epsilon_grav_sink);
-        }
-        acc_ext[i] = sum;
     }
 }
 

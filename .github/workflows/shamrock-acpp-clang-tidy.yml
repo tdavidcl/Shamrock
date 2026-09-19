@@ -56,14 +56,14 @@ jobs:
         run:  |
           git config --global --add safe.directory '*'
           git config --global --list
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: github.event_name == 'pull_request_target'
         with:
           fetch-depth: 0
           submodules: recursive
           ref: "refs/pull/${{ github.event.number }}/merge"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: github.event_name != 'pull_request_target'
         with:
           fetch-depth: 0
@@ -73,6 +73,11 @@ jobs:
         if: github.event_name == 'pull_request_target'
         run: git diff ${{ github.event.pull_request.base.sha }} HEAD
       #### End Checkout part ####
+
+      # Avoids git clone failing with exit code 128 on the GitHub runner
+      - name: Authenticate git for github.com
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: ls local
         run : ls -la

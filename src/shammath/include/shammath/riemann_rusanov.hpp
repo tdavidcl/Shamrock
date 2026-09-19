@@ -22,69 +22,36 @@
 
 namespace shammath {
 
-    // template<class Tcons>
-    // inline constexpr Tcons rusanov_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-    //     Tcons flux;
+    /**
+     * @brief Rusanov flux across a face with unit normal n
+     */
+    template<FluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons rusanov_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        const auto cs_l = fspec.sound_speed(prim_l);
+        const auto cs_r = fspec.sound_speed(prim_r);
 
-    //     const auto primL = cons_to_prim(cL, gamma);
-    //     const auto primR = cons_to_prim(cR, gamma);
+        const auto vn_l = fspec.vn(prim_l, n);
+        const auto vn_r = fspec.vn(prim_r, n);
 
-    //     const auto csL = sound_speed(primL, gamma);
-    //     const auto csR = sound_speed(primR, gamma);
-
-    //     const auto S = sham::max(
-    //         sham::max(sham::abs(primL.vel[0] - csL), sham::abs(primR.vel[0] - csR)),
-    //         sham::max(sham::abs(primL.vel[0] + csL), sham::abs(primR.vel[0] + csR)));
-
-    //     const auto fL = hydro_flux_x(cL, gamma);
-    //     const auto fR = hydro_flux_x(cR, gamma);
-
-    //     return (fL + fR) * 0.5 - (cR - cL) * S;
-    // }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_x(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        Tcons flux;
-
-        const auto primL = cons_to_prim(cL, gamma);
-        const auto primR = cons_to_prim(cR, gamma);
-
-        const auto csL = sound_speed(primL, gamma);
-        const auto csR = sound_speed(primR, gamma);
+        // NOLINTBEGIN(readability-identifier-naming)
 
         // Equation (10.56) from Toro 3rd Edition , Springer 2009
-        const auto S = sham::max((sham::abs(primL.vel[0]) + csL), (sham::abs(primR.vel[0]) + csR));
+        const auto S = sham::max((sham::abs(vn_l) + cs_l), (sham::abs(vn_r) + cs_r));
 
-        const auto fL = hydro_flux_x(cL, gamma);
-        const auto fR = hydro_flux_x(cR, gamma);
+        // NOLINTEND(readability-identifier-naming)
+
+        const auto f_l = fspec.flux(prim_l, n, vn_l);
+        const auto f_r = fspec.flux(prim_r, n, vn_r);
+
+        const auto cons_l = fspec.prim_to_cons(prim_l);
+        const auto cons_r = fspec.prim_to_cons(prim_r);
 
         // Equation (10.55) from Toro 3rd Edition , Springer 2009
-        return 0.5 * ((fL + fR) - (cR - cL) * S);
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_y(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_y(rusanov_flux_x(y_to_x(cL), y_to_x(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_z(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return x_to_z(rusanov_flux_x(z_to_x(cL), z_to_x(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_mx(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(rusanov_flux_x(invert_axis(cL), invert_axis(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_my(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(rusanov_flux_y(invert_axis(cL), invert_axis(cR), gamma));
-    }
-
-    template<class Tcons>
-    inline constexpr Tcons rusanov_flux_mz(Tcons cL, Tcons cR, typename Tcons::Tscal gamma) {
-        return invert_axis(rusanov_flux_z(invert_axis(cL), invert_axis(cR), gamma));
+        return 0.5 * ((f_l + f_r) - (cons_r - cons_l) * S);
     }
 
 } // namespace shammath

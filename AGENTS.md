@@ -103,13 +103,46 @@ Show the device table from the `--smi` output and **ask the user to select which
 - **Pre-commit hooks**: `.pre-commit-config.yaml`
 - Run `pre-commit run --all-files` before committing
 
-## Naming conventions (from `.clang-tidy` `CheckOptions`)
+## Naming conventions (enforced as warnings by `.clang-tidy` `CheckOptions`)
 
-| Entity                         | Case       |
-| ------------------------------ | ---------- |
-| Class/Enum/Union               | CamelCase  |
-| Function/Variable/Parameter    | lower_case |
-| Member                         | lower_case |
+| Entity                            | Case       |
+| --------------------------------- | ---------- |
+| Class/Struct/Enum/Union           | CamelCase  |
+| Function/Variable/Parameter       | lower_case |
+| Member                            | lower_case |
+| Constant (incl. class `static constexpr`) | lower_case |
+| Namespace                         | lower_case |
+| Macro                             | UPPER_CASE |
+| Enum value                        | CamelCase  |
+| Template parameter (type, e.g. `Tvec`) | CamelCase  |
+| Template parameter (non-type, e.g. `dim`) | lower_case |
+
+Enum values use **acronym-preserving CamelCase**: each word is
+capitalized, but a word that is itself a recognized acronym (a
+vendor/hardware name like `AMD`, `CPU`, `GPU`, or a numerical-method name
+like `CG`, `PCG`, `HLL`) is kept fully capitalized as that one word
+instead of only its first letter (`Nvidia`, but `AMD`, `CPU`, `CUDA`,
+`PCG`). A plain English word typed in caps for consistency (`UNKNOWN`,
+`MULTIGRID`) is not an acronym and should be normalized (`Unknown`,
+`Multigrid`). When the value names a specific external technology with
+its own established spelling (`OpenMP`, `ROCm`, `BiCGSTAB`), match that
+spelling rather than deriving one mechanically.
+
+Note: `readability-identifier-naming`'s `CamelCase` check only rejects a
+name with an underscore or a lowercase first letter, so it can't tell an
+acronym from a plain word typed in caps by mistake — it won't flag
+`UNKNOWN` even though the convention above says it should become
+`Unknown`. Treat the table above as the target and fix those on sight.
+
+### File naming
+
+- A file that implements a single class/struct is named after that type
+  in CamelCase (e.g. `PatchDataField.hpp` for `class PatchDataField`).
+- A file that holds a free-function algorithm, a kernel, or a bag of
+  related utilities (no single owning type) is named in `lower_case`
+  (e.g. `compute_ranges.hpp`, `key_morton_sort.hpp`).
+- This is not enforced by clang-tidy (no such check exists there); it's a
+  review-time convention.
 
 ## Architecture overview
 
@@ -147,14 +180,15 @@ upstream `main` on that repo.
 
 ### Commit authorship
 
-Commit-msg hooks can rewrite the author and inject `Co-authored-by` (often)
+Commit-msg hooks can rewrite the author and inject `Co-authored-by` (often
 with a model name). After every `git commit`, amend with `--no-verify`
 before pushing (a plain amend re-runs the hook):
 
 - **Author** = the human who initiated the work. Use `--author`; do not
   change gitconfig.
 - Trailer = `Assisted-by: <agent>` only. No model names. No
-  `Co-authored-by` (`Co-authored-by` is for extra human authors only).
+  `Co-authored-by` (`Co-authored-by` is for extra human authors only). Also
+  no session url.
 
 Check `git log -1 --format='Author: %an <%ae>%n%B'` before push.
 

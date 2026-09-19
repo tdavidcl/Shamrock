@@ -51,6 +51,7 @@ namespace shammodels {
             Tscal a_spin;
             Tvec dir_spin;
             Tvec central_pos{};
+            Tvec central_vel{};
         };
 
         /**
@@ -126,14 +127,14 @@ namespace shammodels {
             Tscal Racc,
             Tscal a_spin,
             Tvec dir_spin,
-            Tvec central_pos = Tvec{}) {
+            Tvec central_pos = Tvec{},
+            Tvec central_vel = Tvec{}) {
             if (sham::abs(sycl::length(dir_spin) - 1) > 1e-8) {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "the sping direction should be a unit vector");
             }
-            ext_forces.push_back(
-                ExtForceVariant<Tvec>{
-                    LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos}});
+            ext_forces.push_back(ExtForceVariant<Tvec>{
+                LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos, central_vel}});
         }
 
         /**
@@ -189,6 +190,7 @@ namespace shammodels {
                 {"a_spin", v->a_spin},
                 {"dir_spin", v->dir_spin},
                 {"central_pos", v->central_pos},
+                {"central_vel", v->central_vel},
             };
         } else if (const ShearingBoxForce *v = std::get_if<ShearingBoxForce>(&p.val)) {
             j = {
@@ -249,6 +251,7 @@ namespace shammodels {
                 j.at("a_spin").get<Tscal>(),
                 j.at("dir_spin").get<Tvec>(),
                 j.value("central_pos", Tvec{}),
+                j.value("central_vel", Tvec{}),
             };
         } else if (force_type == "shearing_box_force") {
             p.val = ShearingBoxForce{
