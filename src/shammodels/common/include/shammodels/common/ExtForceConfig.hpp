@@ -133,8 +133,9 @@ namespace shammodels {
                 shambase::throw_with_loc<std::invalid_argument>(
                     "the sping direction should be a unit vector");
             }
-            ext_forces.push_back(ExtForceVariant<Tvec>{
-                LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos, central_vel}});
+            ext_forces.push_back(
+                ExtForceVariant<Tvec>{
+                    LenseThirring{central_mass, Racc, a_spin, dir_spin, central_pos, central_vel}});
         }
 
         /**
