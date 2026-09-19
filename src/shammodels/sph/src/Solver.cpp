@@ -128,6 +128,14 @@
 #include <stdexcept>
 #include <vector>
 
+namespace shambase {
+
+    template<class T>
+    std::shared_ptr<T> to_shared(T &&t) {
+        return std::make_shared<T>(std::forward<T>(t));
+    }
+} // namespace shambase
+
 template<class Tvec, template<class> class Kern>
 void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
@@ -2394,19 +2402,16 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         set_gpart_mass.set_edges(gpart_mass);
 
-        set_gpart_mass.evaluate();
-        set_constant_G.evaluate();
-        set_field_xyz.evaluate();
-        set_field_axyz_ext.evaluate();
-        set_sizes.evaluate();
-
         Tscal eps_grav = shambase::get_check_ref(
                              std::get_if<SelfGravConfig::SofteningPlummer>(
                                  &solver_config.self_grav_config.softening_mode))
                              .epsilon;
 
+        std::shared_ptr<shamrock::solvergraph::INode> sg_inode;
+
         if (solver_config.self_grav_config.is_none()) {
-            // do nothing
+            throw shambase::make_except_with_loc<std::runtime_error>(
+                "How did you get there ?\?\?!!!");
         } else if (solver_config.self_grav_config.is_direct()) {
 
             SelfGravConfig::Direct &direct_config = shambase::get_check_ref(
@@ -2416,7 +2421,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 eps_grav, direct_config.reference_mode);
             self_gravity_direct_node.set_edges(
                 sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-            self_gravity_direct_node.evaluate();
+
+            sg_inode = shambase::to_shared(std::move(self_gravity_direct_node));
 
         } else if (solver_config.self_grav_config.is_mm()) {
 
@@ -2429,7 +2435,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                     eps_grav, mm_config.opening_angle, mm_config.reduction_level);
                 self_gravity_mm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
+                sg_inode = shambase::to_shared(std::move(self_gravity_mm_node));
             };
 
             switch (mm_config.order) {
@@ -2448,11 +2454,11 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             auto run_sg_fmm = [&](auto fmm_order_tag) {
                 constexpr u32 order = decltype(fmm_order_tag)::value;
-                modules::SGFMMPlummer<Tvec, order> self_gravity_mm_node(
+                modules::SGFMMPlummer<Tvec, order> self_gravity_fmm_node(
                     eps_grav, fmm_config.opening_angle, fmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
+                self_gravity_fmm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
+                sg_inode = shambase::to_shared(std::move(self_gravity_fmm_node));
             };
 
             switch (fmm_config.order) {
@@ -2471,14 +2477,14 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
             auto run_sg_sfmm = [&](auto sfmm_order_tag) {
                 constexpr u32 order = decltype(sfmm_order_tag)::value;
-                modules::SGSFMMPlummer<Tvec, order> self_gravity_mm_node(
+                modules::SGSFMMPlummer<Tvec, order> self_gravity_sfmm_node(
                     eps_grav,
                     sfmm_config.opening_angle,
                     sfmm_config.leaf_lowering,
                     sfmm_config.reduction_level);
-                self_gravity_mm_node.set_edges(
+                self_gravity_sfmm_node.set_edges(
                     sizes, gpart_mass, constant_G, field_xyz, field_axyz_ext);
-                self_gravity_mm_node.evaluate();
+                sg_inode = shambase::to_shared(std::move(self_gravity_sfmm_node));
             };
 
             switch (sfmm_config.order) {
@@ -2495,6 +2501,18 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 "Self gravity config not supported, current state is : \n"
                 + nlohmann::json{solver_config.self_grav_config}.dump(4));
         }
+
+        shamrock::solvergraph::OperationSequence sg_sequence(
+            "self gravity",
+            {
+                shambase::to_shared(std::move(set_gpart_mass)),
+                shambase::to_shared(std::move(set_constant_G)),
+                shambase::to_shared(std::move(set_field_xyz)),
+                shambase::to_shared(std::move(set_field_axyz_ext)),
+                shambase::to_shared(std::move(set_sizes)),
+                sg_inode,
+            });
+        sg_sequence.evaluate();
     }
 
     sph::BasicSPHGhostHandler<Tvec> &ghost_handle = storage.ghost_handler.get();
