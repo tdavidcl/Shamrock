@@ -76,7 +76,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
 
             f32 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
             f32 expected = std::accumulate(data.begin(), data.end(), 0.0f);
-            REQUIRE_EQUAL(result, expected);
+            // Reduction strategies may sum in a different order than std::accumulate
+            // (e.g. a tree reduction), which is not bit-exact for floats.
+            REQUIRE_FLOAT_EQUAL(result, expected, 1e-5f);
         }
 
         {
@@ -87,7 +89,9 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
 
             f64 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
             f64 expected = std::accumulate(data.begin(), data.end(), 0.0);
-            REQUIRE_EQUAL(result, expected);
+            // Reduction strategies may sum in a different order than std::accumulate
+            // (e.g. a tree reduction), which is not bit-exact for floats.
+            REQUIRE_FLOAT_EQUAL(result, expected, 1e-9);
         }
 
         {

@@ -48,7 +48,13 @@ namespace shamalgs::reduction::details {
         T *result       = recov_buf.get_write_access(depends_list);
 
         auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-            auto reduc = sycl::reduction(result, identity, bop);
+            // Without initialize_to_identity, the reduction combines with whatever was
+            // already in *result (uninitialized device memory here), not with identity.
+            auto reduc = sycl::reduction(
+                result,
+                identity,
+                bop,
+                sycl::property_list{sycl::property::reduction::initialize_to_identity{}});
 
             cgh.parallel_for(sycl::range<1>{len}, reduc, [=](sycl::id<1> idx, auto &acc) {
                 acc.combine(in_ptr[idx]);
