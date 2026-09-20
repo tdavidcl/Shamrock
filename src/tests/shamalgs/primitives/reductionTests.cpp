@@ -82,8 +82,8 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             f32 sum_abs = std::accumulate(data.begin(), data.end(), 0.0f, [](f32 a, f32 b) {
                 return a + std::abs(b);
             });
-            f32 tol = static_cast<f32>(data.size() - 1) * std::numeric_limits<f32>::epsilon()
-                      * sum_abs;
+            f32 tol
+                = static_cast<f32>(data.size() - 1) * std::numeric_limits<f32>::epsilon() * sum_abs;
             REQUIRE_FLOAT_EQUAL(result, expected, tol);
         }
 
@@ -101,8 +101,8 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             f64 sum_abs = std::accumulate(data.begin(), data.end(), 0.0, [](f64 a, f64 b) {
                 return a + std::abs(b);
             });
-            f64 tol = static_cast<f64>(data.size() - 1) * std::numeric_limits<f64>::epsilon()
-                      * sum_abs;
+            f64 tol
+                = static_cast<f64>(data.size() - 1) * std::numeric_limits<f64>::epsilon() * sum_abs;
             REQUIRE_FLOAT_EQUAL(result, expected, tol);
         }
 
