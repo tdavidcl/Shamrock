@@ -75,15 +75,33 @@ ON_PYTHON_INIT {
         R"==(
     Strategy used to build the neighbours cache out of the tree traversal.
 
-    Values
-    ------
-    SingleStage
-        Single tree traversal per particle.
-    TwoStage
-        Two stage neighbours search (see the shamrock paper), the default.
+    Usage
+    -----
+    >>> from shamrock import NeighCacheStrategy
+    >>> cfg.set_neigh_cache_strategy(NeighCacheStrategy.SingleStage)
 )==")
-        .value("SingleStage", shammodels::NeighCacheStrategy::SingleStage)
-        .value("TwoStage", shammodels::NeighCacheStrategy::TwoStage);
+        .value(
+            "SingleStage",
+            shammodels::NeighCacheStrategy::SingleStage,
+            R"==(
+    Single tree traversal per particle.
+
+    Each particle walks the tree itself and writes its neighbours straight to the
+    cache. Prefer this one when the tree ends up with giant leaves, as on a chaotic
+    disc: there the leaf bounding boxes grow so large that the two stage search makes
+    each particle scan far more candidates than it keeps.
+)==")
+        .value(
+            "TwoStage",
+            shammodels::NeighCacheStrategy::TwoStage,
+            R"==(
+    Two stage neighbours search (see the shamrock paper). This is the default.
+
+    A first pass walks the tree once per leaf to build a leaf to leaf neighbour map,
+    then each particle only scans the particles held by its own leaf's neighbour
+    leaves. This is usually the faster of the two, since the tree traversal is paid
+    once per leaf instead of once per particle.
+)==");
 
     m.def(
         "compute_histogram",
