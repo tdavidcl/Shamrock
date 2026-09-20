@@ -96,7 +96,9 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
     ----------
     strategy : NeighCacheStrategy
         Either ``shamrock.NeighCacheStrategy.SingleStage`` or
-        ``shamrock.NeighCacheStrategy.TwoStage`` (default).
+        ``shamrock.NeighCacheStrategy.TwoStage`` (default). The members can also be
+        imported directly with
+        ``from shamrock.NeighCacheStrategy import SingleStage, TwoStage``.
 )==")
         .def(
             "set_two_stage_search",

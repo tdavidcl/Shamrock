@@ -18,6 +18,7 @@ import os  # for makedirs
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from shamrock.NeighCacheStrategy import SingleStage
 
 import shamrock
 
@@ -166,7 +167,7 @@ cfg.set_cfl_force(C_force)
 
 # On a chaotic disc, we disable to two stage search to avoid giant leaves
 cfg.set_tree_reduction_level(6)
-cfg.set_neigh_cache_strategy(shamrock.NeighCacheStrategy.SingleStage)
+cfg.set_neigh_cache_strategy(SingleStage)
 
 # Enable this to debug the neighbor counts
 # cfg.set_show_neigh_stats(True)
