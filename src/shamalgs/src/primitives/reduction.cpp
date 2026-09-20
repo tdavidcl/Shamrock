@@ -52,6 +52,38 @@ namespace shamalgs::primitives::impl {
     };
 #endif
 
+    /// Alternatives of the relaxed reduction selector.
+    ///
+    /// Duplicated from the strict ones on purpose: the relaxed reduction owns its own
+    /// implementation list (identical today, since every strict implementation is also a valid
+    /// relaxed one) so that it can gain relaxed-only implementations without disturbing the
+    /// strict selector. They dispatch to the exact same underlying kernels.
+    namespace relaxed {
+
+        /// Fallback USM reduction (portable, no group reduction support required)
+        struct Fallback {
+            static constexpr std::string_view variant_type_name = "fallback";
+        };
+
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+        /// USM group reduction, tunable work-group size
+        struct GroupReduction {
+            static constexpr std::string_view variant_type_name = "group_reduction";
+            u32 group_size                                      = 128;
+
+            /// Expose the group sizes worth benchmarking as separate default implementations
+            static std::vector<GroupReduction> variant_custom_defaults() {
+                return {
+                    GroupReduction{16},
+                    GroupReduction{128},
+                    GroupReduction{256},
+                };
+            }
+        };
+#endif
+
+    } // namespace relaxed
+
 } // namespace shamalgs::primitives::impl
 
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
@@ -62,6 +94,20 @@ struct shamalgs::ImplVariantParams<shamalgs::primitives::impl::GroupReduction> {
     }
     static shamalgs::primitives::impl::GroupReduction from_json(const nlohmann::json &j) {
         shamalgs::primitives::impl::GroupReduction p{};
+        if (j.contains("group_size")) {
+            p.group_size = j.at("group_size").get<u32>();
+        }
+        return p;
+    }
+};
+
+template<>
+struct shamalgs::ImplVariantParams<shamalgs::primitives::impl::relaxed::GroupReduction> {
+    static nlohmann::json to_json(const shamalgs::primitives::impl::relaxed::GroupReduction &p) {
+        return {{"group_size", p.group_size}};
+    }
+    static shamalgs::primitives::impl::relaxed::GroupReduction from_json(const nlohmann::json &j) {
+        shamalgs::primitives::impl::relaxed::GroupReduction p{};
         if (j.contains("group_size")) {
             p.group_size = j.at("group_size").get<u32>();
         }
@@ -112,6 +158,47 @@ namespace shamalgs::primitives {
                 "algs",
                 "defaulting reduction implementation to impl :",
                 get_current_impl_reduction());
+        }
+
+        shamalgs::ImplVariantGlobal<
+            relaxed::Fallback
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            ,
+            relaxed::GroupReduction
+#endif
+            >
+            reduction_relaxed_impl;
+
+        /// Get list of available relaxed reduction implementations, as config json strings
+        std::vector<std::string> get_default_impl_list_reduction_relaxed() {
+            return reduction_relaxed_impl.get_default_config_list();
+        }
+
+        /// Get the current implementation for relaxed reduction, as a config json string
+        std::string get_current_impl_reduction_relaxed() {
+            return reduction_relaxed_impl.get_current_config();
+        }
+
+        /// Check if an implementation has been selected for relaxed reduction
+        bool is_impl_set_reduction_relaxed() { return reduction_relaxed_impl.is_set(); }
+
+        /// Set the implementation for relaxed reduction, from a config json string
+        void set_impl_reduction_relaxed(const std::string &impl) {
+            shamlog_info_ln("algs", "setting relaxed reduction implementation to impl :", impl);
+            reduction_relaxed_impl.set(impl);
+        }
+
+        /// Select the default implementation for relaxed reduction
+        void autoselect_impl_reduction_relaxed() {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            reduction_relaxed_impl.set(relaxed::GroupReduction{});
+#else
+            reduction_relaxed_impl.set(relaxed::Fallback{});
+#endif
+            shamlog_info_ln(
+                "algs",
+                "defaulting relaxed reduction implementation to impl :",
+                get_current_impl_reduction_relaxed());
         }
 
     } // namespace impl
@@ -197,6 +284,87 @@ namespace shamalgs::primitives {
             impl::reduction_impl.get());
     }
 
+    template<class T>
+    T sum_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id) {
+
+        using namespace shamalgs::reduction::details;
+
+        if (!impl::reduction_relaxed_impl.is_set()) {
+            impl::autoselect_impl_reduction_relaxed();
+        }
+
+        return std::visit(
+            shambase::overloaded{
+                [&](impl::relaxed::Fallback) {
+                    return sum_usm_fallback(sched, buf1, start_id, end_id);
+                },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                [&](impl::relaxed::GroupReduction cfg) {
+                    return sum_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
+                },
+#endif
+            },
+            impl::reduction_relaxed_impl.get());
+    }
+
+    template<class T>
+    T min_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id) {
+
+        using namespace shamalgs::reduction::details;
+
+        if (!impl::reduction_relaxed_impl.is_set()) {
+            impl::autoselect_impl_reduction_relaxed();
+        }
+
+        return std::visit(
+            shambase::overloaded{
+                [&](impl::relaxed::Fallback) {
+                    return min_usm_fallback(sched, buf1, start_id, end_id);
+                },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                [&](impl::relaxed::GroupReduction cfg) {
+                    return min_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
+                },
+#endif
+            },
+            impl::reduction_relaxed_impl.get());
+    }
+
+    template<class T>
+    T max_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id) {
+
+        using namespace shamalgs::reduction::details;
+
+        if (!impl::reduction_relaxed_impl.is_set()) {
+            impl::autoselect_impl_reduction_relaxed();
+        }
+
+        return std::visit(
+            shambase::overloaded{
+                [&](impl::relaxed::Fallback) {
+                    return max_usm_fallback(sched, buf1, start_id, end_id);
+                },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                [&](impl::relaxed::GroupReduction cfg) {
+                    return max_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
+                },
+#endif
+            },
+            impl::reduction_relaxed_impl.get());
+    }
+
 #ifndef DOXYGEN
     #define XMAC_TYPES                                                                             \
         X(f32)                                                                                     \
@@ -232,6 +400,21 @@ namespace shamalgs::primitives {
             u32 start_id,                                                                          \
             u32 end_id);                                                                           \
         template _arg_ max<_arg_>(                                                                 \
+            const sham::DeviceScheduler_ptr &sched,                                                \
+            const sham::DeviceBuffer<_arg_> &buf1,                                                 \
+            u32 start_id,                                                                          \
+            u32 end_id);                                                                           \
+        template _arg_ sum_relaxed<_arg_>(                                                         \
+            const sham::DeviceScheduler_ptr &sched,                                                \
+            const sham::DeviceBuffer<_arg_> &buf1,                                                 \
+            u32 start_id,                                                                          \
+            u32 end_id);                                                                           \
+        template _arg_ min_relaxed<_arg_>(                                                         \
+            const sham::DeviceScheduler_ptr &sched,                                                \
+            const sham::DeviceBuffer<_arg_> &buf1,                                                 \
+            u32 start_id,                                                                          \
+            u32 end_id);                                                                           \
+        template _arg_ max_relaxed<_arg_>(                                                         \
             const sham::DeviceScheduler_ptr &sched,                                                \
             const sham::DeviceBuffer<_arg_> &buf1,                                                 \
             u32 start_id,                                                                          \

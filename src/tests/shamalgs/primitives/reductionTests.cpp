@@ -18,9 +18,79 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+    /// Callable wrappers around the standard reduction, so that a test body can be run against
+    /// both it and its relaxed counterpart, which has its own independent implementation selector
+    const auto sum_strict = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::sum(sched, buf, start_id, end_id);
+    };
+    /// @copydoc sum_strict
+    const auto min_strict = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::min(sched, buf, start_id, end_id);
+    };
+    /// @copydoc sum_strict
+    const auto max_strict = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::max(sched, buf, start_id, end_id);
+    };
+
+    /// Callable wrappers around the relaxed reduction, counterpart of sum_strict & co
+    const auto sum_relaxed = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::sum_relaxed(sched, buf, start_id, end_id);
+    };
+    /// @copydoc sum_relaxed
+    const auto min_relaxed = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::min_relaxed(sched, buf, start_id, end_id);
+    };
+    /// @copydoc sum_relaxed
+    const auto max_relaxed = [](const auto &sched, const auto &buf, u32 start_id, u32 end_id) {
+        return shamalgs::primitives::max_relaxed(sched, buf, start_id, end_id);
+    };
+
+    /// Run test_body once per available implementation of the standard reduction, restoring the
+    /// implementation that was selected beforehand
+    template<class Fct>
+    void for_each_reduction_impl(Fct &&test_body) {
+        if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
+            shamalgs::primitives::impl::autoselect_impl_reduction();
+        }
+        auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
+
+        for (const std::string &impl :
+             shamalgs::primitives::impl::get_default_impl_list_reduction()) {
+            shamalgs::primitives::impl::set_impl_reduction(impl);
+            shamlog_info_ln("tests", "testing implementation:", impl);
+            test_body();
+        }
+
+        // reset to default
+        shamalgs::primitives::impl::set_impl_reduction(current_impl);
+    }
+
+    /// Same as for_each_reduction_impl, over the relaxed reduction selector
+    template<class Fct>
+    void for_each_reduction_relaxed_impl(Fct &&test_body) {
+        if (!shamalgs::primitives::impl::is_impl_set_reduction_relaxed()) {
+            shamalgs::primitives::impl::autoselect_impl_reduction_relaxed();
+        }
+        auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction_relaxed();
+
+        for (const std::string &impl :
+             shamalgs::primitives::impl::get_default_impl_list_reduction_relaxed()) {
+            shamalgs::primitives::impl::set_impl_reduction_relaxed(impl);
+            shamlog_info_ln("tests", "testing relaxed implementation:", impl);
+            test_body();
+        }
+
+        // reset to default
+        shamalgs::primitives::impl::set_impl_reduction_relaxed(current_impl);
+    }
+
+} // namespace
+
 NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
 
-    auto test_run = []() {
+    auto test_run = [](auto sum_fct) {
         auto sched = shamsys::instance::get_compute_scheduler_ptr();
 
         {
@@ -29,7 +99,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = std::accumulate(data.begin(), data.end(), 0);
             REQUIRE_EQUAL(result, expected);
         }
@@ -42,7 +112,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
 
             u32 start    = 2;
             u32 end      = 5;
-            i32 result   = shamalgs::primitives::sum(sched, buf, start, end);
+            i32 result   = sum_fct(sched, buf, start, end);
             i32 expected = std::accumulate(data.begin() + start, data.begin() + end, 0);
             REQUIRE_EQUAL(result, expected);
         }
@@ -53,7 +123,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::sum(sched, buf, 0, 1);
+            i32 result = sum_fct(sched, buf, 0, 1);
             REQUIRE_EQUAL(result, 42);
         }
 
@@ -63,18 +133,22 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = std::accumulate(data.begin(), data.end(), 0);
             REQUIRE_EQUAL(result, expected);
         }
 
         {
-            // Test sum with floating point values
+            // Test sum with floating point values.
+            // The exact comparison below also holds for sum_relaxed because every relaxed
+            // implementation currently dispatches to the same kernel as its strict counterpart.
+            // A relaxed implementation that actually reorders the additions would need this
+            // check (and the f64 one below) turned into a tolerance based comparison.
             std::vector<f32> data = {1.5f, 2.7f, 3.14f, 4.2f, 5.9f};
             sham::DeviceBuffer<f32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f32 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f32 expected = std::accumulate(data.begin(), data.end(), 0.0f);
             REQUIRE_EQUAL(result, expected);
         }
@@ -85,7 +159,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<f64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f64 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            f64 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f64 expected = std::accumulate(data.begin(), data.end(), 0.0);
             REQUIRE_EQUAL(result, expected);
         }
@@ -96,7 +170,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<u32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u32 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            u32 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u32 expected = std::accumulate(data.begin(), data.end(), 0U);
             REQUIRE_EQUAL(result, expected);
         }
@@ -107,7 +181,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(result, 0);
         }
 
@@ -117,7 +191,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<u64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u64 result   = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            u64 result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u64 expected = std::accumulate(data.begin(), data.end(), 0ULL);
             REQUIRE_EQUAL(result, expected);
         }
@@ -128,7 +202,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::sum(sched, buf, 2, 2);
+            i32 result = sum_fct(sched, buf, 2, 2);
             REQUIRE_EQUAL(result, 0); // Empty range should sum to 0
         }
 
@@ -146,29 +220,22 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/sum", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::sum(sched, buf, 0, size);
+            i32 result   = sum_fct(sched, buf, 0, size);
             i32 expected = std::accumulate(data.begin(), data.end(), 0);
             REQUIRE_EQUAL(result, expected);
         }
     };
 
-    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
-        shamalgs::primitives::impl::autoselect_impl_reduction();
-    }
-    auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
-
-    for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
-        shamalgs::primitives::impl::set_impl_reduction(impl);
-        shamlog_info_ln("tests", "testing implementation:", impl);
-        test_run();
-    }
-
-    // reset to default
-    shamalgs::primitives::impl::set_impl_reduction(current_impl);
+    for_each_reduction_impl([&]() {
+        test_run(sum_strict);
+    });
+    for_each_reduction_relaxed_impl([&]() {
+        test_run(sum_relaxed);
+    });
 }
 
 NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
-    auto test_run = []() {
+    auto test_run = [](auto min_fct) {
         auto sched = shamsys::instance::get_compute_scheduler_ptr();
 
         {
@@ -177,7 +244,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -190,7 +257,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
 
             u32 start    = 2;
             u32 end      = 6;
-            i32 result   = shamalgs::primitives::min(sched, buf, start, end);
+            i32 result   = min_fct(sched, buf, start, end);
             i32 expected = *std::min_element(data.begin() + start, data.begin() + end);
             REQUIRE_EQUAL(result, expected);
         }
@@ -201,7 +268,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::min(sched, buf, 0, 1);
+            i32 result = min_fct(sched, buf, 0, 1);
             REQUIRE_EQUAL(result, 42);
         }
 
@@ -211,7 +278,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -222,7 +289,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<f32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f32 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f32 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -233,7 +300,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<f64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f64 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            f64 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f64 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -244,7 +311,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<u32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u32 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            u32 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u32 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -255,7 +322,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(result, 7);
         }
 
@@ -265,7 +332,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(result, 1);
         }
 
@@ -275,7 +342,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<u64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u64 result   = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            u64 result   = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u64 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -294,29 +361,22 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/min", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::min(sched, buf, 0, size);
+            i32 result   = min_fct(sched, buf, 0, size);
             i32 expected = *std::min_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
     };
 
-    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
-        shamalgs::primitives::impl::autoselect_impl_reduction();
-    }
-    auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
-
-    for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
-        shamalgs::primitives::impl::set_impl_reduction(impl);
-        shamlog_info_ln("tests", "testing implementation:", impl);
-        test_run();
-    }
-
-    // reset to default
-    shamalgs::primitives::impl::set_impl_reduction(current_impl);
+    for_each_reduction_impl([&]() {
+        test_run(min_strict);
+    });
+    for_each_reduction_relaxed_impl([&]() {
+        test_run(min_relaxed);
+    });
 }
 
 NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
-    auto test_run = []() {
+    auto test_run = [](auto max_fct) {
         auto sched = shamsys::instance::get_compute_scheduler_ptr();
 
         {
@@ -325,7 +385,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -338,7 +398,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
 
             u32 start    = 2;
             u32 end      = 6;
-            i32 result   = shamalgs::primitives::max(sched, buf, start, end);
+            i32 result   = max_fct(sched, buf, start, end);
             i32 expected = *std::max_element(data.begin() + start, data.begin() + end);
             REQUIRE_EQUAL(result, expected);
         }
@@ -349,7 +409,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::max(sched, buf, 0, 1);
+            i32 result = max_fct(sched, buf, 0, 1);
             REQUIRE_EQUAL(result, 42);
         }
 
@@ -359,7 +419,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             i32 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -370,7 +430,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<f32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f32 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f32 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -381,7 +441,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<f64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f64 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            f64 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f64 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -392,7 +452,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<u32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u32 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            u32 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u32 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -403,7 +463,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(result, 7);
         }
 
@@ -413,7 +473,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(result, 95);
         }
 
@@ -423,7 +483,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<u64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u64 result   = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            u64 result   = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             u64 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
@@ -442,29 +502,22 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/max", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 result   = shamalgs::primitives::max(sched, buf, 0, size);
+            i32 result   = max_fct(sched, buf, 0, size);
             i32 expected = *std::max_element(data.begin(), data.end());
             REQUIRE_EQUAL(result, expected);
         }
     };
 
-    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
-        shamalgs::primitives::impl::autoselect_impl_reduction();
-    }
-    auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
-
-    for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
-        shamalgs::primitives::impl::set_impl_reduction(impl);
-        shamlog_info_ln("tests", "testing implementation:", impl);
-        test_run();
-    }
-
-    // reset to default
-    shamalgs::primitives::impl::set_impl_reduction(current_impl);
+    for_each_reduction_impl([&]() {
+        test_run(max_strict);
+    });
+    for_each_reduction_relaxed_impl([&]() {
+        test_run(max_relaxed);
+    });
 }
 
 NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
-    auto test_run = []() {
+    auto test_run = [](auto sum_fct, auto min_fct, auto max_fct) {
         auto sched = shamsys::instance::get_compute_scheduler_ptr();
 
         {
@@ -474,18 +527,15 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            i32 sum_result
-                = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 sum_result = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             // Note: This may overflow, which is expected behavior for integer arithmetic
             i32 expected_sum = std::accumulate(data.begin(), data.end(), static_cast<i32>(0));
             REQUIRE_EQUAL(sum_result, expected_sum);
 
-            i32 min_result
-                = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 min_result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(min_result, std::numeric_limits<i32>::min());
 
-            i32 max_result
-                = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            i32 max_result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(max_result, std::numeric_limits<i32>::max());
         }
 
@@ -500,17 +550,14 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<f32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f32 sum_result
-                = shamalgs::primitives::sum(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 sum_result   = sum_fct(sched, buf, 0, static_cast<u32>(data.size()));
             f32 expected_sum = std::accumulate(data.begin(), data.end(), 0.0f);
             REQUIRE_EQUAL(sum_result, expected_sum);
 
-            f32 min_result
-                = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 min_result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(min_result, std::numeric_limits<f32>::lowest());
 
-            f32 max_result
-                = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            f32 max_result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(max_result, std::numeric_limits<f32>::max());
         }
 
@@ -527,14 +574,14 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
                 sham::DeviceBuffer<i32> buf(data.size(), sched);
                 buf.copy_from_stdvec(data);
 
-                i32 sum_result   = shamalgs::primitives::sum(sched, buf, 0, array_size);
+                i32 sum_result   = sum_fct(sched, buf, 0, array_size);
                 i32 expected_sum = static_cast<i32>(array_size * (array_size + 1) / 2);
                 REQUIRE_EQUAL(sum_result, expected_sum);
 
-                i32 min_result = shamalgs::primitives::min(sched, buf, 0, array_size);
+                i32 min_result = min_fct(sched, buf, 0, array_size);
                 REQUIRE_EQUAL(min_result, 1);
 
-                i32 max_result = shamalgs::primitives::max(sched, buf, 0, array_size);
+                i32 max_result = max_fct(sched, buf, 0, array_size);
                 REQUIRE_EQUAL(max_result, static_cast<i32>(array_size));
             }
         }
@@ -550,31 +597,29 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
                 for (u32 end = start; end <= data.size(); ++end) {
                     if (start == end) {
                         // Empty range - only test sum (min/max are undefined for empty ranges)
-                        i32 sum_result = shamalgs::primitives::sum(sched, buf, start, end);
+                        i32 sum_result = sum_fct(sched, buf, start, end);
                         REQUIRE_EQUAL(sum_result, 0);
 
                         // min should throw exception for empty ranges
                         REQUIRE_EXCEPTION_THROW(
-                            shamalgs::primitives::min(sched, buf, start, end),
-                            std::invalid_argument);
+                            min_fct(sched, buf, start, end), std::invalid_argument);
 
                         // max should throw exception for empty ranges
                         REQUIRE_EXCEPTION_THROW(
-                            shamalgs::primitives::max(sched, buf, start, end),
-                            std::invalid_argument);
+                            max_fct(sched, buf, start, end), std::invalid_argument);
                     } else {
                         // Non-empty range
-                        i32 sum_result = shamalgs::primitives::sum(sched, buf, start, end);
+                        i32 sum_result = sum_fct(sched, buf, start, end);
                         i32 expected_sum
                             = std::accumulate(data.begin() + start, data.begin() + end, 0);
                         REQUIRE_EQUAL(sum_result, expected_sum);
 
-                        i32 min_result = shamalgs::primitives::min(sched, buf, start, end);
+                        i32 min_result = min_fct(sched, buf, start, end);
                         i32 expected_min
                             = *std::min_element(data.begin() + start, data.begin() + end);
                         REQUIRE_EQUAL(min_result, expected_min);
 
-                        i32 max_result = shamalgs::primitives::max(sched, buf, start, end);
+                        i32 max_result = max_fct(sched, buf, start, end);
                         i32 expected_max
                             = *std::max_element(data.begin() + start, data.begin() + end);
                         REQUIRE_EQUAL(max_result, expected_max);
@@ -589,12 +634,10 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<f64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            f64 min_result
-                = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            f64 min_result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(min_result, 1.0000000001);
 
-            f64 max_result
-                = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            f64 max_result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(max_result, 1.0000000004);
         }
 
@@ -604,12 +647,10 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<u64> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            u64 min_result
-                = shamalgs::primitives::min(sched, buf, 0, static_cast<u32>(data.size()));
+            u64 min_result = min_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(min_result, 0ULL);
 
-            u64 max_result
-                = shamalgs::primitives::max(sched, buf, 0, static_cast<u32>(data.size()));
+            u64 max_result = max_fct(sched, buf, 0, static_cast<u32>(data.size()));
             REQUIRE_EQUAL(max_result, 18446744073709551615ULL);
         }
 
@@ -619,8 +660,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            REQUIRE_EXCEPTION_THROW(
-                shamalgs::primitives::min(sched, buf, 2, 2), std::invalid_argument);
+            REQUIRE_EXCEPTION_THROW(min_fct(sched, buf, 2, 2), std::invalid_argument);
         }
 
         {
@@ -629,8 +669,7 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             sham::DeviceBuffer<i32> buf(data.size(), sched);
             buf.copy_from_stdvec(data);
 
-            REQUIRE_EXCEPTION_THROW(
-                shamalgs::primitives::max(sched, buf, 3, 3), std::invalid_argument);
+            REQUIRE_EXCEPTION_THROW(max_fct(sched, buf, 3, 3), std::invalid_argument);
         }
 
         {
@@ -640,30 +679,21 @@ NEW_TEST(Unittest, "shamalgs/primitives/reduction/edge_cases", 1) {
             buf.copy_from_stdvec(data);
 
             // sum should return 0 for invalid ranges (start > end)
-            i32 sum_result = shamalgs::primitives::sum(sched, buf, 4, 2);
+            i32 sum_result = sum_fct(sched, buf, 4, 2);
             REQUIRE_EQUAL(sum_result, 0);
 
             // min should throw exception for invalid ranges
-            REQUIRE_EXCEPTION_THROW(
-                shamalgs::primitives::min(sched, buf, 4, 2), std::invalid_argument);
+            REQUIRE_EXCEPTION_THROW(min_fct(sched, buf, 4, 2), std::invalid_argument);
 
             // max should throw exception for invalid ranges
-            REQUIRE_EXCEPTION_THROW(
-                shamalgs::primitives::max(sched, buf, 4, 2), std::invalid_argument);
+            REQUIRE_EXCEPTION_THROW(max_fct(sched, buf, 4, 2), std::invalid_argument);
         }
     };
 
-    if (!shamalgs::primitives::impl::is_impl_set_reduction()) {
-        shamalgs::primitives::impl::autoselect_impl_reduction();
-    }
-    auto current_impl = shamalgs::primitives::impl::get_current_impl_reduction();
-
-    for (const std::string &impl : shamalgs::primitives::impl::get_default_impl_list_reduction()) {
-        shamalgs::primitives::impl::set_impl_reduction(impl);
-        shamlog_info_ln("tests", "testing implementation:", impl);
-        test_run();
-    }
-
-    // reset to default
-    shamalgs::primitives::impl::set_impl_reduction(current_impl);
+    for_each_reduction_impl([&]() {
+        test_run(sum_strict, min_strict, max_strict);
+    });
+    for_each_reduction_relaxed_impl([&]() {
+        test_run(sum_relaxed, min_relaxed, max_relaxed);
+    });
 }

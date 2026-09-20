@@ -39,29 +39,29 @@ if len(microbench_results) == 0:
 
 # %%
 # Main benchmark functions
-def benchmark_f32(N, nb_repeat=10):
+def benchmark_f32(N, bench_fct, nb_repeat=10):
     times = []
     for i in range(nb_repeat):
         buf = shamrock.backends.DeviceBuffer_f32()
         buf.resize(N)
         buf.fill(0)
-        times.append(shamrock.algs.benchmark_reduction_sum(buf, N))
+        times.append(bench_fct(buf, N))
     return min(times), max(times), sum(times) / nb_repeat
 
 
-def benchmark_f64(N, nb_repeat=10):
+def benchmark_f64(N, bench_fct, nb_repeat=10):
     times = []
     for i in range(nb_repeat):
         buf = shamrock.backends.DeviceBuffer_f64()
         buf.resize(N)
         buf.fill(0)
-        times.append(shamrock.algs.benchmark_reduction_sum(buf, N))
+        times.append(bench_fct(buf, N))
     return min(times), max(times), sum(times) / nb_repeat
 
 
 # %%
 # Run the performance test for all parameters
-def run_performance_sweep():
+def run_performance_sweep(bench_fct):
     # Define parameter ranges
     # logspace as array
     particle_counts = np.logspace(2, 7, 20).astype(int).tolist()
@@ -84,9 +84,9 @@ def run_performance_sweep():
         )
 
         start_time = time.time()
-        min_time, max_time, mean_time = benchmark_f32(N)
+        min_time, max_time, mean_time = benchmark_f32(N, bench_fct)
         results_f32.append(min_time)
-        min_time, max_time, mean_time = benchmark_f64(N)
+        min_time, max_time, mean_time = benchmark_f64(N, bench_fct)
         results_f64.append(min_time)
         elapsed = time.time() - start_time
 
@@ -96,45 +96,73 @@ def run_performance_sweep():
 
 
 # %%
-# List current implementation
-if not shamrock.algs.is_impl_set_reduction():
-    shamrock.algs.autoselect_impl_reduction()
-current_impl = shamrock.algs.get_current_impl_reduction()
+# The standard reduction and its relaxed variant (which is allowed to reorder the reduction
+# operations) have their own independent implementation selectors, so both are swept here.
+#
+# Each entry describes one of them: the label prefix used in the plots, the benchmark entry point,
+# and the four implementation selection functions to drive.
+selectors = [
+    {
+        "label_prefix": "",
+        "bench_fct": shamrock.algs.benchmark_reduction_sum,
+        "is_impl_set": shamrock.algs.is_impl_set_reduction,
+        "autoselect_impl": shamrock.algs.autoselect_impl_reduction,
+        "get_current_impl": shamrock.algs.get_current_impl_reduction,
+        "get_default_impl_list": shamrock.algs.get_default_impl_list_reduction,
+        "set_impl": shamrock.algs.set_impl_reduction,
+    },
+    {
+        "label_prefix": "relaxed ",
+        "bench_fct": shamrock.algs.benchmark_reduction_sum_relaxed,
+        "is_impl_set": shamrock.algs.is_impl_set_reduction_relaxed,
+        "autoselect_impl": shamrock.algs.autoselect_impl_reduction_relaxed,
+        "get_current_impl": shamrock.algs.get_current_impl_reduction_relaxed,
+        "get_default_impl_list": shamrock.algs.get_default_impl_list_reduction_relaxed,
+        "set_impl": shamrock.algs.set_impl_reduction_relaxed,
+    },
+]
 
-print(current_impl)
+# %%
+# List current implementations
+for selector in selectors:
+    if not selector["is_impl_set"]():
+        selector["autoselect_impl"]()
+
+    print(selector["label_prefix"] + "reduction:", selector["get_current_impl"]())
 
 # %%
 # List all implementations available
-all_default_impls = shamrock.algs.get_default_impl_list_reduction()
-
-print(all_default_impls)
+for selector in selectors:
+    print(selector["label_prefix"] + "reduction:", selector["get_default_impl_list"]())
 
 # %%
 # Run the performance benchmarks for all implementations
 
 dic_bench = {}
-for impl in all_default_impls:
-    shamrock.algs.set_impl_reduction(impl)
+for selector in selectors:
+    for impl in selector["get_default_impl_list"]():
+        selector["set_impl"](impl)
 
-    impl_json = json.loads(impl)
-    impl_name = impl_json["implementation"]
-    impl_params = impl_json.get("parameters", {})
-    if impl_params:
-        # Disambiguate implementations that expose multiple default parameter sets
-        # (e.g. several group sizes) under the same "implementation" name
-        params_str = ", ".join(f"{k}={v}" for k, v in impl_params.items())
-        impl_name = f"{impl_name} ({params_str})"
+        impl_json = json.loads(impl)
+        impl_name = impl_json["implementation"]
+        impl_params = impl_json.get("parameters", {})
+        if impl_params:
+            # Disambiguate implementations that expose multiple default parameter sets
+            # (e.g. several group sizes) under the same "implementation" name
+            params_str = ", ".join(f"{k}={v}" for k, v in impl_params.items())
+            impl_name = f"{impl_name} ({params_str})"
+        impl_name = selector["label_prefix"] + impl_name
 
-    print(f"Running reduction performance benchmarks for {impl}...")
+        print(f"Running {selector['label_prefix']}reduction performance benchmarks for {impl}...")
 
-    # Run the performance sweep
-    particle_counts, results_f32, results_f64 = run_performance_sweep()
+        # Run the performance sweep
+        particle_counts, results_f32, results_f64 = run_performance_sweep(selector["bench_fct"])
 
-    dic_bench[impl_name] = {
-        "particle_counts": particle_counts,
-        "results_f32": results_f32,
-        "results_f64": results_f64,
-    }
+        dic_bench[impl_name] = {
+            "particle_counts": particle_counts,
+            "results_f32": results_f32,
+            "results_f64": results_f64,
+        }
 
 
 # %%

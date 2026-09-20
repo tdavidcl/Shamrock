@@ -190,6 +190,56 @@ ON_PYTHON_INIT {
         });
     }
 
+    { // relaxed reductions
+        shamalgs_module.def(
+            "sum_relaxed", [](sham::DeviceBuffer<f64> &buf, u32 start_id, u32 end_id) {
+                return shamalgs::primitives::sum_relaxed(
+                    shamsys::instance::get_compute_scheduler_ptr(), buf, start_id, end_id);
+            });
+
+        shamalgs_module.def(
+            "benchmark_reduction_sum_relaxed", [](sham::DeviceBuffer<f64> &buf, u32 len) {
+                buf.synchronize();
+                shambase::Timer timer;
+                timer.start();
+                f64 result = shamalgs::primitives::sum_relaxed(
+                    shamsys::instance::get_compute_scheduler_ptr(), buf, 0, len);
+                timer.stop();
+                return timer.elapsed_sec();
+            });
+
+        shamalgs_module.def(
+            "benchmark_reduction_sum_relaxed", [](sham::DeviceBuffer<f32> &buf, u32 len) {
+                buf.synchronize();
+                shambase::Timer timer;
+                timer.start();
+                f32 result = shamalgs::primitives::sum_relaxed(
+                    shamsys::instance::get_compute_scheduler_ptr(), buf, 0, len);
+                timer.stop();
+                return timer.elapsed_sec();
+            });
+
+        shamalgs_module.def("set_impl_reduction_relaxed", [](const std::string &impl) {
+            shamalgs::primitives::impl::set_impl_reduction_relaxed(impl);
+        });
+
+        shamalgs_module.def("get_current_impl_reduction_relaxed", []() {
+            return shamalgs::primitives::impl::get_current_impl_reduction_relaxed();
+        });
+
+        shamalgs_module.def("get_default_impl_list_reduction_relaxed", []() {
+            return shamalgs::primitives::impl::get_default_impl_list_reduction_relaxed();
+        });
+
+        shamalgs_module.def("is_impl_set_reduction_relaxed", []() {
+            return shamalgs::primitives::impl::is_impl_set_reduction_relaxed();
+        });
+
+        shamalgs_module.def("autoselect_impl_reduction_relaxed", []() {
+            shamalgs::primitives::impl::autoselect_impl_reduction_relaxed();
+        });
+    }
+
     { // scan_exclusive_sum_in_place
 
         shamalgs_module.def(

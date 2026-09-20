@@ -136,6 +136,138 @@ namespace shamalgs::primitives {
         u32 start_id,
         u32 end_id);
 
+    /**
+     * @brief Compute the sum of elements in a device buffer within a specified range, allowing
+     * reordering of the reduction operations.
+     *
+     * Same contract as shamalgs::primitives::sum, except that the implementation is free to apply
+     * the reduction operations in any order. For non-associative types (floating point) the result
+     * is therefore not guaranteed to be bitwise reproducible across runs, devices, or
+     * implementations. Use shamalgs::primitives::sum instead when reproducibility is required.
+     *
+     * This variant has its own implementation selector (see
+     * shamalgs::primitives::impl::set_impl_reduction_relaxed), independent from the one of the
+     * standard reduction.
+     *
+     * @tparam T The data type of elements in the buffer (e.g., float, double, int).
+     * @param sched The device scheduler to run on.
+     * @param buf1 The input buffer containing the elements to sum.
+     * @param start_id The starting index (inclusive) of the range to sum.
+     * @param end_id The ending index (exclusive) of the range to sum.
+     * @return T The computed sum of elements in the specified range.
+     *
+     * @pre start_id <= end_id
+     * @pre end_id <= buf1.get_size()
+     *
+     * Example:
+     * @code{.cpp}
+     * auto sched = shamsys::get_compute_Scheduler_ptr();
+     *
+     * sham::DeviceBuffer<double> values = ...;
+     * u32 start = 0;
+     * u32 end = values.get_size();
+     *
+     * double total = shamalgs::primitives::sum_relaxed(sched, values, start, end);
+     * @endcode
+     *
+     * values = {1.0, 2.0, 3.0, 4.0, 5.0}, start = 1, end = 4
+     * result = 9.0 (2.0 + 3.0 + 4.0, summed in an unspecified order)
+     */
+    template<class T>
+    T sum_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
+
+    /**
+     * @brief Find the minimum element in a device buffer within a specified range, allowing
+     * reordering of the reduction operations.
+     *
+     * Same contract as shamalgs::primitives::min, except that the implementation is free to apply
+     * the reduction operations in any order. The minimum is associative and commutative, so the
+     * value returned matches shamalgs::primitives::min; only the order in which the comparisons
+     * happen is unspecified.
+     *
+     * This variant has its own implementation selector (see
+     * shamalgs::primitives::impl::set_impl_reduction_relaxed), independent from the one of the
+     * standard reduction.
+     *
+     * @tparam T The data type of elements in the buffer (e.g., float, double, int).
+     * @param sched The device scheduler to run on.
+     * @param buf1 The input buffer containing the elements to search.
+     * @param start_id The starting index (inclusive) of the range to search.
+     * @param end_id The ending index (exclusive) of the range to search.
+     * @return T The minimum value found in the specified range.
+     *
+     * @pre start_id < end_id (range must be non-empty)
+     * @pre end_id <= buf1.get_size()
+     *
+     * Example:
+     * @code{.cpp}
+     * auto sched = shamsys::get_compute_Scheduler_ptr();
+     *
+     * sham::DeviceBuffer<double> values = ...;
+     * u32 start = 0;
+     * u32 end = values.get_size();
+     *
+     * double minimum = shamalgs::primitives::min_relaxed(sched, values, start, end);
+     * @endcode
+     *
+     * values = {5.0, 2.0, 8.0, 1.0, 6.0}, start = 1, end = 4
+     * result = 1.0 (minimum of {2.0, 8.0, 1.0})
+     */
+    template<class T>
+    T min_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
+
+    /**
+     * @brief Find the maximum element in a device buffer within a specified range, allowing
+     * reordering of the reduction operations.
+     *
+     * Same contract as shamalgs::primitives::max, except that the implementation is free to apply
+     * the reduction operations in any order. The maximum is associative and commutative, so the
+     * value returned matches shamalgs::primitives::max; only the order in which the comparisons
+     * happen is unspecified.
+     *
+     * This variant has its own implementation selector (see
+     * shamalgs::primitives::impl::set_impl_reduction_relaxed), independent from the one of the
+     * standard reduction.
+     *
+     * @tparam T The data type of elements in the buffer (e.g., float, double, int).
+     * @param sched The device scheduler to run on.
+     * @param buf1 The input buffer containing the elements to search.
+     * @param start_id The starting index (inclusive) of the range to search.
+     * @param end_id The ending index (exclusive) of the range to search.
+     * @return T The maximum value found in the specified range.
+     *
+     * @pre start_id < end_id (range must be non-empty)
+     * @pre end_id <= buf1.get_size()
+     *
+     * Example:
+     * @code{.cpp}
+     * auto sched = shamsys::get_compute_Scheduler_ptr();
+     *
+     * sham::DeviceBuffer<double> values = ...;
+     * u32 start = 0;
+     * u32 end = values.get_size();
+     *
+     * double maximum = shamalgs::primitives::max_relaxed(sched, values, start, end);
+     * @endcode
+     *
+     * values = {5.0, 2.0, 8.0, 1.0, 6.0}, start = 1, end = 4
+     * result = 8.0 (maximum of {2.0, 8.0, 1.0})
+     */
+    template<class T>
+    T max_relaxed(
+        const sham::DeviceScheduler_ptr &sched,
+        const sham::DeviceBuffer<T> &buf1,
+        u32 start_id,
+        u32 end_id);
+
     /// namespace to control implementation behavior
     namespace impl {
 
@@ -153,6 +285,21 @@ namespace shamalgs::primitives {
 
         /// Select the default implementation for reduction
         void autoselect_impl_reduction();
+
+        /// Get list of available relaxed reduction implementations, as config json strings
+        std::vector<std::string> get_default_impl_list_reduction_relaxed();
+
+        /// Get the current implementation for relaxed reduction, as a config json string
+        std::string get_current_impl_reduction_relaxed();
+
+        /// Check if an implementation has been selected for relaxed reduction
+        bool is_impl_set_reduction_relaxed();
+
+        /// Set the implementation for relaxed reduction, from a config json string
+        void set_impl_reduction_relaxed(const std::string &impl);
+
+        /// Select the default implementation for relaxed reduction
+        void autoselect_impl_reduction_relaxed();
 
     } // namespace impl
 
