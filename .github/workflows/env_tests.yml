@@ -138,15 +138,6 @@ jobs:
               "runtest_rscript": true,
               "mpiargs": "--oversubscribe",
               "ccache-key-extra": "macos26"
-            },
-            {
-              "machine": "macos-generic.acpp",
-              "runson": "[\"macos-27\"]",
-              "imagename": "MacOS-27",
-              "runtest": true,
-              "runtest_rscript": true,
-              "mpiargs": "--oversubscribe",
-              "ccache-key-extra": "macos27"
             }
           ]
           JSON
