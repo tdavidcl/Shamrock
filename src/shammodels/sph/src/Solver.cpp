@@ -1084,7 +1084,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         auto field_xyz = shamrock::solvergraph::FieldRefs<Tvec>::make_shared("", "");
 
         shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tvec>> set_field_xyz(
-            [&](shamrock::solvergraph::FieldRefs<Tvec> &field_xyz_edge) {
+            [&, ixyz](shamrock::solvergraph::FieldRefs<Tvec> &field_xyz_edge) {
                 shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_xyz_refs = {};
                 scheduler().for_each_patchdata_nonempty(
                     [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
@@ -1100,7 +1100,8 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         auto field_axyz_ext = shamrock::solvergraph::FieldRefs<Tvec>::make_shared("", "");
 
         shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tvec>>
-            set_field_axyz_ext([&](shamrock::solvergraph::FieldRefs<Tvec> &field_axyz_ext_edge) {
+        set_field_axyz_ext(
+            [&, iaxyz_ext](shamrock::solvergraph::FieldRefs<Tvec> &field_axyz_ext_edge) {
                 shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_axyz_ext_refs = {};
                 scheduler().for_each_patchdata_nonempty(
                     [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
