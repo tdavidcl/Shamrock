@@ -23,6 +23,7 @@
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pytypealias.hpp"
 #include "shamcomm/logs.hpp"
+#include "shammodels/common/config/enum_NeighCacheStrategy.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include <pybind11/cast.h>
@@ -67,6 +68,22 @@ namespace sham {
 
 ON_PYTHON_INIT {
     auto &m = root_module;
+
+    py::enum_<shammodels::NeighCacheStrategy>(
+        m,
+        "NeighCacheStrategy",
+        R"==(
+    Strategy used to build the neighbours cache out of the tree traversal.
+
+    Values
+    ------
+    SingleStage
+        Single tree traversal per particle.
+    TwoStage
+        Two stage neighbours search (see the shamrock paper), the default.
+)==")
+        .value("SingleStage", shammodels::NeighCacheStrategy::SingleStage)
+        .value("TwoStage", shammodels::NeighCacheStrategy::TwoStage);
 
     m.def(
         "compute_histogram",
