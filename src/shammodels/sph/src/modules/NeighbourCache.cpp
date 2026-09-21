@@ -869,6 +869,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         auto obj_it  = tree.get_object_iterator();
         auto leaf_it = tree.get_traverser();
 
+        // a depth first traversal holds at most depth + 1 entries in its stack
+        u32 tree_depth = tree.get_exact_tree_depth();
+        u32 stack_size = tree_depth + 1;
+
+        shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
+
         u32 leaf_cnt    = tree.get_leaf_cell_count();
         u32 intnode_cnt = tree.get_internal_cell_count();
 
@@ -902,9 +908,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto leaf_looper = leaf_it.get_read_access(depends_list);
 
             constexpr u32 group_size = 256;
-            constexpr u32 stack_size = decltype(leaf_looper)::tree_depth_max;
 
-            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+            auto e = q.submit(depends_list, [&, h_tolerance, stack_size](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
 
                 sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
@@ -982,9 +987,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto leaf_looper       = leaf_it.get_read_access(depends_list);
 
             constexpr u32 group_size = 256;
-            constexpr u32 stack_size = decltype(leaf_looper)::tree_depth_max;
 
-            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+            auto e = q.submit(depends_list, [&, h_tolerance, stack_size](sycl::handler &cgh) {
                 u32 offset_leaf = intnode_cnt;
 
                 sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
@@ -1053,9 +1057,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto leaf_looper = leaf_it.get_read_access(depends_list);
 
             constexpr u32 group_size = 256;
-            constexpr u32 stack_size = decltype(leaf_looper)::tree_depth_max;
 
-            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+            auto e = q.submit(depends_list, [&, h_tolerance, stack_size](sycl::handler &cgh) {
                 sycl::accessor found_id{leaf_part_id, cgh, sycl::write_only, sycl::no_init};
                 u32 offset_leaf = intnode_cnt;
 
