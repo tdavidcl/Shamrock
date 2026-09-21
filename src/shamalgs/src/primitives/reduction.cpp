@@ -30,6 +30,10 @@
 
 namespace shamalgs::primitives::impl {
 
+    // The alternatives below back both the standard and the relaxed reduction selector: every
+    // standard implementation is also a valid relaxed one, and they carry the same parameters,
+    // so there is a single set of them for the two selectors to pick from.
+
     /// Fallback USM reduction (portable, no group reduction support required)
     struct Fallback {
         static constexpr std::string_view variant_type_name = "fallback";
@@ -52,38 +56,6 @@ namespace shamalgs::primitives::impl {
     };
 #endif
 
-    /// Alternatives of the relaxed reduction selector.
-    ///
-    /// Duplicated from the strict ones on purpose: the relaxed reduction owns its own
-    /// implementation list (identical today, since every strict implementation is also a valid
-    /// relaxed one) so that it can gain relaxed-only implementations without disturbing the
-    /// strict selector. They dispatch to the exact same underlying kernels.
-    namespace relaxed {
-
-        /// Fallback USM reduction (portable, no group reduction support required)
-        struct Fallback {
-            static constexpr std::string_view variant_type_name = "fallback";
-        };
-
-#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-        /// USM group reduction, tunable work-group size
-        struct GroupReduction {
-            static constexpr std::string_view variant_type_name = "group_reduction";
-            u32 group_size                                      = 128;
-
-            /// Expose the group sizes worth benchmarking as separate default implementations
-            static std::vector<GroupReduction> variant_custom_defaults() {
-                return {
-                    GroupReduction{16},
-                    GroupReduction{128},
-                    GroupReduction{256},
-                };
-            }
-        };
-#endif
-
-    } // namespace relaxed
-
 } // namespace shamalgs::primitives::impl
 
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
@@ -101,19 +73,6 @@ struct shamalgs::ImplVariantParams<shamalgs::primitives::impl::GroupReduction> {
     }
 };
 
-template<>
-struct shamalgs::ImplVariantParams<shamalgs::primitives::impl::relaxed::GroupReduction> {
-    static nlohmann::json to_json(const shamalgs::primitives::impl::relaxed::GroupReduction &p) {
-        return {{"group_size", p.group_size}};
-    }
-    static shamalgs::primitives::impl::relaxed::GroupReduction from_json(const nlohmann::json &j) {
-        shamalgs::primitives::impl::relaxed::GroupReduction p{};
-        if (j.contains("group_size")) {
-            p.group_size = j.at("group_size").get<u32>();
-        }
-        return p;
-    }
-};
 #endif
 
 namespace shamalgs::primitives {
@@ -161,10 +120,10 @@ namespace shamalgs::primitives {
         }
 
         shamalgs::ImplVariantGlobal<
-            relaxed::Fallback
+            Fallback
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
             ,
-            relaxed::GroupReduction
+            GroupReduction
 #endif
             >
             reduction_relaxed_impl;
@@ -191,9 +150,9 @@ namespace shamalgs::primitives {
         /// Select the default implementation for relaxed reduction
         void autoselect_impl_reduction_relaxed() {
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-            reduction_relaxed_impl.set(relaxed::GroupReduction{});
+            reduction_relaxed_impl.set(GroupReduction{});
 #else
-            reduction_relaxed_impl.set(relaxed::Fallback{});
+            reduction_relaxed_impl.set(Fallback{});
 #endif
             shamlog_info_ln(
                 "algs",
@@ -299,11 +258,11 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::relaxed::Fallback) {
+                [&](impl::Fallback) {
                     return sum_usm_fallback(sched, buf1, start_id, end_id);
                 },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-                [&](impl::relaxed::GroupReduction cfg) {
+                [&](impl::GroupReduction cfg) {
                     return sum_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
                 },
 #endif
@@ -326,11 +285,11 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::relaxed::Fallback) {
+                [&](impl::Fallback) {
                     return min_usm_fallback(sched, buf1, start_id, end_id);
                 },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-                [&](impl::relaxed::GroupReduction cfg) {
+                [&](impl::GroupReduction cfg) {
                     return min_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
                 },
 #endif
@@ -353,11 +312,11 @@ namespace shamalgs::primitives {
 
         return std::visit(
             shambase::overloaded{
-                [&](impl::relaxed::Fallback) {
+                [&](impl::Fallback) {
                     return max_usm_fallback(sched, buf1, start_id, end_id);
                 },
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-                [&](impl::relaxed::GroupReduction cfg) {
+                [&](impl::GroupReduction cfg) {
                     return max_usm_group(sched, buf1, start_id, end_id, cfg.group_size);
                 },
 #endif
