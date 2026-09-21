@@ -297,8 +297,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             return;
                         }
 
-                        u32 group_id  = (u32) item.get_local_id(0);
-                        u32 *stack_id = &stack_local[group_id * stack_size];
+                        u32 group_id   = (u32) item.get_local_id(0);
+                        u32 *stack_ptr = &stack_local[group_id * stack_size];
+                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                            return stack_ptr[id];
+                        };
 
                         Tscal rint_a = hpart[id_a] * h_tolerance;
 
@@ -378,8 +381,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             return;
                         }
 
-                        u32 group_id  = (u32) item.get_local_id(0);
-                        u32 *stack_id = &stack_local[group_id * stack_size];
+                        u32 group_id   = (u32) item.get_local_id(0);
+                        u32 *stack_ptr = &stack_local[group_id * stack_size];
+                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                            return stack_ptr[id];
+                        };
 
                         Tscal rint_a = hpart[id_a] * h_tolerance;
 
@@ -911,8 +917,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             return;
                         }
 
-                        u32 group_id  = (u32) item.get_local_id(0);
-                        u32 *stack_id = &stack_local[group_id * stack_size];
+                        u32 group_id   = (u32) item.get_local_id(0);
+                        u32 *stack_ptr = &stack_local[group_id * stack_size];
+                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                            return stack_ptr[id];
+                        };
 
                         Tscal leaf_a_rint    = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
                         Tvec leaf_a_bmin     = leaf_looper.aabb_min[offset_leaf + id_a];
@@ -988,8 +997,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             return;
                         }
 
-                        u32 group_id  = (u32) item.get_local_id(0);
-                        u32 *stack_id = &stack_local[group_id * stack_size];
+                        u32 group_id   = (u32) item.get_local_id(0);
+                        u32 *stack_ptr = &stack_local[group_id * stack_size];
+                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                            return stack_ptr[id];
+                        };
 
                         Tscal leaf_a_rint    = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
                         Tvec leaf_a_bmin     = leaf_looper.aabb_min[offset_leaf + id_a];
@@ -1057,8 +1069,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             return;
                         }
 
-                        u32 group_id  = (u32) item.get_local_id(0);
-                        u32 *stack_id = &stack_local[group_id * stack_size];
+                        u32 group_id   = (u32) item.get_local_id(0);
+                        u32 *stack_ptr = &stack_local[group_id * stack_size];
+                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                            return stack_ptr[id];
+                        };
 
                         Tvec r_a = xyz[id_a];
 

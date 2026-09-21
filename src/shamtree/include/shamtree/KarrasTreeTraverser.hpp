@@ -134,13 +134,14 @@ struct shamtree::KarrasTreeTraverserAccessed {
             std::forward<Functor3>(on_excluded_node));
     }
 
-    /// stack based tree traversal using memory supplied by the caller instead of an
+    /// stack based tree traversal using a stack supplied by the caller instead of an
     /// internal std::array (e.g. a slice of a local_accessor for shared memory offload).
+    /// `stack` is a functor `(u32 id) -> u32 &` giving access to the entry `id` of the stack.
     /// The stack must hold at least `stack_size` entries, which is enough for a traversal if
     /// `stack_size >= tree depth + 1`.
-    template<class Functor1, class Functor2, class Functor3>
+    template<class StackAccessor, class Functor1, class Functor2, class Functor3>
     inline void stack_based_traversal(
-        u32 *stack_ptr,
+        StackAccessor &&stack,
         u32 stack_size,
         u32 root_node,
         Functor1 &&traverse_condition,
@@ -150,15 +151,15 @@ struct shamtree::KarrasTreeTraverserAccessed {
         static constexpr u32 _nindex = 4294967295;
 
         // Init the stack state
-        u32 stack_cursor        = stack_size - 1;
-        stack_ptr[stack_cursor] = root_node;
+        u32 stack_cursor    = stack_size - 1;
+        stack(stack_cursor) = root_node;
 
         // until the stack is empty
         while (stack_cursor < stack_size) {
 
             // Pop the top of the stack
-            u32 current_node_id     = stack_ptr[stack_cursor];
-            stack_ptr[stack_cursor] = _nindex;
+            u32 current_node_id = stack(stack_cursor);
+            stack(stack_cursor) = _nindex;
             stack_cursor++;
 
             // check iteraction creteria
@@ -175,10 +176,10 @@ struct shamtree::KarrasTreeTraverserAccessed {
                     u32 lid = get_left_child(current_node_id);
                     u32 rid = get_right_child(current_node_id);
 
-                    stack_ptr[stack_cursor - 1] = rid;
+                    stack(stack_cursor - 1) = rid;
                     stack_cursor--;
 
-                    stack_ptr[stack_cursor - 1] = lid;
+                    stack(stack_cursor - 1) = lid;
                     stack_cursor--;
                 }
             } else {
@@ -188,10 +189,10 @@ struct shamtree::KarrasTreeTraverserAccessed {
         }
     }
 
-    /// stack based tree traversal using memory supplied by the caller (root = 0)
-    template<class Functor1, class Functor2, class Functor3>
+    /// stack based tree traversal using a stack supplied by the caller (root = 0)
+    template<class StackAccessor, class Functor1, class Functor2, class Functor3>
     inline void stack_based_traversal(
-        u32 *stack_ptr,
+        StackAccessor &&stack,
         u32 stack_size,
         Functor1 &&traverse_condition,
         Functor2 &&on_found_leaf,
@@ -201,7 +202,7 @@ struct shamtree::KarrasTreeTraverserAccessed {
         u32 root_node = 0;
 
         stack_based_traversal(
-            stack_ptr,
+            std::forward<StackAccessor>(stack),
             stack_size,
             root_node,
             std::forward<Functor1>(traverse_condition),

@@ -137,18 +137,19 @@ struct shamtree::CLBVHTraverserAccessed {
             [&](u32) {});
     }
 
-    /// version using memory supplied by the caller instead of an internal std::array
-    /// for the traversal stack (e.g. a slice of a local_accessor for shared memory offload).
-    /// `stack_size` is the capacity of the stack, it must be at least the tree depth + 1.
-    template<class Functor1, class Functor2>
+    /// version using a stack supplied by the caller instead of an internal std::array
+    /// (e.g. a slice of a local_accessor for shared memory offload).
+    /// `stack` is a functor `(u32 id) -> u32 &` giving access to the entry `id` of the stack and
+    /// `stack_size` is its capacity, which must be at least the tree depth + 1.
+    template<class StackAccessor, class Functor1, class Functor2>
     inline void rtree_for(
-        u32 *stack_ptr,
+        StackAccessor &&stack,
         u32 stack_size,
         Functor1 &&traverse_condition_with_aabb,
         Functor2 &&on_found_leaf) const {
 
         tree_traverser.stack_based_traversal(
-            stack_ptr,
+            std::forward<StackAccessor>(stack),
             stack_size,
             [&](u32 node_id) { // interaction crit
                 return traverse_condition_with_aabb(
@@ -191,18 +192,19 @@ struct shamtree::CLBVHObjectIteratorAccessed {
             });
     }
 
-    /// version using memory supplied by the caller instead of an internal std::array
-    /// for the traversal stack (e.g. a slice of a local_accessor for shared memory offload).
-    /// `stack_size` is the capacity of the stack, it must be at least the tree depth + 1.
-    template<class Functor1, class Functor2>
+    /// version using a stack supplied by the caller instead of an internal std::array
+    /// (e.g. a slice of a local_accessor for shared memory offload).
+    /// `stack` is a functor `(u32 id) -> u32 &` giving access to the entry `id` of the stack and
+    /// `stack_size` is its capacity, which must be at least the tree depth + 1.
+    template<class StackAccessor, class Functor1, class Functor2>
     inline void rtree_for(
-        u32 *stack_ptr,
+        StackAccessor &&stack,
         u32 stack_size,
         Functor1 &&traverse_condition_with_aabb,
         Functor2 &&on_found_object) const {
 
         tree_traverser.rtree_for(
-            stack_ptr,
+            std::forward<StackAccessor>(stack),
             stack_size,
             std::forward<Functor1>(traverse_condition_with_aabb),
             [&](u32 node_id) { // on leaf found
