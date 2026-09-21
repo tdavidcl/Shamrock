@@ -135,10 +135,13 @@ struct shamtree::KarrasTreeTraverserAccessed {
     }
 
     /// stack based tree traversal using memory supplied by the caller instead of an
-    /// internal std::array (e.g. a slice of a local_accessor for shared memory offload)
-    template<u32 tree_depth, class Functor1, class Functor2, class Functor3>
+    /// internal std::array (e.g. a slice of a local_accessor for shared memory offload).
+    /// The stack must hold at least `stack_size` entries, which is enough for a traversal if
+    /// `stack_size >= tree depth + 1`.
+    template<class Functor1, class Functor2, class Functor3>
     inline void stack_based_traversal(
         u32 *stack_ptr,
+        u32 stack_size,
         u32 root_node,
         Functor1 &&traverse_condition,
         Functor2 &&on_found_leaf,
@@ -147,11 +150,11 @@ struct shamtree::KarrasTreeTraverserAccessed {
         static constexpr u32 _nindex = 4294967295;
 
         // Init the stack state
-        u32 stack_cursor        = tree_depth - 1;
+        u32 stack_cursor        = stack_size - 1;
         stack_ptr[stack_cursor] = root_node;
 
         // until the stack is empty
-        while (stack_cursor < tree_depth) {
+        while (stack_cursor < stack_size) {
 
             // Pop the top of the stack
             u32 current_node_id     = stack_ptr[stack_cursor];
@@ -186,9 +189,10 @@ struct shamtree::KarrasTreeTraverserAccessed {
     }
 
     /// stack based tree traversal using memory supplied by the caller (root = 0)
-    template<u32 tree_depth, class Functor1, class Functor2, class Functor3>
+    template<class Functor1, class Functor2, class Functor3>
     inline void stack_based_traversal(
         u32 *stack_ptr,
+        u32 stack_size,
         Functor1 &&traverse_condition,
         Functor2 &&on_found_leaf,
         Functor3 &&on_excluded_node) const {
@@ -196,8 +200,9 @@ struct shamtree::KarrasTreeTraverserAccessed {
         // On a Karras tree, the root is always 0
         u32 root_node = 0;
 
-        stack_based_traversal<tree_depth>(
+        stack_based_traversal(
             stack_ptr,
+            stack_size,
             root_node,
             std::forward<Functor1>(traverse_condition),
             std::forward<Functor2>(on_found_leaf),

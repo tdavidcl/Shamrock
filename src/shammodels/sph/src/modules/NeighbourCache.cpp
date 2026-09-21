@@ -250,6 +250,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         RTree &tree = storage.merged_pos_trees.get().get(patch_id);
         auto obj_it = tree.get_object_iterator();
 
+        // a depth first traversal holds at most depth + 1 entries in its stack
+        u32 tree_depth = tree.get_exact_tree_depth();
+        u32 stack_size = tree_depth + 1;
+
+        shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
+
         u32 obj_cnt = shambase::get_check_ref(storage.part_counts).indexes.get(patch_id);
 
         sycl::range range_npart{obj_cnt};
@@ -277,9 +283,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto particle_looper = obj_it.get_read_access(depends_list);
 
             constexpr u32 group_size = 256;
-            constexpr u32 stack_size = decltype(particle_looper)::tree_depth_max;
 
-            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+            auto e = q.submit(depends_list, [&, h_tolerance, stack_size](sycl::handler &cgh) {
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
@@ -306,6 +311,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         particle_looper.rtree_for(
                             stack_id,
+                            stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                                 Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
@@ -358,9 +364,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             auto particle_looper   = obj_it.get_read_access(depends_list);
 
             constexpr u32 group_size = 256;
-            constexpr u32 stack_size = decltype(particle_looper)::tree_depth_max;
 
-            auto e = q.submit(depends_list, [&, h_tolerance](sycl::handler &cgh) {
+            auto e = q.submit(depends_list, [&, h_tolerance, stack_size](sycl::handler &cgh) {
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
@@ -387,6 +392,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         particle_looper.rtree_for(
                             stack_id,
+                            stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                                 Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
@@ -918,6 +924,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         leaf_looper.rtree_for(
                             stack_id,
+                            stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                                 Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
@@ -994,6 +1001,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         leaf_looper.rtree_for(
                             stack_id,
+                            stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                                 Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
 
@@ -1059,6 +1067,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         leaf_looper.rtree_for(
                             stack_id,
+                            stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                                 bool ret = BBAA::is_coord_in_range_incl_max(
                                     r_a, node_aabb.lower, node_aabb.upper);
