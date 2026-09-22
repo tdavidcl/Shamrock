@@ -859,12 +859,6 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
             __shamrock_stack_entry();
 
-            {
-                static thread_local std::mt19937 rng{std::random_device{}()};
-                std::uniform_real_distribution<double> dist_sleep_s(0.0, 1100.0);
-                std::this_thread::sleep_for(std::chrono::duration<double>(dist_sleep_s(rng)));
-            }
-
             sham::kernel_call_hndl(
                 q,
                 sham::MultiRef{tree_field_rint, leaf_it},
