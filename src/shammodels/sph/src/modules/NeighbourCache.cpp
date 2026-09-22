@@ -31,6 +31,8 @@
 #include "shamunits/Constants.hpp"
 #include <atomic>
 #include <chrono>
+#include <csignal>
+#include <pthread.h>
 #include <random>
 #include <thread>
 
@@ -810,6 +812,13 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         u64 it_cnt      = 0;
         auto t_last_log = std::chrono::steady_clock::now();
 
+        // The thread stuck in the while loop below (usually the main thread). Captured here,
+        // before the watchdog is spawned, so the watchdog can signal *this* thread specifically
+        // on timeout instead of aborting from its own thread: aborting from the watchdog itself
+        // would make cpptrace/the internal stacktrace unwind the watchdog's stack (sleep_for +
+        // the lambda below) rather than the stalled call site in the loop.
+        pthread_t stalled_thread = pthread_self();
+
         std::atomic<int> reset_timer{0};
         std::atomic<bool> watchdog_stop{false};
         std::thread watchdog([&]() {
@@ -826,7 +835,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         stderr,
                         "watchdog: leaf neighbour count loop stalled for 10s, work_rank = %d\n",
                         shamcomm::world_rank());
-                    std::abort();
+                    // Deliver SIGABRT to the stalled thread itself (not std::abort() here),
+                    // so the crash handler runs on it and cpptrace/fmt_callstack report its
+                    // actual call site instead of this watchdog thread's own stack.
+                    pthread_kill(stalled_thread, SIGABRT);
+                    break;
                 }
             }
         });
