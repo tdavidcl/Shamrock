@@ -844,8 +844,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             }
         });
 
+        constexpr u64 max_it_cnt = 1'000'000;
         while (true) {
             it_cnt++;
+            if (it_cnt > max_it_cnt) {
+                break;
+            }
             reset_timer.store(1, std::memory_order_relaxed);
 
             auto t_now = std::chrono::steady_clock::now();
