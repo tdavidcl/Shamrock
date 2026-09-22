@@ -850,10 +850,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
             auto t_now = std::chrono::steady_clock::now();
             if (t_now - t_last_log >= std::chrono::seconds(1)) {
-                printf(
-                    "it_cnt = %llu, work_rank = %d\n",
-                    static_cast<unsigned long long>(it_cnt),
-                    shamcomm::world_rank());
+                shamlog_normal_ln(
+                    "Cache", "it_cnt =", it_cnt, ", work_rank =", shamcomm::world_rank());
                 t_last_log = t_now;
             }
 
