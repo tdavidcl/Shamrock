@@ -86,7 +86,7 @@ class Node_f : public shamrock::solvergraph::INode {
          auto edges = get_edges(); // get actual access to the edges
 
          // do c = a+b, IDataEdge contain the data in a .data member value
-         edges.c.data = edges.a.data + edges.b.data; 
+         edges.c.data = edges.a.data + edges.b.data;
     }
 
     // This is the name that will be displayed on the graph when rendered
