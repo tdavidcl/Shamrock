@@ -18,6 +18,7 @@
 #include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/stacktrace.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/make_ndrange.hpp"
@@ -28,7 +29,10 @@
 #include "shamtree/TreeTraversal.hpp"
 #include "shamtree/kernels/geometry_utils.hpp"
 #include "shamunits/Constants.hpp"
+#include <atomic>
 #include <chrono>
+#include <random>
+#include <thread>
 
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
@@ -805,8 +809,31 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
         u64 it_cnt      = 0;
         auto t_last_log = std::chrono::steady_clock::now();
+
+        std::atomic<int> reset_timer{0};
+        std::atomic<bool> watchdog_stop{false};
+        std::thread watchdog([&]() {
+            auto last_reset_time = std::chrono::steady_clock::now();
+            while (!watchdog_stop.load()) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                auto now = std::chrono::steady_clock::now();
+                if (reset_timer.load() == 1) {
+                    reset_timer.store(0);
+                    last_reset_time = now;
+                } else if (now - last_reset_time > std::chrono::seconds(10)) {
+                    fprintf(
+                        stderr,
+                        "watchdog: leaf neighbour count loop stalled for 10s, work_rank = %d\n",
+                        shamcomm::world_rank());
+                    std::abort();
+                }
+            }
+        });
+
         while (true) {
             it_cnt++;
+            reset_timer.store(1, std::memory_order_relaxed);
 
             auto t_now = std::chrono::steady_clock::now();
             if (t_now - t_last_log >= std::chrono::seconds(1)) {
@@ -815,6 +842,14 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     static_cast<unsigned long long>(it_cnt),
                     shamcomm::world_rank());
                 t_last_log = t_now;
+            }
+
+            __shamrock_stack_entry();
+
+            {
+                static thread_local std::mt19937 rng{std::random_device{}()};
+                std::uniform_real_distribution<double> dist_sleep_s(0.0, 1100.0);
+                std::this_thread::sleep_for(std::chrono::duration<double>(dist_sleep_s(rng)));
             }
 
             sham::kernel_call_hndl(
@@ -882,6 +917,9 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 });
             q.q.wait_and_throw();
         }
+
+        watchdog_stop.store(true);
+        watchdog.join();
 
         tree::ObjectCache pleaf_cache
             = tree::prepare_object_cache(std::move(neigh_count_leaf), leaf_cnt);
