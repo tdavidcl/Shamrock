@@ -81,11 +81,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_n
             obj_cnt,
             [h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
-                const Tscal *rint_tree,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
+                const Tscal *__restrict rint_tree,
                 auto particle_looper,
-                u32 *neigh_cnt) {
+                u32 *__restrict neigh_cnt) {
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 Tscal rint_a = hpart[id_a] * h_tolerance;
@@ -136,12 +136,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_n
             obj_cnt,
             [h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
-                const Tscal *rint_tree,
-                const u32 *scanned_neigh_cnt,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
+                const Tscal *__restrict rint_tree,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto particle_looper,
-                u32 *neigh) {
+                u32 *__restrict neigh) {
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 Tscal rint_a = hpart[id_a] * h_tolerance;
@@ -258,11 +258,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [h_tolerance, stack_size](
                 u32 n,
-                const Tvec *xyz,
-                const Tscal *hpart,
-                const Tscal *rint_tree,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
+                const Tscal *__restrict rint_tree,
                 auto particle_looper,
-                u32 *neigh_cnt) {
+                u32 *__restrict neigh_cnt) {
                 return [=](sycl::handler &cgh) {
                     constexpr Tscal Rker2    = Kernel::Rkern * Kernel::Rkern;
                     constexpr u32 group_size = 256;
@@ -334,12 +334,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [h_tolerance, stack_size](
                 u32 n,
-                const Tvec *xyz,
-                const Tscal *hpart,
-                const Tscal *rint_tree,
-                const u32 *scanned_neigh_cnt,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
+                const Tscal *__restrict rint_tree,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto particle_looper,
-                u32 *neigh) {
+                u32 *__restrict neigh) {
                 return [=](sycl::handler &cgh) {
                     constexpr Tscal Rker2    = Kernel::Rkern * Kernel::Rkern;
                     constexpr u32 group_size = 256;
@@ -476,7 +476,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             sham::MultiRef{tree_field_rint, leaf_it},
             sham::MultiRef{neigh_count_leaf},
             leaf_cnt,
-            [intnode_cnt](u32 id_a, const Tscal *rint_tree, auto leaf_looper, u32 *neigh_cnt) {
+            [intnode_cnt](
+                u32 id_a,
+                const Tscal *__restrict rint_tree,
+                auto leaf_looper,
+                u32 *__restrict neigh_cnt) {
                 u32 offset_leaf = intnode_cnt;
 
                 Tscal leaf_a_rint    = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
@@ -538,10 +542,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             leaf_cnt,
             [intnode_cnt](
                 u32 id_a,
-                const Tscal *rint_tree,
-                const u32 *scanned_neigh_cnt,
+                const Tscal *__restrict rint_tree,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto leaf_looper,
-                u32 *neigh) {
+                u32 *__restrict neigh) {
                 u32 offset_leaf = intnode_cnt;
 
                 Tscal leaf_a_rint    = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
@@ -581,7 +585,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             sham::MultiRef{buf_xyz, leaf_it},
             sham::MultiRef{leaf_part_id},
             obj_cnt,
-            [intnode_cnt](u32 id_a, const Tvec *xyz, auto leaf_looper, u32 *found_id) {
+            [intnode_cnt](
+                u32 id_a, const Tvec *__restrict xyz, auto leaf_looper, u32 *__restrict found_id) {
                 u32 offset_leaf = intnode_cnt;
 
                 Tvec r_a = xyz[id_a];
@@ -627,12 +632,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [intnode_cnt, h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
                 auto acc_neigh_leaf_looper,
                 auto particle_looper,
-                const u32 *leaf_owner,
-                u32 *neigh_cnt) {
+                const u32 *__restrict leaf_owner,
+                u32 *__restrict neigh_cnt) {
                 tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
                 u32 offset_leaf = intnode_cnt;
@@ -682,13 +687,13 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [intnode_cnt, h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
                 auto acc_neigh_leaf_looper,
-                const u32 *scanned_neigh_cnt,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto particle_looper,
-                const u32 *leaf_owner,
-                u32 *neigh) {
+                const u32 *__restrict leaf_owner,
+                u32 *__restrict neigh) {
                 tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
                 u32 offset_leaf = intnode_cnt;
@@ -801,8 +806,11 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             sham::MultiRef{tree_field_rint, leaf_it},
             sham::MultiRef{neigh_count_leaf},
             leaf_cnt,
-            [intnode_cnt,
-             stack_size](u32 n, const Tscal *rint_tree, auto leaf_looper, u32 *neigh_cnt) {
+            [intnode_cnt, stack_size](
+                u32 n,
+                const Tscal *__restrict rint_tree,
+                auto leaf_looper,
+                u32 *__restrict neigh_cnt) {
                 return [=](sycl::handler &cgh) {
                     u32 offset_leaf          = intnode_cnt;
                     constexpr u32 group_size = 256;
@@ -870,10 +878,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             leaf_cnt,
             [intnode_cnt, stack_size](
                 u32 n,
-                const Tscal *rint_tree,
-                const u32 *scanned_neigh_cnt,
+                const Tscal *__restrict rint_tree,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto leaf_looper,
-                u32 *neigh) {
+                u32 *__restrict neigh) {
                 return [=](sycl::handler &cgh) {
                     u32 offset_leaf          = intnode_cnt;
                     constexpr u32 group_size = 256;
@@ -935,7 +943,8 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             sham::MultiRef{buf_xyz, leaf_it},
             sham::MultiRef{leaf_part_id},
             obj_cnt,
-            [intnode_cnt, stack_size](u32 n, const Tvec *xyz, auto leaf_looper, u32 *found_id) {
+            [intnode_cnt, stack_size](
+                u32 n, const Tvec *__restrict xyz, auto leaf_looper, u32 *__restrict found_id) {
                 return [=](sycl::handler &cgh) {
                     u32 offset_leaf          = intnode_cnt;
                     constexpr u32 group_size = 256;
@@ -990,12 +999,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [intnode_cnt, h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
                 auto acc_neigh_leaf_looper,
                 auto particle_looper,
-                const u32 *leaf_owner,
-                u32 *neigh_cnt) {
+                const u32 *__restrict leaf_owner,
+                u32 *__restrict neigh_cnt) {
                 tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
                 u32 offset_leaf = intnode_cnt;
@@ -1045,13 +1054,13 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
             obj_cnt,
             [intnode_cnt, h_tolerance](
                 u32 id_a,
-                const Tvec *xyz,
-                const Tscal *hpart,
+                const Tvec *__restrict xyz,
+                const Tscal *__restrict hpart,
                 auto acc_neigh_leaf_looper,
-                const u32 *scanned_neigh_cnt,
+                const u32 *__restrict scanned_neigh_cnt,
                 auto particle_looper,
-                const u32 *leaf_owner,
-                u32 *neigh) {
+                const u32 *__restrict leaf_owner,
+                u32 *__restrict neigh) {
                 tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
                 u32 offset_leaf = intnode_cnt;
