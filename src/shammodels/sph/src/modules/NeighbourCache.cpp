@@ -21,12 +21,14 @@
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/make_ndrange.hpp"
+#include "shamcomm/worldInfo.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/TreeTraversal.hpp"
 #include "shamtree/kernels/geometry_utils.hpp"
 #include "shamunits/Constants.hpp"
+#include <chrono>
 
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
@@ -801,68 +803,85 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
         shamlog_debug_sycl_ln("Cache", "generate cache for Nleaf=", leaf_cnt);
 
-        sham::kernel_call_hndl(
-            q,
-            sham::MultiRef{tree_field_rint, leaf_it},
-            sham::MultiRef{neigh_count_leaf},
-            leaf_cnt,
-            [intnode_cnt, stack_size](
-                u32 n,
-                const Tscal *__restrict rint_tree,
-                auto leaf_looper,
-                u32 *__restrict neigh_cnt) {
-                return [=](sycl::handler &cgh) {
-                    u32 offset_leaf          = intnode_cnt;
-                    constexpr u32 group_size = 256;
+        u64 it_cnt      = 0;
+        auto t_last_log = std::chrono::steady_clock::now();
+        while (true) {
+            it_cnt++;
 
-                    sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
+            auto t_now = std::chrono::steady_clock::now();
+            if (t_now - t_last_log >= std::chrono::seconds(1)) {
+                printf(
+                    "it_cnt = %llu, work_rank = %d\n",
+                    static_cast<unsigned long long>(it_cnt),
+                    shamcomm::world_rank());
+                t_last_log = t_now;
+            }
 
-                    cgh.parallel_for(sham::make_ndrange(group_size, n), [=](sycl::nd_item<1> item) {
-                        u32 id_a = (u32) item.get_global_linear_id();
+            sham::kernel_call_hndl(
+                q,
+                sham::MultiRef{tree_field_rint, leaf_it},
+                sham::MultiRef{neigh_count_leaf},
+                leaf_cnt,
+                [intnode_cnt, stack_size](
+                    u32 n,
+                    const Tscal *__restrict rint_tree,
+                    auto leaf_looper,
+                    u32 *__restrict neigh_cnt) {
+                    return [=](sycl::handler &cgh) {
+                        u32 offset_leaf          = intnode_cnt;
+                        constexpr u32 group_size = 256;
 
-                        if (id_a >= n) {
-                            return;
-                        }
+                        sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
 
-                        u32 group_id   = (u32) item.get_local_id(0);
-                        u32 *stack_ptr = &stack_local[group_id * stack_size];
-                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
-                            return stack_ptr[id];
-                        };
+                        cgh.parallel_for(
+                            sham::make_ndrange(group_size, n), [=](sycl::nd_item<1> item) {
+                                u32 id_a = (u32) item.get_global_linear_id();
 
-                        Tscal leaf_a_rint    = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
-                        Tvec leaf_a_bmin     = leaf_looper.aabb_min[offset_leaf + id_a];
-                        Tvec leaf_a_bmax     = leaf_looper.aabb_max[offset_leaf + id_a];
-                        Tvec leaf_a_bmin_ext = leaf_a_bmin - leaf_a_rint;
-                        Tvec leaf_a_bmax_ext = leaf_a_bmax + leaf_a_rint;
+                                if (id_a >= n) {
+                                    return;
+                                }
 
-                        u32 cnt = 0;
+                                u32 group_id   = (u32) item.get_local_id(0);
+                                u32 *stack_ptr = &stack_local[group_id * stack_size];
+                                auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
+                                    return stack_ptr[id];
+                                };
 
-                        leaf_looper.rtree_for(
-                            stack_id,
-                            stack_size,
-                            [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                                Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
+                                Tscal leaf_a_rint = rint_tree[offset_leaf + id_a] * Kernel::Rkern;
+                                Tvec leaf_a_bmin  = leaf_looper.aabb_min[offset_leaf + id_a];
+                                Tvec leaf_a_bmax  = leaf_looper.aabb_max[offset_leaf + id_a];
+                                Tvec leaf_a_bmin_ext = leaf_a_bmin - leaf_a_rint;
+                                Tvec leaf_a_bmax_ext = leaf_a_bmax + leaf_a_rint;
 
-                                Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
-                                Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
+                                u32 cnt = 0;
 
-                                return BBAA::cella_neigh_b(
-                                           leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
-                                       || BBAA::cella_neigh_b(
-                                           leaf_a_bmin_ext,
-                                           leaf_a_bmax_ext,
-                                           node_aabb.lower,
-                                           node_aabb.upper);
-                            },
-                            [&](u32 leaf_b) {
-                                cnt++;
+                                leaf_looper.rtree_for(
+                                    stack_id,
+                                    stack_size,
+                                    [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
+                                        Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
+
+                                        Tvec ext_bmin = node_aabb.lower - int_r_max_cell;
+                                        Tvec ext_bmax = node_aabb.upper + int_r_max_cell;
+
+                                        return BBAA::cella_neigh_b(
+                                                   leaf_a_bmin, leaf_a_bmax, ext_bmin, ext_bmax)
+                                               || BBAA::cella_neigh_b(
+                                                   leaf_a_bmin_ext,
+                                                   leaf_a_bmax_ext,
+                                                   node_aabb.lower,
+                                                   node_aabb.upper);
+                                    },
+                                    [&](u32 leaf_b) {
+                                        cnt++;
+                                    });
+
+                                neigh_cnt[id_a] = cnt;
                             });
-
-                        neigh_cnt[id_a] = cnt;
-                    });
-                };
-            });
+                    };
+                });
+            q.q.wait_and_throw();
+        }
 
         tree::ObjectCache pleaf_cache
             = tree::prepare_object_cache(std::move(neigh_count_leaf), leaf_cnt);

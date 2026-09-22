@@ -81,7 +81,7 @@ cfg.set_artif_viscosity_VaryingCD10(
     alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
 )
 cfg.set_tree_reduction_level(6)
-cfg.set_neigh_cache_strategy(NeighCacheStrategy.SingleStageSharedOffload)
+cfg.set_neigh_cache_strategy(NeighCacheStrategy.TwoStageSharedOffload)
 cfg.set_boundary_periodic()
 cfg.set_eos_adiabatic(gamma)
 cfg.print_status()
