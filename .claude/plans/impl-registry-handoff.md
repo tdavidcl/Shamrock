@@ -32,20 +32,23 @@ shamrock.algs.get_current_impl("reduction")
 Each call site that used a per-algorithm function (tests, Python bindings, benchmark scripts, docs)
 switches to the registry. The per-algorithm functions are then deleted.
 
+The registry works entirely through `IImplVariant`. To make that possible, `IImplVariant` gains
+two virtuals, `is_set()` and `autoselect(sched)`, so the registry never needs extra
+per-algorithm callbacks or JSON parsing.
+
 ## Hard constraints
 
-1. **Do not modify `IImplVariant`** (`src/shamalgs/include/shamalgs/ImplVariant.hpp:208-221`).
-   Its interface stays exactly:
-   - `get_current_config() const`: the config JSON string, or the string `"null"` when unset;
-   - `get_default_config_list() const`;
-   - `set(std::string_view)`.
+1. **`IImplVariant` gains exactly two pure virtuals and nothing else**
+   (`src/shamalgs/include/shamalgs/ImplVariant.hpp:208-221`):
+   - `virtual bool is_set() const = 0;`
+   - `virtual void autoselect(const sham::DeviceScheduler_ptr &sched) = 0;`
 
-   Do not modify `ImplVariantGlobal` either; the whole of `ImplVariant.hpp` stays unchanged.
-2. The registry must work through that interface alone. What `IImplVariant` lacks is filled in
-   as follows:
-   - **is_set:** derive it as `!nlohmann::json::parse(impl.get_current_config()).is_null()`.
-   - **autoselect:** there is no virtual for it, so each algorithm registers its autoselect
-     function next to its `IImplVariant &`.
+   Its existing members (`get_current_config`, `get_default_config_list`, `set(std::string_view)`)
+   stay unchanged. The registry works purely through `IImplVariant`, so it never casts to a
+   concrete type.
+2. **`ImplVariantGlobal` changes only as needed to implement those two virtuals** (see "Changes
+   to `ImplVariant.hpp`" below). No name in the constructor, no `get_or_autoselect`, no
+   removal of `set(Variant)`.
 3. The Python value types stay the same: one implementation is a JSON **string**
    (`{"implementation": ..., "parameters": ...}`), and the default list is a `list[str]`.
 
@@ -56,7 +59,7 @@ switches to the registry. The per-algorithm functions are then deleted.
 - The autotune hook.
 - The `SHAMROCK_IMPL_CONFIG` env var and the `--impl-config` CLI option.
 - Moving `shamrock_compiler_id_string` into shambackends.
-- Any change to `ImplVariant.hpp`, including `get_or_autoselect` and a name in the constructor.
+- Any change to `ImplVariant.hpp` beyond the two virtuals and what implementing them requires.
 
 ## The 8 algorithms
 
@@ -79,6 +82,60 @@ Two naming notes:
 
 ## Design
 
+### Changes to `ImplVariant.hpp`
+
+**`IImplVariant`** (lines 208-221) gains two pure virtuals:
+
+```cpp
+/// Whether an implementation has been selected yet
+virtual bool is_set() const = 0;
+
+/// Select the algorithm's default implementation for the device behind `sched`
+virtual void autoselect(const sham::DeviceScheduler_ptr &sched) = 0;
+```
+
+- Add `#include "shambackends/DeviceScheduler.hpp"` for `sham::DeviceScheduler_ptr`.
+  - There is no include cycle: shambackends never includes shamalgs, and shamalgs already links
+    shambackends.
+  - Every current includer of `ImplVariant.hpp` already pulls in SYCL, so the include adds no
+    real cost.
+- Update the file-level doc comment and the `IImplVariant` doc comment to mention the two new
+  members and the registry.
+
+**`ImplVariantGlobal<Alts...>`** (lines 244-281) implements them. The default selection moves
+from a per-algorithm free function into a callback given at construction:
+
+```cpp
+/// Returns the default implementation to use on the device behind `sched`
+using DefaultSelector = std::function<Variant(const sham::DeviceScheduler_ptr &)>;
+
+explicit ImplVariantGlobal(DefaultSelector default_impl)
+    : default_impl(std::move(default_impl)) {
+    if (!this->default_impl) {
+        throw shambase::make_except_with_loc<std::invalid_argument>(
+            "ImplVariantGlobal needs a default implementation selector");
+    }
+}
+
+inline bool is_set() const override { return current.has_value(); }
+
+inline void autoselect(const sham::DeviceScheduler_ptr &sched) override {
+    set(default_impl(sched));
+}
+
+private:
+DefaultSelector default_impl;
+```
+
+Rules for these changes:
+- **`is_set()` becomes the `override`.** Its body is unchanged; it simply was not virtual before.
+- **Mark every override `override`.** Otherwise clang warns `-Winconsistent-missing-override`.
+- **No default constructor.** This forces every algorithm to supply its default.
+- **Everything else in the class stays as it is**, including the public `set(Variant)`, which
+  `autoselect` uses.
+- **Copying and moving:** the registry stores an `IImplVariant *` to each global, so delete copy
+  and move.
+
 ### New `src/shamalgs/include/shamalgs/impl_registry.hpp` + `src/shamalgs/src/impl_registry.cpp`
 
 - The file name is lower_case, because it holds free functions (see the file-naming rule in
@@ -88,46 +145,44 @@ Two naming notes:
 - Everything goes in namespace `shamalgs::impl_registry`.
 
 ```cpp
-using autoselect_fct = std::function<void(const sham::DeviceScheduler_ptr &)>;
+/// Throws std::invalid_argument if `name` is already registered (nothing is stored then)
+void register_impl(std::string name, IImplVariant &impl);
 
-/// Throws std::invalid_argument if `name` is already registered
-void register_impl(std::string name, IImplVariant &impl, autoselect_fct autoselect);
-
-/// RAII-free helper so a registration can sit at namespace scope right after the global
+/// Lets a registration sit at namespace scope right after the global it registers
 struct ImplRegistrar {
-    ImplRegistrar(std::string name, IImplVariant &impl, autoselect_fct autoselect);
+    ImplRegistrar(std::string name, IImplVariant &impl);
 };
 
 std::vector<std::string> get_registered_algs();                       // sorted
-std::vector<std::string> get_default_impl_list(std::string_view alg);
-std::string get_current_impl(std::string_view alg);                    // "null" when unset
-bool is_impl_set(std::string_view alg);
-void set_impl(std::string_view alg, std::string_view impl);            // logs, then impl.set()
-void autoselect_impl(std::string_view alg, const sham::DeviceScheduler_ptr &sched);
+std::vector<std::string> get_default_impl_list(std::string_view alg); // impl.get_default_config_list()
+std::string get_current_impl(std::string_view alg);                   // impl.get_current_config(), "null" when unset
+bool is_impl_set(std::string_view alg);                               // impl.is_set()
+void set_impl(std::string_view alg, std::string_view impl);           // logs, then impl.set(impl)
+void autoselect_impl(std::string_view alg, const sham::DeviceScheduler_ptr &sched); // impl.autoselect(sched), then logs
 ```
 
 **Storage**
 - A function-local static singleton, accessed only from the `.cpp`. The Meyers-singleton pattern
   is already used at `src/shamsolvergraph/include/shamsolvergraph/JsonSerializable.hpp:140`.
-- It holds `std::map<std::string, Entry, std::less<>>`, where
-  `struct Entry { IImplVariant *impl; autoselect_fct autoselect; };`.
+- It holds `std::map<std::string, IImplVariant *, std::less<>>`, so lookups work by
+  `string_view`.
 - The singleton is constructed during the first registration, so it outlives every registered
   global. No unregister is needed.
 
 **Errors**
 - An unknown `alg` throws `std::invalid_argument` built with
   `shambase::make_except_with_loc`. The message lists the registered names.
-- `autoselect_impl` checks the scheduler with `shambase::get_check_ref(sched)` before it calls the
-  function. This matters for Python, where the scheduler is null before `shamrock.sys.init()`.
+- `autoselect_impl` checks the scheduler with `shambase::get_check_ref(sched)` before it calls
+  `impl.autoselect(sched)`. This matters for Python, where the scheduler is null before
+  `shamrock.sys.init()`.
 
 **Logging**
-- `set_impl` logs `shamlog_info_ln("algs", "setting", alg, "implementation to impl :", impl)`,
-  replacing the per-algorithm log lines.
-- The per-algorithm autoselect functions keep their existing "defaulting ..." log lines.
+
+The registry is the only place that logs selections. The per-algorithm log lines go away.
+- `set_impl` logs `shamlog_info_ln("algs", "setting", alg, "implementation to impl :", impl)`.
+- `autoselect_impl` logs `shamlog_info_ln("algs", "defaulting", alg, "implementation to impl :", impl.get_current_config())`.
 
 **Lint**
-- Use designated initializers when building an `Entry`: clang-tidy enables
-  `modernize-use-designated-initializers`.
 - `std::move` any by-value parameters: `performance-unnecessary-value-param` is enabled.
 - Every new file needs the license header and a doxygen `@file` block (pre-commit's
   `doxygen_header` hook).
@@ -139,37 +194,57 @@ Taking `reduction.cpp` as the example:
 
 ```cpp
 namespace shamalgs::primitives::impl {
-    shamalgs::ImplVariantGlobal<Fallback /*, GroupReduction under #ifdef*/> reduction_impl;
+
+    /// Registry name, shared by the registrar and the dispatch site
+    constexpr std::string_view reduction_impl_name = "reduction";
+
+    using ReductionImpl = shamalgs::ImplVariantGlobal<
+        Fallback
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+        ,
+        GroupReduction
+#endif
+        >;
+
+    ReductionImpl reduction_impl{
+        [](const sham::DeviceScheduler_ptr & /*sched*/) -> ReductionImpl::Variant {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            return GroupReduction{};
+#else
+            return Fallback{};
+#endif
+        }};
 
     namespace {
-        /// Select the default implementation for reduction
-        void autoselect_impl_reduction(const sham::DeviceScheduler_ptr & /*sched*/) {
-            // body unchanged (the #ifdef choice + the "defaulting ..." log line)
-        }
-
         // Must come after reduction_impl: same TU, so it is initialized after the global
         shamalgs::impl_registry::ImplRegistrar reduction_registrar{
-            "reduction", reduction_impl, autoselect_impl_reduction};
+            std::string(reduction_impl_name), reduction_impl};
     } // namespace
-}
+} // namespace shamalgs::primitives::impl
 
-// dispatch site (unchanged shape, just passes the scheduler):
+// dispatch site: goes through the registry so that the "defaulting ..." log line is uniform
 if (!impl::reduction_impl.is_set()) {
-    impl::autoselect_impl_reduction(sched);
+    shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
 }
 ```
+
+The explicit `-> ReductionImpl::Variant` return type is needed, because the lambda returns
+different alternatives on different `#ifdef` branches.
 
 Steps for each algorithm:
 1. **Header:** delete the 5 per-algorithm declarations from its `namespace impl` block. Delete
    the whole block if it ends up empty.
 2. **`.cpp`:**
-   - Delete `get_default_impl_list_X`, `get_current_impl_X`, `is_impl_set_X` and `set_impl_X`.
-   - Move `autoselect_impl_X` into an anonymous namespace with the signature
-     `(const sham::DeviceScheduler_ptr &)`. Keep its body unchanged: the `#ifdef`s, the
-     compile-time choices and the log line.
-   - Add the `ImplRegistrar` after the global.
-3. **Dispatch site:** keep the direct `is_set()` / `get()` access on the typed global, which
-   `std::visit` needs. Pass the scheduler from the table above to the local autoselect function.
+   - Delete all 5 per-algorithm functions.
+   - Move the old `autoselect_impl_X` body, the `#ifdef`s and the compile-time choices unchanged
+     into the constructor lambda. Change each `X_impl.set(Alt{})` into `return Alt{};`, and drop
+     its log line, since the registry logs instead.
+   - Add the name constant and the `ImplRegistrar` after the global.
+3. **Dispatch site:**
+   - Keep the direct `is_set()` / `get()` access on the typed global, which `std::visit` needs.
+   - Call `shamalgs::impl_registry::autoselect_impl(<name constant>, <scheduler>)`, with the
+     scheduler from the table above.
+   - The registry lookup only happens on first use.
 
 ### `compute_histogram` (header-only dispatch): special case
 
@@ -181,22 +256,29 @@ duplicate would throw.
 Changes:
 - **Header:**
   - Keep the alternative structs.
-  - Add `using ComputeHistogramImpl = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;`
-    and `extern ComputeHistogramImpl compute_histogram_impl;`.
+  - Add `using ComputeHistogramImpl = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;`,
+    `extern ComputeHistogramImpl compute_histogram_impl;`, and the
+    `constexpr std::string_view compute_histogram_impl_name = "compute_histogram";`.
   - Delete the 5 inline functions.
 - **Dispatch** (`compute_histogram.hpp:371-373`):
 
   ```cpp
   if (!impl::compute_histogram_impl.is_set()) {
-      shamalgs::impl_registry::autoselect_impl("compute_histogram", dev_sched);
+      shamalgs::impl_registry::autoselect_impl(impl::compute_histogram_impl_name, dev_sched);
   }
   ```
 
 - **New `src/shamalgs/src/primitives/compute_histogram.cpp`:**
   - Includes the header.
-  - Defines `compute_histogram_impl`.
-  - Holds the autoselect function in an anonymous namespace, with its body unchanged (its
-    `prop.type == GPU` check now reads the lambda argument).
+  - Defines `compute_histogram_impl` with a lambda holding the old autoselect logic:
+
+    ```cpp
+    return (sched->ctx->device->prop.type == sham::DeviceType::GPU)
+               ? ComputeHistogramImpl::Variant{GpuOversubscribe{}}
+               : ComputeHistogramImpl::Variant{NaiveGpu{}};
+    ```
+
+    The registry has already null-checked `sched`.
   - Holds the `ImplRegistrar`.
   - Add it to the `Sources` list in `src/shamalgs/CMakeLists.txt`.
 
@@ -267,9 +349,12 @@ autoselect if unset, save, loop and set, then restore.
 
   Autoselect first, because a saved `"null"` cannot be restored.
 - An unknown algorithm name throws `std::invalid_argument` from every function.
-- Registering an existing name (`"reduction"`) with a dummy throws. Wrap the call in a lambda,
-  because `REQUIRE_EXCEPTION_THROW` is a macro and the commas would split its arguments:
-  `REQUIRE_EXCEPTION_THROW(([&]{ ...register_impl("reduction", dummy, f); })(), std::invalid_argument)`.
+- Registering an existing name (`"reduction"`) throws. Build the dummy as a function-local
+  `ImplVariantGlobal<A>` with a lambda default, where `A` is a file-scope tag struct with a
+  `variant_type_name`. Wrap the call in a lambda, because `REQUIRE_EXCEPTION_THROW` is a macro and
+  the commas would split its arguments:
+  `REQUIRE_EXCEPTION_THROW(([&]{ shamalgs::impl_registry::register_impl("reduction", dummy); })(), std::invalid_argument)`.
+- The `ImplVariantGlobal` constructor throws when given an empty `DefaultSelector`.
   The duplicate check must throw *before* anything is stored, so no dangling pointer is left.
 - **Never register a test-local object under a new name.** There is no unregister, so the entry
   would dangle once the object goes out of scope.
@@ -293,8 +378,9 @@ breaks the docs CI. The change is mechanical: `shamrock.algs.<fn>_<alg>(x)` beco
 
 Update `doc/sphinx/source/dev_doc/implementation_selection.md`:
 - **Python section:** show the name-keyed API.
-- **C++ skeleton:** the global, the anonymous-namespace autoselect taking the scheduler, and an
-  `ImplRegistrar` after the global.
+- **C++ skeleton:** the name constant, the global constructed with its default-selector lambda,
+  an `ImplRegistrar` after it, and the dispatch site calling `impl_registry::autoselect_impl`.
+  Also document the two new `IImplVariant` virtuals (`is_set`, `autoselect`).
 - **"Wire it up end to end" list:** the header declares nothing now, and there are no Python
   bindings to add per algorithm.
 - **Stale statements to fix:**
