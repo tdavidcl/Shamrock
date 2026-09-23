@@ -3551,9 +3551,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                     G_edge,
                     C_force_edge,
                     eta_phi_edge,
-                    sync.get_edge_ptr<SinkVecEdge>("sink_pos"),
-                    sync.get_edge_ptr<SinkScalEdge>("sink_mass"),
-                    sync.get_edge_ptr<SinkVecEdge>("sink_acc_ext"),
+                    sync.template get_edge_ptr<SinkVecEdge>("sink_pos"),
+                    sync.template get_edge_ptr<SinkScalEdge>("sink_mass"),
+                    sync.template get_edge_ptr<SinkVecEdge>("sink_acc_ext"),
                     sink_sink_cfl);
                 compute_cfl_sink_sink.evaluate();
 
