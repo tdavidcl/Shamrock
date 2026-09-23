@@ -4,8 +4,14 @@ You are implementing **one** piece of a larger design: a registry that lets code
 an algorithm's implementation by name. Read `AGENTS.md` and `CLAUDE.md` first: build, test, commit
 authorship and the no-session-link rules all apply.
 
-The full long-term design is in `.claude/plans/impl-variant-registry.md`. Read it for context
-only: **most of it is out of scope here** (see "Out of scope" below).
+This document is self-contained: everything you need about the current code, the target design,
+and the later work this must stay compatible with is below. Line numbers were taken at commit
+`2922d08` on `main`. Re-check them with `grep` before editing, because they may have drifted.
+
+Repository facts:
+- Project: SHAMROCK, a C++20 / SYCL / MPI / pybind11 hydrodynamics code.
+- Upstream: `Shamrock-code/Shamrock`, base branch `main`.
+- Work on the branch you were assigned. Do not open a PR unless asked.
 
 ## Goal
 
@@ -52,14 +58,191 @@ per-algorithm callbacks or JSON parsing.
 3. The Python value types stay the same: one implementation is a JSON **string**
    (`{"implementation": ..., "parameters": ...}`), and the default list is a `list[str]`.
 
-## Out of scope (do NOT implement)
+## Out of scope (do NOT implement), but stay compatible with it
 
-- JSON export or import of the whole config (`get_impl_config` / `set_impl_config`).
-- Hardware tuning entries and device matching.
-- The autotune hook.
-- The `SHAMROCK_IMPL_CONFIG` env var and the `--impl-config` CLI option.
-- Moving `shamrock_compiler_id_string` into shambackends.
-- Any change to `ImplVariant.hpp` beyond the two virtuals and what implementing them requires.
+These features are planned as later, separate changes on top of this registry. Do not implement
+any of them, but do not make design choices that would block them either.
+
+| Later feature | What it will do | What this change must keep possible |
+|---|---|---|
+| Whole-config JSON export and import | `get_impl_config()` returns `{"device": {...}, "sycl": {...}, "config": {"<alg>": <impl config>, ...}}`, leaving out algorithms that are not set. `set_impl_config(json)` applies `config` entry by entry through the registry's `set_impl`, warning on and skipping unknown algorithms or implementations. | The registry can enumerate every algorithm (`get_registered_algs`) and read and write each one by name. **Every change of selection goes through `impl_registry::set_impl`, or through `IImplVariant::set`, which it calls.** |
+| Env var `SHAMROCK_IMPL_CONFIG` and CLI `--impl-config <file>` | Load such a JSON file at the end of `shamsys::instance::init_sycl_mpi` (env var) and in `shamsys::instance::init(argc, argv)` (CLI). | The registry lives in shamalgs, which shamsys already links. It is fully populated by static initialization, before `main` or before the Python module import completes. |
+| Hardware tuning | User-supplied `"tunings": [{"match": {"device": {...}, "sycl": {...}}, "config": {...}}]` entries. When an algorithm autoselects, the most specific entry that matches the scheduler's device wins; an unusable entry falls back to the next one, and then to the hard-coded default. | Autoselect must always receive the **scheduler**, so that it can see the device (`sched->ctx->device->prop`). That is why `IImplVariant::autoselect` takes a `sham::DeviceScheduler_ptr`. |
+| Autotune hook | An optional per-algorithm autotuner on `IImplVariant`, with "none" as the default, rolled out one algorithm at a time. | Nothing extra; just do not add it now. |
+| Compiler-id move | Move the generated `shamrock_compiler_id_string` from shamlib down into shambackends, for the export's `sycl` block. | Nothing. |
+
+Also out of scope: any change to `ImplVariant.hpp` beyond the two virtuals and what implementing
+them requires.
+
+## Background: how implementation selection works today
+
+### `src/shamalgs/include/shamalgs/ImplVariant.hpp`
+
+This header holds a `std::variant`-based selector.
+
+**Alternatives.** Each implementation of an algorithm is a small struct with a
+`static constexpr std::string_view variant_type_name`. For example:
+`struct Fallback { static constexpr std::string_view variant_type_name = "fallback"; };`.
+
+**Config string format.** An implementation serializes to a single JSON string:
+`{"implementation": "<variant_type_name>", "parameters": {...}}`. The free functions that
+handle it are:
+- `variant_to_config_string(v)`;
+- `variant_from_config_string<Variant>(s)`, which throws `std::invalid_argument` for an unknown
+  name and nlohmann exceptions for malformed JSON;
+- `variant_default_type_names<Variant>()`.
+
+**`ImplVariantParams<Alt>`** (lines 80-86) is a trait for alternatives with tunable fields.
+Specializing it gives the alternative's own `to_json`/`from_json` for `"parameters"`. The default
+serializes to `{}`. Example: `GroupReduction{u32 group_size}` in
+`src/shamalgs/src/primitives/reduction.cpp:57-71`.
+
+**`HasCustomDefaults`** (lines 107-110): an alternative may define
+`static std::vector<Alt> variant_custom_defaults()`. It is then listed once per returned instance
+in the default list, e.g. `GroupReduction{16}, {128}, {256}`.
+
+**`IImplVariant`** (lines 208-221) is the non-template interface:
+- `get_current_config()`, which returns the string `"null"` when unset;
+- `get_default_config_list()`;
+- `set(std::string_view config_json)`.
+
+Today nothing collects instances of it.
+
+**`ImplVariantGlobal<Alts...>`** (lines 244-281) implements `IImplVariant` and holds
+`std::optional<std::variant<Alts...>> current`. It starts unset, has no notion of a default, and
+provides:
+- `is_set()`, which is **not** virtual today;
+- `get()`, which requires `is_set()`;
+- `set(Variant)`;
+- `set(std::string_view)`, which parses first and assigns only on success;
+- `get_current_config()` and `get_default_config_list()`.
+
+### The current per-algorithm pattern (what you are removing)
+
+From `src/shamalgs/src/primitives/reduction.cpp:73-144`:
+
+```cpp
+namespace impl {
+    shamalgs::ImplVariantGlobal<Fallback
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+        , GroupReduction
+#endif
+        > reduction_impl;
+
+    std::vector<std::string> get_default_impl_list_reduction() { return reduction_impl.get_default_config_list(); }
+    std::string get_current_impl_reduction() { return reduction_impl.get_current_config(); }
+    bool is_impl_set_reduction() { return reduction_impl.is_set(); }
+    void set_impl_reduction(const std::string &impl) {
+        shamlog_info_ln("algs", "setting reduction implementation to impl :", impl);
+        reduction_impl.set(impl);
+    }
+    void autoselect_impl_reduction() {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+        reduction_impl.set(GroupReduction{});
+#else
+        reduction_impl.set(Fallback{});
+#endif
+        shamlog_info_ln("algs", "defaulting reduction implementation to impl :", get_current_impl_reduction());
+    }
+}
+
+template<class T>
+T sum(const sham::DeviceScheduler_ptr &sched, const sham::DeviceBuffer<T> &buf1, u32 start_id, u32 end_id) {
+    if (!impl::reduction_impl.is_set()) {
+        impl::autoselect_impl_reduction();   // lazy default on first use
+    }
+    return std::visit(shambase::overloaded{
+            [&](impl::Fallback) { return sum_usm_fallback(sched, buf1, start_id, end_id); },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            [&](impl::GroupReduction cfg) { return sum_usm_group(sched, buf1, start_id, end_id, cfg.group_size); },
+#endif
+        }, impl::reduction_impl.get());
+}
+```
+
+- The 5 functions are declared in the header's `namespace impl` block (e.g. `reduction.hpp:140-157`).
+- Every algorithm's dispatch site does the lazy `if (!is_set()) autoselect` before `std::visit`.
+- Some entry points taking a `sycl::buffer` bypass the selector entirely, e.g.
+  `is_all_true.cpp:264-279` and `sort_by_key_pow2_len.cpp:77-92`. Leave them as they are.
+
+### Current default selections (these move into the constructor lambdas)
+
+| Algorithm | Alternatives (`variant_type_name`) | Current `autoselect` body |
+|---|---|---|
+| `reduction` | `fallback`; `group_reduction` (`group_size`, defaults `{16,128,256}`, only under `#ifdef SYCL2020_FEATURE_GROUP_REDUCTION`) | `GroupReduction{}` if `SYCL2020_FEATURE_GROUP_REDUCTION`, else `Fallback{}` (`reduction.cpp:105-115`) |
+| `is_all_true` | `host`, `sum_reduction`, `atomic_early_exit` (`group_size`, defaults `{64,256}`) | `Host{}` (`is_all_true.cpp:228-234`) |
+| `scan_exclusive_sum_in_place` | `std_scan`; `std_scan_single_task_acpp` (`#ifdef __ACPP__`); `decoupled_lookback_512` (`#ifdef SYCL2020_FEATURE_GROUP_REDUCTION`); `acpp_alg` (`#ifdef ACPP_ALG_AVAILABLE`) | Nested `#ifdef __MACH__` / `__ACPP__` / `SYCL2020_FEATURE_GROUP_REDUCTION` choice (`scan_exclusive_sum_in_place.cpp:179-197`). Keep it verbatim. |
+| `segmented_sort_in_place` | `local_insertion_sort`, `multi_std_sort` | `MultiStdSort{}` (`segmented_sort_in_place.cpp:144-150`) |
+| `sort_by_key_pow2_len` | `bitonic_sort` (`stencil_size`, defaults `{16,32}`), `std_sort` | `BitonicSort{}` (`sort_by_key_pow2_len.cpp:120-126`) |
+| `sort_by_keys` | `std_sort`, `batcher_odd_even_host_serial`, `batcher_odd_even` | `StdSort{}` (`sort_by_keys.cpp:95-101`) |
+| `compute_histogram` | `reference`, `naive_gpu`, `gpu_team_fetching`, `gpu_oversubscribe` | Depends on the device at runtime: `GpuOversubscribe{}` if `dev_sched->ctx->device->prop.type == sham::DeviceType::GPU`, else `NaiveGpu{}` (`compute_histogram.hpp:79-89`). It is the only one that already takes a scheduler. |
+| `clbvh_dual_tree_traversal` | `reference`, `parallel_select`, `scan_multipass` | `ScanMultipass{}` (`CLBVHDualTreeTraversal.cpp:66-72`); it logs under the `"tree"` tag |
+
+`shamalgs::primitives::impl::StdSort` is defined identically in both `sort_by_keys.cpp:58-60` and
+`sort_by_key_pow2_len.cpp:54-56`. That is pre-existing; leave it unless it causes a real problem.
+
+### Build, linking and static-initialization facts relevant to self-registration
+
+- **Library kinds.** Every library is either `SHARED` (the default, `SHAMROCK_USE_SHARED_LIB=On`
+  in `cmake/ShamrockBuildOptions.cmake:18`) or `OBJECT` (`Off`, forced on Apple and in coverage
+  builds). There are **no** `STATIC` archives, so no translation unit holding a registrar can be
+  dropped by the linker.
+  - OBJECT libraries are linked directly into each final binary (`shamrock`, `shamrock_test`, the
+    `pyshamrock` Python module), once each.
+- **Dependencies.**
+  - shamalgs links only shambackends (`src/shamalgs/CMakeLists.txt:60`).
+  - shamtree links shamalgs, shammath and shamsys.
+  - shamsys links shamalgs.
+  - So **shamalgs must not call shamsys**. Take the scheduler as a parameter instead.
+- **The codebase already relies on static-init registration inside libraries:**
+  - `ON_PYTHON_INIT` in `src/shambindings/include/shambindings/pybindaliases.hpp:45-71`;
+  - the shamsolvergraph JSON registry, a Meyers singleton,
+    `src/shamsolvergraph/include/shamsolvergraph/JsonSerializable.hpp:140-206`.
+- **Initialization order.** Within one translation unit, namespace-scope objects are initialized
+  in definition order, so a registrar defined after its global sees a constructed global.
+  - The registry singleton is created during the first registration, so it is destroyed after
+    every global (a single atexit chain, even across shared libraries).
+
+### Getting a scheduler
+
+- **Type.** `sham::DeviceScheduler_ptr` is `std::shared_ptr<sham::DeviceScheduler>`
+  (`src/shambackends/include/shambackends/DeviceScheduler.hpp:73`).
+- **Device properties** are at `sched->ctx->device->prop`, a `sham::DeviceProperties` in
+  `src/shambackends/include/shambackends/Device.hpp:84-138`.
+- **From a buffer:** `sham::DeviceBuffer<T>::get_dev_scheduler_ptr()` (`DeviceBuffer.hpp:439-449`,
+  with both const and non-const overloads).
+- **Process-wide compute scheduler:** `shamsys::instance::get_compute_scheduler_ptr()`
+  (`src/shamsys/include/shamsys/NodeInstance.hpp:137-141`). It is usable from shampylib and the
+  tests, but **not** from shamalgs. It returns a null pointer until `shamrock.sys.init(...)`
+  (lib mode) or `--sycl-cfg` (executable) has initialized the devices.
+
+### Python binding conventions
+
+- **Module layout.** The compiled module is `pyshamrock`, re-exported as `shamrock`.
+  - `src/shampylib/src/pyShamalgs.cpp:40` creates the `algs` submodule inside an `ON_PYTHON_INIT`
+    block: `py::module shamalgs_module = m.def_submodule("algs", ...)`.
+  - `src/pylib/shamrock/algs/__init__.py` re-exports everything automatically, so no Python-side
+    change is needed.
+- **Existing bindings.** Today every implementation binding is a bare lambda with no docstring
+  and no `py::arg`.
+- **Style for new bindings:** use `py::arg("name")`, and an `R"pbdoc(...)pbdoc"` docstring as the
+  last argument (see `src/shampylib/include/shampylib/pyNodeInstance.hpp`).
+- **Types.** `std::vector<std::string>` converts to `list[str]` through `pybind11/stl.h`, which is
+  already included through `shambindings/pybind11_stl.hpp`. C++ exceptions surface as Python
+  exceptions.
+- **Includes.** `pyShamalgs.cpp` already includes `shamsys/NodeInstance.hpp`, and shampylib links
+  shamsys.
+
+### Test framework conventions (`src/shamtest/shamtest.hpp`)
+
+- **Declaring a test.** `NEW_TEST(Unittest, "name", 1) { ... }`, where the last argument is the
+  MPI node count. See `src/tests/shamalgs/primitives/reductionTests.cpp:21` and copy its style.
+- **Assertions.** `REQUIRE(cond)`, `REQUIRE_EQUAL(a, b)`, and
+  `REQUIRE_EXCEPTION_THROW(expr, ExceptionType)`. The last one is a macro, so wrap any
+  expression containing commas in a lambda.
+- **Discovery.** `src/tests/CMakeLists.txt` collects `*.cpp` with `GLOB_RECURSE CONFIGURE_DEPENDS`,
+  so new test files need no CMake edit.
+- **Scheduler.** Tests get it with `shamsys::instance::get_compute_scheduler_ptr()`.
 
 ## The 8 algorithms
 
