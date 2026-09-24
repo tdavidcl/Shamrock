@@ -180,14 +180,15 @@ namespace shammodels::sph::modules {
 
     template<class Tvec>
     std::string NodeEvolveDustCOALASourceTerm<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto rhodust_eps         = get_ro_edge_base(0).get_tex_symbol();
-        auto massgrid            = get_ro_edge_base(1).get_tex_symbol();
-        auto tensor_tabflux_coag = get_ro_edge_base(2).get_tex_symbol();
-        auto part_counts         = get_ro_edge_base(3).get_tex_symbol();
-        auto s_j                 = get_ro_edge_base(5).get_tex_symbol();
-        auto delta_v_j           = get_ro_edge_base(6).get_tex_symbol();
-        auto S_coag              = get_rw_edge_base(0).get_tex_symbol();
+        auto rhodust_eps         = symbols.rhodust_eps;
+        auto massgrid            = symbols.massgrid;
+        auto tensor_tabflux_coag = symbols.tensor_tabflux_coag;
+        auto part_counts         = symbols.part_counts;
+        auto s_j                 = symbols.s_j;
+        auto delta_v_j           = symbols.delta_v_j;
+        auto S_coag              = symbols.S_coag;
 
         std::string tex = R"tex(
             COALA dust coagulation source term, DG $k=0$ (Lombart et al., 2021)

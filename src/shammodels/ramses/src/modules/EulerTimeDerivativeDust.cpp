@@ -127,16 +127,17 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string NodeEulerTimeDerivativeDust<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count   = get_ro_edge_base(0).get_tex_symbol();
-        auto rho_dust      = get_ro_edge_base(1).get_tex_symbol();
-        auto vel_dust      = get_ro_edge_base(2).get_tex_symbol();
-        auto grad_rho_dust = get_ro_edge_base(3).get_tex_symbol();
-        auto dx_v_dust     = get_ro_edge_base(4).get_tex_symbol();
-        auto dy_v_dust     = get_ro_edge_base(5).get_tex_symbol();
-        auto dz_v_dust     = get_ro_edge_base(6).get_tex_symbol();
-        auto dt_rho_dust   = get_rw_edge_base(0).get_tex_symbol();
-        auto dt_vel_dust   = get_rw_edge_base(1).get_tex_symbol();
+        auto block_count   = symbols.sizes;
+        auto rho_dust      = symbols.spans_rho_dust;
+        auto vel_dust      = symbols.spans_vel_dust;
+        auto grad_rho_dust = symbols.spans_grad_rho_dust;
+        auto dx_v_dust     = symbols.spans_dx_v_dust;
+        auto dy_v_dust     = symbols.spans_dy_v_dust;
+        auto dz_v_dust     = symbols.spans_dz_v_dust;
+        auto dt_rho_dust   = symbols.spans_dt_rho_dust;
+        auto dt_vel_dust   = symbols.spans_dt_vel_dust;
 
         std::string tex = R"tex(
             Euler time derivatives of the dust primitive state (pressureless)

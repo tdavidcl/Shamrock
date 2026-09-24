@@ -84,11 +84,12 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec, class TgridVec>
     std::string NodeComputeCoordinates<Tvec, TgridVec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count = get_ro_edge_base(0).get_tex_symbol();
-        auto block_min   = get_ro_edge_base(1).get_tex_symbol();
-        auto block_max   = get_ro_edge_base(2).get_tex_symbol();
-        auto cell_coord  = get_rw_edge_base(0).get_tex_symbol();
+        auto block_count = symbols.sizes;
+        auto block_min   = symbols.spans_block_min;
+        auto block_max   = symbols.spans_block_max;
+        auto cell_coord  = symbols.spans_coordinates;
 
         std::string tex = R"tex(
             Compute cell coordinates:

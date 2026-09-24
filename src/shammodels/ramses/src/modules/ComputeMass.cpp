@@ -81,11 +81,12 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec, class TgridVec>
     std::string NodeComputeMass<Tvec, TgridVec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count = get_ro_edge_base(0).get_tex_symbol();
-        auto cell_size   = get_ro_edge_base(1).get_tex_symbol();
-        auto rho         = get_ro_edge_base(2).get_tex_symbol();
-        auto mass        = get_rw_edge_base(0).get_tex_symbol();
+        auto block_count = symbols.sizes;
+        auto cell_size   = symbols.spans_block_cell_sizes;
+        auto rho         = symbols.spans_rhos;
+        auto mass        = symbols.spans_mass;
 
         std::string tex = R"tex(
             Compute cell mass

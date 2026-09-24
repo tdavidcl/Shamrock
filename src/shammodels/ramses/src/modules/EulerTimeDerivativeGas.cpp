@@ -141,19 +141,20 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string NodeEulerTimeDerivativeGas<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count = get_ro_edge_base(0).get_tex_symbol();
-        auto rho         = get_ro_edge_base(1).get_tex_symbol();
-        auto vel         = get_ro_edge_base(2).get_tex_symbol();
-        auto press       = get_ro_edge_base(3).get_tex_symbol();
-        auto grad_rho    = get_ro_edge_base(4).get_tex_symbol();
-        auto dx_v        = get_ro_edge_base(5).get_tex_symbol();
-        auto dy_v        = get_ro_edge_base(6).get_tex_symbol();
-        auto dz_v        = get_ro_edge_base(7).get_tex_symbol();
-        auto grad_P      = get_ro_edge_base(8).get_tex_symbol();
-        auto dt_rho      = get_rw_edge_base(0).get_tex_symbol();
-        auto dt_vel      = get_rw_edge_base(1).get_tex_symbol();
-        auto dt_press    = get_rw_edge_base(2).get_tex_symbol();
+        auto block_count = symbols.sizes;
+        auto rho         = symbols.spans_rho;
+        auto vel         = symbols.spans_vel;
+        auto press       = symbols.spans_press;
+        auto grad_rho    = symbols.spans_grad_rho;
+        auto dx_v        = symbols.spans_dx_v;
+        auto dy_v        = symbols.spans_dy_v;
+        auto dz_v        = symbols.spans_dz_v;
+        auto grad_P      = symbols.spans_grad_P;
+        auto dt_rho      = symbols.spans_dt_rho;
+        auto dt_vel      = symbols.spans_dt_vel;
+        auto dt_press    = symbols.spans_dt_press;
 
         std::string tex = R"tex(
             Euler time derivatives of the gas primitive state

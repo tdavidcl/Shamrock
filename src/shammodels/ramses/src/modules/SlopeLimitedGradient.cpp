@@ -310,8 +310,8 @@ namespace shammodels::basegodunov::modules {
         std::string spans_block_cell_sizes = get_ro_edge_base(2).get_tex_symbol();
         std::string span_field             = get_ro_edge_base(3).get_tex_symbol();
         std::string span_dx_field          = get_rw_edge_base(0).get_tex_symbol();
-        std::string span_dy_field          = get_rw_edge_base(0).get_tex_symbol();
-        std::string span_dz_field          = get_rw_edge_base(0).get_tex_symbol();
+        std::string span_dy_field          = get_rw_edge_base(1).get_tex_symbol();
+        std::string span_dz_field          = get_rw_edge_base(2).get_tex_symbol();
 
         std::string tex = R"tex(
             Slope limited gradient (Vector)

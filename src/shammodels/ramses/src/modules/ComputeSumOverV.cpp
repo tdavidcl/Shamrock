@@ -44,11 +44,11 @@ namespace shammodels::basegodunov::modules {
 
     template<class T>
     std::string NodeComputeSumOverV<T>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count  = get_ro_edge_base(0).get_tex_symbol();
-        auto field        = get_ro_edge_base(1).get_tex_symbol();
-        auto total_volume = get_ro_edge_base(2).get_tex_symbol();
-        auto mean         = get_rw_edge_base(0).get_tex_symbol();
+        auto block_count = symbols.sizes;
+        auto field       = symbols.spans_field;
+        auto mean        = symbols.mean_val;
 
         std::string tex = R"tex(
             Compute cell mass
@@ -60,7 +60,7 @@ namespace shammodels::basegodunov::modules {
             \end{align}
         )tex";
 
-        shambase::replace_all(tex, "{total_volume}", total_volume);
+        replace_edges_tex_symbols(tex);
         shambase::replace_all(tex, "{field}", field);
         shambase::replace_all(tex, "{mean}", mean);
         shambase::replace_all(tex, "{block_count}", block_count);

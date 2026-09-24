@@ -86,11 +86,12 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string NodeConsToPrimDust<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto block_count = get_ro_edge_base(0).get_tex_symbol();
-        auto rho         = get_ro_edge_base(1).get_tex_symbol();
-        auto rhov        = get_ro_edge_base(2).get_tex_symbol();
-        auto vel         = get_rw_edge_base(0).get_tex_symbol();
+        auto block_count = symbols.sizes;
+        auto rho         = symbols.spans_rho_dust;
+        auto rhov        = symbols.spans_rhov_dust;
+        auto vel         = symbols.spans_vel_dust;
 
         std::string tex = R"tex(
             Conservative to primitive variable (dust)

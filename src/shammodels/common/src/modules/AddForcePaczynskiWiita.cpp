@@ -53,13 +53,10 @@ namespace shammodels::common::modules {
 
     template<class Tvec>
     inline std::string AddForcePaczynskiWiita<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto constant_G   = get_ro_edge_base(0).get_tex_symbol();
-        auto constant_c   = get_ro_edge_base(1).get_tex_symbol();
-        auto central_mass = get_ro_edge_base(2).get_tex_symbol();
-        auto central_pos  = get_ro_edge_base(3).get_tex_symbol();
-        auto positions    = get_ro_edge_base(4).get_tex_symbol();
-        auto axyz_ext     = get_rw_edge_base(0).get_tex_symbol();
+        auto positions = symbols.spans_positions;
+        auto axyz_ext  = symbols.spans_accel_ext;
 
         std::string tex = R"tex(
                  Add force (Paczynski-Wiita potential)
@@ -72,9 +69,7 @@ namespace shammodels::common::modules {
                  \end{align}
              )tex";
 
-        shambase::replace_all(tex, "{constant_G}", constant_G);
-        shambase::replace_all(tex, "{central_mass}", central_mass);
-        shambase::replace_all(tex, "{central_pos}", central_pos);
+        replace_edges_tex_symbols(tex);
         shambase::replace_all(tex, "{positions}", positions);
         shambase::replace_all(tex, "{axyz_ext}", axyz_ext);
 

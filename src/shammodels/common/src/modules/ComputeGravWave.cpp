@@ -231,23 +231,24 @@ namespace shammodels::common::modules {
 
     template<class Tvec>
     inline std::string ComputeGravWave<Tvec>::_impl_get_tex() const {
+        auto symbols = get_edges_tex_symbols();
 
-        auto positions   = get_ro_edge_base(0).get_tex_symbol();
-        auto velocities  = get_ro_edge_base(1).get_tex_symbol();
-        auto accels      = get_ro_edge_base(2).get_tex_symbol();
-        auto masses      = get_ro_edge_base(3).get_tex_symbol();
-        auto accel_ext   = get_ro_edge_base(4).get_tex_symbol();
-        auto central_pos = get_ro_edge_base(5).get_tex_symbol();
-        auto central_vel = get_ro_edge_base(6).get_tex_symbol();
-        auto central_acc = get_ro_edge_base(7).get_tex_symbol();
-        auto fac         = get_ro_edge_base(8).get_tex_symbol();
-        auto theta       = get_ro_edge_base(9).get_tex_symbol();
-        auto phi         = get_ro_edge_base(10).get_tex_symbol();
+        auto positions   = symbols.spans_positions;
+        auto velocities  = symbols.spans_velocities;
+        auto accels      = symbols.spans_accelerations;
+        auto masses      = symbols.spans_masses;
+        auto accel_ext   = symbols.spans_accel_ext;
+        auto central_pos = symbols.central_pos;
+        auto central_vel = symbols.central_vel;
+        auto central_acc = symbols.central_acc;
+        auto fac         = symbols.gw_prefactor;
+        auto theta       = symbols.theta_gw;
+        auto phi         = symbols.phi_gw;
 
-        auto ddq_out    = get_rw_edge_base(0).get_tex_symbol();
-        auto ddq_xy_out = get_rw_edge_base(1).get_tex_symbol();
-        auto hx_out     = get_rw_edge_base(2).get_tex_symbol();
-        auto hp_out     = get_rw_edge_base(3).get_tex_symbol();
+        auto ddq_out    = symbols.ddq;
+        auto ddq_xy_out = symbols.ddq_xy;
+        auto hx_out     = symbols.hx;
+        auto hp_out     = symbols.hp;
 
         std::string tex = R"tex(
                 Gravitational-wave strain from the quadrupole formula

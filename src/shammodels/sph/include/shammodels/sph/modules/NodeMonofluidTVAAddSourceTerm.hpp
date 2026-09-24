@@ -102,12 +102,13 @@ namespace shammodels::sph::modules {
         };
 
         inline virtual std::string _impl_get_tex() const {
+            auto symbols = get_edges_tex_symbols();
 
-            auto S_edge           = get_ro_edge_base(2).get_tex_symbol();
-            auto s_j_edge         = get_ro_edge_base(3).get_tex_symbol();
-            auto ds_j_dt_edge     = get_rw_edge_base(0).get_tex_symbol();
-            auto rhodust_eps_edge = get_ro_edge_base(1).get_tex_symbol();
-            auto part_counts_edge = get_ro_edge_base(0).get_tex_symbol();
+            auto S_edge           = symbols.S;
+            auto s_j_edge         = symbols.s_j;
+            auto ds_j_dt_edge     = symbols.ds_j_dt;
+            auto rhodust_eps_edge = symbols.rhodust_eps;
+            auto part_counts_edge = symbols.part_counts;
 
             std::string tex = R"tex(
                 Monofluid TVA: dust-density source term $\rightarrow$ ${s_j}$ time derivative

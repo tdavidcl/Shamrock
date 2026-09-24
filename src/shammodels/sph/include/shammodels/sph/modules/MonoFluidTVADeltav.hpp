@@ -142,14 +142,9 @@ namespace shammodels::sph::modules {
         inline virtual std::string _impl_get_label() const { return "MonoFluidTVADeltav"; };
 
         inline virtual std::string _impl_get_tex() const {
+            auto symbols = get_edges_tex_symbols();
 
-            auto gpart_mass    = get_ro_edge_base(0).get_tex_symbol();
-            auto part_counts   = get_ro_edge_base(1).get_tex_symbol();
-            auto hpart         = get_ro_edge_base(2).get_tex_symbol();
-            auto grad_p_on_rho = get_ro_edge_base(3).get_tex_symbol();
-            auto s_j           = get_ro_edge_base(4).get_tex_symbol();
-            auto t_j           = get_ro_edge_base(5).get_tex_symbol();
-            auto delta_v       = get_rw_edge_base(0).get_tex_symbol();
+            auto grad_p_on_rho = symbols.grad_P_on_rho;
 
             std::string tex = R"tex(
                 MonoFluidTVADeltav
@@ -162,14 +157,9 @@ namespace shammodels::sph::modules {
                 \end{align}
             )tex";
 
-            shambase::replace_all(tex, "{gpart_mass}", gpart_mass);
-            shambase::replace_all(tex, "{part_counts}", part_counts);
+            replace_edges_tex_symbols(tex);
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
-            shambase::replace_all(tex, "{hpart}", hpart);
             shambase::replace_all(tex, "{grad_p_on_rho}", grad_p_on_rho);
-            shambase::replace_all(tex, "{s_j}", s_j);
-            shambase::replace_all(tex, "{t_j}", t_j);
-            shambase::replace_all(tex, "{delta_v}", delta_v);
 
             return tex;
         };
