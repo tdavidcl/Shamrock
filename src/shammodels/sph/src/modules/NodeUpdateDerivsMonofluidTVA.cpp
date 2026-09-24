@@ -200,6 +200,7 @@ std::string shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<Tvec, SPHKern
     )tex";
 
     replace_edges_tex_symbols(tex);
+
     shambase::replace_all(tex, "{ndust}", ndust_str);
     shambase::replace_all(tex, "{Rkern}", kernel_radius_str);
 

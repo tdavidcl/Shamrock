@@ -152,6 +152,7 @@ namespace shammodels::sph::modules {
             )tex";
 
             replace_edges_tex_symbols(tex);
+
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
             shambase::replace_all(tex, "{hfact}", sham::format("{}", Kernel::hfactd));
 

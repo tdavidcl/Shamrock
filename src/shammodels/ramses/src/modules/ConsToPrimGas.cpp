@@ -98,33 +98,20 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string NodeConsToPrimGas<Tvec>::_impl_get_tex() const {
-        auto symbols = get_edges_tex_symbols();
-
-        auto block_count = symbols.sizes;
-        auto rho         = symbols.spans_rho;
-        auto rhov        = symbols.spans_rhov;
-        auto rhoe        = symbols.spans_rhoe;
-        auto vel         = symbols.spans_vel;
-        auto P           = symbols.spans_P;
-
         std::string tex = R"tex(
             Conservative to primitive variable (gas)
 
             \begin{align}
-            {vel}_i &= \frac{ {rhov}_i }{ {rho}_i } \\
-            {P}_i &= (\gamma - 1) \left( {rhoe}_i - \frac{ {rhov}_i^2 }{ 2 {rho}_i } \right) \\
-            i &\in [0,{block_count} * N_{\rm cell/block}) \\
+            {spans_vel}_i &= \frac{ {spans_rhov}_i }{ {spans_rho}_i } \\
+            {spans_P}_i &= (\gamma - 1) \left( {spans_rhoe}_i - \frac{ {spans_rhov}_i^2 }{ 2 {spans_rho}_i } \right) \\
+            i &\in [0,{sizes} * N_{\rm cell/block}) \\
             \gamma &= {gamma} \\
             N_{\rm cell/block} & = {block_size}
             \end{align}
         )tex";
 
-        shambase::replace_all(tex, "{vel}", vel);
-        shambase::replace_all(tex, "{P}", P);
-        shambase::replace_all(tex, "{rho}", rho);
-        shambase::replace_all(tex, "{rhov}", rhov);
-        shambase::replace_all(tex, "{rhoe}", rhoe);
-        shambase::replace_all(tex, "{block_count}", block_count);
+        replace_edges_tex_symbols(tex);
+
         shambase::replace_all(tex, "{gamma}", sham::format("{}", gamma));
         shambase::replace_all(tex, "{block_size}", sham::format("{}", block_size));
 

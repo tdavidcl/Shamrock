@@ -51,12 +51,11 @@ namespace shamrock::solvergraph {
 
     template<class T>
     std::string CopyPatchDataField<T>::_impl_get_tex() const {
-        auto symbols = get_edges_tex_symbols();
+        std::string tex = R"tex(Copy field ${original} to ${target})tex";
 
-        std::string tmp = "Copy field ${original} to ${target}";
-        shambase::replace_all(tmp, "{original}", symbols.original);
-        shambase::replace_all(tmp, "{target}", symbols.target);
-        return tmp;
+        replace_edges_tex_symbols(tex);
+
+        return tex;
     }
 
     template class CopyPatchDataField<f64>;

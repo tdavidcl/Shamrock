@@ -175,6 +175,7 @@ std::string IterateSmoothingLengthDensityNeighLim<Tvec, SPHKernel>::_impl_get_te
         )tex";
 
     replace_edges_tex_symbols(tex);
+
     shambase::replace_all(tex, "{hfact}", sham::format("{}", SPHKernel::hfactd));
     shambase::replace_all(tex, "{Rkern}", sham::format("{}", SPHKernel::Rkern));
 

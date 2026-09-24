@@ -113,6 +113,7 @@ std::string shammodels::sph::modules::NodeComputeLuminosity<Tvec, SPHKernel>::_i
         )tex";
 
     replace_edges_tex_symbols(tex);
+
     return tex;
 }
 

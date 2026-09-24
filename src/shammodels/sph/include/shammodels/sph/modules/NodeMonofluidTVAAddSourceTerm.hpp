@@ -102,14 +102,6 @@ namespace shammodels::sph::modules {
         };
 
         inline virtual std::string _impl_get_tex() const {
-            auto symbols = get_edges_tex_symbols();
-
-            auto S_edge           = symbols.S;
-            auto s_j_edge         = symbols.s_j;
-            auto ds_j_dt_edge     = symbols.ds_j_dt;
-            auto rhodust_eps_edge = symbols.rhodust_eps;
-            auto part_counts_edge = symbols.part_counts;
-
             std::string tex = R"tex(
                 Monofluid TVA: dust-density source term $\rightarrow$ ${s_j}$ time derivative
 
@@ -133,11 +125,8 @@ namespace shammodels::sph::modules {
                 $\rho_{\rm eps} = {rhodust_eps}$, $N_{\rm bins} = {nbins}$
             )tex";
 
-            shambase::replace_all(tex, "{S}", S_edge);
-            shambase::replace_all(tex, "{s_j}", s_j_edge);
-            shambase::replace_all(tex, "{ds_j_dt}", ds_j_dt_edge);
-            shambase::replace_all(tex, "{rhodust_eps}", rhodust_eps_edge);
-            shambase::replace_all(tex, "{part_counts}", part_counts_edge);
+            replace_edges_tex_symbols(tex);
+
             shambase::replace_all(tex, "{nbins}", sham::format("{}", nbins));
 
             return tex;

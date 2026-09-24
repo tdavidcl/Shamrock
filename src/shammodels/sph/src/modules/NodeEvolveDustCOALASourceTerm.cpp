@@ -180,20 +180,10 @@ namespace shammodels::sph::modules {
 
     template<class Tvec>
     std::string NodeEvolveDustCOALASourceTerm<Tvec>::_impl_get_tex() const {
-        auto symbols = get_edges_tex_symbols();
-
-        auto rhodust_eps         = symbols.rhodust_eps;
-        auto massgrid            = symbols.massgrid;
-        auto tensor_tabflux_coag = symbols.tensor_tabflux_coag;
-        auto part_counts         = symbols.part_counts;
-        auto s_j                 = symbols.s_j;
-        auto delta_v_j           = symbols.delta_v_j;
-        auto S_coag              = symbols.S_coag;
-
         std::string tex = R"tex(
             COALA dust coagulation source term, DG $k=0$ (Lombart et al., 2021)
 
-            Per gas particle $a$ and mass bin $j$ (monofluid: $\rho_{{\rm d},j,a}} = {s_j}_{j,a}^2$):
+            Per gas particle $a$ and mass bin $j$ (monofluid: $\rho_{{\rm d},j,a} = {s_j}_{j,a}^2$):
 
             \begin{align}
             \rho_{{\rm d},j,a} &= {s_j}_{j,a}^2 \\
@@ -214,13 +204,8 @@ namespace shammodels::sph::modules {
             \end{align}
         )tex";
 
-        shambase::replace_all(tex, "{rhodust_eps}", rhodust_eps);
-        shambase::replace_all(tex, "{massgrid}", massgrid);
-        shambase::replace_all(tex, "{tensor_tabflux_coag}", tensor_tabflux_coag);
-        shambase::replace_all(tex, "{part_counts}", part_counts);
-        shambase::replace_all(tex, "{s_j}", s_j);
-        shambase::replace_all(tex, "{delta_v_j}", delta_v_j);
-        shambase::replace_all(tex, "{S_coag}", S_coag);
+        replace_edges_tex_symbols(tex);
+
         shambase::replace_all(tex, "{nbins}", sham::format("{}", nbins));
 
         return tex;

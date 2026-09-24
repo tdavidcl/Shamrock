@@ -142,24 +142,20 @@ namespace shammodels::sph::modules {
         inline virtual std::string _impl_get_label() const { return "MonoFluidTVADeltav"; };
 
         inline virtual std::string _impl_get_tex() const {
-            auto symbols = get_edges_tex_symbols();
-
-            auto grad_p_on_rho = symbols.grad_P_on_rho;
-
             std::string tex = R"tex(
                 MonoFluidTVADeltav
 
                 \begin{align}
                 \epsilon_{i,j} = \frac{{s_j}_{i,j}^2}{{rho}_i ({hpart}_i)} \\
-                {delta_v}_{i,j} = \epsilon_{i,j} {t_j}_{i,j} {grad_p_on_rho}_i  \\
+                {delta_v}_{i,j} = \epsilon_{i,j} {t_j}_{i,j} {grad_P_on_rho}_i  \\
                 i \in [0,{part_counts}] \\
                 j \in [0,{ndust}]
                 \end{align}
             )tex";
 
             replace_edges_tex_symbols(tex);
+
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
-            shambase::replace_all(tex, "{grad_p_on_rho}", grad_p_on_rho);
 
             return tex;
         };

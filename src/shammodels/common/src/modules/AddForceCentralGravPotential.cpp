@@ -50,22 +50,15 @@ namespace shammodels::common::modules {
 
     template<class Tvec>
     inline std::string AddForceCentralGravPotential<Tvec>::_impl_get_tex() const {
-        auto symbols = get_edges_tex_symbols();
-
-        auto positions = symbols.spans_positions;
-        auto axyz_ext  = symbols.spans_accel_ext;
-
         std::string tex = R"tex(
                  Add force (central gravitational potential)
 
                  \begin{align}
-                 {axyz_ext}_i = -{constant_G} * {central_mass} * {central_pos}_i / {positions}_i^3
+                 {spans_accel_ext}_i = -{constant_G} * {central_mass} * {central_pos}_i / {spans_positions}_i^3
                  \end{align}
              )tex";
 
         replace_edges_tex_symbols(tex);
-        shambase::replace_all(tex, "{positions}", positions);
-        shambase::replace_all(tex, "{axyz_ext}", axyz_ext);
 
         return tex;
     }

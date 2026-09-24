@@ -231,50 +231,31 @@ namespace shammodels::common::modules {
 
     template<class Tvec>
     inline std::string ComputeGravWave<Tvec>::_impl_get_tex() const {
-        auto symbols = get_edges_tex_symbols();
-
-        auto positions   = symbols.spans_positions;
-        auto velocities  = symbols.spans_velocities;
-        auto accels      = symbols.spans_accelerations;
-        auto masses      = symbols.spans_masses;
-        auto accel_ext   = symbols.spans_accel_ext;
-        auto central_pos = symbols.central_pos;
-        auto central_vel = symbols.central_vel;
-        auto central_acc = symbols.central_acc;
-        auto fac         = symbols.gw_prefactor;
-        auto theta       = symbols.theta_gw;
-        auto phi         = symbols.phi_gw;
-
-        auto ddq_out    = symbols.ddq;
-        auto ddq_xy_out = symbols.ddq_xy;
-        auto hx_out     = symbols.hx;
-        auto hp_out     = symbols.hp;
-
         std::string tex = R"tex(
                 Gravitational-wave strain from the quadrupole formula
                 (Toscani et al. 2021)
 
                 \begin{align}
-                r_i      &= {positions}_i - {central_pos}_i\\
-                v_i      &= {velocities}_i - {central_vel}_i\\
-                a_i      &= {accels}_i - {central_acc}_i + {accel_ext}_i\\
-                \ddot Q_{ij} &= \sum_p {masses}_p
+                r_i      &= {spans_positions}_i - {central_pos}_i\\
+                v_i      &= {spans_velocities}_i - {central_vel}_i\\
+                a_i      &= {spans_accelerations}_i - {central_acc}_i + {spans_accel_ext}_i\\
+                \ddot Q_{ij} &= \sum_p {spans_masses}_p
                                 \left(2 v_i v_j + r_i a_j + r_j a_i\right)\\
                 R        &= \begin{pmatrix}
                               \cos\lambda & 0 & \sin\lambda\\
                               0           & 1 & 0\\
                              -\sin\lambda & 0 & \cos\lambda
                             \end{pmatrix},\quad
-                            \lambda = {theta}\,\frac{\pi}{180}\\
+                            \lambda = {theta_gw}\,\frac{\pi}{180}\\
                 \ddot Q^{xy} &= R^{T}\,\ddot Q\,R\\
-                h_+(\eta,\phi) &= {fac}\,
+                h_+(\eta,\phi) &= {gw_prefactor}\,
                     \Big[\ddot Q^{xy}_{11}(\cos^2\phi - \sin^2\phi\cos^2\eta)
                         + \ddot Q^{xy}_{22}(\sin^2\phi - \cos^2\phi\cos^2\eta)
                         - \ddot Q^{xy}_{33}\sin^2\eta\\
                     &\qquad - \ddot Q^{xy}_{12}\sin 2\phi\,(1 + \cos^2\eta)
                         + \ddot Q^{xy}_{13}\sin\phi\,\sin 2\eta
                         + \ddot Q^{xy}_{23}\cos\phi\,\sin 2\eta\Big]\\
-                h_\times(\eta,\phi) &= 2\,{fac}\,
+                h_\times(\eta,\phi) &= 2\,{gw_prefactor}\,
                     \Big[\tfrac12(\ddot Q^{xy}_{11} - \ddot Q^{xy}_{22})\sin 2\phi\,\cos\eta\\
                     &\qquad + \ddot Q^{xy}_{12}\cos 2\phi\,\cos\eta
                         - \ddot Q^{xy}_{13}\cos\phi\,\sin\eta
@@ -282,25 +263,10 @@ namespace shammodels::common::modules {
                 \end{align}
 
                 Evaluated at $\eta = 0,\ \pi/6,\ \pi/3,\ \pi/2$
-                with $\phi = {phi}^\circ$, giving {hx} and {hp}.
+                with $\phi = {phi_gw}^\circ$, giving {hx} and {hp}.
             )tex";
 
-        shambase::replace_all(tex, "{positions}", positions);
-        shambase::replace_all(tex, "{velocities}", velocities);
-        shambase::replace_all(tex, "{accels}", accels);
-        shambase::replace_all(tex, "{masses}", masses);
-        shambase::replace_all(tex, "{accel_ext}", accel_ext);
-        shambase::replace_all(tex, "{central_pos}", central_pos);
-        shambase::replace_all(tex, "{central_vel}", central_vel);
-        shambase::replace_all(tex, "{central_acc}", central_acc);
-        shambase::replace_all(tex, "{fac}", fac);
-        shambase::replace_all(tex, "{theta}", theta);
-        shambase::replace_all(tex, "{phi}", phi);
-        shambase::replace_all(tex, "{hx}", hx_out);
-        shambase::replace_all(tex, "{hp}", hp_out);
-
-        (void) ddq_out; // referenced through the outputs already
-        (void) ddq_xy_out;
+        replace_edges_tex_symbols(tex);
 
         return tex;
     }

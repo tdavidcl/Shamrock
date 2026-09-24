@@ -52,19 +52,22 @@ In `_impl_get_tex()`, refer to edges by name rather than by slot index
 when an edge is added, removed or reordered in `NODE_EDGES`, while names stay
 in sync with it.
 
+Name each edge placeholder after its edge in `NODE_EDGES`, and use
+`replace_all` only for values that are not edges (node members, constants):
+
 ```cpp
 std::string _impl_get_tex() const override {
     std::string tex = R"tex(
-        {out}_i = f({in}_i)
+        {out}_i = f({in}_i), \quad N = {nvar}
     )tex";
 
     replace_edges_tex_symbols(tex); // {in}, {out} -> TeX symbols of those edges
+
+    shambase::replace_all(tex, "{nvar}", std::to_string(nvar)); // node member
+
     return tex;
 }
 ```
-
-When a placeholder does not match an edge name, read the symbol by name
-instead: `get_edges_tex_symbols().in`.
 
 ### Edge macros
 
