@@ -157,6 +157,9 @@ int main(){
 #include "shamalgs/collective/reduction.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
+#include "shammodels/sph/modules/BuildGhostInterfaceIdTable.hpp"
+#include "shamrock/solvergraph/DDSharedScalar.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
 #include <functional>
 #include <vector>
 
@@ -514,68 +517,28 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     StackEntry stack_loc{};
     using namespace shamrock::patch;
 
-    shambase::DistributedDataShared<InterfaceIdTable> res;
-
-    std::map<u64, f64> send_count_stats;
-
-    gen.for_each([&](u64 sender, u64 receiver, InterfaceBuildInfos &build) {
-        shamrock::patch::PatchDataLayer &src = sched.patch_data.get_pdat(sender);
-        PatchDataField<vec> &xyz             = src.get_field<vec>(0);
-
-        sham::DeviceBuffer<u32> idxs_res = xyz.get_ids_where(
-            [](auto access, u32 id, vec vmin, vec vmax) {
-                return Patch::is_in_patch_converted(access[id], vmin, vmax);
-            },
-            build.cut_volume.lower,
-            build.cut_volume.upper);
-
-        u32 pcnt = idxs_res.get_size();
-
-        // prevent sending empty patches
-        if (pcnt == 0) {
-            return;
-        }
-
-        f64 ratio = f64(pcnt) / f64(src.get_obj_cnt());
-
-        shamlog_debug_ln(
-            "InterfaceGen",
-            "gen interface :",
-            sender,
-            "->",
-            receiver,
-            "volume ratio:",
-            build.volume_ratio,
-            "part_ratio:",
-            ratio);
-
-        res.add_obj(sender, receiver, InterfaceIdTable{build, std::move(idxs_res), ratio});
-
-        send_count_stats[sender] += ratio;
+    // ----------------------------------------------------------------------------------------
+    // temporary wrapper to slowly migrate to the new solvergraph
+    auto positions = std::make_shared<shamrock::solvergraph::FieldRefs<vec>>("", "");
+    shamrock::solvergraph::DDPatchDataFieldRef<vec> positions_refs = {};
+    sched.for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+        positions_refs.add_obj(p.id_patch, std::ref(pdat.get_field<vec>(0)));
     });
+    positions->set_refs(positions_refs);
 
-    bool has_warn = false;
+    auto interface_infos
+        = std::make_shared<shamrock::solvergraph::DDSharedScalar<InterfaceBuildInfos>>("", "");
+    interface_infos->values = std::forward<GeneratorMap>(gen);
 
-    std::string warn_log = "";
+    auto interface_id_table
+        = std::make_shared<shamrock::solvergraph::DDSharedScalar<InterfaceIdTable>>("", "");
 
-    for (auto &[k, v] : send_count_stats) {
-        if (v > 0.2) {
-            warn_log += sham::format("\n    patch {} high interf/patch volume: {}", k, v);
-            has_warn = true;
-        }
-    }
+    modules::BuildGhostInterfaceIdTable<vec> node;
+    node.set_edges(positions, interface_infos, interface_id_table);
+    node.evaluate();
+    // ----------------------------------------------------------------------------------------
 
-    if (has_warn && shamcomm::world_rank() == 0) {
-        warn_log = "\n    This can lead to high mpi "
-                   "overhead, try to increase the patch split crit"
-                   + warn_log;
-    }
-
-    if (has_warn) {
-        logger::warn_ln("InterfaceGen", "High interface/patch volume ratio." + warn_log);
-    }
-
-    return res;
+    return std::move(interface_id_table->values);
 }
 
 template<class vec>
