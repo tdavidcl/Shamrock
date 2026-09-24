@@ -38,7 +38,9 @@ void shammodels::sph::modules::BuildGhostInterfaceIdTable<Tvec>::_impl_evaluate_
     auto &interface_infos = edges.interface_infos.values;
 
     // positions only holds non-empty patches, an interface whose sender is absent from it has no
-    // particles to send and is therefore dropped (as an empty interface would be)
+    // particles to send and is therefore dropped (as an empty interface would be). Since the filter
+    // only holds **local** non-empty patches, an interface whose sender is not a local patch would
+    // also be silently dropped here rather than raising an error.
     std::vector<u64> ids_vec = positions.get_refs().get_ids();
     std::unordered_set<u64> non_empty_senders(ids_vec.begin(), ids_vec.end());
 
