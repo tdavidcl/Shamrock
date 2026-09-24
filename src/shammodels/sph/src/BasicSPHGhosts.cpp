@@ -20,100 +20,10 @@
 #include "shamalgs/collective/reduction.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammodels/sph/BasicSPHGhosts.hpp"
-#include "shammodels/sph/modules/FindGhostInterfaces.hpp"
-#include "shamrock/solvergraph/DDSharedScalar.hpp"
-#include "shamrock/solvergraph/PatchtreeFieldEdge.hpp"
-#include "shamrock/solvergraph/ScalarEdge.hpp"
-#include "shamrock/solvergraph/ScalarsEdge.hpp"
-#include "shamrock/solvergraph/SerialPatchTreeEdge.hpp"
-#include "shamsolvergraph/edge/IDataEdge.hpp"
 #include <functional>
 #include <vector>
 
 using namespace shammodels::sph;
-
-template<class vec>
-auto BasicSPHGhostHandler<vec>::find_interfaces(
-    SerialPatchTree<vec> &sptree,
-    shamrock::patch::PatchtreeField<flt> &int_range_max_tree,
-    shamrock::patch::PatchField<flt> &int_range_max) -> GeneratorMap {
-
-    StackEntry stack_loc{};
-
-    using namespace shamrock::patch;
-    using namespace shamrock::solvergraph;
-
-    // ----------------------------------------------------------------------------------------
-    // temporary wrapper to slowly migrate to the new solvergraph
-    SimulationBoxInfo &sim_box                  = sched.get_sim_box();
-    PatchCoordTransform<vec> patch_coord_transf = sim_box.get_patch_transform<vec>();
-    auto [bmin, bmax]                           = sim_box.get_bounding_box<vec>();
-
-    auto sim_box_edge   = std::make_shared<ScalarEdge<shammath::AABB<vec>>>("", "");
-    sim_box_edge->value = shammath::AABB<vec>(bmin, bmax);
-
-    auto patch_tree_edge        = std::make_shared<SerialPatchTreeRefEdge<vec>>("", "");
-    patch_tree_edge->patch_tree = std::ref(sptree);
-
-    // sycl buffers have reference semantics, this copy shares the storage of the tree field
-    auto interact_radius_tree = std::make_shared<PatchtreeFieldEdge<flt>>("", "");
-    interact_radius_tree->patchtree_field.internal_buf = std::make_unique<sycl::buffer<flt>>(
-        shambase::get_check_ref(int_range_max_tree.internal_buf));
-
-    auto interact_radius    = std::make_shared<ScalarsEdge<flt>>("", "");
-    interact_radius->values = int_range_max.field_all;
-
-    auto local_patch_boxes = std::make_shared<ScalarsEdge<shammath::CoordRange<vec>>>("", "");
-    sched.for_each_local_patch([&](const Patch &p) {
-        local_patch_boxes->values.add_obj(p.id_patch, patch_coord_transf.to_obj_coord(p));
-    });
-
-    auto interface_infos = std::make_shared<DDSharedScalar<InterfaceBuildInfos>>("", "");
-
-    using CfgClass           = sph::BasicSPHGhostHandlerConfig<vec>;
-    using BCPeriodic         = typename CfgClass::Periodic;
-    using BCShearingPeriodic = typename CfgClass::ShearingPeriodic;
-
-    if (BCPeriodic *cfg = std::get_if<BCPeriodic>(&ghost_config)) {
-        modules::FindGhostInterfacesPeriodic<vec> node;
-        node.set_edges(
-            sim_box_edge,
-            patch_tree_edge,
-            interact_radius_tree,
-            interact_radius,
-            local_patch_boxes,
-            interface_infos);
-        node.evaluate();
-    } else if (BCShearingPeriodic *cfg = std::get_if<BCShearingPeriodic>(&ghost_config)) {
-        auto time  = IDataEdge<flt>::make_shared("", "");
-        time->data = cfg->time;
-
-        modules::FindGhostInterfacesShearingPeriodic<vec> node(
-            cfg->shear_base, cfg->shear_dir, cfg->shear_speed);
-        node.set_edges(
-            sim_box_edge,
-            patch_tree_edge,
-            interact_radius_tree,
-            interact_radius,
-            local_patch_boxes,
-            time,
-            interface_infos);
-        node.evaluate();
-    } else {
-        modules::FindGhostInterfacesFree<vec> node;
-        node.set_edges(
-            sim_box_edge,
-            patch_tree_edge,
-            interact_radius_tree,
-            interact_radius,
-            local_patch_boxes,
-            interface_infos);
-        node.evaluate();
-    }
-    // ----------------------------------------------------------------------------------------
-
-    return std::move(interface_infos->values);
-}
 
 template<class vec>
 void BasicSPHGhostHandler<vec>::gen_debug_patch_ghost(
