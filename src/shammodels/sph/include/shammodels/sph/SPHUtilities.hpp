@@ -18,7 +18,14 @@
 
 #include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/modules/BuildGhostInterfaceIdTable.hpp"
+#include "shammodels/sph/modules/ComputePatchTreeMaxField.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
+#include "shamrock/solvergraph/DDSharedScalar.hpp"
+#include "shamrock/solvergraph/FieldRefs.hpp"
+#include "shamrock/solvergraph/PatchtreeFieldEdge.hpp"
+#include "shamrock/solvergraph/ScalarsEdge.hpp"
+#include "shamrock/solvergraph/SerialPatchTreeEdge.hpp"
 #include "shamtree/RadixTree.hpp"
 #include "shamtree/TreeTraversal.hpp"
 
@@ -80,6 +87,10 @@ namespace shammodels::sph {
             GhostHndl &interf_handle, SerialPatchTree<vec> &sptree, flt h_evol_max) {
 
             using namespace shamrock::patch;
+            using namespace shamrock::solvergraph;
+
+            using InterfaceBuildInfos = typename GhostHndl::InterfaceBuildInfos;
+            using InterfaceIdTable    = typename GhostHndl::InterfaceIdTable;
 
             const u32 ihpart = sched.pdl_old().template get_field_idx<flt>("hpart");
 
@@ -92,15 +103,40 @@ namespace shammodels::sph {
                     }
                 });
 
-            PatchtreeField<flt> interactR_mpi_tree = sptree.make_patch_tree_field(
-                sched,
-                shamsys::instance::get_compute_queue(),
-                interactR_patch,
-                [](flt h0, flt h1, flt h2, flt h3, flt h4, flt h5, flt h6, flt h7) {
-                    return sham::max_8points(h0, h1, h2, h3, h4, h5, h6, h7);
-                });
+            // ------------------------------------------------------------------------------------
+            // temporary wrapper to slowly migrate to the new solvergraph
+            auto patch_tree        = std::make_shared<SerialPatchTreeRefEdge<vec>>("", "");
+            patch_tree->patch_tree = std::ref(sptree);
 
-            return interf_handle.make_interface_cache(sptree, interactR_mpi_tree, interactR_patch);
+            auto interact_radius    = std::make_shared<ScalarsEdge<flt>>("", "");
+            interact_radius->values = interactR_patch.field_all;
+
+            auto interact_radius_tree = std::make_shared<PatchtreeFieldEdge<flt>>("", "");
+
+            modules::ComputePatchTreeMaxField<vec> compute_interact_radius_tree;
+            compute_interact_radius_tree.set_edges(
+                patch_tree, interact_radius, interact_radius_tree);
+            compute_interact_radius_tree.evaluate();
+
+            auto interface_infos    = std::make_shared<DDSharedScalar<InterfaceBuildInfos>>("", "");
+            interface_infos->values = interf_handle.find_interfaces(
+                sptree, interact_radius_tree->patchtree_field, interactR_patch);
+
+            auto positions                          = std::make_shared<FieldRefs<vec>>("", "");
+            DDPatchDataFieldRef<vec> positions_refs = {};
+            sched.for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+                positions_refs.add_obj(p.id_patch, std::ref(pdat.get_field<vec>(0)));
+            });
+            positions->set_refs(positions_refs);
+
+            auto interface_id_table = std::make_shared<DDSharedScalar<InterfaceIdTable>>("", "");
+
+            modules::BuildGhostInterfaceIdTable<vec> build_id_table;
+            build_id_table.set_edges(positions, interface_infos, interface_id_table);
+            build_id_table.evaluate();
+            // ------------------------------------------------------------------------------------
+
+            return std::move(interface_id_table->values);
         }
 
         static void iterate_smoothing_length_cache(
