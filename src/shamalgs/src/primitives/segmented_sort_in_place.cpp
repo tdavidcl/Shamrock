@@ -118,7 +118,10 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "multi_std_sort";
         };
 
-        shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl;
+        shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl{
+            [](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(MultiStdSort{});
+            }};
 
         /// Get list of available segmented sort in place implementations
         std::vector<std::string> get_default_impl_list_segmented_sort_in_place() {
@@ -141,8 +144,8 @@ namespace shamalgs::primitives {
         }
 
         /// Select the default implementation for segmented sort in place
-        void autoselect_impl_segmented_sort_in_place() {
-            segmented_sort_in_place_impl.set(MultiStdSort{});
+        void autoselect_impl_segmented_sort_in_place(const sham::DeviceScheduler_ptr &dev_sched) {
+            segmented_sort_in_place_impl.autoselect(dev_sched);
             shamlog_info_ln(
                 "algs",
                 "defaulting segmented sort in place implementation to impl :",
@@ -164,7 +167,7 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::segmented_sort_in_place_impl.is_set()) {
-            impl::autoselect_impl_segmented_sort_in_place();
+            impl::autoselect_impl_segmented_sort_in_place(buf.get_dev_scheduler_ptr());
         }
 
         std::visit(

@@ -70,7 +70,9 @@ namespace shamalgs::primitives {
         };
 
         shamalgs::ImplVariantGlobal<StdSort, BatcherOddEvenHostSerial, BatcherOddEven>
-            sort_by_keys_impl;
+            sort_by_keys_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(StdSort{});
+            }};
 
         /// Get list of available sort by keys implementations
         std::vector<std::string> get_default_impl_list_sort_by_keys() {
@@ -92,8 +94,8 @@ namespace shamalgs::primitives {
         }
 
         /// Select the default implementation for sort by keys
-        void autoselect_impl_sort_by_keys() {
-            sort_by_keys_impl.set(StdSort{});
+        void autoselect_impl_sort_by_keys(const sham::DeviceScheduler_ptr &dev_sched) {
+            sort_by_keys_impl.autoselect(dev_sched);
             shamlog_info_ln(
                 "algs",
                 "defaulting sort by keys implementation to impl :",
@@ -107,7 +109,7 @@ namespace shamalgs::primitives {
         sham::DeviceBuffer<Tkey> &buf_key, sham::DeviceBuffer<Tval> &buf_values, u32 len) {
 
         if (!impl::sort_by_keys_impl.is_set()) {
-            impl::autoselect_impl_sort_by_keys();
+            impl::autoselect_impl_sort_by_keys(buf_key.get_dev_scheduler_ptr());
         }
 
         std::visit(
