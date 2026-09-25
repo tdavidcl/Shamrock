@@ -1,5 +1,17 @@
 # Plan: registry for implementation choices, with JSON config/tuning and autotune hooks
 
+## Status (upstream `main` at `ca16e0e`)
+
+| Step | State |
+|---|---|
+| Scheduler passed to every `autoselect_impl_<algo>` | **Merged**, #2442 (`c7232a4`) |
+| `IImplVariant::is_set` / `autoselect` virtuals, default rule given to the `ImplVariantGlobal` constructor | **Merged**, #2451 (`ce73d7b`) |
+| Name-keyed registry, removal of the per-algorithm functions, name-keyed Python API, migration of the tests, benchmarks and docs | **Next**: see `.claude/plans/impl-registry-handoff.md` |
+| Config JSON export/import, `SHAMROCK_IMPL_CONFIG`, `--impl-config` | Later |
+| Hardware tuning at autoselect | Later |
+| Autotune hook | Later |
+| Compiler-id move to shambackends | Later, needed by the config export |
+
 ## Context
 
 Each of the 8 algorithms with several implementations wraps a `shamalgs::ImplVariantGlobal<Alts...>`, and each one hand-writes the same 5 free functions (`get_default_impl_list_X`, `get_current_impl_X`, `is_impl_set_X`, `set_impl_X`, `autoselect_impl_X`). Each also gets 5 matching Python bindings and a test loop that calls these functions by name.
@@ -54,86 +66,119 @@ Decisions made with the user:
 
 ## C++ design
 
-### `src/shamalgs/include/shamalgs/ImplVariant.hpp` (edit)
+Design adjusted after #2442 and #2451 were merged. The `ImplVariant.hpp` API below is the one
+upstream now has; the registry sits on top of it and holds all the name, logging, config and
+tuning logic.
 
-**New includes:** `shambackends/DeviceScheduler.hpp` and `shamcomm/logs.hpp`.
-- There is no cycle: shambackends never includes shamalgs.
-- Every current includer already pulls in SYCL.
+### `src/shamalgs/include/shamalgs/ImplVariant.hpp`
 
-**Hooks declared here, not in `impl_registry.hpp`.** Right after `IImplVariant`, declare the few out-of-line functions the template needs, in `namespace shamalgs::impl_registry`. This breaks the circular dependency.
-- `register_impl(IImplVariant &)` and `unregister_impl(IImplVariant &)`.
-- `std::vector<std::pair<std::string, std::string>> get_tuning_candidates(std::string_view alg, const sham::DeviceScheduler_ptr &)`, returning `{entry name, config json}` pairs in priority order.
-  - The device read and the null check (`shambase::get_check_ref`) happen inside `impl_registry.cpp`.
-  - The template therefore never dereferences the scheduler.
+**Already merged (#2451):**
+- `IImplVariant` has `get_current_config`, `get_default_config_list`, `set(string_view)`,
+  `bool is_set() const` and `void autoselect(const sham::DeviceScheduler_ptr &)`.
+- `ImplVariantGlobal<Alts...>` has
+  `using AutoselectFn = std::function<void(const sham::DeviceScheduler_ptr &, ImplVariantGlobal &)>;`
+  and `explicit ImplVariantGlobal(AutoselectFn fn)`. `autoselect(sched)` runs `fn(sched, *this)`,
+  and the lambda picks the default by calling the public `set(Variant)` on the selector it is
+  handed.
+- The header includes `shambackends/DeviceScheduler.hpp` and `<functional>`.
 
-**`IImplVariant` gains** these pure virtuals, and every override in `ImplVariantGlobal` is marked `override` (this includes `is_set`, which is not virtual today):
-- `std::string_view get_name() const`
-- `bool is_set() const`
-- `void autoselect(const sham::DeviceScheduler_ptr &)`
-- `bool has_autotune() const`
-- `void autotune(const sham::DeviceScheduler_ptr &)`
+**Still to do:**
+- **Registry step** (see `impl-registry-handoff.md`): delete copy and move on `ImplVariantGlobal`,
+  because the registry holds an `IImplVariant *` to each global. Optionally, throw on an empty
+  `AutoselectFn`.
+- **Autotune step (later):**
+  - `IImplVariant` gains `bool has_autotune() const` and
+    `void autotune(const sham::DeviceScheduler_ptr &)`.
+  - `ImplVariantGlobal` takes an optional second constructor argument, an `AutotuneFn` with the
+    same `(sched, self)` signature and empty by default. `autotune` throws if it is empty; the
+    registry checks `has_autotune()` first.
 
-It keeps `get_current_config`, `get_default_config_list` and `set(string_view)`.
+**Not planned any more** (superseded by the merged API):
+- a name in the `ImplVariantGlobal` constructor;
+- a `DefaultSelector` returning a `Variant`;
+- `set_variant`;
+- `get_or_autoselect`;
+- removing `set(Variant)`;
+- tuning logic inside `ImplVariantGlobal::autoselect`.
 
-**`ImplVariantGlobal<Alts...>`:**
-- **Constructor:** `ImplVariantGlobal(std::string name, DefaultSelector default_impl, Autotuner autotuner = {})`. Both callbacks are `std::function<Variant(const sham::DeviceScheduler_ptr &)>`, and the parameters are moved into the members.
-  - Throw if `default_impl` is empty.
-  - Call `register_impl(*this)` as the **last** statement of the body. Use `this->name` or `get_name()` there, never the moved-from parameter.
-  - The destructor calls `unregister_impl(*this)`. It only erases the entry if the entry points to `this`.
-  - Copy and move are deleted, because the registry holds a pointer.
-- **`set(string_view)` is the only mutator.**
-  - Order: parse (`variant_from_config_string`), then log `"setting <name> implementation to impl : ..."`, then assign.
-  - Parsing first means a rejected candidate never prints a misleading line, and the old value is kept.
-  - The public `set(Variant)` is removed; nothing outside the 8 algorithm files calls it.
-  - The default selector and the autotuner go through a private `set_variant(const Variant &)`, which serializes with `variant_to_config_string` and then calls `set(string)`. Every write therefore goes through `set_impl`.
-- **`autoselect(sched)`**
-  - Tries each `get_tuning_candidates(name, sched)` entry in turn with `set()`, inside `try { ... } catch (const std::exception &e)`. It must catch `std::exception`, because nlohmann throws `parse_error`, `type_error` and `out_of_range`, not only `invalid_argument`. On a failure it warns and continues.
-  - If no candidate is accepted, it calls `set_variant(default_impl(sched))`.
-  - It logs where the choice came from: a tuning entry's name, or the default.
-- **`autotune(sched)`** throws if there is no autotuner. The registry function checks `has_autotune()` first.
-- **New dispatch helper:** `const Variant &get_or_autoselect(const sham::DeviceScheduler_ptr &sched)`, which autoselects when unset. It replaces the `if (!is_set()) autoselect...; get()` boilerplate at every dispatch site. `get()` stays.
+The name comes from the `ImplRegistrar`. Tuning lives in `impl_registry::autoselect_impl`, so
+`ImplVariant.hpp` needs no knowledge of the registry or of tuning.
 
 ### New file `src/shamalgs/include/shamalgs/impl_registry.hpp` + `src/shamalgs/src/impl_registry.cpp`
 
-The header is named lower_case because it is a bag of free functions. It includes `ImplVariant.hpp` and declares the rest of `namespace shamalgs::impl_registry`. Add `src/impl_registry.cpp` to the explicit `Sources` list in `src/shamalgs/CMakeLists.txt:12-48`.
+The header is named lower_case because it is a bag of free functions. It includes
+`ImplVariant.hpp` and declares `namespace shamalgs::impl_registry`. Add `src/impl_registry.cpp` to
+the explicit `Sources` list in `src/shamalgs/CMakeLists.txt`.
 
-**Storage:** a function-local static singleton (the Meyers singleton pattern, as in `shamsolvergraph/JsonSerializable.hpp:140`). Its accessor stays out-of-line, in the `.cpp`. It holds:
+**Storage.** A function-local static singleton (the Meyers singleton pattern, as in
+`shamsolvergraph/JsonSerializable.hpp:140`), with its accessor out-of-line in the `.cpp`. It holds:
 - `std::map<std::string, IImplVariant*, std::less<>>`, so lookups work by `string_view`;
-- `std::vector<TuningEntry>`, where `TuningEntry` has the fields `name`, `match`, `config` and `load_index`. Construct it with designated initializers, because clang-tidy enables `modernize-use-designated-initializers`.
+- (tuning step) `std::vector<TuningEntry>`, where `TuningEntry` has the fields `name`, `match`,
+  `config` and `load_index`. Construct it with designated initializers, because clang-tidy
+  enables `modernize-use-designated-initializers`.
 
-The singleton finishes construction inside the first global's constructor. It is therefore destroyed after every global, across all shared libraries.
+The singleton is constructed during the first registration, so it is destroyed after every
+global, across all shared libraries.
 
-**Registration:**
-- `register_impl` throws on a duplicate name.
-- `unregister_impl` is the counterpart.
+**Registration (registry step):**
+- `register_impl(std::string name, IImplVariant &)` throws on a duplicate name, before storing
+  anything.
+- `ImplRegistrar{name, impl}` is placed at namespace scope right after each global, in the same
+  translation unit.
+- There is no unregister: globals live until exit.
 
-**Scheduler access:** every function that takes a scheduler checks it with `shambase::get_check_ref`. A null scheduler, e.g. before `shamrock.sys.init()`, then raises a clear error instead of a segfault.
+**Scheduler access:** every function that takes a scheduler checks it with
+`shambase::get_check_ref`. A null scheduler, e.g. before `shamrock.sys.init()`, then raises a
+clear error instead of a segfault.
 
-**Per-algorithm functions** (an unknown `alg` throws `std::invalid_argument` listing the registered names):
-- `get_registered_algs()`
-- `get_default_impl_list(alg)`
-- `get_current_impl(alg)`
-- `is_impl_set(alg)`
-- `set_impl(alg, impl)`
-- `autoselect_impl(alg, sched)`
-- `has_autotune(alg)`
-- `autotune_impl(alg, sched)`: returns `false` and logs that no autotuner is implemented when there is none.
+**Per-algorithm functions.** An unknown `alg` throws `std::invalid_argument` listing the
+registered names.
+- **Registry step:**
+  - `get_registered_algs()`
+  - `get_default_impl_list(alg)`
+  - `get_current_impl(alg)`
+  - `is_impl_set(alg)`
+  - `set_impl(alg, impl)`: logs "setting ..." after `impl.set()` succeeds, so a rejected config
+    logs nothing and keeps the old value.
+  - `autoselect_impl(alg, sched)`: logs "defaulting ...".
+- **Tuning step:** `autoselect_impl(alg, sched)` first tries each tuning candidate for `alg`
+  matching `sched`'s device, in priority order, through `set_impl`.
+  - It catches `std::exception`, because nlohmann throws `parse_error`, `type_error` and
+    `out_of_range`, not only `invalid_argument`.
+  - A failed candidate gives a warning, and the next one is tried.
+  - If none is accepted, it calls `impl.autoselect(sched)`.
+  - It logs which source won: a tuning entry's name, or the default.
+  - Dispatch sites already call `impl_registry::autoselect_impl`, so tuning applies to both lazy
+    and explicit autoselect.
+- **Autotune step:**
+  - `has_autotune(alg)`.
+  - `autotune_impl(alg, sched)`: returns `false` and logs that no autotuner is implemented when
+    there is none.
 
-**Whole-registry functions:**
-- `nlohmann::json get_impl_config(const sham::DeviceScheduler_ptr &sched)`: the `device` block, the `sycl` block, and `config` restricted to algorithms that are set.
+**Whole-registry functions (config/tuning step):**
+- `nlohmann::json get_impl_config(const sham::DeviceScheduler_ptr &sched)`: the `device` block,
+  the `sycl` block, and `config` restricted to algorithms that are set.
 - `void set_impl_config(const nlohmann::json &)`: the unified import described above.
-  - `config`: an unknown algorithm, or any `std::exception` from `set`, gives a warning and a skip; the rest is still applied.
-  - `tunings`: validated in full before any entry is added, so a schema error (an unknown match key, or the wrong types) throws with nothing loaded. An unknown algorithm name only gives a warning when loaded.
-- `void load_impl_config_file(const std::string &path)`: reads the file, then calls `set_impl_config`.
+  - `config`: an unknown algorithm, or any `std::exception` from `set_impl`, gives a warning and
+    a skip; the rest is still applied.
+  - `tunings`: validated in full before any entry is added, so a schema error (an unknown match
+    key, or the wrong types) throws with nothing loaded. An unknown algorithm name only gives a
+    warning when loaded.
+- `void load_impl_config_file(const std::string &path)`: reads the file, then calls
+  `set_impl_config`.
 - `nlohmann::json get_impl_tunings()` and `void clear_impl_tunings()`.
-- `get_tuning_candidates`: declared in `ImplVariant.hpp` and defined here.
 
-**Exact strings to document for matching:** `backend_name` returns `"CUDA"`, `"ROCm"`, `"OpenMP"` or `"Unknown"`. `device_type_name` returns `"CPU"`, `"GPU"` or `"UNKNOWN"` (`Device.hpp:54-76`).
+**Exact strings to document for matching:** `backend_name` returns `"CUDA"`, `"ROCm"`,
+`"OpenMP"` or `"Unknown"`, and `device_type_name` returns `"CPU"`, `"GPU"` or `"UNKNOWN"`
+(`Device.hpp`).
 
 **Where the `sycl` block comes from:**
-- The implementation name comes from `sycl_implementation` in `shambackends/sycl.hpp:24-34`, mapped by a local helper to `"AdaptiveCpp"`, `"DPC++"` or `"Unknown"`.
-- `compiler_id` comes from `shamrock_compiler_id_string`, which moves down into shambackends (next section).
-- The `device` block uses `sham::backend_name`, `device_type_name`, `prop.name` and `prop.platform` (`shambackends/Device.hpp`).
+- The implementation name comes from `sycl_implementation` in `shambackends/sycl.hpp`, mapped by
+  a local helper to `"AdaptiveCpp"`, `"DPC++"` or `"Unknown"`.
+- `compiler_id` comes from `shamrock_compiler_id_string`, which moves down into shambackends
+  (next section).
+- The `device` block uses `sham::backend_name`, `device_type_name`, `prop.name` and
+  `prop.platform` (`shambackends/Device.hpp`).
 
 ### Move the compiler id string down to shambackends
 
@@ -146,44 +191,36 @@ The singleton finishes construction inside the first global's constructor. It is
 - The generated `.cpp` `#include`s that header, so the declaration and the definition are type-checked against each other.
 - Make `src/shamrock/include/shamrock/version.hpp:35-36` include that header instead of re-declaring the symbol. Its only user (`pyShamsys.cpp:85`) is unaffected.
 
-### Migrate the 8 algorithms (same pattern each time)
+### Migrate the 8 algorithms (registry step)
 
-The pattern, using `reduction.cpp` as the example:
+See `impl-registry-handoff.md` for the full, line-referenced version. In short, using
+`reduction.cpp` as the example:
 
 ```cpp
-using ReductionImpl = shamalgs::ImplVariantGlobal<Fallback /*, GroupReduction under #ifdef*/>;
-ReductionImpl reduction_impl{"reduction", [](const sham::DeviceScheduler_ptr &) -> ReductionImpl::Variant {
-#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-    return GroupReduction{};
-#else
-    return Fallback{};
-#endif
-}};
-// dispatch: std::visit(overloaded{...}, impl::reduction_impl.get_or_autoselect(sched));
+constexpr std::string_view reduction_impl_name = "reduction";
+shamalgs::ImplVariantGlobal<Fallback /*, GroupReduction under #ifdef*/> reduction_impl{
+    [](const sham::DeviceScheduler_ptr &, auto &self) { /* merged default rule, unchanged */ }};
+namespace {
+    shamalgs::impl_registry::ImplRegistrar reduction_registrar{std::string(reduction_impl_name), reduction_impl};
+}
+// dispatch:
+if (!impl::reduction_impl.is_set()) {
+    shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
+}
+std::visit(shambase::overloaded{...}, impl::reduction_impl.get());
 ```
 
-- **Delete the 5 free functions** from every header's `namespace impl` and from every `.cpp`.
-- **Move each `autoselect_impl_X` body into its default-selector lambda unchanged**, `#ifdef`s included. `compute_histogram` keeps its `prop.type == GPU` check, now reading it from the lambda's `sched` argument.
-- **Get the scheduler at the dispatch sites** from the argument the site already has. For `is_all_true` (`is_all_true.cpp:239`) and the other buffer-only entry points, use `buf.get_dev_scheduler_ptr()`.
-- **Algorithm names:** keep the current names. The DTT one is `"clbvh_dual_tree_traversal"`, which drops the stray `_impl` suffix from `get_current_impl_clbvh_dual_tree_traversal_impl`.
-
-The files, grouped by action:
-
-| Action | Files |
-|---|---|
-| Edit the header and `.cpp` | `reduction`, `is_all_true`, `scan_exclusive_sum_in_place`, `segmented_sort_in_place`, `sort_by_key_pow2_len`, `sort_by_keys` (headers in `src/shamalgs/include/shamalgs/primitives/`, sources in `src/shamalgs/src/primitives/`); `src/shamtree/include/shamtree/CLBVHDualTreeTraversal.hpp`, `src/shamtree/src/CLBVHDualTreeTraversal.cpp` |
-| Change the `inline` global to a type alias plus an `extern` declaration | `compute_histogram.hpp` |
-| Create, to define the `compute_histogram` global | new `src/shamalgs/src/primitives/compute_histogram.cpp`, which includes the header and is added to the `Sources` list in `src/shamalgs/CMakeLists.txt` |
-
-`compute_histogram` moves to a `.cpp` so that it registers exactly once. Today its `inline` global has copies in `libshampylib`, `libshammodels_common` and `shamrock_test` that are merged only by the dynamic linker. With self-registration, any copy that did not merge would throw "duplicate".
-
-Where each dispatch site gets its scheduler (all 8 checked):
-
-| Algorithm | Scheduler source |
-|---|---|
-| `reduction`, `sort_by_key_pow2_len` | the `sched` argument |
-| `compute_histogram`, `clbvh_dual_tree_traversal` | the `dev_sched` argument |
-| `is_all_true`, `scan_exclusive_sum_in_place`, `segmented_sort_in_place`, `sort_by_keys` | `buf.get_dev_scheduler_ptr()` |
+- **Delete the 5 per-algorithm free functions** from every header's `namespace impl` and from
+  every `.cpp`. Keep the merged default lambdas as they are.
+- **The scheduler at the dispatch sites** is already forwarded (#2442). The call now goes to
+  `impl_registry::autoselect_impl` instead of `autoselect_impl_X`.
+- **Algorithm names:** keep the current names. The DTT one is `"clbvh_dual_tree_traversal"`,
+  which drops the stray `_impl` suffix from `get_current_impl_clbvh_dual_tree_traversal_impl`.
+- **`compute_histogram`:** its `inline` global moves to a new
+  `src/shamalgs/src/primitives/compute_histogram.cpp`, which is added to `Sources`, and the
+  header keeps a type alias plus an `extern` declaration. Today the `inline` global has copies
+  in `libshampylib`, `libshammodels_common` and `shamrock_test` that only the dynamic linker
+  merges. With self-registration, any copy that did not merge would throw "duplicate".
 
 ### Env var and CLI (in shamsys, which already links shamalgs and shamcmdopt)
 
@@ -268,7 +305,7 @@ The unused legacy `impl_param` binding (`pyShamalgs.cpp:44-67`) is left alone.
   - `run_segmented_sort_in_place_performance.py`, which also gains the missing autoselect.
 
   The change is a mechanical rename to `shamrock.algs.<fn>("<alg>", ...)`. sphinx-gallery runs every `run_*.py` (`doc/sphinx/source/conf.py:71,80`), so a missed rename breaks the docs CI.
-- **Docs:** rewrite `doc/sphinx/source/dev_doc/implementation_selection.md`. The new version covers the Python API, the JSON schema, config export/import, the env var and CLI, tuning (match rules and priority), the autotune hook, and the C++ skeleton (constructor with name, default lambda, `get_or_autoselect`). It also fixes the stale points: "three functions", the `{128,256}` example, and the list of lazy-default algorithms.
+- **Docs:** rewrite `doc/sphinx/source/dev_doc/implementation_selection.md`. The new version covers the Python API, the JSON schema, config export/import, the env var and CLI, tuning (match rules and priority), the autotune hook, and the C++ skeleton (the merged `AutoselectFn` constructor lambda, the name constant plus `ImplRegistrar`, and dispatch through `impl_registry::autoselect_impl`). It also fixes the stale "three functions" wording.
 - **`ImplVariant.hpp` file-level doc comment:** update it to describe the registry and the removal of the per-algorithm functions.
 
 ## Verification
