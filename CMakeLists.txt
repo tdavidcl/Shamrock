@@ -121,6 +121,12 @@ endif()
 
 add_subdirectory(src)
 
+# Standalone control GUI (not linked against Shamrock yet, fetches its dependencies)
+option(SHAMROCK_BUILD_GUI "build the standalone shamrock_gui executable" OFF)
+if(SHAMROCK_BUILD_GUI)
+    add_subdirectory(gui)
+endif()
+
 ####################################################################################################
 # Documentation
 ####################################################################################################
