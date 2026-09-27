@@ -5,21 +5,10 @@
 # Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 # ~~~
 
-# Standalone Shamrock control GUI (Dear ImGui docking + GLFW + OpenGL 3).
+# Shamrock control GUI (Dear ImGui docking + GLFW + OpenGL 3), built with -DSHAMROCK_BUILD_GUI=ON.
 # Not linked against any Shamrock library yet: it runs on demo data only.
-# Enabled from the main project with -DSHAMROCK_BUILD_GUI=ON, or built on its own with
-#   cmake -S src/gui -B build-gui && cmake --build build-gui
 
 cmake_minimum_required(VERSION 3.20)
-
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    project(shamrock_gui CXX C)
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-        set(CMAKE_BUILD_TYPE Release)
-    endif()
-endif()
 
 message("-- adding shamrock_gui target")
 
@@ -135,9 +124,7 @@ endif()
 
 # Fonts and logo next to the executable (the app also looks in ./assets).
 # The logo is the one from the documentation.
-set(SHAMROCK_GUI_LOGO
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../doc/mkdocs/docs/assets/no_background_nocolor.png
-)
+set(SHAMROCK_GUI_LOGO ${CMAKE_SOURCE_DIR}/doc/mkdocs/docs/assets/no_background_nocolor.png)
 add_custom_command(
     TARGET shamrock_gui
     POST_BUILD
