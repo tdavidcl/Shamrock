@@ -113,7 +113,7 @@ else()
 endif()
 
 set(sources src/main.cpp src/DemoSimulation.cpp src/GraphPane.cpp src/ProfilePane.cpp
-            src/ScriptPane.cpp
+            src/ScriptPane.cpp src/ViewerPane.cpp
 )
 add_executable(shamrock_gui ${sources})
 target_include_directories(
