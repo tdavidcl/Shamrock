@@ -17,6 +17,7 @@
 #include "DemoSimulation.hpp"
 #include "TextEditor.h"
 #include "colormap.hpp"
+#include "font.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -92,29 +93,8 @@ namespace C {
 } // namespace C
 
 // ============================================================================
-//  Fonts and small drawing helpers
+//  Small drawing helpers
 // ============================================================================
-struct Fonts {
-    static inline ImFont *sans, *medium, *semibold, *mono;
-};
-
-static void load_fonts() {
-    ImGuiIO &io = ImGui::GetIO();
-    auto load   = [&](const char *name, bool merge = false) {
-        ImFontConfig cfg;
-        cfg.MergeMode    = merge;
-        std::string path = (g_assets / "fonts" / (std::string(name) + ".ttf")).string();
-        ImFont *f        = io.Fonts->AddFontFromFileTTF(path.c_str(), 13.0f, &cfg);
-        IM_ASSERT(f && "font not found: run from the project folder or pass --assets");
-        return f;
-    };
-    Fonts::sans     = load("IBMPlexSans-Regular");
-    Fonts::medium   = load("IBMPlexSans-Medium");
-    Fonts::semibold = load("IBMPlexSans-SemiBold");
-    Fonts::mono     = load("IBMPlexMono-Regular");
-    load("IBMPlexSans-Regular", true); // Plex Mono has no Greek (rho): borrow it from Sans
-}
-
 static inline ImVec2 V(double x, double y) { return ImVec2(float(x), float(y)); }
 
 // Global UI scale. The app is laid out in *logical* pixels (the mockup's 1x sizes); these helpers
@@ -2871,7 +2851,7 @@ int main(int argc, char **argv) {
     io.IniFilename = (bench || !screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
-    load_fonts();
+    load_fonts(g_assets);
     App::setup_style();
 
     App app(layout, !screenshot.empty(), frames, bench);
