@@ -51,6 +51,9 @@
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+// scalar path only: the NEON code uses C99 compound literals, rejected by -pedantic-errors, and the
+// logo is resized once at startup
+#define STBIR_NO_SIMD
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize2.h"
 #include <unordered_map>
