@@ -51,6 +51,8 @@
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize2.h"
 #include <unordered_map>
 #include <algorithm>
 #include <array>
@@ -1024,7 +1026,14 @@ g.run(until=0.05)
             int lw, lh, ch;
             unsigned char *px
                 = stbi_load((g_assets / "shamrock_logo.png").string().c_str(), &lw, &lh, &ch, 4);
-            logo.create(lw, lh, px);
+            IM_ASSERT(px && "logo not found: run from the project folder or pass --assets");
+            // The logo is the full-resolution one from the docs; downscale it once to the size the
+            // top bar was designed for, since textures have no mipmaps to minify it cleanly.
+            const int logo_tex_h = 96, logo_tex_w = int(std::lround(double(lw) * logo_tex_h / lh));
+            std::vector<unsigned char> logo_px(size_t(logo_tex_w) * logo_tex_h * 4);
+            stbir_resize_uint8_srgb(
+                px, lw, lh, 0, logo_px.data(), logo_tex_w, logo_tex_h, 0, STBIR_RGBA);
+            logo.create(logo_tex_w, logo_tex_h, logo_px.data());
             stbi_image_free(px);
             editor.SetLanguage(TextEditor::Language::Python());
             editor.SetText(RUN_SCRIPT);
@@ -1243,7 +1252,7 @@ g.run(until=0.05)
             dl->AddLine(V(X, Y + TOP_H - 0.5), V(X + W, Y + TOP_H - 0.5), C::DIVIDER);
             double cy = Y + TOP_H / 2;
 
-            double lx = X + 16, logo_h = 34.0, logo_w = logo_h * 298 / 96;
+            double lx = X + 16, logo_h = 34.0, logo_w = logo_h * logo.w / logo.h;
             dl->AddImage(logo.ref, V(lx, cy - logo_h / 2), V(lx + logo_w, cy + logo_h / 2));
             const std::string script = "run_sedov.py";
             double name_w            = 12 + 13 + text_w(g_fonts.mono, 12, script);

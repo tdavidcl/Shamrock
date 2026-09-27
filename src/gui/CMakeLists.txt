@@ -129,12 +129,16 @@ if(MSVC)
 endif()
 
 # Fonts and logo next to the executable (the app also looks in ./assets).
+# The logo is the one from the documentation.
+set(SHAMROCK_GUI_LOGO
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../doc/mkdocs/docs/assets/no_background_nocolor.png
+)
 add_custom_command(
     TARGET shamrock_gui
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/assets
-            $<TARGET_FILE_DIR:shamrock_gui>/assets
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_LOGO}
+            $<TARGET_FILE_DIR:shamrock_gui>/assets/shamrock_logo.png
     COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_FONTS}
             $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts
     COMMAND ${CMAKE_COMMAND} -E copy ${ibm_plex_sans_SOURCE_DIR}/LICENSE.txt
