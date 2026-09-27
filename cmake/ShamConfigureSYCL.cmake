@@ -89,6 +89,28 @@ endif()
 message("  SHAMROCK_LOOP_GSIZE : ${SHAMROCK_LOOP_GSIZE}")
 set(SHAM_CXX_SYCL_FLAGS "${SHAM_CXX_SYCL_FLAGS} -DSHAMROCK_LOOP_GSIZE=${SHAMROCK_LOOP_GSIZE}")
 
+# AdaptiveCpp compiles every translation unit with -fopenmp (OpenMP host backend), which enables
+# LLVM's OpenMPOptCGSCCPass. Its cost grows with the number of call graph SCCs times the size of
+# the module, so it dominated the compile time of the largest translation units (~60% of
+# sph/pySPHModel.cpp, ~50% of sph/Solver.cpp) while leaving the generated code unchanged (the
+# objects are byte-identical, except for a few instructions in some omp nd_range launchers), as
+# Shamrock itself has no OpenMP constructs for it to optimize.
+# This only disables that LLVM pass, it does not disable OpenMP.
+option(SHAMROCK_ACPP_DISABLE_OPENMP_OPT
+       "Disable LLVM's OpenMPOpt pass when compiling with AdaptiveCpp" On
+)
+message("  SHAMROCK_ACPP_DISABLE_OPENMP_OPT : ${SHAMROCK_ACPP_DISABLE_OPENMP_OPT}")
+if(SHAMROCK_ACPP_DISABLE_OPENMP_OPT AND ("${SYCL_COMPILER}" MATCHES "^ACPP"))
+    set(CMAKE_REQUIRED_FLAGS "-mllvm -openmp-opt-disable")
+    check_cxx_source_compiles("int main(){return 0;}" COMPILER_SUPPORT_OPENMP_OPT_DISABLE)
+    unset(CMAKE_REQUIRED_FLAGS)
+    if(COMPILER_SUPPORT_OPENMP_OPT_DISABLE)
+        # compile only flag (added to CMAKE_CXX_FLAGS it would also be passed to the link step,
+        # where clang warns about it being unused)
+        add_compile_options("SHELL:-mllvm -openmp-opt-disable")
+    endif()
+endif()
+
 message(" -------------------------------------- ")
 
 message(STATUS "Shamrock configure SYCL backend - done")
