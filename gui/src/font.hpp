@@ -8,7 +8,10 @@
 
 // Non-owning: the fonts belong to ImGui's font atlas and are freed by ImGui::DestroyContext().
 struct Fonts {
-    ImFont *sans = nullptr, *medium = nullptr, *semibold = nullptr, *mono = nullptr;
+    ImFont *sans     = nullptr;
+    ImFont *medium   = nullptr;
+    ImFont *semibold = nullptr;
+    ImFont *mono     = nullptr;
 };
 
 inline auto load_fonts(const std::filesystem::path &font_folder) -> Fonts {
