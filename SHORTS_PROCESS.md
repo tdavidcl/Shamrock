@@ -26,8 +26,8 @@ physical setup (see step 1).
   single eased sweep, never cuts or several separate moves.
 - The video must look fancy, stylish and satisfying, and be engaging from the first
   second (hook), because click-through and retention matter.
-- Target about **20 min of simulation wallclock**. Overshooting a bit for a clearly better
-  result is acceptable, but say so in the previews.
+- Target **between 20 min and 1 h of simulation wallclock**. If the run is heading past
+  1 h, say so in the previews.
 - If the result is not satisfying enough, change the setup and run it again.
 
 ---
@@ -238,7 +238,7 @@ Keep it short:
 
 - what the scene is and its story arc;
 - solver settings (particle count, sinks, sim time covered);
-- actual sim wallclock against the 20-min target;
+- actual sim wallclock against the 20 min – 1 h target;
 - any restarts or tweaks and why;
 - where the files are, and the Artifact link.
 
