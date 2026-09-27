@@ -98,6 +98,13 @@ namespace shammodels::sph {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> pressure;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> soundspeed;
 
+        /// Set by the solver to ask the derivatives update to also compute the signal velocity
+        /// of the courant CFL within the force neighbour loop (see impl::cfl_vsig)
+        bool request_fused_vsig_cfl = false;
+        /// Signal velocity of the courant CFL, set by the derivatives update only if it
+        /// supports computing it (null otherwise, in which case the solver computes it)
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> vsig_cfl_fused;
+
         Component<shamrock::ComputeField<Tvec>> old_axyz;
         Component<shamrock::ComputeField<Tscal>> old_duint;
 

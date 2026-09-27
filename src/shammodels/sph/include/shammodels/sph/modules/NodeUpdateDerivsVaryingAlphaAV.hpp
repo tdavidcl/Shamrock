@@ -23,7 +23,7 @@
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/node/INode.hpp"
 
-#define NODE_EDGES(X_RO, X_RW)                                                                     \
+#define NODE_EDGES(X_RO, X_RW, X_RO_OPT, X_RW_OPT)                                                 \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, alpha_u)                                         \
@@ -48,7 +48,10 @@
                                                                                                    \
     /* outputs */                                                                                  \
     X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, axyz)                                            \
-    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, duint)
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, duint)                                          \
+                                                                                                   \
+    /* optional output : signal velocity of the courant CFL (computed only if set) */              \
+    X_RW_OPT(shamrock::solvergraph::IFieldSpan<Tscal>, vsig_cfl)
 
 namespace shammodels::sph::modules {
 
@@ -62,7 +65,7 @@ namespace shammodels::sph::modules {
         public:
         NodeUpdateDerivsVaryingAlphaAV() {}
 
-        EXPAND_NODE_EDGES(NODE_EDGES)
+        EXPAND_NODE_EDGES_OPTIONAL(NODE_EDGES)
 
         void _impl_evaluate_internal();
 

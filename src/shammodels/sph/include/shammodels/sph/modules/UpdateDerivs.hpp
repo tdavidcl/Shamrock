@@ -21,6 +21,8 @@
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/modules/SolverStorage.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
+#include "shamrock/solvergraph/Field.hpp"
+#include <optional>
 
 namespace shammodels::sph::modules {
 
@@ -71,6 +73,16 @@ namespace shammodels::sph::modules {
         using NonIdealMHD = typename Cfg_MHD::NonIdealMHD;
 
         void update_derivs_MHD(IdealMHD cfg);
+
+        /**
+         * @brief Optional vsig_cfl output edge for the derivatives nodes able to compute the
+         * signal velocity of the courant CFL within their neighbour loop.
+         *
+         * If the solver requested it (storage.request_fused_vsig_cfl), allocates
+         * storage.vsig_cfl_fused and returns it, otherwise returns a null optional.
+         */
+        std::optional<std::shared_ptr<shamrock::solvergraph::IFieldSpan<Tscal>>>
+        get_fused_vsig_cfl_edge();
     };
 
 } // namespace shammodels::sph::modules

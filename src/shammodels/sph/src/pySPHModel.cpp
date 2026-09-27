@@ -27,6 +27,7 @@
 #include "shammodels/common/modules/ComputeGravWave.hpp"
 #include "shammodels/common/shamrock_json_to_py_json.hpp"
 #include "shammodels/sph/Model.hpp"
+#include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/modules/AnalysisAngularMomentum.hpp"
 #include "shammodels/sph/modules/AnalysisBarycenter.hpp"
@@ -1987,6 +1988,46 @@ ON_PYTHON_INIT {
     auto &m = root_module;
 
     py::module msph = m.def_submodule("model_sph", "Shamrock sph solver");
+
+    {
+        py::module msph_impl = msph.def_submodule(
+            "impl", "Runtime selection of the implementations of the SPH solver sections");
+
+        msph_impl.def(
+            "get_impl_sections",
+            []() {
+                return shammodels::sph::impl::get_impl_sections();
+            },
+            "List the SPH solver sections having selectable implementations");
+        msph_impl.def(
+            "get_default_impl_list",
+            [](const std::string &section) {
+                return shammodels::sph::impl::get_default_impl_list(section);
+            },
+            py::arg("section"),
+            "List the available implementations of a section, as config json strings");
+        msph_impl.def(
+            "get_current_impl",
+            [](const std::string &section) {
+                return shammodels::sph::impl::get_current_impl(section);
+            },
+            py::arg("section"),
+            "Get the current implementation of a section, as a config json string");
+        msph_impl.def(
+            "set_impl",
+            [](const std::string &section, const std::string &impl) {
+                shammodels::sph::impl::set_impl(section, impl);
+            },
+            py::arg("section"),
+            py::arg("impl"),
+            "Select the implementation of a section from a config json string");
+        msph_impl.def(
+            "autoselect_all_impl",
+            []() {
+                shammodels::sph::impl::autoselect_all_impl();
+            },
+            "Select the default implementation of every section");
+    }
 
     py::class_<shamrock::PatchDataLazyGetter>(m, "PatchDataLazyGetter")
         .def("__getitem__", &shamrock::PatchDataLazyGetter::get_item);

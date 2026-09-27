@@ -22,7 +22,7 @@
 #include "shammodels/sph/math/q_ab.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 
-template<class Tvec, template<class> class SPHKernel>
+template<class Tvec, template<class> class SPHKernel, bool compute_vsig_cfl>
 struct KernelUpdateDerivsVaryingAlphaAV {
     using Tscal                   = shambase::VecComponent<Tvec>;
     using Kernel                  = SPHKernel<Tscal>;
@@ -46,7 +46,71 @@ struct KernelUpdateDerivsVaryingAlphaAV {
         const Tscal *__restrict alpha_AV,
         shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
         Tvec *__restrict axyz,
-        Tscal *__restrict duint) const {
+        Tscal *__restrict duint) const
+        requires(!compute_vsig_cfl)
+    {
+        compute(
+            id_a,
+            xyz,
+            hpart,
+            vxyz,
+            uint,
+            omega,
+            pressure,
+            cs,
+            alpha_AV,
+            ploop_ptrs,
+            axyz,
+            duint,
+            nullptr);
+    }
+
+    inline void operator()(
+        unsigned int id_a,
+        const Tvec *__restrict xyz,
+        const Tscal *__restrict hpart,
+        const Tvec *__restrict vxyz,
+        const Tscal *__restrict uint,
+        const Tscal *__restrict omega,
+        const Tscal *__restrict pressure,
+        const Tscal *__restrict cs,
+        const Tscal *__restrict alpha_AV,
+        shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+        Tvec *__restrict axyz,
+        Tscal *__restrict duint,
+        Tscal *__restrict vsig_cfl) const
+        requires(compute_vsig_cfl)
+    {
+        compute(
+            id_a,
+            xyz,
+            hpart,
+            vxyz,
+            uint,
+            omega,
+            pressure,
+            cs,
+            alpha_AV,
+            ploop_ptrs,
+            axyz,
+            duint,
+            vsig_cfl);
+    }
+
+    inline void compute(
+        unsigned int id_a,
+        const Tvec *__restrict xyz,
+        const Tscal *__restrict hpart,
+        const Tvec *__restrict vxyz,
+        const Tscal *__restrict uint,
+        const Tscal *__restrict omega,
+        const Tscal *__restrict pressure,
+        const Tscal *__restrict cs,
+        const Tscal *__restrict alpha_AV,
+        shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+        Tvec *__restrict axyz,
+        Tscal *__restrict duint,
+        Tscal *__restrict vsig_cfl) const {
 
         using namespace shamrock::sph;
 
@@ -69,6 +133,10 @@ struct KernelUpdateDerivsVaryingAlphaAV {
 
         Tvec force_pressure  = Tvec{0, 0, 0};
         Tscal tmpdU_pressure = Tscal{0};
+
+        // signal velocity of the courant CFL, same expression as the "compute vsig" loop of the
+        // solver (fixed alpha = 1, beta = 2, and r_ab_unit = dr / rab) to get identical results
+        Tscal vsig_cfl_max = 0;
 
         particle_looper.for_each_object(id_a, [&](u32 id_b) {
             Tvec dr    = xyz_a - xyz[id_b];
@@ -131,10 +199,24 @@ struct KernelUpdateDerivsVaryingAlphaAV {
 
                 force_pressure,
                 tmpdU_pressure);
+
+            if constexpr (compute_vsig_cfl) {
+                Tvec r_ab_unit_cfl = dr / rab;
+                if (rab < 1e-9) {
+                    r_ab_unit_cfl = {0, 0, 0};
+                }
+                Tscal abs_v_ab_r_ab_cfl = sycl::fabs(sycl::dot(v_ab, r_ab_unit_cfl));
+                Tscal vsig_cfl_a        = Tscal{1} * cs_a + Tscal{2} * abs_v_ab_r_ab_cfl;
+                vsig_cfl_max            = sycl::fmax(vsig_cfl_max, vsig_cfl_a);
+            }
         });
 
         axyz[id_a]  = force_pressure;
         duint[id_a] = tmpdU_pressure;
+
+        if constexpr (compute_vsig_cfl) {
+            vsig_cfl[id_a] = vsig_cfl_max;
+        }
     }
 };
 
@@ -167,24 +249,38 @@ void shammodels::sph::modules::NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>::
     const Tscal alpha_u = edges.alpha_u.data;
     const Tscal beta_AV = edges.beta_AV.data;
 
-    using ComputeKernel = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>;
+    auto inputs = sham::DDMultiRef{
+        edges.xyz.get_spans(),
+        edges.hpart.get_spans(),
+        edges.vxyz.get_spans(),
+        edges.uint.get_spans(),
+        edges.omega.get_spans(),
+        edges.pressure.get_spans(),
+        edges.cs.get_spans(),
+        edges.alpha_AV.get_spans(),
+        edges.neigh_cache};
 
     // call the kernel for each patches with part_counts.get(id_patch) threads of patch id_patch
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{
-            edges.xyz.get_spans(),
-            edges.hpart.get_spans(),
-            edges.vxyz.get_spans(),
-            edges.uint.get_spans(),
-            edges.omega.get_spans(),
-            edges.pressure.get_spans(),
-            edges.cs.get_spans(),
-            edges.alpha_AV.get_spans(),
-            edges.neigh_cache},
-        sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans()},
-        part_counts,
-        ComputeKernel{pmass, alpha_u, beta_AV});
+    if (edges.vsig_cfl.has_value()) {
+        auto &vsig_cfl = edges.vsig_cfl.value().get();
+        vsig_cfl.ensure_sizes(part_counts);
+
+        using ComputeKernel = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, true>;
+        sham::distributed_data_kernel_call(
+            shamsys::instance::get_compute_scheduler_ptr(),
+            inputs,
+            sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans(), vsig_cfl.get_spans()},
+            part_counts,
+            ComputeKernel{pmass, alpha_u, beta_AV});
+    } else {
+        using ComputeKernel = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, false>;
+        sham::distributed_data_kernel_call(
+            shamsys::instance::get_compute_scheduler_ptr(),
+            inputs,
+            sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans()},
+            part_counts,
+            ComputeKernel{pmass, alpha_u, beta_AV});
+    }
 }
 
 using namespace shammath;

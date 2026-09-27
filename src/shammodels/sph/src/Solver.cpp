@@ -42,6 +42,7 @@
 #include "shammodels/sph/SPHUtilities.hpp"
 #include "shammodels/sph/Solver.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
+#include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
@@ -2635,7 +2636,12 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
         if (solver_config.has_field_dtdivv()) {
 
-            if (solver_config.combined_dtdiv_divcurlv_compute) {
+            bool use_fused_diff_operators
+                = solver_config.combined_dtdiv_divcurlv_compute
+                  || std::holds_alternative<impl::diff_operators::FusedKernel>(
+                      impl::get_impl_diff_operators());
+
+            if (use_fused_diff_operators) {
                 if (solver_config.has_field_dtdivv()) {
                     sph::modules::DiffOperatorDtDivv<Tvec, Kern>(context, solver_config, storage)
                         .update_dtdivv(true);
@@ -2771,7 +2777,15 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         // save old acceleration
         prepare_corrector();
 
+        // ask the force kernel to also compute the CFL signal velocity if possible
+        storage.request_fused_vsig_cfl
+            = (!has_psi_field)
+              && std::holds_alternative<impl::cfl_vsig::FusedWithDerivs>(impl::get_impl_cfl_vsig());
+        storage.vsig_cfl_fused.reset();
+
         update_derivs(dt);
+
+        storage.request_fused_vsig_cfl = false;
 
         ////////////////////////////////////////////////////////////////////////////////////////
         // Gravitational Wave emission
@@ -3140,9 +3154,13 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         return scheduler().patch_data.get_pdat(id).get_obj_cnt();
                     });
 
+            // the signal velocity may already have been computed by the force kernel
+            bool vsig_already_computed = bool(storage.vsig_cfl_fused);
+
             std::shared_ptr<shamrock::solvergraph::Field<Tscal>> vsig_max_dt
-                = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
-                    1, "vsig_a", "v_{\\rm sig}");
+                = (vsig_already_computed) ? storage.vsig_cfl_fused
+                                          : std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+                                                1, "vsig_a", "v_{\\rm sig}");
             vsig_max_dt->ensure_sizes(shambase::get_check_ref(storage.part_counts).indexes);
 
             std::shared_ptr<shamrock::solvergraph::Field<Tscal>> vclean_dt;
@@ -3156,6 +3174,10 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 = storage.merged_patchdata_ghost.get();
 
             scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
+                if (vsig_already_computed) {
+                    return;
+                }
+
                 PatchDataLayer &mpdat = mpdats.get(cur_p.id_patch);
 
                 sham::DeviceBuffer<Tvec> &buf_xyz
@@ -3640,6 +3662,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     reset_merge_ghosts_fields();
     reset_eos_fields();
+    storage.vsig_cfl_fused.reset();
 
     // if delta too big jump to compute force
 

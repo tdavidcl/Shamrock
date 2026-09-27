@@ -406,10 +406,25 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_mm97
             alpha_av_refs,
             storage.neigh_cache,
             axyz_refs,
-            duint_refs);
+            duint_refs,
+            get_fused_vsig_cfl_edge());
     }
     node->evaluate();
 }
+
+template<class Tvec, template<class> class SPHKernel>
+std::optional<std::shared_ptr<shamrock::solvergraph::IFieldSpan<shambase::VecComponent<Tvec>>>>
+shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::get_fused_vsig_cfl_edge() {
+
+    if (!storage.request_fused_vsig_cfl) {
+        return std::nullopt;
+    }
+
+    storage.vsig_cfl_fused
+        = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "vsig_a", "v_{\\rm sig}");
+    return storage.vsig_cfl_fused;
+}
+
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10(VaryingCD10 cfg) {
     StackEntry stack_loc{};
@@ -569,7 +584,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
                 alpha_av_refs,
                 storage.neigh_cache,
                 axyz_refs,
-                duint_refs);
+                duint_refs,
+                get_fused_vsig_cfl_edge());
         }
         node->evaluate();
     }
