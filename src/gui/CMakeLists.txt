@@ -109,6 +109,11 @@ target_include_directories(
                               ${imgui_color_text_edit_SOURCE_DIR}
 )
 target_link_libraries(shamrock_gui_imgui PUBLIC glfw OpenGL::GL)
+# OpenGL is deprecated on macOS (10.14+) but still works; silence the per-call warnings until the
+# app gets a Metal-capable backend. PUBLIC so it also reaches shamrock_gui.
+if(APPLE)
+    target_compile_definitions(shamrock_gui_imgui PUBLIC GL_SILENCE_DEPRECATION)
+endif()
 if(SHAMROCK_GUI_FREETYPE AND FREETYPE_FOUND)
     target_sources(shamrock_gui_imgui PRIVATE ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp)
     target_compile_definitions(shamrock_gui_imgui PUBLIC IMGUI_ENABLE_FREETYPE)
