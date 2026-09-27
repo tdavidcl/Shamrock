@@ -1,4 +1,4 @@
-// Shamrock control GUI — C++ app with dockable panes (Dear ImGui docking branch).
+// Shamrock control GUI - C++ app with dockable panes (Dear ImGui docking branch).
 //
 // Four panes (Viewer, Graph, Script, Profile) live in one dock area arranged by kitty-style layouts
 // (Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits). Tabs can be dragged onto drop targets,
@@ -53,9 +53,9 @@ namespace fs               = std::filesystem;
 static fs::path g_assets   = "assets";
 static constexpr double PI = 3.14159265358979323846;
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Design tokens (taken from the mockup)
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 static constexpr ImU32 rgb_u32(int r, int g, int b, int a = 255) {
     return (ImU32(a) << 24) | (ImU32(b) << 16) | (ImU32(g) << 8) | ImU32(r);
 }
@@ -90,9 +90,9 @@ namespace C {
     constexpr HeaderStyle SOLVER{rgba("#43301f"), rgba("#f3dcc2"), rgba("#5c4029")};
 } // namespace C
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Fonts and small drawing helpers
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 struct Fonts {
     static inline ImFont *sans, *medium, *semibold, *mono;
 };
@@ -111,7 +111,7 @@ static void load_fonts() {
     Fonts::medium   = load("IBMPlexSans-Medium");
     Fonts::semibold = load("IBMPlexSans-SemiBold");
     Fonts::mono     = load("IBMPlexMono-Regular");
-    load("IBMPlexSans-Regular", true); // Plex Mono has no Greek (ρ): borrow it from Sans
+    load("IBMPlexSans-Regular", true); // Plex Mono has no Greek (rho): borrow it from Sans
 }
 
 static inline ImVec2 V(double x, double y) { return ImVec2(float(x), float(y)); }
@@ -364,9 +364,9 @@ static void draw_live_dot(SDL *dl, double cx, double cy, double r = 3.0) {
     dl->AddCircleFilled(V(cx, cy), float(r), C::ACCENT);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  GPU textures and colormaps
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 struct GLTexture {
     int w = 0, h = 0;
     GLuint id = 0;
@@ -442,17 +442,19 @@ static ImU32 lut_color(const Lut &lut, double v01, double shade = 1.0) {
 }
 static ImU32 viridis_u32(double v01) { return lut_color(VIRIDIS, v01); }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Demo data source (stand-in for the remote solver)
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 struct FieldInfo {
     const char *id;
     const char *label;
     const char *cb_label;
     bool log;
 };
+// start allow utf-8
 static const FieldInfo FIELDS[3]
     = {{"rho", "ρ", "ρ log", true}, {"p", "p", "p log", true}, {"v", "|v|", "|v| lin", false}};
+// end allow utf-8
 
 struct Rng { // SplitMix64, bit-identical to the Python Rng
     uint64_t state;
@@ -721,9 +723,9 @@ class DemoSimulation {
     }
 };
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Graph model + in-house canvas (compute nodes, data edges, links)
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 enum class RowKind { Param, In, RW, Out };
 struct Row {
     RowKind kind;
@@ -770,6 +772,7 @@ static std::pair<std::vector<Node>, std::vector<Link>> build_demo_graph() {
         return Row{k, l, "", c, false};
     };
     std::vector<Node> nodes;
+    // start allow utf-8
     nodes.push_back(
         {"sedov",
          true,
@@ -784,6 +787,7 @@ static std::pair<std::vector<Node>, std::vector<Link>> build_demo_graph() {
           port(RowKind::Out, "mesh", G),
           port(RowKind::Out, "state", A),
           port(RowKind::Out, "tracers", B)}});
+    // end allow utf-8
     nodes.push_back(
         {"hydro",
          true,
@@ -823,9 +827,11 @@ static std::pair<std::vector<Node>, std::vector<Link>> build_demo_graph() {
         return n;
     };
     nodes.push_back(edge("mesh", 240, 20, G, "amr", Preview::None, ""));
+    // start allow utf-8
     nodes.push_back(edge("state", 240, 130, A, "ρ v p", Preview::Slice, "ρ · z=0.5 · 128²"));
     nodes.push_back(edge("tracers", 240, 306, B, "1.2M", Preview::Tracers, "xy proj · 128²"));
-    Node diag  = edge("diag", 700, 60, T, "series", Preview::Series, "E_tot, dt, speed · 1 Hz");
+    Node diag = edge("diag", 700, 60, T, "series", Preview::Series, "E_tot, dt, speed · 1 Hz");
+    // end allow utf-8
     diag.title = "diagnostics";
     nodes.push_back(diag);
     std::vector<Link> links = {
@@ -1092,9 +1098,9 @@ class GraphView {
     }
 };
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Icons
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 static void icon_play(SDL *dl, double cx, double cy, ImU32 col, double s = 7.0) {
     dl->AddTriangleFilled(V(cx - s * 0.6, cy - s), V(cx + s, cy), V(cx - s * 0.6, cy + s), col);
 }
@@ -1193,9 +1199,9 @@ static void icon_gear(SDL *dl, double cx, double cy, ImU32 col) {
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Formatting helpers (match Python's format specs)
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 static std::string fmt(const char *f, double v) {
     char buf[64];
     std::snprintf(buf, sizeof buf, f, v);
@@ -1234,9 +1240,9 @@ g.node(n.AdvectTracers(scheme="rk2"), inp=[state], rw=[trc])
 g.run(until=0.05)
 )";
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Application
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 // Kitty-style layouts. The dockspace is the single "tab"; every layout except Splits is recomputed
 // from the ordered list of visible panes, Splits is the free-form tree the user builds by dragging.
 enum class Lay { Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits };
@@ -1662,8 +1668,10 @@ struct App {
         double lx2 = gx + group_w + 10;
         if (framed_button(dl, "##layout", lx2, cy - 18, lay_w, 36, C::BUTTON, C::BORDER, 6))
             ImGui::OpenPopup("##layout_menu");
+        // start allow utf-8
         if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##layout_menu"))
             tooltip("Layout  ·  ctrl+shift+L cycles");
+        // end allow utf-8
         layout_menu(lx2, cy + 22);
         icon_layout(dl, lx2 + 12 + 9, cy, C::TEXT, int(lay));
         if (!compact)
@@ -1719,7 +1727,9 @@ struct App {
                 double steps = std::nearbyint(UI::scale / UI::STEP) + (wheel > 0 ? 1 : -1);
                 ui_scale     = std::min(UI::MAX, std::max(UI::MIN, steps * UI::STEP));
             }
+            // start allow utf-8
             tooltip("UI scale · scroll to change · click to reset");
+            // end allow utf-8
         }
         if (r.clicked)
             ui_scale = 1.0;
@@ -2425,9 +2435,11 @@ struct App {
         const char *seg[2] = {"3D", "Slice"};
         double seg_w[2]
             = {20 + text_w(Fonts::mono, 11, seg[0]), 20 + text_w(Fonts::mono, 11, seg[1])};
-        double tw         = seg_w[0] + seg_w[1] + 2 * 3;
+        double tw = seg_w[0] + seg_w[1] + 2 * 3;
+        // start allow utf-8
         std::string label = std::string("state.") + FIELDS[field].label + " · "
                             + (view3d ? "cut z=0.5" : "z=0.5") + " · 10 Hz";
+        // end allow utf-8
         if (8 + 20 + text_w(Fonts::mono, 11, label) + 8 + 12 + tw + 8 > s)
             label = std::string("state.") + FIELDS[field].label;
         double bw_ = 8 + 6 + 6 + text_w(Fonts::mono, 11, label) + 8;
@@ -2637,7 +2649,8 @@ struct App {
             std::string c[4];
             bool active;
         };
-        const bool pf   = visible['f'] && prof_live;
+        const bool pf = visible['f'] && prof_live;
+        // start allow utf-8
         const R rows[6] = {
             {{std::string("state.") + FIELDS[field].label, "main", "512²", "10 Hz"}, true},
             {{"state.ρ", "card", "128²", on ? "4 Hz" : "off"}, on},
@@ -2646,6 +2659,7 @@ struct App {
             {{"profile", "pane", "scopes", pf ? "2 Hz" : "off"}, pf},
             {{"mesh", "card", "—", "off"}, false},
         };
+        // end allow utf-8
         const double col_x[4] = {0.0, 0.4, 0.6, 0.8}; // first column is the widest (edge names)
         double ry             = y + 22;
         for (const R &r : rows) {
@@ -2683,12 +2697,14 @@ struct App {
             for (size_t i = 0; i < prof.size(); ++i)
                 prof_snap[i] = prof[i].ema;
         }
-        double cy        = pane_header(dl, x, y, w);
+        double cy = pane_header(dl, x, y, w);
+        // start allow utf-8
         std::string info = "rank 0 · running mean · " + fmt("%.2f", prof_snap[0]) + " ms / step";
         // right: Live toggle, Reset zoom when zoomed
         std::string live = prof_live ? "Live · 2 Hz" : "Paused";
-        double live_w    = 20 + (prof_live ? 12 : 0) + text_w(Fonts::sans, 12, live);
-        double bx        = x + w - 12 - live_w;
+        // end allow utf-8
+        double live_w = 20 + (prof_live ? 12 : 0) + text_w(Fonts::sans, 12, live);
+        double bx     = x + w - 12 - live_w;
         if (prof_focus != 0) {
             double rw = 20 + text_w(Fonts::sans, 12, "Reset zoom");
             if (text_button(dl, "##prof_reset", bx - 6 - rw, cy, "Reset zoom").clicked)
@@ -2750,8 +2766,10 @@ struct App {
             } else if (bw > tw + 12) {
                 draw_text_vc(dl, Fonts::mono, 11, bx0 + 6, by0 + row_h / 2, tc, label);
             } else if (bw > 28) {
+                // start allow utf-8
                 std::string cut
                     = label.substr(0, std::max<size_t>(1, size_t((bw - 16) / 6.6))) + "…";
+                // end allow utf-8
                 draw_text_vc(dl, Fonts::mono, 11, bx0 + 5, by0 + row_h / 2, tc, cut);
             }
             if (hv.hovered) {
@@ -2761,11 +2779,13 @@ struct App {
                                   : prof[i].cat == DemoSimulation::Cat::Mpi ? "MPI / communication"
                                   : prof[i].cat == DemoSimulation::Cat::Io  ? "I/O"
                                                                             : "host";
+                // start allow utf-8
                 tooltip((label + "\n" + fmt("%.3f ms", prof_snap[i]) + "   "
                          + fmt("%.1f", 100 * prof_snap[i] / step) + "% of step   "
                          + fmt("%.1f", 100 * prof_snap[i] / par) + "% of parent\n" + cat
                          + (prof[i].leaf ? "" : "   ·   click to zoom"))
                             .c_str());
+                // end allow utf-8
             }
             if (hv.clicked && (dim || !prof[i].leaf))
                 prof_focus = i; // zoom in, or back out via an ancestor
@@ -2816,11 +2836,13 @@ struct App {
         int n_c   = 0;
         for (auto &n : graph.nodes)
             n_c += n.compute;
-        int n_e            = int(graph.nodes.size()) - n_c;
+        int n_e = int(graph.nodes.size()) - n_c;
+        // start allow utf-8
         std::string counts = std::to_string(n_c) + " nodes · " + std::to_string(n_e) + " edges · "
                              + std::to_string(graph.links.size()) + " links";
         double counts_x    = x + 12;
         std::string prev_label = graph.previews_on ? "Previews · 4 Hz" : "Previews off";
+        // end allow utf-8
         double widths[3]
             = {20 + 12 + text_w(Fonts::sans, 12, prev_label),
                20 + text_w(Fonts::sans, 12, "Auto-layout"),
@@ -2915,10 +2937,12 @@ struct App {
         dl->AddRectFilled(V(X, Y), V(X + W, Y + STATUS_H), C::PANEL);
         dl->AddLine(V(X, Y + 0.5), V(X + W, Y + 0.5), C::DIVIDER);
         double cy = Y + STATUS_H / 2, wob = std::sin(now() * 0.7);
+        // start allow utf-8
         std::string left[3]
             = {"8 MPI ranks · control on rank 0",
                "GPU util " + fmt("%.0f", 87 + 2 * wob) + "%",
                "GPU mem 61 / 80 GB"};
+        // end allow utf-8
         std::string right[3]
             = {"step " + fmt("%.1f", sim.step_ms) + " ms",
                "preview extract 0.3 ms",
@@ -3037,7 +3061,9 @@ void GraphView::draw_edge(SDL *dl, const double *origin, const Node &n, App &app
 
     double bx0 = x0 + 7 * z, by0 = y0 + 37 * z;
     if (n.preview == Preview::None) {
+        // start allow utf-8
         draw_text(dl, Fonts::mono, 11 * z, x0 + 12 * z, y0 + 38 * z, C::TEXT_3, "256³ · 8 patches");
+        // end allow utf-8
         draw_text(dl, Fonts::mono, 11 * z, x0 + 12 * z, y0 + 54 * z, C::DIM, "no preview");
         return;
     }
@@ -3077,9 +3103,9 @@ void GraphView::draw_edge(SDL *dl, const double *origin, const Node &n, App &app
         draw_live_dot(dl, bx1 - 3 * z, fy - 1 * z, 3 * z);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 //  Entry point
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 static void print_bench(const App &app, int warmup) {
     std::printf("BENCH {\"impl\": \"cpp\"");
     for (const char *k : {"update", "ui", "frame"}) {
