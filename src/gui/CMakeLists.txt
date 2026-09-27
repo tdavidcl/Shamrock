@@ -112,7 +112,7 @@ else()
     message(STATUS "shamrock_gui fonts: stb_truetype")
 endif()
 
-add_executable(shamrock_gui src/main.cpp src/DemoSimulation.cpp)
+add_executable(shamrock_gui src/main.cpp src/DemoSimulation.cpp src/GraphPane.cpp)
 target_include_directories(
     shamrock_gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${stb_SOURCE_DIR}
 )
