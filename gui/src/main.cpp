@@ -1,18 +1,33 @@
-// Shamrock control GUI - C++ app with dockable panes (Dear ImGui docking branch).
+// -------------------------------------------------------//
 //
-// Four panes (Viewer, Graph, Script, Profile) live in one dock area arranged by kitty-style layouts
-// (Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits). Tabs can be dragged onto drop targets,
-// dividers resized; interactive runs remember everything in shamrock_gui_layout.ini. All data is
-// demo data from DemoSimulation (deterministic 60 fps clock and SplitMix64 seeds for --screenshot /
-// --bench).
+// SHAMROCK code for hydrodynamics
+// Copyright (c) 2021-2026 Timothée David--Cléris <tim.shamrock@proton.me>
+// SPDX-License-Identifier: CeCILL Free Software License Agreement v2.1
+// Shamrock is licensed under the CeCILL 2.1 License, see LICENSE for more information
 //
-//   ./shamrock_gui                        interactive
-//   ./shamrock_gui --layout grid          stack | tall | fat | grid | horizontal | vertical |
-//   splits
-//   ./shamrock_gui --profile              start with the Profile pane shown
-//   ./shamrock_gui --ui-scale 1.5         start at 150 %
-//   ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
-//   ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
+// -------------------------------------------------------//
+
+/**
+ * @file main.cpp
+ * @author Timothée David--Cléris (tim.shamrock@proton.me)
+ * @brief Shamrock control GUI: C++ app with dockable panes (Dear ImGui docking branch).
+ *
+ * Four panes (Viewer, Graph, Script, Profile) live in one dock area arranged by kitty-style layouts
+ * (Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits). Tabs can be dragged onto drop targets,
+ * dividers resized; interactive runs remember everything in shamrock_gui_layout.ini. All data is
+ * demo data from DemoSimulation (deterministic 60 fps clock and SplitMix64 seeds for --screenshot /
+ * --bench).
+ *
+ * Usage:
+ *
+ *     ./shamrock_gui                        interactive
+ *     ./shamrock_gui --layout NAME          stack|tall|fat|grid|horizontal|vertical|splits
+ *     ./shamrock_gui --profile              start with the Profile pane shown
+ *     ./shamrock_gui --ui-scale 1.5         start at 150 %
+ *     ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
+ *     ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
+ *
+ */
 
 #include "DemoSimulation.hpp"
 #include "TextEditor.h"
