@@ -119,7 +119,9 @@ else()
 endif()
 
 add_executable(shamrock_gui src/main.cpp src/DemoSimulation.cpp)
-target_include_directories(shamrock_gui PRIVATE ${stb_SOURCE_DIR})
+target_include_directories(
+    shamrock_gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${stb_SOURCE_DIR}
+)
 target_link_libraries(shamrock_gui PRIVATE shamrock_gui_imgui)
 if(MSVC)
     target_compile_options(shamrock_gui PRIVATE /utf-8)
