@@ -52,8 +52,9 @@
 #include <string>
 #include <vector>
 
-namespace fs               = std::filesystem;
-static fs::path g_assets   = "assets";
+namespace fs             = std::filesystem;
+static fs::path g_assets = "assets";
+static Fonts g_fonts; // set by load_fonts() in main()
 static constexpr double PI = 3.14159265358979323846;
 
 // ============================================================================
@@ -234,7 +235,7 @@ static void draw_text_vc(
 }
 
 static void tooltip(const char *text) {
-    ImGui::PushFont(Fonts::sans, S(13));
+    ImGui::PushFont(g_fonts.sans, S(13));
     ImGui::SetItemTooltip("%s", text);
     ImGui::PopFont();
 }
@@ -304,7 +305,7 @@ static Btn text_button(
     bool warm = false,
     bool dot  = false,
     double h  = 26.0) {
-    ImFont *font      = Fonts::sans;
+    ImFont *font      = g_fonts.sans;
     const double size = 12.0, pad = 10.0, dot_w = dot ? 12.0 : 0.0;
     double w = pad * 2 + dot_w + text_w(font, size, label);
     double y = cy - h / 2;
@@ -691,12 +692,12 @@ class GraphView {
             float(8 * z),
             0,
             1.0f);
-        draw_text_vc(dl, Fonts::medium, 13 * z, x0 + 12 * z, y0 + 15 * z, n.style.fg, n.title);
+        draw_text_vc(dl, g_fonts.medium, 13 * z, x0 + 12 * z, y0 + 15 * z, n.style.fg, n.title);
         if (n.gpu) {
-            double cw = text_w(Fonts::mono, 11 * z, "GPU") + 12 * z, cx = x1 - 12 * z - cw;
+            double cw = text_w(g_fonts.mono, 11 * z, "GPU") + 12 * z, cx = x1 - 12 * z - cw;
             dl->AddRectFilled(
                 V(cx, y0 + 7 * z), V(cx + cw, y0 + 23 * z), n.style.chip, float(4 * z));
-            draw_text_vc(dl, Fonts::mono, 11 * z, cx + 6 * z, y0 + 15 * z, n.style.fg, "GPU");
+            draw_text_vc(dl, g_fonts.mono, 11 * z, cx + 6 * z, y0 + 15 * z, n.style.fg, "GPU");
         }
         for (size_t i = 0; i < n.rows.size(); ++i) {
             const Row &r = n.rows[i];
@@ -704,21 +705,21 @@ class GraphView {
             if (r.highlight)
                 dl->AddRectFilled(V(x0 + 1, ry), V(x1 - 1, ry + 26 * z), C::ROW_HL);
             if (r.kind == RowKind::Param) {
-                draw_text_vc(dl, Fonts::sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
-                double vw = text_w(Fonts::mono, 12 * z, r.value);
-                draw_text_vc(dl, Fonts::mono, 12 * z, x1 - 12 * z - vw, cy, C::TEXT, r.value);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
+                double vw = text_w(g_fonts.mono, 12 * z, r.value);
+                draw_text_vc(dl, g_fonts.mono, 12 * z, x1 - 12 * z - vw, cy, C::TEXT, r.value);
             } else if (r.kind == RowKind::Out) {
-                double lw = text_w(Fonts::sans, 12 * z, r.label);
-                draw_text_vc(dl, Fonts::sans, 12 * z, x1 - 12 * z - lw, cy, C::ROW, r.label);
+                double lw = text_w(g_fonts.sans, 12 * z, r.label);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x1 - 12 * z - lw, cy, C::ROW, r.label);
                 port(dl, x1, cy, r.color);
             } else {
-                draw_text_vc(dl, Fonts::sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
                 port(dl, x0, cy, r.color, r.kind == RowKind::RW);
                 if (r.kind == RowKind::RW) {
-                    double tw = text_w(Fonts::mono, 11 * z, "rw") + 10 * z, tx = x1 - 12 * z - tw;
+                    double tw = text_w(g_fonts.mono, 11 * z, "rw") + 10 * z, tx = x1 - 12 * z - tw;
                     dl->AddRectFilled(
                         V(tx, cy - 8 * z), V(tx + tw, cy + 8 * z), rgba("#2e3035"), float(3 * z));
-                    draw_text_vc(dl, Fonts::mono, 11 * z, tx + 5 * z, cy, C::TEXT_2, "rw");
+                    draw_text_vc(dl, g_fonts.mono, 11 * z, tx + 5 * z, cy, C::TEXT_2, "rw");
                 }
             }
         }
@@ -729,7 +730,7 @@ class GraphView {
     void draw_legend(SDL *dl, double x, double y, double w, double h) const {
         const char *kinds[3]  = {"edge", "dot", "diamond"};
         const char *labels[3] = {"data edge", "read / write", "in-place (rw)"};
-        ImFont *f             = Fonts::sans;
+        ImFont *f             = g_fonts.sans;
         const double s        = 11.0;
         double widths[3], sum = 0;
         for (int i = 0; i < 3; ++i) {
@@ -1157,10 +1158,10 @@ struct App {
         if (!any) {
             std::string msg
                 = "All panes are hidden. Turn one back on from the toggles in the top bar.";
-            double mw = text_w(Fonts::sans, 14, msg);
+            double mw = text_w(g_fonts.sans, 14, msg);
             draw_text_vc(
                 dl,
-                Fonts::sans,
+                g_fonts.sans,
                 14,
                 body.x + (body.w - mw) / 2,
                 body.y + body.h / 2,
@@ -1203,22 +1204,22 @@ struct App {
         double lx = X + 16, logo_h = 34.0, logo_w = logo_h * 298 / 96;
         dl->AddImage(logo.ref, V(lx, cy - logo_h / 2), V(lx + logo_w, cy + logo_h / 2));
         const std::string script = "run_sedov.py";
-        double name_w            = 12 + 13 + text_w(Fonts::mono, 12, script);
+        double name_w            = 12 + 13 + text_w(g_fonts.mono, 12, script);
 
         // measure everything, then drop the least important parts until it fits the (logical) width
         std::string pill_name = "gpu-node-042", pill_via = "ssh";
         std::string layout_label = LAY_NAME[int(lay)];
         double group_w           = 2 + 32 * 4 + 2 * 3 + 2 + 2;
-        double scale_w           = 24 + text_w(Fonts::mono, 12, "000%");
+        double scale_w           = 24 + text_w(g_fonts.mono, 12, "000%");
         std::pair<std::string, std::string> readouts[3]
             = {{"step", fmt_thousands(sim.step)},
                {"t", fmt("%.3e", sim.t)},
                {"dt", fmt("%.2e", sim.dt())}};
         std::string run_label = sim.running ? "Running" : "Paused";
-        double run_w          = 14 + 14 + 8 + text_w(Fonts::semibold, 13, run_label) + 14;
+        double run_w          = 14 + 14 + 8 + text_w(g_fonts.semibold, 13, run_label) + 14;
         double ro_w           = 18 * 2;
         for (auto &[k, v] : readouts)
-            ro_w += text_w(Fonts::mono, 12, k + " " + v);
+            ro_w += text_w(g_fonts.mono, 12, k + " " + v);
         double buttons_w = run_w + 6 + 36 * 3 + 6 * 2;
         // levels: (show readouts, compact layout button + pill, show script name)
         const bool levels[4][3] = {
@@ -1229,11 +1230,11 @@ struct App {
             show_ro   = lv[0];
             compact   = lv[1];
             show_name = lv[2];
-            pill_w    = 12 + 8 + 8 + text_w(Fonts::mono, 12, pill_name) + 12;
+            pill_w    = 12 + 8 + 8 + text_w(g_fonts.mono, 12, pill_name) + 12;
             lay_w     = 12 + 18 + 8 + 12 + 12;
             if (!compact) {
-                pill_w += 8 + text_w(Fonts::sans, 12, pill_via);
-                lay_w += text_w(Fonts::sans, 12, layout_label) + 8;
+                pill_w += 8 + text_w(g_fonts.sans, 12, pill_via);
+                lay_w += text_w(g_fonts.sans, 12, layout_label) + 8;
             }
             right_w  = scale_w + 10 + group_w + 10 + lay_w + 10 + pill_w + 10 + 36;
             rx       = X + W - 16 - right_w;
@@ -1245,7 +1246,7 @@ struct App {
         if (show_name) {
             double nx = lx + logo_w + 12;
             dl->AddLine(V(nx, cy - 10), V(nx, cy + 10), C::BORDER);
-            draw_text_vc(dl, Fonts::mono, 12, nx + 13, cy, C::TEXT_3, script);
+            draw_text_vc(dl, g_fonts.mono, 12, nx + 13, cy, C::TEXT_3, script);
         }
 
         double cx = std::max(left_end + 24, left_end + (rx - left_end - centre_w) / 2);
@@ -1260,7 +1261,7 @@ struct App {
             icon_play(dl, cx + 14 + 6, cy, C::ON_ACCENT, 6);
         else
             icon_pause(dl, cx + 14 + 7, cy, C::ON_ACCENT);
-        draw_text_vc(dl, Fonts::semibold, 13, cx + 14 + 14 + 8, cy, C::ON_ACCENT, run_label);
+        draw_text_vc(dl, g_fonts.semibold, 13, cx + 14 + 14 + 8, cy, C::ON_ACCENT, run_label);
         if (r.clicked)
             sim.running = !sim.running;
         double bx = cx + run_w + 6;
@@ -1287,10 +1288,10 @@ struct App {
         for (auto &[k, v] : readouts) {
             if (!show_ro)
                 break;
-            draw_text_vc(dl, Fonts::mono, 12, tx, cy, C::TEXT_3, k + " ");
-            double kw = text_w(Fonts::mono, 12, k + " ");
-            draw_text_vc(dl, Fonts::mono, 12, tx + kw, cy, C::TEXT, v);
-            tx += text_w(Fonts::mono, 12, k + " " + v) + 18;
+            draw_text_vc(dl, g_fonts.mono, 12, tx, cy, C::TEXT_3, k + " ");
+            double kw = text_w(g_fonts.mono, 12, k + " ");
+            draw_text_vc(dl, g_fonts.mono, 12, tx + kw, cy, C::TEXT, v);
+            tx += text_w(g_fonts.mono, 12, k + " " + v) + 18;
         }
 
         scale_control(dl, rx, cy, scale_w);
@@ -1333,19 +1334,19 @@ struct App {
         layout_menu(lx2, cy + 22);
         icon_layout(dl, lx2 + 12 + 9, cy, C::TEXT, int(lay));
         if (!compact)
-            draw_text_vc(dl, Fonts::sans, 12, lx2 + 12 + 18 + 8, cy, C::TEXT, layout_label);
+            draw_text_vc(dl, g_fonts.sans, 12, lx2 + 12 + 18 + 8, cy, C::TEXT, layout_label);
         icon_chevron(dl, lx2 + lay_w - 12 - 6, cy, C::MUTED);
         double ppx = lx2 + lay_w + 10;
         dl->AddRectFilled(V(ppx, cy - 16), V(ppx + pill_w, cy + 16), C::PILL_BG, 16);
         dl->AddRect(V(ppx + 0.5, cy - 15.5), V(ppx + pill_w - 0.5, cy + 15.5), C::PILL_BORDER, 16);
         dl->AddCircleFilled(V(ppx + 16, cy), 4, C::TEAL);
-        draw_text_vc(dl, Fonts::mono, 12, ppx + 28, cy, C::PILL_TEXT, pill_name);
+        draw_text_vc(dl, g_fonts.mono, 12, ppx + 28, cy, C::PILL_TEXT, pill_name);
         if (!compact)
             draw_text_vc(
                 dl,
-                Fonts::sans,
+                g_fonts.sans,
                 12,
-                ppx + 28 + text_w(Fonts::mono, 12, pill_name) + 8,
+                ppx + 28 + text_w(g_fonts.mono, 12, pill_name) + 8,
                 cy,
                 C::TEAL_TEXT,
                 pill_via);
@@ -1373,9 +1374,9 @@ struct App {
         std::string label = std::to_string(int(std::nearbyint(UI::scale * 100))) + "%";
         draw_text_vc(
             dl,
-            Fonts::mono,
+            g_fonts.mono,
             12,
-            x + (w - text_w(Fonts::mono, 12, label)) / 2,
+            x + (w - text_w(g_fonts.mono, 12, label)) / 2,
             cy,
             r.hovered ? C::TEXT : C::TEXT_3,
             label);
@@ -1859,7 +1860,7 @@ struct App {
                 icon_layout(dl, p.x + 12, p.y + 12, on ? C::ACCENT : C::TEXT_2, i);
                 draw_text_vc(
                     dl,
-                    Fonts::sans,
+                    g_fonts.sans,
                     13,
                     p.x + 32,
                     p.y + 12,
@@ -1869,9 +1870,9 @@ struct App {
                 if (*hint)
                     draw_text_vc(
                         dl,
-                        Fonts::mono,
+                        g_fonts.mono,
                         11,
-                        p.x + 250 - 8 - text_w(Fonts::mono, 11, hint),
+                        p.x + 250 - 8 - text_w(g_fonts.mono, 11, hint),
                         p.y + 12,
                         C::MUTED,
                         hint);
@@ -2009,7 +2010,7 @@ struct App {
         const std::string &label,
         bool on,
         double h = 26.0) {
-        double w = 20 + text_w(Fonts::mono, 12, label);
+        double w = 20 + text_w(g_fonts.mono, 12, label);
         Hit r    = hit(id, x, cy - h / 2, w, h);
         ImU32 bg = on ? C::ACCENT_BG : (r.hovered ? lighten(C::BUTTON) : C::BUTTON);
         dl->AddRectFilled(V(x, cy - h / 2), V(x + w, cy + h / 2), bg, 5);
@@ -2018,7 +2019,7 @@ struct App {
             V(x + w - 0.5, cy + h / 2 - 0.5),
             on ? C::ACCENT : C::BORDER,
             5);
-        draw_text_vc(dl, Fonts::mono, 12, x + 10, cy, on ? C::ACCENT_TEXT : C::TEXT_3, label);
+        draw_text_vc(dl, g_fonts.mono, 12, x + 10, cy, on ? C::ACCENT_TEXT : C::TEXT_3, label);
         return {r.clicked, w};
     }
 
@@ -2026,10 +2027,10 @@ struct App {
         double cy = pane_header(dl, x, y, w);
         double widths[3], total = 0;
         for (int k = 0; k < 3; ++k) {
-            widths[k] = 20 + text_w(Fonts::mono, 12, FIELDS[k].label);
+            widths[k] = 20 + text_w(g_fonts.mono, 12, FIELDS[k].label);
             total += widths[k];
         }
-        double tr_w = 20 + text_w(Fonts::mono, 12, "tracers");
+        double tr_w = 20 + text_w(g_fonts.mono, 12, "tracers");
         total += 6 * 2 + 6 + 1 + 6 + tr_w;
         double cx = x + w - 12 - total;
         for (int k = 0; k < 3; ++k) {
@@ -2092,18 +2093,18 @@ struct App {
 
         const char *seg[2] = {"3D", "Slice"};
         double seg_w[2]
-            = {20 + text_w(Fonts::mono, 11, seg[0]), 20 + text_w(Fonts::mono, 11, seg[1])};
+            = {20 + text_w(g_fonts.mono, 11, seg[0]), 20 + text_w(g_fonts.mono, 11, seg[1])};
         double tw = seg_w[0] + seg_w[1] + 2 * 3;
         // start allow utf-8
         std::string label = std::string("state.") + FIELDS[field].label + " · "
                             + (view3d ? "cut z=0.5" : "z=0.5") + " · 10 Hz";
         // end allow utf-8
-        if (8 + 20 + text_w(Fonts::mono, 11, label) + 8 + 12 + tw + 8 > s)
+        if (8 + 20 + text_w(g_fonts.mono, 11, label) + 8 + 12 + tw + 8 > s)
             label = std::string("state.") + FIELDS[field].label;
-        double bw_ = 8 + 6 + 6 + text_w(Fonts::mono, 11, label) + 8;
+        double bw_ = 8 + 6 + 6 + text_w(g_fonts.mono, 11, label) + 8;
         dl->AddRectFilled(V(x + 8, y + 8), V(x + 8 + bw_, y + 28), C::CARD, 4);
         draw_live_dot(dl, x + 8 + 11, y + 18);
-        draw_text_vc(dl, Fonts::mono, 11, x + 8 + 20, y + 18, C::TEXT, label);
+        draw_text_vc(dl, g_fonts.mono, 11, x + 8 + 20, y + 18, C::TEXT, label);
 
         double sx0 = x + s - 8 - tw;
         dl->AddRectFilled(V(sx0, y + 8), V(sx0 + tw, y + 36), C::CARD, 6);
@@ -2115,7 +2116,7 @@ struct App {
             Hit h          = hit(id.c_str(), bx, y + 10, seg_w[i], 24);
             if (on)
                 dl->AddRectFilled(V(bx, y + 10), V(bx + seg_w[i], y + 34), C::ACCENT_BG, 4);
-            draw_text_vc(dl, Fonts::mono, 11, bx + 10, y + 22, on ? C::ACCENT : C::MUTED, seg[i]);
+            draw_text_vc(dl, g_fonts.mono, 11, bx + 10, y + 22, on ? C::ACCENT : C::MUTED, seg[i]);
             if (h.clicked)
                 view3d = is3d;
             bx += seg_w[i] + 2;
@@ -2124,10 +2125,10 @@ struct App {
         double val = sim.sample(field, 0.648 - 0.5, 0.5 - 0.585);
         std::string probe
             = std::string(FIELDS[field].label) + " = " + fmt("%.3g", val) + "  (0.65, 0.41)";
-        double pw = 16 + text_w(Fonts::mono, 11, probe);
+        double pw = 16 + text_w(g_fonts.mono, 11, probe);
         dl->AddRectFilled(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), C::CARD, 4);
         dl->AddRect(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), C::NODE_BORDER, 4);
-        draw_text_vc(dl, Fonts::mono, 11, x + s - pw, y + s - 19, C::TEXT, probe);
+        draw_text_vc(dl, g_fonts.mono, 11, x + s - pw, y + s - 19, C::TEXT, probe);
 
         // orbit with left drag (3D), double-click resets the camera. Submitted after the overlay
         // buttons: with overlapping items the first one submitted takes the hover, so the 3D /
@@ -2230,7 +2231,7 @@ struct App {
             P3 r      = rot(a.d);
             double ex = gx + r[0] * 14, ey = gy - r[1] * 14;
             dl->AddLine(V(gx, gy), V(ex, ey), a.col, 1.6f);
-            draw_text_vc(dl, Fonts::mono, 11, ex + r[0] * 5 - 3, ey - r[1] * 5, a.col, a.name);
+            draw_text_vc(dl, g_fonts.mono, 11, ex + r[0] * 5 - 3, ey - r[1] * 5, a.col, a.name);
         }
     }
 
@@ -2240,19 +2241,25 @@ struct App {
         };
         std::string lo_s = f(main_lo), hi_s = f(main_hi), name = FIELDS[field].cb_label;
         double cy = y + 7;
-        draw_text_vc(dl, Fonts::mono, 11, x, cy, C::TEXT_3, lo_s);
-        double bx0 = x + text_w(Fonts::mono, 11, lo_s) + 10;
+        draw_text_vc(dl, g_fonts.mono, 11, x, cy, C::TEXT_3, lo_s);
+        double bx0 = x + text_w(g_fonts.mono, 11, lo_s) + 10;
         double bx1
-            = x + w - text_w(Fonts::mono, 11, hi_s) - 10 - text_w(Fonts::mono, 11, name) - 10;
+            = x + w - text_w(g_fonts.mono, 11, hi_s) - 10 - text_w(g_fonts.mono, 11, name) - 10;
         const int n = 24;
         for (int i = 0; i < n; ++i) {
             double a = bx0 + (bx1 - bx0) * i / n, b = bx0 + (bx1 - bx0) * (i + 1) / n;
             ImU32 ca = viridis_u32(double(i) / n), cb = viridis_u32(double(i + 1) / n);
             dl->AddRectFilledMultiColor(V(a, cy - 4), V(b + 0.5, cy + 4), ca, cb, cb, ca);
         }
-        draw_text_vc(dl, Fonts::mono, 11, bx1 + 10, cy, C::TEXT_3, hi_s);
+        draw_text_vc(dl, g_fonts.mono, 11, bx1 + 10, cy, C::TEXT_3, hi_s);
         draw_text_vc(
-            dl, Fonts::mono, 11, bx1 + 10 + text_w(Fonts::mono, 11, hi_s) + 10, cy, C::TEXT, name);
+            dl,
+            g_fonts.mono,
+            11,
+            bx1 + 10 + text_w(g_fonts.mono, 11, hi_s) + 10,
+            cy,
+            C::TEXT,
+            name);
     }
 
     double plots(SDL *dl, double x, double y, double w) {
@@ -2277,8 +2284,8 @@ struct App {
         for (int i = 0; i < 3; ++i) {
             const Item &it = items[i];
             double cx      = x + i * (cw + gap);
-            draw_text(dl, Fonts::sans, 12, cx, y, C::TEXT_2, it.title);
-            draw_text(dl, Fonts::mono, 12, cx, y + 18, C::TEXT, it.value);
+            draw_text(dl, g_fonts.sans, 12, cx, y, C::TEXT_2, it.title);
+            draw_text(dl, g_fonts.mono, 12, cx, y + 18, C::TEXT, it.value);
             double by0 = y + 38, by1 = y + 38 + 44;
             dl->AddRectFilled(V(cx, by0), V(cx + cw, by1), C::CANVAS, 4);
             for (double f : {0.25, 0.5, 0.75}) {
@@ -2298,10 +2305,10 @@ struct App {
     }
 
     void subscriptions(SDL *dl, double x, double y, double w) {
-        draw_text(dl, Fonts::sans, 12, x, y, C::TEXT_2, "Preview subscriptions");
+        draw_text(dl, g_fonts.sans, 12, x, y, C::TEXT_2, "Preview subscriptions");
         std::string rate = fmt("%.1f", bytes_per_s / 1e6) + " MB/s";
         draw_text(
-            dl, Fonts::mono, 11, x + w - text_w(Fonts::mono, 11, rate), y + 1, C::MUTED, rate);
+            dl, g_fonts.mono, 11, x + w - text_w(g_fonts.mono, 11, rate), y + 1, C::MUTED, rate);
         bool on = graph.previews_on;
         struct R {
             std::string c[4];
@@ -2323,7 +2330,7 @@ struct App {
         for (const R &r : rows) {
             for (int i = 0; i < 4; ++i) {
                 ImU32 col = r.active ? (i == 0 ? C::TEXT : C::TEXT_3) : C::DIM;
-                draw_text(dl, Fonts::mono, 11, x + col_x[i] * w, ry, col, r.c[i]);
+                draw_text(dl, g_fonts.mono, 11, x + col_x[i] * w, ry, col, r.c[i]);
             }
             ry += 17;
         }
@@ -2361,19 +2368,19 @@ struct App {
         // right: Live toggle, Reset zoom when zoomed
         std::string live = prof_live ? "Live · 2 Hz" : "Paused";
         // end allow utf-8
-        double live_w = 20 + (prof_live ? 12 : 0) + text_w(Fonts::sans, 12, live);
+        double live_w = 20 + (prof_live ? 12 : 0) + text_w(g_fonts.sans, 12, live);
         double bx     = x + w - 12 - live_w;
         if (prof_focus != 0) {
-            double rw = 20 + text_w(Fonts::sans, 12, "Reset zoom");
+            double rw = 20 + text_w(g_fonts.sans, 12, "Reset zoom");
             if (text_button(dl, "##prof_reset", bx - 6 - rw, cy, "Reset zoom").clicked)
                 prof_focus = 0;
         }
         if (text_button(dl, "##prof_live", bx, cy, live, prof_live, prof_live).clicked)
             prof_live = !prof_live;
         double info_max
-            = bx - 12 - (prof_focus != 0 ? 20 + text_w(Fonts::sans, 12, "Reset zoom") + 6 : 0);
-        if (x + 12 + text_w(Fonts::mono, 12, info) <= info_max)
-            draw_text_vc(dl, Fonts::mono, 12, x + 12, cy, C::MUTED, info);
+            = bx - 12 - (prof_focus != 0 ? 20 + text_w(g_fonts.sans, 12, "Reset zoom") + 6 : 0);
+        if (x + 12 + text_w(g_fonts.mono, 12, info) <= info_max)
+            draw_text_vc(dl, g_fonts.mono, 12, x + 12, cy, C::MUTED, info);
 
         // frames: ancestors of the focused scope (dimmed, full width), the focus, then its subtree
         const double fx = x + 12, fw = w - 24, gap = 1;
@@ -2417,18 +2424,18 @@ struct App {
             ImU32 tc          = dark_text ? rgba("#16140f") : C::TEXT_2;
             std::string ms    = fmt("%.2f ms", prof_snap[i]);
             std::string label = prof[i].name;
-            double tw = text_w(Fonts::mono, 11, label), mw = text_w(Fonts::mono, 11, ms);
+            double tw = text_w(g_fonts.mono, 11, label), mw = text_w(g_fonts.mono, 11, ms);
             if (bw > tw + mw + 24 && row_h >= 16) {
-                draw_text_vc(dl, Fonts::mono, 11, bx0 + 6, by0 + row_h / 2, tc, label);
-                draw_text_vc(dl, Fonts::mono, 11, bx0 + bw - 7 - mw, by0 + row_h / 2, tc, ms);
+                draw_text_vc(dl, g_fonts.mono, 11, bx0 + 6, by0 + row_h / 2, tc, label);
+                draw_text_vc(dl, g_fonts.mono, 11, bx0 + bw - 7 - mw, by0 + row_h / 2, tc, ms);
             } else if (bw > tw + 12) {
-                draw_text_vc(dl, Fonts::mono, 11, bx0 + 6, by0 + row_h / 2, tc, label);
+                draw_text_vc(dl, g_fonts.mono, 11, bx0 + 6, by0 + row_h / 2, tc, label);
             } else if (bw > 28) {
                 // start allow utf-8
                 std::string cut
                     = label.substr(0, std::max<size_t>(1, size_t((bw - 16) / 6.6))) + "…";
                 // end allow utf-8
-                draw_text_vc(dl, Fonts::mono, 11, bx0 + 5, by0 + row_h / 2, tc, cut);
+                draw_text_vc(dl, g_fonts.mono, 11, bx0 + 5, by0 + row_h / 2, tc, cut);
             }
             if (hv.hovered) {
                 double step = std::max(prof_snap[0], 1e-9);
@@ -2479,13 +2486,13 @@ struct App {
         double lx = x + 12, ly = y + h - 16;
         for (const L &l : legend) {
             dl->AddRectFilled(V(lx, ly - 5), V(lx + 10, ly + 5), cat_color(l.c, ""), 2);
-            draw_text_vc(dl, Fonts::sans, 11, lx + 16, ly, C::MUTED, l.t);
-            lx += 16 + text_w(Fonts::sans, 11, l.t) + 16;
+            draw_text_vc(dl, g_fonts.sans, 11, lx + 16, ly, C::MUTED, l.t);
+            lx += 16 + text_w(g_fonts.sans, 11, l.t) + 16;
         }
         std::string hint = "click a frame to zoom";
-        double hw        = text_w(Fonts::sans, 11, hint);
+        double hw        = text_w(g_fonts.sans, 11, hint);
         if (lx + 20 + hw < x + w - 12)
-            draw_text_vc(dl, Fonts::sans, 11, x + w - 12 - hw, ly, C::DIM, hint);
+            draw_text_vc(dl, g_fonts.sans, 11, x + w - 12 - hw, ly, C::DIM, hint);
     }
 
     // --- graph pane --------------------------------------------------------
@@ -2502,15 +2509,15 @@ struct App {
         std::string prev_label = graph.previews_on ? "Previews · 4 Hz" : "Previews off";
         // end allow utf-8
         double widths[3]
-            = {20 + 12 + text_w(Fonts::sans, 12, prev_label),
-               20 + text_w(Fonts::sans, 12, "Auto-layout"),
-               20 + text_w(Fonts::sans, 12, "Fit")};
+            = {20 + 12 + text_w(g_fonts.sans, 12, prev_label),
+               20 + text_w(g_fonts.sans, 12, "Auto-layout"),
+               20 + text_w(g_fonts.sans, 12, "Fit")};
         double bx        = x + w - 12 - (widths[0] + widths[1] + widths[2]) - 6 * 2;
         std::string zoom = std::to_string(int(std::nearbyint(graph.zoom * 100))) + "%";
-        double zx        = bx - 8 - text_w(Fonts::mono, 11, zoom);
-        draw_text_vc(dl, Fonts::mono, 11, zx, cy, C::MUTED, zoom);
-        if (counts_x + text_w(Fonts::mono, 12, counts) + 12 <= zx)
-            draw_text_vc(dl, Fonts::mono, 12, counts_x, cy, C::MUTED, counts);
+        double zx        = bx - 8 - text_w(g_fonts.mono, 11, zoom);
+        draw_text_vc(dl, g_fonts.mono, 11, zx, cy, C::MUTED, zoom);
+        if (counts_x + text_w(g_fonts.mono, 12, counts) + 12 <= zx)
+            draw_text_vc(dl, g_fonts.mono, 12, counts_x, cy, C::MUTED, counts);
         Btn b = text_button(dl, "##fit", bx, cy, "Fit");
         if (b.clicked) {
             graph.user_view = false;
@@ -2547,7 +2554,7 @@ struct App {
         };
         const Tab tabs[3] = {{"run_sedov.py", true}, {"Log", false}, {"Problems", false}};
         for (const Tab &t : tabs) {
-            ImFont *font  = t.active ? Fonts::mono : Fonts::sans;
+            ImFont *font  = t.active ? g_fonts.mono : g_fonts.sans;
             bool problems = !std::strcmp(t.label, "Problems");
             double tw = 28 + text_w(font, 12, t.label) + (t.active ? 14 : 0) + (problems ? 22 : 0);
             if (t.active)
@@ -2561,7 +2568,7 @@ struct App {
             if (problems) {
                 double bx = tx + 14 + lw + 6;
                 dl->AddRectFilled(V(bx, y + 10), V(bx + 16, y + 26), C::ROW_HL, 8);
-                draw_text_vc(dl, Fonts::sans, 11, bx + 5, y + 18, C::TEXT_2, "0");
+                draw_text_vc(dl, g_fonts.sans, 11, bx + 5, y + 18, C::TEXT_2, "0");
             }
             dl->AddLine(V(tx + tw - 0.5, y), V(tx + tw - 0.5, y + 36), C::DIVIDER);
             tx += tw;
@@ -2570,22 +2577,22 @@ struct App {
         dl->AddRectFilled(V(x, ay), V(x + w, ay + 38), C::CANVAS);
         dl->AddLine(V(x, ay + 37.5), V(x + w, ay + 37.5), rgba("#25272b"));
         double acy     = ay + 19;
-        double apply_w = 20 + text_w(Fonts::sans, 12, "Apply at next step"),
-               dry_w   = 20 + text_w(Fonts::sans, 12, "Dry run");
+        double apply_w = 20 + text_w(g_fonts.sans, 12, "Apply at next step"),
+               dry_w   = 20 + text_w(g_fonts.sans, 12, "Dry run");
         double bx      = x + w - 12 - apply_w - 6 - dry_w;
         dl->AddCircleFilled(V(x + 15, acy), 3, C::TEAL);
         std::string sync;
         for (const char *s : {"in sync with graph", "in sync", ""}) {
             sync = s;
-            if (x + 24 + text_w(Fonts::sans, 12, sync) + 12 <= bx)
+            if (x + 24 + text_w(g_fonts.sans, 12, sync) + 12 <= bx)
                 break;
         }
-        draw_text_vc(dl, Fonts::sans, 12, x + 24, acy, C::TEAL_TEXT, sync);
+        draw_text_vc(dl, g_fonts.sans, 12, x + 24, acy, C::TEAL_TEXT, sync);
         text_button(dl, "##dry", bx, acy, "Dry run");
         text_button(dl, "##apply", bx + dry_w + 6, acy, "Apply at next step", true);
         double ey = ay + 38;
         set_cursor(V(x, ey + 6));
-        ImGui::PushFont(Fonts::mono, S(13));
+        ImGui::PushFont(g_fonts.mono, S(13));
         editor.Render("##run_script", V(w * UI::scale, (h - 38 - 36 - 6) * UI::scale));
         ImGui::PopFont();
     }
@@ -2607,13 +2614,13 @@ struct App {
                "link latency " + fmt("%.0f", 38 + 3 * wob) + " ms"};
         double tx = X + 16;
         for (auto &t : left) {
-            draw_text_vc(dl, Fonts::mono, 11, tx, cy, C::TEXT_3, t);
-            tx += text_w(Fonts::mono, 11, t) + 20;
+            draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, t);
+            tx += text_w(g_fonts.mono, 11, t) + 20;
         }
         tx = X + W - 16;
         for (int i = 2; i >= 0; --i) {
-            tx -= text_w(Fonts::mono, 11, right[i]);
-            draw_text_vc(dl, Fonts::mono, 11, tx, cy, C::TEXT_3, right[i]);
+            tx -= text_w(g_fonts.mono, 11, right[i]);
+            draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, right[i]);
             tx -= 20;
         }
     }
@@ -2711,18 +2718,19 @@ void GraphView::draw_edge(SDL *dl, const double *origin, const Node &n, App &app
     double hc = y0 + 15 * z;
     dl->AddRectFilled(
         V(x0 + 12 * z, hc - 4 * z), V(x0 + 20 * z, hc + 4 * z), n.color, float(2 * z));
-    draw_text_vc(dl, Fonts::medium, 13 * z, x0 + 27 * z, hc, C::TEXT, n.title);
-    double mw = text_w(Fonts::mono, 11 * z, n.meta);
-    draw_text_vc(dl, Fonts::mono, 11 * z, x1 - 10 * z - mw, hc, C::MUTED, n.meta);
+    draw_text_vc(dl, g_fonts.medium, 13 * z, x0 + 27 * z, hc, C::TEXT, n.title);
+    double mw = text_w(g_fonts.mono, 11 * z, n.meta);
+    draw_text_vc(dl, g_fonts.mono, 11 * z, x1 - 10 * z - mw, hc, C::MUTED, n.meta);
     port(dl, x0, y0 + 16 * z, n.color);
     port(dl, x1, y0 + 16 * z, n.color);
 
     double bx0 = x0 + 7 * z, by0 = y0 + 37 * z;
     if (n.preview == Preview::None) {
         // start allow utf-8
-        draw_text(dl, Fonts::mono, 11 * z, x0 + 12 * z, y0 + 38 * z, C::TEXT_3, "256³ · 8 patches");
+        draw_text(
+            dl, g_fonts.mono, 11 * z, x0 + 12 * z, y0 + 38 * z, C::TEXT_3, "256³ · 8 patches");
         // end allow utf-8
-        draw_text(dl, Fonts::mono, 11 * z, x0 + 12 * z, y0 + 54 * z, C::DIM, "no preview");
+        draw_text(dl, g_fonts.mono, 11 * z, x0 + 12 * z, y0 + 54 * z, C::DIM, "no preview");
         return;
     }
     double img_h = n.preview == Preview::Series ? 56 : 88;
@@ -2730,7 +2738,7 @@ void GraphView::draw_edge(SDL *dl, const double *origin, const Node &n, App &app
     if (!previews_on) {
         dl->AddRectFilled(V(bx0, by0), V(bx1, by1), C::DARK, float(4 * z));
         draw_text_vc(
-            dl, Fonts::mono, 11 * z, bx0 + 8 * z, (by0 + by1) / 2, C::DIM, "preview paused");
+            dl, g_fonts.mono, 11 * z, bx0 + 8 * z, (by0 + by1) / 2, C::DIM, "preview paused");
     } else if (n.preview == Preview::Slice) {
         dl->AddImageRounded(
             app.tex_card_state.ref,
@@ -2756,7 +2764,7 @@ void GraphView::draw_edge(SDL *dl, const double *origin, const Node &n, App &app
             dl, bx0, by0 + 3 * z, bx1, by1 - 3 * z, app.sim.history["E_tot"], C::TEAL, 1.2, 0.35);
     }
     double fy = by1 + 11 * z;
-    draw_text_vc(dl, Fonts::mono, 11 * z, bx0, fy, C::TEXT_3, n.footer);
+    draw_text_vc(dl, g_fonts.mono, 11 * z, bx0, fy, C::TEXT_3, n.footer);
     if (previews_on)
         draw_live_dot(dl, bx1 - 3 * z, fy - 1 * z, 3 * z);
 }
@@ -2851,7 +2859,7 @@ int main(int argc, char **argv) {
     io.IniFilename = (bench || !screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
-    load_fonts(g_assets);
+    g_fonts = load_fonts(g_assets / "fonts");
     App::setup_style();
 
     App app(layout, !screenshot.empty(), frames, bench);

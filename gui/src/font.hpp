@@ -1,5 +1,4 @@
-// IBM Plex fonts used by the GUI (Sans for UI text, Mono for values and code), loaded from
-// <assets>/fonts.
+// IBM Plex fonts used by the GUI (Sans for UI text, Mono for values and code).
 
 #pragma once
 
@@ -7,23 +6,26 @@
 #include <filesystem>
 #include <string>
 
+// Non-owning: the fonts belong to ImGui's font atlas and are freed by ImGui::DestroyContext().
 struct Fonts {
-    static inline ImFont *sans, *medium, *semibold, *mono;
+    ImFont *sans = nullptr, *medium = nullptr, *semibold = nullptr, *mono = nullptr;
 };
 
-inline void load_fonts(const std::filesystem::path &assets) {
+inline auto load_fonts(const std::filesystem::path &font_folder) -> Fonts {
     ImGuiIO &io = ImGui::GetIO();
     auto load   = [&](const char *name, bool merge = false) {
         ImFontConfig cfg;
         cfg.MergeMode    = merge;
-        std::string path = (assets / "fonts" / (std::string(name) + ".ttf")).string();
+        std::string path = (font_folder / (std::string(name) + ".ttf")).string();
         ImFont *f        = io.Fonts->AddFontFromFileTTF(path.c_str(), 13.0f, &cfg);
         IM_ASSERT(f && "font not found: run from the project folder or pass --assets");
         return f;
     };
-    Fonts::sans     = load("IBMPlexSans-Regular");
-    Fonts::medium   = load("IBMPlexSans-Medium");
-    Fonts::semibold = load("IBMPlexSans-SemiBold");
-    Fonts::mono     = load("IBMPlexMono-Regular");
+    Fonts fonts;
+    fonts.sans     = load("IBMPlexSans-Regular");
+    fonts.medium   = load("IBMPlexSans-Medium");
+    fonts.semibold = load("IBMPlexSans-SemiBold");
+    fonts.mono     = load("IBMPlexMono-Regular");
     load("IBMPlexSans-Regular", true); // Plex Mono has no Greek (rho): borrow it from Sans
+    return fonts;
 }
