@@ -28,6 +28,18 @@
 
 namespace shambase {
 
+    namespace details {
+        /**
+         * @brief Line prefix used by format_array for the element i (i being a multiple of the
+         * column count)
+         *
+         * Note : the formatting of non template dependent arguments is defined out of line in
+         * this header, as the compile time check of the format string has to be performed in
+         * every file including it otherwise.
+         */
+        std::string format_array_line_prefix(u32 i);
+    } // namespace details
+
     /**
      * @brief Format an array of elements into a string
      *
@@ -55,11 +67,7 @@ namespace shambase {
         for (u32 i = 0; i < len; i++) {
 
             if (i % column_count == 0) {
-                if (i == 0) {
-                    accum += sham::format("{:8} : ", i);
-                } else {
-                    accum += sham::format("\n{:8} : ", i);
-                }
+                accum += details::format_array_line_prefix(i);
             }
 
             accum += sham::format(fmt, iter[i]);
@@ -77,10 +85,7 @@ namespace shambase {
      * @param size the size
      * @return std::string the formated string
      */
-    inline std::string readable_sizeof(double size) {
-        auto res = sham::to_human_readable<false>(size);
-        return sham::format("{:.2f} {}B", res.value, res.prefix);
-    }
+    std::string readable_sizeof(double size);
 
     /**
      * @brief dump a string to a file
@@ -193,15 +198,7 @@ namespace shambase {
      *
      * @return std::string The shortened string
      */
-    inline std::string shorten_string(std::string str, u32 len) {
-        if (len > str.size()) {
-            throw make_except_with_loc<std::invalid_argument>(
-                "the string is too short to be shortened"
-                "\n args : "
-                + sham::format("{} : {} \n {} : {}", "str", str, "len", len));
-        }
-        return str.substr(0, str.size() - len);
-    }
+    std::string shorten_string(std::string str, u32 len);
 
     /**
      * @brief Splits a string into a vector of substrings according to a delimiter

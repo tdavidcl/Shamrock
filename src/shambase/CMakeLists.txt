@@ -14,6 +14,8 @@ set(Sources
     src/stacktrace.cpp
     src/SourceLocation.cpp
     src/print.cpp
+    src/string.cpp
+    src/DistributedData.cpp
     src/popen.cpp
     src/term_colors.cpp
     src/profiling/chrome.cpp

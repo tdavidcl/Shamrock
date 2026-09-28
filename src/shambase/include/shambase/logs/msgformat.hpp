@@ -38,6 +38,17 @@ namespace shambase::logs {
      */
     inline std::string format_message() { return ""; }
 
+    namespace details {
+        /**
+         * @brief Format a pointer for format_message
+         *
+         * Defined out of line, as the compile time check of the format string would otherwise be
+         * performed in every file including this header (the argument does not depend on the
+         * template parameters of format_message).
+         */
+        std::string format_pointer(const void *ptr);
+    } // namespace details
+
     /**
      * Formats a log message with multiple arguments.
      *
@@ -87,7 +98,8 @@ namespace shambase::logs {
         else if constexpr (std::is_pointer_v<T>) {
             // Convert the pointer to a void pointer, format it as a hexadecimal string, and
             // concatenate it with the formatted string from the remaining arguments
-            return sham::format("{} ", static_cast<const void *>(var1)) + format_message(var2...);
+            return details::format_pointer(static_cast<const void *>(var1))
+                   + format_message(var2...);
         }
 
         else {

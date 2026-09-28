@@ -27,6 +27,10 @@ void sham::EventList::add_events(sham::EventList &e) {
     e.consumed = true;
 }
 
+std::string sham::EventList::get_state() {
+    return sham::format("events : {}, consumed : {}", events.size(), consumed);
+}
+
 sham::EventList::~EventList() noexcept(false) {
     if (!consumed && !events.empty()) {
         std::string log_str = sham::format(

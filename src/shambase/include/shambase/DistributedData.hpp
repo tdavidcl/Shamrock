@@ -30,6 +30,16 @@
 
 namespace shambase {
 
+    namespace details {
+        /**
+         * @brief Error message of DistributedData::get when the id does not exist
+         *
+         * Defined out of line, as the compile time check of the format string would otherwise be
+         * performed in every file including this header.
+         */
+        std::string format_missing_id(u64 id, const std::vector<u64> &id_list);
+    } // namespace details
+
     /**
      * @brief Represents a collection of objects distributed across patches identified by a u64 id.
      *
@@ -153,8 +163,8 @@ namespace shambase {
                     id_list.push_back(id);
                 });
 
-                throw make_except_with_loc<std::runtime_error>(sham::format(
-                    "The querried id {} does not exist, current id list is {}", id, id_list));
+                throw make_except_with_loc<std::runtime_error>(
+                    details::format_missing_id(id, id_list));
             }
         }
 
@@ -170,8 +180,8 @@ namespace shambase {
                     id_list.push_back(id);
                 });
 
-                throw make_except_with_loc<std::runtime_error>(sham::format(
-                    "The querried id {} does not exist, current id list is {}", id, id_list));
+                throw make_except_with_loc<std::runtime_error>(
+                    details::format_missing_id(id, id_list));
             }
         }
 

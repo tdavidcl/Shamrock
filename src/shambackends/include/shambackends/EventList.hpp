@@ -120,9 +120,7 @@ namespace sham {
          *
          * @return A string representation of the EventList's state.
          */
-        inline std::string get_state() {
-            return sham::format("events : {}, consumed : {}", events.size(), consumed);
-        }
+        std::string get_state();
 
         /// Default constructor for EventList with source location
         EventList(SourceLocation loc = SourceLocation{}) : loc_build(loc) {}

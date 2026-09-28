@@ -14,10 +14,13 @@
  *
  */
 
+#include "shambase/logs/msgformat.hpp"
 #include "shambase/logs/reformat_message.hpp"
 #include "shambase/term_colors.hpp"
 
 namespace shambase::logs {
+
+    std::string details::format_pointer(const void *ptr) { return sham::format("{} ", ptr); }
 
     /**
      * @brief Pointer to the full formatter function.
