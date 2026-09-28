@@ -18,6 +18,8 @@
 #include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/numeric_limits.hpp"
+#include "shamalgs/primitives/reduction.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shammath/sphkernels.hpp"
@@ -536,7 +538,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         // of its particles and the floating point operations used being monotonic, this test
         // never removes an interacting particle, hence the resulting neighbour lists (and their
         // ordering) are identical with or without pruning.
-        auto particle_passes = [&](auto prune_tag) -> tree::ObjectCache {
+        auto particle_passes = [&](auto prune_tag, u32 slot_capacity) -> tree::ObjectCache {
             constexpr bool prune = decltype(prune_tag)::value;
 
             // test whether the neighbour leaf leaf_b (node id) can be skipped for particle a
@@ -563,70 +565,199 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
             shamlog_debug_sycl_ln("Cache", "generate cache for N=", obj_cnt);
 
-            sham::kernel_call(
-                q,
-                sham::MultiRef{
-                    buf_xyz,
-                    buf_hpart,
-                    pleaf_cache,
-                    obj_it.cell_iterator,
-                    leaf_part_id,
-                    tree_field_rint,
-                    tree.aabbs.buf_aabb_min,
-                    tree.aabbs.buf_aabb_max},
-                sham::MultiRef{neigh_count},
-                obj_cnt,
-                [intnode_cnt, h_tolerance, can_skip_leaf](
-                    u32 id_a,
-                    const Tvec *__restrict xyz,
-                    const Tscal *__restrict hpart,
-                    auto acc_neigh_leaf_looper,
-                    auto particle_looper,
-                    const u32 *__restrict leaf_owner,
-                    const Tscal *__restrict rint_tree,
-                    const Tvec *__restrict aabb_min,
-                    const Tvec *__restrict aabb_max,
-                    u32 *__restrict neigh_cnt) {
-                    tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
+            // slotted layout : a single pass counts the neighbours and stores them in fixed size
+            // slots (particle i owns [i*capacity, (i+1)*capacity)), the count pass being also the
+            // fill pass. The lists are the same as with the compact layout, only their location
+            // in the cache buffer differs. If a particle has more neighbours than the capacity,
+            // the counts are kept and the compact layout is built instead.
+            bool counted   = false;
+            bool use_slots = slot_capacity > 0
+                             && u64(obj_cnt) * u64(slot_capacity) < u64(shambase::get_max<u32>());
+            if (use_slots) {
+                sham::DeviceBuffer<u32> slots(
+                    size_t(obj_cnt) * slot_capacity,
+                    shamsys::instance::get_compute_scheduler_ptr());
 
-                    u32 offset_leaf = intnode_cnt;
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{
+                        buf_xyz,
+                        buf_hpart,
+                        pleaf_cache,
+                        obj_it.cell_iterator,
+                        leaf_part_id,
+                        tree_field_rint,
+                        tree.aabbs.buf_aabb_min,
+                        tree.aabbs.buf_aabb_max},
+                    sham::MultiRef{neigh_count, slots},
+                    obj_cnt,
+                    [intnode_cnt, h_tolerance, can_skip_leaf, slot_capacity](
+                        u32 id_a,
+                        const Tvec *__restrict xyz,
+                        const Tscal *__restrict hpart,
+                        auto acc_neigh_leaf_looper,
+                        auto particle_looper,
+                        const u32 *__restrict leaf_owner,
+                        const Tscal *__restrict rint_tree,
+                        const Tvec *__restrict aabb_min,
+                        const Tvec *__restrict aabb_max,
+                        u32 *__restrict neigh_cnt,
+                        u32 *__restrict slot_neigh) {
+                        tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
-                    constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+                        u32 offset_leaf = intnode_cnt;
 
-                    Tscal rint_a = hpart[id_a] * h_tolerance;
+                        constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                    Tvec xyz_a = xyz[id_a];
+                        Tscal rint_a = hpart[id_a] * h_tolerance;
 
-                    Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
+                        Tvec xyz_a = xyz[id_a];
 
-                    u32 cnt = 0;
+                        Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
 
-                    u32 leaf_own_a = leaf_owner[id_a];
+                        u32 cnt      = 0;
+                        u64 slot_off = u64(id_a) * slot_capacity;
 
-                    neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
-                        SHAM_ASSERT(leaf_b >= offset_leaf);
+                        u32 leaf_own_a = leaf_owner[id_a];
 
-                        if constexpr (prune) {
-                            if (can_skip_leaf(
-                                    xyz_a, rint_a_sq_R2, leaf_b, rint_tree, aabb_min, aabb_max)) {
-                                return;
+                        neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
+                            SHAM_ASSERT(leaf_b >= offset_leaf);
+
+                            if constexpr (prune) {
+                                if (can_skip_leaf(
+                                        xyz_a,
+                                        rint_a_sq_R2,
+                                        leaf_b,
+                                        rint_tree,
+                                        aabb_min,
+                                        aabb_max)) {
+                                    return;
+                                }
                             }
-                        }
 
-                        particle_looper.for_each_in_leaf_cell(leaf_b - offset_leaf, [&](u32 id_b) {
-                            Tvec dr      = xyz_a - xyz[id_b];
-                            Tscal rab2   = sycl::dot(dr, dr);
-                            Tscal rint_b = hpart[id_b] * h_tolerance;
+                            particle_looper.for_each_in_leaf_cell(
+                                leaf_b - offset_leaf, [&](u32 id_b) {
+                                    Tvec dr      = xyz_a - xyz[id_b];
+                                    Tscal rab2   = sycl::dot(dr, dr);
+                                    Tscal rint_b = hpart[id_b] * h_tolerance;
 
-                            bool no_interact
-                                = rab2 > rint_a * rint_a * Rker2 && rab2 > rint_b * rint_b * Rker2;
+                                    bool no_interact = rab2 > rint_a * rint_a * Rker2
+                                                       && rab2 > rint_b * rint_b * Rker2;
 
-                            cnt += (no_interact) ? 0 : 1;
+                                    if (!no_interact && cnt < slot_capacity) {
+                                        slot_neigh[slot_off + cnt] = id_b;
+                                    }
+                                    cnt += (no_interact) ? 0 : 1;
+                                });
                         });
+
+                        neigh_cnt[id_a] = cnt;
                     });
 
-                    neigh_cnt[id_a] = cnt;
-                });
+                u32 max_cnt = shamalgs::primitives::max(
+                    shamsys::instance::get_compute_scheduler_ptr(), neigh_count, 0, obj_cnt);
+
+                if (max_cnt <= slot_capacity) {
+                    sham::DeviceBuffer<u32> slot_offsets(
+                        obj_cnt, shamsys::instance::get_compute_scheduler_ptr());
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{},
+                        sham::MultiRef{slot_offsets},
+                        obj_cnt,
+                        [slot_capacity](u32 i, u32 *__restrict offs) {
+                            offs[i] = i * slot_capacity;
+                        });
+
+                    return tree::ObjectCache{
+                        .cnt_neigh       = std::move(neigh_count),
+                        .scanned_cnt     = std::move(slot_offsets),
+                        .sum_neigh_cnt   = obj_cnt * slot_capacity,
+                        .index_neigh_map = std::move(slots)};
+                }
+
+                shamlog_debug_ln(
+                    "Cache",
+                    "neighbour count",
+                    max_cnt,
+                    "larger than the slot capacity",
+                    slot_capacity,
+                    ", using the compact layout");
+                counted = true;
+            }
+
+            if (!counted) {
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{
+                        buf_xyz,
+                        buf_hpart,
+                        pleaf_cache,
+                        obj_it.cell_iterator,
+                        leaf_part_id,
+                        tree_field_rint,
+                        tree.aabbs.buf_aabb_min,
+                        tree.aabbs.buf_aabb_max},
+                    sham::MultiRef{neigh_count},
+                    obj_cnt,
+                    [intnode_cnt, h_tolerance, can_skip_leaf](
+                        u32 id_a,
+                        const Tvec *__restrict xyz,
+                        const Tscal *__restrict hpart,
+                        auto acc_neigh_leaf_looper,
+                        auto particle_looper,
+                        const u32 *__restrict leaf_owner,
+                        const Tscal *__restrict rint_tree,
+                        const Tvec *__restrict aabb_min,
+                        const Tvec *__restrict aabb_max,
+                        u32 *__restrict neigh_cnt) {
+                        tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
+
+                        u32 offset_leaf = intnode_cnt;
+
+                        constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+                        Tscal rint_a = hpart[id_a] * h_tolerance;
+
+                        Tvec xyz_a = xyz[id_a];
+
+                        Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
+
+                        u32 cnt = 0;
+
+                        u32 leaf_own_a = leaf_owner[id_a];
+
+                        neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
+                            SHAM_ASSERT(leaf_b >= offset_leaf);
+
+                            if constexpr (prune) {
+                                if (can_skip_leaf(
+                                        xyz_a,
+                                        rint_a_sq_R2,
+                                        leaf_b,
+                                        rint_tree,
+                                        aabb_min,
+                                        aabb_max)) {
+                                    return;
+                                }
+                            }
+
+                            particle_looper.for_each_in_leaf_cell(
+                                leaf_b - offset_leaf, [&](u32 id_b) {
+                                    Tvec dr      = xyz_a - xyz[id_b];
+                                    Tscal rab2   = sycl::dot(dr, dr);
+                                    Tscal rint_b = hpart[id_b] * h_tolerance;
+
+                                    bool no_interact = rab2 > rint_a * rint_a * Rker2
+                                                       && rab2 > rint_b * rint_b * Rker2;
+
+                                    cnt += (no_interact) ? 0 : 1;
+                                });
+                        });
+
+                        neigh_cnt[id_a] = cnt;
+                    });
+            }
 
             tree::ObjectCache pcache = tree::prepare_object_cache(std::move(neigh_count), obj_cnt);
 
@@ -706,10 +837,21 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         bool prune_leaves = std::holds_alternative<impl::neigh_cache_particle_pass::PruneLeaves>(
             impl::get_impl_neigh_cache_particle_pass());
 
+        u32 slot_capacity = std::visit(
+            [](const auto &variant) -> u32 {
+                using V = std::decay_t<decltype(variant)>;
+                if constexpr (std::is_same_v<V, impl::neigh_cache_particle_layout::Slots>) {
+                    return variant.capacity;
+                } else {
+                    return 0;
+                }
+            },
+            impl::get_impl_neigh_cache_particle_layout());
+
         if (prune_leaves) {
-            return particle_passes(std::true_type{});
+            return particle_passes(std::true_type{}, slot_capacity);
         } else {
-            return particle_passes(std::false_type{});
+            return particle_passes(std::false_type{}, slot_capacity);
         }
     };
 

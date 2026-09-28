@@ -90,6 +90,23 @@ namespace shammodels::sph::impl {
     } // namespace neigh_cache_particle_pass
 
     /**
+     * @brief Memory layout of the particle neighbour lists (two stages neighbour cache build).
+     */
+    namespace neigh_cache_particle_layout {
+        /// Lists stored contiguously, requiring a count pass then a fill pass
+        struct Compact {
+            static constexpr std::string_view variant_type_name = "compact";
+        };
+        /// Every particle owns `capacity` slots, a single pass counts and stores the neighbours
+        /// (falls back to the compact layout if a particle has more neighbours than that)
+        struct Slots {
+            static constexpr std::string_view variant_type_name = "slots";
+            u32 capacity                                        = 96;
+        };
+        using Variant = std::variant<Compact, Slots>;
+    } // namespace neigh_cache_particle_layout
+
+    /**
      * @brief Leaf level passes (count & fill) of the two stages neighbour cache build.
      */
     namespace neigh_cache_leaf_pass {
@@ -133,6 +150,9 @@ namespace shammodels::sph::impl {
     /// Currently selected implementation for the neighbour cache particle passes section
     const neigh_cache_particle_pass::Variant &get_impl_neigh_cache_particle_pass();
 
+    /// Currently selected implementation for the neighbour cache particle layout section
+    const neigh_cache_particle_layout::Variant &get_impl_neigh_cache_particle_layout();
+
     /// Currently selected implementation for the neighbour cache leaf passes section
     const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass();
 
@@ -166,6 +186,20 @@ namespace shammodels::sph::impl {
 template<>
 struct shamalgs::ImplVariantParams<shammodels::sph::impl::neigh_cache_leaf_pass::SingleTraversal> {
     using Alt = shammodels::sph::impl::neigh_cache_leaf_pass::SingleTraversal;
+    static nlohmann::json to_json(const Alt &p) { return {{"capacity", p.capacity}}; }
+    static Alt from_json(const nlohmann::json &j) {
+        Alt p{};
+        if (j.contains("capacity")) {
+            p.capacity = j.at("capacity").get<u32>();
+        }
+        return p;
+    }
+};
+
+/// json (de)serialization of the capacity of the slotted particle neighbour layout
+template<>
+struct shamalgs::ImplVariantParams<shammodels::sph::impl::neigh_cache_particle_layout::Slots> {
+    using Alt = shammodels::sph::impl::neigh_cache_particle_layout::Slots;
     static nlohmann::json to_json(const Alt &p) { return {{"capacity", p.capacity}}; }
     static Alt from_json(const nlohmann::json &j) {
         Alt p{};
