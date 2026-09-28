@@ -7,7 +7,7 @@ all apply.
 
 This document is self-contained: it covers the current code, the target design, and the later
 work this change must stay compatible with. All line numbers refer to upstream `main` at
-**`ca16e0e`**. Re-check them with `grep` before editing, because they may have drifted.
+**`adb21e5`**. Re-check them with `grep` before editing, because they may have drifted.
 
 About the repository:
 - Project: SHAMROCK, a C++20 / SYCL / MPI / pybind11 hydrodynamics code.
@@ -29,6 +29,9 @@ Two preparatory PRs already landed. **Do not redo them.**
   - All 8 algorithms declare their default in that constructor lambda. The defaults themselves
     are unchanged.
   - See "Background" for the exact API.
+
+No further implementation-selection change has landed since then: `adb21e5` (#2461) is an
+unrelated pre-commit autofix touching two shammodels files.
 
 What is **not** done yet, and is the scope of this handoff:
 - There is no registry (`impl_registry.hpp/.cpp`, `ImplRegistrar`).
@@ -93,7 +96,7 @@ any of them, but do not make design choices that would block them.
 | Autotune hook | An optional per-algorithm autotuner, with "none" as the default, rolled out one algorithm at a time. | Nothing; just do not add it now. |
 | Compiler-id move | Move the generated `shamrock_compiler_id_string` from shamlib down to shambackends, for the export's `sycl` block. | Nothing. |
 
-## Background: current code (at `ca16e0e`)
+## Background: current code (at `adb21e5`)
 
 ### `src/shamalgs/include/shamalgs/ImplVariant.hpp`
 

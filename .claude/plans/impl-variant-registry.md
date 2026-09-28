@@ -1,6 +1,6 @@
 # Plan: registry for implementation choices, with JSON config/tuning and autotune hooks
 
-## Status (upstream `main` at `ca16e0e`)
+## Status (upstream `main` at `adb21e5`)
 
 | Step | State |
 |---|---|
