@@ -259,14 +259,46 @@ namespace shammodels::sph {
 
 } // namespace shammodels::sph
 
+namespace shammodels::sph::details {
+    /**
+     * @brief Implementation of Solver::init_solver_graph
+     *
+     * Apart from the hfact of the kernel (passed as an argument), building the solver graph does
+     * not depend on the SPH kernel. Implementing it in a function templated on Tvec only compiles
+     * it once instead of once per SPH kernel.
+     *
+     * Note : the lambdas stored in the graph capture context, solver_config & storage by reference,
+     * as these are references they refer to the members of the Solver (C++20
+     * [expr.prim.lambda.capture]), as did the previous capture of this.
+     */
+    template<class Tvec>
+    void init_solver_graph(
+        ShamrockCtx &context,
+        SolverConfigBase<Tvec> &solver_config,
+        SolverStorage<Tvec, u32> &storage,
+        shambase::VecComponent<Tvec> kernel_hfactd);
+} // namespace shammodels::sph::details
+
 template<class Tvec, template<class> class Kern>
 void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
+    details::init_solver_graph<Tvec>(context, solver_config, storage, Kernel::hfactd);
+}
 
-    PatchScheduler &sched = scheduler();
+template<class Tvec>
+void shammodels::sph::details::init_solver_graph(
+    ShamrockCtx &context,
+    SolverConfigBase<Tvec> &solver_config,
+    SolverStorage<Tvec, u32> &storage,
+    shambase::VecComponent<Tvec> kernel_hfactd) {
+
+    using Tscal  = shambase::VecComponent<Tvec>;
+    using Config = SolverConfigBase<Tvec>;
+
+    PatchScheduler &sched = shambase::get_check_ref(context.sched);
 
     auto &sync_data = sched.synchronized_data;
 
-    shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
+    shamrock::patch::PatchDataLayerLayout &pdl = shambase::get_check_ref(context.sched).pdl_old();
     bool has_B_field                           = solver_config.has_field_B_on_rho();
     bool has_psi_field                         = solver_config.has_field_psi_on_ch();
     bool has_epsilon_field                     = solver_config.dust_config.has_epsilon_field();
@@ -335,9 +367,9 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                 "set_scheduler_patchdata",
                 NodeSetEdge<PatchDataLayerRefs>([&](PatchDataLayerRefs &scheduler_patchdata) {
                     scheduler_patchdata.free_alloc();
-                    scheduler().for_each_patchdata_nonempty(
-                        [&](const shamrock::patch::Patch &p,
-                            shamrock::patch::PatchDataLayer &pdat) {
+                    shambase::get_check_ref(context.sched)
+                        .for_each_patchdata_nonempty([&](const shamrock::patch::Patch &p,
+                                                         shamrock::patch::PatchDataLayer &pdat) {
                             scheduler_patchdata.patchdatas.add_obj(p.id_patch, std::ref(pdat));
                         });
                 }));
@@ -631,7 +663,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
                 if (cfg.should_clamp_dust_density()) {
                     auto hfactd_edge  = IDataEdge<Tscal>::make_shared("hfactd", "hfactd");
-                    hfactd_edge->data = Kernel::hfactd;
+                    hfactd_edge->data = kernel_hfactd;
 
                     auto clamp_frac_edge
                         = IDataEdge<Tscal>::make_shared("clamp_frac", "clamp_frac");
@@ -759,7 +791,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
     storage.patch_rank_owner = std::make_shared<shamrock::solvergraph::RankGetter>(
         [&](u64 patch_id) -> u32 {
-            return scheduler().get_patch_rank_owner(patch_id);
+            return shambase::get_check_ref(context.sched).get_patch_rank_owner(patch_id);
         },
         "patch_rank_owner",
         "rank");
@@ -1210,11 +1242,12 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::FieldRefs<Tvec>> set_field_xyz(
             [&, ixyz](shamrock::solvergraph::FieldRefs<Tvec> &field_xyz_edge) {
                 shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_xyz_refs = {};
-                scheduler().for_each_patchdata_nonempty(
-                    [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-                        auto &field = pdat.get_field<Tvec>(ixyz);
-                        field_xyz_refs.add_obj(p.id_patch, std::ref(field));
-                    });
+                shambase::get_check_ref(context.sched)
+                    .for_each_patchdata_nonempty(
+                        [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                            auto &field = pdat.get_field<Tvec>(ixyz);
+                            field_xyz_refs.add_obj(p.id_patch, std::ref(field));
+                        });
                 field_xyz_edge.set_refs(field_xyz_refs);
             });
         set_field_xyz.set_edges(field_xyz);
@@ -1227,11 +1260,12 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         set_field_axyz_ext(
             [&, iaxyz_ext](shamrock::solvergraph::FieldRefs<Tvec> &field_axyz_ext_edge) {
                 shamrock::solvergraph::DDPatchDataFieldRef<Tvec> field_axyz_ext_refs = {};
-                scheduler().for_each_patchdata_nonempty(
-                    [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-                        auto &field = pdat.get_field<Tvec>(iaxyz_ext);
-                        field_axyz_ext_refs.add_obj(p.id_patch, std::ref(field));
-                    });
+                shambase::get_check_ref(context.sched)
+                    .for_each_patchdata_nonempty(
+                        [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                            auto &field = pdat.get_field<Tvec>(iaxyz_ext);
+                            field_axyz_ext_refs.add_obj(p.id_patch, std::ref(field));
+                        });
                 field_axyz_ext_edge.set_refs(field_axyz_ext_refs);
             });
         set_field_axyz_ext.set_edges(field_axyz_ext);
@@ -1241,10 +1275,11 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         shamrock::solvergraph::NodeSetEdge<shamrock::solvergraph::Indexes<u32>> set_sizes(
             [&](shamrock::solvergraph::Indexes<u32> &sizes) {
                 sizes.indexes = {};
-                scheduler().for_each_patchdata_nonempty(
-                    [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-                        sizes.indexes.add_obj(p.id_patch, pdat.get_obj_cnt());
-                    });
+                shambase::get_check_ref(context.sched)
+                    .for_each_patchdata_nonempty(
+                        [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                            sizes.indexes.add_obj(p.id_patch, pdat.get_obj_cnt());
+                        });
             });
         set_sizes.set_edges(sizes);
 
