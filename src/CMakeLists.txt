@@ -247,9 +247,26 @@ if(SHAMROCK_USE_PCH)
         target_precompile_headers(${tgt} REUSE_FROM shammodels_common)
     endforeach()
 
-    # the test executable is not compiled as position independent code, hence its own PCH
+    # the test executable is not compiled as position independent code, hence its own PCH, which
+    # also contains the test library header and the core headers most of the tests include
     if("${BUILD_TEST}")
-        target_precompile_headers(shamrock_test PRIVATE ${shamrock_pch_headers})
+        set(shamrock_test_pch_headers
+            ${shamrock_pch_headers}
+            <shamtest/shamtest.hpp>
+            <shambase/exception.hpp>
+            <shambase/string.hpp>
+            <shambase/memory.hpp>
+            <shambase/stacktrace.hpp>
+            <shamcomm/logs.hpp>
+            <shambackends/vec.hpp>
+            <shambackends/math.hpp>
+            <shambackends/DeviceScheduler.hpp>
+            <shambackends/sycl_utils.hpp>
+            <shambackends/DeviceBuffer.hpp>
+            <shambackends/kernel_call.hpp>
+            <shamsys/NodeInstance.hpp>
+        )
+        target_precompile_headers(shamrock_test PRIVATE ${shamrock_test_pch_headers})
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
