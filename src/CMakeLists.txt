@@ -79,10 +79,6 @@ function(target_link_lib_and_install tgt)
 
     target_link_libraries(${tgt} PUBLIC ${as_subproject})
 
-    if(SHAMROCK_USE_PCH)
-        target_precompile_headers(${tgt} REUSE_FROM shamrock_lib)
-    endif()
-
     target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(${tgt} PUBLIC "${CMAKE_SOURCE_DIR}/external")
 
@@ -163,10 +159,6 @@ if("${BUILD_TEST}")
     target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/external")
 
-    if(SHAMROCK_USE_PCH)
-        target_precompile_headers(shamrock_test REUSE_FROM shamrock_lib)
-    endif()
-
     ########################################################################################
     # CTest integration ####################################################################
     ########################################################################################
@@ -199,4 +191,39 @@ add_subdirectory(shamtest)
 
 if("${BUILD_TEST}")
     add_subdirectory(tests)
+endif()
+
+########################################################################################
+# Precompiled SYCL header
+########################################################################################
+
+# Only for the targets where (almost) every translation unit includes the SYCL header.
+# See SHAMROCK_USE_PCH in cmake/ShamrockBuildOptions.cmake
+if(SHAMROCK_USE_PCH)
+    set(shamrock_sycl_pch_targets
+        shambackends
+        shammath
+        shamalgs
+        shamsys
+        shamtree
+        shamlib
+        shampylib
+        shammodels_common
+        shammodels_zeus
+        shammodels_ramses
+        shammodels_sph
+        shammodels_gsph
+    )
+    if("${BUILD_TEST}")
+        list(APPEND shamrock_sycl_pch_targets shamrock_test)
+    endif()
+
+    foreach(tgt ${shamrock_sycl_pch_targets})
+        target_precompile_headers(${tgt} PRIVATE <sycl/sycl.hpp>)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            # do not embed timestamps in the PCH, otherwise ccache can not cache the translation units
+            # using it (this also requires ccache's sloppiness to include pch_defines,time_macros)
+            target_compile_options(${tgt} PRIVATE "SHELL:-Xclang -fno-pch-timestamp")
+        endif()
+    endforeach()
 endif()

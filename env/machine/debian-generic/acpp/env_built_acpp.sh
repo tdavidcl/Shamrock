@@ -2,6 +2,8 @@
 
 if which ccache &>/dev/null; then
     export CCACHE_CMAKE_ARG="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+    # required for ccache to cache the translation units using the precompiled SYCL header
+    export CCACHE_SLOPPINESS="${CCACHE_SLOPPINESS:+${CCACHE_SLOPPINESS},}pch_defines,time_macros"
     echo " ----- ccache found, using it ----- "
 else
     export CCACHE_CMAKE_ARG=""

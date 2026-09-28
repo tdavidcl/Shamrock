@@ -9,7 +9,51 @@
 # precompiled headers
 ######################
 
-option(SHAMROCK_USE_PCH "use precompiled headers" Off)
+# <sycl/sycl.hpp> is by far the most expensive header of the build (~7s per translation unit with
+# AdaptiveCpp), precompiling it cuts the build time by ~30%. With AdaptiveCpp (omp & generic
+# targets) the resulting objects were checked to have the same host code and the same embedded
+# device IR as without the precompiled header. It is only enabled by default for AdaptiveCpp in
+# direct mode, and only if a small test project using the precompiled header builds with the
+# current compiler & flags (e.g. clang refuses to use a host PCH in a CUDA/HIP device compilation).
+if(("${SYCL_IMPLEMENTATION}" STREQUAL "ACPPDirect") AND (NOT CMAKE_VERSION VERSION_LESS 3.16))
+    set(SHAMROCK_USE_PCH_DEFAULT On)
+else()
+    set(SHAMROCK_USE_PCH_DEFAULT Off)
+endif()
+
+option(SHAMROCK_USE_PCH "precompile the SYCL header" ${SHAMROCK_USE_PCH_DEFAULT})
+
+if(SHAMROCK_USE_PCH AND CMAKE_VERSION VERSION_LESS 3.16)
+    message(WARNING "SHAMROCK_USE_PCH requires CMake >= 3.16, disabling it")
+    set(SHAMROCK_USE_PCH Off)
+endif()
+
+if(SHAMROCK_USE_PCH AND (NOT DEFINED SHAMROCK_PCH_SYCL_WORKS))
+    message(STATUS "Performing Test SHAMROCK_PCH_SYCL_WORKS")
+    try_compile(
+        SHAMROCK_PCH_SYCL_WORKS ${CMAKE_BINARY_DIR}/compile_tests/pch_sycl
+        ${CMAKE_SOURCE_DIR}/cmake/feature_test/pch_sycl shamrock_pch_sycl_test
+        CMAKE_FLAGS
+            "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+            "-DCMAKE_CXX_FLAGS_${_SHAMROCK_BUILD_TYPE_UC}=${CMAKE_CXX_FLAGS_${_SHAMROCK_BUILD_TYPE_UC}}"
+        OUTPUT_VARIABLE SHAMROCK_PCH_SYCL_TEST_OUTPUT
+    )
+    set(SHAMROCK_PCH_SYCL_WORKS ${SHAMROCK_PCH_SYCL_WORKS} CACHE INTERNAL "" FORCE)
+    if(SHAMROCK_PCH_SYCL_WORKS)
+        message(STATUS "Performing Test SHAMROCK_PCH_SYCL_WORKS - Success")
+    else()
+        message(STATUS "Performing Test SHAMROCK_PCH_SYCL_WORKS - Failed")
+    endif()
+endif()
+
+if(SHAMROCK_USE_PCH AND (NOT SHAMROCK_PCH_SYCL_WORKS))
+    message(WARNING "SHAMROCK_USE_PCH is enabled but a precompiled <sycl/sycl.hpp> "
+                    "does not work with the current configuration, disabling it"
+    )
+    set(SHAMROCK_USE_PCH Off)
+endif()
 
 ######################
 # Shared/Object libs
