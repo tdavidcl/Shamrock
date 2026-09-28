@@ -157,6 +157,23 @@ namespace shammodels::sph::impl {
         using Variant = std::variant<Divisions, Reciprocals>;
     } // namespace neigh_loop_arithmetic
 
+    /**
+     * @brief Evaluation of the kernel sums in the neighbour loops (smoothing length iteration,
+     * omega).
+     */
+    namespace neigh_loop_evaluation {
+        /// One neighbour at a time, skipping the ones out of the kernel support
+        struct Scalar {
+            static constexpr std::string_view variant_type_name = "scalar";
+        };
+        /// Kernel evaluated by blocks of neighbours with a branch free (vectorizable) loop,
+        /// then accumulated in the neighbour order (identical sums)
+        struct Blocked {
+            static constexpr std::string_view variant_type_name = "blocked";
+        };
+        using Variant = std::variant<Scalar, Blocked>;
+    } // namespace neigh_loop_evaluation
+
     /// Currently selected implementation for the diff operators section
     const diff_operators::Variant &get_impl_diff_operators();
 
@@ -177,6 +194,15 @@ namespace shammodels::sph::impl {
 
     /// Currently selected implementation for the neighbour loops arithmetic section
     const neigh_loop_arithmetic::Variant &get_impl_neigh_loop_arithmetic();
+
+    /// Currently selected implementation for the neighbour loops evaluation section
+    const neigh_loop_evaluation::Variant &get_impl_neigh_loop_evaluation();
+
+    /// Whether the neighbour loops should use the blocked evaluation
+    inline bool use_blocked_neigh_evaluation() {
+        return std::holds_alternative<neigh_loop_evaluation::Blocked>(
+            get_impl_neigh_loop_evaluation());
+    }
 
     /// Whether the neighbour loops should use the reciprocals arithmetic
     inline bool use_reciprocal_arithmetic() {

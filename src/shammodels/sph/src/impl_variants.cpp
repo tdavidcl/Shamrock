@@ -68,6 +68,11 @@ namespace shammodels::sph::impl {
                     self.set(neigh_loop_arithmetic::Reciprocals{});
                 }};
 
+        shamalgs::ImplVariantGlobal<neigh_loop_evaluation::Scalar, neigh_loop_evaluation::Blocked>
+            neigh_loop_evaluation_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(neigh_loop_evaluation::Blocked{});
+            }};
+
         /// Registry of the selectors, by section name
         const std::map<std::string, shamalgs::IImplVariant *> &get_registry() {
             static const std::map<std::string, shamalgs::IImplVariant *> registry{
@@ -78,6 +83,7 @@ namespace shammodels::sph::impl {
                 {"neigh_cache_candidate_data", &neigh_cache_candidate_data_impl},
                 {"neigh_cache_leaf_pass", &neigh_cache_leaf_pass_impl},
                 {"neigh_loop_arithmetic", &neigh_loop_arithmetic_impl},
+                {"neigh_loop_evaluation", &neigh_loop_evaluation_impl},
             };
             return registry;
         }
@@ -128,6 +134,10 @@ namespace shammodels::sph::impl {
 
     const neigh_loop_arithmetic::Variant &get_impl_neigh_loop_arithmetic() {
         return get_or_autoselect(neigh_loop_arithmetic_impl);
+    }
+
+    const neigh_loop_evaluation::Variant &get_impl_neigh_loop_evaluation() {
+        return get_or_autoselect(neigh_loop_evaluation_impl);
     }
 
     std::vector<std::string> get_impl_sections() {

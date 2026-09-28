@@ -22,6 +22,7 @@
 #include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/kernel_inv_h.hpp"
+#include "shammodels/sph/math/sqrt_noerrno.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensity.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 
@@ -51,8 +52,9 @@ void IterateSmoothingLengthDensity<Tvec, SPHKernel>::_impl_evaluate_internal() {
 
     static constexpr Tscal Rkern = SPHKernel::Rkern;
 
-    auto run = [&](auto reciprocal_tag) {
+    auto run = [&](auto reciprocal_tag, auto blocked_tag) {
         constexpr bool reciprocal = decltype(reciprocal_tag)::value;
+        constexpr bool blocked    = decltype(blocked_tag)::value;
 
         sham::distributed_data_kernel_call(
             dev_sched,
@@ -89,26 +91,77 @@ void IterateSmoothingLengthDensity<Tvec, SPHKernel>::_impl_evaluate_internal() {
 
                     Tscal hinv_a = Tscal{1} / h_a;
 
-                    particle_looper.for_each_object(id_a, [&](u32 id_b) {
-                        Tvec dr    = xyz_a - r[id_b];
-                        Tscal rab2 = sycl::dot(dr, dr);
+                    if constexpr (blocked) {
+                        // blocked evaluation : a branch free loop evaluates the kernel for a
+                        // block of neighbours (zero outside of the support), then the sums are
+                        // accumulated in the neighbour order, adding exact zeros for the
+                        // neighbours skipped by the reference loop (identical sums)
+                        constexpr u32 block = 16;
 
-                        if (rab2 > dint) {
-                            return; // early return if the particle is too far away
+                        const u32 cnt = ploop_ptrs.cnt_neigh[id_a];
+                        const u32 *neigh_b
+                            = ploop_ptrs.index_neigh_map + ploop_ptrs.scanned_cnt[id_a];
+
+                        Tscal rab2_b[block];
+                        Tscal w_b[block];
+                        Tscal dhw_b[block];
+
+                        for (u32 b0 = 0; b0 < cnt; b0 += block) {
+                            u32 n = sham::min(block, cnt - b0);
+
+                            // gather
+                            for (u32 t = 0; t < n; t++) {
+                                Tvec dr   = xyz_a - r[neigh_b[b0 + t]];
+                                rab2_b[t] = sycl::dot(dr, dr);
+                            }
+
+                            // pure arithmetic on contiguous arrays
+                            for (u32 t = 0; t < n; t++) {
+                                Tscal rab2  = rab2_b[t];
+                                bool inside = !(rab2 > dint);
+
+                                Tscal rab = shamrock::sph::sqrt_noerrno(rab2);
+
+                                Tscal w, dhw;
+                                if constexpr (reciprocal) {
+                                    w   = shamrock::sph::KernelInvH<SPHKernel>::W_3d(rab, hinv_a);
+                                    dhw = shamrock::sph::KernelInvH<SPHKernel>::dhW_3d(rab, hinv_a);
+                                } else {
+                                    w   = SPHKernel::W_3d(rab, h_a);
+                                    dhw = SPHKernel::dhW_3d(rab, h_a);
+                                }
+                                w_b[t]   = (inside) ? w : Tscal{0};
+                                dhw_b[t] = (inside) ? dhw : Tscal{0};
+                            }
+
+                            for (u32 t = 0; t < n; t++) {
+                                rho_sum += part_mass * w_b[t];
+                                sumdWdh += part_mass * dhw_b[t];
+                            }
                         }
+                    } else
+                        particle_looper.for_each_object(id_a, [&](u32 id_b) {
+                            Tvec dr    = xyz_a - r[id_b];
+                            Tscal rab2 = sycl::dot(dr, dr);
 
-                        Tscal rab = sycl::sqrt(rab2);
+                            if (rab2 > dint) {
+                                return; // early return if the particle is too far away
+                            }
 
-                        if constexpr (reciprocal) {
-                            rho_sum += part_mass
+                            Tscal rab = sycl::sqrt(rab2);
+
+                            if constexpr (reciprocal) {
+                                rho_sum
+                                    += part_mass
                                        * shamrock::sph::KernelInvH<SPHKernel>::W_3d(rab, hinv_a);
-                            sumdWdh += part_mass
+                                sumdWdh
+                                    += part_mass
                                        * shamrock::sph::KernelInvH<SPHKernel>::dhW_3d(rab, hinv_a);
-                        } else {
-                            rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
-                            sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
-                        }
-                    });
+                            } else {
+                                rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
+                                sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
+                            }
+                        });
 
                     using namespace shamrock::sph;
 
@@ -133,10 +186,19 @@ void IterateSmoothingLengthDensity<Tvec, SPHKernel>::_impl_evaluate_internal() {
             });
     };
 
+    bool blocked = shammodels::sph::impl::use_blocked_neigh_evaluation();
     if (shammodels::sph::impl::use_reciprocal_arithmetic()) {
-        run(std::true_type{});
+        if (blocked) {
+            run(std::true_type{}, std::true_type{});
+        } else {
+            run(std::true_type{}, std::false_type{});
+        }
     } else {
-        run(std::false_type{});
+        if (blocked) {
+            run(std::false_type{}, std::true_type{});
+        } else {
+            run(std::false_type{}, std::false_type{});
+        }
     }
 }
 
