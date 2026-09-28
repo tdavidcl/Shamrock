@@ -6,7 +6,7 @@
 |---|---|
 | Scheduler passed to every `autoselect_impl_<algo>` | **Merged**, #2442 (`c7232a4`) |
 | `IImplVariant::is_set` / `autoselect` virtuals, default rule given to the `ImplVariantGlobal` constructor | **Merged**, #2451 (`ce73d7b`) |
-| Name-keyed registry, removal of the per-algorithm functions, name-keyed Python API, migration of the tests, benchmarks and docs | **Next**: see `.claude/plans/impl-registry-handoff.md` |
+| Name-keyed registry, removal of the per-algorithm functions, name-keyed Python API, migration of the tests, benchmarks and docs | **Next**: 6 steps in `.claude/plans/impl-registry/` (see its `README.md`) |
 | Config JSON export/import, `SHAMROCK_IMPL_CONFIG`, `--impl-config` | Later |
 | Hardware tuning at autoselect | Later |
 | Autotune hook | Later |
@@ -83,7 +83,7 @@ tuning logic.
 - The header includes `shambackends/DeviceScheduler.hpp` and `<functional>`.
 
 **Still to do:**
-- **Registry step** (see `impl-registry-handoff.md`): delete copy and move on `ImplVariantGlobal`,
+- **Registry step** (step 2 in `.claude/plans/impl-registry/`): delete copy and move on `ImplVariantGlobal`,
   because the registry holds an `IImplVariant *` to each global. Optionally, throw on an empty
   `AutoselectFn`.
 - **Autotune step (later):**
@@ -193,7 +193,7 @@ registered names.
 
 ### Migrate the 8 algorithms (registry step)
 
-See `impl-registry-handoff.md` for the full, line-referenced version. In short, using
+See `.claude/plans/impl-registry/` (steps 1-6, with `00-background.md`) for the full, line-referenced version. In short, using
 `reduction.cpp` as the example:
 
 ```cpp

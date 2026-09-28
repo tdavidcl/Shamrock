@@ -1,13 +1,16 @@
-# Handoff: name-keyed registry for implementation selection
+# Implementation registry: shared background
 
-You are implementing **one** piece of a larger design: a registry that lets code and Python select
-an algorithm's implementation by name. Read `AGENTS.md` and `CLAUDE.md` first: build, test, commit
-authorship, branch naming (`claude/<type>/<short-kebab-description>`) and the no-session-link rules
-all apply.
+This file is the shared context for every step of the implementation-registry work in
+`.claude/plans/impl-registry/`. You were handed this file plus **one** step file
+(`step-N-*.md`). Implement only that step; the other steps are separate PRs.
 
-This document is self-contained: it covers the current code, the target design, and the later
-work this change must stay compatible with. All line numbers refer to upstream `main` at
-**`adb21e5`**. Re-check them with `grep` before editing, because they may have drifted.
+Read `AGENTS.md` and `CLAUDE.md` first: build, test, commit authorship, branch naming
+(`claude/<type>/<short-kebab-description>`) and the no-session-link rules all apply.
+
+This file is self-contained. It covers the current code, the target end state, the constraints,
+and the later work everything must stay compatible with. All line numbers refer to upstream
+`main` at **`adb21e5`**. Re-check them with `grep` before editing: they may have drifted,
+including because earlier steps of this work have landed.
 
 About the repository:
 - Project: SHAMROCK, a C++20 / SYCL / MPI / pybind11 hydrodynamics code.
@@ -33,14 +36,14 @@ Two preparatory PRs already landed. **Do not redo them.**
 No further implementation-selection change has landed since then: `adb21e5` (#2461) is an
 unrelated pre-commit autofix touching two shammodels files.
 
-What is **not** done yet, and is the scope of this handoff:
+What is **not** done yet is split into the 6 steps listed in `README.md`:
 - There is no registry (`impl_registry.hpp/.cpp`, `ImplRegistrar`).
 - The 5 per-algorithm free functions still exist in the headers, the `.cpp` files, the Python
   bindings, the tests, the benchmark scripts and the docs.
 - There is no name-keyed Python API.
 - `compute_histogram_impl` is still an `inline` global in a header.
 
-## Goal
+## Goal (end state after step 6)
 
 Each of the 8 algorithms still hand-writes the same 5 free functions around its
 `shamalgs::ImplVariantGlobal<...>` global, plus 5 matching Python bindings. For `reduction`:
@@ -67,6 +70,7 @@ bindings, benchmark scripts and docs. The per-algorithm functions are then delet
 works purely through `IImplVariant`, which already has everything it needs. It never casts to a
 concrete type, never parses JSON to find out whether an implementation is set, and needs no
 per-algorithm callbacks.
+
 
 ## Hard constraints
 
@@ -95,6 +99,7 @@ any of them, but do not make design choices that would block them.
 | Hardware tuning | User-supplied `"tunings": [{"match": {"device": {...}, "sycl": {...}}, "config": {...}}]`. When an algorithm autoselects, the most specific entry matching the scheduler's device wins; an unusable entry falls back to the next one, and then to the hard-coded default. | This will be implemented **inside `impl_registry::autoselect_impl`**: try the tuning candidates through `set_impl`, else fall back to `impl.autoselect(sched)`. That is why **dispatch sites must call `impl_registry::autoselect_impl`**, not `X_impl.autoselect` directly. |
 | Autotune hook | An optional per-algorithm autotuner, with "none" as the default, rolled out one algorithm at a time. | Nothing; just do not add it now. |
 | Compiler-id move | Move the generated `shamrock_compiler_id_string` from shamlib down to shambackends, for the export's `sycl` block. | Nothing. |
+
 
 ## Background: current code (at `adb21e5`)
 
@@ -270,9 +275,13 @@ Notes:
 - **Discovery:** `src/tests/CMakeLists.txt` collects `*.cpp` with a `GLOB_RECURSE`, so a new
   test file needs no CMake edit.
 
-## Design
 
-### `ImplVariant.hpp`: the one small change
+## Target design
+
+This is the design every step implements a slice of. Which step does which part is written in
+each step file.
+
+### `ImplVariant.hpp`: the one small change (step 2)
 
 In `ImplVariantGlobal` (line 265):
 
@@ -288,7 +297,7 @@ Optionally, also make the constructor throw
 class doc comment saying instances are registered by name, and are therefore neither copyable
 nor movable.
 
-### New `src/shamalgs/include/shamalgs/impl_registry.hpp` + `src/shamalgs/src/impl_registry.cpp`
+### New `src/shamalgs/include/shamalgs/impl_registry.hpp` + `src/shamalgs/src/impl_registry.cpp` (step 2)
 
 - **File name:** lower_case, because it holds free functions (AGENTS.md file-naming rule).
 - **CMake:** add `src/impl_registry.cpp` to the **explicit** `Sources` list in
@@ -371,13 +380,13 @@ if (!impl::reduction_impl.is_set()) {
 ```
 
 For each algorithm:
-1. **Header:** delete the 5 per-algorithm declarations from its `namespace impl` block, and delete
-   the block if it ends up empty.
+1. **Header (step 6):** delete the 5 per-algorithm declarations from its `namespace impl` block,
+   and delete the block if it ends up empty.
 2. **`.cpp`:**
    - Keep the global and its lambda exactly as merged.
-   - Delete the 5 per-algorithm functions.
-   - Add the name constant and the `ImplRegistrar` after the global.
-3. **Dispatch site:**
+   - Add the name constant and the `ImplRegistrar` after the global (step 2).
+   - Delete the 5 per-algorithm functions (step 6).
+3. **Dispatch site (step 4):**
    - Keep the direct `is_set()` / `get()` access on the typed global, which `std::visit` needs.
    - Replace `impl::autoselect_impl_X(s)` with
      `shamalgs::impl_registry::autoselect_impl(impl::X_impl_name, s)`.
@@ -387,14 +396,14 @@ For each algorithm:
 
 - **Header (`compute_histogram.hpp`):**
   - Keep the alternative structs.
-  - Replace the `inline` global with:
+  - Replace the `inline` global with (step 1; the name constant in step 2):
     - `using ComputeHistogramImpl = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;`
     - `extern ComputeHistogramImpl compute_histogram_impl;`
     - `constexpr std::string_view compute_histogram_impl_name = "compute_histogram";`
-  - Delete the 5 inline functions at lines 65-91.
-- **Dispatch (line 374):** call
+  - Delete the 5 inline functions at lines 65-91 (step 6).
+- **Dispatch (line 374, step 4):** call
   `shamalgs::impl_registry::autoselect_impl(impl::compute_histogram_impl_name, dev_sched);`.
-- **New `src/shamalgs/src/primitives/compute_histogram.cpp`:**
+- **New `src/shamalgs/src/primitives/compute_histogram.cpp` (step 1, registrar in step 2):**
   - include the header;
   - define `ComputeHistogramImpl compute_histogram_impl{<the merged lambda, moved verbatim>};`;
   - add the `ImplRegistrar`;
@@ -406,11 +415,15 @@ Use the same pattern as the `.cpp` algorithms, in `src/shamtree/src/CLBVHDualTre
 and delete the declarations at `CLBVHDualTreeTraversal.hpp:66-83`. shamtree already links
 shamalgs.
 
-## Call sites to migrate (these must all go through the registry)
+
+## Call-site inventory
+
+Every call site that uses a per-algorithm function, with its lines at `adb21e5`. The step files
+refer to these lists instead of repeating them.
 
 ### Python bindings
 
-**`src/shampylib/src/pyShamalgs.cpp`**: delete the per-algorithm blocks. Every
+**`src/shampylib/src/pyShamalgs.cpp`**: the per-algorithm blocks (deleted in step 6). Every
 `autoselect_impl_*` lambda among them currently passes
 `shamsys::instance::get_compute_scheduler_ptr()`.
 
@@ -424,9 +437,9 @@ shamalgs.
 | `sort_by_key_pow2_len` | 356-375 | |
 | `compute_histogram` | 380-399 | |
 
-**`src/shampylib/src/pyShamtree.cpp`**: delete the DTT block at lines 93-112.
+**`src/shampylib/src/pyShamtree.cpp`**: the DTT block at lines 93-112 (deleted in step 6).
 
-**Add to `shamalgs_module`** (`pyShamalgs.cpp:40`):
+**New name-keyed functions (step 3)**, added to `shamalgs_module` (`pyShamalgs.cpp:40`):
 - `get_registered_algs()`
 - `get_default_impl_list(alg)`
 - `get_current_impl(alg)`
@@ -440,7 +453,7 @@ work before `sys.init()`.
 
 Leave the unrelated legacy `impl_param` binding (`pyShamalgs.cpp:44-67`) alone.
 
-### C++ tests
+### C++ tests (migrated in step 4)
 
 Replace `ns::impl::<fn>_<alg>(...)` with `shamalgs::impl_registry::<fn>("<alg>", ...)`. The tests
 already pass `shamsys::instance::get_compute_scheduler_ptr()` to autoselect. Keep the loop shape:
@@ -460,31 +473,7 @@ restore.
 - `src/tests/shamalgs/algorithm/algorithmTests.cpp:26-40`
 - `src/tests/shamtree/DTTTesting_tests.cpp:410-443, 453-475`
 
-### New test `src/tests/shamalgs/impl_registryTests.cpp`
-
-`NEW_TEST(Unittest, "shamalgs/impl_registry", 1)` covers:
-- **Registration:** `get_registered_algs()` **contains** all 8 names. Check containment, not
-  equality.
-- **Round trip:** for every registered algorithm,
-  1. autoselect with the compute scheduler, then check `is_impl_set`;
-  2. save `get_current_impl`;
-  3. `set_impl` each entry of `get_default_impl_list` and read it back;
-  4. restore the saved value.
-
-  Autoselect first, because a saved `"null"` cannot be restored.
-- **Unknown names:** an unknown algorithm name throws `std::invalid_argument` from every
-  function.
-- **Null scheduler:** `autoselect_impl("reduction", nullptr)` throws.
-- **Duplicate names:** registering an existing name (`"reduction"`) throws.
-  - Build the dummy as a function-local `shamalgs::ImplVariantGlobal<A>` whose lambda is
-    `self.set(A{})`, where `A` is a file-scope tag struct with a `variant_type_name`.
-  - Wrap the call in a lambda so the macro's commas don't split it:
-    `REQUIRE_EXCEPTION_THROW(([&]{ shamalgs::impl_registry::register_impl("reduction", dummy); })(), std::invalid_argument)`.
-  - The duplicate check must throw *before* anything is stored, so no dangling pointer is left.
-- **Never register a test-local object under a new name.** There is no unregister, so its entry
-  would dangle once the object goes out of scope.
-
-### Benchmark scripts (`examples/benchmarks/`)
+### Benchmark scripts (`examples/benchmarks/`, migrated in step 5)
 
 sphinx-gallery executes every `run_*.py` (`doc/sphinx/source/conf.py`), so a missed rename breaks
 the docs CI. The change is mechanical:
@@ -504,46 +493,42 @@ Files to update:
 ### Docs
 
 Update `doc/sphinx/source/dev_doc/implementation_selection.md`:
-- **"User side (Python)" (lines 20-82):** show the name-keyed API. Fix "three functions" at
+- **"User side (Python)" (lines 20-82, step 5):** show the name-keyed API. Fix "three functions" at
   line 22, since the list shows five.
-- **"Developer side (C++)" (lines 84-228):**
+- **"Developer side (C++)" (lines 84-228, step 6):**
   - Keep the merged explanation of the `AutoselectFn` constructor lambda and the scheduler.
   - Add the name constant, the `ImplRegistrar`, and the dispatch through
     `impl_registry::autoselect_impl`.
-- **"Wire it up end to end" list (around lines 215-228):** the header now declares nothing, and
+- **"Wire it up end to end" list (around lines 215-228, step 6):** the header now declares nothing, and
   no Python binding is needed per algorithm.
-- **`ImplVariant.hpp` doc comment:** it still says the class makes "get_default_impl_list_X /
+- **`ImplVariant.hpp` doc comment (step 6):** it still says the class makes "get_default_impl_list_X /
   get_current_impl_X / set_impl_X free functions become one-liners". Replace that with a mention
   of the registry.
 
-## Verification
+
+## Common verification
+
+Every step runs the parts of this list that apply to it. Its step file says which, and adds any
+extra checks.
 
 1. **Build.**
    - `cd build && ./shamenv_do shamconfigure`. The first run builds AdaptiveCpp, which takes a
      few minutes.
-   - `./shamenv_do shammake shamalgs shamtree shampylib && echo DONE`.
-   - Before testing, the full `./shamenv_do shammake && echo DONE`, then check that `./shamrock`
-     and `./shamrock_test` exist.
+   - While iterating, build only the touched targets, e.g.
+     `./shamenv_do shammake shamalgs shamtree shampylib && echo DONE`.
+   - Before testing, run the full `./shamenv_do shammake && echo DONE`, then check that
+     `./shamrock` and `./shamrock_test` exist.
 2. **Unit tests.**
    - `test -d reference-files || ./shamenv_do pull_reffiles`, then `./shamenv_do ./shamrock --smi`.
    - Show the device table and **ask the user which device to use** (once only).
    - `./shamenv_do ./shamrock_test --sycl-cfg X:X --loglevel 1 --unittest`.
-   - The new `shamalgs/impl_registry` test and every migrated test must pass.
-3. **Python.**
-   - Run each of the 7 benchmark scripts with
-     `./shamenv_do ./shamrock --sycl-cfg X:X --rscript <script>`. Shrink the sizes temporarily
-     if they are slow.
-   - Run a scratch script that:
-     - checks `shamrock.algs.get_registered_algs()` lists all 8;
-     - does a set/get round trip;
-     - checks that `shamrock.algs.set_impl("nope", "{}")` raises a Python exception.
-4. **Leftovers.** This must return nothing in `src/`, `examples/` or `doc/`:
-   `git grep -nE '(get_default_impl_list|get_current_impl|is_impl_set|set_impl|autoselect_impl)_[a-z]'`.
-5. **Lint.**
+3. **Python scripts.** Run a script with `./shamenv_do ./shamrock --sycl-cfg X:X --rscript <script>`.
+   Shrink a benchmark's sizes temporarily if it is slow, and don't commit the shrink.
+4. **Lint.**
    - `SETUPTOOLS_USE_DISTUTILS=stdlib pre-commit run --files <changed files>`.
-   - `.claude/tools/clang-tidy-check.py` on `impl_registry.cpp`, `compute_histogram.cpp` and one
-     migrated algorithm `.cpp`.
-6. **Commit.**
+   - `.claude/tools/clang-tidy-check.py <file.cpp>` on the new or substantially edited `.cpp`
+     files.
+5. **Commit.**
    - Follow AGENTS.md "Commit authorship": the author is the human, the only trailer is
      `Assisted-by: <agent>`, with no model names, no `Co-authored-by` and no session link.
      Amend with `--no-verify`.
