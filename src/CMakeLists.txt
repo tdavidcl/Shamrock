@@ -202,8 +202,16 @@ endif()
 # transitively) in most translation units of those targets.
 # See SHAMROCK_USE_PCH in cmake/ShamrockBuildOptions.cmake
 if(SHAMROCK_USE_PCH)
-    set(shamrock_sycl_pch_targets
-        shambackends
+    set(shamrock_pch_headers <sycl/sycl.hpp> <fmt/printf.h> <fmt/ranges.h> <nlohmann/json.hpp>)
+
+    # The libraries have the same compile options, so they all reuse the precompiled header of
+    # shambackends (the lowest of them) rather than each building an identical one. CMake defines
+    # <target>_EXPORTS for shared libraries, it is unused in Shamrock and removed from shambackends
+    # so that it does not end up in the shared precompiled header.
+    target_precompile_headers(shambackends PRIVATE ${shamrock_pch_headers})
+    set_target_properties(shambackends PROPERTIES DEFINE_SYMBOL "")
+
+    set(shamrock_pch_reuse_targets
         shammath
         shamalgs
         shamsys
@@ -216,18 +224,23 @@ if(SHAMROCK_USE_PCH)
         shammodels_sph
         shammodels_gsph
     )
+    foreach(tgt ${shamrock_pch_reuse_targets})
+        target_precompile_headers(${tgt} REUSE_FROM shambackends)
+    endforeach()
+
+    set(shamrock_pch_targets shambackends ${shamrock_pch_reuse_targets})
+
+    # the test executable is not compiled as position independent code, hence its own PCH
     if("${BUILD_TEST}")
-        list(APPEND shamrock_sycl_pch_targets shamrock_test)
+        target_precompile_headers(shamrock_test PRIVATE ${shamrock_pch_headers})
+        list(APPEND shamrock_pch_targets shamrock_test)
     endif()
 
-    foreach(tgt ${shamrock_sycl_pch_targets})
-        target_precompile_headers(
-            ${tgt} PRIVATE <sycl/sycl.hpp> <fmt/printf.h> <fmt/ranges.h> <nlohmann/json.hpp>
-        )
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        foreach(tgt ${shamrock_pch_targets})
             # do not embed timestamps in the PCH, otherwise ccache can not cache the translation units
             # using it (this also requires ccache's sloppiness to include pch_defines,time_macros)
             target_compile_options(${tgt} PRIVATE "SHELL:-Xclang -fno-pch-timestamp")
-        endif()
-    endforeach()
+        endforeach()
+    endif()
 endif()
