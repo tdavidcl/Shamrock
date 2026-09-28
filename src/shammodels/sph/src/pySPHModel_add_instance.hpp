@@ -16,8 +16,9 @@
  * @author Yona Lapeyre (yona.lapeyre@ens-lyon.fr)
  * @brief Python bindings of the SPH model & solver config for a given (vector type, kernel) pair
  *
- * This is the definition of add_instance, it is explicitly instantiated once per SPH kernel in
- * pySPHModel_<kernel>.cpp so that the (large) instantiations can be compiled in parallel.
+ * This is the definition of add_instance. Its instantiations are split in two translation units
+ * that can be compiled in parallel: pySPHModel.cpp (M4, M6, M8 kernels) and
+ * pySPHModel_C_kernels.cpp (C2, C4, C6 kernels).
  */
 
 #include "shambase/exception.hpp"
@@ -1821,3 +1822,19 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("step_begin") = std::nullopt,
             py::arg("step_end")   = std::nullopt);
 }
+
+// Explicitly instantiated in pySPHModel.cpp
+extern template void add_instance<f64_3, shammath::M4>(
+    py::module &m, std::string name_config, std::string name_model);
+extern template void add_instance<f64_3, shammath::M6>(
+    py::module &m, std::string name_config, std::string name_model);
+extern template void add_instance<f64_3, shammath::M8>(
+    py::module &m, std::string name_config, std::string name_model);
+
+// Explicitly instantiated in pySPHModel_C_kernels.cpp
+extern template void add_instance<f64_3, shammath::C2>(
+    py::module &m, std::string name_config, std::string name_model);
+extern template void add_instance<f64_3, shammath::C4>(
+    py::module &m, std::string name_config, std::string name_model);
+extern template void add_instance<f64_3, shammath::C6>(
+    py::module &m, std::string name_config, std::string name_model);

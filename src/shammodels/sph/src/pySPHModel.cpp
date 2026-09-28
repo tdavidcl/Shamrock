@@ -18,6 +18,7 @@
 #include "shambase/exception.hpp"
 #include "shambase/logs/loglevels.hpp"
 #include "shambase/memory.hpp"
+#include "pySPHModel_add_instance.hpp"
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pytypealias.hpp"
 #include "shamcomm/logs.hpp"
@@ -51,15 +52,13 @@
 #include <random>
 #include <utility>
 
-/**
- * @brief Register the python bindings of the SPH model & solver config for a (vector type, kernel)
- * pair.
- *
- * Defined in pySPHModel_add_instance.hpp and explicitly instantiated for each kernel in
- * pySPHModel_<kernel>.cpp.
- */
-template<class Tvec, template<class> class SPHKernel>
-void add_instance(py::module &m, std::string name_config, std::string name_model);
+// The C2, C4 & C6 instantiations are in pySPHModel_C_kernels.cpp
+template void add_instance<f64_3, shammath::M4>(
+    py::module &m, std::string name_config, std::string name_model);
+template void add_instance<f64_3, shammath::M6>(
+    py::module &m, std::string name_config, std::string name_model);
+template void add_instance<f64_3, shammath::M8>(
+    py::module &m, std::string name_config, std::string name_model);
 
 template<class Tvec, template<class> class SPHKernel>
 void add_analysisBarycenter_instance(py::module &m, const std::string &name_model) {
