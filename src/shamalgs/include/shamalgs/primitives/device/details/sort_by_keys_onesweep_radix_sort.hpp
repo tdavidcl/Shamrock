@@ -358,13 +358,17 @@ namespace shamalgs::primitives::device::details {
                                 // output position of the element at local sorted position `li` of
                                 // digit `d` : global digit offset + look-back prefix + rank of the
                                 // element among the digit `d` of the tile (li - local digit start)
-                                u32 global_start = sycl::exclusive_scan_over_group(
-                                    g, hist[pass * nbuckets + lid], sycl::plus<u32>{});
-                                u32 local_start
-                                    = sycl::exclusive_scan_over_group(g, count, sycl::plus<u32>{});
-                                // wraps around if local_start is larger, but the final sum is
-                                // correct in modular arithmetic
-                                l_offset[lid] = global_start + exclusive - local_start;
+                                //
+                                // global start - local start is computed with a single scan of
+                                // (global count - tile count) : the partial sums wrap around, but
+                                // the final sum is correct in modular arithmetic. Two consecutive
+                                // group scans must be avoided : AdaptiveCpp's work-group scan on
+                                // CUDA has no trailing barrier, so a fast warp entering the second
+                                // scan can overwrite the shared scratch of the first one before a
+                                // slower warp has read its prefix.
+                                u32 start_diff = sycl::exclusive_scan_over_group(
+                                    g, hist[pass * nbuckets + lid] - count, sycl::plus<u32>{});
+                                l_offset[lid] = start_diff + exclusive;
                                 item.barrier(sycl::access::fence_space::local_space);
 
                                 // scatter (padding elements are at the end of the sorted tile)
