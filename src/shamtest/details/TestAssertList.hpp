@@ -23,6 +23,19 @@
 
 namespace shamtest::details {
 
+    /**
+     *@brief Format a string that is an assert name
+     *
+     * If the string is empty, returns an empty string
+     * Otherwise, returns the string with " | " appended
+     */
+    inline std::string format_assert_name(std::string s) {
+        if (s == "") {
+            return "";
+        }
+        return "\"" + s + "\" : ";
+    }
+
     /// Class to hold the list of assertion related to a test
     struct TestAssertList {
 
@@ -39,19 +52,20 @@ namespace shamtest::details {
         // kept out of the macros so that each assert expands to a single call.
 
         /// Register the result of a `REQUIRE_NAMED` assert
-        void register_require(
-            std::string assert_name, bool eval, const char *expr, SourceLocation loc);
+        void register_require(std::string name, const char *expr, bool eval, SourceLocation loc);
 
         /// Register the result of a `REQUIRE_EQUAL_CUSTOM_COMP_NAMED` assert
         template<class Ta, class Tb>
         inline void register_require_equal(
-            std::string assert_name,
+            std::string name,
+            const char *assert_expr,
             bool eval,
             const char *expr_a,
             Ta &a,
             const char *expr_b,
             Tb &b,
             SourceLocation loc) {
+            std::string assert_name = format_assert_name(std::move(name)) + assert_expr;
             if (eval) {
                 assert_bool_with_log(assert_name, eval, "");
             } else {
@@ -68,7 +82,8 @@ namespace shamtest::details {
         /// Register the result of a `REQUIRE_FLOAT_EQUAL_CUSTOM_DIST_NAMED` assert
         template<class Ta, class Tb, class Tprec>
         inline void register_require_float_equal(
-            std::string assert_name,
+            std::string name,
+            const char *assert_expr,
             bool eval,
             const char *expr_a,
             Ta &a,
@@ -77,6 +92,7 @@ namespace shamtest::details {
             const char *expr_prec,
             const Tprec &prec,
             SourceLocation loc) {
+            std::string assert_name = format_assert_name(std::move(name)) + assert_expr;
             if (eval) {
                 assert_bool_with_log(assert_name, eval, "");
             } else {

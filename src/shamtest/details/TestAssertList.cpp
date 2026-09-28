@@ -27,7 +27,8 @@ namespace shamtest::details {
     }
 
     void TestAssertList::register_require(
-        std::string assert_name, bool eval, const char *expr, SourceLocation loc) {
+        std::string name, const char *expr, bool eval, SourceLocation loc) {
+        std::string assert_name = format_assert_name(std::move(name)) + expr;
         if (eval) {
             assert_bool_with_log(assert_name, eval, "");
         } else {

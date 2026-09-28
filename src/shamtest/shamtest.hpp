@@ -168,21 +168,6 @@ namespace shamtest {
 
 // Note : the do-while are here to enforce the presence of a semicolumn after the call to the macros
 
-namespace shamtest::details {
-    /**
-     *@brief Format a string that is an assert name
-     *
-     * If the string is empty, returns an empty string
-     * Otherwise, returns the string with " | " appended
-     */
-    inline std::string format_assert_name(std::string s) {
-        if (s == "") {
-            return "";
-        }
-        return "\"" + s + "\" : ";
-    }
-} // namespace shamtest::details
-
 /**
  * @brief Assert macro for test
  * write the conditional, the name of the assert will be the condition
@@ -197,8 +182,7 @@ namespace shamtest::details {
     do {                                                                                           \
         using namespace shamtest::details;                                                         \
         bool eval = a;                                                                             \
-        shamtest::asserts().register_require(                                                      \
-            format_assert_name(name) + #a, eval, #a, SourceLocation{});                            \
+        shamtest::asserts().register_require(name, #a, eval, SourceLocation{});                    \
     } while (0)
 
 /**
@@ -217,13 +201,7 @@ namespace shamtest::details {
         using namespace shamtest::details;                                                         \
         bool eval = comp(_______a, _______b);                                                      \
         shamtest::asserts().register_require_equal(                                                \
-            format_assert_name(name) + #_a " == " #_b,                                             \
-            eval,                                                                                  \
-            #_a,                                                                                   \
-            _______a,                                                                              \
-            #_b,                                                                                   \
-            _______b,                                                                              \
-            SourceLocation{});                                                                     \
+            name, #_a " == " #_b, eval, #_a, _______a, #_b, _______b, SourceLocation{});           \
     } while (0)
 
 /**
@@ -256,7 +234,8 @@ namespace shamtest::details {
         using namespace shamtest::details;                                                         \
         bool eval = dist((a) - (b)) < prec;                                                        \
         shamtest::asserts().register_require_float_equal(                                          \
-            format_assert_name(name) + #dist "(" #_a ") - (" #_b ") < " #prec,                     \
+            name,                                                                                  \
+            #dist "(" #_a ") - (" #_b ") < " #prec,                                                \
             eval,                                                                                  \
             #_a,                                                                                   \
             a,                                                                                     \
