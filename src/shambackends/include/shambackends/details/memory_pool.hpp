@@ -34,6 +34,16 @@ namespace sham::details {
     /// @brief Release every block cached in the pool of freed USM blocks
     void release_memory_pool();
 
+    /**
+     * @brief Set the memory limits of the pool, as fractions of the device global memory.
+     *
+     * @param max_cached_fraction maximum memory held by the cached (free) blocks, freed blocks
+     * above it are returned to the SYCL runtime (default 0.6)
+     * @param max_total_fraction maximum memory held by the pooled blocks (in use and cached),
+     * cached blocks are released before allocating above it (default 0.9)
+     */
+    void set_memory_pool_limits(double max_cached_fraction, double max_total_fraction);
+
     /// @brief Number of bytes currently cached (free) in the pool of freed USM blocks
     size_t get_memory_pool_cached_bytes();
 

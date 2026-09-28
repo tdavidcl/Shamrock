@@ -586,31 +586,43 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         impl::get_impl_neigh_cache_candidate_data());
 
                 if (use_sorted_copy) {
-                    using Tvec4 = sycl::vec<Tscal, 4>;
-
                     u32 merged_cnt = mfield.get_obj_cnt();
                     u32 sorted_len = obj_it.cell_iterator.buf_sort_index_map.get_size();
 
-                    sham::DeviceBuffer<Tvec4> xyzh_sorted(
-                        sorted_len, shamsys::instance::get_compute_scheduler_ptr());
+                    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+                    // structure of arrays copy of the positions & smoothing lengths, in tree order
+                    sham::DeviceBuffer<Tscal> xs(sorted_len, dev_sched);
+                    sham::DeviceBuffer<Tscal> ys(sorted_len, dev_sched);
+                    sham::DeviceBuffer<Tscal> zs(sorted_len, dev_sched);
+                    sham::DeviceBuffer<Tscal> hs(sorted_len, dev_sched);
 
                     sham::kernel_call(
                         q,
                         sham::MultiRef{buf_xyz, buf_hpart, obj_it.cell_iterator},
-                        sham::MultiRef{xyzh_sorted},
+                        sham::MultiRef{xs, ys, zs, hs},
                         sorted_len,
                         [merged_cnt](
                             u32 k,
                             const Tvec *__restrict xyz,
                             const Tscal *__restrict hpart,
                             auto cell_it,
-                            Tvec4 *__restrict out) {
+                            Tscal *__restrict x_out,
+                            Tscal *__restrict y_out,
+                            Tscal *__restrict z_out,
+                            Tscal *__restrict h_out) {
                             u32 id = cell_it.sort_index_map[k];
                             if (id < merged_cnt) {
-                                Tvec r = xyz[id];
-                                out[k] = Tvec4{r.x(), r.y(), r.z(), hpart[id]};
+                                Tvec r   = xyz[id];
+                                x_out[k] = r.x();
+                                y_out[k] = r.y();
+                                z_out[k] = r.z();
+                                h_out[k] = hpart[id];
                             } else {
-                                out[k] = Tvec4{0, 0, 0, 0};
+                                x_out[k] = 0;
+                                y_out[k] = 0;
+                                z_out[k] = 0;
+                                h_out[k] = 0;
                             }
                         });
 
@@ -625,7 +637,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             tree_field_rint,
                             tree.aabbs.buf_aabb_min,
                             tree.aabbs.buf_aabb_max,
-                            xyzh_sorted},
+                            xs,
+                            ys,
+                            zs,
+                            hs},
                         sham::MultiRef{neigh_count, slots},
                         obj_cnt,
                         [intnode_cnt, h_tolerance, can_skip_leaf, slot_capacity](
@@ -638,7 +653,10 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             const Tscal *__restrict rint_tree,
                             const Tvec *__restrict aabb_min,
                             const Tvec *__restrict aabb_max,
-                            const Tvec4 *__restrict xyzh_s,
+                            const Tscal *__restrict xs,
+                            const Tscal *__restrict ys,
+                            const Tscal *__restrict zs,
+                            const Tscal *__restrict hs,
                             u32 *__restrict neigh_cnt,
                             u32 *__restrict slot_neigh) {
                             tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
@@ -650,6 +668,9 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             Tscal rint_a = hpart[id_a] * h_tolerance;
 
                             Tvec xyz_a = xyz[id_a];
+                            Tscal xa   = xyz_a.x();
+                            Tscal ya   = xyz_a.y();
+                            Tscal za   = xyz_a.z();
 
                             Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
 
@@ -657,6 +678,12 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             u64 slot_off = u64(id_a) * slot_capacity;
 
                             u32 leaf_own_a = leaf_owner[id_a];
+
+                            // candidates are tested by blocks, first computing the interaction
+                            // flags with a branch free (vectorizable) loop, then storing the
+                            // interacting ones in order
+                            constexpr u32 block = 32;
+                            bool interact[block];
 
                             neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
                                 if constexpr (prune) {
@@ -675,20 +702,33 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                                 u32 kmin = cell_it.reduc_index_map[cell];
                                 u32 kmax = cell_it.reduc_index_map[cell + 1];
 
-                                for (u32 k = kmin; k < kmax; k++) {
-                                    Tvec4 p      = xyzh_s[k];
-                                    Tvec xyz_b   = {p.x(), p.y(), p.z()};
-                                    Tvec dr      = xyz_a - xyz_b;
-                                    Tscal rab2   = sycl::dot(dr, dr);
-                                    Tscal rint_b = p.w() * h_tolerance;
+                                for (u32 k0 = kmin; k0 < kmax; k0 += block) {
+                                    u32 n = sham::min(block, kmax - k0);
 
-                                    bool no_interact = rab2 > rint_a * rint_a * Rker2
-                                                       && rab2 > rint_b * rint_b * Rker2;
-
-                                    if (!no_interact && cnt < slot_capacity) {
-                                        slot_neigh[slot_off + cnt] = cell_it.sort_index_map[k];
+                                    for (u32 t = 0; t < n; t++) {
+                                        Tscal dx = xa - xs[k0 + t];
+                                        Tscal dy = ya - ys[k0 + t];
+                                        Tscal dz = za - zs[k0 + t];
+                                        // same operations as sycl::dot(dr, dr) on the Tvec
+                                        Tscal rab2 = 0;
+                                        rab2 += dx * dx;
+                                        rab2 += dy * dy;
+                                        rab2 += dz * dz;
+                                        Tscal rint_b = hs[k0 + t] * h_tolerance;
+                                        interact[t]
+                                            = !(rab2 > rint_a * rint_a * Rker2
+                                                && rab2 > rint_b * rint_b * Rker2);
                                     }
-                                    cnt += (no_interact) ? 0 : 1;
+
+                                    for (u32 t = 0; t < n; t++) {
+                                        if (interact[t]) {
+                                            if (cnt < slot_capacity) {
+                                                slot_neigh[slot_off + cnt]
+                                                    = cell_it.sort_index_map[k0 + t];
+                                            }
+                                            cnt++;
+                                        }
+                                    }
                                 }
                             });
 

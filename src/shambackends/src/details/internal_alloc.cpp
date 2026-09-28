@@ -239,6 +239,15 @@ namespace sham::details {
 
     void release_memory_pool() { get_pool().purge(); }
 
+    void set_memory_pool_limits(f64 max_cached_fraction, f64 max_total_fraction) {
+        UsmBlockPool &pool = get_pool();
+        {
+            std::lock_guard<std::mutex> lock(pool.mtx);
+            pool.max_cached_fraction = max_cached_fraction;
+            pool.max_total_fraction  = max_total_fraction;
+        }
+    }
+
     size_t get_memory_pool_cached_bytes() {
         UsmBlockPool &pool = get_pool();
         std::lock_guard<std::mutex> lock(pool.mtx);

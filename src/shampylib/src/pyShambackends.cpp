@@ -93,6 +93,14 @@ ON_PYTHON_INIT {
         },
         "Whether the memory pool is enabled");
     shambackends_module.def(
+        "set_memory_pool_limits",
+        [](f64 max_cached_fraction, f64 max_total_fraction) {
+            sham::details::set_memory_pool_limits(max_cached_fraction, max_total_fraction);
+        },
+        py::arg("max_cached_fraction"),
+        py::arg("max_total_fraction"),
+        "Set the memory pool limits, as fractions of the device global memory");
+    shambackends_module.def(
         "release_memory_pool",
         []() {
             sham::details::release_memory_pool();
