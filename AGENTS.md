@@ -184,7 +184,7 @@ Commit titles (and PR titles, which become the squash-merge commit title)
 follow this format (try to stay under 70 total characters if possible):
 
 ```text
-[Module name][Other module name] description
+[Main module][Other module (optional)] description
 ```
 
 ### Commit authorship
