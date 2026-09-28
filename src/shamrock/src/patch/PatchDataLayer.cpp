@@ -47,6 +47,22 @@ namespace shamrock::patch {
         return pdat;
     }
 
+    PatchDataLayer::PatchDataLayer(const std::shared_ptr<PatchDataLayerLayout> &pdl)
+        : pdl_ptr(pdl) {
+        init_fields();
+    }
+
+    PatchDataLayer::~PatchDataLayer() = default;
+
+    PatchDataLayer::PatchDataLayer(PatchDataLayer &&other) noexcept
+        : fields(std::move(other.fields)), pdl_ptr(std::move(other.pdl_ptr)) {}
+
+    PatchDataLayer &PatchDataLayer::operator=(PatchDataLayer &&other) noexcept {
+        fields  = std::move(other.fields);
+        pdl_ptr = std::move(other.pdl_ptr);
+        return *this;
+    }
+
     PatchDataLayer::PatchDataLayer(const PatchDataLayer &other) : pdl_ptr(other.get_layout_ptr()) {
 
         NamedStackEntry stack_loc{"PatchDataLayer::copy_constructor", true};

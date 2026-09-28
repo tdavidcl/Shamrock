@@ -75,9 +75,20 @@ namespace shamrock::patch {
 
         inline std::shared_ptr<PatchDataLayerLayout> get_layout_ptr() const { return pdl_ptr; }
 
-        inline PatchDataLayer(const std::shared_ptr<PatchDataLayerLayout> &pdl) : pdl_ptr(pdl) {
-            init_fields();
-        }
+        // Note : the constructors, destructor and move assignment are defined out of line, as
+        // destroying the fields (which any constructor may have to do) instantiates the
+        // destruction of all the PatchDataField types of the FieldVariant, which is costly to
+        // compile in every includer.
+
+        /**
+         * @brief Construct an empty PatchDataLayer with the given layout
+         *
+         * @param pdl the layout
+         */
+        PatchDataLayer(const std::shared_ptr<PatchDataLayerLayout> &pdl);
+
+        /// PatchDataLayer destructor
+        ~PatchDataLayer();
 
         /**
          * @brief PatchDataLayer copy constructor
@@ -94,19 +105,14 @@ namespace shamrock::patch {
          *
          * @param other
          */
-        inline PatchDataLayer(PatchDataLayer &&other) noexcept
-            : fields(std::move(other.fields)), pdl_ptr(std::move(other.pdl_ptr)) {}
+        PatchDataLayer(PatchDataLayer &&other) noexcept;
 
         /**
          * @brief PatchDataLayer move assignment
          *
          * @param other
          */
-        inline PatchDataLayer &operator=(PatchDataLayer &&other) noexcept {
-            fields  = std::move(other.fields);
-            pdl_ptr = std::move(other.pdl_ptr);
-            return *this;
-        }
+        PatchDataLayer &operator=(PatchDataLayer &&other) noexcept;
 
         PatchDataLayer &operator=(const PatchDataLayer &other) = delete;
 
