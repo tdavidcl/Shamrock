@@ -24,6 +24,43 @@ namespace shamrock::patch {
     MPI_Datatype get_patch_mpi_type<3>() {
         return patch_3d_MPI_type;
     }
+
+    // Defined out of line: PatchCoord::merge is costly to instantiate (sycl::min/max) and this
+    // function would otherwise instantiate it in every file including Patch.hpp.
+    Patch Patch::merge_patch(std::array<Patch, splts_count> patches) {
+
+        PatchCoord merged_c = PatchCoord<dim>::merge(
+            {patches[0].get_coords(),
+             patches[1].get_coords(),
+             patches[2].get_coords(),
+             patches[3].get_coords(),
+             patches[4].get_coords(),
+             patches[5].get_coords(),
+             patches[6].get_coords(),
+             patches[7].get_coords()});
+
+        Patch ret{};
+        ret = patches[0];
+
+        ret.coord_min[0] = merged_c.coord_min[0];
+        ret.coord_min[1] = merged_c.coord_min[1];
+        ret.coord_min[2] = merged_c.coord_min[2];
+        ret.coord_max[0] = merged_c.coord_max[0];
+        ret.coord_max[1] = merged_c.coord_max[1];
+        ret.coord_max[2] = merged_c.coord_max[2];
+
+        ret.pack_node_index = u64_max;
+
+        ret.load_value += patches[1].load_value;
+        ret.load_value += patches[2].load_value;
+        ret.load_value += patches[3].load_value;
+        ret.load_value += patches[4].load_value;
+        ret.load_value += patches[5].load_value;
+        ret.load_value += patches[6].load_value;
+        ret.load_value += patches[7].load_value;
+
+        return ret;
+    }
 } // namespace shamrock::patch
 
 /////////////////////////////////////////////
