@@ -197,7 +197,9 @@ endif()
 # Precompiled SYCL header
 ########################################################################################
 
-# Only for the targets where (almost) every translation unit includes the SYCL header.
+# Only for the targets where (almost) every translation unit includes the SYCL header. Besides the SYCL
+# header, the precompiled header also contains the fmt & nlohmann_json headers that are included (often
+# transitively) in most translation units of those targets.
 # See SHAMROCK_USE_PCH in cmake/ShamrockBuildOptions.cmake
 if(SHAMROCK_USE_PCH)
     set(shamrock_sycl_pch_targets
@@ -219,7 +221,9 @@ if(SHAMROCK_USE_PCH)
     endif()
 
     foreach(tgt ${shamrock_sycl_pch_targets})
-        target_precompile_headers(${tgt} PRIVATE <sycl/sycl.hpp>)
+        target_precompile_headers(
+            ${tgt} PRIVATE <sycl/sycl.hpp> <fmt/printf.h> <fmt/ranges.h> <nlohmann/json.hpp>
+        )
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             # do not embed timestamps in the PCH, otherwise ccache can not cache the translation units
             # using it (this also requires ccache's sloppiness to include pch_defines,time_macros)
