@@ -156,24 +156,41 @@ struct KernelUpdateDerivsVaryingAlphaAV {
         // contribution of the pair (a, b) with the reciprocals arithmetic, from the quantities
         // depending only on the separation and h_b : 1/h_b, the saturated inverse of r_ab, and
         // the kernel derivatives (shared by the scalar and the blocked loops)
+        // quantities of b depending only on h_b, omega_b and P_b (same expressions as
+        // shamrock::sph::vsig_u, with a square root that does not prevent the vectorization)
+        auto b_quantities = [&](Tscal h_b,
+                                Tscal hinv_b,
+                                Tscal omega_b,
+                                Tscal P_b,
+                                Tscal &rho_b,
+                                Tscal &rho_b_inv,
+                                Tscal &omega_b_inv,
+                                Tscal &vsig_u) SHAM_FLATTEN {
+            Tscal hfact_hinv_b = hfactd * hinv_b;
+            rho_b              = pmass * (hfact_hinv_b * hfact_hinv_b * hfact_hinv_b);
+            rho_b_inv          = (h_b * h_b * h_b) * inv_m_hfact3;
+            omega_b_inv        = Tscal{1} / omega_b;
+
+            Tscal rho_avg = (rho_a + rho_b) * 0.5;
+            Tscal abs_dp  = sham::abs(P_a - P_b);
+            vsig_u        = shamrock::sph::sqrt_noerrno(abs_dp / rho_avg);
+        };
+
         auto add_pair_reciprocal = [&](u32 id_b,
                                        const Tvec &dr,
-                                       Tscal h_b,
-                                       Tscal hinv_b,
                                        Tscal inv_rab,
                                        Tscal Fab_a,
-                                       Tscal Fab_b) SHAM_FLATTEN {
+                                       Tscal Fab_b,
+                                       Tscal omega_b,
+                                       Tscal P_b,
+                                       Tscal rho_b,
+                                       Tscal rho_b_inv,
+                                       Tscal omega_b_inv,
+                                       Tscal vsig_u) SHAM_FLATTEN {
             Tvec vxyz_b         = vxyz[id_b];
             const Tscal u_b     = uint[id_b];
-            Tscal P_b           = pressure[id_b];
-            Tscal omega_b       = omega[id_b];
             const Tscal alpha_b = alpha_AV[id_b];
             Tscal cs_b          = cs[id_b];
-
-            Tscal hfact_hinv_b = hfactd * hinv_b;
-            Tscal rho_b        = pmass * (hfact_hinv_b * hfact_hinv_b * hfact_hinv_b);
-            Tscal rho_b_inv    = (h_b * h_b * h_b) * inv_m_hfact3;
-            Tscal omega_b_inv  = Tscal{1} / omega_b;
 
             Tvec v_ab = vxyz_a - vxyz_b;
 
@@ -184,8 +201,6 @@ struct KernelUpdateDerivsVaryingAlphaAV {
 
             Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
             Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
-
-            Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
 
             Tscal qa_ab = shamrock::sph::q_av(rho_a, vsig_a, v_ab_r_ab);
             Tscal qb_ab = shamrock::sph::q_av(rho_b, vsig_b, v_ab_r_ab);
@@ -241,19 +256,23 @@ struct KernelUpdateDerivsVaryingAlphaAV {
             const Tscal h_a_sq_rker2 = h_a * h_a * Rker2;
 
             Tscal dx_b[block], dy_b[block], dz_b[block], rab2_b[block], h_b_b[block];
-            Tscal hinv_b_b[block], inv_rab_b[block], fab_a_b[block], fab_b_b[block];
+            Tscal omega_b_b[block], P_b_b[block];
+            Tscal inv_rab_b[block], fab_a_b[block], fab_b_b[block];
+            Tscal rho_b_b[block], rho_b_inv_b[block], omega_b_inv_b[block], vsig_u_b[block];
             bool inside_b[block];
 
             for (u32 b0 = 0; b0 < cnt; b0 += block) {
                 u32 n = sham::min(block, cnt - b0);
 
                 for (u32 t = 0; t < n; t++) {
-                    Tvec dr   = xyz_a - xyz[neigh_b[b0 + t]];
-                    dx_b[t]   = dr.x();
-                    dy_b[t]   = dr.y();
-                    dz_b[t]   = dr.z();
-                    rab2_b[t] = sycl::dot(dr, dr);
-                    h_b_b[t]  = hpart[neigh_b[b0 + t]];
+                    Tvec dr      = xyz_a - xyz[neigh_b[b0 + t]];
+                    dx_b[t]      = dr.x();
+                    dy_b[t]      = dr.y();
+                    dz_b[t]      = dr.z();
+                    rab2_b[t]    = sycl::dot(dr, dr);
+                    h_b_b[t]     = hpart[neigh_b[b0 + t]];
+                    omega_b_b[t] = omega[neigh_b[b0 + t]];
+                    P_b_b[t]     = pressure[neigh_b[b0 + t]];
                 }
 
                 for (u32 t = 0; t < n; t++) {
@@ -262,10 +281,18 @@ struct KernelUpdateDerivsVaryingAlphaAV {
                     inside_b[t]  = !(rab2 > h_a_sq_rker2 && rab2 > h_b * h_b * Rker2);
                     Tscal rab    = shamrock::sph::sqrt_noerrno(rab2);
                     Tscal hinv_b = Tscal{1} / h_b;
-                    hinv_b_b[t]  = hinv_b;
                     inv_rab_b[t] = sham::inv_sat_positive(rab);
                     fab_a_b[t]   = KInv::dW_3d(rab, hinv_a);
                     fab_b_b[t]   = KInv::dW_3d(rab, hinv_b);
+                    b_quantities(
+                        h_b,
+                        hinv_b,
+                        omega_b_b[t],
+                        P_b_b[t],
+                        rho_b_b[t],
+                        rho_b_inv_b[t],
+                        omega_b_inv_b[t],
+                        vsig_u_b[t]);
                 }
 
                 for (u32 t = 0; t < n; t++) {
@@ -275,11 +302,15 @@ struct KernelUpdateDerivsVaryingAlphaAV {
                     add_pair_reciprocal(
                         neigh_b[b0 + t],
                         Tvec{dx_b[t], dy_b[t], dz_b[t]},
-                        h_b_b[t],
-                        hinv_b_b[t],
                         inv_rab_b[t],
                         fab_a_b[t],
-                        fab_b_b[t]);
+                        fab_b_b[t],
+                        omega_b_b[t],
+                        P_b_b[t],
+                        rho_b_b[t],
+                        rho_b_inv_b[t],
+                        omega_b_inv_b[t],
+                        vsig_u_b[t]);
                 }
             }
         } else
@@ -297,15 +328,23 @@ struct KernelUpdateDerivsVaryingAlphaAV {
                 if constexpr (reciprocal) {
                     using KInv = shamrock::sph::KernelInvH<Kernel>;
 
-                    Tscal hinv_b = Tscal{1} / h_b;
+                    Tscal hinv_b  = Tscal{1} / h_b;
+                    Tscal omega_b = omega[id_b];
+                    Tscal P_b     = pressure[id_b];
+                    Tscal rho_b, rho_b_inv, omega_b_inv, vsig_u;
+                    b_quantities(h_b, hinv_b, omega_b, P_b, rho_b, rho_b_inv, omega_b_inv, vsig_u);
                     add_pair_reciprocal(
                         id_b,
                         dr,
-                        h_b,
-                        hinv_b,
                         sham::inv_sat_positive(rab),
                         KInv::dW_3d(rab, hinv_a),
-                        KInv::dW_3d(rab, hinv_b));
+                        KInv::dW_3d(rab, hinv_b),
+                        omega_b,
+                        P_b,
+                        rho_b,
+                        rho_b_inv,
+                        omega_b_inv,
+                        vsig_u);
                     return;
                 }
 
