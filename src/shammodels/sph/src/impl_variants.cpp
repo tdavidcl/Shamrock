@@ -49,6 +49,13 @@ namespace shammodels::sph::impl {
             }};
 
         shamalgs::ImplVariantGlobal<
+            neigh_cache_candidate_data::Indirect,
+            neigh_cache_candidate_data::LeafSortedCopy>
+            neigh_cache_candidate_data_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(neigh_cache_candidate_data::LeafSortedCopy{});
+            }};
+
+        shamalgs::ImplVariantGlobal<
             neigh_cache_leaf_pass::CountThenFill,
             neigh_cache_leaf_pass::SingleTraversal>
             neigh_cache_leaf_pass_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
@@ -68,6 +75,7 @@ namespace shammodels::sph::impl {
                 {"cfl_vsig", &cfl_vsig_impl},
                 {"neigh_cache_particle_pass", &neigh_cache_particle_pass_impl},
                 {"neigh_cache_particle_layout", &neigh_cache_particle_layout_impl},
+                {"neigh_cache_candidate_data", &neigh_cache_candidate_data_impl},
                 {"neigh_cache_leaf_pass", &neigh_cache_leaf_pass_impl},
                 {"neigh_loop_arithmetic", &neigh_loop_arithmetic_impl},
             };
@@ -108,6 +116,10 @@ namespace shammodels::sph::impl {
 
     const neigh_cache_particle_layout::Variant &get_impl_neigh_cache_particle_layout() {
         return get_or_autoselect(neigh_cache_particle_layout_impl);
+    }
+
+    const neigh_cache_candidate_data::Variant &get_impl_neigh_cache_candidate_data() {
+        return get_or_autoselect(neigh_cache_candidate_data_impl);
     }
 
     const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass() {

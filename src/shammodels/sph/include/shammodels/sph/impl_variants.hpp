@@ -107,6 +107,22 @@ namespace shammodels::sph::impl {
     } // namespace neigh_cache_particle_layout
 
     /**
+     * @brief Candidate particle data read by the slotted particle pass of the neighbour cache.
+     */
+    namespace neigh_cache_candidate_data {
+        /// Positions and smoothing lengths read through the tree sort map
+        struct Indirect {
+            static constexpr std::string_view variant_type_name = "indirect";
+        };
+        /// Positions and smoothing lengths first copied in tree order, so that the candidates of
+        /// a leaf are read contiguously (identical lists)
+        struct LeafSortedCopy {
+            static constexpr std::string_view variant_type_name = "leaf_sorted_copy";
+        };
+        using Variant = std::variant<Indirect, LeafSortedCopy>;
+    } // namespace neigh_cache_candidate_data
+
+    /**
      * @brief Leaf level passes (count & fill) of the two stages neighbour cache build.
      */
     namespace neigh_cache_leaf_pass {
@@ -152,6 +168,9 @@ namespace shammodels::sph::impl {
 
     /// Currently selected implementation for the neighbour cache particle layout section
     const neigh_cache_particle_layout::Variant &get_impl_neigh_cache_particle_layout();
+
+    /// Currently selected implementation for the neighbour cache candidate data section
+    const neigh_cache_candidate_data::Variant &get_impl_neigh_cache_candidate_data();
 
     /// Currently selected implementation for the neighbour cache leaf passes section
     const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass();
