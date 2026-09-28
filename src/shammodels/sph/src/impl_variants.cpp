@@ -32,6 +32,26 @@ namespace shammodels::sph::impl {
                 self.set(diff_operators::FusedKernel{});
             }};
 
+        shamalgs::
+            ImplVariantGlobal<diff_operators_evaluation::Scalar, diff_operators_evaluation::Blocked>
+                diff_operators_evaluation_impl{
+                    [](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+                        if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+                            self.set(diff_operators_evaluation::Scalar{});
+                        } else {
+                            self.set(diff_operators_evaluation::Blocked{});
+                        }
+                    }};
+
+        shamalgs::ImplVariantGlobal<derivs_evaluation::Scalar, derivs_evaluation::Blocked>
+            derivs_evaluation_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+                if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+                    self.set(derivs_evaluation::Scalar{});
+                } else {
+                    self.set(derivs_evaluation::Blocked{});
+                }
+            }};
+
         shamalgs::ImplVariantGlobal<cfl_vsig::SeparatePass, cfl_vsig::FusedWithDerivs>
             cfl_vsig_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
                 self.set(cfl_vsig::FusedWithDerivs{});
@@ -90,6 +110,8 @@ namespace shammodels::sph::impl {
         const std::map<std::string, shamalgs::IImplVariant *> &get_registry() {
             static const std::map<std::string, shamalgs::IImplVariant *> registry{
                 {"diff_operators", &diff_operators_impl},
+                {"diff_operators_evaluation", &diff_operators_evaluation_impl},
+                {"derivs_evaluation", &derivs_evaluation_impl},
                 {"cfl_vsig", &cfl_vsig_impl},
                 {"neigh_cache_particle_pass", &neigh_cache_particle_pass_impl},
                 {"neigh_cache_particle_layout", &neigh_cache_particle_layout_impl},
@@ -126,6 +148,14 @@ namespace shammodels::sph::impl {
 
     const diff_operators::Variant &get_impl_diff_operators() {
         return get_or_autoselect(diff_operators_impl);
+    }
+
+    const diff_operators_evaluation::Variant &get_impl_diff_operators_evaluation() {
+        return get_or_autoselect(diff_operators_evaluation_impl);
+    }
+
+    const derivs_evaluation::Variant &get_impl_derivs_evaluation() {
+        return get_or_autoselect(derivs_evaluation_impl);
     }
 
     const cfl_vsig::Variant &get_impl_cfl_vsig() { return get_or_autoselect(cfl_vsig_impl); }

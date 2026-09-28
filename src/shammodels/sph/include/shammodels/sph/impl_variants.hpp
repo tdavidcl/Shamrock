@@ -194,8 +194,53 @@ namespace shammodels::sph::impl {
         using Variant = std::variant<Scalar, Blocked>;
     } // namespace neigh_loop_evaluation
 
+    /**
+     * @brief Evaluation of the neighbour loop of the fused diff operators kernel.
+     *
+     * The blocked evaluation is the default on CPU like devices, the scalar one on GPUs.
+     */
+    namespace diff_operators_evaluation {
+        /// One neighbour at a time, skipping the ones out of the kernel supports
+        struct Scalar {
+            static constexpr std::string_view variant_type_name = "scalar";
+        };
+        /// Square roots, inverses and kernel derivatives evaluated by blocks of neighbours with a
+        /// branch free (vectorizable) loop, then accumulated in the neighbour order (identical
+        /// sums)
+        struct Blocked {
+            static constexpr std::string_view variant_type_name = "blocked";
+        };
+        using Variant = std::variant<Scalar, Blocked>;
+    } // namespace diff_operators_evaluation
+
+    /**
+     * @brief Evaluation of the neighbour loop of the varying alpha force kernel (reciprocals
+     * arithmetic only, the divisions arithmetic always uses the scalar loop).
+     *
+     * The blocked evaluation is the default on CPU like devices, the scalar one on GPUs.
+     */
+    namespace derivs_evaluation {
+        /// One neighbour at a time, skipping the ones out of the kernel supports
+        struct Scalar {
+            static constexpr std::string_view variant_type_name = "scalar";
+        };
+        /// Square roots, inverses and kernel derivatives evaluated by blocks of neighbours with a
+        /// branch free (vectorizable) loop, the interacting pairs being then accumulated in the
+        /// neighbour order (identical sums)
+        struct Blocked {
+            static constexpr std::string_view variant_type_name = "blocked";
+        };
+        using Variant = std::variant<Scalar, Blocked>;
+    } // namespace derivs_evaluation
+
     /// Currently selected implementation for the diff operators section
     const diff_operators::Variant &get_impl_diff_operators();
+
+    /// Currently selected implementation for the diff operators evaluation section
+    const diff_operators_evaluation::Variant &get_impl_diff_operators_evaluation();
+
+    /// Currently selected implementation for the force kernel evaluation section
+    const derivs_evaluation::Variant &get_impl_derivs_evaluation();
 
     /// Currently selected implementation for the CFL signal velocity section
     const cfl_vsig::Variant &get_impl_cfl_vsig();

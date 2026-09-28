@@ -21,6 +21,7 @@
 #include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/kernel_inv_h.hpp"
+#include "shammodels/sph/math/sqrt_noerrno.hpp"
 #include "shammodels/sph/modules/DiffOperatorDtDivv.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/scheduler/InterfacesUtility.hpp"
@@ -225,8 +226,9 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
             auto dtdivv     = buf_dtdivv.get_write_access(depends_list);
             auto ploop_ptrs = pcache.get_read_access(depends_list);
 
-            auto submit_kernel = [&](auto reciprocal_tag) {
+            auto submit_kernel = [&](auto reciprocal_tag, auto blocked_tag) {
                 constexpr bool reciprocal = decltype(reciprocal_tag)::value;
+                constexpr bool blocked    = decltype(blocked_tag)::value;
                 return queue.submit(depends_list, [&](sycl::handler &cgh) {
                     const Tscal pmass = gpart_mass;
 
@@ -263,62 +265,154 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
 
                             Tscal hinv_a = Tscal{1} / h_a;
 
-                            particle_looper.for_each_object(id_a, [&](u32 id_b) {
-                                // compute only omega_a
-                                Tvec r_ab  = xyz_a - xyz[id_b];
-                                Tscal rab2 = sycl::dot(r_ab, r_ab);
-                                Tscal h_b  = hpart[id_b];
+                            if constexpr (blocked) {
+                                // neighbours processed by blocks : a gather loop computes the
+                                // separations, a branch free (vectorizable) loop evaluates the
+                                // square roots, inverses and kernel derivatives (zero for the
+                                // pairs skipped by the scalar loop), then the sums are
+                                // accumulated in the neighbour order with the same expressions
+                                // as the scalar loop. The skipped pairs only add (signed) zeros
+                                // to sums that start at +0, hence identical sums.
+                                constexpr u32 block = 16;
 
-                                if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
-                                    return;
-                                }
+                                const u32 cnt = ploop_ptrs.cnt_neigh[id_a];
+                                const u32 *neigh_b
+                                    = ploop_ptrs.index_neigh_map + ploop_ptrs.scanned_cnt[id_a];
 
-                                Tscal rab   = sycl::sqrt(rab2);
-                                Tvec vxyz_b = vxyz[id_b];
-                                Tvec axyz_b = axyz[id_b];
-                                Tvec v_ab   = vxyz_a - vxyz_b;
-                                Tvec a_ab   = axyz_a - axyz_b;
+                                const Tscal h_a_sq_rker2 = h_a * h_a * Rker2;
 
-                                Tvec r_ab_unit;
-                                Tvec dWab_a;
-                                if constexpr (reciprocal) {
-                                    r_ab_unit = r_ab * (Tscal{1} / rab);
+                                Tscal dx_b[block], dy_b[block], dz_b[block];
+                                Tscal rab2_b[block], h_b_b[block];
+                                Tscal rab_b[block], inv_rab_b[block], dw_b[block];
 
-                                    if (rab < 1e-9) {
-                                        r_ab_unit = ZVEC;
+                                for (u32 b0 = 0; b0 < cnt; b0 += block) {
+                                    u32 n = sham::min(block, cnt - b0);
+
+                                    for (u32 t = 0; t < n; t++) {
+                                        u32 id_b  = neigh_b[b0 + t];
+                                        Tvec r_ab = xyz_a - xyz[id_b];
+                                        dx_b[t]   = r_ab.x();
+                                        dy_b[t]   = r_ab.y();
+                                        dz_b[t]   = r_ab.z();
+                                        rab2_b[t] = sycl::dot(r_ab, r_ab);
+                                        h_b_b[t]  = hpart[id_b];
                                     }
 
-                                    dWab_a = shamrock::sph::KernelInvH<Kernel>::dW_3d(rab, hinv_a)
-                                             * r_ab_unit;
-                                } else {
-                                    r_ab_unit = r_ab / rab;
-
-                                    if (rab < 1e-9) {
-                                        r_ab_unit = ZVEC;
+                                    for (u32 t = 0; t < n; t++) {
+                                        Tscal rab2 = rab2_b[t];
+                                        Tscal h_b  = h_b_b[t];
+                                        bool inside
+                                            = !(rab2 > h_a_sq_rker2 && rab2 > h_b * h_b * Rker2);
+                                        Tscal rab = shamrock::sph::sqrt_noerrno(rab2);
+                                        Tscal dw;
+                                        if constexpr (reciprocal) {
+                                            inv_rab_b[t] = Tscal{1} / rab;
+                                            dw           = shamrock::sph::KernelInvH<Kernel>::dW_3d(
+                                                rab, hinv_a);
+                                        } else {
+                                            dw = Kernel::dW_3d(rab, h_a);
+                                        }
+                                        rab_b[t] = rab;
+                                        dw_b[t]  = (inside) ? dw : Tscal{0};
                                     }
 
-                                    dWab_a = Kernel::dW_3d(rab, h_a) * r_ab_unit;
+                                    for (u32 t = 0; t < n; t++) {
+                                        u32 id_b    = neigh_b[b0 + t];
+                                        Tvec r_ab   = {dx_b[t], dy_b[t], dz_b[t]};
+                                        Tscal rab   = rab_b[t];
+                                        Tvec vxyz_b = vxyz[id_b];
+                                        Tvec axyz_b = axyz[id_b];
+                                        Tvec v_ab   = vxyz_a - vxyz_b;
+                                        Tvec a_ab   = axyz_a - axyz_b;
+
+                                        Tvec r_ab_unit;
+                                        if constexpr (reciprocal) {
+                                            r_ab_unit = r_ab * inv_rab_b[t];
+                                        } else {
+                                            r_ab_unit = r_ab / rab;
+                                        }
+                                        if (rab < 1e-9) {
+                                            r_ab_unit = ZVEC;
+                                        }
+
+                                        Tvec dWab_a = dw_b[t] * r_ab_unit;
+
+                                        Tvec mdWab_b = dWab_a * pmass;
+
+                                        Rij_a[0] -= r_ab.x() * mdWab_b;
+                                        Rij_a[1] -= r_ab.y() * mdWab_b;
+                                        Rij_a[2] -= r_ab.z() * mdWab_b;
+
+                                        Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
+                                        Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
+                                        Rij_a_dvk_dxj[2] -= v_ab * mdWab_b.z();
+
+                                        Rij_a_dak_dxj[0] -= a_ab * mdWab_b.x();
+                                        Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
+                                        Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
+
+                                        sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
+                                        sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                                    }
                                 }
+                            } else
+                                particle_looper.for_each_object(id_a, [&](u32 id_b) {
+                                    // compute only omega_a
+                                    Tvec r_ab  = xyz_a - xyz[id_b];
+                                    Tscal rab2 = sycl::dot(r_ab, r_ab);
+                                    Tscal h_b  = hpart[id_b];
 
-                                Tvec mdWab_b = dWab_a * pmass;
+                                    if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
+                                        return;
+                                    }
 
-                                static_assert(dim == 3, "this is only implemented for dim 3");
-                                Rij_a[0] -= r_ab.x() * mdWab_b;
-                                Rij_a[1] -= r_ab.y() * mdWab_b;
-                                Rij_a[2] -= r_ab.z() * mdWab_b;
+                                    Tscal rab   = sycl::sqrt(rab2);
+                                    Tvec vxyz_b = vxyz[id_b];
+                                    Tvec axyz_b = axyz[id_b];
+                                    Tvec v_ab   = vxyz_a - vxyz_b;
+                                    Tvec a_ab   = axyz_a - axyz_b;
 
-                                Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
-                                Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
-                                Rij_a_dvk_dxj[2] -= v_ab * mdWab_b.z();
+                                    Tvec r_ab_unit;
+                                    Tvec dWab_a;
+                                    if constexpr (reciprocal) {
+                                        r_ab_unit = r_ab * (Tscal{1} / rab);
 
-                                Rij_a_dak_dxj[0] -= a_ab * mdWab_b.x();
-                                Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
-                                Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
+                                        if (rab < 1e-9) {
+                                            r_ab_unit = ZVEC;
+                                        }
 
-                                // sum_nabla_a += sycl::dot(a_ab, mdWab_b);
-                                sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
-                                sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
-                            });
+                                        dWab_a
+                                            = shamrock::sph::KernelInvH<Kernel>::dW_3d(rab, hinv_a)
+                                              * r_ab_unit;
+                                    } else {
+                                        r_ab_unit = r_ab / rab;
+
+                                        if (rab < 1e-9) {
+                                            r_ab_unit = ZVEC;
+                                        }
+
+                                        dWab_a = Kernel::dW_3d(rab, h_a) * r_ab_unit;
+                                    }
+
+                                    Tvec mdWab_b = dWab_a * pmass;
+
+                                    static_assert(dim == 3, "this is only implemented for dim 3");
+                                    Rij_a[0] -= r_ab.x() * mdWab_b;
+                                    Rij_a[1] -= r_ab.y() * mdWab_b;
+                                    Rij_a[2] -= r_ab.z() * mdWab_b;
+
+                                    Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
+                                    Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
+                                    Rij_a_dvk_dxj[2] -= v_ab * mdWab_b.z();
+
+                                    Rij_a_dak_dxj[0] -= a_ab * mdWab_b.x();
+                                    Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
+                                    Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
+
+                                    // sum_nabla_a += sycl::dot(a_ab, mdWab_b);
+                                    sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
+                                    sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                                });
 
                             std::array<Tvec, 3> invRij = shammath::compute_inv_33(Rij_a);
 
@@ -353,9 +447,15 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
                 });
             };
 
+            bool blocked_eval
+                = std::holds_alternative<shammodels::sph::impl::diff_operators_evaluation::Blocked>(
+                    shammodels::sph::impl::get_impl_diff_operators_evaluation());
+
             auto e = (shammodels::sph::impl::use_reciprocal_arithmetic())
-                         ? submit_kernel(std::true_type{})
-                         : submit_kernel(std::false_type{});
+                         ? (blocked_eval ? submit_kernel(std::true_type{}, std::true_type{})
+                                         : submit_kernel(std::true_type{}, std::false_type{}))
+                         : (blocked_eval ? submit_kernel(std::false_type{}, std::true_type{})
+                                         : submit_kernel(std::false_type{}, std::false_type{}));
 
             buf_xyz.complete_event_state(e);
             buf_vxyz.complete_event_state(e);
