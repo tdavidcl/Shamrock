@@ -35,6 +35,19 @@ namespace shambase::profiling {
     void set_enable_nvtx(bool enable_nvtx);
 
     /**
+     * @brief Push a NVTX range (does nothing if Shamrock is built without NVTX)
+     *
+     * Defined with the profiling implementation, so that the NVTX headers are not included in
+     * every file that pushes a range.
+     *
+     * @param name The name of the range
+     */
+    void nvtx_range_push(const char *name);
+
+    /// @brief Pop the last pushed NVTX range (does nothing if Shamrock is built without NVTX)
+    void nvtx_range_pop();
+
+    /**
      * @brief Set wether to enable profiling
      *
      * @param enable_profiling Whether to enable profiling

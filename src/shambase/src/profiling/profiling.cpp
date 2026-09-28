@@ -161,6 +161,18 @@ void shambase::profiling::stack_entry_end_no_time(
     }
 }
 
+void shambase::profiling::nvtx_range_push([[maybe_unused]] const char *name) {
+#ifdef SHAMROCK_USE_NVTX
+    nvtxRangePush(name);
+#endif
+}
+
+void shambase::profiling::nvtx_range_pop() {
+#ifdef SHAMROCK_USE_NVTX
+    nvtxRangePop();
+#endif
+}
+
 void shambase::profiling::register_counter_val(const std::string &name, f64 time, f64 val) {
 
     if (enable_profiling) {

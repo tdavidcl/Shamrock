@@ -18,15 +18,12 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/integer.hpp"
+#include "shambase/profiling/profiling.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambackends/sycl.hpp"
 #include "shambackends/vec.hpp"
 #include "shamcomm/logs.hpp"
 #include <stdexcept>
-
-#ifdef SHAMROCK_USE_NVTX
-    #include <nvtx3/nvtx3.hpp>
-#endif
 
 namespace shambase {
 
@@ -102,7 +99,7 @@ namespace shambase {
     inline void parallel_for(sycl::handler &cgh, u32 length, const char *name, LambdaKernel &&ker) {
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePush(name);
+        shambase::profiling::nvtx_range_push(name);
 #endif
 
         shamlog_debug_sycl_ln("SYCL", sham::format("parallel_for {} N={}", name, length));
@@ -140,7 +137,7 @@ namespace shambase {
         }
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePop();
+        shambase::profiling::nvtx_range_pop();
 #endif
     }
 
@@ -152,7 +149,7 @@ namespace shambase {
         sycl::handler &cgh, u32 length_x, u32 length_y, const char *name, LambdaKernel &&ker) {
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePush(name);
+        shambase::profiling::nvtx_range_push(name);
 #endif
 
         shamlog_debug_sycl_ln(
@@ -196,7 +193,7 @@ namespace shambase {
         }
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePop();
+        shambase::profiling::nvtx_range_pop();
 #endif
     }
 
@@ -213,7 +210,7 @@ namespace shambase {
         LambdaKernel &&ker) {
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePush(name);
+        shambase::profiling::nvtx_range_push(name);
 #endif
 
         shamlog_debug_sycl_ln(
@@ -267,7 +264,7 @@ namespace shambase {
         }
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePop();
+        shambase::profiling::nvtx_range_pop();
 #endif
     }
 
@@ -276,7 +273,7 @@ namespace shambase {
         sycl::handler &cgh, u32 length, u32 group_size, const char *name, LambdaKernel &&ker) {
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePush(name);
+        shambase::profiling::nvtx_range_push(name);
 #endif
 
         if constexpr (mode == PARALLEL_FOR) {
@@ -312,7 +309,7 @@ namespace shambase {
         }
 
 #ifdef SHAMROCK_USE_NVTX
-        nvtxRangePop();
+        shambase::profiling::nvtx_range_pop();
 #endif
     }
 
