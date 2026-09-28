@@ -8,6 +8,7 @@
 // -------------------------------------------------------//
 
 #include "shambase/integer.hpp"
+#include "PinBitonicSort.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shamcomm/logs.hpp"
@@ -24,6 +25,8 @@ using Tvec    = f64_3;
 using Tmorton = u64;
 
 NEW_TEST(Unittest, "shamtree/MortonReducedSet", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{
         Tvec(0, 0, 0),
@@ -155,6 +158,8 @@ NEW_TEST(Unittest, "shamtree/MortonReducedSet", 1) {
 }
 
 NEW_TEST(Unittest, "shamtree/MortonReducedSet(single cell)", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{Tvec(0.1, 0.0, 0.0), Tvec(0.0, 0.1, 0.0), Tvec(0.0, 0.0, 0.1)};
 

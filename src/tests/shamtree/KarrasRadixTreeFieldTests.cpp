@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------//
 
+#include "PinBitonicSort.hpp"
 #include "shambackends/math.hpp"
 #include "shamtest/shamtest.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
@@ -22,6 +23,9 @@ using Tmorton = u64;
 using Tvec    = f64_3;
 
 NEW_TEST(Unittest, "shamtree/KarrasRadixTreeField", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
+
     // Use the same 11-particle partpos as in KarrasRadixTreeAABBTests.cpp
     std::vector<Tval> field_values{1.0, 5.0, 3.0, 2.0, 8.0, 7.0, 4.0, 6.0, 9.0, 10.0, 11.0};
     std::vector<Tvec> partpos{

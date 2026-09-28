@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------//
 
+#include "PinBitonicSort.hpp"
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shambackends/math.hpp"
 #include "shammath/AABB.hpp"
@@ -22,6 +23,8 @@ using Tvec    = f64_3;
 using Tmorton = u64;
 
 NEW_TEST(Unittest, "shamtree/KarrasRadixTreeAABB", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{
         Tvec(0.0, 0.0, 0.0),
@@ -239,6 +242,8 @@ NEW_TEST(Unittest, "shamtree/KarrasRadixTreeAABB", 1) {
 }
 
 NEW_TEST(Unittest, "shamtree/KarrasRadixTreeAABB(one-cell)", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{
         Tvec(0.0, 0.0, 0.0),

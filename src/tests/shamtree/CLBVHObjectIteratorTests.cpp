@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------//
 
+#include "PinBitonicSort.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shambackends/kernel_call.hpp"
@@ -23,6 +24,8 @@ using Tvec    = f64_3;
 using Tscal   = shambase::VecComponent<Tvec>;
 
 NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{
         Tvec(0, 0, 0),
@@ -231,6 +234,8 @@ NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator", 1) {
 }
 
 NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator(one-cell)", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     std::vector<Tvec> partpos{
         Tvec(0, 0, 0),

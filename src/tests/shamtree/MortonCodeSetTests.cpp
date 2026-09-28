@@ -8,6 +8,7 @@
 // -------------------------------------------------------//
 
 #include "shambase/integer.hpp"
+#include "PinBitonicSort.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/fmt_bindings/fmt_defs.hpp"
 #include "shamcomm/logs.hpp"
@@ -95,6 +96,8 @@ NEW_TEST(Unittest, "shamtree/MortonCodeSet", 1) {
 }
 
 NEW_TEST(Unittest, "shamtree/MortonCodeSortedSet", 1) {
+    // the expected values encode the order of the equal Morton codes given by the bitonic sort
+    PinBitonicSort pin_sort;
 
     shammath::AABB<Tvec> bb = shammath::AABB<Tvec>(Tvec(0, 0, 0), Tvec(1, 1, 1));
 
