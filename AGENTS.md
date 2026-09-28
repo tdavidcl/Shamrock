@@ -181,23 +181,10 @@ upstream `main` on that repo.
 ### Commit & PR title style
 
 Commit titles (and PR titles, which become the squash-merge commit title)
-follow this format:
+follow this format (try to stay under 70 total characters if possible):
 
 ```text
 [Module name][Other module name] description
-```
-
-- One bracketed tag per module touched, most relevant first (e.g. `[SPH]`,
-  `[Algs]`, `[Ramses]`, `[SolverGraph]`, `[Doc]`, `[CI]`). One tag is
-  enough for most changes.
-- Try to keep the whole title under 70 characters if possible.
-
-Examples:
-
-```text
-[SPH] move sink-sink CFL into ComputeCFLSinkSink solvergraph node
-[Algs][SPH] pass the device scheduler to autoselect_impl
-[Doc] add some general doc about what are solvergraphs
 ```
 
 ### Commit authorship
