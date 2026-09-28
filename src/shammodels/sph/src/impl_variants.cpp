@@ -15,6 +15,9 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/logs/loglevels.hpp"
+#include "shambackends/Device.hpp"
+#include "shambackends/DeviceContext.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammodels/sph/impl_variants.hpp"
 #include "shamsys/NodeInstance.hpp"
@@ -55,6 +58,12 @@ namespace shammodels::sph::impl {
                 self.set(neigh_cache_candidate_data::LeafSortedCopy{});
             }};
 
+        shamalgs::
+            ImplVariantGlobal<neigh_cache_compaction::Branch, neigh_cache_compaction::BranchFree>
+                neigh_cache_compaction_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                    self.set(neigh_cache_compaction::BranchFree{});
+                }};
+
         shamalgs::ImplVariantGlobal<
             neigh_cache_leaf_pass::CountThenFill,
             neigh_cache_leaf_pass::SingleTraversal>
@@ -69,8 +78,12 @@ namespace shammodels::sph::impl {
                 }};
 
         shamalgs::ImplVariantGlobal<neigh_loop_evaluation::Scalar, neigh_loop_evaluation::Blocked>
-            neigh_loop_evaluation_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
-                self.set(neigh_loop_evaluation::Blocked{});
+            neigh_loop_evaluation_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+                if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+                    self.set(neigh_loop_evaluation::Scalar{});
+                } else {
+                    self.set(neigh_loop_evaluation::Blocked{});
+                }
             }};
 
         /// Registry of the selectors, by section name
@@ -81,6 +94,7 @@ namespace shammodels::sph::impl {
                 {"neigh_cache_particle_pass", &neigh_cache_particle_pass_impl},
                 {"neigh_cache_particle_layout", &neigh_cache_particle_layout_impl},
                 {"neigh_cache_candidate_data", &neigh_cache_candidate_data_impl},
+                {"neigh_cache_compaction", &neigh_cache_compaction_impl},
                 {"neigh_cache_leaf_pass", &neigh_cache_leaf_pass_impl},
                 {"neigh_loop_arithmetic", &neigh_loop_arithmetic_impl},
                 {"neigh_loop_evaluation", &neigh_loop_evaluation_impl},
@@ -126,6 +140,10 @@ namespace shammodels::sph::impl {
 
     const neigh_cache_candidate_data::Variant &get_impl_neigh_cache_candidate_data() {
         return get_or_autoselect(neigh_cache_candidate_data_impl);
+    }
+
+    const neigh_cache_compaction::Variant &get_impl_neigh_cache_compaction() {
+        return get_or_autoselect(neigh_cache_compaction_impl);
     }
 
     const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass() {

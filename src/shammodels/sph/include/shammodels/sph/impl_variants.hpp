@@ -123,6 +123,23 @@ namespace shammodels::sph::impl {
     } // namespace neigh_cache_candidate_data
 
     /**
+     * @brief Storage of the interacting candidates in the slotted particle pass of the
+     * neighbour cache (with the sorted candidate copy).
+     */
+    namespace neigh_cache_compaction {
+        /// Only the interacting candidates are written (one branch per candidate)
+        struct Branch {
+            static constexpr std::string_view variant_type_name = "branch";
+        };
+        /// Every candidate is written at the next free slot, which is only kept for the
+        /// interacting ones (branch free, the last slot of a particle is a scratch slot)
+        struct BranchFree {
+            static constexpr std::string_view variant_type_name = "branch_free";
+        };
+        using Variant = std::variant<Branch, BranchFree>;
+    } // namespace neigh_cache_compaction
+
+    /**
      * @brief Leaf level passes (count & fill) of the two stages neighbour cache build.
      */
     namespace neigh_cache_leaf_pass {
@@ -160,6 +177,9 @@ namespace shammodels::sph::impl {
     /**
      * @brief Evaluation of the kernel sums in the neighbour loops (smoothing length iteration,
      * omega).
+     *
+     * The blocked evaluation is the default on CPU like devices, the scalar one on GPUs (where
+     * the per work-item block arrays would not fit in registers).
      */
     namespace neigh_loop_evaluation {
         /// One neighbour at a time, skipping the ones out of the kernel support
@@ -188,6 +208,9 @@ namespace shammodels::sph::impl {
 
     /// Currently selected implementation for the neighbour cache candidate data section
     const neigh_cache_candidate_data::Variant &get_impl_neigh_cache_candidate_data();
+
+    /// Currently selected implementation for the neighbour cache compaction section
+    const neigh_cache_compaction::Variant &get_impl_neigh_cache_compaction();
 
     /// Currently selected implementation for the neighbour cache leaf passes section
     const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass();

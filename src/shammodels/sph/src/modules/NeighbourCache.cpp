@@ -585,6 +585,16 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     = std::holds_alternative<impl::neigh_cache_candidate_data::LeafSortedCopy>(
                         impl::get_impl_neigh_cache_candidate_data());
 
+                // branch free storage of the interacting candidates (sorted copy path) : every
+                // candidate is written at the position of the next neighbour, the count being
+                // incremented only for the interacting ones. The last slot of a particle is then
+                // a scratch slot, hence at most capacity - 1 neighbours are stored.
+                bool branch_free
+                    = use_sorted_copy
+                      && std::holds_alternative<impl::neigh_cache_compaction::BranchFree>(
+                          impl::get_impl_neigh_cache_compaction());
+                u32 max_stored_cnt = (branch_free) ? slot_capacity - 1 : slot_capacity;
+
                 if (use_sorted_copy) {
                     u32 merged_cnt = mfield.get_obj_cnt();
                     u32 sorted_len = obj_it.cell_iterator.buf_sort_index_map.get_size();
@@ -626,114 +636,132 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             }
                         });
 
-                    sham::kernel_call(
-                        q,
-                        sham::MultiRef{
-                            buf_xyz,
-                            buf_hpart,
-                            pleaf_cache,
-                            obj_it.cell_iterator,
-                            leaf_part_id,
-                            tree_field_rint,
-                            tree.aabbs.buf_aabb_min,
-                            tree.aabbs.buf_aabb_max,
-                            xs,
-                            ys,
-                            zs,
-                            hs},
-                        sham::MultiRef{neigh_count, slots},
-                        obj_cnt,
-                        [intnode_cnt, h_tolerance, can_skip_leaf, slot_capacity](
-                            u32 id_a,
-                            const Tvec *__restrict xyz,
-                            const Tscal *__restrict hpart,
-                            auto acc_neigh_leaf_looper,
-                            auto cell_it,
-                            const u32 *__restrict leaf_owner,
-                            const Tscal *__restrict rint_tree,
-                            const Tvec *__restrict aabb_min,
-                            const Tvec *__restrict aabb_max,
-                            const Tscal *__restrict xs,
-                            const Tscal *__restrict ys,
-                            const Tscal *__restrict zs,
-                            const Tscal *__restrict hs,
-                            u32 *__restrict neigh_cnt,
-                            u32 *__restrict slot_neigh) {
-                            tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
+                    auto sorted_copy_pass = [&](auto branch_free_tag) {
+                        constexpr bool branch_free_store = decltype(branch_free_tag)::value;
+                        sham::kernel_call(
+                            q,
+                            sham::MultiRef{
+                                buf_xyz,
+                                buf_hpart,
+                                pleaf_cache,
+                                obj_it.cell_iterator,
+                                leaf_part_id,
+                                tree_field_rint,
+                                tree.aabbs.buf_aabb_min,
+                                tree.aabbs.buf_aabb_max,
+                                xs,
+                                ys,
+                                zs,
+                                hs},
+                            sham::MultiRef{neigh_count, slots},
+                            obj_cnt,
+                            [intnode_cnt, h_tolerance, can_skip_leaf, slot_capacity](
+                                u32 id_a,
+                                const Tvec *__restrict xyz,
+                                const Tscal *__restrict hpart,
+                                auto acc_neigh_leaf_looper,
+                                auto cell_it,
+                                const u32 *__restrict leaf_owner,
+                                const Tscal *__restrict rint_tree,
+                                const Tvec *__restrict aabb_min,
+                                const Tvec *__restrict aabb_max,
+                                const Tscal *__restrict xs,
+                                const Tscal *__restrict ys,
+                                const Tscal *__restrict zs,
+                                const Tscal *__restrict hs,
+                                u32 *__restrict neigh_cnt,
+                                u32 *__restrict slot_neigh) {
+                                tree::ObjectCacheIterator neigh_leaf_looper(acc_neigh_leaf_looper);
 
-                            u32 offset_leaf = intnode_cnt;
+                                u32 offset_leaf = intnode_cnt;
 
-                            constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+                                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                            Tscal rint_a = hpart[id_a] * h_tolerance;
+                                Tscal rint_a = hpart[id_a] * h_tolerance;
 
-                            Tvec xyz_a = xyz[id_a];
-                            Tscal xa   = xyz_a.x();
-                            Tscal ya   = xyz_a.y();
-                            Tscal za   = xyz_a.z();
+                                Tvec xyz_a = xyz[id_a];
+                                Tscal xa   = xyz_a.x();
+                                Tscal ya   = xyz_a.y();
+                                Tscal za   = xyz_a.z();
 
-                            Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
+                                Tscal rint_a_sq_R2 = rint_a * rint_a * Rker2;
 
-                            u32 cnt      = 0;
-                            u64 slot_off = u64(id_a) * slot_capacity;
+                                u32 cnt      = 0;
+                                u64 slot_off = u64(id_a) * slot_capacity;
 
-                            u32 leaf_own_a = leaf_owner[id_a];
+                                u32 leaf_own_a = leaf_owner[id_a];
 
-                            // candidates are tested by blocks, first computing the interaction
-                            // flags with a branch free (vectorizable) loop, then storing the
-                            // interacting ones in order
-                            constexpr u32 block = 32;
-                            bool interact[block];
+                                // candidates are tested by blocks, first computing the interaction
+                                // flags with a branch free (vectorizable) loop, then storing the
+                                // interacting ones in order
+                                constexpr u32 block = 32;
+                                bool interact[block];
 
-                            neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
-                                if constexpr (prune) {
-                                    if (can_skip_leaf(
-                                            xyz_a,
-                                            rint_a_sq_R2,
-                                            leaf_b,
-                                            rint_tree,
-                                            aabb_min,
-                                            aabb_max)) {
-                                        return;
-                                    }
-                                }
-
-                                u32 cell = leaf_b - offset_leaf;
-                                u32 kmin = cell_it.reduc_index_map[cell];
-                                u32 kmax = cell_it.reduc_index_map[cell + 1];
-
-                                for (u32 k0 = kmin; k0 < kmax; k0 += block) {
-                                    u32 n = sham::min(block, kmax - k0);
-
-                                    for (u32 t = 0; t < n; t++) {
-                                        Tscal dx = xa - xs[k0 + t];
-                                        Tscal dy = ya - ys[k0 + t];
-                                        Tscal dz = za - zs[k0 + t];
-                                        // same operations as sycl::dot(dr, dr) on the Tvec
-                                        Tscal rab2 = 0;
-                                        rab2 += dx * dx;
-                                        rab2 += dy * dy;
-                                        rab2 += dz * dz;
-                                        Tscal rint_b = hs[k0 + t] * h_tolerance;
-                                        interact[t]
-                                            = !(rab2 > rint_a * rint_a * Rker2
-                                                && rab2 > rint_b * rint_b * Rker2);
-                                    }
-
-                                    for (u32 t = 0; t < n; t++) {
-                                        if (interact[t]) {
-                                            if (cnt < slot_capacity) {
-                                                slot_neigh[slot_off + cnt]
-                                                    = cell_it.sort_index_map[k0 + t];
-                                            }
-                                            cnt++;
+                                neigh_leaf_looper.for_each_object(leaf_own_a, [&](u32 leaf_b) {
+                                    if constexpr (prune) {
+                                        if (can_skip_leaf(
+                                                xyz_a,
+                                                rint_a_sq_R2,
+                                                leaf_b,
+                                                rint_tree,
+                                                aabb_min,
+                                                aabb_max)) {
+                                            return;
                                         }
                                     }
-                                }
-                            });
 
-                            neigh_cnt[id_a] = cnt;
-                        });
+                                    u32 cell = leaf_b - offset_leaf;
+                                    u32 kmin = cell_it.reduc_index_map[cell];
+                                    u32 kmax = cell_it.reduc_index_map[cell + 1];
+
+                                    for (u32 k0 = kmin; k0 < kmax; k0 += block) {
+                                        u32 n = sham::min(block, kmax - k0);
+
+                                        for (u32 t = 0; t < n; t++) {
+                                            Tscal dx = xa - xs[k0 + t];
+                                            Tscal dy = ya - ys[k0 + t];
+                                            Tscal dz = za - zs[k0 + t];
+                                            // same operations as sycl::dot(dr, dr) on the Tvec
+                                            Tscal rab2 = 0;
+                                            rab2 += dx * dx;
+                                            rab2 += dy * dy;
+                                            rab2 += dz * dz;
+                                            Tscal rint_b = hs[k0 + t] * h_tolerance;
+                                            interact[t]
+                                                = !(rab2 > rint_a * rint_a * Rker2
+                                                    && rab2 > rint_b * rint_b * Rker2);
+                                        }
+
+                                        if constexpr (branch_free_store) {
+                                            for (u32 t = 0; t < n; t++) {
+                                                u32 pos = sham::min(cnt, slot_capacity - 1);
+                                                slot_neigh[slot_off + pos]
+                                                    = cell_it.sort_index_map[k0 + t];
+                                                cnt += u32(interact[t]);
+                                            }
+                                        } else {
+                                            for (u32 t = 0; t < n; t++) {
+                                                if (interact[t]) {
+                                                    if (cnt < slot_capacity) {
+                                                        slot_neigh[slot_off + cnt]
+                                                            = cell_it.sort_index_map[k0 + t];
+                                                    }
+                                                    cnt++;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                neigh_cnt[id_a] = cnt;
+                            });
+                    };
+
+                    if (branch_free) {
+                        sorted_copy_pass(std::true_type{});
+                    } else {
+                        sorted_copy_pass(std::false_type{});
+                    }
                 } else {
                     sham::kernel_call(
                         q,
@@ -815,7 +843,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 u32 max_cnt = shamalgs::primitives::max(
                     shamsys::instance::get_compute_scheduler_ptr(), neigh_count, 0, obj_cnt);
 
-                if (max_cnt <= slot_capacity) {
+                if (max_cnt <= max_stored_cnt) {
                     sham::DeviceBuffer<u32> slot_offsets(
                         obj_cnt, shamsys::instance::get_compute_scheduler_ptr());
                     sham::kernel_call(
@@ -839,7 +867,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     "neighbour count",
                     max_cnt,
                     "larger than the slot capacity",
-                    slot_capacity,
+                    max_stored_cnt,
                     ", using the compact layout");
                 counted = true;
             }
