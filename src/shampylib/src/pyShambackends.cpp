@@ -101,6 +101,14 @@ ON_PYTHON_INIT {
         py::arg("max_total_fraction"),
         "Set the memory pool limits, as fractions of the device global memory");
     shambackends_module.def(
+        "set_memory_pool_lru_eviction",
+        [](bool enable) {
+            sham::details::set_memory_pool_lru_eviction(enable);
+        },
+        py::arg("enable"),
+        "Evict the least recently freed blocks of the memory pool first (default) instead of "
+        "releasing the newly freed ones when the pool is full");
+    shambackends_module.def(
         "release_memory_pool",
         []() {
             sham::details::release_memory_pool();

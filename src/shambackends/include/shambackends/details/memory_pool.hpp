@@ -35,6 +35,12 @@ namespace sham::details {
     void release_memory_pool();
 
     /**
+     * @brief Select the eviction policy of the pool (least recently freed first, default, or
+     * largest first with the newly freed blocks released when the pool is full).
+     */
+    void set_memory_pool_lru_eviction(bool enable);
+
+    /**
      * @brief Set the memory limits of the pool, as fractions of the device global memory.
      *
      * @param max_cached_fraction maximum memory held by the cached (free) blocks, freed blocks

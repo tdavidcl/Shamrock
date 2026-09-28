@@ -13,6 +13,7 @@
  * @brief This file contains the methods to actually allocate memory
  */
 
+#include "shambase/aliases_int.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/profiling/profiling.hpp"
 #include "shambase/string.hpp"
@@ -22,6 +23,7 @@
 #include "shamcomm/worldInfo.hpp"
 #include <unordered_map>
 #include <bit>
+#include <deque>
 #include <exception>
 #include <map>
 #include <mutex>
@@ -131,6 +133,12 @@ namespace {
      * reuses the block, which avoids the cost of the device allocator and, on CPU backends, of
      * the page faults & zeroing of freshly mapped memory. The memory held by the pool is bounded
      * (see max_cached_fraction and max_total_fraction), and is released on allocation failure.
+     *
+     * With the LRU eviction (default), when the cached blocks exceed their limit the least
+     * recently freed ones are released, so that the pool follows the current allocation pattern
+     * instead of keeping blocks of sizes that are no longer used (e.g. from the setup phase).
+     * Otherwise the newly freed block is released and the largest cached blocks are evicted
+     * first.
      */
     struct UsmBlockPool {
         struct Key {
@@ -145,6 +153,7 @@ namespace {
         struct CachedBlock {
             void *ptr;
             std::shared_ptr<sham::DeviceScheduler> dev_sched; // keeps the context alive
+            u64 stamp;                                        // order in which it was freed
         };
 
         std::mutex mtx;
@@ -156,7 +165,14 @@ namespace {
         /// which cached blocks are released before allocating new ones
         f64 max_total_fraction = 0.9;
 
-        std::map<Key, std::vector<CachedBlock>> free_blocks;
+        /// evict the least recently freed blocks first (otherwise the largest ones)
+        bool lru_eviction = true;
+
+        /// counter used to stamp the freed blocks
+        u64 clock = 0;
+
+        /// cached blocks by key, oldest first (the most recently freed is reused first)
+        std::map<Key, std::deque<CachedBlock>> free_blocks;
         std::unordered_map<void *, Key> live_blocks;
         size_t cached_bytes = 0;
         size_t live_bytes   = 0;
@@ -195,6 +211,35 @@ namespace {
                 if (stack.empty()) {
                     free_blocks.erase(it);
                 }
+            }
+        }
+
+        /// release the least recently freed cached blocks until `bytes_needed` bytes were
+        /// released or the pool is empty (mutex must be held)
+        void evict_lru(size_t bytes_needed) {
+            size_t released = 0;
+            while (released < bytes_needed && !free_blocks.empty()) {
+                auto oldest = free_blocks.begin();
+                for (auto it = free_blocks.begin(); it != free_blocks.end(); ++it) {
+                    if (it->second.front().stamp < oldest->second.front().stamp) {
+                        oldest = it;
+                    }
+                }
+                release(oldest->first, oldest->second.front());
+                released += oldest->first.class_size;
+                oldest->second.pop_front();
+                if (oldest->second.empty()) {
+                    free_blocks.erase(oldest);
+                }
+            }
+        }
+
+        /// release cached blocks following the eviction policy (mutex must be held)
+        void make_room(size_t bytes_needed) {
+            if (lru_eviction) {
+                evict_lru(bytes_needed);
+            } else {
+                evict(bytes_needed);
             }
         }
 
@@ -238,6 +283,12 @@ namespace sham::details {
     }
 
     void release_memory_pool() { get_pool().purge(); }
+
+    void set_memory_pool_lru_eviction(bool enable) {
+        UsmBlockPool &pool = get_pool();
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        pool.lru_eviction = enable;
+    }
 
     void set_memory_pool_limits(f64 max_cached_fraction, f64 max_total_fraction) {
         UsmBlockPool &pool = get_pool();
@@ -312,8 +363,13 @@ namespace sham::details {
                 size_t max_cached
                     = size_t(pool.max_cached_fraction * f64(UsmBlockPool::device_mem(*dev_sched)));
 
+                if (pool.enabled && pool.lru_eviction && key.class_size <= max_cached
+                    && pool.cached_bytes + key.class_size > max_cached) {
+                    pool.evict_lru(pool.cached_bytes + key.class_size - max_cached);
+                }
+
                 if (pool.enabled && pool.cached_bytes + key.class_size <= max_cached) {
-                    pool.free_blocks[key].push_back({usm_ptr, dev_sched});
+                    pool.free_blocks[key].push_back({usm_ptr, dev_sched, pool.clock++});
                     pool.cached_bytes += key.class_size;
                     pooled = true;
                 }
@@ -380,7 +436,7 @@ namespace sham::details {
                         = size_t(pool.max_total_fraction * f64(UsmBlockPool::device_mem(ds)));
                     size_t total = pool.live_bytes + pool.cached_bytes + pool_key->class_size;
                     if (total > max_total) {
-                        pool.evict(total - max_total);
+                        pool.make_room(total - max_total);
                     }
                 }
             }
