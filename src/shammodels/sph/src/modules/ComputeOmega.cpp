@@ -18,6 +18,8 @@
 #include "shambase/stacktrace.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammodels/sph/SPHUtilities.hpp"
+#include "shammodels/sph/impl_variants.hpp"
+#include "shammodels/sph/math/kernel_inv_h.hpp"
 #include "shammodels/sph/modules/ComputeOmega.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
@@ -33,44 +35,62 @@ void shammodels::sph::modules::NodeComputeOmega<Tvec, SPHKernel>::_impl_evaluate
 
     edges.omega.ensure_sizes(edges.part_counts.indexes);
 
-    sham::distributed_data_kernel_call(
-        dev_sched,
-        sham::DDMultiRef{
-            edges.xyz.get_spans(), edges.hpart.get_spans(), edges.neigh_cache.neigh_cache},
-        sham::DDMultiRef{edges.omega.get_spans()},
-        edges.part_counts.indexes,
-        [part_mass = this->part_mass, Rkern = kernel_radius](
-            u32 id_a, const Tvec *r, const Tscal *hpart, const auto ploop_ptrs, Tscal *omega) {
-            shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
+    auto run = [&](auto reciprocal_tag) {
+        constexpr bool reciprocal = decltype(reciprocal_tag)::value;
 
-            Tvec xyz_a = r[id_a]; // could be recovered from lambda
+        sham::distributed_data_kernel_call(
+            dev_sched,
+            sham::DDMultiRef{
+                edges.xyz.get_spans(), edges.hpart.get_spans(), edges.neigh_cache.neigh_cache},
+            sham::DDMultiRef{edges.omega.get_spans()},
+            edges.part_counts.indexes,
+            [part_mass = this->part_mass, Rkern = kernel_radius](
+                u32 id_a, const Tvec *r, const Tscal *hpart, const auto ploop_ptrs, Tscal *omega) {
+                shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
 
-            Tscal h_a  = hpart[id_a];
-            Tscal dint = h_a * h_a * Rkern * Rkern;
+                Tvec xyz_a = r[id_a]; // could be recovered from lambda
 
-            Tscal rho_sum        = 0;
-            Tscal part_omega_sum = 0;
+                Tscal h_a  = hpart[id_a];
+                Tscal dint = h_a * h_a * Rkern * Rkern;
 
-            particle_looper.for_each_object(id_a, [&](u32 id_b) {
-                Tvec dr    = xyz_a - r[id_b];
-                Tscal rab2 = sycl::dot(dr, dr);
+                Tscal rho_sum        = 0;
+                Tscal part_omega_sum = 0;
 
-                if (rab2 > dint) {
-                    return;
-                }
+                Tscal hinv_a = Tscal{1} / h_a;
 
-                Tscal rab = sycl::sqrt(rab2);
+                particle_looper.for_each_object(id_a, [&](u32 id_b) {
+                    Tvec dr    = xyz_a - r[id_b];
+                    Tscal rab2 = sycl::dot(dr, dr);
 
-                rho_sum += part_mass * SPHKernel<Tscal>::W_3d(rab, h_a);
-                part_omega_sum += part_mass * SPHKernel<Tscal>::dhW_3d(rab, h_a);
+                    if (rab2 > dint) {
+                        return;
+                    }
+
+                    Tscal rab = sycl::sqrt(rab2);
+
+                    if constexpr (reciprocal) {
+                        using KInv = shamrock::sph::KernelInvH<SPHKernel<Tscal>>;
+                        rho_sum += part_mass * KInv::W_3d(rab, hinv_a);
+                        part_omega_sum += part_mass * KInv::dhW_3d(rab, hinv_a);
+                    } else {
+                        rho_sum += part_mass * SPHKernel<Tscal>::W_3d(rab, h_a);
+                        part_omega_sum += part_mass * SPHKernel<Tscal>::dhW_3d(rab, h_a);
+                    }
+                });
+
+                using namespace shamrock::sph;
+
+                Tscal rho_ha  = rho_h(part_mass, h_a, SPHKernel<Tscal>::hfactd);
+                Tscal omega_a = 1 + (h_a / (3 * rho_ha)) * part_omega_sum;
+                omega[id_a]   = omega_a;
             });
+    };
 
-            using namespace shamrock::sph;
-
-            Tscal rho_ha  = rho_h(part_mass, h_a, SPHKernel<Tscal>::hfactd);
-            Tscal omega_a = 1 + (h_a / (3 * rho_ha)) * part_omega_sum;
-            omega[id_a]   = omega_a;
-        });
+    if (shammodels::sph::impl::use_reciprocal_arithmetic()) {
+        run(std::true_type{});
+    } else {
+        run(std::false_type{});
+    }
 }
 
 template<class Tvec, template<class> class SPHKernel>

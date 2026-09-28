@@ -19,7 +19,9 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/kernel_inv_h.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensity.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 
@@ -49,74 +51,93 @@ void IterateSmoothingLengthDensity<Tvec, SPHKernel>::_impl_evaluate_internal() {
 
     static constexpr Tscal Rkern = SPHKernel::Rkern;
 
-    sham::distributed_data_kernel_call(
-        dev_sched,
-        sham::DDMultiRef{neigh_cache, positions, old_h},
-        sham::DDMultiRef{new_h, eps_h},
-        thread_counts,
-        [gpart_mass      = this->gpart_mass,
-         h_evol_max      = this->h_evol_max,
-         h_evol_iter_max = this->h_evol_iter_max,
-         epsilon_h       = this->epsilon_h](
-            u32 id_a,
-            auto ploop_ptrs,
-            const Tvec *__restrict r,
-            const Tscal *__restrict h_old,
-            Tscal *__restrict h_new,
-            Tscal *__restrict eps) {
-            // attach the neighbor looper on the cache
-            shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
+    auto run = [&](auto reciprocal_tag) {
+        constexpr bool reciprocal = decltype(reciprocal_tag)::value;
 
-            Tscal part_mass          = gpart_mass;
-            Tscal h_max_tot_max_evol = h_evol_max;
-            Tscal h_max_evol_p       = h_evol_iter_max;
-            Tscal h_max_evol_m       = 1 / h_evol_iter_max;
+        sham::distributed_data_kernel_call(
+            dev_sched,
+            sham::DDMultiRef{neigh_cache, positions, old_h},
+            sham::DDMultiRef{new_h, eps_h},
+            thread_counts,
+            [gpart_mass      = this->gpart_mass,
+             h_evol_max      = this->h_evol_max,
+             h_evol_iter_max = this->h_evol_iter_max,
+             epsilon_h       = this->epsilon_h](
+                u32 id_a,
+                auto ploop_ptrs,
+                const Tvec *__restrict r,
+                const Tscal *__restrict h_old,
+                Tscal *__restrict h_new,
+                Tscal *__restrict eps) {
+                // attach the neighbor looper on the cache
+                shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
 
-            if (eps[id_a] > epsilon_h) {
+                Tscal part_mass          = gpart_mass;
+                Tscal h_max_tot_max_evol = h_evol_max;
+                Tscal h_max_evol_p       = h_evol_iter_max;
+                Tscal h_max_evol_m       = 1 / h_evol_iter_max;
 
-                Tvec xyz_a = r[id_a]; // could be recovered from lambda
+                if (eps[id_a] > epsilon_h) {
 
-                Tscal h_a  = h_new[id_a];
-                Tscal dint = h_a * h_a * Rkern * Rkern;
+                    Tvec xyz_a = r[id_a]; // could be recovered from lambda
 
-                Tscal rho_sum = 0;
-                Tscal sumdWdh = 0;
+                    Tscal h_a  = h_new[id_a];
+                    Tscal dint = h_a * h_a * Rkern * Rkern;
 
-                particle_looper.for_each_object(id_a, [&](u32 id_b) {
-                    Tvec dr    = xyz_a - r[id_b];
-                    Tscal rab2 = sycl::dot(dr, dr);
+                    Tscal rho_sum = 0;
+                    Tscal sumdWdh = 0;
 
-                    if (rab2 > dint) {
-                        return; // early return if the particle is too far away
+                    Tscal hinv_a = Tscal{1} / h_a;
+
+                    particle_looper.for_each_object(id_a, [&](u32 id_b) {
+                        Tvec dr    = xyz_a - r[id_b];
+                        Tscal rab2 = sycl::dot(dr, dr);
+
+                        if (rab2 > dint) {
+                            return; // early return if the particle is too far away
+                        }
+
+                        Tscal rab = sycl::sqrt(rab2);
+
+                        if constexpr (reciprocal) {
+                            rho_sum += part_mass
+                                       * shamrock::sph::KernelInvH<SPHKernel>::W_3d(rab, hinv_a);
+                            sumdWdh += part_mass
+                                       * shamrock::sph::KernelInvH<SPHKernel>::dhW_3d(rab, hinv_a);
+                        } else {
+                            rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
+                            sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
+                        }
+                    });
+
+                    using namespace shamrock::sph;
+
+                    Tscal rho_ha = rho_h(part_mass, h_a, SPHKernel::hfactd);
+                    Tscal new_h  = newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a);
+
+                    if (new_h < h_a * h_max_evol_m)
+                        new_h = h_max_evol_m * h_a;
+                    if (new_h > h_a * h_max_evol_p)
+                        new_h = h_max_evol_p * h_a;
+
+                    Tscal ha_0 = h_old[id_a];
+
+                    if (new_h < ha_0 * h_max_tot_max_evol) {
+                        h_new[id_a] = new_h;
+                        eps[id_a]   = sycl::fabs(new_h - h_a) / ha_0;
+                    } else {
+                        h_new[id_a] = ha_0 * h_max_tot_max_evol;
+                        eps[id_a]   = -1;
                     }
-
-                    Tscal rab = sycl::sqrt(rab2);
-
-                    rho_sum += part_mass * SPHKernel::W_3d(rab, h_a);
-                    sumdWdh += part_mass * SPHKernel::dhW_3d(rab, h_a);
-                });
-
-                using namespace shamrock::sph;
-
-                Tscal rho_ha = rho_h(part_mass, h_a, SPHKernel::hfactd);
-                Tscal new_h  = newton_iterate_new_h(rho_ha, rho_sum, sumdWdh, h_a);
-
-                if (new_h < h_a * h_max_evol_m)
-                    new_h = h_max_evol_m * h_a;
-                if (new_h > h_a * h_max_evol_p)
-                    new_h = h_max_evol_p * h_a;
-
-                Tscal ha_0 = h_old[id_a];
-
-                if (new_h < ha_0 * h_max_tot_max_evol) {
-                    h_new[id_a] = new_h;
-                    eps[id_a]   = sycl::fabs(new_h - h_a) / ha_0;
-                } else {
-                    h_new[id_a] = ha_0 * h_max_tot_max_evol;
-                    eps[id_a]   = -1;
                 }
-            }
-        });
+            });
+    };
+
+    if (shammodels::sph::impl::use_reciprocal_arithmetic()) {
+        run(std::true_type{});
+    } else {
+        run(std::false_type{});
+    }
 }
 
 template<class Tvec, class SPHKernel>

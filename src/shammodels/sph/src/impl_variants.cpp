@@ -34,11 +34,34 @@ namespace shammodels::sph::impl {
                 self.set(cfl_vsig::FusedWithDerivs{});
             }};
 
+        shamalgs::ImplVariantGlobal<
+            neigh_cache_particle_pass::AllLeafParticles,
+            neigh_cache_particle_pass::PruneLeaves>
+            neigh_cache_particle_pass_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(neigh_cache_particle_pass::PruneLeaves{});
+            }};
+
+        shamalgs::ImplVariantGlobal<
+            neigh_cache_leaf_pass::CountThenFill,
+            neigh_cache_leaf_pass::SingleTraversal>
+            neigh_cache_leaf_pass_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(neigh_cache_leaf_pass::SingleTraversal{});
+            }};
+
+        shamalgs::
+            ImplVariantGlobal<neigh_loop_arithmetic::Divisions, neigh_loop_arithmetic::Reciprocals>
+                neigh_loop_arithmetic_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                    self.set(neigh_loop_arithmetic::Reciprocals{});
+                }};
+
         /// Registry of the selectors, by section name
         const std::map<std::string, shamalgs::IImplVariant *> &get_registry() {
             static const std::map<std::string, shamalgs::IImplVariant *> registry{
                 {"diff_operators", &diff_operators_impl},
                 {"cfl_vsig", &cfl_vsig_impl},
+                {"neigh_cache_particle_pass", &neigh_cache_particle_pass_impl},
+                {"neigh_cache_leaf_pass", &neigh_cache_leaf_pass_impl},
+                {"neigh_loop_arithmetic", &neigh_loop_arithmetic_impl},
             };
             return registry;
         }
@@ -70,6 +93,18 @@ namespace shammodels::sph::impl {
     }
 
     const cfl_vsig::Variant &get_impl_cfl_vsig() { return get_or_autoselect(cfl_vsig_impl); }
+
+    const neigh_cache_particle_pass::Variant &get_impl_neigh_cache_particle_pass() {
+        return get_or_autoselect(neigh_cache_particle_pass_impl);
+    }
+
+    const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass() {
+        return get_or_autoselect(neigh_cache_leaf_pass_impl);
+    }
+
+    const neigh_loop_arithmetic::Variant &get_impl_neigh_loop_arithmetic() {
+        return get_or_autoselect(neigh_loop_arithmetic_impl);
+    }
 
     std::vector<std::string> get_impl_sections() {
         std::vector<std::string> ret;

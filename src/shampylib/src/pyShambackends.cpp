@@ -15,6 +15,7 @@
 
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/MemPerfInfos.hpp"
+#include "shambackends/details/memory_pool.hpp"
 #include "shambindings/pybind11_stl.hpp"
 #include "shambindings/pybindaliases.hpp"
 #include "shambindings/pytypealias.hpp"
@@ -77,6 +78,26 @@ ON_PYTHON_INIT {
     register_DeviceBuffer<f64>(shambackends_module, "DeviceBuffer_f64");
     register_DeviceBuffer<f64_2>(shambackends_module, "DeviceBuffer_f64_2");
     register_DeviceBuffer<f64_3>(shambackends_module, "DeviceBuffer_f64_3");
+
+    shambackends_module.def(
+        "set_memory_pool_enabled",
+        [](bool enable) {
+            sham::details::set_memory_pool_enabled(enable);
+        },
+        py::arg("enable"),
+        "Enable or disable the reuse of freed device buffers (memory pool)");
+    shambackends_module.def(
+        "is_memory_pool_enabled",
+        []() {
+            return sham::details::is_memory_pool_enabled();
+        },
+        "Whether the memory pool is enabled");
+    shambackends_module.def(
+        "release_memory_pool",
+        []() {
+            sham::details::release_memory_pool();
+        },
+        "Release the device buffers cached by the memory pool");
 
     shambackends_module.def("reset_mem_info_max", []() {
         sham::details::reset_mem_info_max();

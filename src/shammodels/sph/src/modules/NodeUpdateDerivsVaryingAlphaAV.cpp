@@ -17,12 +17,14 @@
 #include "shammodels/sph/modules/NodeUpdateDerivsVaryingAlphaAV.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
+#include "shammodels/sph/math/kernel_inv_h.hpp"
 #include "shammodels/sph/math/q_ab.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 
-template<class Tvec, template<class> class SPHKernel, bool compute_vsig_cfl>
+template<class Tvec, template<class> class SPHKernel, bool compute_vsig_cfl, bool reciprocal>
 struct KernelUpdateDerivsVaryingAlphaAV {
     using Tscal                   = shambase::VecComponent<Tvec>;
     using Kernel                  = SPHKernel<Tscal>;
@@ -131,6 +133,12 @@ struct KernelUpdateDerivsVaryingAlphaAV {
 
         Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
 
+        // reciprocal arithmetic : quantities of a hoisted out of the neighbour loop
+        Tscal hinv_a               = Tscal{1} / h_a;
+        Tscal inv_rho_a_sq_omega_a = sham::inv_sat_zero(rho_a_sq * omega_a);
+        // 1/rho = h^3 / (m hfact^3)
+        const Tscal inv_m_hfact3 = Tscal{1} / (pmass * hfactd * hfactd * hfactd);
+
         Tvec force_pressure  = Tvec{0, 0, 0};
         Tscal tmpdU_pressure = Tscal{0};
 
@@ -155,6 +163,71 @@ struct KernelUpdateDerivsVaryingAlphaAV {
             Tscal cs_b          = cs[id_b];
 
             Tscal rab = sycl::sqrt(rab2);
+
+            if constexpr (reciprocal) {
+                using KInv = shamrock::sph::KernelInvH<Kernel>;
+
+                Tscal hinv_b       = Tscal{1} / h_b;
+                Tscal hfact_hinv_b = hfactd * hinv_b;
+                Tscal rho_b        = pmass * (hfact_hinv_b * hfact_hinv_b * hfact_hinv_b);
+                Tscal rho_b_inv    = (h_b * h_b * h_b) * inv_m_hfact3;
+                Tscal omega_b_inv  = Tscal{1} / omega_b;
+
+                Tscal Fab_a = KInv::dW_3d(rab, hinv_a);
+                Tscal Fab_b = KInv::dW_3d(rab, hinv_b);
+
+                Tvec v_ab = vxyz_a - vxyz_b;
+
+                Tvec r_ab_unit = dr * sham::inv_sat_positive(rab);
+
+                Tscal v_ab_r_ab     = sycl::dot(v_ab, r_ab_unit);
+                Tscal abs_v_ab_r_ab = sycl::fabs(v_ab_r_ab);
+
+                Tscal vsig_a = alpha_a * cs_a + beta_AV * abs_v_ab_r_ab;
+                Tscal vsig_b = alpha_b * cs_b + beta_AV * abs_v_ab_r_ab;
+
+                Tscal vsig_u = shamrock::sph::vsig_u(P_a, P_b, rho_a, rho_b);
+
+                Tscal qa_ab = shamrock::sph::q_av(rho_a, vsig_a, v_ab_r_ab);
+                Tscal qb_ab = shamrock::sph::q_av(rho_b, vsig_b, v_ab_r_ab);
+
+                // same as add_to_derivs_sph_artif_visco_cond, with the divisions by rho_b and
+                // omega_b replaced by multiplications by their inverses
+                Tscal AV_P_a = P_a + qa_ab;
+                Tscal AV_P_b = P_b + qb_ab;
+
+                // same semantic as sham::inv_sat_zero(rho_b^2 omega_b) (rho_b > 0)
+                Tscal inv_rho_b_sq_omega_b = (omega_b != Tscal{0} && omega_b == omega_b)
+                                                 ? rho_b_inv * rho_b_inv * omega_b_inv
+                                                 : Tscal{0};
+
+                Tvec nabla_Wab_ha = r_ab_unit * Fab_a;
+                Tvec nabla_Wab_hb = r_ab_unit * Fab_b;
+
+                force_pressure += -pmass
+                                  * ((AV_P_a * inv_rho_a_sq_omega_a) * nabla_Wab_ha
+                                     + (AV_P_b * inv_rho_b_sq_omega_b) * nabla_Wab_hb);
+
+                tmpdU_pressure += duint_dt_pressure(
+                    pmass, AV_P_a, omega_a_rho_a_inv * rho_a_inv, v_ab, nabla_Wab_ha);
+
+                tmpdU_pressure += lambda_shock_conductivity(
+                    pmass,
+                    alpha_u,
+                    vsig_u,
+                    u_a - u_b,
+                    Fab_a * omega_a_rho_a_inv,
+                    Fab_b * (rho_b_inv * omega_b_inv));
+
+                if constexpr (compute_vsig_cfl) {
+                    // same signal velocity as the dedicated CFL loop (alpha = 1, beta = 2), up to
+                    // the rounding of r_ab_unit
+                    Tscal vsig_cfl_a = cs_a + Tscal{2} * abs_v_ab_r_ab;
+                    vsig_cfl_max     = sycl::fmax(vsig_cfl_max, vsig_cfl_a);
+                }
+
+                return;
+            }
 
             Tscal rho_b = rho_h(pmass, h_b, hfactd);
 
@@ -261,25 +334,38 @@ void shammodels::sph::modules::NodeUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel>::
         edges.neigh_cache};
 
     // call the kernel for each patches with part_counts.get(id_patch) threads of patch id_patch
-    if (edges.vsig_cfl.has_value()) {
-        auto &vsig_cfl = edges.vsig_cfl.value().get();
-        vsig_cfl.ensure_sizes(part_counts);
+    auto run = [&](auto reciprocal_tag) {
+        constexpr bool reciprocal = decltype(reciprocal_tag)::value;
 
-        using ComputeKernel = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, true>;
-        sham::distributed_data_kernel_call(
-            shamsys::instance::get_compute_scheduler_ptr(),
-            inputs,
-            sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans(), vsig_cfl.get_spans()},
-            part_counts,
-            ComputeKernel{pmass, alpha_u, beta_AV});
+        if (edges.vsig_cfl.has_value()) {
+            auto &vsig_cfl = edges.vsig_cfl.value().get();
+            vsig_cfl.ensure_sizes(part_counts);
+
+            using ComputeKernel
+                = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, true, reciprocal>;
+            sham::distributed_data_kernel_call(
+                shamsys::instance::get_compute_scheduler_ptr(),
+                inputs,
+                sham::DDMultiRef{
+                    edges.axyz.get_spans(), edges.duint.get_spans(), vsig_cfl.get_spans()},
+                part_counts,
+                ComputeKernel{pmass, alpha_u, beta_AV});
+        } else {
+            using ComputeKernel
+                = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, false, reciprocal>;
+            sham::distributed_data_kernel_call(
+                shamsys::instance::get_compute_scheduler_ptr(),
+                inputs,
+                sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans()},
+                part_counts,
+                ComputeKernel{pmass, alpha_u, beta_AV});
+        }
+    };
+
+    if (shammodels::sph::impl::use_reciprocal_arithmetic()) {
+        run(std::true_type{});
     } else {
-        using ComputeKernel = KernelUpdateDerivsVaryingAlphaAV<Tvec, SPHKernel, false>;
-        sham::distributed_data_kernel_call(
-            shamsys::instance::get_compute_scheduler_ptr(),
-            inputs,
-            sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans()},
-            part_counts,
-            ComputeKernel{pmass, alpha_u, beta_AV});
+        run(std::false_type{});
     }
 }
 

@@ -18,7 +18,9 @@
 #include "shambase/memory.hpp"
 #include "shammath/matrix_legacy.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/sph/impl_variants.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/kernel_inv_h.hpp"
 #include "shammodels/sph/modules/DiffOperatorDtDivv.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamrock/scheduler/InterfacesUtility.hpp"
@@ -223,110 +225,137 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
             auto dtdivv     = buf_dtdivv.get_write_access(depends_list);
             auto ploop_ptrs = pcache.get_read_access(depends_list);
 
-            auto e = queue.submit(depends_list, [&](sycl::handler &cgh) {
-                const Tscal pmass = gpart_mass;
+            auto submit_kernel = [&](auto reciprocal_tag) {
+                constexpr bool reciprocal = decltype(reciprocal_tag)::value;
+                return queue.submit(depends_list, [&](sycl::handler &cgh) {
+                    const Tscal pmass = gpart_mass;
 
-                tree::ObjectCacheIterator particle_looper(ploop_ptrs);
+                    tree::ObjectCacheIterator particle_looper(ploop_ptrs);
 
-                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+                    constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                shambase::parallel_for(
-                    cgh, pdat.get_obj_cnt(), "compute dtdivv + divcurl v", [=](i32 id_a) {
-                        using namespace shamrock::sph;
+                    shambase::parallel_for(
+                        cgh, pdat.get_obj_cnt(), "compute dtdivv + divcurl v", [=](i32 id_a) {
+                            using namespace shamrock::sph;
 
-                        Tvec sum_axyz  = ZVEC;
-                        Tscal sum_du_a = 0;
-                        Tscal h_a      = hpart[id_a];
-                        Tvec xyz_a     = xyz[id_a];
-                        Tvec vxyz_a    = vxyz[id_a];
-                        Tvec axyz_a    = axyz[id_a];
-                        Tscal omega_a  = omega[id_a];
+                            Tvec sum_axyz  = ZVEC;
+                            Tscal sum_du_a = 0;
+                            Tscal h_a      = hpart[id_a];
+                            Tvec xyz_a     = xyz[id_a];
+                            Tvec vxyz_a    = vxyz[id_a];
+                            Tvec axyz_a    = axyz[id_a];
+                            Tscal omega_a  = omega[id_a];
 
-                        Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
-                        // Tscal rho_a_sq  = rho_a * rho_a;
-                        // Tscal rho_a_inv = 1. / rho_a;
-                        Tscal inv_rho_omega_a = 1. / (omega_a * rho_a);
+                            Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
+                            // Tscal rho_a_sq  = rho_a * rho_a;
+                            // Tscal rho_a_inv = 1. / rho_a;
+                            Tscal inv_rho_omega_a = 1. / (omega_a * rho_a);
 
-                        Tscal sum_nabla_a = 0;
+                            Tscal sum_nabla_a = 0;
 
-                        std::array<Tvec, dim> Rij_a{ZVEC, ZVEC, ZVEC};
+                            std::array<Tvec, dim> Rij_a{ZVEC, ZVEC, ZVEC};
 
-                        std::array<Tvec, dim> Rij_a_dvk_dxj{ZVEC, ZVEC, ZVEC};
-                        std::array<Tvec, dim> Rij_a_dak_dxj{ZVEC, ZVEC, ZVEC};
+                            std::array<Tvec, dim> Rij_a_dvk_dxj{ZVEC, ZVEC, ZVEC};
+                            std::array<Tvec, dim> Rij_a_dak_dxj{ZVEC, ZVEC, ZVEC};
 
-                        Tscal sum_nabla_v = 0;
-                        Tvec sum_nabla_cross_v{};
+                            Tscal sum_nabla_v = 0;
+                            Tvec sum_nabla_cross_v{};
 
-                        particle_looper.for_each_object(id_a, [&](u32 id_b) {
-                            // compute only omega_a
-                            Tvec r_ab  = xyz_a - xyz[id_b];
-                            Tscal rab2 = sycl::dot(r_ab, r_ab);
-                            Tscal h_b  = hpart[id_b];
+                            Tscal hinv_a = Tscal{1} / h_a;
 
-                            if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
-                                return;
-                            }
+                            particle_looper.for_each_object(id_a, [&](u32 id_b) {
+                                // compute only omega_a
+                                Tvec r_ab  = xyz_a - xyz[id_b];
+                                Tscal rab2 = sycl::dot(r_ab, r_ab);
+                                Tscal h_b  = hpart[id_b];
 
-                            Tscal rab   = sycl::sqrt(rab2);
-                            Tvec vxyz_b = vxyz[id_b];
-                            Tvec axyz_b = axyz[id_b];
-                            Tvec v_ab   = vxyz_a - vxyz_b;
-                            Tvec a_ab   = axyz_a - axyz_b;
+                                if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
+                                    return;
+                                }
 
-                            Tvec r_ab_unit = r_ab / rab;
+                                Tscal rab   = sycl::sqrt(rab2);
+                                Tvec vxyz_b = vxyz[id_b];
+                                Tvec axyz_b = axyz[id_b];
+                                Tvec v_ab   = vxyz_a - vxyz_b;
+                                Tvec a_ab   = axyz_a - axyz_b;
 
-                            if (rab < 1e-9) {
-                                r_ab_unit = ZVEC;
-                            }
+                                Tvec r_ab_unit;
+                                Tvec dWab_a;
+                                if constexpr (reciprocal) {
+                                    r_ab_unit = r_ab * (Tscal{1} / rab);
 
-                            Tvec dWab_a = Kernel::dW_3d(rab, h_a) * r_ab_unit;
+                                    if (rab < 1e-9) {
+                                        r_ab_unit = ZVEC;
+                                    }
 
-                            Tvec mdWab_b = dWab_a * pmass;
+                                    dWab_a = shamrock::sph::KernelInvH<Kernel>::dW_3d(rab, hinv_a)
+                                             * r_ab_unit;
+                                } else {
+                                    r_ab_unit = r_ab / rab;
 
-                            static_assert(dim == 3, "this is only implemented for dim 3");
-                            Rij_a[0] -= r_ab.x() * mdWab_b;
-                            Rij_a[1] -= r_ab.y() * mdWab_b;
-                            Rij_a[2] -= r_ab.z() * mdWab_b;
+                                    if (rab < 1e-9) {
+                                        r_ab_unit = ZVEC;
+                                    }
 
-                            Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
-                            Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
-                            Rij_a_dvk_dxj[2] -= v_ab * mdWab_b.z();
+                                    dWab_a = Kernel::dW_3d(rab, h_a) * r_ab_unit;
+                                }
 
-                            Rij_a_dak_dxj[0] -= a_ab * mdWab_b.x();
-                            Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
-                            Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
+                                Tvec mdWab_b = dWab_a * pmass;
 
-                            // sum_nabla_a += sycl::dot(a_ab, mdWab_b);
-                            sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
-                            sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                                static_assert(dim == 3, "this is only implemented for dim 3");
+                                Rij_a[0] -= r_ab.x() * mdWab_b;
+                                Rij_a[1] -= r_ab.y() * mdWab_b;
+                                Rij_a[2] -= r_ab.z() * mdWab_b;
+
+                                Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
+                                Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
+                                Rij_a_dvk_dxj[2] -= v_ab * mdWab_b.z();
+
+                                Rij_a_dak_dxj[0] -= a_ab * mdWab_b.x();
+                                Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
+                                Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
+
+                                // sum_nabla_a += sycl::dot(a_ab, mdWab_b);
+                                sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
+                                sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                            });
+
+                            std::array<Tvec, 3> invRij = shammath::compute_inv_33(Rij_a);
+
+                            std::array<Tvec, 3> dvi_dxk
+                                = shammath::mat_prod_33(invRij, Rij_a_dvk_dxj);
+                            std::array<Tvec, 3> dai_dxk
+                                = shammath::mat_prod_33(invRij, Rij_a_dak_dxj);
+
+                            Tscal div_ai = dai_dxk[0].x() + dai_dxk[1].y() + dai_dxk[2].z();
+                            Tscal div_vi = dvi_dxk[0].x() + dvi_dxk[1].y() + dvi_dxk[2].z();
+                            Tvec curl_vi
+                                = {dvi_dxk[1].z() - dvi_dxk[2].y(),
+                                   dvi_dxk[2].x() - dvi_dxk[0].z(),
+                                   dvi_dxk[0].y() - dvi_dxk[1].x()};
+
+                            Tscal tens_nablav = dvi_dxk[0].x() * dvi_dxk[0].x()
+                                                + dvi_dxk[1].x() * dvi_dxk[0].y()
+                                                + dvi_dxk[2].x() * dvi_dxk[0].z()
+                                                + dvi_dxk[0].y() * dvi_dxk[1].x()
+                                                + dvi_dxk[1].y() * dvi_dxk[1].y()
+                                                + dvi_dxk[2].y() * dvi_dxk[1].z()
+                                                + dvi_dxk[0].z() * dvi_dxk[2].x()
+                                                + dvi_dxk[1].z() * dvi_dxk[2].y()
+                                                + dvi_dxk[2].z() * dvi_dxk[2].z();
+
+                            // divv[id_a] = div_vi;
+                            // curlv[id_a] = curl_vi;
+                            divv[id_a]   = -inv_rho_omega_a * sum_nabla_v;
+                            curlv[id_a]  = -inv_rho_omega_a * sum_nabla_cross_v;
+                            dtdivv[id_a] = div_ai - tens_nablav;
                         });
+                });
+            };
 
-                        std::array<Tvec, 3> invRij = shammath::compute_inv_33(Rij_a);
-
-                        std::array<Tvec, 3> dvi_dxk = shammath::mat_prod_33(invRij, Rij_a_dvk_dxj);
-                        std::array<Tvec, 3> dai_dxk = shammath::mat_prod_33(invRij, Rij_a_dak_dxj);
-
-                        Tscal div_ai = dai_dxk[0].x() + dai_dxk[1].y() + dai_dxk[2].z();
-                        Tscal div_vi = dvi_dxk[0].x() + dvi_dxk[1].y() + dvi_dxk[2].z();
-                        Tvec curl_vi
-                            = {dvi_dxk[1].z() - dvi_dxk[2].y(),
-                               dvi_dxk[2].x() - dvi_dxk[0].z(),
-                               dvi_dxk[0].y() - dvi_dxk[1].x()};
-
-                        Tscal tens_nablav
-                            = dvi_dxk[0].x() * dvi_dxk[0].x() + dvi_dxk[1].x() * dvi_dxk[0].y()
-                              + dvi_dxk[2].x() * dvi_dxk[0].z() + dvi_dxk[0].y() * dvi_dxk[1].x()
-                              + dvi_dxk[1].y() * dvi_dxk[1].y() + dvi_dxk[2].y() * dvi_dxk[1].z()
-                              + dvi_dxk[0].z() * dvi_dxk[2].x() + dvi_dxk[1].z() * dvi_dxk[2].y()
-                              + dvi_dxk[2].z() * dvi_dxk[2].z();
-
-                        // divv[id_a] = div_vi;
-                        // curlv[id_a] = curl_vi;
-                        divv[id_a]   = -inv_rho_omega_a * sum_nabla_v;
-                        curlv[id_a]  = -inv_rho_omega_a * sum_nabla_cross_v;
-                        dtdivv[id_a] = div_ai - tens_nablav;
-                    });
-            });
+            auto e = (shammodels::sph::impl::use_reciprocal_arithmetic())
+                         ? submit_kernel(std::true_type{})
+                         : submit_kernel(std::false_type{});
 
             buf_xyz.complete_event_state(e);
             buf_vxyz.complete_event_state(e);

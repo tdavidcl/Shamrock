@@ -17,9 +17,15 @@
 #include "shambase/profiling/profiling.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/details/internal_alloc.hpp"
+#include "shambackends/details/memory_pool.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include <unordered_map>
+#include <bit>
 #include <exception>
+#include <map>
+#include <mutex>
+#include <vector>
 
 namespace {
 
@@ -116,6 +122,94 @@ namespace {
         return "host";
     }
 
+    /**
+     * @brief Pool of freed USM blocks kept for reuse by later allocations.
+     *
+     * Allocations are rounded up to a size class (at most 12.5% larger than requested), and
+     * freed blocks are kept in the pool, keyed by (context, USM kind, size class, alignment),
+     * instead of being returned to the SYCL runtime. A later allocation of the same class then
+     * reuses the block, which avoids the cost of the device allocator and, on CPU backends, of
+     * the page faults & zeroing of freshly mapped memory. The memory held by the pool is bounded
+     * (see max_cached_fraction and max_total_fraction), and is released on allocation failure.
+     */
+    struct UsmBlockPool {
+        struct Key {
+            const void *ctx_id;
+            int target;
+            size_t class_size;
+            size_t alignment; // 0 if unspecified
+
+            auto operator<=>(const Key &) const = default;
+        };
+
+        struct CachedBlock {
+            void *ptr;
+            std::shared_ptr<sham::DeviceScheduler> dev_sched; // keeps the context alive
+        };
+
+        std::mutex mtx;
+        bool enabled = true;
+
+        /// maximum fraction of the device memory that can be held by cached (free) blocks
+        f64 max_cached_fraction = 0.6;
+        /// maximum fraction of the device memory held by pooled blocks (live + cached) above
+        /// which cached blocks are released before allocating new ones
+        f64 max_total_fraction = 0.9;
+
+        std::map<Key, std::vector<CachedBlock>> free_blocks;
+        std::unordered_map<void *, Key> live_blocks;
+        size_t cached_bytes = 0;
+        size_t live_bytes   = 0;
+
+        static size_t class_size(size_t sz, size_t alignment) {
+            size_t gran = 256;
+            if (sz > 4096) {
+                gran = std::bit_floor(sz) / 8;
+            }
+            gran = std::max(gran, alignment); // both are powers of two
+            return ((sz + gran - 1) / gran) * gran;
+        }
+
+        static size_t device_mem(const sham::DeviceScheduler &ds) {
+            return ds.ctx->device->prop.global_mem_size;
+        }
+
+        /// release a cached block to the SYCL runtime (mutex must be held)
+        void release(const Key &key, CachedBlock &blk) {
+            sycl::free(blk.ptr, blk.dev_sched->ctx->ctx);
+            cached_bytes -= key.class_size;
+        }
+
+        /// release cached blocks, largest first, until `bytes_needed` bytes were released or the
+        /// pool is empty (mutex must be held)
+        void evict(size_t bytes_needed) {
+            size_t released = 0;
+            while (released < bytes_needed && !free_blocks.empty()) {
+                auto it     = std::prev(free_blocks.end());
+                auto &stack = it->second;
+                while (!stack.empty() && released < bytes_needed) {
+                    release(it->first, stack.back());
+                    released += it->first.class_size;
+                    stack.pop_back();
+                }
+                if (stack.empty()) {
+                    free_blocks.erase(it);
+                }
+            }
+        }
+
+        void purge() {
+            std::lock_guard<std::mutex> lock(mtx);
+            evict(cached_bytes);
+        }
+    };
+
+    UsmBlockPool &get_pool() {
+        // intentionally leaked, blocks are released in finalize (see release_memory_pool)
+        static UsmBlockPool *pool = new UsmBlockPool();
+        return *pool;
+    }
+
 } // namespace
 
 namespace sham::details {
@@ -126,6 +220,29 @@ namespace sham::details {
         mem_perf_infos.max_allocated_byte_host   = mem_perf_infos.allocated_byte_host;
         mem_perf_infos.max_allocated_byte_device = mem_perf_infos.allocated_byte_device;
         mem_perf_infos.max_allocated_byte_shared = mem_perf_infos.allocated_byte_shared;
+    }
+
+    void set_memory_pool_enabled(bool enable) {
+        UsmBlockPool &pool = get_pool();
+        if (!enable) {
+            pool.purge();
+        }
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        pool.enabled = enable;
+    }
+
+    bool is_memory_pool_enabled() {
+        UsmBlockPool &pool = get_pool();
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        return pool.enabled;
+    }
+
+    void release_memory_pool() { get_pool().purge(); }
+
+    size_t get_memory_pool_cached_bytes() {
+        UsmBlockPool &pool = get_pool();
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        return pool.cached_bytes;
     }
 
     std::string log_mem_perf_info(const std::shared_ptr<DeviceScheduler> &dev_sched) {
@@ -173,8 +290,31 @@ namespace sham::details {
             " | mode =",
             get_mode_name<target>());
 
-        sycl::context &sycl_ctx = dev_sched->ctx->ctx;
-        sycl::free(usm_ptr, sycl_ctx);
+        bool pooled = false;
+        {
+            UsmBlockPool &pool = get_pool();
+            std::lock_guard<std::mutex> lock(pool.mtx);
+            auto it = pool.live_blocks.find(usm_ptr);
+            if (it != pool.live_blocks.end()) {
+                UsmBlockPool::Key key = it->second;
+                pool.live_blocks.erase(it);
+                pool.live_bytes -= key.class_size;
+
+                size_t max_cached
+                    = size_t(pool.max_cached_fraction * f64(UsmBlockPool::device_mem(*dev_sched)));
+
+                if (pool.enabled && pool.cached_bytes + key.class_size <= max_cached) {
+                    pool.free_blocks[key].push_back({usm_ptr, dev_sched});
+                    pool.cached_bytes += key.class_size;
+                    pooled = true;
+                }
+            }
+        }
+
+        if (!pooled) {
+            sycl::context &sycl_ctx = dev_sched->ctx->ctx;
+            sycl::free(usm_ptr, sycl_ctx);
+        }
 
         f64 end_time = shambase::details::get_wtime();
 
@@ -205,9 +345,60 @@ namespace sham::details {
 
         void *usm_ptr = nullptr;
 
+        // memory pool : try to reuse a cached block of the same class
+        UsmBlockPool &pool = get_pool();
+        std::optional<UsmBlockPool::Key> pool_key;
+        {
+            std::lock_guard<std::mutex> lock(pool.mtx);
+            if (pool.enabled && sz > 0) {
+                size_t align = (alignment) ? *alignment : 0;
+                pool_key     = UsmBlockPool::Key{
+                    ds.ctx.get(), int(target), UsmBlockPool::class_size(sz, align), align};
+
+                auto it = pool.free_blocks.find(*pool_key);
+                if (it != pool.free_blocks.end() && !it->second.empty()) {
+                    usm_ptr = it->second.back().ptr;
+                    it->second.pop_back();
+                    if (it->second.empty()) {
+                        pool.free_blocks.erase(it);
+                    }
+                    pool.cached_bytes -= pool_key->class_size;
+                    pool.live_blocks[usm_ptr] = *pool_key;
+                    pool.live_bytes += pool_key->class_size;
+                } else {
+                    // make room if the pool holds too much memory
+                    size_t max_total
+                        = size_t(pool.max_total_fraction * f64(UsmBlockPool::device_mem(ds)));
+                    size_t total = pool.live_bytes + pool.cached_bytes + pool_key->class_size;
+                    if (total > max_total) {
+                        pool.evict(total - max_total);
+                    }
+                }
+            }
+        }
+
+        if (usm_ptr != nullptr) {
+            f64 end_time = shambase::details::get_wtime();
+            if constexpr (target == device) {
+                register_alloc_device(sz, end_time - start_time);
+            } else if constexpr (target == shared) {
+                register_alloc_shared(sz, end_time - start_time);
+            } else if constexpr (target == host) {
+                register_alloc_host(sz, end_time - start_time);
+            }
+            return usm_ptr;
+        }
+
+        // size actually allocated (the size class if the block will be pooled)
+        size_t alloc_sz = (pool_key) ? pool_key->class_size : sz;
+
         auto catch_alloc_except = [&](auto alloc_lambda) {
             try {
                 usm_ptr = alloc_lambda();
+                if (usm_ptr == nullptr && pool.cached_bytes > 0) {
+                    pool.purge();
+                    usm_ptr = alloc_lambda();
+                }
             } catch (std::exception &ex) {
                 std::string log = sham::format(
                     "Alloc failed with exception : {}\nShamrock mem infos : {}",
@@ -282,15 +473,15 @@ namespace sham::details {
 
             if constexpr (target == device) {
                 catch_alloc_except([&] {
-                    return sycl::aligned_alloc_device(*alignment, sz, dev, sycl_ctx);
+                    return sycl::aligned_alloc_device(*alignment, alloc_sz, dev, sycl_ctx);
                 });
             } else if constexpr (target == shared) {
                 catch_alloc_except([&] {
-                    return sycl::aligned_alloc_shared(*alignment, sz, dev, sycl_ctx);
+                    return sycl::aligned_alloc_shared(*alignment, alloc_sz, dev, sycl_ctx);
                 });
             } else if constexpr (target == host) {
                 catch_alloc_except([&] {
-                    return sycl::aligned_alloc_host(*alignment, sz, sycl_ctx);
+                    return sycl::aligned_alloc_host(*alignment, alloc_sz, sycl_ctx);
                 });
             } else {
                 shambase::throw_unimplemented();
@@ -298,15 +489,15 @@ namespace sham::details {
         } else {
             if constexpr (target == device) {
                 catch_alloc_except([&] {
-                    return sycl::malloc_device(sz, dev, sycl_ctx);
+                    return sycl::malloc_device(alloc_sz, dev, sycl_ctx);
                 });
             } else if constexpr (target == shared) {
                 catch_alloc_except([&] {
-                    return sycl::malloc_shared(sz, dev, sycl_ctx);
+                    return sycl::malloc_shared(alloc_sz, dev, sycl_ctx);
                 });
             } else if constexpr (target == host) {
                 catch_alloc_except([&] {
-                    return sycl::malloc_host(sz, sycl_ctx);
+                    return sycl::malloc_host(alloc_sz, sycl_ctx);
                 });
             } else {
                 shambase::throw_unimplemented();
@@ -347,6 +538,12 @@ namespace sham::details {
 
             shamcomm::logs::debug_alloc_ln(
                 "memoryHandle", "pointer created : ptr =", usm_ptr, "alignment = None");
+        }
+
+        if (pool_key) {
+            std::lock_guard<std::mutex> lock(pool.mtx);
+            pool.live_blocks[usm_ptr] = *pool_key;
+            pool.live_bytes += pool_key->class_size;
         }
 
         f64 end_time = shambase::details::get_wtime();

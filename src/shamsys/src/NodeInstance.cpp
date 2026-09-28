@@ -25,6 +25,7 @@
 #include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/SyclMpiTypes.hpp"
 #include "shambackends/comm/CommunicationBuffer.hpp"
+#include "shambackends/details/memory_pool.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/sycl_utils.hpp"
 #include "shambackends/typeAliasVec.hpp"
@@ -146,6 +147,9 @@ namespace syclinit {
 
     void finalize() {
         initialized = false;
+
+        // give back the memory cached by the pool before the contexts are released
+        sham::details::release_memory_pool();
 
         device_compute.reset();
         device_alt.reset();

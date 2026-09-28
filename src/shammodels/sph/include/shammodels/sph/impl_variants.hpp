@@ -30,6 +30,7 @@
  * @endcode
  */
 
+#include "shambase/aliases_int.hpp"
 #include "shamalgs/ImplVariant.hpp"
 #include <string_view>
 #include <string>
@@ -72,11 +73,77 @@ namespace shammodels::sph::impl {
         using Variant = std::variant<SeparatePass, FusedWithDerivs>;
     } // namespace cfl_vsig
 
+    /**
+     * @brief Particle level passes (count & fill) of the two stages neighbour cache build.
+     */
+    namespace neigh_cache_particle_pass {
+        /// Test every particle of every neighbour leaf of the particle's leaf
+        struct AllLeafParticles {
+            static constexpr std::string_view variant_type_name = "all_leaf_particles";
+        };
+        /// Skip the neighbour leaves whose AABB is out of reach of the particle (exact, the
+        /// resulting neighbour lists are identical)
+        struct PruneLeaves {
+            static constexpr std::string_view variant_type_name = "prune_leaves";
+        };
+        using Variant = std::variant<AllLeafParticles, PruneLeaves>;
+    } // namespace neigh_cache_particle_pass
+
+    /**
+     * @brief Leaf level passes (count & fill) of the two stages neighbour cache build.
+     */
+    namespace neigh_cache_leaf_pass {
+        /// One tree traversal per leaf to count its neighbour leaves, a second one to store them
+        struct CountThenFill {
+            static constexpr std::string_view variant_type_name = "count_then_fill";
+        };
+        /// A single tree traversal per leaf, storing the neighbour leaves in a temporary buffer
+        /// of `capacity` entries per leaf (leaves with more neighbours are traversed again)
+        struct SingleTraversal {
+            static constexpr std::string_view variant_type_name = "single_traversal";
+            u32 capacity                                        = 128;
+        };
+        using Variant = std::variant<CountThenFill, SingleTraversal>;
+    } // namespace neigh_cache_leaf_pass
+
+    /**
+     * @brief Arithmetic of the main neighbour loops (smoothing length iteration, omega, fused
+     * diff operators, varying alpha force kernel).
+     */
+    namespace neigh_loop_arithmetic {
+        /// Divisions by the smoothing lengths, densities, ... evaluated for every pair, as in
+        /// the reference implementation (bitwise reproducible with the reference)
+        struct Divisions {
+            static constexpr std::string_view variant_type_name = "divisions";
+        };
+        /// Divisions replaced by multiplications with inverses computed once per particle or
+        /// per pair. Same physics, but the results differ from the reference by rounding
+        struct Reciprocals {
+            static constexpr std::string_view variant_type_name = "reciprocals";
+        };
+        using Variant = std::variant<Divisions, Reciprocals>;
+    } // namespace neigh_loop_arithmetic
+
     /// Currently selected implementation for the diff operators section
     const diff_operators::Variant &get_impl_diff_operators();
 
     /// Currently selected implementation for the CFL signal velocity section
     const cfl_vsig::Variant &get_impl_cfl_vsig();
+
+    /// Currently selected implementation for the neighbour cache particle passes section
+    const neigh_cache_particle_pass::Variant &get_impl_neigh_cache_particle_pass();
+
+    /// Currently selected implementation for the neighbour cache leaf passes section
+    const neigh_cache_leaf_pass::Variant &get_impl_neigh_cache_leaf_pass();
+
+    /// Currently selected implementation for the neighbour loops arithmetic section
+    const neigh_loop_arithmetic::Variant &get_impl_neigh_loop_arithmetic();
+
+    /// Whether the neighbour loops should use the reciprocals arithmetic
+    inline bool use_reciprocal_arithmetic() {
+        return std::holds_alternative<neigh_loop_arithmetic::Reciprocals>(
+            get_impl_neigh_loop_arithmetic());
+    }
 
     /// List the names of the SPH sections having selectable implementations
     std::vector<std::string> get_impl_sections();
@@ -94,3 +161,17 @@ namespace shammodels::sph::impl {
     void autoselect_all_impl();
 
 } // namespace shammodels::sph::impl
+
+/// json (de)serialization of the capacity of the single traversal leaf pass
+template<>
+struct shamalgs::ImplVariantParams<shammodels::sph::impl::neigh_cache_leaf_pass::SingleTraversal> {
+    using Alt = shammodels::sph::impl::neigh_cache_leaf_pass::SingleTraversal;
+    static nlohmann::json to_json(const Alt &p) { return {{"capacity", p.capacity}}; }
+    static Alt from_json(const nlohmann::json &j) {
+        Alt p{};
+        if (j.contains("capacity")) {
+            p.capacity = j.at("capacity").get<u32>();
+        }
+        return p;
+    }
+};
