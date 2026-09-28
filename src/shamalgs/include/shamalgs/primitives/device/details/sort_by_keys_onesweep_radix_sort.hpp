@@ -18,8 +18,8 @@
  * Significant Digit Radix Sort for GPUs", 2022, arXiv:2206.01784), following the structure of
  * https://github.com/Vincenwwx/hpcGPU :
  *
- *  1. an upfront kernel computes the digit histograms of every digit place in a single read of
- *     the keys,
+ *  1. an upfront kernel (shamalgs::primitives::digit_histogram) computes the digit histograms of
+ *     every digit place in a single read of the keys,
  *  2. for every digit place, a single "chained scan digit binning" kernel is launched. The input
  *     is split in tiles of `tile_size` keys, each work-group :
  *      - takes a tile using a dynamic tile id (so that tile `t` can only wait on tiles that are
@@ -46,6 +46,7 @@
 #include "shambase/integer.hpp"
 #include "shambase/string.hpp"
 #include "shamalgs/details/numeric/scanDecoupledLookback.hpp"
+#include "shamalgs/primitives/digit_histogram.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/math.hpp"
@@ -155,8 +156,8 @@ namespace shamalgs::primitives::device::details {
         sham::DeviceBuffer<Tkey> key_tmp(len, sched);
         sham::DeviceBuffer<Tval> val_tmp(len, sched);
 
-        // digit histograms of every digit place (pass major)
-        sham::DeviceBuffer<u32> digit_hist(npasses * nbuckets, sched);
+        // digit histograms of every digit place (pass major, see digit_histogram)
+        sham::DeviceBuffer<u32> digit_hist(0, sched);
         // look-back tile states, index `tile * nbuckets + digit`
         sham::DeviceBuffer<u32> tile_states(ntiles * nbuckets, sched);
         // dynamic tile id counter
@@ -166,54 +167,7 @@ namespace shamalgs::primitives::device::details {
         // 1. upfront histograms of all the digit places
         ////////////////////////////////////////////////////////////////////////////////////////
 
-        digit_hist.fill(0);
-
-        // enough groups to fill the device, while bounding the number of global atomics
-        u32 hist_groups = std::min<u32>(ntiles, 1024);
-
-        sham::kernel_call_hndl(
-            q,
-            sham::MultiRef{buf_key},
-            sham::MultiRef{digit_hist},
-            hist_groups * group_size,
-            [=](u32 nthreads, const Tkey *__restrict keys, u32 *__restrict hist) {
-                return [=](sycl::handler &cgh) {
-                    sycl::local_accessor<u32, 1> l_hist{npasses * nbuckets, cgh};
-
-                    cgh.parallel_for(
-                        sycl::nd_range<1>{nthreads, group_size}, [=](sycl::nd_item<1> item) {
-                            u32 lid   = item.get_local_id(0);
-                            u32 group = item.get_group_linear_id();
-
-                            for (u32 p = 0; p < npasses; p++) {
-                                l_hist[p * nbuckets + lid] = 0;
-                            }
-                            item.barrier(sycl::access::fence_space::local_space);
-
-                            for (u32 t = group; t < ntiles; t += hist_groups) {
-                                for (u32 j = 0; j < items_per_thread; j++) {
-                                    u32 i = t * tile_size + j * group_size + lid;
-                                    if (i < len) {
-                                        Tkey k = keys[i];
-                                        for (u32 p = 0; p < npasses; p++) {
-                                            u32 digit = u32(k >> (p * radix_bits)) & digit_mask;
-                                            atomic_ref_local(l_hist[p * nbuckets + digit])
-                                                .fetch_add(1U);
-                                        }
-                                    }
-                                }
-                            }
-                            item.barrier(sycl::access::fence_space::local_space);
-
-                            for (u32 p = 0; p < npasses; p++) {
-                                u32 cnt = l_hist[p * nbuckets + lid];
-                                if (cnt > 0) {
-                                    atomic_ref_global(hist[p * nbuckets + lid]).fetch_add(cnt);
-                                }
-                            }
-                        });
-                };
-            });
+        shamalgs::primitives::digit_histogram<Tkey, radix_bits>(sched, buf_key, digit_hist, len);
 
         ////////////////////////////////////////////////////////////////////////////////////////
         // 2. one chained scan digit binning kernel per digit place
