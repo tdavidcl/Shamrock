@@ -52,6 +52,11 @@ namespace shammodels::sph::impl {
                 }
             }};
 
+        shamalgs::ImplVariantGlobal<neigh_cache_tighten::None, neigh_cache_tighten::AfterOmega>
+            neigh_cache_tighten_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(neigh_cache_tighten::AfterOmega{});
+            }};
+
         shamalgs::ImplVariantGlobal<cfl_vsig::SeparatePass, cfl_vsig::FusedWithDerivs>
             cfl_vsig_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
                 self.set(cfl_vsig::FusedWithDerivs{});
@@ -112,6 +117,7 @@ namespace shammodels::sph::impl {
                 {"diff_operators", &diff_operators_impl},
                 {"diff_operators_evaluation", &diff_operators_evaluation_impl},
                 {"derivs_evaluation", &derivs_evaluation_impl},
+                {"neigh_cache_tighten", &neigh_cache_tighten_impl},
                 {"cfl_vsig", &cfl_vsig_impl},
                 {"neigh_cache_particle_pass", &neigh_cache_particle_pass_impl},
                 {"neigh_cache_particle_layout", &neigh_cache_particle_layout_impl},
@@ -156,6 +162,10 @@ namespace shammodels::sph::impl {
 
     const derivs_evaluation::Variant &get_impl_derivs_evaluation() {
         return get_or_autoselect(derivs_evaluation_impl);
+    }
+
+    const neigh_cache_tighten::Variant &get_impl_neigh_cache_tighten() {
+        return get_or_autoselect(neigh_cache_tighten_impl);
     }
 
     const cfl_vsig::Variant &get_impl_cfl_vsig() { return get_or_autoselect(cfl_vsig_impl); }

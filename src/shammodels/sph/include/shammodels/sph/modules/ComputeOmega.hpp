@@ -25,7 +25,8 @@
 
 #define NODE_EDGES(X_RO, X_RW)                                                                     \
     X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
-    X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
+    /* read, and tightened in place with neigh_cache_tighten = after_omega */                      \
+    X_RW(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, xyz)                                             \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, omega)

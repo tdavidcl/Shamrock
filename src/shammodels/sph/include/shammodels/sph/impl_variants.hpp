@@ -233,6 +233,26 @@ namespace shammodels::sph::impl {
         using Variant = std::variant<Scalar, Blocked>;
     } // namespace derivs_evaluation
 
+    /**
+     * @brief Tightening of the neighbour lists once the smoothing lengths are final.
+     *
+     * The neighbour cache is built with the interaction radius including the smoothing length
+     * tolerance of the h iteration, while the following loops (diff operators, forces, CFL)
+     * only use the pairs within the kernel support of either particle.
+     */
+    namespace neigh_cache_tighten {
+        /// The lists are kept as built
+        struct None {
+            static constexpr std::string_view variant_type_name = "none";
+        };
+        /// The omega loop (blocked evaluation only) compacts the lists in place to the pairs
+        /// within the kernel support of either particle, in the same order (identical results)
+        struct AfterOmega {
+            static constexpr std::string_view variant_type_name = "after_omega";
+        };
+        using Variant = std::variant<None, AfterOmega>;
+    } // namespace neigh_cache_tighten
+
     /// Currently selected implementation for the diff operators section
     const diff_operators::Variant &get_impl_diff_operators();
 
@@ -241,6 +261,9 @@ namespace shammodels::sph::impl {
 
     /// Currently selected implementation for the force kernel evaluation section
     const derivs_evaluation::Variant &get_impl_derivs_evaluation();
+
+    /// Currently selected implementation for the neighbour lists tightening section
+    const neigh_cache_tighten::Variant &get_impl_neigh_cache_tighten();
 
     /// Currently selected implementation for the CFL signal velocity section
     const cfl_vsig::Variant &get_impl_cfl_vsig();
