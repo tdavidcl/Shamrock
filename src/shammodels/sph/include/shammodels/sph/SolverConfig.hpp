@@ -686,7 +686,11 @@ struct shammodels::sph::SolverConfig {
     // Tree config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    u32 tree_reduction_level = 3; ///< Reduction level to be used in the tree build
+    /// Reduction level to be used in the tree build (larger values give larger tree leaves).
+    /// The neighbour lists (hence the results) do not depend on it, only the performance does
+    /// (5 was measured best on CPU together with the neighbour cache leaf pruning, set 3 to get
+    /// the previous default)
+    u32 tree_reduction_level = 5;
 
     /// Strategy used to build the neighbours cache out of the tree traversal
     NeighCacheStrategy neigh_cache_strategy = NeighCacheStrategy::TwoStage;
