@@ -20,6 +20,7 @@
 #include "shamalgs/details/algorithm/batcherOddEvenSort.hpp"
 #include "shamalgs/impl_registry.hpp"
 #include "shamalgs/primitives/device/details/sort_by_keys_lsd_radix_sort_basic.hpp"
+#include "shamalgs/primitives/device/details/sort_by_keys_onesweep_radix_sort.hpp"
 #include "shamalgs/primitives/device/details/sort_by_keys_std_sort.hpp"
 #include "shamalgs/primitives/sort_by_keys.hpp"
 #include <type_traits>
@@ -77,18 +78,35 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "lsd_radix_sort_basic";
         };
 
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+        /// Onesweep LSD radix sort (single digit binning kernel per digit place using a
+        /// decoupled look-back, unsigned integer keys only, falls back to the basic LSD radix
+        /// sort above 2^30 elements and to the std sort for other keys)
+        struct OnesweepRadixSort {
+            static constexpr std::string_view variant_type_name = "onesweep_radix_sort";
+        };
+#endif
+
         /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view sort_by_keys_impl_name = "sort_by_keys";
 
-        shamalgs::
-            ImplVariantGlobal<StdSort, BatcherOddEvenHostSerial, BatcherOddEven, LsdRadixSortBasic>
-                sort_by_keys_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
-                    if (dev_sched->ctx->device->prop.type == sham::DeviceType::CPU) {
-                        self.set(LsdRadixSortBasic{});
-                    } else {
-                        self.set(StdSort{});
-                    }
-                }};
+        shamalgs::ImplVariantGlobal<
+            StdSort,
+            BatcherOddEvenHostSerial,
+            BatcherOddEven,
+            LsdRadixSortBasic
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            ,
+            OnesweepRadixSort
+#endif
+            >
+            sort_by_keys_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+                if (dev_sched->ctx->device->prop.type == sham::DeviceType::CPU) {
+                    self.set(LsdRadixSortBasic{});
+                } else {
+                    self.set(StdSort{});
+                }
+            }};
 
         // Must come after the global it registers: same TU, so it is initialized after it
         SHAMALGS_REGISTER_IMPL(sort_by_keys_impl_name, sort_by_keys_impl);
@@ -124,6 +142,21 @@ namespace shamalgs::primitives {
                         device::details::sort_by_keys_std_sort(buf_key, buf_values, len);
                     }
                 },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                [&](impl::OnesweepRadixSort) {
+                    if constexpr (std::is_unsigned_v<Tkey>) {
+                        if (len <= device::details::onesweep_radix_sort_max_len) {
+                            device::details::sort_by_keys_onesweep_radix_sort(
+                                buf_key.get_dev_scheduler_ptr(), buf_key, buf_values, len);
+                        } else {
+                            device::details::sort_by_keys_lsd_radix_sort_basic(
+                                buf_key.get_dev_scheduler_ptr(), buf_key, buf_values, len);
+                        }
+                    } else {
+                        device::details::sort_by_keys_std_sort(buf_key, buf_values, len);
+                    }
+                },
+#endif
             },
             impl::sort_by_keys_impl.get());
     }
