@@ -228,19 +228,25 @@ if(SHAMROCK_USE_PCH)
         target_precompile_headers(${tgt} REUSE_FROM shambackends)
     endforeach()
 
-    set(shamrock_pch_targets shambackends ${shamrock_pch_reuse_targets})
-
     # the test executable is not compiled as position independent code, hence its own PCH
     if("${BUILD_TEST}")
         target_precompile_headers(shamrock_test PRIVATE ${shamrock_pch_headers})
-        list(APPEND shamrock_pch_targets shamrock_test)
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        foreach(tgt ${shamrock_pch_targets})
-            # do not embed timestamps in the PCH, otherwise ccache can not cache the translation units
-            # using it (this also requires ccache's sloppiness to include pch_defines,time_macros)
-            target_compile_options(${tgt} PRIVATE "SHELL:-Xclang -fno-pch-timestamp")
-        endforeach()
+        # Do not embed timestamps in the PCH, otherwise ccache can not cache the translation units
+        # using it (this also requires ccache's sloppiness to include pch_defines,time_macros).
+        # Only needed when generating the PCH, so it is set on the source CMake generates for it
+        # rather than on the whole targets (clang-tidy & clangd do not handle this -Xclang flag).
+        set_source_files_properties(
+            "${CMAKE_CURRENT_BINARY_DIR}/shambackends/CMakeFiles/shambackends.dir/cmake_pch.hxx.cxx"
+            DIRECTORY shambackends PROPERTIES COMPILE_FLAGS "-Xclang -fno-pch-timestamp"
+        )
+        if("${BUILD_TEST}")
+            set_source_files_properties(
+                "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/shamrock_test.dir/cmake_pch.hxx.cxx"
+                PROPERTIES COMPILE_FLAGS "-Xclang -fno-pch-timestamp"
+            )
+        endif()
     endif()
 endif()

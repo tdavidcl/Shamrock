@@ -6,7 +6,13 @@ CompileFlags:
       --hipsycl-platform=*,
       --hipsycl-config-file=*,
       --hipsycl-cpu-cxx=*,
-      --acpp-targets=*
+      --acpp-targets=*,
+      # precompiled header (SHAMROCK_USE_PCH) flags: the PCH is built by the project compiler,
+      # which may be a different clang version than clangd. They are passed as
+      # `-Xclang -include-pch -Xclang <file>.pch -Xclang -include -Xclang <file>`, this keeps only
+      # the (textual) `-include <file>`.
+      -Xclang,
+      -include-pch
     ]
   Add: [
       -Wconversion
