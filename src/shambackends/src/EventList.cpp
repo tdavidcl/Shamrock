@@ -16,6 +16,17 @@
 #include "shambackends/EventList.hpp"
 #include "shamcomm/logs.hpp"
 
+void sham::EventList::add_events(std::vector<sycl::event> &e) {
+    events.insert(events.end(), e.begin(), e.end());
+    consumed = false;
+}
+
+void sham::EventList::add_events(sham::EventList &e) {
+    events.insert(events.end(), e.events.begin(), e.events.end());
+    consumed   = false;
+    e.consumed = true;
+}
+
 sham::EventList::~EventList() noexcept(false) {
     if (!consumed && !events.empty()) {
         std::string log_str = sham::format(

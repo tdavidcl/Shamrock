@@ -98,10 +98,7 @@ namespace sham {
          *
          * @param e A reference to a vector containing the SYCL events to add.
          */
-        inline void add_events(std::vector<sycl::event> &e) {
-            events.insert(events.end(), e.begin(), e.end());
-            consumed = false;
-        }
+        void add_events(std::vector<sycl::event> &e);
 
         /**
          * @brief Add all events from another EventList to this one.
@@ -112,11 +109,7 @@ namespace sham {
          *
          * @param e The EventList from which to add all events.
          */
-        inline void add_events(sham::EventList &e) {
-            events.insert(events.end(), e.events.begin(), e.events.end());
-            consumed   = false;
-            e.consumed = true;
-        }
+        void add_events(sham::EventList &e);
 
         /**
          * @brief Get a string representation of the EventList's state.

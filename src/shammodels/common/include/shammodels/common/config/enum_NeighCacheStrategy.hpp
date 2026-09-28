@@ -65,33 +65,11 @@ namespace shammodels {
      * @param has_used_defaults Set to true if no key was found
      * @param has_updated_config Set to true if the legacy key was used
      */
-    inline void get_to_neigh_cache_strategy(
+    void get_to_neigh_cache_strategy(
         const nlohmann::json &j,
         NeighCacheStrategy &value,
         const std::string &log_ctx,
         bool &has_used_defaults,
-        bool &has_updated_config) {
-
-        if (j.contains(neigh_cache_strategy_json_key)) {
-            j.at(neigh_cache_strategy_json_key).get_to(value);
-            return;
-        }
-
-        if (j.contains(neigh_cache_strategy_legacy_json_key)) {
-            value = neigh_cache_strategy_from_two_stage_search(
-                j.at(neigh_cache_strategy_legacy_json_key).template get<bool>());
-            has_updated_config = true;
-            if (shamcomm::world_rank() == 0) {
-                shamcomm::logs::warn_ln(
-                    log_ctx,
-                    "Updating old key [" + std::string(neigh_cache_strategy_legacy_json_key)
-                        + "] to new key [" + std::string(neigh_cache_strategy_json_key)
-                        + "] in from_json");
-            }
-            return;
-        }
-
-        has_used_defaults = true;
-    }
+        bool &has_updated_config);
 
 } // namespace shammodels

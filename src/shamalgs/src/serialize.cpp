@@ -175,6 +175,36 @@ sham::DeviceBuffer<u8> shamalgs::SerializeHelper::finalize() {
     return std::move(storage);
 }
 
+void shamalgs::SerializeHelper::write(std::string s) {
+    StackEntry stack_loc{false};
+    write(u32(s.size()));
+
+    sycl::buffer<char> buf(s.size());
+    {
+        sycl::host_accessor acc{buf, sycl::write_only, sycl::no_init};
+        for (u32 i = 0; i < s.size(); i++) {
+            acc[i] = s[i];
+        }
+    }
+    write_buf(buf, s.size());
+}
+
+void shamalgs::SerializeHelper::load(std::string &s) {
+    StackEntry stack_loc{false};
+    u32 len;
+    load(len);
+    s.resize(len);
+
+    sycl::buffer<char> buf(len);
+    load_buf(buf, len);
+    {
+        sycl::host_accessor acc{buf, sycl::read_only};
+        for (u32 i = 0; i < len; i++) {
+            s[i] = acc[i];
+        }
+    }
+}
+
 shamalgs::SerializeHelper::SerializeHelper(std::shared_ptr<sham::DeviceScheduler> _dev_sched)
     : dev_sched(std::move(_dev_sched)), storage(0, _dev_sched) {}
 

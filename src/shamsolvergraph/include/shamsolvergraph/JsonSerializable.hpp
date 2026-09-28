@@ -205,13 +205,4 @@ namespace shamrock::solvergraph {
         }
     };
 
-    inline std::unique_ptr<JsonSerializable> JsonSerializable::from_json(const nlohmann::json &j) {
-        if (!j.is_object() || !j.contains("type") || !j["type"].is_string()) {
-            throw std::runtime_error(
-                "Invalid JSON for deserialization: expected an object with a string 'type' field.");
-        }
-        const std::string type = j.at("type").get<std::string>();
-        return JsonSerializable_registry::instance().create(type, j);
-    }
-
 } // namespace shamrock::solvergraph

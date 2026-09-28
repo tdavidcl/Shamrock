@@ -53,21 +53,7 @@ namespace shamrock::patch {
             reset_box_size();
         }
 
-        void set_patch_coord_bounding_box(PatchCoord<dim> new_patch_coord_box) {
-            patch_coord_bounding_box = new_patch_coord_box;
-            shamlog_debug_ln(
-                "SimBox",
-                "changed patch coord bounds :",
-                std::pair{
-                    u64_3{
-                        new_patch_coord_box.coord_min[0],
-                        new_patch_coord_box.coord_min[1],
-                        new_patch_coord_box.coord_min[2]},
-                    u64_3{
-                        new_patch_coord_box.coord_max[0],
-                        new_patch_coord_box.coord_max[1],
-                        new_patch_coord_box.coord_max[2]}});
-        }
+        void set_patch_coord_bounding_box(PatchCoord<dim> new_patch_coord_box);
 
         /**
          * @brief Get the stored bounding box of the domain
