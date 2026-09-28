@@ -21,6 +21,24 @@
 
 namespace shamtest::details {
 
+    void TestAssertList::assert_bool_with_log(std::string assert_name, bool v, std::string log) {
+        asserts.push_back(
+            TestAssert{.value = v, .name = std::move(assert_name), .comment = std::move(log)});
+    }
+
+    void TestAssertList::register_require(
+        std::string assert_name, bool eval, const char *expr, SourceLocation loc) {
+        if (eval) {
+            assert_bool_with_log(assert_name, eval, "");
+        } else {
+            assert_bool_with_log(
+                assert_name,
+                eval,
+                std::string(expr) + " evaluated to false\n\n"
+                    + " -> location : " + loc.format_one_line());
+        }
+    }
+
     std::string TestAssertList::serialize_json() {
         std::string acc = "\n[\n";
 

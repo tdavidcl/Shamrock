@@ -32,9 +32,63 @@ namespace shamtest::details {
         // define member function here
         // to register asserts
 
-        inline void assert_bool_with_log(std::string assert_name, bool v, std::string log) {
-            asserts.push_back(
-                TestAssert{.value = v, .name = std::move(assert_name), .comment = std::move(log)});
+        /// Register an assertion with the supplied log
+        void assert_bool_with_log(std::string assert_name, bool v, std::string log);
+
+        // The register_require* functions implement the REQUIRE* macros of shamtest.hpp, they are
+        // kept out of the macros so that each assert expands to a single call.
+
+        /// Register the result of a `REQUIRE_NAMED` assert
+        void register_require(
+            std::string assert_name, bool eval, const char *expr, SourceLocation loc);
+
+        /// Register the result of a `REQUIRE_EQUAL_CUSTOM_COMP_NAMED` assert
+        template<class Ta, class Tb>
+        inline void register_require_equal(
+            std::string assert_name,
+            bool eval,
+            const char *expr_a,
+            Ta &a,
+            const char *expr_b,
+            Tb &b,
+            SourceLocation loc) {
+            if (eval) {
+                assert_bool_with_log(assert_name, eval, "");
+            } else {
+                assert_bool_with_log(
+                    assert_name,
+                    eval,
+                    assert_name + " evaluated to false\n\n" + " -> " + expr_a
+                        + sham::format(" = {}", a) + "\n" + " -> " + expr_b
+                        + sham::format(" = {}", b) + "\n"
+                        + " -> location : " + loc.format_one_line());
+            }
+        }
+
+        /// Register the result of a `REQUIRE_FLOAT_EQUAL_CUSTOM_DIST_NAMED` assert
+        template<class Ta, class Tb, class Tprec>
+        inline void register_require_float_equal(
+            std::string assert_name,
+            bool eval,
+            const char *expr_a,
+            Ta &a,
+            const char *expr_b,
+            Tb &b,
+            const char *expr_prec,
+            const Tprec &prec,
+            SourceLocation loc) {
+            if (eval) {
+                assert_bool_with_log(assert_name, eval, "");
+            } else {
+                assert_bool_with_log(
+                    assert_name,
+                    eval,
+                    assert_name + " evaluated to false\n\n" + " -> " + expr_a
+                        + sham::format(" = {}", a) + "\n" + " -> " + expr_b
+                        + sham::format(" = {}", b) + "\n" + " -> " + expr_prec
+                        + sham::format(" = {}", prec) + "\n"
+                        + " -> location : " + loc.format_one_line());
+            }
         }
 
         /// Append the source location to the the supplied string to generate a comment

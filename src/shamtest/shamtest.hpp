@@ -196,17 +196,9 @@ namespace shamtest::details {
 #define REQUIRE_NAMED(name, a)                                                                     \
     do {                                                                                           \
         using namespace shamtest::details;                                                         \
-        bool eval               = a;                                                               \
-        std::string assert_name = format_assert_name(name) + #a;                                   \
-        if (eval) {                                                                                \
-            shamtest::asserts().assert_bool_with_log(assert_name, eval, "");                       \
-        } else {                                                                                   \
-            shamtest::asserts().assert_bool_with_log(                                              \
-                assert_name,                                                                       \
-                eval,                                                                              \
-                STDSTRINGIFY(a) + " evaluated to false\n\n"                                        \
-                    + " -> location : " + SourceLocation{}.format_one_line());                     \
-        }                                                                                          \
+        bool eval = a;                                                                             \
+        shamtest::asserts().register_require(                                                      \
+            format_assert_name(name) + #a, eval, #a, SourceLocation{});                            \
     } while (0)
 
 /**
@@ -223,19 +215,15 @@ namespace shamtest::details {
         auto _______a = _a;                                                                        \
         auto _______b = _b;                                                                        \
         using namespace shamtest::details;                                                         \
-        bool eval               = comp(_______a, _______b);                                        \
-        std::string assert_name = format_assert_name(name) + #_a " == " #_b;                       \
-        if (eval) {                                                                                \
-            shamtest::asserts().assert_bool_with_log(assert_name, eval, "");                       \
-        } else {                                                                                   \
-            shamtest::asserts().assert_bool_with_log(                                              \
-                assert_name,                                                                       \
-                eval,                                                                              \
-                assert_name + " evaluated to false\n\n" + " -> " #_a                               \
-                    + sham::format(" = {}", _______a) + "\n" + " -> " #_b                          \
-                    + sham::format(" = {}", _______b) + "\n"                                       \
-                    + " -> location : " + SourceLocation{}.format_one_line());                     \
-        }                                                                                          \
+        bool eval = comp(_______a, _______b);                                                      \
+        shamtest::asserts().register_require_equal(                                                \
+            format_assert_name(name) + #_a " == " #_b,                                             \
+            eval,                                                                                  \
+            #_a,                                                                                   \
+            _______a,                                                                              \
+            #_b,                                                                                   \
+            _______b,                                                                              \
+            SourceLocation{});                                                                     \
     } while (0)
 
 /**
@@ -267,19 +255,16 @@ namespace shamtest::details {
         auto b = _b;                                                                               \
         using namespace shamtest::details;                                                         \
         bool eval = dist((a) - (b)) < prec;                                                        \
-        std::string assert_name                                                                    \
-            = format_assert_name(name) + #dist "(" #_a ") - (" #_b ") < " #prec;                   \
-        if (eval) {                                                                                \
-            shamtest::asserts().assert_bool_with_log(assert_name, eval, "");                       \
-        } else {                                                                                   \
-            shamtest::asserts().assert_bool_with_log(                                              \
-                assert_name,                                                                       \
-                eval,                                                                              \
-                assert_name + " evaluated to false\n\n" + sham::format(" -> " #_a " = {}", a)      \
-                    + "\n" + sham::format(" -> " #_b " = {}", b) + "\n"                            \
-                    + sham::format(" -> " #prec " = {}", prec) + "\n"                              \
-                    + " -> location : " + SourceLocation{}.format_one_line());                     \
-        }                                                                                          \
+        shamtest::asserts().register_require_float_equal(                                          \
+            format_assert_name(name) + #dist "(" #_a ") - (" #_b ") < " #prec,                     \
+            eval,                                                                                  \
+            #_a,                                                                                   \
+            a,                                                                                     \
+            #_b,                                                                                   \
+            b,                                                                                     \
+            #prec,                                                                                 \
+            prec,                                                                                  \
+            SourceLocation{});                                                                     \
     } while (0)
 
 /**
