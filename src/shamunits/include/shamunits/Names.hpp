@@ -17,7 +17,7 @@
  */
 
 #include "details/utils.hpp"
-#include <unordered_map>
+#include <string_view>
 #include <stdexcept>
 #include <string>
 
@@ -102,9 +102,22 @@ namespace shamunits {
         return details::pow_constexpr_fast_inv<p, T>(10, 1e-1);
     }
 
-    /// Map to convert from a prefix name to a prefix enum value
+    namespace details {
+        /// Entry of a table associating a name to an enum value
+        template<class T>
+        struct NamedValue {
+            std::string_view name; ///< the name
+            T value;               ///< the associated enum value
+        };
+    } // namespace details
+
+    // Note : the name <-> value tables below are plain constexpr arrays searched linearly rather
+    // than std::unordered_map, they are only used when parsing units (e.g. from python) while
+    // static maps in this header had to be instantiated and constructed in every file including it.
+
+    /// Table to convert from a prefix name (long or short) to a prefix enum value
     /// Ideally this should be replaced by cpp reflexion one day
-    static const std::unordered_map<std::string, UnitPrefix> map_name_to_unit_prefix{
+    inline constexpr details::NamedValue<UnitPrefix> unit_prefix_names[] = {
     // clang-format off
         #define X(longname, shortname, value) {#longname, longname}, {#shortname, shortname},
         XMAC_UNIT_PREFIX
@@ -112,11 +125,11 @@ namespace shamunits {
         // clang-format on
     };
 
-    /// Map to convert from unit prefix to prefix name in string
+    /// Table to convert from unit prefix to prefix name in string
     /// Ideally this should be replaced by cpp reflexion one day
-    static const std::unordered_map<UnitPrefix, std::string> map_u_to_name_prefix = {
+    inline constexpr details::NamedValue<UnitPrefix> unit_prefix_short_names[] = {
     // clang-format off
-        #define X(longname, shortname, value) {shortname, #shortname},
+        #define X(longname, shortname, value) {#shortname, shortname},
         XMAC_UNIT_PREFIX
         #undef X
         // clang-format on
@@ -125,10 +138,10 @@ namespace shamunits {
     /// Get the prefix name for a UnitPrefix enum value
     inline const std::string get_unit_prefix_name(UnitPrefix p) {
 
-        map_u_to_name_prefix.find(p);
-
-        if (auto search = map_u_to_name_prefix.find(p); search != map_u_to_name_prefix.end()) {
-            return search->second;
+        for (const auto &entry : unit_prefix_short_names) {
+            if (entry.value == p) {
+                return std::string(entry.name);
+            }
         }
 
         return "[Unknown Unit prefix name]";
@@ -137,11 +150,10 @@ namespace shamunits {
     /// Get the UnitPrefix enum value from a prefix name as a string
     inline const UnitPrefix unit_prefix_from_name(std::string p) {
 
-        map_name_to_unit_prefix.find(p);
-
-        if (auto search = map_name_to_unit_prefix.find(p);
-            search != map_name_to_unit_prefix.end()) {
-            return search->second;
+        for (const auto &entry : unit_prefix_names) {
+            if (entry.name == p) {
+                return entry.value;
+            }
         }
 
         throw std::invalid_argument("this unit prefix name is unknown");
@@ -159,18 +171,18 @@ namespace shamunits {
             #undef X1
         };
 
-        /// Map to convert from string to unit name
-        static const std::unordered_map<std::string, UnitName> map_name_to_unit{
-            /// Macro expanding to the string->UnitName map
+        /// Table to convert from string (long or short name) to unit name
+        inline constexpr shamunits::details::NamedValue<UnitName> unit_names[] = {
+            /// Macro expanding to the string->UnitName table
             #define X1(longname, shortname) {#longname, longname}, {#shortname, shortname},
             XMAC_UNITS
             #undef X1
         };
 
-        /// Map to convert from unit name to string
-        static const std::unordered_map<UnitName, std::string> map_u_to_name = {
-            /// Macro expanding to the UnitName->string map
-            #define X1(longname, shortname) {shortname, #shortname},
+        /// Table to convert from unit name to string
+        inline constexpr shamunits::details::NamedValue<UnitName> unit_short_names[] = {
+            /// Macro expanding to the UnitName->string table
+            #define X1(longname, shortname) {#shortname, shortname},
             XMAC_UNITS
             #undef X1
         };
@@ -179,10 +191,10 @@ namespace shamunits {
         /// Get the unit name for a UnitName enum value
         inline const std::string get_unit_name(UnitName p) {
 
-            map_u_to_name.find(p);
-
-            if (auto search = map_u_to_name.find(p); search != map_u_to_name.end()) {
-                return search->second;
+            for (const auto &entry : unit_short_names) {
+                if (entry.value == p) {
+                    return std::string(entry.name);
+                }
             }
 
             return "[Unknown Unit name]";
@@ -191,10 +203,10 @@ namespace shamunits {
         /// Get the UnitName enum value from a unit name as a string
         inline const UnitName unit_from_name(std::string p) {
 
-            auto search = map_name_to_unit.find(p);
-
-            if (search != map_name_to_unit.end()) {
-                return search->second;
+            for (const auto &entry : unit_names) {
+                if (entry.name == p) {
+                    return entry.value;
+                }
             }
 
             throw std::invalid_argument("this unit name is unknown : " + p);
