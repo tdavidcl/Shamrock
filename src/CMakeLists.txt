@@ -211,21 +211,40 @@ if(SHAMROCK_USE_PCH)
     target_precompile_headers(shambackends PRIVATE ${shamrock_pch_headers})
     set_target_properties(shambackends PROPERTIES DEFINE_SYMBOL "")
 
-    set(shamrock_pch_reuse_targets
-        shammath
-        shamalgs
-        shamsys
-        shamtree
-        shamlib
-        shampylib
-        shammodels_common
-        shammodels_zeus
-        shammodels_ramses
-        shammodels_sph
-        shammodels_gsph
-    )
+    set(shamrock_pch_reuse_targets shammath shamalgs shamsys shamtree shamlib shampylib)
     foreach(tgt ${shamrock_pch_reuse_targets})
         target_precompile_headers(${tgt} REUSE_FROM shambackends)
+    endforeach()
+
+    # The model libraries also share a precompiled header, built by shammodels_common, that adds
+    # the Shamrock core headers (device buffers & kernels, logs, patch scheduler & context) that
+    # (nearly) all of their translation units include, and that cost ~2s to parse in each of them.
+    set(shamrock_models_pch_headers
+        ${shamrock_pch_headers}
+        <shambase/exception.hpp>
+        <shambase/string.hpp>
+        <shambase/memory.hpp>
+        <shambase/stacktrace.hpp>
+        <shambase/DistributedData.hpp>
+        <shamcomm/logs.hpp>
+        <shambackends/vec.hpp>
+        <shambackends/math.hpp>
+        <shambackends/DeviceScheduler.hpp>
+        <shambackends/sycl_utils.hpp>
+        <shambackends/DeviceBuffer.hpp>
+        <shambackends/kernel_call.hpp>
+        <shamsys/NodeInstance.hpp>
+        <shamrock/scheduler/PatchScheduler.hpp>
+        <shamrock/scheduler/ShamrockCtx.hpp>
+    )
+    target_precompile_headers(shammodels_common PRIVATE ${shamrock_models_pch_headers})
+    set_target_properties(shammodels_common PROPERTIES DEFINE_SYMBOL "")
+
+    set(shamrock_models_pch_reuse_targets shammodels_zeus shammodels_ramses shammodels_sph
+                                          shammodels_gsph
+    )
+    foreach(tgt ${shamrock_models_pch_reuse_targets})
+        target_precompile_headers(${tgt} REUSE_FROM shammodels_common)
     endforeach()
 
     # the test executable is not compiled as position independent code, hence its own PCH
@@ -241,6 +260,12 @@ if(SHAMROCK_USE_PCH)
         set_source_files_properties(
             "${CMAKE_CURRENT_BINARY_DIR}/shambackends/CMakeFiles/shambackends.dir/cmake_pch.hxx.cxx"
             DIRECTORY shambackends PROPERTIES COMPILE_FLAGS "-Xclang -fno-pch-timestamp"
+        )
+        set_source_files_properties(
+            "${CMAKE_CURRENT_BINARY_DIR}/shammodels/common/CMakeFiles/shammodels_common.dir/cmake_pch.hxx.cxx"
+            DIRECTORY
+            shammodels/common
+            PROPERTIES COMPILE_FLAGS "-Xclang -fno-pch-timestamp"
         )
         if("${BUILD_TEST}")
             set_source_files_properties(
