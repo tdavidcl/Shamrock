@@ -20,8 +20,8 @@
 
 namespace shammodels::sph {
 
-    template<class Tvec, template<class> class SPHKernel>
-    void SolverConfig<Tvec, SPHKernel>::set_layout(shamrock::patch::PatchDataLayerLayout &pdl) {
+    template<class Tvec>
+    void SolverConfigBase<Tvec>::set_layout(shamrock::patch::PatchDataLayerLayout &pdl) {
         pdl.add_field<Tvec>("xyz", 1);
         pdl.add_field<Tvec>("vxyz", 1);
         pdl.add_field<Tvec>("axyz", 1);
@@ -122,8 +122,8 @@ namespace shammodels::sph {
         }
     }
 
-    template<class Tvec, template<class> class SPHKernel>
-    void SolverConfig<Tvec, SPHKernel>::set_ghost_layout(
+    template<class Tvec>
+    void SolverConfigBase<Tvec>::set_ghost_layout(
         shamrock::patch::PatchDataLayerLayout &ghost_layout) {
 
         ghost_layout.add_field<Tscal>("hpart", 1);
@@ -170,6 +170,8 @@ namespace shammodels::sph {
 }; // namespace shammodels::sph
 
 using namespace shammath;
+
+template struct shammodels::sph::SolverConfigBase<f64_3>;
 
 template class shammodels::sph::SolverConfig<f64_3, M4>;
 template class shammodels::sph::SolverConfig<f64_3, M6>;

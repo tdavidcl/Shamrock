@@ -32,17 +32,19 @@ namespace shammodels::sph::modules {
 
     /**
      * @brief Module for computing equation of state quantities
+     *
+     * It does not depend on the SPH kernel (only on its hfact, passed to compute_eos), so that it
+     * is compiled once for all kernels.
+     *
      * @tparam Tvec Vector type for positions
-     * @tparam SPHKernel SPH kernel template
      */
-    template<class Tvec, template<class> class SPHKernel>
+    template<class Tvec>
     class ComputeEos {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-        using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
+        using Config  = SolverConfigBase<Tvec>;
         using Storage = SolverStorage<Tvec, u32>;
 
         ShamrockCtx &context;
@@ -52,8 +54,12 @@ namespace shammodels::sph::modules {
         ComputeEos(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
-        /// @brief Computes pressure and sound speed from equation of state
-        void compute_eos();
+        /**
+         * @brief Computes pressure and sound speed from equation of state
+         *
+         * @param kernel_hfactd the hfactd of the SPH kernel (SPHKernel<Tscal>::hfactd)
+         */
+        void compute_eos(Tscal kernel_hfactd);
 
         private:
         void compute_eos_internal(

@@ -52,6 +52,17 @@
 namespace shammodels::sph {
 
     /**
+     * @brief The part of the configuration of a sph solver that does not depend on the SPH kernel
+     *
+     * Modules that do not depend on the SPH kernel can take this type instead of the full
+     * SolverConfig, so that they are compiled once instead of once per SPH kernel.
+     *
+     * @tparam Tvec the type of the vector used to represent the particles
+     */
+    template<class Tvec>
+    struct SolverConfigBase;
+
+    /**
      * @brief The configuration for a sph solver
      *
      * @tparam Tvec the type of the vector used to represent the particles
@@ -535,22 +546,17 @@ namespace shammodels::sph {
 
 } // namespace shammodels::sph
 
-template<class Tvec, template<class> class SPHKernel>
-struct shammodels::sph::SolverConfig {
+template<class Tvec>
+struct shammodels::sph::SolverConfigBase {
 
     /// The type of the scalar used to represent the quantities
     using Tscal = shambase::VecComponent<Tvec>;
     /// The dimension of the problem
     static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-    /// The type of the kernel used for the SPH interactions
-    using Kernel = SPHKernel<Tscal>;
     /// The type of the Morton code for the tree
     using u_morton = u32;
 
     using RTree = shamtree::CompressedLeafBVH<u_morton, Tvec, 3>;
-
-    /// The radius of the sph kernel
-    static constexpr Tscal Rkern = Kernel::Rkern;
 
     Tscal gpart_mass; ///< The mass of each gas particle
 
@@ -1147,16 +1153,6 @@ struct shammodels::sph::SolverConfig {
         compute_gw = enable;
     }
 
-    /// Print the current status of the solver config
-    inline void print_status() {
-        if (shamcomm::world_rank() != 0) {
-            return;
-        }
-        logger::raw_ln("----- SPH Solver configuration -----");
-        logger::raw_ln(nlohmann::json{*this}.dump(4));
-        logger::raw_ln("------------------------------------");
-    }
-
     inline void check_config() {
         dust_config.check_config();
 
@@ -1177,6 +1173,28 @@ struct shammodels::sph::SolverConfig {
 
     void set_layout(shamrock::patch::PatchDataLayerLayout &pdl);
     void set_ghost_layout(shamrock::patch::PatchDataLayerLayout &ghost_layout);
+};
+
+template<class Tvec, template<class> class SPHKernel>
+struct shammodels::sph::SolverConfig : public shammodels::sph::SolverConfigBase<Tvec> {
+
+    /// The type of the scalar used to represent the quantities
+    using Tscal = shambase::VecComponent<Tvec>;
+    /// The type of the kernel used for the SPH interactions
+    using Kernel = SPHKernel<Tscal>;
+
+    /// The radius of the sph kernel
+    static constexpr Tscal Rkern = Kernel::Rkern;
+
+    /// Print the current status of the solver config
+    inline void print_status() {
+        if (shamcomm::world_rank() != 0) {
+            return;
+        }
+        logger::raw_ln("----- SPH Solver configuration -----");
+        logger::raw_ln(nlohmann::json{*this}.dump(4));
+        logger::raw_ln("------------------------------------");
+    }
 };
 
 namespace shammodels::sph {

@@ -456,8 +456,7 @@ namespace shammodels::sph {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
 
-            modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(
-                ctx, solver.solver_config, solver.storage)
+            modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
                 .update_load_balancing();
 
             sched.scheduler_step(false, false);
@@ -612,8 +611,7 @@ namespace shammodels::sph {
                 logger::info_ln("Model", "Push particles : ", log_gathered);
             }
 
-            modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(
-                ctx, solver.solver_config, solver.storage)
+            modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
                 .update_load_balancing();
 
             sched.scheduler_step(false, false);

@@ -30,8 +30,8 @@
 #include <numeric>
 #include <vector>
 
-template<class Tvec, template<class> class SPHKernel>
-auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_basis(
+template<class Tvec>
+auto shammodels::sph::modules::AnalysisDiscBase<Tvec>::compute_analysis_basis(
     Tscal pmass, Tscal Rmin, Tscal Rmax, u32 Nbin, const ShamrockCtx &context) -> analysis_basis {
 
     sham::DeviceBuffer<Tscal> bin_edges(Nbin, shamsys::instance::get_compute_scheduler_ptr());
@@ -149,8 +149,8 @@ auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_b
         std::move(Sigma)};
 }
 
-template<class Tvec, template<class> class SPHKernel>
-auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_stage0(
+template<class Tvec>
+auto shammodels::sph::modules::AnalysisDiscBase<Tvec>::compute_analysis_stage0(
     analysis_basis &basis, u32 Nbin) -> analysis_stage0 {
     // compute unit l
     // still do it on device because data is there still
@@ -316,8 +316,8 @@ auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_s
         std::move(binned_Hsq)};
 }
 
-template<class Tvec, template<class> class SPHKernel>
-auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_stage1(
+template<class Tvec>
+auto shammodels::sph::modules::AnalysisDiscBase<Tvec>::compute_analysis_stage1(
     analysis_basis &basis, analysis_stage0 &stage0, u32 Nbin) -> analysis_stage1 {
 
     sham::DeviceBuffer<Tscal> &buf_lx     = stage0.lx;
@@ -367,8 +367,8 @@ auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis_s
     return analysis_stage1{std::move(buf_tilt), std::move(buf_twist), std::move(buf_psi)};
 }
 
-template<class Tvec, template<class> class SPHKernel>
-auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis(
+template<class Tvec>
+auto shammodels::sph::modules::AnalysisDiscBase<Tvec>::compute_analysis(
     Tscal Rmin, Tscal Rmax, u32 Nbin, const ShamrockCtx &ctx) -> analysis {
 
     const Tscal pmass      = solver_config.gpart_mass;
@@ -389,11 +389,4 @@ auto shammodels::sph::modules::AnalysisDisc<Tvec, SPHKernel>::compute_analysis(
         std::move(stage0.Hsq)};
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::AnalysisDisc<f64_3, M4>;
-template class shammodels::sph::modules::AnalysisDisc<f64_3, M6>;
-template class shammodels::sph::modules::AnalysisDisc<f64_3, M8>;
-
-template class shammodels::sph::modules::AnalysisDisc<f64_3, C2>;
-template class shammodels::sph::modules::AnalysisDisc<f64_3, C4>;
-template class shammodels::sph::modules::AnalysisDisc<f64_3, C6>;
+template class shammodels::sph::modules::AnalysisDiscBase<f64_3>;

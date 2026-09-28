@@ -18,8 +18,8 @@
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammath/sphkernels.hpp"
 
-template<class Tvec, class Tmorton, template<class> class SPHKernel>
-void shammodels::sph::modules::ParticleReordering<Tvec, Tmorton, SPHKernel>::reorder_particles() {
+template<class Tvec, class Tmorton>
+void shammodels::sph::modules::ParticleReordering<Tvec, Tmorton>::reorder_particles() {
 
     using namespace shamrock;
     using namespace shamrock::patch;
@@ -47,11 +47,4 @@ void shammodels::sph::modules::ParticleReordering<Tvec, Tmorton, SPHKernel>::reo
     });
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M4>;
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M6>;
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, M8>;
-
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, C2>;
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, C4>;
-template class shammodels::sph::modules::ParticleReordering<f64_3, u32, C6>;
+template class shammodels::sph::modules::ParticleReordering<f64_3, u32>;

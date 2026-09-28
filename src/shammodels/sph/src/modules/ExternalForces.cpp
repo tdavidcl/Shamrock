@@ -44,8 +44,8 @@ namespace shambase {
     }
 } // namespace shambase
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::compute_ext_forces_indep_v() {
+template<class Tvec>
+void shammodels::sph::modules::ExternalForces<Tvec>::compute_ext_forces_indep_v() {
 
     StackEntry stack_loc{};
 
@@ -59,7 +59,7 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::compute_ext_forc
     PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
     const u32 iaxyz_ext = pdl.get_field_idx<Tvec>("axyz_ext");
-    modules::SinkParticlesUpdate<Tvec, SPHKernel> sink_update(context, solver_config, storage);
+    modules::SinkParticlesUpdate<Tvec> sink_update(context, solver_config, storage);
 
     scheduler().for_each_patchdata_nonempty([&](Patch cur_p, PatchDataLayer &pdat) {
         PatchDataField<Tvec> &field = pdat.get_field<Tvec>(iaxyz_ext);
@@ -329,8 +329,8 @@ std::shared_ptr<shamrock::solvergraph::INode> register_constant_set(
     return solver_graph.get_node_ptr_base("set_" + name);
 }
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces() {
+template<class Tvec>
+void shammodels::sph::modules::ExternalForces<Tvec>::add_ext_forces() {
 
     StackEntry stack_loc{};
 
@@ -606,11 +606,4 @@ void shammodels::sph::modules::ExternalForces<Tvec, SPHKernel>::add_ext_forces()
     }
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::ExternalForces<f64_3, M4>;
-template class shammodels::sph::modules::ExternalForces<f64_3, M6>;
-template class shammodels::sph::modules::ExternalForces<f64_3, M8>;
-
-template class shammodels::sph::modules::ExternalForces<f64_3, C2>;
-template class shammodels::sph::modules::ExternalForces<f64_3, C4>;
-template class shammodels::sph::modules::ExternalForces<f64_3, C6>;
+template class shammodels::sph::modules::ExternalForces<f64_3>;

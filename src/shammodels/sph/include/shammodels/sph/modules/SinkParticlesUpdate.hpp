@@ -24,14 +24,13 @@
 
 namespace shammodels::sph::modules {
 
-    template<class Tvec, template<class> class SPHKernel>
+    template<class Tvec>
     class SinkParticlesUpdate {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-        using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
+        using Config  = SolverConfigBase<Tvec>;
         using Storage = SolverStorage<Tvec, u32>;
 
         ShamrockCtx &context;

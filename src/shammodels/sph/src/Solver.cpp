@@ -2168,7 +2168,7 @@ void shammodels::sph::Solver<Tvec, Kern>::reset_merge_ghosts_fields() {
 template<class Tvec, template<class> class Kern>
 void shammodels::sph::Solver<Tvec, Kern>::update_artificial_viscosity(Tscal dt) {
 
-    sph::modules::UpdateViscosity<Tvec, Kern>(context, solver_config, storage)
+    sph::modules::UpdateViscosity<Tvec>(context, solver_config, storage)
         .update_artificial_viscosity(dt);
 }
 
@@ -2179,7 +2179,7 @@ void shammodels::sph::Solver<Tvec, Kern>::update_artificial_viscosity(Tscal dt) 
 template<class Tvec, template<class> class Kern>
 void shammodels::sph::Solver<Tvec, Kern>::compute_eos_fields() {
 
-    modules::ComputeEos<Tvec, Kern>(context, solver_config, storage).compute_eos();
+    modules::ComputeEos<Tvec>(context, solver_config, storage).compute_eos(Kernel::hfactd);
 }
 
 template<class Tvec, template<class> class Kern>
@@ -2446,7 +2446,7 @@ void shammodels::sph::Solver<Tvec, Kern>::update_derivs(Tscal dt_hydro) {
     modules::UpdateDerivs<Tvec, Kern> derivs(context, solver_config, storage);
     derivs.update_derivs(dt_hydro);
 
-    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
+    modules::ExternalForces<Tvec> ext_forces(context, solver_config, storage);
     ext_forces.add_ext_forces();
 }
 
@@ -2457,8 +2457,7 @@ bool shammodels::sph::Solver<Tvec, Kern>::apply_corrector(Tscal dt, u64 Npart_al
 
 template<class Tvec, template<class> class Kern>
 void shammodels::sph::Solver<Tvec, Kern>::update_sync_load_values() {
-    modules::ComputeLoadBalanceValue<Tvec, Kern>(context, solver_config, storage)
-        .update_load_balancing();
+    modules::ComputeLoadBalanceValue<Tvec>(context, solver_config, storage).update_load_balancing();
     scheduler().scheduler_step(false, false);
 }
 
@@ -2491,11 +2490,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     tstep.start();
 
     // if(shamcomm::world_rank() == 0) std::cout << scheduler().dump_status() << std::endl;
-    modules::ComputeLoadBalanceValue<Tvec, Kern>(context, solver_config, storage)
-        .update_load_balancing();
+    modules::ComputeLoadBalanceValue<Tvec>(context, solver_config, storage).update_load_balancing();
     scheduler().scheduler_step(true, true);
-    modules::ComputeLoadBalanceValue<Tvec, Kern>(context, solver_config, storage)
-        .update_load_balancing();
+    modules::ComputeLoadBalanceValue<Tvec>(context, solver_config, storage).update_load_balancing();
     // if(shamcomm::world_rank() == 0) std::cout << scheduler().dump_status() << std::endl;
     scheduler().scheduler_step(false, false);
     // if(shamcomm::world_rank() == 0) std::cout << scheduler().dump_status() << std::endl;
@@ -2546,7 +2543,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         shambase::get_check_ref(storage.solver_sequence).evaluate();
     }
 
-    modules::ExternalForces<Tvec, Kern> ext_forces(context, solver_config, storage);
+    modules::ExternalForces<Tvec> ext_forces(context, solver_config, storage);
     ext_forces.compute_ext_forces_indep_v();
 
     gen_serial_patch_tree();
@@ -2558,7 +2555,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     if (solver_config.enable_particle_reordering
         && solve_logs.step_count % solver_config.particle_reordering_step_freq == 0) {
         logger::info_ln("SPH", "Reordering particles at step ", solve_logs.step_count);
-        modules::ParticleReordering<Tvec, u_morton, Kern>(context, solver_config, storage)
+        modules::ParticleReordering<Tvec, u_morton>(context, solver_config, storage)
             .reorder_particles();
     }
 
@@ -2954,8 +2951,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             compute_luminosity.evaluate();
         }
 
-        modules::ConservativeCheck<Tvec, Kern> cv_check(context, solver_config, storage);
-        cv_check.check_conservation();
+        modules::ConservativeCheck<Tvec> cv_check(context, solver_config, storage);
+        cv_check.check_conservation(Kernel::hfactd);
 
         ComputeField<Tscal> vepsilon_v_sq
             = utility.make_compute_field<Tscal>("vmean epsilon_v^2", 1);

@@ -22,9 +22,8 @@
 #include "shamsys/legacy/log.hpp"
 #include <variant>
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artificial_viscosity(
-    Tscal dt) {
+template<class Tvec>
+void shammodels::sph::modules::UpdateViscosity<Tvec>::update_artificial_viscosity(Tscal dt) {
 
     using Cfg_AV = typename Config::AVConfig;
 
@@ -48,8 +47,8 @@ void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artifici
     }
 }
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artificial_viscosity_mm97(
+template<class Tvec>
+void shammodels::sph::modules::UpdateViscosity<Tvec>::update_artificial_viscosity_mm97(
     Tscal dt, typename Config::AVConfig::VaryingMM97 cfg) {
     StackEntry stack_loc{};
     shamlog_debug_ln("UpdateViscosity", "Updating alpha viscosity (Morris & Monaghan 1997)");
@@ -118,8 +117,8 @@ void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artifici
     });
 }
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artificial_viscosity_cd10(
+template<class Tvec>
+void shammodels::sph::modules::UpdateViscosity<Tvec>::update_artificial_viscosity_cd10(
     Tscal dt, typename Config::AVConfig::VaryingCD10 cfg) {
 
     StackEntry stack_loc{};
@@ -220,11 +219,4 @@ void shammodels::sph::modules::UpdateViscosity<Tvec, SPHKernel>::update_artifici
     });
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::UpdateViscosity<f64_3, M4>;
-template class shammodels::sph::modules::UpdateViscosity<f64_3, M6>;
-template class shammodels::sph::modules::UpdateViscosity<f64_3, M8>;
-
-template class shammodels::sph::modules::UpdateViscosity<f64_3, C2>;
-template class shammodels::sph::modules::UpdateViscosity<f64_3, C4>;
-template class shammodels::sph::modules::UpdateViscosity<f64_3, C6>;
+template class shammodels::sph::modules::UpdateViscosity<f64_3>;

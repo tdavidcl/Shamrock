@@ -26,17 +26,19 @@ namespace shammodels::sph::modules {
 
     /**
      * @brief Module for checking conservation of physical quantities
+     *
+     * It does not depend on the SPH kernel (only on its hfact, passed to check_conservation), so
+     * that it is compiled once for all kernels.
+     *
      * @tparam Tvec Vector type for positions
-     * @tparam SPHKernel SPH kernel template
      */
-    template<class Tvec, template<class> class SPHKernel>
+    template<class Tvec>
     class ConservativeCheck {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-        using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
+        using Config  = SolverConfigBase<Tvec>;
         using Storage = SolverStorage<Tvec, u32>;
 
         ShamrockCtx &context;
@@ -46,8 +48,12 @@ namespace shammodels::sph::modules {
         ConservativeCheck(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
-        /// @brief Verifies conservation of mass, momentum, and energy
-        void check_conservation();
+        /**
+         * @brief Verifies conservation of mass, momentum, and energy
+         *
+         * @param kernel_hfactd the hfactd of the SPH kernel (SPHKernel<Tscal>::hfactd)
+         */
+        void check_conservation(Tscal kernel_hfactd);
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }

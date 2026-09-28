@@ -22,8 +22,8 @@
 #include "shammodels/sph/sink_edges_helper.hpp"
 #include "shamsys/legacy/log.hpp"
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ConservativeCheck<Tvec, SPHKernel>::check_conservation() {
+template<class Tvec>
+void shammodels::sph::modules::ConservativeCheck<Tvec>::check_conservation(Tscal kernel_hfactd) {
 
     StackEntry stack_loc{};
 
@@ -158,7 +158,7 @@ void shammodels::sph::modules::ConservativeCheck<Tvec, SPHKernel>::check_conserv
                     Tscal term_B = 0.;
 
                     Tvec B_on_rho_a  = B_on_rho[item];
-                    Tvec B           = B_on_rho_a * shamrock::sph::rho_h(pmass, h, Kernel::hfactd);
+                    Tvec B           = B_on_rho_a * shamrock::sph::rho_h(pmass, h, kernel_hfactd);
                     Tvec dB_on_rho_a = dB_on_rho[item];
                     Tscal drho       = drho_dt[item];
                     term_B           = 0.5 * (1. / mu_0) * sycl::dot(B_on_rho_a, B_on_rho_a) * drho
@@ -183,11 +183,4 @@ void shammodels::sph::modules::ConservativeCheck<Tvec, SPHKernel>::check_conserv
     }
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::ConservativeCheck<f64_3, M4>;
-template class shammodels::sph::modules::ConservativeCheck<f64_3, M6>;
-template class shammodels::sph::modules::ConservativeCheck<f64_3, M8>;
-
-template class shammodels::sph::modules::ConservativeCheck<f64_3, C2>;
-template class shammodels::sph::modules::ConservativeCheck<f64_3, C4>;
-template class shammodels::sph::modules::ConservativeCheck<f64_3, C6>;
+template class shammodels::sph::modules::ConservativeCheck<f64_3>;

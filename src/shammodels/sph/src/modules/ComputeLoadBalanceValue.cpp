@@ -19,8 +19,8 @@
 #include "shammath/sphkernels.hpp"
 #include "shamsys/legacy/log.hpp"
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ComputeLoadBalanceValue<Tvec, SPHKernel>::update_load_balancing() {
+template<class Tvec>
+void shammodels::sph::modules::ComputeLoadBalanceValue<Tvec>::update_load_balancing() {
     StackEntry stack_loc{};
 
     shamlog_debug_ln("ComputeLoadBalanceValue", "update load balancing");
@@ -29,11 +29,4 @@ void shammodels::sph::modules::ComputeLoadBalanceValue<Tvec, SPHKernel>::update_
     });
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, M4>;
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, M6>;
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, M8>;
-
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, C2>;
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, C4>;
-template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3, C6>;
+template class shammodels::sph::modules::ComputeLoadBalanceValue<f64_3>;

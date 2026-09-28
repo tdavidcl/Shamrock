@@ -28,16 +28,14 @@ namespace shammodels::sph::modules {
      * @brief Module for reordering particles to improve cache locality
      * @tparam Tvec Vector type for positions
      * @tparam Tmorton Morton code type
-     * @tparam SPHKernel SPH kernel template
      */
-    template<class Tvec, class Tmorton, template<class> class SPHKernel>
+    template<class Tvec, class Tmorton>
     class ParticleReordering {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-        using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
+        using Config  = SolverConfigBase<Tvec>;
         using Storage = SolverStorage<Tvec, u32>;
 
         ShamrockCtx &context;

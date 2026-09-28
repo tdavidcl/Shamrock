@@ -587,8 +587,8 @@ namespace shammodels::common::modules {
 
 #undef NODE_EDGES
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal(
+template<class Tvec>
+void shammodels::sph::modules::ComputeEos<Tvec>::compute_eos_internal(
     const std::shared_ptr<shamrock::solvergraph::IDataEdge<Tscal>> &hfactd,
     const std::shared_ptr<shamrock::solvergraph::IDataEdge<Tscal>> &pmass,
     const std::optional<std::shared_ptr<shamrock::solvergraph::IFieldSpan<Tscal>>> &spans_rho,
@@ -1134,8 +1134,8 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos_internal
     }
 }
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
+template<class Tvec>
+void shammodels::sph::modules::ComputeEos<Tvec>::compute_eos(Tscal kernel_hfactd) {
 
     NamedStackEntry stack_loc{"compute eos"};
 
@@ -1152,7 +1152,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
     auto hfactd = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("hfactd", "hfactd");
     auto pmass  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("pmass", "pmass");
 
-    hfactd->data = Kernel::hfactd;
+    hfactd->data = kernel_hfactd;
     pmass->data  = gpart_mass;
 
     auto sizes = storage.part_counts_with_ghost;
@@ -1310,11 +1310,4 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
     }
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::ComputeEos<f64_3, M4>;
-template class shammodels::sph::modules::ComputeEos<f64_3, M6>;
-template class shammodels::sph::modules::ComputeEos<f64_3, M8>;
-
-template class shammodels::sph::modules::ComputeEos<f64_3, C2>;
-template class shammodels::sph::modules::ComputeEos<f64_3, C4>;
-template class shammodels::sph::modules::ComputeEos<f64_3, C6>;
+template class shammodels::sph::modules::ComputeEos<f64_3>;

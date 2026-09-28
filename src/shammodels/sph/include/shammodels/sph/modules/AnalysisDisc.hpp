@@ -28,21 +28,26 @@
 
 namespace shammodels::sph::modules {
 
-    template<class Tvec, template<class> class SPHKernel>
-    class AnalysisDisc {
+    /**
+     * @brief Implementation of AnalysisDisc, which does not depend on the SPH kernel
+     *
+     * AnalysisDisc is exposed to python for each SPH kernel, hence it must be a different type for
+     * each of them, but its implementation is compiled only once here.
+     */
+    template<class Tvec>
+    class AnalysisDiscBase {
         public:
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
-        using Kernel             = SPHKernel<Tscal>;
 
-        using Config  = SolverConfig<Tvec, SPHKernel>;
+        using Config  = SolverConfigBase<Tvec>;
         using Storage = SolverStorage<Tvec, u32>;
 
         ShamrockCtx &context;
         Config &solver_config;
         Storage &storage;
 
-        AnalysisDisc(ShamrockCtx &context, Config &solver_config, Storage &storage)
+        AnalysisDiscBase(ShamrockCtx &context, Config &solver_config, Storage &storage)
             : context(context), solver_config(solver_config), storage(storage) {}
 
         /// TODO: make this a dichotomic search
@@ -104,6 +109,15 @@ namespace shammodels::sph::modules {
 
         private:
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
+    };
+
+    template<class Tvec, template<class> class SPHKernel>
+    class AnalysisDisc : public AnalysisDiscBase<Tvec> {
+        public:
+        using Tscal  = shambase::VecComponent<Tvec>;
+        using Kernel = SPHKernel<Tscal>;
+
+        using AnalysisDiscBase<Tvec>::AnalysisDiscBase;
     };
 
 } // namespace shammodels::sph::modules

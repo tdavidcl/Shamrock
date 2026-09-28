@@ -173,7 +173,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::remap_positions(std::function<Tvec
         xyz.copy_from_stdvec(acc);
     });
 
-    modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+    modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
         .update_load_balancing();
     sched.scheduler_step(false, false);
 
@@ -187,7 +187,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::remap_positions(std::function<Tvec
         sched.check_patchdata_locality_correctness();
     }
 
-    modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+    modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
         .update_load_balancing();
     sched.scheduler_step(true, true);
 
@@ -357,7 +357,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::push_particle(
         }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
 
         post_insert_data<Tvec>(sched);
@@ -469,7 +469,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::push_particle_mhd(
         }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
 
         post_insert_data<Tvec>(sched);
@@ -586,13 +586,13 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_hcp_3d(
         // }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
         post_insert_data<Tvec>(sched);
     }
 
     if (true) {
-        modules::ParticleReordering<Tvec, u32, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ParticleReordering<Tvec, u32>(ctx, solver.solver_config, solver.storage)
             .reorder_particles();
     }
 
@@ -643,8 +643,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_hcp_3d_v2(
         }
 
         inserter.push_patch_data<Tvec>(tmp, "xyz", sched.crit_patch_split * 8, [&]() {
-            modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(
-                ctx, solver.solver_config, solver.storage)
+            modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
                 .update_load_balancing();
         });
         pos_data.clear();
@@ -1073,13 +1072,13 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_big_disc_3d(
         // }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
         post_insert_data<Tvec>(sched);
     }
 
     if (true) {
-        modules::ParticleReordering<Tvec, u32, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ParticleReordering<Tvec, u32>(ctx, solver.solver_config, solver.storage)
             .reorder_particles();
     }
 
@@ -1193,7 +1192,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_fcc_3d(
         }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
         post_insert_data<Tvec>(sched);
     }
@@ -1394,7 +1393,7 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init_from_phantom_dump(
         }
         log = "";
 
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(ctx, solver.solver_config, solver.storage)
+        modules::ComputeLoadBalanceValue<Tvec>(ctx, solver.solver_config, solver.storage)
             .update_load_balancing();
 
         post_insert_data<Tvec>(sched);

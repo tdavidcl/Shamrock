@@ -216,8 +216,8 @@ namespace {
 
 #undef NODE_EDGES
 
-template<class Tvec, template<class> class SPHKernel>
-void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph_forces() {
+template<class Tvec>
+void shammodels::sph::modules::SinkParticlesUpdate<Tvec>::compute_sph_forces() {
 
     StackEntry stack_loc{};
 
@@ -281,11 +281,4 @@ void shammodels::sph::modules::SinkParticlesUpdate<Tvec, SPHKernel>::compute_sph
     add_sph_forces.evaluate();
 }
 
-using namespace shammath;
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M4>;
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M6>;
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, M8>;
-
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, C2>;
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, C4>;
-template class shammodels::sph::modules::SinkParticlesUpdate<f64_3, C6>;
+template class shammodels::sph::modules::SinkParticlesUpdate<f64_3>;

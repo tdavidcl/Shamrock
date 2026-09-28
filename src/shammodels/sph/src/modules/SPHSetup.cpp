@@ -47,6 +47,44 @@
 #include <mpi.h>
 #include <vector>
 
+namespace shammodels::sph::modules {
+
+    /**
+     * @brief Implementation of SPHSetup::apply_setup and SPHSetup::apply_setup_new
+     *
+     * They do not depend on the SPH kernel, implementing them here rather than in SPHSetup
+     * (templated on the SPH kernel as it is exposed to python for each of them) compiles them once
+     * for all kernels.
+     */
+    template<class Tvec>
+    struct SPHSetupImpl {
+        using Tscal   = shambase::VecComponent<Tvec>;
+        using Config  = SolverConfigBase<Tvec>;
+        using Storage = SolverStorage<Tvec, u32>;
+
+        ShamrockCtx &context;
+        Config &solver_config;
+        Storage &storage;
+        u64 &injected_parts;
+
+        void apply_setup(SetupNodePtr setup, bool part_reordering, std::optional<u32> insert_step);
+
+        void apply_setup_new(
+            SetupNodePtr setup,
+            bool part_reordering,
+            std::optional<u32> gen_count_per_step,
+            std::optional<u32> insert_count_per_step,
+            std::optional<u64> max_msg_count_per_rank_per_step,
+            std::optional<u64> max_data_count_per_rank_per_step,
+            std::optional<u64> max_msg_size,
+            bool do_setup_log,
+            bool speculative_balancing);
+
+        inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
+    };
+
+} // namespace shammodels::sph::modules
+
 template<class Tvec, template<class> class SPHKernel>
 inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph::modules::
     SPHSetup<Tvec, SPHKernel>::make_generator_lattice_hcp(
@@ -110,6 +148,13 @@ inline std::shared_ptr<shammodels::sph::modules::ISPHSetupNode> shammodels::sph:
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup(
     SetupNodePtr setup, bool part_reordering, std::optional<u32> insert_step) {
+    SPHSetupImpl<Tvec>{context, solver_config, storage, injected_parts}.apply_setup(
+        setup, part_reordering, insert_step);
+}
+
+template<class Tvec>
+void shammodels::sph::modules::SPHSetupImpl<Tvec>::apply_setup(
+    SetupNodePtr setup, bool part_reordering, std::optional<u32> insert_step) {
 
     if (!bool(setup)) {
         shambase::throw_with_loc<std::invalid_argument>("The setup shared pointer is empty");
@@ -122,7 +167,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup(
     PatchScheduler &sched = shambase::get_check_ref(context.sched);
 
     auto compute_load = [&]() {
-        modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(context, solver_config, storage)
+        modules::ComputeLoadBalanceValue<Tvec>(context, solver_config, storage)
             .update_load_balancing();
     };
 
@@ -200,8 +245,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup(
     }
 
     if (part_reordering) {
-        modules::ParticleReordering<Tvec, u32, SPHKernel>(context, solver_config, storage)
-            .reorder_particles();
+        modules::ParticleReordering<Tvec, u32>(context, solver_config, storage).reorder_particles();
     }
 
     time_setup.stop();
@@ -263,6 +307,29 @@ inline constexpr f64 golden_number = 1.61803398874989484820458683436563;
 
 template<class Tvec, template<class> class SPHKernel>
 void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
+    SetupNodePtr setup,
+    bool part_reordering,
+    std::optional<u32> gen_count_per_step,
+    std::optional<u32> insert_count_per_step,
+    std::optional<u64> max_msg_count_per_rank_per_step,
+    std::optional<u64> max_data_count_per_rank_per_step,
+    std::optional<u64> max_msg_size,
+    bool do_setup_log,
+    bool speculative_balancing) {
+    SPHSetupImpl<Tvec>{context, solver_config, storage, injected_parts}.apply_setup_new(
+        setup,
+        part_reordering,
+        gen_count_per_step,
+        insert_count_per_step,
+        max_msg_count_per_rank_per_step,
+        max_data_count_per_rank_per_step,
+        max_msg_size,
+        do_setup_log,
+        speculative_balancing);
+}
+
+template<class Tvec>
+void shammodels::sph::modules::SPHSetupImpl<Tvec>::apply_setup_new(
     SetupNodePtr setup,
     bool part_reordering,
     std::optional<u32> gen_count_per_step,
@@ -440,7 +507,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
             });
 
         } else {
-            modules::ComputeLoadBalanceValue<Tvec, SPHKernel>(context, solver_config, storage)
+            modules::ComputeLoadBalanceValue<Tvec>(context, solver_config, storage)
                 .update_load_balancing();
         }
     };
@@ -1016,8 +1083,7 @@ void shammodels::sph::modules::SPHSetup<Tvec, SPHKernel>::apply_setup_new(
     }
 
     if (part_reordering) {
-        modules::ParticleReordering<Tvec, u32, SPHKernel>(context, solver_config, storage)
-            .reorder_particles();
+        modules::ParticleReordering<Tvec, u32>(context, solver_config, storage).reorder_particles();
     }
 
     time_setup.stop();
