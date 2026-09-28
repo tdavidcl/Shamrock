@@ -191,6 +191,10 @@ add_subdirectory(shamtest)
 
 if("${BUILD_TEST}")
     add_subdirectory(tests)
+    # the tests are compiled in an object library, see tests/CMakeLists.txt. Its objects come
+    # before the ones of shamrock_test itself on the link line, which does not matter: the static
+    # initializers of the tests only register them (still in the same order).
+    target_link_libraries(shamrock_test PRIVATE shamrock_test_objs)
 endif()
 
 ########################################################################################
@@ -247,8 +251,10 @@ if(SHAMROCK_USE_PCH)
         target_precompile_headers(${tgt} REUSE_FROM shammodels_common)
     endforeach()
 
-    # the test executable is not compiled as position independent code, hence its own PCH, which
-    # also contains the test library header and the core headers most of the tests include
+    # the tests are not compiled as position independent code, hence their own PCH, which also
+    # contains the test library header and the core headers most of the tests include. It is built
+    # by the object library of the tests (see tests/CMakeLists.txt) and reused by the few files of
+    # the test executable itself.
     if("${BUILD_TEST}")
         set(shamrock_test_pch_headers
             ${shamrock_pch_headers}
@@ -266,7 +272,8 @@ if(SHAMROCK_USE_PCH)
             <shambackends/kernel_call.hpp>
             <shamsys/NodeInstance.hpp>
         )
-        target_precompile_headers(shamrock_test PRIVATE ${shamrock_test_pch_headers})
+        target_precompile_headers(shamrock_test_objs PRIVATE ${shamrock_test_pch_headers})
+        target_precompile_headers(shamrock_test REUSE_FROM shamrock_test_objs)
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -286,7 +293,9 @@ if(SHAMROCK_USE_PCH)
         )
         if("${BUILD_TEST}")
             set_source_files_properties(
-                "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/shamrock_test.dir/cmake_pch.hxx.cxx"
+                "${CMAKE_CURRENT_BINARY_DIR}/tests/CMakeFiles/shamrock_test_objs.dir/cmake_pch.hxx.cxx"
+                DIRECTORY
+                tests
                 PROPERTIES COMPILE_FLAGS "-Xclang -fno-pch-timestamp"
             )
         endif()
