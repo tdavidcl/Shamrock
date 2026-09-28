@@ -22,7 +22,12 @@
 #include "shamalgs/details/numeric/numericFallback.hpp"
 #include "shamalgs/details/numeric/scanDecoupledLookback.hpp"
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/DeviceContext.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/EventList.hpp"
+#include "shambackends/kernel_call.hpp"
+#include "shambackends/math.hpp"
+#include <algorithm>
 #include <numeric>
 
 #if defined(__has_include)
@@ -67,6 +72,65 @@ namespace {
         auto acc_src = buf1.copy_to_stdvec_idx_range(0, len);
         std::exclusive_scan(acc_src.begin(), acc_src.end(), acc_src.begin(), 0);
         buf1.copy_from_stdvec(acc_src, len);
+    }
+
+    /**
+     * @brief Exclusive scan parallelized over contiguous chunks of the buffer.
+     *
+     * Every work-item sums its chunk, then scans it sequentially starting from the sum of the
+     * previous chunks. It only uses plain range kernels without any inter work-group
+     * communication, which suits CPU-like devices (few, fat work-items) where the look-back
+     * spin waits are costly.
+     */
+    template<class T>
+    void scan_exclusive_sum_in_place_chunked(sham::DeviceBuffer<T> &buf1, u32 len) {
+
+        // chunks of at least 4096 elements, and at most 1024 chunks
+        constexpr u32 min_chunk_size = 4096;
+        constexpr u32 max_chunks     = 1024;
+        u32 nchunks                  = std::max(1u, std::min(max_chunks, len / min_chunk_size));
+        u32 chunk_size               = (len + nchunks - 1) / nchunks;
+        nchunks                      = (len + chunk_size - 1) / chunk_size;
+
+        auto sched           = buf1.get_dev_scheduler_ptr();
+        sham::DeviceQueue &q = sched->get_queue();
+
+        sham::DeviceBuffer<T> chunk_sums(nchunks, sched);
+
+        sham::kernel_call(
+            q,
+            sham::MultiRef{buf1},
+            sham::MultiRef{chunk_sums},
+            nchunks,
+            [len, chunk_size](u32 ichunk, const T *__restrict in, T *__restrict sums) {
+                u32 start = ichunk * chunk_size;
+                u32 end   = sham::min(start + chunk_size, len);
+                T sum{};
+                for (u32 i = start; i < end; i++) {
+                    sum += in[i];
+                }
+                sums[ichunk] = sum;
+            });
+
+        sham::kernel_call(
+            q,
+            sham::MultiRef{chunk_sums},
+            sham::MultiRef{buf1},
+            nchunks,
+            [len, chunk_size](u32 ichunk, const T *__restrict sums, T *__restrict in_out) {
+                T acc{};
+                for (u32 c = 0; c < ichunk; c++) {
+                    acc += sums[c];
+                }
+
+                u32 start = ichunk * chunk_size;
+                u32 end   = sham::min(start + chunk_size, len);
+                for (u32 i = start; i < end; i++) {
+                    T val     = in_out[i];
+                    in_out[i] = acc;
+                    acc += val;
+                }
+            });
     }
 
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
@@ -122,6 +186,11 @@ namespace shamalgs::primitives {
         };
 #endif
 
+        /// Scan parallelized over contiguous chunks with plain range kernels (CPU-like devices)
+        struct Chunked {
+            static constexpr std::string_view variant_type_name = "chunked";
+        };
+
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
         /// Atomic decoupled look-back scan, 512-wide work groups
         struct DecoupledLookback512 {
@@ -137,7 +206,8 @@ namespace shamalgs::primitives {
 #endif
 
         shamalgs::ImplVariantGlobal<
-            StdScan
+            StdScan,
+            Chunked
 #ifdef __ACPP__
             ,
             StdScanSingleTaskAcpp
@@ -151,21 +221,27 @@ namespace shamalgs::primitives {
             AdaptiveCppAlg
 #endif
             >
-            scan_exclusive_sum_in_place_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+            scan_exclusive_sum_in_place_impl{
+                [](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+                    // the look-back spin waits are costly on CPUs
+                    if (dev_sched->ctx->device->prop.type == sham::DeviceType::CPU) {
+                        self.set(Chunked{});
+                        return;
+                    }
 #ifdef __MACH__     // decoupled lookback perf on mac os is awful
     #ifdef __ACPP__ // for acpp we gain using enqueue custom operation instead of copying
-                self.set(StdScanSingleTaskAcpp{});
+                    self.set(StdScanSingleTaskAcpp{});
     #else
-                self.set(StdScan{});
+            self.set(StdScan{});
     #endif
 #else
     #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-                self.set(DecoupledLookback512{});
+            self.set(DecoupledLookback512{});
     #else
-                self.set(StdScan{});
+            self.set(StdScan{});
     #endif
 #endif
-            }};
+                }};
 
         /// Get list of available scan_exclusive_sum_in_place implementations
         std::vector<std::string> get_default_impl_list_scan_exclusive_sum_in_place() {
@@ -224,6 +300,9 @@ namespace shamalgs::primitives {
             shambase::overloaded{
                 [&](impl::StdScan) {
                     scan_exclusive_sum_in_place_fallback(buf1, len);
+                },
+                [&](impl::Chunked) {
+                    scan_exclusive_sum_in_place_chunked(buf1, len);
                 },
 #ifdef __ACPP__
                 [&](impl::StdScanSingleTaskAcpp) {

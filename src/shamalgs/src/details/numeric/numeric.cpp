@@ -25,6 +25,7 @@
 #include "shamalgs/details/numeric/numericFallback.hpp"
 #include "shamalgs/details/numeric/scanDecoupledLookback.hpp"
 #include "shamalgs/details/numeric/streamCompactExclScan.hpp"
+#include "shamalgs/primitives/scan_exclusive_sum_in_place.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 #include <utility>
@@ -47,15 +48,14 @@ namespace shamalgs::numeric {
     template<class T>
     sham::DeviceBuffer<T> scan_exclusive(
         sham::DeviceScheduler_ptr sched, sham::DeviceBuffer<T> &buf1, u32 len) {
-#ifdef __MACH__ // decoupled lookback perf on mac os is awful
-        return details::exclusive_sum_fallback_usm(sched, buf1, len);
-#else
-    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-        return details::exclusive_sum_atomic_decoupled_v5_usm<T, 512>(sched, buf1, len);
-    #else
-        return details::exclusive_sum_fallback_usm(sched, buf1, len);
-    #endif
-#endif
+        // in-place scan of a copy, so that the runtime selected implementation of
+        // shamalgs::primitives::scan_exclusive_sum_in_place is used
+        sham::DeviceBuffer<T> ret(len, sched);
+        if (len > 0) {
+            ret.copy_from(buf1, len);
+            shamalgs::primitives::scan_exclusive_sum_in_place(ret, len);
+        }
+        return ret;
     }
 
     template<class T>
