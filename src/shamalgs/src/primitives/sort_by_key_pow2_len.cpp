@@ -20,6 +20,7 @@
 #include "shamalgs/details/algorithm/bitonicSort.hpp"
 #include "shamalgs/details/algorithm/bitonicSort_updated_usm.hpp"
 #include "shamalgs/primitives/device/details/sort_by_keys_lsd_radix_sort_basic.hpp"
+#include "shamalgs/primitives/device/details/sort_by_keys_onesweep_radix_sort.hpp"
 #include "shamalgs/primitives/device/details/sort_by_keys_std_sort.hpp"
 #include "shamalgs/primitives/sort_by_key_pow2_len.hpp"
 #include "shamcomm/logs.hpp"
@@ -62,6 +63,15 @@ namespace shamalgs::primitives::impl {
         static constexpr std::string_view variant_type_name = "lsd_radix_sort_basic";
     };
 
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+    /// Onesweep LSD radix sort, single digit binning kernel per digit place using a decoupled
+    /// look-back (unsigned integer keys only, falls back to the basic LSD radix sort above 2^30
+    /// elements and to the bitonic sort for other keys)
+    struct OnesweepRadixSort {
+        static constexpr std::string_view variant_type_name = "onesweep_radix_sort";
+    };
+#endif
+
 } // namespace shamalgs::primitives::impl
 
 template<>
@@ -101,7 +111,15 @@ namespace shamalgs::primitives {
     /// namespace to control implementation behavior
     namespace impl {
 
-        shamalgs::ImplVariantGlobal<BitonicSort, StdSort, LsdRadixSortBasic>
+        shamalgs::ImplVariantGlobal<
+            BitonicSort,
+            StdSort,
+            LsdRadixSortBasic
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+            ,
+            OnesweepRadixSort
+#endif
+            >
             sort_by_key_pow2_len_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
                 if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
                     self.set(BitonicSort{});
@@ -211,6 +229,22 @@ namespace shamalgs::primitives {
                             sched, buf_key, buf_values, len, impl::MaxStencilSize::Size16);
                     }
                 },
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                [&](impl::OnesweepRadixSort) {
+                    if constexpr (std::is_unsigned_v<Tkey>) {
+                        if (len <= device::details::onesweep_radix_sort_max_len) {
+                            device::details::sort_by_keys_onesweep_radix_sort(
+                                sched, buf_key, buf_values, len);
+                        } else {
+                            device::details::sort_by_keys_lsd_radix_sort_basic(
+                                sched, buf_key, buf_values, len);
+                        }
+                    } else {
+                        impl::sort_by_key_pow2_len_bitonic_dispatch(
+                            sched, buf_key, buf_values, len, impl::MaxStencilSize::Size16);
+                    }
+                },
+#endif
             },
             impl::sort_by_key_pow2_len_impl.get());
     }
