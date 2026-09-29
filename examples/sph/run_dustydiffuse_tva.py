@@ -376,6 +376,7 @@ r_bins = np.linspace(0, 0.5, 41)
 #
 # Top: radially binned :math:`\epsilon(r)` for each evolved dust variable, with the analytic
 # solution in black. Bottom: :math:`\epsilon - \epsilon_{\rm analytic}`.
+# The analytic solution is clipped to 0 beyond the diffusion front.
 
 snapshot_times = [t for (t, _, _) in results[dust_variables[0]]["snapshots"] if t > 0]
 
@@ -390,8 +391,12 @@ fig, axs = plt.subplots(
 )
 
 for k, t_snap in enumerate(snapshot_times):
-    eps_ana_bins = np.array([analytic_eps(r, t_snap) for r in 0.5 * (r_bins[1:] + r_bins[:-1])])
-    axs[0, k].plot(r_ana, analytic_eps_curve(t_snap), "-", color="black", label="analytic")
+    eps_ana_bins = np.maximum(
+        np.array([analytic_eps(r, t_snap) for r in 0.5 * (r_bins[1:] + r_bins[:-1])]), 0
+    )
+    axs[0, k].plot(
+        r_ana, np.maximum(analytic_eps_curve(t_snap), 0), "-", color="black", label="analytic"
+    )
 
     for dust_variable in dust_variables:
         for t, r_data, eps in results[dust_variable]["snapshots"]:
@@ -421,6 +426,7 @@ for k, t_snap in enumerate(snapshot_times):
     axs[1, k].axhline(0, color="black", linewidth=0.8)
     axs[1, k].set_xlabel(r"$r$")
     axs[0, k].set_xlim(0, 0.5)
+    axs[0, k].set_ylim(0, 0.11)
 
 axs[0, 0].set_ylabel(r"$\epsilon$")
 axs[1, 0].set_ylabel(r"$\epsilon - \epsilon_{\rm analytic}$")
