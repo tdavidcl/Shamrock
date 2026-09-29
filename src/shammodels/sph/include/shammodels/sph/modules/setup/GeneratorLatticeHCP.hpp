@@ -20,8 +20,10 @@
 #include "shamalgs/collective/indexing.hpp"
 #include "shammath/AABB.hpp"
 #include "shammath/crystalLattice.hpp"
+#include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/setup/ISPHSetupNode.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
+#include <algorithm>
 
 namespace shammodels::sph::modules {
 
@@ -47,6 +49,32 @@ namespace shammodels::sph::modules {
         shammath::AABB<Tvec> box;
 
         LatticeIter generator;
+
+        /// Smallest default hfact among all the SPH kernels
+        static constexpr Tscal hfact_min
+            = std::min({shammath::M4<Tscal>::hfactd,       shammath::M5<Tscal>::hfactd,
+                        shammath::M6<Tscal>::hfactd,       shammath::M7<Tscal>::hfactd,
+                        shammath::M8<Tscal>::hfactd,       shammath::M9<Tscal>::hfactd,
+                        shammath::M10<Tscal>::hfactd,      shammath::C2<Tscal>::hfactd,
+                        shammath::C4<Tscal>::hfactd,       shammath::C6<Tscal>::hfactd,
+                        shammath::TGauss3<Tscal>::hfactd,  shammath::TGauss5<Tscal>::hfactd,
+                        shammath::M4DH<Tscal>::hfactd,     shammath::M4DH3<Tscal>::hfactd,
+                        shammath::M4DH5<Tscal>::hfactd,    shammath::M4DH7<Tscal>::hfactd,
+                        shammath::M4Shift2<Tscal>::hfactd, shammath::M4Shift4<Tscal>::hfactd,
+                        shammath::M4Shift8<Tscal>::hfactd, shammath::M4Shift16<Tscal>::hfactd});
+
+        /**
+         * @brief Initial smoothing length for a HCP lattice of parameter dr
+         *
+         * Neighbours in the lattice are 2 dr apart, so each particle occupies a volume
+         * (2 dr)^3 / sqrt(2) = 4 sqrt(2) dr^3. With rho = m (hfact / h)^3 the equilibrium
+         * smoothing length is h = hfact (4 sqrt(2))^(1/3) dr = hfact 2^(5/6) dr.
+         * Using the smallest hfact of all kernels ensures that the initial guess never
+         * exceeds the equilibrium value, whatever the kernel.
+         */
+        static Tscal get_h_init(Tscal dr) {
+            return hfact_min * sycl::pow(Tscal{2}, Tscal{5. / 6.}) * dr;
+        }
 
         static auto init_gen(Tscal dr, std::pair<Tvec, Tvec> box) {
 
@@ -116,7 +144,7 @@ namespace shammodels::sph::modules {
                 {
                     PatchDataField<Tscal> &f
                         = tmp.get_field<Tscal>(sched.pdl_old().get_field_idx<Tscal>("hpart"));
-                    f.override(dr);
+                    f.override(get_h_init(dr));
                 }
             }
             return tmp;
