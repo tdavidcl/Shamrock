@@ -1137,7 +1137,9 @@ for dust_variable in dust_variables:
     eps_mean = np.array(
         [np.mean(eps_tot[idx == b]) if np.any(idx == b) else np.nan for b in range(len(z_centers))]
     )
-    axs[0].plot(z_centers, eps_mean, "-", color=color, label=label)
+    axs[0].plot(
+        z_centers, eps_mean, linestyle=dvar.LINESTYLES[dust_variable], color=color, label=label
+    )
 
     folder = get_sim_folder(dust_variable) + "dump/"
 
@@ -1146,7 +1148,13 @@ for dust_variable in dust_variables:
     iinject_v = np.argmax(~np.isnan(dust_mass_v)[:, 0])
     t_v = np.array(t_v) - np.array(t_v)[iinject_v]
     total_v = np.sum(dust_mass_v, axis=1)
-    axs[1].plot(t_v, total_v / total_v[iinject_v] - 1, "-", color=color, label=label)
+    axs[1].plot(
+        t_v,
+        total_v / total_v[iinject_v] - 1,
+        linestyle=dvar.LINESTYLES[dust_variable],
+        color=color,
+        label=label,
+    )
 
     t_l2, l2_v = load_data_from_json("l2_error.json", "l2_error", folder=folder)
     l2_v = np.array(l2_v, dtype=float)
@@ -1154,7 +1162,7 @@ for dust_variable in dust_variables:
     axs[2].plot(
         np.array(t_l2) - np.array(t_l2)[iinject_v],
         np.nanmean(l2_v, axis=1),
-        "-",
+        linestyle=dvar.LINESTYLES[dust_variable],
         color=color,
         label=label,
     )

@@ -583,6 +583,7 @@ for ics, cs in enumerate(cs_g_list):
                 a["t"],
                 plot_scaling * a[key],
                 marker=dvar.MARKERS[dust_variable],
+                fillstyle=dvar.FILLSTYLES[dust_variable],
                 markersize=3,
                 linestyle="none",
                 color=dvar.COLORS[dust_variable],
@@ -621,7 +622,7 @@ for ics, cs in enumerate(cs_g_list):
             ax.plot(
                 a["t"],
                 (a[key] - a[key + "_ana"]) / norm,
-                "-",
+                linestyle=dvar.LINESTYLES[dust_variable],
                 color=dvar.COLORS[dust_variable],
                 label=dvar.LABELS[dust_variable],
             )
@@ -656,6 +657,7 @@ for irow, (key, label) in enumerate(fields_cmp):
             cs_g_list,
             rms,
             marker=dvar.MARKERS[dust_variable],
+            fillstyle=dvar.FILLSTYLES[dust_variable],
             color=dvar.COLORS[dust_variable],
             label=dvar.LABELS[dust_variable],
         )

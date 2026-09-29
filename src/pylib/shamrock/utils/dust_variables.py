@@ -46,6 +46,20 @@ MARKERS = {
     "sqrt_eps_over_1m_eps": "^",
 }
 
+#: Marker fill styles, eps is hollow so that curves lying on top of each other stay visible
+FILLSTYLES = {
+    "sqrt_rho_eps": "full",
+    "eps": "none",
+    "sqrt_eps_over_1m_eps": "full",
+}
+
+#: Line styles of the dust variables
+LINESTYLES = {
+    "sqrt_rho_eps": "-",
+    "eps": "--",
+    "sqrt_eps_over_1m_eps": "-",
+}
+
 
 def field_name(dust_variable):
     """Name of the patch field holding the evolved dust variable."""
