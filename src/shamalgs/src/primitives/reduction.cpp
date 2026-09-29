@@ -76,7 +76,7 @@ namespace shamalgs::primitives {
     /// namespace to control implementation behavior
     namespace impl {
 
-        /// Registry name, shared by the registrar and the dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view reduction_impl_name = "reduction";
 
         shamalgs::ImplVariantGlobal<
@@ -94,11 +94,8 @@ namespace shamalgs::primitives {
 #endif
             }};
 
-        namespace {
-            // Must come after the global it registers: same TU, so it is initialized after it
-            shamalgs::impl_registry::ImplRegistrar reduction_registrar{
-                std::string(reduction_impl_name), reduction_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(reduction_impl_name, reduction_impl);
 
         /// Get list of available reduction implementations, as config json strings
         std::vector<std::string> get_default_impl_list_reduction() {

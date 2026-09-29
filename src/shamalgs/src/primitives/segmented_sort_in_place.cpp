@@ -119,7 +119,7 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "multi_std_sort";
         };
 
-        /// Registry name, shared by the registrar and the dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view segmented_sort_in_place_impl_name = "segmented_sort_in_place";
 
         shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl{
@@ -127,11 +127,8 @@ namespace shamalgs::primitives {
                 self.set(MultiStdSort{});
             }};
 
-        namespace {
-            // Must come after the global it registers: same TU, so it is initialized after it
-            shamalgs::impl_registry::ImplRegistrar segmented_sort_in_place_registrar{
-                std::string(segmented_sort_in_place_impl_name), segmented_sort_in_place_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(segmented_sort_in_place_impl_name, segmented_sort_in_place_impl);
 
         /// Get list of available segmented sort in place implementations
         std::vector<std::string> get_default_impl_list_segmented_sort_in_place() {

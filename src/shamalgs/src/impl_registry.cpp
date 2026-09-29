@@ -69,10 +69,6 @@ namespace shamalgs::impl_registry {
         registry.emplace(std::move(name), &impl);
     }
 
-    ImplRegistrar::ImplRegistrar(std::string name, IImplVariant &impl) {
-        register_impl(std::move(name), impl);
-    }
-
     std::vector<std::string> get_registered_algs() {
         std::vector<std::string> ret;
         ret.reserve(get_registry().size());

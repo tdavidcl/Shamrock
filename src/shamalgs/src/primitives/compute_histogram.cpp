@@ -27,10 +27,7 @@ namespace shamalgs::primitives::impl {
             }
         }};
 
-    namespace {
-        // Must come after the global it registers: same TU, so it is initialized after it
-        shamalgs::impl_registry::ImplRegistrar compute_histogram_registrar{
-            std::string(compute_histogram_impl_name), compute_histogram_impl};
-    } // namespace
+    // Must come after the global it registers: same TU, so it is initialized after it
+    SHAMALGS_REGISTER_IMPL(compute_histogram_impl_name, compute_histogram_impl);
 
 } // namespace shamalgs::primitives::impl

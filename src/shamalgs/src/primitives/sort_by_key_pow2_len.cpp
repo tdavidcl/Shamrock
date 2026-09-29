@@ -102,7 +102,7 @@ namespace shamalgs::primitives {
     /// namespace to control implementation behavior
     namespace impl {
 
-        /// Registry name of sort_by_key_pow2_len_impl, shared by its registrar and dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view sort_by_key_pow2_len_impl_name = "sort_by_key_pow2_len";
 
         shamalgs::ImplVariantGlobal<BitonicSort, StdSort, LsdRadixSortBasic>
@@ -114,12 +114,8 @@ namespace shamalgs::primitives {
                 }
             }};
 
-        namespace {
-            // Must come after sort_by_key_pow2_len_impl: same TU, so it is initialized after the
-            // global
-            shamalgs::impl_registry::ImplRegistrar sort_by_key_pow2_len_registrar{
-                std::string(sort_by_key_pow2_len_impl_name), sort_by_key_pow2_len_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(sort_by_key_pow2_len_impl_name, sort_by_key_pow2_len_impl);
 
         /// Get list of available sort by key (pow2 len) implementations
         std::vector<std::string> get_default_impl_list_sort_by_key_pow2_len() {

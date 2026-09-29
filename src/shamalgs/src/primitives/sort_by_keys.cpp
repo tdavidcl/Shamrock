@@ -78,7 +78,7 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "lsd_radix_sort_basic";
         };
 
-        /// Registry name, shared by the registrar and the dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view sort_by_keys_impl_name = "sort_by_keys";
 
         shamalgs::
@@ -91,11 +91,8 @@ namespace shamalgs::primitives {
                     }
                 }};
 
-        namespace {
-            // Must come after the global it registers: same TU, so it is initialized after it
-            shamalgs::impl_registry::ImplRegistrar sort_by_keys_registrar{
-                std::string(sort_by_keys_impl_name), sort_by_keys_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(sort_by_keys_impl_name, sort_by_keys_impl);
 
         /// Get list of available sort by keys implementations
         std::vector<std::string> get_default_impl_list_sort_by_keys() {

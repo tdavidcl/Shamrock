@@ -137,7 +137,7 @@ namespace shamalgs::primitives {
         };
 #endif
 
-        /// Registry name, shared by the registrar and the dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view scan_exclusive_sum_in_place_impl_name
             = "scan_exclusive_sum_in_place";
 
@@ -172,12 +172,9 @@ namespace shamalgs::primitives {
 #endif
             }};
 
-        namespace {
-            // Must come after the global it registers: same TU, so it is initialized after it
-            shamalgs::impl_registry::ImplRegistrar scan_exclusive_sum_in_place_registrar{
-                std::string(scan_exclusive_sum_in_place_impl_name),
-                scan_exclusive_sum_in_place_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(
+            scan_exclusive_sum_in_place_impl_name, scan_exclusive_sum_in_place_impl);
 
         /// Get list of available scan_exclusive_sum_in_place implementations
         std::vector<std::string> get_default_impl_list_scan_exclusive_sum_in_place() {

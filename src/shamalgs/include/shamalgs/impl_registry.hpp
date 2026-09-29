@@ -24,17 +24,16 @@
  *         self.set(AltA{});
  *     }};
  *
- * namespace {
- *     // same translation unit, so initialized after my_algo_impl
- *     shamalgs::impl_registry::ImplRegistrar my_algo_registrar{
- *         std::string(my_algo_impl_name), my_algo_impl};
- * } // namespace
+ * // same translation unit, so initialized after my_algo_impl
+ * SHAMALGS_REGISTER_IMPL(my_algo_impl_name, my_algo_impl);
  * @endcode
  *
  * The selection of any registered algorithm can then be read or changed by name. Every function
  * taking an algorithm name throws std::invalid_argument if no algorithm is registered under it.
  */
 
+#include "shambase/call_lambda.hpp"
+#include "shambase/unique_name_macro.hpp"
 #include "shamalgs/ImplVariant.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include <string_view>
@@ -52,12 +51,6 @@ namespace shamalgs::impl_registry {
      * @throws std::invalid_argument if `name` is already registered (nothing is stored then)
      */
     void register_impl(std::string name, IImplVariant &impl);
-
-    /// Lets a registration sit at namespace scope right after the global it registers
-    struct ImplRegistrar {
-        /// Register `impl` under `name` (see register_impl)
-        ImplRegistrar(std::string name, IImplVariant &impl);
-    };
 
     /// Get the names of every registered algorithm, sorted
     std::vector<std::string> get_registered_algs();
@@ -82,3 +75,26 @@ namespace shamalgs::impl_registry {
     void autoselect_impl(std::string_view alg, const sham::DeviceScheduler_ptr &sched);
 
 } // namespace shamalgs::impl_registry
+
+/**
+ * @brief Register the implementation selector `impl` under `name` at static initialization
+ *
+ * Meant for namespace scope in a .cpp file, right after the definition of `impl`: objects of one
+ * translation unit are initialized in definition order, so `impl` is constructed by then. See
+ * shamalgs::impl_registry::register_impl for the requirements and errors.
+ *
+ * Usage :
+ * @code{.cpp}
+ * SHAMALGS_REGISTER_IMPL(my_algo_impl_name, my_algo_impl);
+ * @endcode
+ *
+ * @param name the registry name (string literal or std::string_view constant)
+ * @param impl the namespace-scope IImplVariant to register
+ */
+#define SHAMALGS_REGISTER_IMPL(name, impl)                                                         \
+    [[maybe_unused]] static const shambase::call_lambda __shamrock_unique_name(                    \
+        shamalgs_impl_registration_) {                                                             \
+        [] {                                                                                       \
+            shamalgs::impl_registry::register_impl(std::string(name), impl);                       \
+        }                                                                                          \
+    }

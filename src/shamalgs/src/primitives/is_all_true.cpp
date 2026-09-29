@@ -206,7 +206,7 @@ namespace shamalgs::primitives {
     /// namespace to control implementation behavior
     namespace impl {
 
-        /// Registry name, shared by the registrar and the dispatch site(s)
+        /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view is_all_true_impl_name = "is_all_true";
 
         shamalgs::ImplVariantGlobal<Host, SumReduction, AtomicEarlyExit> is_all_true_impl{
@@ -214,11 +214,8 @@ namespace shamalgs::primitives {
                 self.set(Host{});
             }};
 
-        namespace {
-            // Must come after the global it registers: same TU, so it is initialized after it
-            shamalgs::impl_registry::ImplRegistrar is_all_true_registrar{
-                std::string(is_all_true_impl_name), is_all_true_impl};
-        } // namespace
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(is_all_true_impl_name, is_all_true_impl);
 
         /// Get list of available is_all_true implementations, as config json strings
         std::vector<std::string> get_default_impl_list_is_all_true() {
