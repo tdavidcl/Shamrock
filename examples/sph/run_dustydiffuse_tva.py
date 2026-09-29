@@ -164,7 +164,8 @@ def setup_model(dust_variable):
     model.set_cfl_cour(0.3)
     model.set_cfl_force(0.3)
 
-    return model
+    # the context must outlive the model, return both
+    return ctx, model
 
 
 t_snapshot = [0.0, 0.1, 0.3, 1, 3, 10]
@@ -235,7 +236,7 @@ os.makedirs("_to_trash", exist_ok=True)
 
 
 def run_case(dust_variable, make_frames):
-    model = setup_model(dust_variable)
+    ctx, model = setup_model(dust_variable)
     model.timestep()
 
     analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
