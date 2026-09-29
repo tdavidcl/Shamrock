@@ -14,6 +14,7 @@
  */
 
 #include "shamalgs/primitives/compute_histogram.hpp"
+#include "shamalgs/impl_registry.hpp"
 
 namespace shamalgs::primitives::impl {
 
@@ -25,5 +26,11 @@ namespace shamalgs::primitives::impl {
                 self.set(NaiveGpu{}); // it is portable and fast everywhere
             }
         }};
+
+    namespace {
+        // Must come after the global it registers: same TU, so it is initialized after it
+        shamalgs::impl_registry::ImplRegistrar compute_histogram_registrar{
+            std::string(compute_histogram_impl_name), compute_histogram_impl};
+    } // namespace
 
 } // namespace shamalgs::primitives::impl

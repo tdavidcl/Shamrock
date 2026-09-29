@@ -60,6 +60,9 @@ namespace shamalgs::primitives {
         /// Implementation selector for compute_histogram (defined in compute_histogram.cpp)
         extern ComputeHistogramImpl compute_histogram_impl;
 
+        /// Registry name of compute_histogram_impl, shared by its registrar and dispatch site
+        constexpr std::string_view compute_histogram_impl_name = "compute_histogram";
+
         /// Get list of available compute_histogram implementations
         inline std::vector<std::string> get_default_impl_list_compute_histogram() {
             return compute_histogram_impl.get_default_config_list();

@@ -18,6 +18,7 @@
 #include "shambase/assert.hpp"
 #include "shambase/overloaded.hpp"
 #include "shamalgs/ImplVariant.hpp"
+#include "shamalgs/impl_registry.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 
@@ -118,10 +119,19 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "multi_std_sort";
         };
 
+        /// Registry name, shared by the registrar and the dispatch site(s)
+        constexpr std::string_view segmented_sort_in_place_impl_name = "segmented_sort_in_place";
+
         shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl{
             [](const sham::DeviceScheduler_ptr &, auto &self) {
                 self.set(MultiStdSort{});
             }};
+
+        namespace {
+            // Must come after the global it registers: same TU, so it is initialized after it
+            shamalgs::impl_registry::ImplRegistrar segmented_sort_in_place_registrar{
+                std::string(segmented_sort_in_place_impl_name), segmented_sort_in_place_impl};
+        } // namespace
 
         /// Get list of available segmented sort in place implementations
         std::vector<std::string> get_default_impl_list_segmented_sort_in_place() {
