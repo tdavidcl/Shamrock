@@ -6,81 +6,12 @@
 # ~~~
 
 # Shamrock control GUI (Dear ImGui docking + GLFW + OpenGL 3), built with -DSHAMROCK_BUILD_GUI=ON.
+# Its dependencies are set up in cmake/ShamConfigureGUILibs.cmake.
 # Not linked against any Shamrock library yet: it runs on demo data only.
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.9...3.10)
 
 message("-- adding shamrock_gui target")
-
-include(FetchContent)
-# Docking build of the Dear ImGui version used by imgui-bundle 1.92.900.
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.92.9-docking
-    GIT_SHALLOW TRUE
-)
-FetchContent_Declare(
-    imgui_color_text_edit
-    GIT_REPOSITORY https://github.com/goossens/ImGuiColorTextEdit.git
-    GIT_TAG master
-    GIT_SHALLOW TRUE
-)
-FetchContent_Declare(
-    stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(imgui imgui_color_text_edit stb)
-
-# IBM Plex fonts (SIL OFL 1.1), from the upstream release archives.
-if(POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW)
-endif()
-FetchContent_Declare(
-    ibm_plex_sans
-    URL https://github.com/IBM/plex/releases/download/%40ibm%2Fplex-sans%401.1.0/ibm-plex-sans.zip
-    URL_HASH SHA256=fb365d910566e6d199cc2c15579a7dd9a267128e18431a394ed81f1970c69200
-)
-FetchContent_Declare(
-    ibm_plex_mono
-    URL https://github.com/IBM/plex/releases/download/%40ibm%2Fplex-mono%402.5.0/ibm-plex-mono.zip
-    URL_HASH SHA256=6d23f01257663d8cc49a0d64c22ced630b79e0e2a0ac08a0da86e9a38bbc481c
-)
-FetchContent_MakeAvailable(ibm_plex_sans ibm_plex_mono)
-set(SHAMROCK_GUI_FONTS
-    ${ibm_plex_sans_SOURCE_DIR}/fonts/complete/ttf/IBMPlexSans-Regular.ttf
-    ${ibm_plex_sans_SOURCE_DIR}/fonts/complete/ttf/IBMPlexSans-Medium.ttf
-    ${ibm_plex_sans_SOURCE_DIR}/fonts/complete/ttf/IBMPlexSans-SemiBold.ttf
-    ${ibm_plex_mono_SOURCE_DIR}/fonts/complete/ttf/IBMPlexMono-Regular.ttf
-    ${ibm_plex_mono_SOURCE_DIR}/fonts/complete/ttf/IBMPlexMono-Medium.ttf
-)
-
-# GLFW: use the system package when present, otherwise build it.
-find_package(glfw3 3.3 QUIET)
-if(NOT glfw3_FOUND)
-    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-        glfw
-        GIT_REPOSITORY https://github.com/glfw/glfw.git
-        GIT_TAG 3.4
-        GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(glfw)
-endif()
-# Prefer GLVND (CMP0072 NEW default), set explicitly as src/ wraps find_package with old policies
-set(OpenGL_GL_PREFERENCE GLVND)
-find_package(OpenGL REQUIRED)
-
-# FreeType rasterises glyphs the same way as the imgui-bundle wheel.
-# Without it Dear ImGui falls back to its built-in stb_truetype.
-option(SHAMROCK_GUI_FREETYPE "Use FreeType for font rasterisation in shamrock_gui" ON)
-if(SHAMROCK_GUI_FREETYPE)
-    find_package(Freetype)
-endif()
 
 add_library(
     shamrock_gui_imgui STATIC
@@ -136,6 +67,6 @@ add_custom_command(
             $<TARGET_FILE_DIR:shamrock_gui>/assets/shamrock_logo.png
     COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_FONTS}
             $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts
-    COMMAND ${CMAKE_COMMAND} -E copy ${ibm_plex_sans_SOURCE_DIR}/LICENSE.txt
+    COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_FONTS_LICENSE}
             $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts/OFL.txt
 )
