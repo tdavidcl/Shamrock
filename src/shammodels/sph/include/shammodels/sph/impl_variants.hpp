@@ -253,6 +253,23 @@ namespace shammodels::sph::impl {
         using Variant = std::variant<None, AfterOmega>;
     } // namespace neigh_cache_tighten
 
+    /**
+     * @brief Accumulations of the blocked fused diff operators loop.
+     */
+    namespace diff_operators_accumulation {
+        /// Every sum accumulated as in the reference kernel (identical results)
+        struct Direct {
+            static constexpr std::string_view variant_type_name = "direct";
+        };
+        /// The symmetric r_ab x grad W matrix is accumulated once (6 terms instead of 9), and
+        /// sum m v_ab . grad W, sum m v_ab x grad W are derived from the v_ab x grad W sums.
+        /// Same quantities, the results differ from the reference by rounding
+        struct Derived {
+            static constexpr std::string_view variant_type_name = "derived";
+        };
+        using Variant = std::variant<Direct, Derived>;
+    } // namespace diff_operators_accumulation
+
     /// Currently selected implementation for the diff operators section
     const diff_operators::Variant &get_impl_diff_operators();
 
@@ -264,6 +281,9 @@ namespace shammodels::sph::impl {
 
     /// Currently selected implementation for the neighbour lists tightening section
     const neigh_cache_tighten::Variant &get_impl_neigh_cache_tighten();
+
+    /// Currently selected implementation for the diff operators accumulation section
+    const diff_operators_accumulation::Variant &get_impl_diff_operators_accumulation();
 
     /// Currently selected implementation for the CFL signal velocity section
     const cfl_vsig::Variant &get_impl_cfl_vsig();

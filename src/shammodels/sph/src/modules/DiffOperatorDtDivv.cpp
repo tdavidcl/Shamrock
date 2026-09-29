@@ -226,9 +226,10 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
             auto dtdivv     = buf_dtdivv.get_write_access(depends_list);
             auto ploop_ptrs = pcache.get_read_access(depends_list);
 
-            auto submit_kernel = [&](auto reciprocal_tag, auto blocked_tag) {
+            auto submit_kernel = [&](auto reciprocal_tag, auto blocked_tag, auto derived_tag) {
                 constexpr bool reciprocal = decltype(reciprocal_tag)::value;
                 constexpr bool blocked    = decltype(blocked_tag)::value;
+                constexpr bool derived    = decltype(derived_tag)::value;
                 return queue.submit(depends_list, [&](sycl::handler &cgh) {
                     const Tscal pmass = gpart_mass;
 
@@ -280,6 +281,8 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
                                     = ploop_ptrs.index_neigh_map + ploop_ptrs.scanned_cnt[id_a];
 
                                 const Tscal h_a_sq_rker2 = h_a * h_a * Rker2;
+
+                                Tscal R00 = 0, R01 = 0, R02 = 0, R11 = 0, R12 = 0, R22 = 0;
 
                                 Tscal dx_b[block], dy_b[block], dz_b[block];
                                 Tscal rab2_b[block], h_b_b[block];
@@ -339,9 +342,19 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
 
                                         Tvec mdWab_b = dWab_a * pmass;
 
-                                        Rij_a[0] -= r_ab.x() * mdWab_b;
-                                        Rij_a[1] -= r_ab.y() * mdWab_b;
-                                        Rij_a[2] -= r_ab.z() * mdWab_b;
+                                        if constexpr (derived) {
+                                            // symmetric matrix (r_ab x r_ab up to a factor)
+                                            R00 -= r_ab.x() * mdWab_b.x();
+                                            R01 -= r_ab.x() * mdWab_b.y();
+                                            R02 -= r_ab.x() * mdWab_b.z();
+                                            R11 -= r_ab.y() * mdWab_b.y();
+                                            R12 -= r_ab.y() * mdWab_b.z();
+                                            R22 -= r_ab.z() * mdWab_b.z();
+                                        } else {
+                                            Rij_a[0] -= r_ab.x() * mdWab_b;
+                                            Rij_a[1] -= r_ab.y() * mdWab_b;
+                                            Rij_a[2] -= r_ab.z() * mdWab_b;
+                                        }
 
                                         Rij_a_dvk_dxj[0] -= v_ab * mdWab_b.x();
                                         Rij_a_dvk_dxj[1] -= v_ab * mdWab_b.y();
@@ -351,9 +364,29 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
                                         Rij_a_dak_dxj[1] -= a_ab * mdWab_b.y();
                                         Rij_a_dak_dxj[2] -= a_ab * mdWab_b.z();
 
-                                        sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
-                                        sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                                        if constexpr (!derived) {
+                                            sum_nabla_v += pmass * sycl::dot(v_ab, dWab_a);
+                                            sum_nabla_cross_v += pmass * sycl::cross(v_ab, dWab_a);
+                                        }
                                     }
+                                }
+
+                                if constexpr (derived) {
+                                    // sum_b m v_ab . grad W and sum_b m v_ab x grad W are the
+                                    // trace and the antisymmetric part of
+                                    // Rij_a_dvk_dxj[k][j] = - sum_b m v_ab[j] grad W[k]
+                                    Rij_a
+                                        = {Tvec{R00, R01, R02},
+                                           Tvec{R01, R11, R12},
+                                           Tvec{R02, R12, R22}};
+
+                                    sum_nabla_v
+                                        = -(Rij_a_dvk_dxj[0].x() + Rij_a_dvk_dxj[1].y()
+                                            + Rij_a_dvk_dxj[2].z());
+                                    sum_nabla_cross_v
+                                        = {Rij_a_dvk_dxj[1].z() - Rij_a_dvk_dxj[2].y(),
+                                           Rij_a_dvk_dxj[2].x() - Rij_a_dvk_dxj[0].z(),
+                                           Rij_a_dvk_dxj[0].y() - Rij_a_dvk_dxj[1].x()};
                                 }
                             } else
                                 particle_looper.for_each_object(id_a, [&](u32 id_b) {
@@ -451,11 +484,25 @@ void shammodels::sph::modules::DiffOperatorDtDivv<Tvec, SPHKernel>::update_dtdiv
                 = std::holds_alternative<shammodels::sph::impl::diff_operators_evaluation::Blocked>(
                     shammodels::sph::impl::get_impl_diff_operators_evaluation());
 
+            // the derived accumulation is only implemented in the blocked loop
+            bool derived_acc = blocked_eval
+                               && std::holds_alternative<
+                                   shammodels::sph::impl::diff_operators_accumulation::Derived>(
+                                   shammodels::sph::impl::get_impl_diff_operators_accumulation());
+
+            auto submit = [&](auto reciprocal_tag) {
+                if (!blocked_eval) {
+                    return submit_kernel(reciprocal_tag, std::false_type{}, std::false_type{});
+                } else if (derived_acc) {
+                    return submit_kernel(reciprocal_tag, std::true_type{}, std::true_type{});
+                } else {
+                    return submit_kernel(reciprocal_tag, std::true_type{}, std::false_type{});
+                }
+            };
+
             auto e = (shammodels::sph::impl::use_reciprocal_arithmetic())
-                         ? (blocked_eval ? submit_kernel(std::true_type{}, std::true_type{})
-                                         : submit_kernel(std::true_type{}, std::false_type{}))
-                         : (blocked_eval ? submit_kernel(std::false_type{}, std::true_type{})
-                                         : submit_kernel(std::false_type{}, std::false_type{}));
+                         ? submit(std::true_type{})
+                         : submit(std::false_type{});
 
             buf_xyz.complete_event_state(e);
             buf_vxyz.complete_event_state(e);
