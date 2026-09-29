@@ -303,7 +303,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                bool smooth_s_positivity_limiter,
                bool dust_corrected_av,
                std::optional<Tscal> clamp_dust_frac,
-               std::string dust_variable) {
+               const std::string &dust_variable) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
