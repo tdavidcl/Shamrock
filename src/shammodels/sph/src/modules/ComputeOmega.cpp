@@ -129,89 +129,103 @@ void shammodels::sph::modules::NodeComputeOmega<Tvec, SPHKernel>::_impl_evaluate
     // blocked evaluation that also tightens the neighbour lists : the lists are compacted in place
     // to the pairs within the kernel support of either particle (with the final smoothing
     // lengths), which are the only pairs used by the following neighbour loops (same criterion,
-    // same order, hence identical results)
+    // same order, hence identical results). The final smoothing lengths are only known for the
+    // particles of the patch (the ghosts are exchanged later), so the pairs with a ghost
+    // (id_b >= part count) are always kept.
     auto run_tighten = [&](auto reciprocal_tag) {
         constexpr bool reciprocal = decltype(reciprocal_tag)::value;
 
-        sham::distributed_data_kernel_call(
-            dev_sched,
-            sham::DDMultiRef{edges.xyz.get_spans(), edges.hpart.get_spans()},
-            sham::DDMultiRef{edges.omega.get_spans(), edges.neigh_cache.neigh_cache},
-            edges.part_counts.indexes,
-            [part_mass = this->part_mass, Rkern = kernel_radius](
-                u32 id_a, const Tvec *r, const Tscal *hpart, Tscal *omega, auto ploop_ptrs) {
-                constexpr Tscal Rker2 = SPHKernel<Tscal>::Rkern * SPHKernel<Tscal>::Rkern;
+        auto &xyz_spans   = edges.xyz.get_spans();
+        auto &hpart_spans = edges.hpart.get_spans();
+        auto &omega_spans = edges.omega.get_spans();
+        auto &caches      = edges.neigh_cache.neigh_cache;
 
-                Tvec xyz_a = r[id_a];
+        edges.part_counts.indexes.for_each([&](u64 id_patch, const u32 &part_cnt) {
+            sham::kernel_call(
+                dev_sched->get_queue(),
+                sham::MultiRef{xyz_spans.get(id_patch), hpart_spans.get(id_patch)},
+                sham::MultiRef{omega_spans.get(id_patch), caches.get(id_patch)},
+                part_cnt,
+                [part_mass = this->part_mass, Rkern = kernel_radius, part_cnt](
+                    u32 id_a, const Tvec *r, const Tscal *hpart, Tscal *omega, auto ploop_ptrs) {
+                    constexpr Tscal Rker2 = SPHKernel<Tscal>::Rkern * SPHKernel<Tscal>::Rkern;
 
-                Tscal h_a  = hpart[id_a];
-                Tscal dint = h_a * h_a * Rkern * Rkern;
+                    Tvec xyz_a = r[id_a];
 
-                // same expression as the neighbour loops using the lists
-                const Tscal h_a_sq_rker2 = h_a * h_a * Rker2;
+                    Tscal h_a  = hpart[id_a];
+                    Tscal dint = h_a * h_a * Rkern * Rkern;
 
-                Tscal part_omega_sum = 0;
+                    // same expression as the neighbour loops using the lists
+                    const Tscal h_a_sq_rker2 = h_a * h_a * Rker2;
 
-                Tscal hinv_a = Tscal{1} / h_a;
+                    Tscal part_omega_sum = 0;
 
-                constexpr u32 block = 16;
+                    Tscal hinv_a = Tscal{1} / h_a;
 
-                const u32 cnt = ploop_ptrs.cnt_neigh[id_a];
-                u32 *neigh_b  = ploop_ptrs.index_neigh_map + ploop_ptrs.scanned_cnt[id_a];
+                    constexpr u32 block = 16;
 
-                Tscal rab2_b[block];
-                Tscal dhw_b[block];
-                bool keep_b[block];
+                    const u32 cnt = ploop_ptrs.cnt_neigh[id_a];
+                    u32 *neigh_b  = ploop_ptrs.index_neigh_map + ploop_ptrs.scanned_cnt[id_a];
 
-                u32 new_cnt = 0;
+                    Tscal rab2_b[block];
+                    Tscal dhw_b[block];
+                    bool keep_b[block];
 
-                for (u32 b0 = 0; b0 < cnt; b0 += block) {
-                    u32 n = sham::min(block, cnt - b0);
+                    u32 new_cnt = 0;
 
-                    for (u32 t = 0; t < n; t++) {
-                        u32 id_b   = neigh_b[b0 + t];
-                        Tvec dr    = xyz_a - r[id_b];
-                        Tscal rab2 = sycl::dot(dr, dr);
-                        Tscal h_b  = hpart[id_b];
-                        rab2_b[t]  = rab2;
-                        keep_b[t]  = !(rab2 > h_a_sq_rker2 && rab2 > h_b * h_b * Rker2);
-                    }
+                    for (u32 b0 = 0; b0 < cnt; b0 += block) {
+                        u32 n = sham::min(block, cnt - b0);
 
-                    for (u32 t = 0; t < n; t++) {
-                        Tscal rab2  = rab2_b[t];
-                        bool inside = !(rab2 > dint);
-                        Tscal rab   = shamrock::sph::sqrt_noerrno(rab2);
-
-                        Tscal dhw;
-                        if constexpr (reciprocal) {
-                            dhw = shamrock::sph::KernelInvH<SPHKernel<Tscal>>::dhW_3d(rab, hinv_a);
-                        } else {
-                            dhw = SPHKernel<Tscal>::dhW_3d(rab, h_a);
+                        for (u32 t = 0; t < n; t++) {
+                            u32 id_b   = neigh_b[b0 + t];
+                            Tvec dr    = xyz_a - r[id_b];
+                            Tscal rab2 = sycl::dot(dr, dr);
+                            rab2_b[t]  = rab2;
+                            if (id_b < part_cnt) {
+                                Tscal h_b = hpart[id_b];
+                                keep_b[t] = !(rab2 > h_a_sq_rker2 && rab2 > h_b * h_b * Rker2);
+                            } else {
+                                keep_b[t] = true;
+                            }
                         }
-                        dhw_b[t] = (inside) ? dhw : Tscal{0};
+
+                        for (u32 t = 0; t < n; t++) {
+                            Tscal rab2  = rab2_b[t];
+                            bool inside = !(rab2 > dint);
+                            Tscal rab   = shamrock::sph::sqrt_noerrno(rab2);
+
+                            Tscal dhw;
+                            if constexpr (reciprocal) {
+                                dhw = shamrock::sph::KernelInvH<SPHKernel<Tscal>>::dhW_3d(
+                                    rab, hinv_a);
+                            } else {
+                                dhw = SPHKernel<Tscal>::dhW_3d(rab, h_a);
+                            }
+                            dhw_b[t] = (inside) ? dhw : Tscal{0};
+                        }
+
+                        for (u32 t = 0; t < n; t++) {
+                            part_omega_sum += part_mass * dhw_b[t];
+                        }
+
+                        // in place, order preserving and branch free compaction (the write position
+                        // never exceeds the read position)
+                        for (u32 t = 0; t < n; t++) {
+                            u32 id_b         = neigh_b[b0 + t];
+                            neigh_b[new_cnt] = id_b;
+                            new_cnt += u32(keep_b[t]);
+                        }
                     }
 
-                    for (u32 t = 0; t < n; t++) {
-                        part_omega_sum += part_mass * dhw_b[t];
-                    }
+                    ploop_ptrs.cnt_neigh[id_a] = new_cnt;
 
-                    // in place, order preserving and branch free compaction (the write position
-                    // never exceeds the read position)
-                    for (u32 t = 0; t < n; t++) {
-                        u32 id_b         = neigh_b[b0 + t];
-                        neigh_b[new_cnt] = id_b;
-                        new_cnt += u32(keep_b[t]);
-                    }
-                }
+                    using namespace shamrock::sph;
 
-                ploop_ptrs.cnt_neigh[id_a] = new_cnt;
-
-                using namespace shamrock::sph;
-
-                Tscal rho_ha  = rho_h(part_mass, h_a, SPHKernel<Tscal>::hfactd);
-                Tscal omega_a = 1 + (h_a / (3 * rho_ha)) * part_omega_sum;
-                omega[id_a]   = omega_a;
-            });
+                    Tscal rho_ha  = rho_h(part_mass, h_a, SPHKernel<Tscal>::hfactd);
+                    Tscal omega_a = 1 + (h_a / (3 * rho_ha)) * part_omega_sum;
+                    omega[id_a]   = omega_a;
+                });
+        });
     };
 
     bool blocked = shammodels::sph::impl::use_blocked_neigh_evaluation();
