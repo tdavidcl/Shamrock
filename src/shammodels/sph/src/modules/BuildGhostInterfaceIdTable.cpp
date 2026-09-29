@@ -98,7 +98,7 @@ void shammodels::sph::modules::BuildGhostInterfaceIdTable<Tvec>::_impl_evaluate_
     }
 
     if (has_warn && shamcomm::world_rank() == 0) {
-        warn_log = "\n    High interf/patch volume. This can lead to high mpi "
+        warn_log = "\n    This can lead to high mpi "
                    "overhead, try to increase the patch split crit"
                    + warn_log;
     }
