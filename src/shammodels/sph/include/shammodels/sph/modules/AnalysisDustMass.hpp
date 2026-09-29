@@ -22,6 +22,7 @@
 #include "shambackends/DeviceScheduler.hpp"
 #include "shammodels/sph/Model.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
 #include <shambackends/sycl.hpp>
@@ -54,9 +55,11 @@ namespace shammodels::sph::modules {
             u64 ndust = solver.solver_config.dust_config.get_dust_nvar();
 
             const u32 ihpart = sched.pdl_old().template get_field_idx<Tscal>("hpart");
-            const u32 is_j   = sched.pdl_old().template get_field_idx<Tscal>("s_j");
+            const u32 is_j   = sched.pdl_old().template get_field_idx<Tscal>(
+                solver.solver_config.dust_config.get_dust_var_field_name());
 
-            Tscal pmass = solver.solver_config.gpart_mass;
+            Tscal pmass           = solver.solver_config.gpart_mass;
+            DustVariable dust_var = solver.solver_config.dust_config.get_dust_variable();
 
             std::vector<Tscal> dust_mass(ndust, 0.0);
 
@@ -77,7 +80,7 @@ namespace shammodels::sph::modules {
                             sham::MultiRef{hpart_buf, s_j_buf},
                             sham::MultiRef{dust_mass_j_part},
                             len,
-                            [pmass, jdust, ndust](
+                            [pmass, jdust, ndust, dust_var](
                                 u32 i,
                                 const Tscal *__restrict hpart,
                                 const Tscal *__restrict s_j,
@@ -85,7 +88,7 @@ namespace shammodels::sph::modules {
                                 Tscal h_a        = hpart[i];
                                 Tscal rho_a      = shamrock::sph::rho_h(pmass, h_a, Kernel::hfactd);
                                 Tscal s_ja       = s_j[i * ndust + jdust];
-                                Tscal epsilon_ja = s_ja * s_ja / rho_a;
+                                Tscal epsilon_ja = dust_var_to_eps(dust_var, s_ja, rho_a);
 
                                 dust_mass_j_part[i] = pmass * epsilon_ja;
                             });

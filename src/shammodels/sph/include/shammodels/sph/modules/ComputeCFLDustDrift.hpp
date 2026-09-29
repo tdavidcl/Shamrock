@@ -18,6 +18,7 @@
 
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
@@ -40,10 +41,14 @@ class ComputeCFLDustDrift : public shamrock::solvergraph::INode {
 
     using Tscal = shambase::VecComponent<Tvec>;
 
+    using DustVariable = shammodels::sph::DustVariable;
+
     u32 nbins;
+    DustVariable dust_var;
 
     public:
-    ComputeCFLDustDrift(u32 nbins) : nbins(nbins) {}
+    ComputeCFLDustDrift(u32 nbins, DustVariable dust_var = DustVariable::SqrtRhoEps)
+        : nbins(nbins), dust_var(dust_var) {}
 
     EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -64,7 +69,12 @@ class ComputeCFLDustDrift : public shamrock::solvergraph::INode {
                 edges.hpart.get_spans(), edges.delta_v.get_spans(), edges.s_j.get_spans()},
             sham::DDMultiRef{edges.cfl_dt.get_spans()},
             edges.part_counts.indexes,
-            [C_drift, cfl_density_threshold, pmass, hfactd, nbins = this->nbins](
+            [C_drift,
+             cfl_density_threshold,
+             pmass,
+             hfactd,
+             nbins    = this->nbins,
+             dust_var = this->dust_var](
                 u32 id_a,
                 const Tscal *hpart,
                 const Tvec *delta_v,
@@ -76,8 +86,8 @@ class ComputeCFLDustDrift : public shamrock::solvergraph::INode {
                 Tscal rho_a = shamrock::sph::rho_h(pmass, h_a, hfactd);
 
                 auto rho_dust = [&](int j) {
-                    auto tmp = s_j[id_a_d + j];
-                    return tmp * tmp;
+                    return rho_a
+                           * shammodels::sph::dust_var_to_eps(dust_var, s_j[id_a_d + j], rho_a);
                 };
 
                 auto epsilon_j = [&](Tscal rho_d_j) {

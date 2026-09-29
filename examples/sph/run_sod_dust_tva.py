@@ -11,6 +11,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import PillowWriter
+from shamrock.utils import dust_variables as dvar
 from shamrock.utils.analysis import AnalysisHelper
 from shamrock.utils.plot import show_image_sequence
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
@@ -51,6 +52,9 @@ u_d = P_d / ((gamma - 1) * rho_d)
 
 resol = int(os.environ.get("RESOL", "128"))
 
+# evolved dust variable (see shamrock.utils.dust_variables)
+dust_variable = os.environ.get("DUST_VARIABLE", "sqrt_rho_eps")
+
 sim_folder = f"_to_trash/dustysod_{resol}/"
 dump_folder = sim_folder + "dump/"
 
@@ -90,14 +94,14 @@ class Simulation(SimulationRunner):
         x = np.array(dic["xyz"][:, 0]) + 0.5
         vx = dic["vxyz"][:, 0]
         uint_tilde = dic["uint"][:]
-        sj = dic["s_j"].reshape(-1, ndust)
+        sj = dic[dvar.field_name(dust_variable)].reshape(-1, ndust)
 
         hpart = dic["hpart"]
         alpha = dic["alpha_AV"]
 
         rho = pmass * (model.get_hfact() / hpart) ** 3
 
-        rho_d = sj**2
+        rho_d = rho[:, None] * dvar.var_to_eps(dust_variable, sj, rho[:, None])
         rho_g = rho - np.sum(rho_d, axis=1)
 
         P = (gamma - 1) * rho * uint_tilde  # = rho_g * u
@@ -171,7 +175,7 @@ class Simulation(SimulationRunner):
         )
         cfg.set_boundary_periodic()
         cfg.set_eos_adiabatic(gamma)
-        cfg.set_dust_mode_monofluid_tva(nvar=1)
+        cfg.set_dust_mode_monofluid_tva(nvar=1, dust_variable=dust_variable)
         cfg.set_dust_drag_constant(ts)
         cfg.set_show_cfl_detail(True)
         cfg.print_status()
@@ -222,7 +226,7 @@ class Simulation(SimulationRunner):
             pmass = model.get_particle_mass()
             hpart = patchdata["hpart"]
             rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
-            s = np.sqrt(rho * epsilons[j])
+            s = dvar.eps_to_var(dust_variable, epsilons[j], rho)
             return s
 
         for k in range(ndust):
@@ -230,7 +234,7 @@ class Simulation(SimulationRunner):
             def compute_sj_new(patchdata):
                 return compute_sj_new_j(patchdata, k)
 
-            self.model.overwrite_field_value_f64("s_j", compute_sj_new, k)
+            self.model.overwrite_field_value_f64(dvar.field_name(dust_variable), compute_sj_new, k)
 
 
 Simulation(model).run()

@@ -12,6 +12,7 @@ import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from shamrock.utils import dust_variables as dvar
 
 import shamrock
 
@@ -40,6 +41,14 @@ ly = 12
 lz = 12
 
 # %%
+# The TVA solver can evolve different dust variables (see :py:mod:`shamrock.utils.dust_variables`).
+# The test is first run with the default :math:`S_j = \sqrt{\rho \epsilon_j}` and then repeated
+# with the other variables for comparison. :math:`\epsilon_j` is not positivity preserving, so it
+# is only run with the hard limiter :math:`\epsilon_j = \max(\epsilon_j, 0)`.
+hard_limiter = True
+dust_variables = dvar.selected_dust_variables(hard_limiter=hard_limiter)
+
+# %%
 # Use shamrock documentation style for matplotlib
 shamrock.matplotlib.set_shamrock_mpl_style()
 
@@ -64,7 +73,7 @@ vol_b = (xM - xm) * (yM - ym) * (zM - zm)
 totmass = rho * vol_b
 
 
-def do_setup(model, cs, delta_v_0):
+def do_setup(model, cs, delta_v_0, dust_variable="sqrt_rho_eps"):
 
     cfg = model.gen_default_config()
     # cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
@@ -72,7 +81,9 @@ def do_setup(model, cs, delta_v_0):
     cfg.set_artif_viscosity_VaryingCD10(
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
-    cfg.set_dust_mode_monofluid_tva(nvar=1)
+    cfg.set_dust_mode_monofluid_tva(
+        nvar=1, ensure_s_j_positivity=hard_limiter, dust_variable=dust_variable
+    )
     cfg.set_dust_drag_constant([ts])
     cfg.set_boundary_periodic()
     cfg.set_eos_isothermal(cs)
@@ -91,9 +102,9 @@ def do_setup(model, cs, delta_v_0):
     setup.apply_setup(gen, insert_step=scheduler_split_val)
 
     def func_s(r):
-        return np.sqrt(rho * epsilon_0)
+        return dvar.eps_to_var(dust_variable, epsilon_0, rho)
 
-    model.set_field_value_lambda_f64("s_j", func_s, 0)
+    model.set_field_value_lambda_f64(dvar.field_name(dust_variable), func_s, 0)
 
     print(delta_v_0)
 
@@ -120,7 +131,7 @@ def do_setup(model, cs, delta_v_0):
 
 # %%
 # Field recovery for plots
-def get_field_results(model):
+def get_field_results(model, dust_variable="sqrt_rho_eps"):
     def custom_getter_x(size: int, dic_out: dict) -> np.array:
         return dic_out["xyz"][:, 0]
 
@@ -130,10 +141,10 @@ def get_field_results(model):
     x_field = model.compute_field("custom", "f64", custom_getter_x)
     vx_field = model.compute_field("custom", "f64", custom_getter_vx)
     rho_field = model.compute_field("rho", "f64")
-    s_j_field = model.compute_field("s_j", "f64")
+    s_j_field = model.compute_field(dvar.field_name(dust_variable), "f64")
 
     def internal_eps(size: int, s: np.array, rho: np.array) -> np.array:
-        return (s**2) / rho
+        return dvar.var_to_eps(dust_variable, s, rho)
 
     eps_field = shamrock.map_fields_f64(internal_eps, s=s_j_field, rho=rho_field)
 
@@ -218,7 +229,7 @@ def project_eigenmode(
     return c
 
 
-def find_eigen_decomp(x_data, rho_data, eps_data, vx_data, eigval, eigvec):
+def find_eigen_decomp(x_data, rho_data, eps_data, vx_data, eigval, eigvec, cs):
 
     offset_rho, ampl_rho, phi_rho = fit_sine_wave(x_data, rho_data)
     offset_eps, ampl_eps, phi_eps = fit_sine_wave(x_data, eps_data)
@@ -279,16 +290,15 @@ def fit_sine_wave(x, y, prev_phi=None):
 # %%
 # Perform the simulation
 
-all_case_plot = []
+k = 2 * np.pi / (xM - xm)
 
-for ics, cs in enumerate(cs_g_list):
+
+def run_case(ics, cs, dust_variable, make_frames):
     ctx = shamrock.Context()
     ctx.pdata_layout_new()
 
     model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
-    do_setup(model, cs, delta_v_0_list[ics])
-
-    k = 2 * np.pi / (xM - xm)
+    do_setup(model, cs, delta_v_0_list[ics], dust_variable)
 
     # Compute Omega
     omega_k = get_dustywave_omega_k(k, cs, ts, epsilon_0)
@@ -323,12 +333,14 @@ for ics, cs in enumerate(cs_g_list):
         t = Twave * i / (Twave_cnt)
         model.evolve_until(t)
 
-        x_data, rho_data, rho_g_data, rho_d_data, vx_data, eps_data = get_field_results(model)
+        x_data, rho_data, rho_g_data, rho_d_data, vx_data, eps_data = get_field_results(
+            model, dust_variable
+        )
 
         x_ana = np.linspace(xm, xM, 256)
 
         if i == 0:
-            coefs = find_eigen_decomp(x_data, rho_data, eps_data, vx_data, eigval, eigvec)
+            coefs = find_eigen_decomp(x_data, rho_data, eps_data, vx_data, eigval, eigvec, cs)
             print(f"coefs={coefs}")
 
             decomp = np.array(eigvec[0] * 0)
@@ -382,6 +394,9 @@ for ics, cs in enumerate(cs_g_list):
         eps_last_phi = eps_t_phi
         vx_last_phi = vx_t_phi
 
+        if not make_frames:
+            continue
+
         fig, axs = plt.subplots(1, 1, figsize=(10, 5))
 
         axs.plot(x_data, rho_data - 1, ".", label=r"$\delta \rho$")
@@ -415,6 +430,19 @@ for ics, cs in enumerate(cs_g_list):
         #    break
 
     t_arr = np.asarray(t_list)
+
+    amplitudes = {
+        "t": t_arr,
+        "rho": np.array(rho_t_list),
+        "eps": np.array(eps_t_list),
+        "vx_on_cs": np.array(vx_t_list) / cs,
+        "rho_ana": np.array(rho_t_list_analytic),
+        "eps_ana": np.array(eps_t_list_analytic),
+        "vx_on_cs_ana": np.array(vx_t_list_analytic) / cs,
+    }
+
+    if not make_frames:
+        return None, amplitudes
 
     rho_t_list = np.array(rho_t_list)
     eps_t_list = np.array(eps_t_list)
@@ -462,7 +490,20 @@ for ics, cs in enumerate(cs_g_list):
     plt.legend(fontsize=12, loc="upper right")
     plt.savefig(f"_to_trash/dustywave_tva_scan_{return_dict['ics']:04}.png")
 
-    all_case_plot.append(return_dict)
+    return return_dict, amplitudes
+
+
+all_case_plot = []
+amplitudes = {v: [] for v in dust_variables}
+
+for dust_variable in dust_variables:
+    for ics, cs in enumerate(cs_g_list):
+        return_dict, ampl = run_case(
+            ics, cs, dust_variable, make_frames=(dust_variable == "sqrt_rho_eps")
+        )
+        amplitudes[dust_variable].append(ampl)
+        if return_dict is not None:
+            all_case_plot.append(return_dict)
 
 # %%
 # make gifs
@@ -505,4 +546,124 @@ axs[0].legend(fontsize=11, loc="upper left")
 plt.tight_layout()
 plt.savefig("_to_trash/dustywave_tva_scan_all.png")
 plt.savefig("_to_trash/dustywave_tva_scan_all.pdf")
+plt.show()
+
+
+####################################################
+# Comparison of the dust variables
+####################################################
+
+fields_cmp = [
+    ("rho", r"$\delta \rho$"),
+    ("eps", r"$\delta \epsilon$"),
+    ("vx_on_cs", r"$\delta v_x / c_s$"),
+]
+
+# %%
+# Comparison of the dust variables: fitted amplitudes
+#
+# Fitted amplitude of each field for every evolved dust variable (markers) against the eigenmode
+# solution (black). Columns are the sound speeds of the scan.
+
+fig, axs = plt.subplots(
+    len(fields_cmp),
+    len(cs_g_list),
+    figsize=(4.5 * len(cs_g_list), 3 * len(fields_cmp)),
+    sharex="col",
+    squeeze=False,
+)
+for ics, cs in enumerate(cs_g_list):
+    ref = amplitudes[dust_variables[0]][ics]
+    for irow, (key, label) in enumerate(fields_cmp):
+        ax = axs[irow, ics]
+        ax.plot(ref["t"], plot_scaling * ref[key + "_ana"], "-", color="black", label="analytic")
+        for dust_variable in dust_variables:
+            a = amplitudes[dust_variable][ics]
+            ax.plot(
+                a["t"],
+                plot_scaling * a[key],
+                marker=dvar.MARKERS[dust_variable],
+                markersize=3,
+                linestyle="none",
+                color=dvar.COLORS[dust_variable],
+                label=dvar.LABELS[dust_variable],
+            )
+        if ics == 0:
+            ax.set_ylabel(f"${label_scaling}$ " + label)
+        if irow == 0:
+            ax.set_title(f"cs={cs:.2e} [code unit]")
+        if irow == len(fields_cmp) - 1:
+            ax.set_xlabel("$t$ [code unit]")
+axs[0, 0].legend(fontsize=8, loc="upper right")
+plt.tight_layout()
+plt.savefig("_to_trash/dustywave_tva_dust_variables_amplitudes.png")
+plt.show()
+
+# %%
+# Comparison of the dust variables: amplitude error
+#
+# Error of the fitted amplitude with respect to the eigenmode solution, normalised by the
+# initial perturbation amplitude of that field.
+
+fig, axs = plt.subplots(
+    len(fields_cmp),
+    len(cs_g_list),
+    figsize=(4.5 * len(cs_g_list), 3 * len(fields_cmp)),
+    sharex="col",
+    squeeze=False,
+)
+for ics, cs in enumerate(cs_g_list):
+    for irow, (key, label) in enumerate(fields_cmp):
+        ax = axs[irow, ics]
+        for dust_variable in dust_variables:
+            a = amplitudes[dust_variable][ics]
+            norm = np.max(np.abs(a[key + "_ana"]))
+            ax.plot(
+                a["t"],
+                (a[key] - a[key + "_ana"]) / norm,
+                "-",
+                color=dvar.COLORS[dust_variable],
+                label=dvar.LABELS[dust_variable],
+            )
+        ax.axhline(0, color="black", linewidth=0.8)
+        if ics == 0:
+            ax.set_ylabel("error " + label + r" / max$|$analytic$|$")
+        if irow == 0:
+            ax.set_title(f"cs={cs:.2e} [code unit]")
+        if irow == len(fields_cmp) - 1:
+            ax.set_xlabel("$t$ [code unit]")
+axs[0, 0].legend(fontsize=8, loc="upper left")
+plt.tight_layout()
+plt.savefig("_to_trash/dustywave_tva_dust_variables_error.png")
+plt.show()
+
+# %%
+# Comparison of the dust variables: RMS error summary
+#
+# Time averaged RMS of the normalised amplitude error, as a function of the sound speed of the
+# scan (i.e. of the stopping time relative to the wave period).
+
+fig, axs = plt.subplots(1, len(fields_cmp), figsize=(4.5 * len(fields_cmp), 4), squeeze=False)
+for irow, (key, label) in enumerate(fields_cmp):
+    ax = axs[0, irow]
+    for dust_variable in dust_variables:
+        rms = []
+        for ics, cs in enumerate(cs_g_list):
+            a = amplitudes[dust_variable][ics]
+            norm = np.max(np.abs(a[key + "_ana"]))
+            rms.append(np.sqrt(np.mean(((a[key] - a[key + "_ana"]) / norm) ** 2)))
+        ax.plot(
+            cs_g_list,
+            rms,
+            marker=dvar.MARKERS[dust_variable],
+            color=dvar.COLORS[dust_variable],
+            label=dvar.LABELS[dust_variable],
+        )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("$c_s$ [code unit]")
+    ax.set_title("RMS error " + label)
+axs[0, 0].legend(fontsize=8)
+plt.tight_layout()
+plt.savefig("_to_trash/dustywave_tva_dust_variables_rms.png")
 plt.show()

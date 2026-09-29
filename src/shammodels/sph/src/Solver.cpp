@@ -497,8 +497,10 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         }
 
         if (has_s_j_field) {
-            auto attach_s_j
-                = solver_graph.register_node("attach_s_j", GetFieldRefFromLayer<Tscal>(pdl, "s_j"));
+            auto attach_s_j = solver_graph.register_node(
+                "attach_s_j",
+                GetFieldRefFromLayer<Tscal>(
+                    pdl, solver_config.dust_config.get_dust_var_field_name()));
             shambase::get_check_ref(attach_s_j)
                 .set_edges(
                     solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"),
@@ -508,7 +510,9 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
         if (has_s_j_field) {
             auto attach_ds_j_dt = solver_graph.register_node(
-                "attach_ds_j_dt", GetFieldRefFromLayer<Tscal>(pdl, "ds_j_dt"));
+                "attach_ds_j_dt",
+                GetFieldRefFromLayer<Tscal>(
+                    pdl, solver_config.dust_config.get_dust_var_deriv_field_name()));
             shambase::get_check_ref(attach_ds_j_dt)
                 .set_edges(
                     solver_graph.get_edge_ptr<PatchDataLayerRefs>("scheduler_patchdata"),
@@ -639,7 +643,8 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
 
                     auto half_step_s_j_density_clamp = solver_graph.register_node(
                         prefix + "_s_j_density_clamp",
-                        shammodels::sph::modules::NodeMonofluidTVADustDensityClamp<Tvec>(ndust));
+                        shammodels::sph::modules::NodeMonofluidTVADustDensityClamp<Tvec>(
+                            ndust, cfg.dust_variable));
                     shambase::get_check_ref(half_step_s_j_density_clamp)
                         .set_edges(
                             solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
@@ -1964,7 +1969,10 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
 
     const u32 iepsilon = (has_epsilon_field) ? pdl.get_field_idx<Tscal>("epsilon") : 0;
     const u32 ideltav  = (has_deltav_field) ? pdl.get_field_idx<Tvec>("deltav") : 0;
-    const u32 is_j     = (has_s_j_field) ? pdl.get_field_idx<Tscal>("s_j") : 0;
+    const u32 is_j
+        = (has_s_j_field)
+              ? pdl.get_field_idx<Tscal>(solver_config.dust_config.get_dust_var_field_name())
+              : 0;
 
     auto &ghost_layout_ptr                              = storage.ghost_layout;
     shamrock::patch::PatchDataLayerLayout &ghost_layout = shambase::get_check_ref(ghost_layout_ptr);
@@ -1986,7 +1994,10 @@ void shammodels::sph::Solver<Tvec, Kern>::communicate_merge_ghosts_fields() {
     const u32 iepsilon_interf
         = (has_epsilon_field) ? ghost_layout.get_field_idx<Tscal>("epsilon") : 0;
     const u32 ideltav_interf = (has_deltav_field) ? ghost_layout.get_field_idx<Tvec>("deltav") : 0;
-    const u32 is_j_interf    = (has_s_j_field) ? ghost_layout.get_field_idx<Tscal>("s_j") : 0;
+    const u32 is_j_interf    = (has_s_j_field)
+                                   ? ghost_layout.get_field_idx<Tscal>(
+                                         solver_config.dust_config.get_dust_var_field_name())
+                                   : 0;
 
     using InterfaceBuildInfos = typename sph::BasicSPHGhostHandler<Tvec>::InterfaceBuildInfos;
 
@@ -2228,8 +2239,9 @@ void shammodels::sph::Solver<Tvec, Kern>::prepare_corrector() {
             utility.save_field<Tvec>(pdl.get_field_idx<Tvec>("dtdeltav"), "dtdeltav_old"));
     }
     if (has_s_j_field) {
-        storage.old_ds_j_dt.set(
-            utility.save_field<Tscal>(pdl.get_field_idx<Tscal>("ds_j_dt"), "ds_j_dt_old"));
+        storage.old_ds_j_dt.set(utility.save_field<Tscal>(
+            pdl.get_field_idx<Tscal>(solver_config.dust_config.get_dust_var_deriv_field_name()),
+            "ds_j_dt_old"));
     }
 }
 
@@ -2405,7 +2417,7 @@ void shammodels::sph::Solver<Tvec, Kern>::update_derivs(Tscal dt_hydro) {
         std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> s_j_refs
             = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("s_j", "s_j");
         {
-            u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
+            u32 is_j_interf = ghost_layout.get_field_idx<Tscal>(cfg.get_dust_var_field_name());
             shambase::get_check_ref(s_j_refs).set_refs(
                 mpdats.map<std::reference_wrapper<PatchDataField<Tscal>>>(
                     [is_j_interf](u64 id, shamrock::patch::PatchDataLayer &mpdat) {
@@ -2423,7 +2435,8 @@ void shammodels::sph::Solver<Tvec, Kern>::update_derivs(Tscal dt_hydro) {
         map_field_refs(scheduler(), idelta_v, *delta_v);
 
         auto press_grad_node = std::make_shared<modules::NodeComputePressureGrad<Tvec, Kern>>();
-        auto delta_v_node    = std::make_shared<modules::MonoFluidTVADeltav<Tvec, Kern>>(ndust);
+        auto delta_v_node    = std::make_shared<modules::MonoFluidTVADeltav<Tvec, Kern>>(
+            ndust, cfg.get_dust_variable());
 
         press_grad_node->set_edges(
             gpart_mass,
@@ -2525,10 +2538,16 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
     const u32 idpsi_on_ch = (has_psi_field) ? pdl.get_field_idx<Tscal>("dpsi/ch") : 0;
     const u32 iepsilon    = (has_epsilon_field) ? pdl.get_field_idx<Tscal>("epsilon") : 0;
     const u32 idtepsilon  = (has_epsilon_field) ? pdl.get_field_idx<Tscal>("dtepsilon") : 0;
-    const u32 is_j        = (has_s_j_field) ? pdl.get_field_idx<Tscal>("s_j") : 0;
-    const u32 ids_j_dt    = (has_s_j_field) ? pdl.get_field_idx<Tscal>("ds_j_dt") : 0;
-    const u32 ideltav     = (has_deltav_field) ? pdl.get_field_idx<Tvec>("deltav") : 0;
-    const u32 idtdeltav   = (has_deltav_field) ? pdl.get_field_idx<Tvec>("dtdeltav") : 0;
+    const u32 is_j
+        = (has_s_j_field)
+              ? pdl.get_field_idx<Tscal>(solver_config.dust_config.get_dust_var_field_name())
+              : 0;
+    const u32 ids_j_dt
+        = (has_s_j_field)
+              ? pdl.get_field_idx<Tscal>(solver_config.dust_config.get_dust_var_deriv_field_name())
+              : 0;
+    const u32 ideltav   = (has_deltav_field) ? pdl.get_field_idx<Tvec>("deltav") : 0;
+    const u32 idtdeltav = (has_deltav_field) ? pdl.get_field_idx<Tvec>("dtdeltav") : 0;
 
     shamrock::SchedulerUtility utility(scheduler());
 
@@ -3020,7 +3039,7 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                 clamp_frac_edge->data = monofluid_tva_cfg.get_clamp_dust_frac();
 
                 shammodels::sph::modules::NodeMonofluidTVADustDensityClamp<Tvec> density_clamp(
-                    solver_config.dust_config.get_dust_nvar());
+                    solver_config.dust_config.get_dust_nvar(), monofluid_tva_cfg.dust_variable);
                 density_clamp.set_edges(
                     storage.solver_graph.template get_edge_ptr<shamrock::solvergraph::Indexes<u32>>(
                         "part_counts"),
@@ -3411,7 +3430,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             if (solver_config.dust_config.has_s_j_field()) {
                 u32 ndust = solver_config.dust_config.get_dust_nvar();
 
-                compute_cfl_dust1_fluid = std::make_shared<ComputeCFLDust1Fluid<Tvec>>(ndust);
+                compute_cfl_dust1_fluid = std::make_shared<ComputeCFLDust1Fluid<Tvec>>(
+                    ndust, solver_config.dust_config.get_dust_variable());
 
                 auto t_j_field
                     = storage.solver_graph
@@ -3456,7 +3476,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
             if (solver_config.dust_config.has_s_j_field()) {
                 u32 ndust = solver_config.dust_config.get_dust_nvar();
 
-                compute_cfl_dust_drift = std::make_shared<ComputeCFLDustDrift<Tvec>>(ndust);
+                compute_cfl_dust_drift = std::make_shared<ComputeCFLDustDrift<Tvec>>(
+                    ndust, solver_config.dust_config.get_dust_variable());
 
                 delta_v_refs = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
                     "delta_v", "delta_v");

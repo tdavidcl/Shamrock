@@ -18,6 +18,7 @@
 
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
@@ -40,10 +41,14 @@ class ComputeCFLDust1Fluid : public shamrock::solvergraph::INode {
 
     using Tscal = shambase::VecComponent<Tvec>;
 
+    using DustVariable = shammodels::sph::DustVariable;
+
     u32 nbins;
+    DustVariable dust_var;
 
     public:
-    ComputeCFLDust1Fluid(u32 nbins) : nbins(nbins) {}
+    ComputeCFLDust1Fluid(u32 nbins, DustVariable dust_var = DustVariable::SqrtRhoEps)
+        : nbins(nbins), dust_var(dust_var) {}
 
     EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -65,7 +70,7 @@ class ComputeCFLDust1Fluid : public shamrock::solvergraph::INode {
                 edges.Ts_j.get_spans()},
             sham::DDMultiRef{edges.cfl_dt.get_spans()},
             edges.part_counts.indexes,
-            [C_1_fluid, pmass, hfactd, nbins = this->nbins](
+            [C_1_fluid, pmass, hfactd, nbins = this->nbins, dust_var = this->dust_var](
                 u32 id_a,
                 const Tscal *hpart,
                 const Tscal *soundspeed,
@@ -80,13 +85,8 @@ class ComputeCFLDust1Fluid : public shamrock::solvergraph::INode {
                 Tscal cs_a  = soundspeed[id_a];
                 Tscal cs2_a = cs_a * cs_a;
 
-                auto rho_dust = [&](int j) {
-                    auto tmp = s_j[id_a_d + j];
-                    return tmp * tmp;
-                };
-
                 auto epsilon_j = [&](int j) {
-                    return rho_dust(j) / rho_a;
+                    return shammodels::sph::dust_var_to_eps(dust_var, s_j[id_a_d + j], rho_a);
                 };
 
                 Tscal sum_eps = 0;

@@ -243,8 +243,9 @@ namespace shammodels::sph::modules {
         }
 
         if (solver_config.dust_config.has_s_j_field()) {
-            const u32 is_j  = pdl.get_field_idx<Tscal>("s_j");
-            const u32 ndust = solver_config.dust_config.get_dust_nvar();
+            const std::string s_j_name = solver_config.dust_config.get_dust_var_field_name();
+            const u32 is_j             = pdl.get_field_idx<Tscal>(s_j_name);
+            const u32 ndust            = solver_config.dust_config.get_dust_nvar();
 
             for (u32 idust = 0; idust < ndust; idust++) {
                 ComputeField<Tscal> tmp_s_j = utility.make_compute_field<Tscal>("tmp_s_j", 1);
@@ -270,12 +271,14 @@ namespace shammodels::sph::modules {
                 });
 
                 vtk_dump_add_compute_field(
-                    scheduler(), writer, tmp_s_j, "s_j_" + std::to_string(idust));
+                    scheduler(), writer, tmp_s_j, s_j_name + "_" + std::to_string(idust));
             }
         }
 
         if (solver_config.dust_config.has_s_j_field()) {
-            const u32 ids_j_dt = pdl.get_field_idx<Tscal>("ds_j_dt");
+            const std::string ds_j_dt_name
+                = solver_config.dust_config.get_dust_var_deriv_field_name();
+            const u32 ids_j_dt = pdl.get_field_idx<Tscal>(ds_j_dt_name);
             const u32 ndust    = solver_config.dust_config.get_dust_nvar();
 
             for (u32 idust = 0; idust < ndust; idust++) {
@@ -306,7 +309,7 @@ namespace shammodels::sph::modules {
                 });
 
                 vtk_dump_add_compute_field(
-                    scheduler(), writer, tmp_ds_j_dt, "ds_j_dt_" + std::to_string(idust));
+                    scheduler(), writer, tmp_ds_j_dt, ds_j_dt_name + "_" + std::to_string(idust));
             }
         }
 

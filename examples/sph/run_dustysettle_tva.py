@@ -30,6 +30,7 @@ from matplotlib.animation import PillowWriter
 from matplotlib.lines import Line2D
 from scipy.linalg import solve_banded
 from scipy.special import erfinv
+from shamrock.utils import dust_variables as dvar
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.numba_helper import maybe_njit
 from shamrock.utils.plot import show_image_sequence
@@ -123,8 +124,22 @@ reference_tau = 0.025
 reference_Nz = 4000
 reference_zrange = 3.5  # in units of H
 
+# Evolved dust variables (see shamrock.utils.dust_variables). The test is run for each of them
+# and compared at the end. eps is not positivity preserving, so it is only run with the hard
+# limiter eps_j = max(eps_j, 0).
+hard_limiter = True
+dust_variables = dvar.selected_dust_variables(hard_limiter=hard_limiter)
+current_dust_variable = "sqrt_rho_eps"
+
+
 # Paths
-sim_folder = f"_to_trash/dusty_settle_{lz}/"
+def get_sim_folder(dust_variable):
+    if dust_variable == "sqrt_rho_eps":
+        return f"_to_trash/dusty_settle_{lz}/"
+    return f"_to_trash/dusty_settle_{lz}_{dust_variable}/"
+
+
+sim_folder = get_sim_folder(current_dust_variable)
 dump_folder = sim_folder + "dump/"
 
 # Plotting
@@ -235,7 +250,7 @@ def compute_sj_new_j(patchdata, j):
 
     epsilon_target = epsilon_base * mrn_distribution.mrn_weight[j] * mask
     print(f"epsilon_target = {epsilon_target} {j}")
-    s = np.sqrt(rho * epsilon_target)
+    s = dvar.eps_to_var(current_dust_variable, epsilon_target, rho)
 
     print(
         f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_distribution.mrn_weight[j]} mask = {mask}, rho = {rho}"
@@ -541,9 +556,9 @@ def save_analysis_data(filename, key, value, ianalysis):
             json.dump(data, fp, indent=4)
 
 
-def load_data_from_json(filename, key):
+def load_data_from_json(filename, key, folder=None):
     """Helper to load analysis data from a JSON file."""
-    filepath = os.path.join(dump_folder, filename)
+    filepath = os.path.join(dump_folder if folder is None else folder, filename)
     with open(filepath, "r") as fp:
         data = json.load(fp)[key]
     t = [d["t"] for d in data]
@@ -579,15 +594,17 @@ def analyse_and_plot(j):
     hfact = model.get_hfact()
 
     dic = ctx.collect_data()
-    print(dic["s_j"])
+    X_name = dvar.field_name(current_dust_variable)
+    dX_name = dvar.deriv_field_name(current_dust_variable)
+    print(dic[X_name])
 
     print(dic["xyz"].shape)
 
     x = dic["xyz"][:, 0]
     y = dic["xyz"][:, 1]
     z = dic["xyz"][:, 2]
-    s_j = dic["s_j"].reshape(-1, ndust)
-    ds_j_dt = dic["ds_j_dt"].reshape(-1, ndust)
+    s_j = dic[X_name].reshape(-1, ndust)
+    ds_j_dt = dic[dX_name].reshape(-1, ndust)
     cs = dic["soundspeed"]
     delta_v = dic["delta_v"].reshape(-1, ndust, 3)
 
@@ -595,6 +612,9 @@ def analyse_and_plot(j):
 
     hpart = dic["hpart"]
     rho = pmass * (hfact / np.array(hpart)) ** 3
+
+    # dust fraction of each species, from the evolved dust variable
+    eps_j = dvar.var_to_eps(current_dust_variable, s_j, rho[:, None])
 
     print("compute original rho")
     estimated_rho = [func_rho_t(dic["xyz"][kk]) for kk in range(len(dic["xyz"]))]
@@ -629,11 +649,11 @@ def analyse_and_plot(j):
 
     for i in range(ndust):
         c = dust_colors[i]
-        ax_rho.scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
-        ax_epsilon.scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
+        ax_rho.scatter(z, eps_j[:, i] * rho * to_dens, s=sz, color=c, edgecolors="none")
+        ax_epsilon.scatter(z, eps_j[:, i], s=sz, color=c, edgecolors="none")
 
-        rho_dust_all += s_j[:, i] ** 2 * to_dens
-        epsilon_dust_all += s_j[:, i] ** 2 / rho
+        rho_dust_all += eps_j[:, i] * rho * to_dens
+        epsilon_dust_all += eps_j[:, i]
 
         if reference_dusty_settle is not None:
             ax_rho.plot(
@@ -652,7 +672,7 @@ def analyse_and_plot(j):
             ax_epsilon.plot(reference_dusty_settle.soluces[i].zbar, ana_epsilon, "--", color="0.0")
 
             L2_error = compute_L2_error(
-                z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon
+                z, eps_j[:, i], reference_dusty_settle.soluces[i].zbar, ana_epsilon
             )
 
             l2_error_all[i] = L2_error
@@ -767,13 +787,13 @@ def analyse_and_plot(j):
         axs[0].scatter(z, s_j[:, i], s=sz, color=c, edgecolors="none")
         axs[1].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
 
-    axs[0].set_ylabel(r"$s_j$")
+    axs[0].set_ylabel(f"{X_name} ({current_dust_variable})")
     axs[0].set_xlabel(r"$z$")
     axs[0].set_xlim(-4 * H, 4 * H)
     axs[0].set_yscale("log")
     axs[0].set_ylim(1e-20, 1e-1)
 
-    axs[1].set_ylabel(r"$\dot{s}_j$")
+    axs[1].set_ylabel(f"{dX_name}")
     axs[1].set_xlabel(r"$z$")
     axs[1].set_xlim(-4 * H, 4 * H)
     axs[1].set_yscale("symlog", linthresh=1e-10)
@@ -791,17 +811,6 @@ def analyse_and_plot(j):
 # Simulation setup and restore
 # ------------------------------------------
 
-if shamrock.sys.world_rank() == 0:
-    os.makedirs(sim_folder, exist_ok=True)
-    os.makedirs(dump_folder, exist_ok=True)
-
-ctx = shamrock.Context()
-ctx.pdata_layout_new()
-
-model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
-
-dump_helper = shamrock.utils.dump.ShamrockDumpHandleHelper(model, dump_folder)
-
 
 def setup_model():
     global bmin, bmax
@@ -816,7 +825,12 @@ def setup_model():
     )
 
     cfg.set_dust_mode_monofluid_tva(
-        nvar=ndust, C_1_fluid=0.1, C_drift=1.0, cfl_density_threshold=1e-50
+        nvar=ndust,
+        C_1_fluid=0.1,
+        C_drift=1.0,
+        cfl_density_threshold=1e-50,
+        ensure_s_j_positivity=hard_limiter,
+        dust_variable=current_dust_variable,
     )
     cfg.set_dust_drag_epstein(gamma, mrn_distribution.grain_size, mrn_distribution.rho_grains)
     cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
@@ -870,10 +884,6 @@ def setup_model():
     model.timestep()
 
 
-analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
-pmass = model.get_particle_mass()
-
-
 # %%
 # Run simulation
 # ------------------------------------------
@@ -899,7 +909,9 @@ class Simulation(SimulationRunner):
             def compute_sj_new(patchdata):
                 return compute_sj_new_j(patchdata, k)
 
-            self.model.overwrite_field_value_f64("s_j", compute_sj_new, k)
+            self.model.overwrite_field_value_f64(
+                dvar.field_name(current_dust_variable), compute_sj_new, k
+            )
 
             self.model.set_cfl_cour(cfl_cour_inject)
             self.model.set_cfl_force(cfl_force_inject)
@@ -929,7 +941,45 @@ class Simulation(SimulationRunner):
         setup_model()
 
 
-Simulation(model).run()
+# final state of each run, for the comparison of the dust variables
+final_profiles = {}
+
+for current_dust_variable in dust_variables:
+    sim_folder = get_sim_folder(current_dust_variable)
+    dump_folder = sim_folder + "dump/"
+
+    if shamrock.sys.world_rank() == 0:
+        os.makedirs(sim_folder, exist_ok=True)
+        os.makedirs(dump_folder, exist_ok=True)
+
+    ctx = shamrock.Context()
+    ctx.pdata_layout_new()
+
+    model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
+
+    analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
+    reference_dusty_settle = None
+
+    Simulation.dump_prefix = dump_folder + "dump_"
+    Simulation(model).run()
+
+    dic = ctx.collect_data()
+    rho_final = model.get_particle_mass() * (model.get_hfact() / np.array(dic["hpart"])) ** 3
+    final_profiles[current_dust_variable] = {
+        "z": np.array(dic["xyz"][:, 2]),
+        "eps": dvar.var_to_eps(
+            current_dust_variable,
+            dic[dvar.field_name(current_dust_variable)].reshape(-1, ndust),
+            rho_final[:, None],
+        ),
+        "t": model.get_time() - tinject,
+    }
+
+# The rest of the analysis (animations, dust mass and L2 error history) is done on the
+# default dust variable, the other ones are compared at the end.
+current_dust_variable = dust_variables[0]
+sim_folder = get_sim_folder(current_dust_variable)
+dump_folder = sim_folder + "dump/"
 
 # %%
 # Build animations from plot sequences
@@ -1051,3 +1101,82 @@ result = {
 print(result)
 
 json.dump(result, open(f"{dump_folder}/test_result.json", "w"), indent=4)
+
+# %%
+# Comparison of the dust variables
+# ------------------------------------------
+#
+# Same test for every evolved dust variable. From left to right: vertical profile of the total
+# dust fraction at the final time, relative drift of the total dust mass, and mean L2 error
+# (over the dust species) against the reference solution.
+
+fig, axs = plt.subplots(1, 3, figsize=(16, 4.5))
+
+eps_ref_total = None
+if reference_dusty_settle is not None:
+    zbar_ref = reference_dusty_settle.soluces[0].zbar
+    eps_ref_total = np.zeros_like(zbar_ref)
+    for i in range(ndust):
+        eps_ref_total += (
+            reference_dusty_settle.soluces[i].rho
+            * reference_dusty_settle.rhoscale
+            / reference_dusty_settle.soluces[i].rhog
+        )
+    axs[0].plot(zbar_ref, eps_ref_total, "--", color="black", label="reference")
+
+z_bins = np.linspace(-2.5 * H, 2.5 * H, 81)
+z_centers = 0.5 * (z_bins[1:] + z_bins[:-1])
+
+for dust_variable in dust_variables:
+    color = dvar.COLORS[dust_variable]
+    label = dvar.LABELS[dust_variable]
+
+    prof = final_profiles[dust_variable]
+    eps_tot = np.sum(prof["eps"], axis=1)
+    idx = np.digitize(prof["z"], z_bins) - 1
+    eps_mean = np.array(
+        [np.mean(eps_tot[idx == b]) if np.any(idx == b) else np.nan for b in range(len(z_centers))]
+    )
+    axs[0].plot(z_centers, eps_mean, "-", color=color, label=label)
+
+    folder = get_sim_folder(dust_variable) + "dump/"
+
+    t_v, dust_mass_v = load_data_from_json("dust_mass.json", "dust_mass", folder=folder)
+    dust_mass_v = np.array(dust_mass_v)
+    iinject_v = np.argmax(~np.isnan(dust_mass_v)[:, 0])
+    t_v = np.array(t_v) - np.array(t_v)[iinject_v]
+    total_v = np.sum(dust_mass_v, axis=1)
+    axs[1].plot(t_v, total_v / total_v[iinject_v] - 1, "-", color=color, label=label)
+
+    t_l2, l2_v = load_data_from_json("l2_error.json", "l2_error", folder=folder)
+    l2_v = np.array(l2_v, dtype=float)
+    # l2_error.json and dust_mass.json are written at the same analysis steps
+    axs[2].plot(
+        np.array(t_l2) - np.array(t_l2)[iinject_v],
+        np.nanmean(l2_v, axis=1),
+        "-",
+        color=color,
+        label=label,
+    )
+
+axs[0].set_xlabel(r"$z$")
+axs[0].set_ylabel(r"$\sum_j \epsilon_j$")
+axs[0].set_yscale("log")
+axs[0].set_ylim(1e-4, 1e-1)
+axs[0].set_xlim(-2.5 * H, 2.5 * H)
+axs[0].set_title(f"t = {final_profiles[dust_variables[0]]['t']:.2f} [yr]")
+axs[0].legend(fontsize=8)
+
+axs[1].set_xlabel("t")
+axs[1].set_ylabel(r"$\delta M_{dust} / M_{dust,0}$")
+axs[1].set_yscale("symlog", linthresh=1e-8)
+axs[1].set_title("Total dust mass conservation")
+
+axs[2].set_xlabel("t")
+axs[2].set_ylabel("mean L2 error")
+axs[2].set_yscale("log")
+axs[2].set_title("L2 error against the reference")
+
+plt.tight_layout()
+plt.savefig(f"{dump_folder}/plots/dust_variables_comparison.png")
+plt.show()

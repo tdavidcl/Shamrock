@@ -34,6 +34,7 @@ struct KernelUpdateDerivsVaryingAlphaAVDustTVA {
     Tscal alpha_u;
     Tscal beta_AV;
     u32 ndust;
+    shammodels::sph::DustVariable dust_var;
 
     inline void operator()(
         unsigned int id_a,
@@ -70,7 +71,7 @@ struct KernelUpdateDerivsVaryingAlphaAVDustTVA {
         Tscal epsilon_sum_a = 0;
         for (u32 j = 0; j < ndust; j++) {
             Tscal s = s_j[id_a * ndust + j];
-            epsilon_sum_a += s * s / rho_a;
+            epsilon_sum_a += shammodels::sph::dust_var_to_eps(dust_var, s, rho_a);
         }
 
         Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
@@ -101,7 +102,7 @@ struct KernelUpdateDerivsVaryingAlphaAVDustTVA {
             Tscal epsilon_sum_b = 0;
             for (u32 j = 0; j < ndust; j++) {
                 Tscal s = s_j[id_b * ndust + j];
-                epsilon_sum_b += s * s / rho_b;
+                epsilon_sum_b += shammodels::sph::dust_var_to_eps(dust_var, s, rho_b);
             }
 
             Tscal Fab_a = Kernel::dW_3d(rab, h_a);
@@ -200,7 +201,7 @@ void shammodels::sph::modules::NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKe
             edges.neigh_cache},
         sham::DDMultiRef{edges.axyz.get_spans(), edges.duint.get_spans()},
         part_counts,
-        ComputeKernel{pmass, alpha_u, beta_AV, ndust});
+        ComputeKernel{pmass, alpha_u, beta_AV, ndust, dust_var});
 }
 
 using namespace shammath;

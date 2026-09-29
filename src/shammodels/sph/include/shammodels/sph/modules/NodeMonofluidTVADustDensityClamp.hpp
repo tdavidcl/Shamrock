@@ -20,6 +20,7 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
@@ -49,9 +50,12 @@ namespace shammodels::sph::modules {
         using Tscal = shambase::VecComponent<Tvec>;
 
         u32 ndust;
+        DustVariable dust_var;
 
         public:
-        NodeMonofluidTVADustDensityClamp(u32 ndust) : ndust(ndust) {}
+        NodeMonofluidTVADustDensityClamp(
+            u32 ndust, DustVariable dust_var = DustVariable::SqrtRhoEps)
+            : ndust(ndust), dust_var(dust_var) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -70,7 +74,7 @@ namespace shammodels::sph::modules {
                 sham::DDMultiRef{edges.hpart.get_spans()},
                 sham::DDMultiRef{edges.s_j.get_spans()},
                 edges.part_counts.indexes,
-                [pmass, hfactd, clamp_frac, ndust = this->ndust](
+                [pmass, hfactd, clamp_frac, ndust = this->ndust, dust_var = this->dust_var](
                     u32 id_a, const Tscal *__restrict hpart, Tscal *__restrict s_j) {
                     u32 id_a_d = id_a * ndust;
 
@@ -82,10 +86,10 @@ namespace shammodels::sph::modules {
                     Tscal eps_sum = 0;
                     for (u32 j = 0; j < ndust; j++) {
                         Tscal sj    = s_j[id_a_d + j];
-                        Tscal eps_j = sj * sj / rho_a;
+                        Tscal eps_j = dust_var_to_eps(dust_var, sj, rho_a);
                         if (eps_j > eps_max) {
                             eps_j           = eps_max;
-                            s_j[id_a_d + j] = sycl::sqrt(eps_j * rho_a);
+                            s_j[id_a_d + j] = dust_var_from_eps(dust_var, eps_j, rho_a);
                         }
                         eps_sum += eps_j;
                     }
@@ -96,9 +100,9 @@ namespace shammodels::sph::modules {
                         Tscal scale = eps_max / eps_sum;
                         for (u32 j = 0; j < ndust; j++) {
                             Tscal sj        = s_j[id_a_d + j];
-                            Tscal eps_j     = sj * sj / rho_a;
+                            Tscal eps_j     = dust_var_to_eps(dust_var, sj, rho_a);
                             Tscal eps_j_sc  = eps_j * scale;
-                            s_j[id_a_d + j] = sycl::sqrt(eps_j_sc * rho_a);
+                            s_j[id_a_d + j] = dust_var_from_eps(dust_var, eps_j_sc, rho_a);
                         }
                     }
                 });
@@ -118,7 +122,7 @@ namespace shammodels::sph::modules {
                 (the maximum allowed dust-to-gas ratio $\epsilon_{\max}$):
 
                 \begin{align}
-                \epsilon_{j,a} &= \min\left({s_j}_{j,a}^2 / \rho_a,\ f\right) \\
+                \epsilon_{j,a} &= \min\left(\epsilon({s_j}_{j,a}, \rho_a),\ f\right) \\
                 \epsilon_a &= \sum_j \epsilon_{j,a} \\
                 \epsilon_{j,a} &\leftarrow
                     \begin{cases}
@@ -126,8 +130,11 @@ namespace shammodels::sph::modules {
                             & \epsilon_a > f \\
                         \epsilon_{j,a} & \text{otherwise}
                     \end{cases} \\
-                {s_j}_{j,a} &\leftarrow \sqrt{\epsilon_{j,a}\, \rho_a}
+                {s_j}_{j,a} &\leftarrow X(\epsilon_{j,a}, \rho_a)
                 \end{align}
+
+                with $\epsilon(X, \rho)$ and its inverse $X(\epsilon, \rho)$ the maps of the
+                evolved dust variable ({dust_var}).
 
                 $a \in [0,{part_counts})$, $j \in [0,{ndust})$.
 
@@ -137,6 +144,7 @@ namespace shammodels::sph::modules {
             replace_edges_tex_symbols(tex);
 
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
+            shambase::replace_all(tex, "{dust_var}", dust_variable_to_string(dust_var));
 
             return tex;
         }

@@ -47,6 +47,7 @@ import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from shamrock.utils import dust_variables as dvar
 
 import shamrock
 
@@ -72,6 +73,15 @@ bmax = (0.5, 0.5, 0.5)
 
 N_target = 3e4
 
+# %%
+# The TVA solver can evolve different dust variables (see the note of
+# :py:mod:`shamrock.utils.dust_variables`). The test is first run with the default
+# :math:`S_j = \sqrt{\rho \epsilon_j}` and then repeated with the other variables for comparison.
+# :math:`\epsilon_j` is not positivity preserving, so it is only run with the hard limiter
+# :math:`\epsilon_j = \max(\epsilon_j, 0)`.
+hard_limiter = True
+dust_variables = dvar.selected_dust_variables(hard_limiter=hard_limiter)
+
 
 def func_rho_t(r):
     return rho
@@ -82,12 +92,6 @@ def func_eps(pos):
     return epsilon_0 * max(0, 1 - (r / rc) ** 2)
 
 
-def func_s(r):
-    rho_t = func_rho_t(r)
-    eps = func_eps(r)
-    return np.sqrt(rho_t * eps)
-
-
 # %%
 # Use shamrock documentation style for matplotlib
 shamrock.matplotlib.set_shamrock_mpl_style()
@@ -95,77 +99,80 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 
 # %%
 # Setup
-xm, ym, zm = bmin
-xM, yM, zM = bmax
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+def setup_model(dust_variable):
+    xm, ym, zm = bmin
+    xM, yM, zM = bmax
+    vol_b = (xM - xm) * (yM - ym) * (zM - zm)
 
-part_vol = vol_b / N_target
+    part_vol = vol_b / N_target
 
-# lattice volume
-HCP_PACKING_DENSITY = 0.74
-part_vol_lattice = HCP_PACKING_DENSITY * part_vol
+    # lattice volume
+    HCP_PACKING_DENSITY = 0.74
+    part_vol_lattice = HCP_PACKING_DENSITY * part_vol
 
-dr = (part_vol_lattice / ((4.0 / 3.0) * np.pi)) ** (1.0 / 3.0)
+    dr = (part_vol_lattice / ((4.0 / 3.0) * np.pi)) ** (1.0 / 3.0)
 
-bmin, bmax = shamrock.math.get_ideal_hcp_box(dr, bmin, bmax)
-xm, ym, zm = bmin
-xM, yM, zM = bmax
+    bmin_lat, bmax_lat = shamrock.math.get_ideal_hcp_box(dr, bmin, bmax)
+    xm, ym, zm = bmin_lat
+    xM, yM, zM = bmax_lat
 
+    vol_b = (xM - xm) * (yM - ym) * (zM - zm)
+    totmass = rho * vol_b
 
-vol_b = (xM - xm) * (yM - ym) * (zM - zm)
-totmass = rho * vol_b
+    ctx = shamrock.Context()
+    ctx.pdata_layout_new()
 
+    model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
 
-pmass = -1
+    cfg = model.gen_default_config()
+    # cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
+    # cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
+    cfg.set_artif_viscosity_VaryingCD10(
+        alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
+    )
+    cfg.set_dust_mode_monofluid_tva(
+        nvar=1,
+        pure_diffusion_mode=True,
+        ensure_s_j_positivity=hard_limiter,
+        dust_variable=dust_variable,
+    )
+    cfg.set_dust_drag_constant([ts])
+    cfg.set_boundary_periodic()
+    cfg.set_eos_isothermal(cs_g)
+    cfg.print_status()
+    model.set_solver_config(cfg)
 
-ctx = shamrock.Context()
-ctx.pdata_layout_new()
+    scheduler_split_val = int(2e7)
+    scheduler_merge_val = 1
 
-model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel="M6")
+    model.init_scheduler(scheduler_split_val, scheduler_merge_val)
 
-cfg = model.gen_default_config()
-# cfg.set_artif_viscosity_Constant(alpha_u = 1, alpha_AV = 1, beta_AV = 2)
-# cfg.set_artif_viscosity_VaryingMM97(alpha_min = 0.1,alpha_max = 1,sigma_decay = 0.1, alpha_u = 1, beta_AV = 2)
-cfg.set_artif_viscosity_VaryingCD10(
-    alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
-)
-cfg.set_dust_mode_monofluid_tva(nvar=1, pure_diffusion_mode=True)
-cfg.set_dust_drag_constant([ts])
-cfg.set_boundary_periodic()
-cfg.set_eos_isothermal(cs_g)
-cfg.print_status()
-model.set_solver_config(cfg)
+    model.resize_simulation_box(bmin_lat, bmax_lat)
 
-scheduler_split_val = int(2e7)
-scheduler_merge_val = 1
+    setup = model.get_setup()
+    gen = setup.make_generator_lattice_hcp(dr, bmin_lat, bmax_lat)
+    setup.apply_setup(gen, insert_step=scheduler_split_val)
 
-model.init_scheduler(scheduler_split_val, scheduler_merge_val)
+    def func_X(r):
+        return dvar.eps_to_var(dust_variable, func_eps(r), func_rho_t(r))
 
+    model.set_field_value_lambda_f64(dvar.field_name(dust_variable), func_X, 0)
 
-model.resize_simulation_box(bmin, bmax)
+    pmass = model.total_mass_to_part_mass(totmass)
+    model.set_particle_mass(pmass)
 
-setup = model.get_setup()
-gen = setup.make_generator_lattice_hcp(dr, bmin, bmax)
-setup.apply_setup(gen, insert_step=scheduler_split_val)
+    model.set_cfl_cour(0.3)
+    model.set_cfl_force(0.3)
 
+    return model
 
-model.set_field_value_lambda_f64("s_j", func_s, 0)
-
-pmass = model.total_mass_to_part_mass(totmass)
-model.set_particle_mass(pmass)
-
-model.set_cfl_cour(0.3)
-model.set_cfl_force(0.3)
-
-model.timestep()
 
 t_snapshot = [0.0, 0.1, 0.3, 1, 3, 10]
-snapshots = []
 
 
 # %%
 # Field recovery for plots
-def get_field_results(model):
+def get_field_results(model, dust_variable):
     def custom_getter_r(size: int, dic_out: dict) -> np.array:
         return np.sqrt(
             dic_out["xyz"][:, 0] ** 2 + dic_out["xyz"][:, 1] ** 2 + dic_out["xyz"][:, 2] ** 2
@@ -173,13 +180,13 @@ def get_field_results(model):
 
     r_field = model.compute_field("custom", "f64", custom_getter_r)
     rho_field = model.compute_field("rho", "f64")
-    s_j_field = model.compute_field("s_j", "f64")
-    dsdt_field = model.compute_field("ds_j_dt", "f64")
+    X_field = model.compute_field(dvar.field_name(dust_variable), "f64")
+    dXdt_field = model.compute_field(dvar.deriv_field_name(dust_variable), "f64")
 
     def internal_eps(size: int, s: np.array, rho: np.array) -> np.array:
-        return (s**2) / rho
+        return dvar.var_to_eps(dust_variable, s, rho)
 
-    eps_field = shamrock.map_fields_f64(internal_eps, s=s_j_field, rho=rho_field)
+    eps_field = shamrock.map_fields_f64(internal_eps, s=X_field, rho=rho_field)
 
     def internal_rho_g(size: int, rho: np.array, eps: np.array) -> np.array:
         return rho * (1 - eps)
@@ -194,8 +201,8 @@ def get_field_results(model):
     rho_data = np.asarray(rho_field.collect_data())
     rho_g_data = np.asarray(rho_g_field.collect_data())
     rho_d_data = np.asarray(rho_d_field.collect_data())
-    dsdt_data = np.asarray(dsdt_field.collect_data())
-    return r_data, rho_data, rho_g_data, rho_d_data, dsdt_data
+    dXdt_data = np.asarray(dXdt_field.collect_data())
+    return r_data, rho_data, rho_g_data, rho_d_data, dXdt_data
 
 
 # %%
@@ -225,39 +232,70 @@ def analytic_dsdt(t):
 # %%
 # Perform the simulation
 os.makedirs("_to_trash", exist_ok=True)
-for t in [0.1 * i for i in range(20)]:
-    model.evolve_until(t)
-    r_data, rho_data, rho_g_data, rho_d_data, dsdt_data = get_field_results(model)
-    eps = rho_d_data / rho_data
 
-    if any(np.isclose(t, ts, atol=1e-6) for ts in t_snapshot):
-        snapshots.append((t, r_data, eps))
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-    axs[0].plot(r_data, eps, ".", label="eps")
-    axs[0].plot(r_ana, analytic_eps_curve(t), "--", color="black", label="analytic")
-    axs[0].set_xlabel(r"$r$")
-    axs[0].set_ylabel(r"$\epsilon$")
-    axs[0].set_xlim(0, 0.5)
-    axs[0].set_ylim(0, 0.11)
-    axs[0].text(
-        0.02,
-        0.98,
-        f"t = {t:.2f}",
-        transform=axs[0].transAxes,
-        verticalalignment="top",
-        horizontalalignment="left",
-        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
-    )
-    axs[1].plot(r_data, dsdt_data, ".", label="ds/dt")
-    axs[1].plot(r_ana, analytic_dsdt(t), "--", color="black", label="analytic")
-    axs[1].set_xlabel(r"$r$")
-    axs[1].set_ylabel(r"$\frac{d s}{d t}$")
-    axs[1].set_xlim(0, 0.5)
-    axs[1].set_ylim(-0.16, 0.4)
-    plt.tight_layout()
-    plt.savefig(f"_to_trash/dump_dustydiffuse_tva_{t:.2f}.png")
-    plt.close()
+def run_case(dust_variable, make_frames):
+    model = setup_model(dust_variable)
+    model.timestep()
+
+    analysis_dust_mass = shamrock.model_sph.analysisDustMass(model=model)
+
+    snapshots = []
+    t_hist = []
+    dust_mass_hist = []
+
+    for t in [0.1 * i for i in range(20)]:
+        model.evolve_until(t)
+        r_data, rho_data, rho_g_data, rho_d_data, dXdt_data = get_field_results(
+            model, dust_variable
+        )
+        eps = rho_d_data / rho_data
+
+        t_hist.append(t)
+        dust_mass_hist.append(analysis_dust_mass.get_dust_mass()[0])
+
+        if any(np.isclose(t, ts, atol=1e-6) for ts in t_snapshot):
+            snapshots.append((t, r_data, eps))
+
+        if not make_frames:
+            continue
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        axs[0].plot(r_data, eps, ".", label="eps")
+        axs[0].plot(r_ana, analytic_eps_curve(t), "--", color="black", label="analytic")
+        axs[0].set_xlabel(r"$r$")
+        axs[0].set_ylabel(r"$\epsilon$")
+        axs[0].set_xlim(0, 0.5)
+        axs[0].set_ylim(0, 0.11)
+        axs[0].text(
+            0.02,
+            0.98,
+            f"t = {t:.2f}",
+            transform=axs[0].transAxes,
+            verticalalignment="top",
+            horizontalalignment="left",
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+        axs[1].plot(r_data, dXdt_data, ".", label="ds/dt")
+        axs[1].plot(r_ana, analytic_dsdt(t), "--", color="black", label="analytic")
+        axs[1].set_xlabel(r"$r$")
+        axs[1].set_ylabel(r"$\frac{d s}{d t}$")
+        axs[1].set_xlim(0, 0.5)
+        axs[1].set_ylim(-0.16, 0.4)
+        plt.tight_layout()
+        plt.savefig(f"_to_trash/dump_dustydiffuse_tva_{t:.2f}.png")
+        plt.close()
+
+    return {
+        "snapshots": snapshots,
+        "t": np.array(t_hist),
+        "dust_mass": np.array(dust_mass_hist),
+    }
+
+
+results = {}
+for dust_variable in dust_variables:
+    results[dust_variable] = run_case(dust_variable, make_frames=(dust_variable == "sqrt_rho_eps"))
 
 ####################################################
 # Plot making
@@ -278,37 +316,143 @@ from shamrock.utils.plot import show_image_sequence
 
 # If the animation is not returned only a static image will be shown in the doc
 
-glob_str = os.path.join("_to_trash", "dump_dustydiffuse_tva_*.png")
-ani = show_image_sequence(glob_str)
+if "sqrt_rho_eps" in results:
+    glob_str = os.path.join("_to_trash", "dump_dustydiffuse_tva_*.png")
+    ani = show_image_sequence(glob_str)
 
-from matplotlib.animation import PillowWriter
+    from matplotlib.animation import PillowWriter
 
-writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-ani.save("_to_trash/dump_dustydiffuse_tva.gif", writer=writer)
+    writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save("_to_trash/dump_dustydiffuse_tva.gif", writer=writer)
 
-if shamrock.sys.world_rank() == 0:
-    # Show the animation
-    plt.show()
+    if shamrock.sys.world_rank() == 0:
+        # Show the animation
+        plt.show()
 
 ####################################################
 # PL15 like figure
 ####################################################
 
-plt.figure()
-for i, (t, r_data, eps) in enumerate(snapshots):
-    plt.plot(
-        r_ana,
-        analytic_eps_curve(t),
-        "--",
-        color="black",
-        label="analytic" if i == 0 else "_nolegend_",
+if "sqrt_rho_eps" in results:
+    plt.figure()
+    for i, (t, r_data, eps) in enumerate(results["sqrt_rho_eps"]["snapshots"]):
+        plt.plot(
+            r_ana,
+            analytic_eps_curve(t),
+            "--",
+            color="black",
+            label="analytic" if i == 0 else "_nolegend_",
+        )
+        plt.plot(r_data, eps, ".", label=f"t = {t:.2f}")
+
+    plt.xlabel(r"$r$")
+    plt.ylabel(r"$\epsilon$")
+    plt.xlim(0, 0.5)
+    plt.ylim(0, 0.11)
+    plt.legend()
+    plt.show()
+
+
+####################################################
+# Comparison of the dust variables
+####################################################
+
+
+def binned_profile(r, y, bins):
+    """Mean of y in radial bins (particles are noisy, the mean makes the comparison readable)"""
+    idx = np.digitize(r, bins) - 1
+    centers = 0.5 * (bins[1:] + bins[:-1])
+    mean = np.array(
+        [np.mean(y[idx == i]) if np.any(idx == i) else np.nan for i in range(len(centers))]
     )
-    plt.plot(r_data, eps, ".", label=f"t = {t:.2f}")
+    return centers, mean
 
 
-plt.xlabel(r"$r$")
-plt.ylabel(r"$\epsilon$")
-plt.xlim(0, 0.5)
-plt.ylim(0, 0.11)
-plt.legend()
+r_bins = np.linspace(0, 0.5, 41)
+
+# %%
+# Comparison of the dust variables: :math:`\epsilon(r)` profiles
+#
+# Top: radially binned :math:`\epsilon(r)` for each evolved dust variable, with the analytic
+# solution in black. Bottom: :math:`\epsilon - \epsilon_{\rm analytic}`.
+
+snapshot_times = [t for (t, _, _) in results[dust_variables[0]]["snapshots"] if t > 0]
+
+fig, axs = plt.subplots(
+    2,
+    len(snapshot_times),
+    figsize=(4 * len(snapshot_times), 6),
+    sharex=True,
+    sharey="row",
+    gridspec_kw={"height_ratios": [2, 1]},
+    squeeze=False,
+)
+
+for k, t_snap in enumerate(snapshot_times):
+    eps_ana_bins = np.array([analytic_eps(r, t_snap) for r in 0.5 * (r_bins[1:] + r_bins[:-1])])
+    axs[0, k].plot(r_ana, analytic_eps_curve(t_snap), "-", color="black", label="analytic")
+
+    for dust_variable in dust_variables:
+        for t, r_data, eps in results[dust_variable]["snapshots"]:
+            if not np.isclose(t, t_snap, atol=1e-6):
+                continue
+            centers, eps_mean = binned_profile(r_data, eps, r_bins)
+            axs[0, k].plot(
+                centers,
+                eps_mean,
+                marker=dvar.MARKERS[dust_variable],
+                markersize=3,
+                linestyle="none",
+                color=dvar.COLORS[dust_variable],
+                label=dvar.LABELS[dust_variable],
+            )
+            axs[1, k].plot(
+                centers,
+                eps_mean - eps_ana_bins,
+                marker=dvar.MARKERS[dust_variable],
+                markersize=3,
+                linestyle="-",
+                linewidth=0.8,
+                color=dvar.COLORS[dust_variable],
+            )
+
+    axs[0, k].set_title(f"t = {t_snap:.2f}")
+    axs[1, k].axhline(0, color="black", linewidth=0.8)
+    axs[1, k].set_xlabel(r"$r$")
+    axs[0, k].set_xlim(0, 0.5)
+
+axs[0, 0].set_ylabel(r"$\epsilon$")
+axs[1, 0].set_ylabel(r"$\epsilon - \epsilon_{\rm analytic}$")
+axs[0, 0].legend(fontsize=8)
+plt.tight_layout()
+plt.savefig("_to_trash/dustydiffuse_tva_dust_variables_profiles.png")
+plt.show()
+
+# %%
+# Comparison of the dust variables: dust mass conservation
+#
+# Relative drift of the total dust mass. :math:`\epsilon_j` is linear in the evolved variable so
+# it conserves the dust mass to round-off, except where the hard limiter clips negative values.
+# The square-root variables have an :math:`\mathcal{O}(\Delta t^2)` time-integration error.
+
+plt.figure()
+for dust_variable in dust_variables:
+    res = results[dust_variable]
+    # floor at 1e-17 so that an exactly conserved mass still shows on the log scale
+    drift = np.maximum(np.abs(res["dust_mass"] / res["dust_mass"][0] - 1), 1e-17)
+    plt.plot(
+        res["t"][1:],
+        drift[1:],
+        marker=dvar.MARKERS[dust_variable],
+        markersize=3,
+        color=dvar.COLORS[dust_variable],
+        label=dvar.LABELS[dust_variable],
+    )
+plt.yscale("log")
+plt.xlabel("t")
+plt.ylabel(r"$|M_{\rm dust}(t) / M_{\rm dust}(0) - 1|$")
+plt.title("Dust mass conservation")
+plt.legend(fontsize=8)
+plt.tight_layout()
+plt.savefig("_to_trash/dustydiffuse_tva_dust_variables_mass.png")
 plt.show()

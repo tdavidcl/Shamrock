@@ -17,6 +17,7 @@
  */
 
 #include "shambackends/vec.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shammodels/sph/solvergraph/NeighCache.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
@@ -57,9 +58,11 @@ namespace shammodels::sph::modules {
         static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
 
         u32 ndust;
+        DustVariable dust_var;
 
         public:
-        NodeUpdateDerivsMonofluidTVA(u32 ndust) : ndust(ndust) {}
+        NodeUpdateDerivsMonofluidTVA(u32 ndust, DustVariable dust_var = DustVariable::SqrtRhoEps)
+            : ndust(ndust), dust_var(dust_var) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 

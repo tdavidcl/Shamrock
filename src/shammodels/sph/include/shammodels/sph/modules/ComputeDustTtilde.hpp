@@ -20,6 +20,7 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
@@ -52,9 +53,11 @@ namespace shammodels::sph::modules {
         static constexpr Tscal kernel_radius = SPHKernel<Tscal>::Rkern;
 
         u32 ndust;
+        DustVariable dust_var;
 
         public:
-        ComputeDustTtilde(u32 ndust) : ndust(ndust) {}
+        ComputeDustTtilde(u32 ndust, DustVariable dust_var = DustVariable::SqrtRhoEps)
+            : ndust(ndust), dust_var(dust_var) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -88,7 +91,7 @@ namespace shammodels::sph::modules {
                     edges.hpart.get_spans(), edges.s_j.get_spans(), edges.t_j.get_spans()},
                 sham::DDMultiRef{edges.Ttilde_sj.get_spans()},
                 total_specie_count,
-                [pmass, ndust = ndust](
+                [pmass, ndust = ndust, dust_var = dust_var](
                     u32 thread_id,                 // = part_id * ndust + jdust
                     const Tscal *__restrict hpart, // [part_counts]
                     const Tscal *__restrict s_j,   // [part_counts * ndust]
@@ -106,7 +109,7 @@ namespace shammodels::sph::modules {
                     Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
 
                     auto epsilon = [&](Tscal sj) {
-                        return sj * sj / rho_a;
+                        return dust_var_to_eps(dust_var, sj, rho_a);
                     };
 
 #if false
@@ -151,7 +154,7 @@ namespace shammodels::sph::modules {
 
             \begin{align}
             \rho_a &= m_p \left( \frac{h_{\rm fact}}{ {hpart}_a } \right)^3 \\
-            \epsilon_{j,a} &= \frac{ {s_j}_{j,a}^2 }{ \rho_a } \\
+            \epsilon_{j,a} &= \epsilon({s_j}_{j,a}, \rho_a) \quad \text{({dust_var})} \\
             {Ttilde_sj}_{j,a} &= \epsilon_{j,a} \, {t_j}_{j,a}
                 - \sum_{k=0}^{N_{\rm dust}-1} \epsilon_{k,a}^2 \, {t_j}_{k,a} \\
             a &\in [0, {part_counts}), \quad j \in [0, N_{\rm dust}) \\
@@ -163,6 +166,7 @@ namespace shammodels::sph::modules {
 
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
             shambase::replace_all(tex, "{hfact}", sham::format("{}", Kernel::hfactd));
+            shambase::replace_all(tex, "{dust_var}", dust_variable_to_string(dust_var));
 
             return tex;
         };

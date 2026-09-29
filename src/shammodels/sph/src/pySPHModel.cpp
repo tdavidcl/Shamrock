@@ -302,7 +302,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                bool ensure_s_j_positivity,
                bool smooth_s_positivity_limiter,
                bool dust_corrected_av,
-               std::optional<Tscal> clamp_dust_frac) {
+               std::optional<Tscal> clamp_dust_frac,
+               std::string dust_variable) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
@@ -312,7 +313,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     ensure_s_j_positivity,
                     smooth_s_positivity_limiter,
                     dust_corrected_av,
-                    clamp_dust_frac);
+                    clamp_dust_frac,
+                    shammodels::sph::dust_variable_from_string(dust_variable));
             },
             py::kw_only(),
             py::arg("nvar"),
@@ -323,7 +325,22 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("ensure_s_j_positivity")       = true,
             py::arg("smooth_s_positivity_limiter") = false,
             py::arg("dust_corrected_av")           = false,
-            py::arg("clamp_dust_frac")             = std::nullopt)
+            py::arg("clamp_dust_frac")             = std::nullopt,
+            py::arg("dust_variable")               = "sqrt_rho_eps",
+            R"==(
+    Enable the monofluid terminal velocity approximation (TVA) dust solver.
+
+    ``dust_variable`` selects the variable evolved for each dust species, and the name of the
+    patch field that holds it:
+
+    * ``"sqrt_rho_eps"`` : :math:`S_j = \sqrt{\rho \epsilon_j}` (Hutchison et al. 2018), field ``s_j``
+    * ``"eps"`` : :math:`\epsilon_j` (Price & Laibe 2015), field ``eps_j``
+    * ``"sqrt_eps_over_1m_eps"`` : :math:`s_j = \sqrt{\epsilon_j / (1-\epsilon_j)}`
+      (Ballabio et al. 2018), field ``sb_j``
+
+    ``ensure_s_j_positivity`` is the hard limiter :math:`X_j = \max(X_j, 0)` applied after each
+    update of the evolved variable.
+)==")
         .def(
             "set_dust_mode_monofluid_complete",
             [](TConfig &self, u32 ndust) {

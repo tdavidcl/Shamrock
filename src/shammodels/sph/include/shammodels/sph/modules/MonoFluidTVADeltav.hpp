@@ -19,6 +19,7 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
@@ -50,9 +51,11 @@ namespace shammodels::sph::modules {
         using Kernel = SPHKernel<Tscal>;
 
         u32 ndust;
+        DustVariable dust_var;
 
         public:
-        MonoFluidTVADeltav(u32 ndust) : ndust(ndust) {}
+        MonoFluidTVADeltav(u32 ndust, DustVariable dust_var = DustVariable::SqrtRhoEps)
+            : ndust(ndust), dust_var(dust_var) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -90,7 +93,7 @@ namespace shammodels::sph::modules {
                     edges.t_j.get_spans()},
                 sham::DDMultiRef{edges.delta_v.get_spans()},
                 total_specie_count,
-                [pmass, ndust = ndust](
+                [pmass, ndust = ndust, dust_var = dust_var](
                     u32 thread_id,
                     const Tscal *__restrict hpart,        // npart
                     const Tvec *__restrict grad_P_on_rho, // npart
@@ -110,7 +113,7 @@ namespace shammodels::sph::modules {
                     Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
 
                     auto epsilon = [&](Tscal sj) {
-                        return sj * sj / rho_a;
+                        return dust_var_to_eps(dust_var, sj, rho_a);
                     };
 
                     Tscal eps_j_a = epsilon(sj_a);
@@ -146,7 +149,7 @@ namespace shammodels::sph::modules {
                 MonoFluidTVADeltav
 
                 \begin{align}
-                \epsilon_{i,j} = \frac{{s_j}_{i,j}^2}{{rho}_i ({hpart}_i)} \\
+                \epsilon_{i,j} = \epsilon({s_j}_{i,j}, \rho_i ({hpart}_i)) \quad \text{({dust_var})} \\
                 {delta_v}_{i,j} = \epsilon_{i,j} {t_j}_{i,j} {grad_P_on_rho}_i  \\
                 i \in [0,{part_counts}] \\
                 j \in [0,{ndust}]
@@ -156,6 +159,7 @@ namespace shammodels::sph::modules {
             replace_edges_tex_symbols(tex);
 
             shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
+            shambase::replace_all(tex, "{dust_var}", dust_variable_to_string(dust_var));
 
             return tex;
         };

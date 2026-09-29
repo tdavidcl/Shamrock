@@ -32,6 +32,7 @@
 #include "shammodels/common/ExtForceConfig.hpp"
 #include "shammodels/common/config/enum_NeighCacheStrategy.hpp"
 #include "shammodels/sph/config/MHDConfig.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shamrock/experimental_features.hpp"
 #include "shamrock/io/json_print_diff.hpp"
 #include "shamrock/io/json_std_optional.hpp"
@@ -138,6 +139,9 @@ namespace shammodels::sph {
 
             static constexpr Tscal default_clamp_dust_frac = 0.99;
 
+            // Variable evolved for each dust species (see dust_variables.hpp)
+            DustVariable dust_variable = DustVariable::SqrtRhoEps;
+
             inline bool should_clamp_dust_density() const { return clamp_dust_frac.has_value(); }
 
             inline Tscal get_clamp_dust_frac() const {
@@ -164,7 +168,21 @@ namespace shammodels::sph {
             bool ensure_s_j_positivity           = true,
             bool smooth_s_positivity_limiter     = false,
             bool dust_corrected_av               = false,
-            std::optional<Tscal> clamp_dust_frac = std::nullopt) {
+            std::optional<Tscal> clamp_dust_frac = std::nullopt,
+            DustVariable dust_variable           = DustVariable::SqrtRhoEps) {
+
+            if (dust_variable == DustVariable::SqrtEpsOverOneMinusEps
+                && !clamp_dust_frac.has_value()) {
+                // each eps_j < 1 by construction but not sum_j eps_j, 1 - eps must be guarded
+                clamp_dust_frac = MonofluidTVA::default_clamp_dust_frac;
+                ON_RANK_0(
+                    logger::info_ln(
+                        "SPH::config",
+                        "dust variable sqrt_eps_over_1m_eps: enabling the dust density clamp "
+                        "with clamp_dust_frac =",
+                        *clamp_dust_frac));
+            }
+
             current_mode = MonofluidTVA{
                 nvar,
                 pure_diffusion_mode,
@@ -174,7 +192,8 @@ namespace shammodels::sph {
                 ensure_s_j_positivity,
                 smooth_s_positivity_limiter,
                 dust_corrected_av,
-                clamp_dust_frac};
+                clamp_dust_frac,
+                dust_variable};
         }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
@@ -202,7 +221,8 @@ namespace shammodels::sph {
                        {"ensure_s_j_positivity", cfg->ensure_s_j_positivity},
                        {"smooth_s_positivity_limiter", cfg->smooth_s_positivity_limiter},
                        {"dust_corrected_av", cfg->dust_corrected_av},
-                       {"clamp_dust_frac", cfg->clamp_dust_frac}};
+                       {"clamp_dust_frac", cfg->clamp_dust_frac},
+                       {"dust_variable", dust_variable_to_string(cfg->dust_variable)}};
             } else if (
                 const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 j = {{"type", "monofluid_complete"}, {"ndust", cfg->ndust}};
@@ -225,7 +245,9 @@ namespace shammodels::sph {
                     j.at("ensure_s_j_positivity").get<bool>(),
                     j.value("smooth_s_positivity_limiter", false),
                     j.value("dust_corrected_av", false),
-                    j.value("clamp_dust_frac", std::optional<Tscal>{}));
+                    j.value("clamp_dust_frac", std::optional<Tscal>{}),
+                    dust_variable_from_string(
+                        j.value("dust_variable", std::string("sqrt_rho_eps"))));
             } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
             } else {
@@ -233,8 +255,19 @@ namespace shammodels::sph {
             }
         }
 
-        inline bool has_s_j_field() {
-            return is_monofluid_tva(); // S_j = sqrt(\rho \epsilon_j)
+        /// true if the monofluid TVA evolved dust variable X_j (see DustVariable) is present
+        inline bool has_s_j_field() { return is_monofluid_tva(); }
+
+        inline DustVariable get_dust_variable() { return get_monofluid_tva().dust_variable; }
+
+        /// Name of the patch field holding the evolved TVA dust variable
+        inline std::string get_dust_var_field_name() {
+            return dust_variable_field_name(get_dust_variable());
+        }
+
+        /// Name of the patch field holding the time derivative of the TVA dust variable
+        inline std::string get_dust_var_deriv_field_name() {
+            return dust_variable_deriv_field_name(get_dust_variable());
         }
 
         inline bool should_use_dust_av() {
@@ -390,6 +423,33 @@ namespace shammodels::sph {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
                             "grains_sizes size does not match the number of dust bins");
                     }
+                }
+            }
+
+            if (is_monofluid_tva()) {
+                MonofluidTVA &cfg = get_monofluid_tva();
+
+                if (cfg.dust_variable == DustVariable::SqrtEpsOverOneMinusEps
+                    && cfg.smooth_s_positivity_limiter) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "smooth_s_positivity_limiter is meaningless with the dust variable "
+                        "sqrt_eps_over_1m_eps (the sign of s_j does not matter)");
+                }
+
+                if (cfg.dust_variable != DustVariable::SqrtRhoEps
+                    && !std::holds_alternative<None>(dust_evol_config)) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "dust evolution (COALA) is only implemented for the dust variable "
+                        "sqrt_rho_eps, got "
+                        + dust_variable_to_string(cfg.dust_variable));
+                }
+
+                if (cfg.dust_variable == DustVariable::Eps && !cfg.ensure_s_j_positivity) {
+                    ON_RANK_0(
+                        logger::warn_ln(
+                            "SPH::config",
+                            "the dust variable eps is not positivity preserving and the hard "
+                            "limiter (ensure_s_j_positivity) is off"));
                 }
             }
 

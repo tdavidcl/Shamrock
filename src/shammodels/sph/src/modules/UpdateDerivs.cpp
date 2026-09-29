@@ -514,7 +514,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
 
     if (solver_config.dust_config.should_use_dust_av()) {
         u32 ndust       = solver_config.dust_config.get_dust_nvar();
-        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
+        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>(
+            solver_config.dust_config.get_dust_var_field_name());
 
         std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> s_j_refs
             = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("s_j", "s_j");
@@ -527,7 +528,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_cd10
         }
 
         std::shared_ptr<NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKernel>> node
-            = std::make_shared<NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKernel>>(ndust);
+            = std::make_shared<NodeUpdateDerivsVaryingAlphaAVDustTVA<Tvec, SPHKernel>>(
+                ndust, solver_config.dust_config.get_dust_variable());
         {
             node->set_edges(
                 gpart_mass,
@@ -1126,17 +1128,18 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     const u32 ivxyz    = pdl.get_field_idx<Tvec>("vxyz");
     const u32 iaxyz    = pdl.get_field_idx<Tvec>("axyz");
     const u32 ihpart   = pdl.get_field_idx<Tscal>("hpart");
-    const u32 is_j     = pdl.get_field_idx<Tscal>("s_j");
-    const u32 ids_j_dt = pdl.get_field_idx<Tscal>("ds_j_dt");
+    const u32 is_j     = pdl.get_field_idx<Tscal>(cfg.get_dust_var_field_name());
+    const u32 ids_j_dt = pdl.get_field_idx<Tscal>(cfg.get_dust_var_deriv_field_name());
 
     shamrock::patch::PatchDataLayerLayout &ghost_layout
         = shambase::get_check_ref(storage.ghost_layout.get());
     u32 ihpart_interf = ghost_layout.get_field_idx<Tscal>("hpart");
     u32 ivxyz_interf  = ghost_layout.get_field_idx<Tvec>("vxyz");
     u32 iomega_interf = ghost_layout.get_field_idx<Tscal>("omega");
-    u32 is_j_interf   = ghost_layout.get_field_idx<Tscal>("s_j");
+    u32 is_j_interf   = ghost_layout.get_field_idx<Tscal>(cfg.get_dust_var_field_name());
 
-    u32 ndust = cfg.get_dust_nvar();
+    u32 ndust             = cfg.get_dust_nvar();
+    DustVariable dust_var = cfg.get_dust_variable();
 
     auto &merged_xyzh                                 = storage.merged_xyzh.get();
     shamrock::solvergraph::Field<Tscal> &omega        = shambase::get_check_ref(storage.omega);
@@ -1202,7 +1205,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         = solver_graph.get_edge_ptr<shamrock::solvergraph::FieldRefs<Tscal>>("ds_j_dt");
 
     std::shared_ptr<ComputeDustTtilde<Tvec, SPHKernel>> node_tj
-        = std::make_shared<ComputeDustTtilde<Tvec, SPHKernel>>(ndust);
+        = std::make_shared<ComputeDustTtilde<Tvec, SPHKernel>>(ndust, dust_var);
     {
         node_tj->set_edges(
             gpart_mass, part_counts_with_ghost, hpart_refs, s_j_refs, t_j_field, Ttilde_sj_field);
@@ -1210,7 +1213,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     node_tj->evaluate();
 
     std::shared_ptr<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>> node
-        = std::make_shared<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>>(ndust);
+        = std::make_shared<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>>(ndust, dust_var);
     {
         node->set_edges(
             gpart_mass,
@@ -1230,6 +1233,11 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
 
     if (DustEvolCoalaCoag<Tscal> *cfg_evol
         = std::get_if<DustEvolCoalaCoag<Tscal>>(&cfg.dust_evol_config)) {
+
+        if (dust_var != DustVariable::SqrtRhoEps) {
+            shambase::throw_unimplemented(
+                "COALA dust evolution is only implemented for the dust variable sqrt_rho_eps");
+        }
 
         auto massgrid  = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
         massgrid->data = cfg_evol->massgrid;
@@ -1256,9 +1264,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> S_coag
             = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "S_coag", "S_coag");
 
-        auto press_grad_node      = std::make_shared<NodeComputePressureGrad<Tvec, SPHKernel>>();
-        auto delta_v_node         = std::make_shared<MonoFluidTVADeltav<Tvec, SPHKernel>>(ndust);
-        auto node                 = std::make_shared<NodeEvolveDustCOALASourceTerm<Tvec>>(ndust);
+        auto press_grad_node = std::make_shared<NodeComputePressureGrad<Tvec, SPHKernel>>();
+        auto delta_v_node = std::make_shared<MonoFluidTVADeltav<Tvec, SPHKernel>>(ndust, dust_var);
+        auto node         = std::make_shared<NodeEvolveDustCOALASourceTerm<Tvec>>(ndust);
         auto node_add_source_term = std::make_shared<NodeMonofluidTVAAddSourceTerm<Tvec>>(ndust);
 
         press_grad_node->set_edges(

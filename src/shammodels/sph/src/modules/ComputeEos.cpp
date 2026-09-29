@@ -24,6 +24,7 @@
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
+#include "shammodels/sph/math/dust_variables.hpp"
 #include "shammodels/sph/modules/ComputeEos.hpp"
 #include "shammodels/sph/sink_edges_helper.hpp"
 #include "shamphys/eos.hpp"
@@ -1240,8 +1241,10 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             storage.soundspeed);
     } else if (solver_config.dust_config.has_s_j_field()) {
 
-        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>("s_j");
-        u32 nvar_dust   = solver_config.dust_config.get_dust_nvar();
+        u32 is_j_interf = ghost_layout.get_field_idx<Tscal>(
+            solver_config.dust_config.get_dust_var_field_name());
+        u32 nvar_dust         = solver_config.dust_config.get_dust_nvar();
+        DustVariable dust_var = solver_config.dust_config.get_dust_variable();
 
         auto rho_g  = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "rho_g", "rho_g");
         auto uint_g = std::make_shared<shamrock::solvergraph::Field<Tscal>>(1, "uint_g", "uint_g");
@@ -1263,7 +1266,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
             sham::DDMultiRef{h_refs->get_spans(), uint_refs->get_spans(), s_j_refs.get_spans()},
             sham::DDMultiRef{rho_g->get_spans(), uint_g->get_spans()},
             shambase::get_check_ref(sizes).indexes,
-            [pmass = pmass->data, hfactd = hfactd->data, nvar_dust](
+            [pmass = pmass->data, hfactd = hfactd->data, nvar_dust, dust_var](
                 u32 gid,
                 const Tscal *h,
                 const Tscal *uint,
@@ -1277,7 +1280,7 @@ void shammodels::sph::modules::ComputeEos<Tvec, SPHKernel>::compute_eos() {
                 Tscal epsilon_sum = 0;
                 for (u32 j = 0; j < nvar_dust; j++) {
                     Tscal s = s_j[gid * nvar_dust + j];
-                    epsilon_sum += s * s / rho_a;
+                    epsilon_sum += dust_var_to_eps(dust_var, s, rho_a);
                 }
 
                 Tscal rho_g_a  = rho_a * (1 - epsilon_sum);

@@ -114,10 +114,10 @@ namespace shammodels::sph {
 
         if (dust_config.has_s_j_field()) {
             u32 ndust = dust_config.get_dust_nvar();
-            // s_j := sqrt(rho * epsilon_j), the TVA evolved dust variable (positivity-preserving
-            // substitute for the dust fraction epsilon_j) -- see DustConfig::MonofluidTVA
-            pdl.add_field<Tscal>("s_j", ndust);
-            pdl.add_field<Tscal>("ds_j_dt", ndust);
+            // the TVA evolved dust variable X_j (s_j := sqrt(rho * epsilon_j) by default), its
+            // name depends on the selected DustVariable -- see DustConfig::MonofluidTVA
+            pdl.add_field<Tscal>(dust_config.get_dust_var_field_name(), ndust);
+            pdl.add_field<Tscal>(dust_config.get_dust_var_deriv_field_name(), ndust);
             pdl.add_field<Tvec>("delta_v", ndust);
         }
     }
@@ -163,7 +163,7 @@ namespace shammodels::sph {
 
         if (dust_config.has_s_j_field()) {
             u32 ndust = dust_config.get_dust_nvar();
-            ghost_layout.add_field<Tscal>("s_j", ndust);
+            ghost_layout.add_field<Tscal>(dust_config.get_dust_var_field_name(), ndust);
         }
     }
 
