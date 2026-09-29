@@ -20,10 +20,8 @@
 #include "shamalgs/collective/indexing.hpp"
 #include "shammath/AABB.hpp"
 #include "shammath/crystalLattice.hpp"
-#include "shammath/sphkernels.hpp"
 #include "shammodels/sph/modules/setup/ISPHSetupNode.hpp"
 #include "shamrock/scheduler/ShamrockCtx.hpp"
-#include <algorithm>
 
 namespace shammodels::sph::modules {
 
@@ -47,35 +45,23 @@ namespace shammodels::sph::modules {
         ShamrockCtx &context;
         Tscal dr;
         shammath::AABB<Tvec> box;
+        Tscal init_h_factor;
 
         LatticeIter generator;
 
-        /// Smallest default hfact among all the SPH kernels
-        static constexpr Tscal hfact_min
-            = std::min({shammath::M4<Tscal>::hfactd,       shammath::M5<Tscal>::hfactd,
-                        shammath::M6<Tscal>::hfactd,       shammath::M7<Tscal>::hfactd,
-                        shammath::M8<Tscal>::hfactd,       shammath::M9<Tscal>::hfactd,
-                        shammath::M10<Tscal>::hfactd,      shammath::C2<Tscal>::hfactd,
-                        shammath::C4<Tscal>::hfactd,       shammath::C6<Tscal>::hfactd,
-                        shammath::TGauss3<Tscal>::hfactd,  shammath::TGauss5<Tscal>::hfactd,
-                        shammath::M4DH<Tscal>::hfactd,     shammath::M4DH3<Tscal>::hfactd,
-                        shammath::M4DH5<Tscal>::hfactd,    shammath::M4DH7<Tscal>::hfactd,
-                        shammath::M4Shift2<Tscal>::hfactd, shammath::M4Shift4<Tscal>::hfactd,
-                        shammath::M4Shift8<Tscal>::hfactd, shammath::M4Shift16<Tscal>::hfactd});
-
+        public:
         /**
-         * @brief Initial smoothing length for a HCP lattice of parameter dr
+         * @brief Default ratio between the initial smoothing length and dr
          *
          * Neighbours in the lattice are 2 dr apart, so each particle occupies a volume
          * (2 dr)^3 / sqrt(2) = 4 sqrt(2) dr^3. With rho = m (hfact / h)^3 the equilibrium
          * smoothing length is h = hfact (4 sqrt(2))^(1/3) dr = hfact 2^(5/6) dr.
-         * Using the smallest hfact of all kernels ensures that the initial guess never
-         * exceeds the equilibrium value, whatever the kernel.
+         * The default is 2^(5/6), which is the equilibrium value for hfact = 1, the smallest
+         * hfact of all the SPH kernels, so the initial guess never exceeds the equilibrium.
          */
-        static Tscal get_h_init(Tscal dr) {
-            return hfact_min * sycl::pow(Tscal{2}, Tscal{5. / 6.}) * dr;
-        }
+        static constexpr Tscal default_init_h_factor = 1.7817974362806785; // 2^(5/6)
 
+        private:
         static auto init_gen(Tscal dr, std::pair<Tvec, Tvec> box) {
 
             auto [idxs_min, idxs_max] = Lattice::get_box_index_bounds(dr, box.first, box.second);
@@ -84,8 +70,13 @@ namespace shammodels::sph::modules {
         };
 
         public:
-        GeneratorLatticeHCP(ShamrockCtx &context, Tscal dr, std::pair<Tvec, Tvec> box)
-            : context(context), dr(dr), box(box), generator(init_gen(dr, box)) {}
+        GeneratorLatticeHCP(
+            ShamrockCtx &context,
+            Tscal dr,
+            std::pair<Tvec, Tvec> box,
+            Tscal init_h_factor = default_init_h_factor)
+            : context(context), dr(dr), box(box), init_h_factor(init_h_factor),
+              generator(init_gen(dr, box)) {}
 
         bool is_done() { return generator.is_done(); }
 
@@ -144,7 +135,7 @@ namespace shammodels::sph::modules {
                 {
                     PatchDataField<Tscal> &f
                         = tmp.get_field<Tscal>(sched.pdl_old().get_field_idx<Tscal>("hpart"));
-                    f.override(get_h_init(dr));
+                    f.override(init_h_factor * dr);
                 }
             }
             return tmp;
