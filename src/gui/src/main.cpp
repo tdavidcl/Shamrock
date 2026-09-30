@@ -138,14 +138,17 @@ namespace sham::gui {
     /// Command-line options of shamrock_gui.
     struct CliArgs {
         std::string screenshot; ///< --screenshot: PNG to save, empty for an interactive run
-        int frames = 45;        ///< frames rendered before exiting (--frames, or --bench + 30)
-        int bench  = 0;         ///< --bench: timed frames, 0 when not benchmarking
+        int bench = 0;          ///< --bench: timed frames, 0 when not benchmarking
+        /// frames rendered before exiting: --frames N (default 45) with --screenshot, --bench + 30
+        /// warm-up frames with --bench, empty for an interactive run
+        std::optional<int> frames_before_exit;
         std::optional<int> exit_code; ///< set when main must return right away (usage printed)
     };
 
     /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
     static CliArgs parse_cli(int argc, char **argv) {
         CliArgs cli;
+        std::optional<int> frames;
         for (int i = 1; i < argc; ++i) {
             std::string a = argv[i];
             auto next     = [&]() {
@@ -154,7 +157,7 @@ namespace sham::gui {
             if (a == "--screenshot")
                 cli.screenshot = next();
             else if (a == "--frames")
-                cli.frames = std::stoi(next());
+                frames = std::stoi(next());
             else if (a == "--bench")
                 cli.bench = std::stoi(next());
             else {
@@ -164,7 +167,9 @@ namespace sham::gui {
             }
         }
         if (cli.bench)
-            cli.frames = cli.bench + 30;
+            cli.frames_before_exit = cli.bench + 30;
+        else if (!cli.screenshot.empty())
+            cli.frames_before_exit = frames.value_or(45);
         return cli;
     }
 
@@ -201,7 +206,7 @@ int main(int argc, char **argv) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    App app(!cli.screenshot.empty(), cli.frames, cli.bench);
+    App app(!cli.screenshot.empty(), cli.frames_before_exit.value_or(0), cli.bench);
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
