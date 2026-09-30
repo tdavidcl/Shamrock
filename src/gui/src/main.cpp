@@ -46,47 +46,23 @@
 
 namespace sham::gui {
 
-    struct App {
-        bool deterministic;
-        long long frame = 0;
-        int frames_left;
-        bool screenshot, want_exit = false;
-
-        App(bool screenshot_, int frames)
-            : deterministic(screenshot_), frames_left(frames), screenshot(screenshot_) {}
-        // single instance owned by main, the panes will keep callbacks into it
-        App(const App &)            = delete;
-        App &operator=(const App &) = delete;
-
-        static double wall() {
-            using namespace std::chrono;
-            return duration<double>(steady_clock::now().time_since_epoch()).count();
-        }
-        double now() const { return deterministic ? double(frame) / 60.0 : wall(); }
-
-        /// Build one frame: a full-screen host window holding the dock area.
-        void gui() {
-            const ImGuiViewport *vp = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(vp->Pos);
-            ImGui::SetNextWindowSize(vp->Size);
-            ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
-                                     | ImGuiWindowFlags_NoSavedSettings
-                                     | ImGuiWindowFlags_NoBringToFrontOnFocus
-                                     | ImGuiWindowFlags_NoScrollWithMouse;
-            // no padding or border, so the dock area covers the whole window
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-            ImGui::Begin("##shamrock_main", nullptr, flags);
-            ImGui::PopStyleVar(2);
-            ImGui::DockSpace(ImGui::GetID("##body_dockspace"), ImVec2(0, 0));
-            ImGui::End();
-
-            frame += 1;
-            if (screenshot)
-                if (--frames_left <= 0)
-                    want_exit = true;
-        }
-    };
+    /// Build one frame: a full-screen host window holding the dock area.
+    void gui() {
+        const ImGuiViewport *vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->Pos);
+        ImGui::SetNextWindowSize(vp->Size);
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
+                                 | ImGuiWindowFlags_NoSavedSettings
+                                 | ImGuiWindowFlags_NoBringToFrontOnFocus
+                                 | ImGuiWindowFlags_NoScrollWithMouse;
+        // no padding or border, so the dock area covers the whole window
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::Begin("##shamrock_main", nullptr, flags);
+        ImGui::PopStyleVar(2);
+        ImGui::DockSpace(ImGui::GetID("##body_dockspace"), ImVec2(0, 0));
+        ImGui::End();
+    }
 
     /// Command-line options of shamrock_gui.
     struct CliArgs {
@@ -157,7 +133,14 @@ int main(int argc, char **argv) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    App app(!cli.screenshot.empty(), cli.frames_before_exit.value_or(0));
+    // screenshots run on a fixed 60 fps virtual clock so they are reproducible
+    const bool deterministic = !cli.screenshot.empty();
+    long long frame          = 0;
+    auto now                 = [&]() {
+        using namespace std::chrono;
+        return deterministic ? double(frame) / 60.0
+                             : duration<double>(steady_clock::now().time_since_epoch()).count();
+    };
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -165,10 +148,12 @@ int main(int argc, char **argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        app.gui();
+        gui();
+        frame += 1;
+        const bool want_exit = cli.frames_before_exit && frame >= *cli.frames_before_exit;
         // temporary: something moving to check --screenshot, removed with the real panes
         {
-            const double t = app.now();
+            const double t = now();
             const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
             ImGui::GetForegroundDrawList()->AddRectFilled(
                 ImVec2(c.x - 20, c.y - 20),
@@ -181,7 +166,7 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (app.want_exit && !cli.screenshot.empty()) {
+        if (want_exit && !cli.screenshot.empty()) {
             std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
@@ -196,7 +181,7 @@ int main(int argc, char **argv) {
             std::printf("saved %s\n", cli.screenshot.c_str());
         }
         glfwSwapBuffers(window);
-        if (app.want_exit)
+        if (want_exit)
             break;
     }
 
