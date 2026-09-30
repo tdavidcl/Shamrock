@@ -18,7 +18,6 @@
 #include "shamtree/TreeTraversal.hpp"
 #include "tests/shamtree/tie_order_utils.hpp"
 #include <algorithm>
-#include <utility>
 #include <vector>
 
 using shamtree::test_utils::sort_segments;
@@ -36,21 +35,17 @@ inline u32 get_tree_depth_host_reference(const shamtree::KarrasRadixTree &tree) 
     auto host_traverser = tree.get_structure_traverser_host();
     auto acc            = host_traverser.get_read_access();
 
-    u32 depth = 0;
-    std::vector<std::pair<u32, u32>> stack{{0, 0}}; // (node id, node depth)
-    while (!stack.empty()) {
-        auto [id, d] = stack.back();
-        stack.pop_back();
-
+    // height of the subtree rooted at `id` (leaves have height 0)
+    auto get_height = [&](auto &&self, u32 id) -> u32 {
         if (acc.is_id_leaf(id)) {
-            depth = std::max(depth, d);
-            continue;
+            return 0;
         }
+        return 1
+               + std::max(self(self, acc.get_left_child(id)), self(self, acc.get_right_child(id)));
+    };
 
-        stack.push_back({acc.get_left_child(id), d + 1});
-        stack.push_back({acc.get_right_child(id), d + 1});
-    }
-    return depth;
+    // the root of a Karras tree is always the cell 0
+    return get_height(get_height, 0);
 }
 
 NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator", 1) {
