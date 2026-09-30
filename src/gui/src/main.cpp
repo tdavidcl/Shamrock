@@ -112,7 +112,6 @@ int main(int argc, char **argv) {
     if (!glfwInit()) {
         return 1;
     }
-    GuiClock gui_clock(!cli.interactive_mode);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -133,6 +132,8 @@ int main(int argc, char **argv) {
     io.IniFilename = cli.interactive_mode ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
+
+    GuiClock gui_clock(!cli.interactive_mode);
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
