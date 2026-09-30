@@ -137,12 +137,18 @@ namespace sham::gui {
 
     /// Command-line options of shamrock_gui.
     struct CliArgs {
-        std::string screenshot; ///< --screenshot: PNG to save, empty for an interactive run
-        int bench = 0;          ///< --bench: timed frames, 0 when not benchmarking
+        /// ---screenshot: save PNG of window before exit
+        std::string screenshot = {};
+
+        /// --bench: benchmark with --bench frames after warm-up
+        int bench = 0;
+
         /// frames rendered before exiting: --frames N (default 45) with --screenshot, --bench + 30
         /// warm-up frames with --bench, empty for an interactive run
         std::optional<int> frames_before_exit;
-        std::optional<int> exit_code; ///< set when main must return right away (usage printed)
+
+        /// set when main must return right away (usage printed)
+        std::optional<int> exit_code;
     };
 
     /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
