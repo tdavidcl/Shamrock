@@ -17,6 +17,8 @@
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/TreeTraversal.hpp"
 #include "tests/shamtree/tie_order_utils.hpp"
+#include <algorithm>
+#include <utility>
 #include <vector>
 
 using shamtree::test_utils::sort_segments;
@@ -24,6 +26,32 @@ using shamtree::test_utils::sort_segments;
 using Tmorton = u64;
 using Tvec    = f64_3;
 using Tscal   = shambase::VecComponent<Tvec>;
+
+/// Host side reference for the tree depth (number of edges on the longest root to leaf path)
+inline u32 get_tree_depth_host_reference(const shamtree::KarrasRadixTree &tree) {
+    if (tree.is_root_leaf()) {
+        return 0;
+    }
+
+    auto host_traverser = tree.get_structure_traverser_host();
+    auto acc            = host_traverser.get_read_access();
+
+    u32 depth = 0;
+    std::vector<std::pair<u32, u32>> stack{{0, 0}}; // (node id, node depth)
+    while (!stack.empty()) {
+        auto [id, d] = stack.back();
+        stack.pop_back();
+
+        if (acc.is_id_leaf(id)) {
+            depth = std::max(depth, d);
+            continue;
+        }
+
+        stack.push_back({acc.get_left_child(id), d + 1});
+        stack.push_back({acc.get_right_child(id), d + 1});
+    }
+    return depth;
+}
 
 NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator", 1) {
 
@@ -57,6 +85,8 @@ NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator", 1) {
     bvh.rebuild_from_positions(partpos_buf, bb, 1);
 
     REQUIRE_EQUAL(bvh.structure.get_internal_cell_count(), 6);
+
+    REQUIRE_EQUAL(bvh.get_exact_tree_depth(), get_tree_depth_host_reference(bvh.structure));
 
     auto obj_it = bvh.get_object_iterator();
 
@@ -269,6 +299,8 @@ NEW_TEST(Unittest, "shamtree/LCBVHObjectIterator(one-cell)", 1) {
     bvh.rebuild_from_positions(partpos_buf, bb, 8);
 
     REQUIRE_EQUAL(bvh.structure.get_internal_cell_count(), 0);
+
+    REQUIRE_EQUAL(bvh.get_exact_tree_depth(), 0);
 
     auto obj_it = bvh.get_object_iterator();
 
