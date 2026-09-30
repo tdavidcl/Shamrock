@@ -20,6 +20,7 @@
 #include "shambase/overloaded.hpp"
 #include "shambase/string.hpp"
 #include "shamalgs/ImplVariant.hpp"
+#include "shamalgs/impl_registry.hpp"
 #include "shambackends/Device.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
@@ -372,7 +373,7 @@ namespace shamalgs::primitives {
         sham::DeviceBuffer<T> result(nbins, dev_sched);
 
         if (!impl::compute_histogram_impl.is_set()) {
-            impl::compute_histogram_impl.autoselect(dev_sched);
+            shamalgs::impl_registry::autoselect_impl(impl::compute_histogram_impl_name, dev_sched);
         }
 
         std::visit(

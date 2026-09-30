@@ -135,7 +135,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::reduction_impl.autoselect(sched);
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(
@@ -162,7 +162,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::reduction_impl.autoselect(sched);
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(
@@ -189,7 +189,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::reduction_impl.autoselect(sched);
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(
