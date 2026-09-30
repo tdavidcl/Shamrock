@@ -64,6 +64,22 @@ namespace sham::gui {
         ImGui::End();
     }
 
+    /// Save the current framebuffer (after rendering, before the buffer swap) as a PNG.
+    void take_screenshot(const std::string &screenshot_path) {
+        int fbw = 0, fbh = 0;
+        glfwGetFramebufferSize(glfwGetCurrentContext(), &fbw, &fbh);
+        std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+        for (int j = 0; j < fbh; ++j)
+            std::memcpy(
+                &flipped[size_t(j) * fbw * 4], &px[size_t(fbh - 1 - j) * fbw * 4], size_t(fbw) * 4);
+        for (size_t k = 3; k < flipped.size(); k += 4)
+            flipped[k] = 255;
+        stbi_write_png(screenshot_path.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
+        std::printf("saved %s\n", screenshot_path.c_str());
+    }
+
     /// Command-line options of shamrock_gui.
     struct CliArgs {
         /// --screenshot: save PNG of window before exit
@@ -159,20 +175,8 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (want_exit && !cli.screenshot.empty()) {
-            std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-            for (int j = 0; j < fbh; ++j)
-                std::memcpy(
-                    &flipped[size_t(j) * fbw * 4],
-                    &px[size_t(fbh - 1 - j) * fbw * 4],
-                    size_t(fbw) * 4);
-            for (size_t k = 3; k < flipped.size(); k += 4)
-                flipped[k] = 255;
-            stbi_write_png(cli.screenshot.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
-            std::printf("saved %s\n", cli.screenshot.c_str());
-        }
+        if (want_exit && !cli.screenshot.empty())
+            take_screenshot(cli.screenshot);
         glfwSwapBuffers(window);
         if (want_exit)
             break;
