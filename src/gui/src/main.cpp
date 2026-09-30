@@ -26,6 +26,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "sham/gui/GuiClock.hpp"
 #include <GLFW/glfw3.h>
 #if defined(__APPLE__)
     #include <OpenGL/gl3.h>
@@ -35,7 +36,6 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -45,25 +45,6 @@
 #include <vector>
 
 namespace sham::gui {
-
-    /// Time source of the GUI: a fixed 60 fps virtual clock when deterministic, the wall clock
-    /// otherwise.
-    struct GuiClock {
-        bool deterministic;
-        long long frame = 0; ///< frames completed so far
-
-        explicit GuiClock(bool deterministic_) : deterministic(deterministic_) {}
-
-        /// Mark the end of a frame.
-        void end_frame() { frame += 1; }
-
-        /// Current time in seconds.
-        double now() const {
-            using namespace std::chrono;
-            return deterministic ? double(frame) / 60.0
-                                 : duration<double>(steady_clock::now().time_since_epoch()).count();
-        }
-    };
 
     /// Build one frame: a full-screen host window holding the dock area.
     void gui() {
