@@ -137,7 +137,7 @@ namespace sham::gui {
 
     /// Command-line options of shamrock_gui.
     struct CliArgs {
-        /// ---screenshot: save PNG of window before exit
+        /// --screenshot: save PNG of window before exit
         std::string screenshot = {};
 
         /// --bench: benchmark with --bench frames after warm-up
