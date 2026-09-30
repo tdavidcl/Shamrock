@@ -145,10 +145,10 @@ namespace sham::gui {
 
         /// frames rendered before exiting: --frames N (default 45) with --screenshot, --bench + 30
         /// warm-up frames with --bench, empty for an interactive run
-        std::optional<int> frames_before_exit;
+        std::optional<int> frames_before_exit = std::nullopt;
 
         /// set when main must return right away (usage printed)
-        std::optional<int> exit_code;
+        std::optional<int> exit_code = std::nullopt;
     };
 
     /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
