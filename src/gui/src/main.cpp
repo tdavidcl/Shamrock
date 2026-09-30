@@ -35,8 +35,6 @@
     #include <GL/gl.h>
 #endif
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 #include <cmath>
 #include <cstdio>
 #include <optional>

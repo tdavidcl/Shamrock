@@ -14,40 +14,13 @@
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Save the OpenGL framebuffer of shamrock_gui as a PNG.
  *
- * Only declares the stb_image_write functions; the implementation is compiled in main.cpp.
- *
  */
 
-#include <GLFW/glfw3.h>
-#if defined(__APPLE__)
-    #include <OpenGL/gl3.h>
-#else
-    #include <GL/gl.h>
-#endif
-
-#include "stb_image_write.h"
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
 #include <string>
-#include <vector>
 
 namespace sham::gui {
 
     /// Save the current framebuffer (after rendering, before the buffer swap) as a PNG.
-    inline void take_screenshot(const std::string &screenshot_path) {
-        int fbw = 0, fbh = 0;
-        glfwGetFramebufferSize(glfwGetCurrentContext(), &fbw, &fbh);
-        std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-        for (int j = 0; j < fbh; ++j)
-            std::memcpy(
-                &flipped[size_t(j) * fbw * 4], &px[size_t(fbh - 1 - j) * fbw * 4], size_t(fbw) * 4);
-        for (size_t k = 3; k < flipped.size(); k += 4)
-            flipped[k] = 255;
-        stbi_write_png(screenshot_path.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
-        std::printf("saved %s\n", screenshot_path.c_str());
-    }
+    void take_screenshot(const std::string &screenshot_path);
 
 } // namespace sham::gui
