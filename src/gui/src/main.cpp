@@ -46,6 +46,25 @@
 
 namespace sham::gui {
 
+    /// Time source of the GUI: a fixed 60 fps virtual clock when deterministic (reproducible
+    /// screenshots), the wall clock otherwise.
+    struct GuiClock {
+        bool deterministic;
+        long long frame = 0; ///< frames completed so far
+
+        explicit GuiClock(bool deterministic_) : deterministic(deterministic_) {}
+
+        /// Mark the end of a frame.
+        void end_frame() { frame += 1; }
+
+        /// Current time in seconds.
+        double now() const {
+            using namespace std::chrono;
+            return deterministic ? double(frame) / 60.0
+                                 : duration<double>(steady_clock::now().time_since_epoch()).count();
+        }
+    };
+
     /// Build one frame: a full-screen host window holding the dock area.
     void gui() {
         const ImGuiViewport *vp = ImGui::GetMainViewport();
@@ -133,14 +152,7 @@ int main(int argc, char **argv) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    // screenshots run on a fixed 60 fps virtual clock so they are reproducible
-    const bool deterministic = !cli.screenshot.empty();
-    long long frame          = 0;
-    auto now                 = [&]() {
-        using namespace std::chrono;
-        return deterministic ? double(frame) / 60.0
-                             : duration<double>(steady_clock::now().time_since_epoch()).count();
-    };
+    GuiClock gui_clock(!cli.screenshot.empty());
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -149,11 +161,11 @@ int main(int argc, char **argv) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         gui();
-        frame += 1;
-        const bool want_exit = cli.frames_before_exit && frame >= *cli.frames_before_exit;
+        gui_clock.end_frame();
+        const bool want_exit = cli.frames_before_exit && gui_clock.frame >= *cli.frames_before_exit;
         // temporary: something moving to check --screenshot, removed with the real panes
         {
-            const double t = now();
+            const double t = gui_clock.now();
             const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
             ImGui::GetForegroundDrawList()->AddRectFilled(
                 ImVec2(c.x - 20, c.y - 20),
