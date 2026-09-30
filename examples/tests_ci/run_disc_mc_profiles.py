@@ -185,6 +185,7 @@ fig_rho, ax_rho = plt.subplots(dpi=dpi)
 fig_err, ax_err = plt.subplots(dpi=dpi)
 
 max_delta_sigma = {}
+fitted_slope = {}
 
 for i, p_index in enumerate(p_index_list):
     # the disc profiles read p_index & sigma_norm from the module globals
@@ -234,6 +235,11 @@ for i, p_index in enumerate(p_index_list):
     mask_inner = (x_list > 2 * R_in) & (x_list < 0.8 * R_out)
     max_delta_sigma[p_index] = np.max(np.abs(delta_sigma[mask_inner]))
 
+    # power law index of the measured surface density (should be -p_index)
+    fitted_slope[p_index] = np.polyfit(
+        np.log(x_list[mask_inner]), np.log(arr_sigma_avg[mask_inner]), 1
+    )[0]
+
 ax_sigma.set_xlabel("r")
 ax_sigma.set_ylabel("sigma")
 ax_sigma.set_title("Surface density after one step")
@@ -256,5 +262,27 @@ ax_err.legend(fontsize="small")
 
 plt.show()
 
-for p_index, err in max_delta_sigma.items():
-    print(f"p={p_index}: max relative delta sigma (2 R_in < r < 0.8 R_out): {err}")
+# With a biased radial sampling (e.g. the rejection sampling bound being too low, which
+# makes r uniform) the max relative error is ~0.36 for p=1.5 and ~1.05 for p=2,
+# and the fitted slope is -1 regardless of p
+max_rel_err_tol = 0.2
+slope_tol = 0.1
+
+errors = []
+for p_index in p_index_list:
+    err = max_delta_sigma[p_index]
+    slope = fitted_slope[p_index]
+    print(
+        f"p={p_index}: max relative delta sigma (2 R_in < r < 0.8 R_out): {err:.4e}, "
+        f"fitted slope: {slope:.4f} (expected {-p_index})"
+    )
+
+    if err > max_rel_err_tol:
+        errors.append(f"p={p_index}: max relative delta sigma {err:.4e} > {max_rel_err_tol}")
+    if abs(slope + p_index) > slope_tol:
+        errors.append(
+            f"p={p_index}: fitted slope {slope:.4f} differs from {-p_index} by more than {slope_tol}"
+        )
+
+if errors:
+    raise ValueError("Disc MC profile check failed:\n" + "\n".join(errors))
