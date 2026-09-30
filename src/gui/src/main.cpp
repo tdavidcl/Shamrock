@@ -159,7 +159,8 @@ int main(int argc, char **argv) {
         ImGui::NewFrame();
         gui();
         gui_clock.end_frame();
-        const bool want_exit = cli.frames_before_exit && gui_clock.frame >= *cli.frames_before_exit;
+        const bool want_exit
+            = cli.frames_before_exit && gui_clock.frame_counter >= *cli.frames_before_exit;
         // temporary: something moving to check --screenshot, removed with the real panes
         {
             const double t = gui_clock.now();

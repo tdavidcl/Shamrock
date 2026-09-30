@@ -24,17 +24,17 @@ namespace sham::gui {
     /// otherwise.
     struct GuiClock {
         bool deterministic;
-        long long frame = 0; ///< frames completed so far
+        long long frame_counter = 0; ///< frames completed so far
 
         explicit GuiClock(bool deterministic_) : deterministic(deterministic_) {}
 
         /// Mark the end of a frame.
-        void end_frame() { frame += 1; }
+        void end_frame() { frame_counter += 1; }
 
         /// Current time in seconds.
         double now() const {
             using namespace std::chrono;
-            return deterministic ? double(frame) / 60.0
+            return deterministic ? double(frame_counter) / 60.0
                                  : duration<double>(steady_clock::now().time_since_epoch()).count();
         }
     };
