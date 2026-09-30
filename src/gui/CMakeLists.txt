@@ -36,4 +36,5 @@ endif()
 set(sources src/main.cpp)
 add_executable(shamrock_gui ${sources})
 
+target_include_directories(shamrock_gui PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(shamrock_gui PRIVATE shamrock_gui_imgui)

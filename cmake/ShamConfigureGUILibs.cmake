@@ -14,7 +14,7 @@ option(SHAMROCK_BUILD_GUI "build the standalone shamrock_gui executable" Off)
 message(STATUS "SHAMROCK_BUILD_GUI : ${SHAMROCK_BUILD_GUI}")
 
 if(SHAMROCK_BUILD_GUI)
-    # Dear ImGui is always fetched.
+    # Dear ImGui and stb are always fetched.
     if(CMAKE_VERSION VERSION_LESS 3.14)
         message(
             FATAL_ERROR
@@ -55,7 +55,7 @@ if(SHAMROCK_BUILD_GUI)
     find_package(OpenGL REQUIRED)
 
     ###############################################################################
-    ### Dear ImGui (docking)
+    ### Dear ImGui (docking), stb
     ###############################################################################
 
     # Docking build of the Dear ImGui version used by imgui-bundle 1.92.900.
@@ -65,5 +65,11 @@ if(SHAMROCK_BUILD_GUI)
         GIT_TAG v1.92.9-docking
         GIT_SHALLOW TRUE
     )
-    FetchContent_MakeAvailable(imgui)
+    FetchContent_Declare(
+        stb
+        GIT_REPOSITORY https://github.com/nothings/stb.git
+        GIT_TAG master
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(imgui stb)
 endif()
