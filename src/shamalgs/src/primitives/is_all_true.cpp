@@ -249,8 +249,7 @@ namespace shamalgs::primitives {
     bool is_all_true(sham::DeviceBuffer<T> &buf, u32 cnt) {
 
         if (!impl::is_all_true_impl.is_set()) {
-            shamalgs::impl_registry::autoselect_impl(
-                impl::is_all_true_impl_name, buf.get_dev_scheduler_ptr());
+            impl::is_all_true_impl.autoselect(buf.get_dev_scheduler_ptr());
         }
 
         return std::visit(

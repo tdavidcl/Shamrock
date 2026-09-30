@@ -197,7 +197,7 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::sort_by_key_pow2_len_impl.is_set()) {
-            shamalgs::impl_registry::autoselect_impl(impl::sort_by_key_pow2_len_impl_name, sched);
+            impl::sort_by_key_pow2_len_impl.autoselect(sched);
         }
 
         std::visit(

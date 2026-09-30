@@ -129,8 +129,7 @@ namespace shamalgs::primitives {
         sham::DeviceBuffer<Tkey> &buf_key, sham::DeviceBuffer<Tval> &buf_values, u32 len) {
 
         if (!impl::sort_by_keys_impl.is_set()) {
-            shamalgs::impl_registry::autoselect_impl(
-                impl::sort_by_keys_impl_name, buf_key.get_dev_scheduler_ptr());
+            impl::sort_by_keys_impl.autoselect(buf_key.get_dev_scheduler_ptr());
         }
 
         std::visit(
