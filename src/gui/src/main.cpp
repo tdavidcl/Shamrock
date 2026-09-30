@@ -44,6 +44,7 @@
 #include <cstring>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -134,30 +135,46 @@ namespace sham::gui {
         std::printf("}\n");
     }
 
+    /// Command-line options of shamrock_gui.
+    struct CliArgs {
+        std::string screenshot; ///< --screenshot: PNG to save, empty for an interactive run
+        int frames = 45;        ///< frames rendered before exiting (--frames, or --bench + 30)
+        int bench  = 0;         ///< --bench: timed frames, 0 when not benchmarking
+        std::optional<int> exit_code; ///< set when main must return right away (usage printed)
+    };
+
+    /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
+    static CliArgs parse_cli(int argc, char **argv) {
+        CliArgs cli;
+        for (int i = 1; i < argc; ++i) {
+            std::string a = argv[i];
+            auto next     = [&]() {
+                return i + 1 < argc ? std::string(argv[++i]) : std::string();
+            };
+            if (a == "--screenshot")
+                cli.screenshot = next();
+            else if (a == "--frames")
+                cli.frames = std::stoi(next());
+            else if (a == "--bench")
+                cli.bench = std::stoi(next());
+            else {
+                std::printf("usage: %s [--screenshot out.png] [--frames N] [--bench N]\n", argv[0]);
+                cli.exit_code = a == "-h" || a == "--help" ? 0 : 1;
+                return cli;
+            }
+        }
+        if (cli.bench)
+            cli.frames = cli.bench + 30;
+        return cli;
+    }
+
 } // namespace sham::gui
 
 int main(int argc, char **argv) {
     using namespace sham::gui;
-    std::string screenshot;
-    int frames = 45, bench = 0;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next     = [&]() {
-            return i + 1 < argc ? std::string(argv[++i]) : std::string();
-        };
-        if (a == "--screenshot")
-            screenshot = next();
-        else if (a == "--frames")
-            frames = std::stoi(next());
-        else if (a == "--bench")
-            bench = std::stoi(next());
-        else {
-            std::printf("usage: %s [--screenshot out.png] [--frames N] [--bench N]\n", argv[0]);
-            return a == "-h" || a == "--help" ? 0 : 1;
-        }
-    }
-    if (bench)
-        frames = bench + 30;
+    const CliArgs cli = parse_cli(argc, argv);
+    if (cli.exit_code)
+        return *cli.exit_code;
 
     if (!glfwInit()) {
         return 1;
@@ -172,7 +189,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(bench || !screenshot.empty() ? 0 : 1);
+    glfwSwapInterval(cli.bench || !cli.screenshot.empty() ? 0 : 1);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -180,11 +197,11 @@ int main(int argc, char **argv) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // interactive runs remember the arrangement; screenshots and benchmarks always start from
     // scratch
-    io.IniFilename = (bench || !screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
+    io.IniFilename = (cli.bench || !cli.screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    App app(!screenshot.empty(), frames, bench);
+    App app(!cli.screenshot.empty(), cli.frames, cli.bench);
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -208,7 +225,7 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (app.want_exit && !screenshot.empty()) {
+        if (app.want_exit && !cli.screenshot.empty()) {
             std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
@@ -219,14 +236,14 @@ int main(int argc, char **argv) {
                     size_t(fbw) * 4);
             for (size_t k = 3; k < flipped.size(); k += 4)
                 flipped[k] = 255;
-            stbi_write_png(screenshot.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
-            std::printf("saved %s\n", screenshot.c_str());
+            stbi_write_png(cli.screenshot.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
+            std::printf("saved %s\n", cli.screenshot.c_str());
         }
         glfwSwapBuffers(window);
         if (app.want_exit)
             break;
     }
-    if (bench)
+    if (cli.bench)
         print_bench(app, 30);
 
     ImGui_ImplOpenGL3_Shutdown();
