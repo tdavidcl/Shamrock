@@ -12,7 +12,7 @@
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Shamrock control GUI: for now a Dear ImGui (docking branch) frame loop showing an empty
  * dock area that fills the window, with a headless test mode (deterministic 60 fps clock for
- * --screenshot / --bench).
+ * --screenshot).
  *
  * Interactive runs remember the dock arrangement in shamrock_gui_layout.ini.
  *
@@ -20,7 +20,6 @@
  *
  *     ./shamrock_gui                        interactive
  *     ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
- *     ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
  *
  */
 
@@ -36,14 +35,11 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <map>
-#include <numeric>
 #include <optional>
 #include <string>
 #include <vector>
@@ -53,15 +49,11 @@ namespace sham::gui {
     struct App {
         bool deterministic;
         long long frame = 0;
-        int frames_left, bench_frames;
+        int frames_left;
         bool screenshot, want_exit = false;
-        std::map<std::string, std::vector<double>> timings{
-            {"update", {}}, {"ui", {}}, {"frame", {}}};
-        double prev_frame_start = -1;
 
-        App(bool screenshot_, int frames, int bench)
-            : deterministic(screenshot_ || bench > 0), frames_left(frames), bench_frames(bench),
-              screenshot(screenshot_) {}
+        App(bool screenshot_, int frames)
+            : deterministic(screenshot_), frames_left(frames), screenshot(screenshot_) {}
         // single instance owned by main, the panes will keep callbacks into it
         App(const App &)            = delete;
         App &operator=(const App &) = delete;
@@ -74,10 +66,6 @@ namespace sham::gui {
 
         /// Build one frame: a full-screen host window holding the dock area.
         void gui() {
-            double t0 = wall();
-            // update phase (empty for now)
-            double t1 = wall();
-
             const ImGuiViewport *vp = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(vp->Pos);
             ImGui::SetNextWindowSize(vp->Size);
@@ -93,58 +81,20 @@ namespace sham::gui {
             ImGui::DockSpace(ImGui::GetID("##body_dockspace"), ImVec2(0, 0));
             ImGui::End();
 
-            double t2 = wall();
-            if (bench_frames) {
-                timings["update"].push_back(t1 - t0);
-                timings["ui"].push_back(t2 - t1);
-                if (prev_frame_start >= 0)
-                    timings["frame"].push_back(t0 - prev_frame_start);
-                prev_frame_start = t0;
-            }
             frame += 1;
-            if (screenshot || bench_frames)
+            if (screenshot)
                 if (--frames_left <= 0)
                     want_exit = true;
         }
     };
-
-    static void print_bench(const App &app, int warmup) {
-        std::printf("BENCH {\"impl\": \"cpp\"");
-        for (const char *k : {"update", "ui", "frame"}) {
-            std::vector<double> a(
-                app.timings.at(k).begin() + std::min<size_t>(warmup, app.timings.at(k).size()),
-                app.timings.at(k).end());
-            for (double &v : a)
-                v *= 1e3;
-            std::sort(a.begin(), a.end());
-            double mean = a.empty() ? 0 : std::accumulate(a.begin(), a.end(), 0.0) / a.size();
-            auto pct    = [&](double p) { // numpy's default (linear) percentile
-                if (a.empty())
-                    return 0.0;
-                double idx = p / 100.0 * (a.size() - 1);
-                size_t lo = size_t(idx), hi = std::min(lo + 1, a.size() - 1);
-                return a[lo] + (a[hi] - a[lo]) * (idx - lo);
-            };
-            std::printf(
-                ", \"%s\": {\"mean_ms\": %.3f, \"median_ms\": %.3f, \"p95_ms\": %.3f}",
-                k,
-                mean,
-                pct(50),
-                pct(95));
-        }
-        std::printf("}\n");
-    }
 
     /// Command-line options of shamrock_gui.
     struct CliArgs {
         /// --screenshot: save PNG of window before exit
         std::string screenshot = {};
 
-        /// --bench: benchmark with --bench frames after warm-up
-        int bench = 0;
-
-        /// frames rendered before exiting: --frames N (default 45) with --screenshot, --bench + 30
-        /// warm-up frames with --bench, empty for an interactive run
+        /// frames rendered before exiting: --frames N (default 45) with --screenshot, empty for an
+        /// interactive run
         std::optional<int> frames_before_exit = std::nullopt;
 
         /// set when main must return right away (usage printed)
@@ -164,17 +114,13 @@ namespace sham::gui {
                 cli.screenshot = next();
             else if (a == "--frames")
                 frames = std::stoi(next());
-            else if (a == "--bench")
-                cli.bench = std::stoi(next());
             else {
-                std::printf("usage: %s [--screenshot out.png] [--frames N] [--bench N]\n", argv[0]);
+                std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
                 cli.exit_code = a == "-h" || a == "--help" ? 0 : 1;
                 return cli;
             }
         }
-        if (cli.bench)
-            cli.frames_before_exit = cli.bench + 30;
-        else if (!cli.screenshot.empty())
+        if (!cli.screenshot.empty())
             cli.frames_before_exit = frames.value_or(45);
         return cli;
     }
@@ -200,19 +146,18 @@ int main(int argc, char **argv) {
         return 1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(cli.bench || !cli.screenshot.empty() ? 0 : 1);
+    glfwSwapInterval(cli.screenshot.empty() ? 1 : 0);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // interactive runs remember the arrangement; screenshots and benchmarks always start from
-    // scratch
-    io.IniFilename = (cli.bench || !cli.screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
+    // interactive runs remember the arrangement; screenshots always start from scratch
+    io.IniFilename = cli.screenshot.empty() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    App app(!cli.screenshot.empty(), cli.frames_before_exit.value_or(0), cli.bench);
+    App app(!cli.screenshot.empty(), cli.frames_before_exit.value_or(0));
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -221,7 +166,7 @@ int main(int argc, char **argv) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         app.gui();
-        // temporary: something moving to check --screenshot / --bench, removed with the real panes
+        // temporary: something moving to check --screenshot, removed with the real panes
         {
             const double t = app.now();
             const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
@@ -254,8 +199,6 @@ int main(int argc, char **argv) {
         if (app.want_exit)
             break;
     }
-    if (cli.bench)
-        print_bench(app, 30);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
