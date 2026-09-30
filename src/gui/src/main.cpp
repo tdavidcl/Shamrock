@@ -46,8 +46,8 @@
 
 namespace sham::gui {
 
-    /// Time source of the GUI: a fixed 60 fps virtual clock when deterministic (reproducible
-    /// screenshots), the wall clock otherwise.
+    /// Time source of the GUI: a fixed 60 fps virtual clock when deterministic, the wall clock
+    /// otherwise.
     struct GuiClock {
         bool deterministic;
         long long frame = 0; ///< frames completed so far
