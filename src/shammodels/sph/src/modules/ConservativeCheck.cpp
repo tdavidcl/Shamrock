@@ -116,7 +116,7 @@ void shammodels::sph::modules::ConservativeCheck<Tvec, SPHKernel>::check_conserv
     Tscal tmp_de = 0;
 
     // only fetched when needed, get_constant_mu_0 warns if the unit system is not set
-    Tscal const mu_0 = (has_B_field) ? solver_config.get_constant_mu_0() : Tscal{};
+    Tscal const mu_0 = (has_b_field) ? solver_config.get_constant_mu_0() : Tscal{};
 
     scheduler().for_each_patchdata_nonempty([&, pmass](Patch cur_p, PatchDataLayer &pdat) {
         PatchDataField<Tvec> &field_v      = pdat.get_field<Tvec>(ivxyz);
