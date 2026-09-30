@@ -55,7 +55,7 @@ if(SHAMROCK_BUILD_GUI)
     find_package(OpenGL REQUIRED)
 
     ###############################################################################
-    ### Dear ImGui (docking), stb
+    ### Dear ImGui (docking)
     ###############################################################################
 
     # Docking build of the Dear ImGui version used by imgui-bundle 1.92.900.
@@ -65,11 +65,18 @@ if(SHAMROCK_BUILD_GUI)
         GIT_TAG v1.92.9-docking
         GIT_SHALLOW TRUE
     )
+    FetchContent_MakeAvailable(imgui)
+
+    ###############################################################################
+    ### stb
+    ###############################################################################
+
+    # stb_image_write, used to save --screenshot PNGs.
     FetchContent_Declare(
         stb
         GIT_REPOSITORY https://github.com/nothings/stb.git
         GIT_TAG master
         GIT_SHALLOW TRUE
     )
-    FetchContent_MakeAvailable(imgui stb)
+    FetchContent_MakeAvailable(stb)
 endif()
