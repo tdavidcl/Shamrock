@@ -34,7 +34,7 @@ alpha_u = 1
 beta_AV = 2
 
 q = 0.5
-p = 1.0
+p = 3.0 / 2.0
 r0 = 1
 
 C_cour = 0.3
