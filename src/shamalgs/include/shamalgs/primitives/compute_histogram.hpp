@@ -20,6 +20,7 @@
 #include "shambase/overloaded.hpp"
 #include "shambase/string.hpp"
 #include "shamalgs/ImplVariant.hpp"
+#include "shamalgs/impl_registry.hpp"
 #include "shambackends/Device.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
@@ -53,8 +54,15 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "gpu_oversubscribe";
         };
 
-        inline shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>
-            compute_histogram_impl;
+        /// Implementation selector type for compute_histogram
+        using ComputeHistogramImpl
+            = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
+
+        /// Implementation selector for compute_histogram (defined in compute_histogram.cpp)
+        extern ComputeHistogramImpl compute_histogram_impl;
+
+        /// Registry name, shared by its registration and the dispatch site(s)
+        constexpr std::string_view compute_histogram_impl_name = "compute_histogram";
 
         /// Get list of available compute_histogram implementations
         inline std::vector<std::string> get_default_impl_list_compute_histogram() {
@@ -77,11 +85,7 @@ namespace shamalgs::primitives {
 
         /// Select the default implementation for compute_histogram
         inline void autoselect_impl_compute_histogram(const sham::DeviceScheduler_ptr &dev_sched) {
-            if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
-                compute_histogram_impl.set(GpuOversubscribe{});
-            } else {
-                compute_histogram_impl.set(NaiveGpu{}); // it is portable and fast everywhere
-            }
+            compute_histogram_impl.autoselect(dev_sched);
             shamlog_info_ln(
                 "algs",
                 "defaulting compute_histogram implementation to impl :",
@@ -369,7 +373,7 @@ namespace shamalgs::primitives {
         sham::DeviceBuffer<T> result(nbins, dev_sched);
 
         if (!impl::compute_histogram_impl.is_set()) {
-            impl::autoselect_impl_compute_histogram(dev_sched);
+            shamalgs::impl_registry::autoselect_impl(impl::compute_histogram_impl_name, dev_sched);
         }
 
         std::visit(

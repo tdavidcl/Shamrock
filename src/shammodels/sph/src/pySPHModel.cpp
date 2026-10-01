@@ -220,12 +220,43 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("beta_AV"))
         .def(
             "set_IdealMHD",
-            [](TConfig &self, Tscal sigma_mhd, Tscal sigma_u) {
-                self.set_IdealMHD({sigma_mhd, sigma_u});
+            [](TConfig &self,
+               Tscal sigma_mhd,
+               Tscal sigma_u,
+               Tscal alpha_B,
+               Tscal alpha_AV,
+               Tscal beta_AV) {
+                self.set_ideal_mhd({sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV});
             },
             py::kw_only(),
             py::arg("sigma_mhd"),
-            py::arg("sigma_u"))
+            py::arg("sigma_u"),
+            py::arg("alpha_B")  = 1.0,
+            py::arg("alpha_AV") = 1.0,
+            py::arg("beta_AV")  = 1.0)
+        .def(
+            "set_NonIdealMHD",
+            [](TConfig &self,
+               Tscal sigma_mhd,
+               Tscal sigma_u,
+               Tscal etaO,
+               Tscal etaH,
+               Tscal etaAD,
+               Tscal alpha_B,
+               Tscal alpha_AV,
+               Tscal beta_AV) {
+                self.set_non_ideal_mhd(
+                    {sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV, etaO, etaH, etaAD});
+            },
+            py::kw_only(),
+            py::arg("sigma_mhd"),
+            py::arg("sigma_u"),
+            py::arg("etaO"),
+            py::arg("etaH"),
+            py::arg("etaAD"),
+            py::arg("alpha_B")  = 1.0,
+            py::arg("alpha_AV") = 1.0,
+            py::arg("beta_AV")  = 1.0)
         .def(
             "set_self_gravity_none",
             [](TConfig &self) {
@@ -551,13 +582,27 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
     py::class_<TSPHSetup>(m, setup_name.c_str())
         .def(
             "make_generator_lattice_hcp",
-            [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max, bool discontinuous) {
-                return self.make_generator_lattice_hcp(dr, {box_min, box_max}, discontinuous);
+            [](TSPHSetup &self,
+               Tscal dr,
+               Tvec box_min,
+               Tvec box_max,
+               bool discontinuous,
+               Tscal init_h_factor) {
+                return self.make_generator_lattice_hcp(
+                    dr, {box_min, box_max}, discontinuous, init_h_factor);
             },
             py::arg("dr"),
             py::arg("box_min"),
             py::arg("box_max"),
-            py::arg("discontinuous") = true)
+            py::arg("discontinuous") = true,
+            py::arg("init_h_factor") = modules::GeneratorLatticeHCP<Tvec>::default_init_h_factor,
+            R"==(
+    Generate particles on a HCP lattice of parameter dr (neighbours are 2 dr apart)
+
+    The initial smoothing length is set to init_h_factor * dr. The default 2^(5/6)
+    is the equilibrium smoothing length for hfact = 1 (the smallest hfact of all
+    the SPH kernels), so the initial guess never exceeds the equilibrium value.
+)==")
         .def(
             "make_generator_lattice_cubic",
             [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max) {

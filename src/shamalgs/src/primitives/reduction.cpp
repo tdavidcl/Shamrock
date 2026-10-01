@@ -27,6 +27,7 @@
 #include "shamalgs/details/reduction/groupReduction_usm.hpp"
 #include "shamalgs/details/reduction/reduction.hpp"
 #include "shamalgs/details/reduction/sycl2020reduction.hpp"
+#include "shamalgs/impl_registry.hpp"
 
 namespace shamalgs::primitives::impl {
 
@@ -75,6 +76,9 @@ namespace shamalgs::primitives {
     /// namespace to control implementation behavior
     namespace impl {
 
+        /// Registry name, shared by its registration and the dispatch site(s)
+        constexpr std::string_view reduction_impl_name = "reduction";
+
         shamalgs::ImplVariantGlobal<
             Fallback
 #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
@@ -82,7 +86,16 @@ namespace shamalgs::primitives {
             GroupReduction
 #endif
             >
-            reduction_impl;
+            reduction_impl{[](const sham::DeviceScheduler_ptr &, auto &self) {
+#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+                self.set(GroupReduction{});
+#else
+                self.set(Fallback{});
+#endif
+            }};
+
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(reduction_impl_name, reduction_impl);
 
         /// Get list of available reduction implementations, as config json strings
         std::vector<std::string> get_default_impl_list_reduction() {
@@ -102,12 +115,8 @@ namespace shamalgs::primitives {
         }
 
         /// Select the default implementation for reduction
-        void autoselect_impl_reduction() {
-#ifdef SYCL2020_FEATURE_GROUP_REDUCTION
-            reduction_impl.set(GroupReduction{});
-#else
-            reduction_impl.set(Fallback{});
-#endif
+        void autoselect_impl_reduction(const sham::DeviceScheduler_ptr &dev_sched) {
+            reduction_impl.autoselect(dev_sched);
             shamlog_info_ln(
                 "algs",
                 "defaulting reduction implementation to impl :",
@@ -126,7 +135,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(
@@ -153,7 +162,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(
@@ -180,7 +189,7 @@ namespace shamalgs::primitives {
         using namespace shamalgs::reduction::details;
 
         if (!impl::reduction_impl.is_set()) {
-            impl::autoselect_impl_reduction();
+            shamalgs::impl_registry::autoselect_impl(impl::reduction_impl_name, sched);
         }
 
         return std::visit(

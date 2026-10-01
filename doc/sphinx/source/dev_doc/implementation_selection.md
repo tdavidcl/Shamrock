@@ -19,40 +19,55 @@ to an existing one.
 
 ## User side (Python)
 
-For every algorithm that supports it, three functions are exposed on the Python bindings, under
-`shamrock.algs` for `shamalgs` primitives and `shamrock.tree` for `shamtree`'s dual tree
-traversal:
+Every algorithm that supports implementation selection is registered under a name (e.g.
+`"reduction"`, `"scan_exclusive_sum_in_place"`, `"clbvh_dual_tree_traversal"`). The following
+six functions are exposed under `shamrock.algs`, and all except `get_registered_algs` take that
+name as their first argument `alg`:
 
-- `get_default_impl_list_<algo>()` — the list of available implementations.
-- `get_current_impl_<algo>()` — the implementation currently selected.
-- `set_impl_<algo>(...)` — select an implementation.
-- `is_impl_set_<algo>()` — whether an implementation has been selected yet.
-- `autoselect_impl_<algo>()` — select the algorithm's default implementation.
+- `get_registered_algs()`: the sorted list of registered algorithm names.
+- `get_default_impl_list(alg)`: the list of available implementations.
+- `get_current_impl(alg)`: the implementation currently selected.
+- `set_impl(alg, impl)`: select an implementation.
+- `is_impl_set(alg)`: whether an implementation has been selected yet.
+- `autoselect_impl(alg)`: select the algorithm's default implementation.
 
-Implementations are plain JSON config strings of the form
-`{"implementation": "<name>", "parameters": {...}}`. `set_impl_<algo>` takes that whole string
-back.
-
-`is_impl_set_<algo>` / `autoselect_impl_<algo>` matter because `ImplVariantGlobal` has no notion
-of a default until something picks one: some algorithms only pick their default the first time
-they actually run, so `get_current_impl_<algo>()` returns `"null"` until then, unless you call
-`autoselect_impl_<algo>()` yourself first.
+An unknown `alg` raises an exception whose message lists the registered names. The same
+functions cover every algorithm, including `shamtree`'s dual tree traversal.
 
 ```python
 import shamrock
 
-current = shamrock.algs.get_current_impl_scan_exclusive_sum_in_place()
+print(shamrock.algs.get_registered_algs())
+# ['clbvh_dual_tree_traversal', 'compute_histogram', 'is_all_true', 'reduction', ...]
+```
+
+Implementations are plain JSON config strings of the form
+`{"implementation": "<name>", "parameters": {...}}`. `set_impl` takes that whole string back.
+
+`is_impl_set` and `autoselect_impl` matter because an algorithm starts with no implementation
+selected: it only picks its default the first time it actually runs, so `get_current_impl(alg)`
+returns `"null"` until then, unless you call `autoselect_impl(alg)` yourself first. From Python,
+the default is picked for the compute device (`shamsys::instance::get_compute_scheduler_ptr()`),
+so `autoselect_impl` requires the devices to be initialized (`shamrock.sys.init(...)` in library
+mode). The other functions also work before that.
+
+```python
+import shamrock
+
+current = shamrock.algs.get_current_impl("scan_exclusive_sum_in_place")
 print(current)
 # null (nothing selected yet, and the algorithm hasn't run)
 
 # two ways of selecting an implementation manually:
 
 # 1. pick a specific one
-shamrock.algs.set_impl_scan_exclusive_sum_in_place('{"implementation":"std_scan","parameters":{}}')
+shamrock.algs.set_impl(
+    "scan_exclusive_sum_in_place", '{"implementation":"std_scan","parameters":{}}'
+)
 
 # 2. or fall back to the algorithm's own default
-if not shamrock.algs.is_impl_set_scan_exclusive_sum_in_place():
-    shamrock.algs.autoselect_impl_scan_exclusive_sum_in_place()
+if not shamrock.algs.is_impl_set("scan_exclusive_sum_in_place"):
+    shamrock.algs.autoselect_impl("scan_exclusive_sum_in_place")
 ```
 
 If you want to test something against every available implementation, do:
@@ -61,8 +76,8 @@ If you want to test something against every available implementation, do:
 import json
 import shamrock
 
-for impl in shamrock.algs.get_default_impl_list_scan_exclusive_sum_in_place():
-    shamrock.algs.set_impl_scan_exclusive_sum_in_place(impl)
+for impl in shamrock.algs.get_default_impl_list("scan_exclusive_sum_in_place"):
+    shamrock.algs.set_impl("scan_exclusive_sum_in_place", impl)
     name = json.loads(impl)["implementation"]
     print(f"running with {name}")
     # ...
@@ -92,6 +107,7 @@ Use `shamalgs::ImplVariantGlobal`, documented in detail in
 ```cpp
 #include "shamalgs/ImplVariant.hpp"
 #include "shambase/overloaded.hpp"
+#include "shambackends/DeviceScheduler.hpp"
 
 namespace shamalgs::primitives {
 
@@ -105,7 +121,12 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "alt_b";
         };
 
-        shamalgs::ImplVariantGlobal<AltA, AltB> my_algo_impl;
+        /// The lambda picks the default implementation, it may inspect the device behind
+        /// the scheduler or ignore it
+        shamalgs::ImplVariantGlobal<AltA, AltB> my_algo_impl{
+            [](const sham::DeviceScheduler_ptr &, auto &self) {
+                self.set(AltA{});
+            }};
 
         std::vector<std::string> get_default_impl_list_my_algo() {
             return my_algo_impl.get_default_config_list();
@@ -118,13 +139,15 @@ namespace shamalgs::primitives {
         void set_impl_my_algo(const std::string &impl) { my_algo_impl.set(impl); }
 
         /// Called lazily on first use if no implementation was selected yet
-        void autoselect_impl_my_algo() { my_algo_impl.set(AltA{}); }
+        void autoselect_impl_my_algo(const sham::DeviceScheduler_ptr &dev_sched) {
+            my_algo_impl.autoselect(dev_sched);
+        }
 
     } // namespace impl
 
-    void my_algo(...) {
+    void my_algo(const sham::DeviceScheduler_ptr &dev_sched, ...) {
         if (!impl::my_algo_impl.is_set()) {
-            impl::autoselect_impl_my_algo();
+            impl::autoselect_impl_my_algo(dev_sched);
         }
 
         std::visit(
@@ -138,22 +161,33 @@ namespace shamalgs::primitives {
 } // namespace shamalgs::primitives
 ```
 
-`ImplVariantGlobal` has no notion of a default at construction — `is_set()` starts `false`. It is
-up to each call site to decide what to do when unset: the lazy-default pattern above (check
-`is_set()`, autoselect right before dispatching) is what `segmented_sort_in_place` and
-`scan_exclusive_sum_in_place` do, but picking a default eagerly, right where the selector is
-declared, is just as valid when there is no reason to defer it.
+`ImplVariantGlobal` starts unset — `is_set()` is `false` until something selects an
+implementation — but the rule picking its default is given at construction, as a callable of
+signature `void(const sham::DeviceScheduler_ptr &, ImplVariantGlobal &)` that calls `set()` on the
+selector it is handed. `autoselect(dev_sched)` runs it. Both `is_set()` and `autoselect()` are part
+of the non-template `shamalgs::IImplVariant` interface, so code holding a selector type-erased can
+also check and fill it in. The lazy-default pattern above (check `is_set()`, autoselect right
+before dispatching) is what every algorithm currently does.
 
-`autoselect_impl_<algo>` isn't required to take no arguments — `void autoselect_impl_my_algo()` is
-just the common case, when the default only depends on compile-time information (a `#ifdef`
-backend/platform check, e.g. `scan_exclusive_sum_in_place`'s). When the default instead depends on
-something only known at runtime, pass it in as a parameter and thread it through from every call
-site, including the dispatching function itself and the Python binding. `compute_histogram` does
-this: its default depends on the device type of the `sham::DeviceScheduler_ptr` it runs on (a GPU
-device picks a different default than a CPU one), so its autoselect function is
-`autoselect_impl_compute_histogram(const sham::DeviceScheduler_ptr &dev_sched)`, called as
-`impl::autoselect_impl_compute_histogram(dev_sched)` from within `compute_histogram(...)` (which
-already has `dev_sched` on hand), and the Python binding supplies it explicitly:
+`autoselect_impl_<algo>` always takes the `sham::DeviceScheduler_ptr` the algorithm runs on, and
+forwards it to the selector's `autoselect`. Most lambdas ignore it, because the default only
+depends on compile-time information (a `#ifdef` backend/platform check, e.g.
+`scan_exclusive_sum_in_place`'s). When the default depends on the device, the lambda looks at it.
+`compute_histogram` does this: a GPU device picks a different default than a CPU one.
+
+```cpp
+inline shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>
+    compute_histogram_impl{[](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
+        if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
+            self.set(GpuOversubscribe{});
+        } else {
+            self.set(NaiveGpu{});
+        }
+    }};
+```
+
+The dispatching function passes its own scheduler (or `buf.get_dev_scheduler_ptr()` when it only
+gets buffers). The Python binding and unit tests supply the compute scheduler explicitly:
 
 ```cpp
 shamalgs_module.def("autoselect_impl_compute_histogram", []() {
@@ -196,16 +230,16 @@ tells them apart in the resulting config strings, so any code keying results off
 Once the selector and dispatch are in place, wire it up end to end:
 
 1. Header: declare `get_default_impl_list_<algo>`, `get_current_impl_<algo>`,
-   `set_impl_<algo>`, and (if using the lazy-default pattern) `is_impl_set_<algo>` and
-   `autoselect_impl_<algo>` in the algorithm's `impl` namespace.
+   `set_impl_<algo>`, `is_impl_set_<algo>` and
+   `autoselect_impl_<algo>(const sham::DeviceScheduler_ptr &)` in the algorithm's `impl`
+   namespace.
 2. Python bindings (`shampylib/src/pyShamalgs.cpp` or `pyShamtree.cpp`): expose all the
    user-facing functions declared in the header under the relevant submodule.
 3. Unit test: loop over `get_default_impl_list_<algo>()`, calling `set_impl_<algo>` before each
    run, then restore the implementation that was active before the loop.
 4. Benchmark script (`examples/benchmarks/`, if one exists for the algorithm): same loop,
-   extracting the implementation's display name with `json.loads(impl)["implementation"]`; if
-   using the lazy-default pattern, call `autoselect_impl_<algo>()` first when
-   `is_impl_set_<algo>()` is `False`.
+   extracting the implementation's display name with `json.loads(impl)["implementation"]`; call
+   `autoselect_impl_<algo>()` first when `is_impl_set_<algo>()` is `False`.
 
 ## Related files
 
