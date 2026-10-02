@@ -36,6 +36,7 @@
 #include "shamcomm/mpiInfo.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shamsys/MpiDataTypeHandler.hpp"
+#include "shamsys/MpiLifetimeGuard.hpp"
 #include "shamsys/MpiWrapper.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/change_log_format.hpp"
@@ -242,11 +243,18 @@ namespace shamsys::instance {
         syclinit::init_queues(search_key);
     }
 
+    /// Guard of the MPI library lifetime, created by start_mpi and reset by close_mpi
+    std::unique_ptr<MpiLifetimeGuard> mpi_guard;
+
     void start_mpi(MPIInitInfo mpi_info) {
+
+        if (mpi_guard) {
+            throw ShamsysInstanceException("MPI is already started");
+        }
 
         shamcomm::fetch_mpi_capabilities(mpi_info.forced_state);
 
-        mpi::init(&mpi_info.argc, &mpi_info.argv);
+        mpi_guard = std::make_unique<MpiLifetimeGuard>(&mpi_info.argc, &mpi_info.argv);
 
         shamcomm::fetch_world_info();
 
@@ -353,7 +361,7 @@ namespace shamsys::instance {
             logger::raw_ln(" Hopefully it was quick :')\n");
         }
 
-        mpi::finalize();
+        mpi_guard.reset();
     }
 
     void close() {

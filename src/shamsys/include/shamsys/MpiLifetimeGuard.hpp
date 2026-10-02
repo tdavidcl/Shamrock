@@ -12,7 +12,7 @@
 /**
  * @file MpiLifetimeGuard.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief RAII guard tying the MPI library lifetime to a scope
+ * @brief RAII guard of the MPI library lifetime
  */
 
 #include <exception>
@@ -22,32 +22,37 @@ namespace shamsys::instance {
     /**
      * @brief RAII guard of the MPI library lifetime
      *
-     * On destruction, if MPI is initialized and not yet finalized:
+     * The constructor calls `MPI_Init`, unless MPI was already initialized by someone else (e.g.
+     * mpi4py), in which case the guard does not own MPI and leaves its lifetime alone.
+     *
+     * If the guard owns MPI, on destruction (if MPI was not finalized in the meantime):
      *  - if an exception is in flight (the guard is destroyed during stack unwinding), the other
      *    ranks cannot be expected to reach `MPI_Finalize`, so `MPI_Abort` is called to tear down
      *    the whole job instead of leaving it hanging.
-     *  - otherwise MPI is finalized through `shamsys::instance::close_mpi()`.
-     *
-     * If MPI was never started, or was already finalized explicitly (e.g. by
-     * `shamsys::instance::close()`), the destructor does nothing.
+     *  - otherwise `MPI_Finalize` is called.
      *
      * An exception escaping `main` does not necessarily unwind the stack (it is implementation
-     * defined), in which case `std::terminate` is called without running this destructor. To cover
-     * that case the guard also installs, for its own lifetime, a terminate handler that prints the
-     * exception and calls `MPI_Abort` while MPI is alive.
+     * defined), in which case `std::terminate` is called without running any destructor. To cover
+     * that case an owning guard also installs, for its own lifetime, a terminate handler that
+     * prints the exception and calls `MPI_Abort`.
      *
      * Usage:
      * @code{.cpp}
-     * int main(int argc, char *argv[]) {
-     *     shamsys::instance::MpiLifetimeGuard mpi_guard;
-     *     shamsys::instance::init(argc, argv);
-     *     ... do stuff ...
-     * } // MPI_Finalize (or MPI_Abort if an exception is in flight)
+     * std::unique_ptr<MpiLifetimeGuard> mpi_guard;
+     * mpi_guard = std::make_unique<MpiLifetimeGuard>(&argc, &argv); // MPI_Init
+     * ... do stuff ...
+     * mpi_guard.reset(); // MPI_Finalize (or MPI_Abort if an exception is in flight)
      * @endcode
      */
     class MpiLifetimeGuard {
         public:
-        MpiLifetimeGuard();
+        /**
+         * @brief Initialize MPI if it is not already initialized
+         *
+         * @param argc pointer to the number of arguments, forwarded to `MPI_Init`
+         * @param argv pointer to the argument vector, forwarded to `MPI_Init`
+         */
+        MpiLifetimeGuard(int *argc, char ***argv);
         ~MpiLifetimeGuard() noexcept;
 
         MpiLifetimeGuard(const MpiLifetimeGuard &)            = delete;
@@ -56,11 +61,14 @@ namespace shamsys::instance {
         MpiLifetimeGuard &operator=(MpiLifetimeGuard &&)      = delete;
 
         private:
+        /// true if the guard called `MPI_Init`
+        bool owns_mpi = false;
+
         /// Number of uncaught exceptions when the guard was created
         int uncaught_exceptions_at_ctor;
 
         /// Terminate handler that was active before the guard installed its own
-        std::terminate_handler previous_terminate_handler;
+        std::terminate_handler previous_terminate_handler = nullptr;
     };
 
 } // namespace shamsys::instance

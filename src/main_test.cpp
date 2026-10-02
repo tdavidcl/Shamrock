@@ -29,7 +29,6 @@
 #include "shamrock/banner.hpp"
 #include "shamrock/experimental_features.hpp"
 #include "shamsys/MicroBenchmark.hpp"
-#include "shamsys/MpiLifetimeGuard.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/SignalCatch.hpp"
 #include "shamsys/shamrock_smi.hpp"
@@ -121,9 +120,6 @@ int main(int argc, char *argv[]) {
             logger::set_loglevel(i8(a));
         }
     }
-
-    // Finalize MPI when leaving main, or abort the whole MPI job if an exception is in flight
-    shamsys::instance::MpiLifetimeGuard mpi_guard;
 
     if (opts::has_option("--sycl-cfg")) {
         shamsys::instance::init(argc, argv);
@@ -238,6 +234,7 @@ int main(int argc, char *argv[]) {
             logger::warn_ln(
                 "Init", "No sycl configuration (--sycl-cfg x:x) has been set, early exit");
         }
+        shamsys::instance::close_mpi();
         return 0;
     }
 }

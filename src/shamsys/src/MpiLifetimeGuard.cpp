@@ -10,13 +10,13 @@
 /**
  * @file MpiLifetimeGuard.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief RAII guard tying the MPI library lifetime to a scope
+ * @brief RAII guard of the MPI library lifetime
  */
 
 #include "shamsys/MpiLifetimeGuard.hpp"
 #include "shamcomm/mpi.hpp"
 #include "shamcomm/worldInfo.hpp"
-#include "shamsys/NodeInstance.hpp"
+#include "shamsys/MpiWrapper.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -64,16 +64,29 @@ namespace {
 
 namespace shamsys::instance {
 
-    MpiLifetimeGuard::MpiLifetimeGuard()
-        : uncaught_exceptions_at_ctor(std::uncaught_exceptions()),
-          previous_terminate_handler(std::set_terminate(mpi_terminate_handler)) {
-        chained_terminate_handler = previous_terminate_handler;
+    MpiLifetimeGuard::MpiLifetimeGuard(int *argc, char ***argv)
+        : uncaught_exceptions_at_ctor(std::uncaught_exceptions()) {
+
+        if (shamcomm::is_mpi_initialized()) {
+            // someone else started MPI, its lifetime is not ours to manage
+            return;
+        }
+
+        mpi::init(argc, argv);
+        owns_mpi = true;
+
+        previous_terminate_handler = std::set_terminate(mpi_terminate_handler);
+        chained_terminate_handler  = previous_terminate_handler;
     }
 
     MpiLifetimeGuard::~MpiLifetimeGuard() noexcept {
+        if (!owns_mpi) {
+            return;
+        }
+
         std::set_terminate(previous_terminate_handler);
 
-        if (!is_mpi_alive()) {
+        if (shamcomm::is_mpi_finalized()) {
             return;
         }
 
@@ -81,14 +94,7 @@ namespace shamsys::instance {
             mpi_abort("exception in flight while destroying the MPI lifetime guard");
         }
 
-        try {
-            close_mpi();
-        } catch (const std::exception &e) {
-            std::fprintf(stderr, "Exception thrown while finalizing MPI : %s\n", e.what());
-            mpi_abort("MPI finalization failed");
-        } catch (...) {
-            mpi_abort("MPI finalization failed");
-        }
+        mpi::finalize();
     }
 
 } // namespace shamsys::instance
