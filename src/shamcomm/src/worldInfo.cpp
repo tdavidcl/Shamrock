@@ -93,4 +93,10 @@ namespace shamcomm {
         return flag;
     }
 
+    bool is_mpi_finalized() {
+        int flag = false;
+        MPICHECK(MPI_Finalized(&flag));
+        return flag;
+    }
+
 } // namespace shamcomm

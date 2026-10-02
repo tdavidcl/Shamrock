@@ -67,6 +67,15 @@ namespace shamcomm {
      */
     bool is_mpi_initialized();
 
+    /**
+     * @brief Check if MPI is finalized
+     *
+     * This function returns true if MPI_Finalize has been called, false otherwise.
+     *
+     * @return true if MPI is finalized, false otherwise
+     */
+    bool is_mpi_finalized();
+
 } // namespace shamcomm
 
 /// @brief Macro to execute code only on rank 0

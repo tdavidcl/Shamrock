@@ -11,6 +11,7 @@ project(Shamsys CXX C)
 
 set(Sources
     src/NodeInstance.cpp
+    src/MpiLifetimeGuard.cpp
     src/SyclHelper.cpp
     src/SignalCatch.cpp
     src/MicroBenchmark.cpp
