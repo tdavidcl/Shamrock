@@ -36,6 +36,7 @@
 #include "sham/gui/DemoSimulation.hpp"
 #include "sham/gui/GLTexture.hpp"
 #include "sham/gui/GraphPane.hpp"
+#include "sham/gui/GuiClock.hpp"
 #include "sham/gui/ProfilePane.hpp"
 #include "sham/gui/ScriptPane.hpp"
 #include "sham/gui/ViewerPane.hpp"
@@ -131,8 +132,7 @@ namespace sham::gui {
         std::map<char, bool> visible{
             {'v', true}, {'g', true}, {'s', true}, {'f', false}}; // profile pane off by default
         GLTexture logo;
-        bool deterministic;
-        long long frame = 0;
+        GuiClock clock; // fixed 60 fps virtual clock for --screenshot / --bench, else wall clock
         int frames_left, bench_frames;
         double ui_scale    = 1.0; // applied at the start of each frame
         bool style_applied = false, first_frame = true, need_layout = true, layout_from_cli = false;
@@ -144,19 +144,19 @@ namespace sham::gui {
         double bytes_per_s = 0; // preview traffic estimate (all panes)
 
         App(std::string layout_, bool screenshot_, int frames, int bench)
-            : lay(parse_lay(layout_)), deterministic(screenshot_ || bench > 0), frames_left(frames),
+            : lay(parse_lay(layout_)), clock(screenshot_ || bench > 0), frames_left(frames),
               bench_frames(bench), screenshot(screenshot_) {
-            last_time = now();
+            last_time = clock.now();
         }
         // panes keep callbacks into the app (see post_init), so it must stay where it is
         App(const App &)            = delete;
         App &operator=(const App &) = delete;
 
+        // wall clock, for the --bench CPU timings
         static double wall() {
             using namespace std::chrono;
             return duration<double>(steady_clock::now().time_since_epoch()).count();
         }
-        double now() const { return deterministic ? double(frame) / 60.0 : wall(); }
 
         void post_init() {
             viewer.on_field_change = [this] {
@@ -249,7 +249,7 @@ namespace sham::gui {
 
         // --- data --------------------------------------------------------------
         void refresh_previews(bool force = false) {
-            double t    = now();
+            double t    = clock.now();
             double sent = viewer.refresh(sim, t, force);
             sent += graph.refresh(sim, t, force);
             profile.refresh(sim, t, force, visible['f']);
@@ -270,8 +270,8 @@ namespace sham::gui {
 
         void gui() {
             double t0 = wall();
-            double t  = now();
-            sim.advance(deterministic ? 1.0 / 60.0 : t - last_time);
+            double t  = clock.now();
+            sim.advance(clock.deterministic ? 1.0 / 60.0 : t - last_time);
             last_time = t;
             refresh_previews();
             double t1 = wall();
@@ -354,7 +354,7 @@ namespace sham::gui {
                     timings["frame"].push_back(t0 - prev_frame_start);
                 prev_frame_start = t0;
             }
-            frame += 1;
+            clock.end_frame();
             if (screenshot || bench_frames)
                 if (--frames_left <= 0)
                     want_exit = true;
@@ -1184,7 +1184,7 @@ namespace sham::gui {
         void status_bar(SDL *dl, double X, double Y, double W) {
             dl->AddRectFilled(V(X, Y), V(X + W, Y + STATUS_H), C::PANEL);
             dl->AddLine(V(X, Y + 0.5), V(X + W, Y + 0.5), C::DIVIDER);
-            double cy = Y + STATUS_H / 2, wob = std::sin(now() * 0.7);
+            double cy = Y + STATUS_H / 2, wob = std::sin(clock.now() * 0.7);
             // start allow utf-8
             std::string left[3]
                 = {"8 MPI ranks · control on rank 0",
