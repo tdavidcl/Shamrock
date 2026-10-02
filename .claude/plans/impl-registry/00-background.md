@@ -1,5 +1,10 @@
 # Implementation registry: shared background
 
+> **Historical record.** All 6 steps have landed (see `README.md`). The "current code" sections
+> and line numbers below describe `adb21e5`, before the registry existed. For the current API
+> read `src/shamalgs/include/shamalgs/impl_registry.hpp` and
+> `doc/sphinx/source/dev_doc/implementation_selection.md`.
+
 This file is the shared context for every step of the implementation-registry work in
 `.claude/plans/impl-registry/`. You were handed this file plus **one** step file
 (`step-N-*.md`). Implement only that step; the other steps are separate PRs.
