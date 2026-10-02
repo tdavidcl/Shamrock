@@ -129,7 +129,8 @@ namespace shambase {
      * the source location.
      */
     template<class ExcptTypes>
-    inline void throw_with_loc(std::string message, SourceLocation loc = SourceLocation{}) {
+    [[noreturn]] inline void throw_with_loc(
+        std::string message, SourceLocation loc = SourceLocation{}) {
         throw make_except_with_loc<ExcptTypes>(message + exception_format(loc));
     }
 
@@ -150,7 +151,7 @@ namespace shambase {
      * @throw std::runtime_error The exception with a message saying that the
      * function is unimplemented, and the source location.
      */
-    inline void throw_unimplemented(SourceLocation loc = SourceLocation{}) {
+    [[noreturn]] inline void throw_unimplemented(SourceLocation loc = SourceLocation{}) {
         throw_with_loc<std::runtime_error>("unimplemented", loc);
     }
 
@@ -172,7 +173,8 @@ namespace shambase {
      * @throw std::runtime_error The exception with a message saying that the
      * function is unimplemented, the given message, and the source location.
      */
-    inline void throw_unimplemented(std::string message, SourceLocation loc = SourceLocation{}) {
+    [[noreturn]] inline void throw_unimplemented(
+        std::string message, SourceLocation loc = SourceLocation{}) {
         throw_with_loc<std::runtime_error>(message + "\nunimplemented", loc);
     }
 

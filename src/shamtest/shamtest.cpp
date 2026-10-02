@@ -600,6 +600,7 @@ namespace shamtest {
             case LongValidationTest: return "LongValidationTest";
             case Unittest          : return "Unittest";
             }
+            shambase::throw_unimplemented("unknown TestType");
         };
 
         auto get_arg = [](TestType t) -> std::string {
@@ -610,6 +611,7 @@ namespace shamtest {
             case LongValidationTest: return "--long-test --validation";
             case Unittest          : return "--unittest";
             }
+            shambase::throw_unimplemented("unknown TestType");
         };
 
         auto get_test_name = [&](Test t, int ranks) -> std::string {

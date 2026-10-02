@@ -19,6 +19,7 @@
 #include "ConversionConstants.hpp"
 #include "Names.hpp"
 #include <cmath>
+#include <stdexcept>
 
 /// Macro to add a unit getter
 #define addget(uname)                                                                              \
@@ -294,6 +295,7 @@ namespace shamunits {
             case units::erg              : return get<pref, units::erg>(); break;
             case units::pint             : return get<pref, units::pint>(); break;
             }
+            throw std::invalid_argument("unknown unit name");
         }
 
         inline T getter_2(UnitPrefix pref, units::UnitName name) {
@@ -314,6 +316,7 @@ namespace shamunits {
             case pico : return getter_1<pico>(name); break;
             case femto: return getter_1<femto>(name); break;
             }
+            throw std::invalid_argument("unknown unit prefix");
         }
 
         public:

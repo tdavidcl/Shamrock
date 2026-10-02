@@ -15,6 +15,7 @@
 
 #include "TestResult.hpp"
 #include "shambase/bytestream.hpp"
+#include "shambase/exception.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtest/details/TestAssertList.hpp"
@@ -37,6 +38,7 @@ namespace shamtest::details {
             case LongValidationTest: return "LongValidationTest";
             case Unittest          : return "Unittest";
             }
+            shambase::throw_unimplemented("unknown TestType");
         };
 
         auto get_str = [&]() -> std::string {
