@@ -60,45 +60,62 @@ namespace sham::gui {
         ImGui::End();
     }
 
-    /// Command-line options of shamrock_gui.
+    /// Command-line options of shamrock_gui: the flags as given, and what follows from them.
     struct CliArgs {
-        /// --screenshot: save PNG of window before exit, empty for an interactive run
+        /// --screenshot PATH: save a PNG of the window before exiting (an empty PATH is ignored)
         std::optional<std::string> screenshot = std::nullopt;
 
-        /// frames rendered before exiting: --frames N (default 45) with --screenshot, empty for an
-        /// interactive run
-        std::optional<int> frames_before_exit = std::nullopt;
+        /// --frames N: frames rendered before saving the screenshot
+        std::optional<int> frames = std::nullopt;
 
-        /// set when main must return right away (usage printed)
-        std::optional<int> exit_code = std::nullopt;
+        /// -h / --help
+        std::optional<bool> is_help = std::nullopt;
+
+        /// first unrecognised argument (parsing stops there)
+        std::optional<std::string> unknown_arg = std::nullopt;
 
         /// false for headless runs (--screenshot): deterministic clock, no vsync, no .ini
         bool interactive_mode() const { return !screenshot; }
+
+        /// frames rendered before exiting: --frames (default 45) with --screenshot, empty for an
+        /// interactive run
+        std::optional<int> frames_before_exit() const {
+            if (screenshot)
+                return frames.value_or(45);
+            return std::nullopt;
+        }
+
+        /// set when main must print the usage and return right away
+        std::optional<int> exit_code() const {
+            if (is_help.value_or(false))
+                return 0;
+            if (unknown_arg)
+                return 1;
+            return std::nullopt;
+        }
     };
 
-    /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
+    /// Parse argv into CliArgs; stops at -h / --help or at the first unknown option.
     static CliArgs parse_cli(int argc, char **argv) {
         CliArgs cli;
-        std::optional<int> frames;
         for (int i = 1; i < argc; ++i) {
             std::string a = argv[i];
             auto next     = [&]() {
                 return i + 1 < argc ? std::string(argv[++i]) : std::string();
             };
             if (a == "--screenshot") {
-                // an empty path keeps the interactive mode
                 if (std::string path = next(); !path.empty())
                     cli.screenshot = path;
-            } else if (a == "--frames")
-                frames = std::stoi(next());
-            else {
-                std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
-                cli.exit_code = a == "-h" || a == "--help" ? 0 : 1;
-                return cli;
+            } else if (a == "--frames") {
+                cli.frames = std::stoi(next());
+            } else if (a == "-h" || a == "--help") {
+                cli.is_help = true;
+                break;
+            } else {
+                cli.unknown_arg = a;
+                break;
             }
         }
-        if (cli.screenshot)
-            cli.frames_before_exit = frames.value_or(45);
         return cli;
     }
 
@@ -107,8 +124,10 @@ namespace sham::gui {
 int main(int argc, char **argv) {
     using namespace sham::gui;
     const CliArgs cli = parse_cli(argc, argv);
-    if (cli.exit_code)
-        return *cli.exit_code;
+    if (std::optional<int> code = cli.exit_code()) {
+        std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
+        return *code;
+    }
 
     if (!glfwInit()) {
         return 1;
@@ -145,7 +164,7 @@ int main(int argc, char **argv) {
         gui();
         gui_clock.end_frame();
         const bool want_exit
-            = cli.frames_before_exit && gui_clock.frame_counter >= *cli.frames_before_exit;
+            = cli.frames_before_exit() && gui_clock.frame_counter >= *cli.frames_before_exit();
         // temporary: something moving to check --screenshot, removed with the real panes
         {
             const double t = gui_clock.now();
