@@ -79,7 +79,23 @@ set_property(TARGET shamrock_pylib PROPERTY POSITION_INDEPENDENT_CODE ON)
 add_executable(shamrock_exe main.cpp)
 target_link_libraries(shamrock_exe PUBLIC pybind11::embed)
 
+# The python bindings are registered by static initializers in the Shamrock libraries, which are
+# never referenced directly by the executables and the python module. Linkers defaulting to
+# --as-needed (e.g. gcc on Debian/Ubuntu) would otherwise drop those libraries, leaving the python
+# module empty.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.18)
+    include(CheckLinkerFlag)
+    check_linker_flag(CXX "LINKER:--no-as-needed" SHAMROCK_LINKER_HAS_NO_AS_NEEDED)
+endif()
+
+function(shamrock_keep_all_linked_libs tgt)
+    if(SHAMROCK_LINKER_HAS_NO_AS_NEEDED)
+        target_link_options(${tgt} PRIVATE "LINKER:--no-as-needed")
+    endif()
+endfunction()
+
 function(target_link_lib_and_install tgt)
+    shamrock_keep_all_linked_libs(${tgt})
     target_link_libraries(${tgt} PUBLIC nlohmann_json::nlohmann_json)
 
     target_link_libraries(${tgt} PUBLIC ${as_subproject})
@@ -164,6 +180,7 @@ if("${BUILD_TEST}")
     target_link_libraries(shamrock_test PUBLIC nlohmann_json::nlohmann_json)
 
     target_link_libraries(shamrock_test PUBLIC ${as_subproject})
+    shamrock_keep_all_linked_libs(shamrock_test)
 
     target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/src")
     #target_include_directories(shamrock_test PUBLIC "${CMAKE_SOURCE_DIR}/external")
