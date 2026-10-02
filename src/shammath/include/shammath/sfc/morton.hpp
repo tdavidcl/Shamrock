@@ -25,10 +25,9 @@
 
 namespace shamrock::sfc {
 
+    /// Only specialized for u32 & u64 (see below)
     template<class morton_t>
-    struct MortonInfo {
-        static constexpr morton_t err_code;
-    };
+    struct MortonInfo {};
 
     template<>
     struct MortonInfo<u32> {
