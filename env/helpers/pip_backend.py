@@ -34,7 +34,8 @@ Supported ``[tool.shamrock-env]`` keys:
 Supported config settings (``pip install -C key=value``):
 
 * ``builddir``: build directory to use (kept after the build, allows incremental rebuilds when
-  used with ``--no-build-isolation``)
+  used with ``--no-build-isolation``). By default a temporary directory is used and removed
+  once the wheel is built
 * ``jobs``: parallel build jobs, forwarded to the generator through ``MAKE_OPT``
 """
 
@@ -197,15 +198,11 @@ def _sanitize_rpaths(root):
         _log(f"RUNPATH of {f.name}: {':'.join(keep) or '<removed>'}")
 
 
-def _build(config_settings, stagedir):
+def _build(config_settings, builddir, stagedir):
     config_settings = config_settings or {}
     pyproject = _load_pyproject()
     cfg = pyproject["tool"]["shamrock-env"]
 
-    if config_settings.get("builddir"):
-        builddir = Path(config_settings["builddir"]).expanduser().resolve()
-    else:
-        builddir = Path(tempfile.mkdtemp(prefix="shamrock-pip-build-"))
     _log(f"build directory: {builddir}")
 
     env = dict(os.environ)
@@ -352,7 +349,21 @@ def prepare_metadata_for_build_wheel(metadata_directory, config_settings=None):
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     info = _project_info(_load_pyproject())
-    with tempfile.TemporaryDirectory(prefix="shamrock-pip-stage-") as stagedir:
-        stagedir = Path(stagedir)
-        _build(config_settings, stagedir)
-        return _pack_wheel(stagedir, info, wheel_directory)
+
+    # A user provided build directory is kept (incremental rebuilds), a temporary one is removed
+    if config_settings and config_settings.get("builddir"):
+        builddir = Path(config_settings["builddir"]).expanduser().resolve()
+        tmp_builddir = None
+    else:
+        tmp_builddir = tempfile.mkdtemp(prefix="shamrock-pip-build-")
+        builddir = Path(tmp_builddir)
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="shamrock-pip-stage-") as stagedir:
+            stagedir = Path(stagedir)
+            _build(config_settings, builddir, stagedir)
+            return _pack_wheel(stagedir, info, wheel_directory)
+    finally:
+        if tmp_builddir is not None:
+            _log(f"removing temporary build directory: {tmp_builddir}")
+            shutil.rmtree(tmp_builddir, ignore_errors=True)
