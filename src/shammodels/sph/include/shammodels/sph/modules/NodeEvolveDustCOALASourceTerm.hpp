@@ -24,12 +24,16 @@
 #include <experimental/mdspan>
 #include <vector>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                     \
+#define NODE_EDGES(X_RO, X_RW, X_RO_OPTIONAL, X_RW_OPTIONAL)                                       \
     /* scalars */                                                                                  \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, rhodust_eps)                                     \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dv_max)                                          \
     X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, massgrid)                           \
     X_RO(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, tensor_tabflux_coag)                \
+                                                                                                   \
+    /* fragmentation (optional, both or none) */                                                   \
+    X_RO_OPTIONAL(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, tensor_tabflux_frag_T1)    \
+    X_RO_OPTIONAL(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, tensor_tabflux_frag_T2)    \
                                                                                                    \
     /* counts */                                                                                   \
     X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
@@ -55,7 +59,7 @@ namespace shammodels::sph::modules {
         public:
         NodeEvolveDustCOALASourceTerm(u32 nbins) : nbins(nbins) {}
 
-        EXPAND_NODE_EDGES(NODE_EDGES)
+        EXPAND_NODE_EDGES_OPTIONAL(NODE_EDGES)
 
         void _impl_evaluate_internal();
 

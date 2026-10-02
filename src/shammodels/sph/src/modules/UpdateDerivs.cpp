@@ -47,6 +47,7 @@
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include <memory>
+#include <optional>
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
@@ -1288,6 +1289,21 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
         tabflux_coag->data = cfg_evol->tabflux_coag;
 
+        using OptTabEdge
+            = std::optional<std::shared_ptr<shamrock::solvergraph::IDataEdge<std::vector<Tscal>>>>;
+
+        auto make_opt_tab_edge = [](const std::optional<std::vector<Tscal>> &tab) -> OptTabEdge {
+            if (!tab) {
+                return std::nullopt;
+            }
+            auto edge  = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
+            edge->data = *tab;
+            return edge;
+        };
+
+        OptTabEdge tabflux_frag_T1 = make_opt_tab_edge(cfg_evol->tabflux_frag_T1);
+        OptTabEdge tabflux_frag_T2 = make_opt_tab_edge(cfg_evol->tabflux_frag_T2);
+
         auto rhodust_eps  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("", "");
         rhodust_eps->data = cfg_evol->rhodust_eps;
 
@@ -1326,7 +1342,16 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             gpart_mass, part_counts, hpart_refs, grad_P_on_rho, s_j_refs, t_j_field, delta_v);
 
         node->set_edges(
-            rhodust_eps, dv_max, massgrid, tabflux_coag, part_counts, s_j_refs, delta_v, S_coag);
+            rhodust_eps,
+            dv_max,
+            massgrid,
+            tabflux_coag,
+            tabflux_frag_T1,
+            tabflux_frag_T2,
+            part_counts,
+            s_j_refs,
+            delta_v,
+            S_coag);
 
         node_add_source_term->set_edges(
             part_counts, rhodust_eps, dt_hydro_edge, S_coag, s_j_refs, ds_j_dt_refs);

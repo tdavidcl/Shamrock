@@ -138,6 +138,95 @@ namespace shamphys {
     }
 
     /**
+     * @brief Coagulation-fragmentation flux at bin right edges for a ballistic kernel (\f$k=0\f$)
+     *
+     * Evaluates the flux approximation at the right boundary of each mass bin,
+     * \f$\mathrm{flux}[j] \approx F(m_{j+1/2})\f$, by summing over all bin pairs
+     * \f$(l, m)\f$:
+     *
+     * \f[
+     *     \mathrm{flux}[j] = \sum_{l,m}
+     *         \left(
+     *             \mathrm{tensor\_tabflux\_coag}[j,l,m]
+     *             - \mathrm{tensor\_tabflux\_frag\_T1}[j,l,m]
+     *             - \mathrm{tensor\_tabflux\_frag\_T2}[j,l,m]
+     *         \right)
+     *         \mathrm{dv\_frag}(l,m)\, g_l\, g_m
+     * \f]
+     *
+     * Equivalent to the NumPy contraction
+     * `einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv_frag, gij, gij)
+     *  - (einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv_frag, gij, gij)
+     *     + einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv_frag, gij, gij))`.
+     *
+     * @p gij, the flux tensors and @p flux are expected to share the same scalar element type.
+     *
+     * @tparam Func  Callable invoked as `dv_frag(l, m)` returning the differential velocity
+     *               between bins \f$l\f$ and \f$m\f$
+     * @param nbins                   Number of dust mass bins
+     * @param gij                     Rank-1 `std::mdspan` (`shambase::is_mdspan_rank<1>`) of DG
+     *                                coefficients \f$g_l\f$; extent @p nbins
+     * @param tensor_tabflux_coag     Rank-3 `std::mdspan` (`shambase::is_mdspan_rank<3>`) of
+     *                                precomputed coagulation flux entries; extents
+     *                                @p nbins \(\times\) @p nbins \(\times\) @p nbins
+     * @param tensor_tabflux_frag_T1  Rank-3 `std::mdspan` of precomputed fragmentation flux
+     *                                entries (first term); same extents
+     * @param tensor_tabflux_frag_T2  Rank-3 `std::mdspan` of precomputed fragmentation flux
+     *                                entries (second term); same extents
+     * @param dv_frag                 Pair-wise differential-velocity callable
+     * @param flux                    Rank-1 `std::mdspan` (`shambase::is_mdspan_rank<1>`) of
+     *                                output fluxes; extent @p nbins, written in place
+     */
+    template<class Func>
+        requires requires(Func f, int a, int b) {
+            { f(a, b) };
+        }
+    inline void compute_flux_coag_frag_k0_kdv(
+        int nbins,
+        shambase::is_mdspan_rank<1> auto gij,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_coag,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T1,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T2,
+        Func &&dv_frag,
+        shambase::is_mdspan_rank<1> auto flux) {
+
+        SHAM_ASSERT(gij.extent(0) == nbins);
+        SHAM_ASSERT(flux.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(2) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(2) == nbins);
+
+        // initialize flux to 0
+        for (int j = 0; j < nbins; ++j) {
+            flux[j] = 0;
+        }
+
+        /*
+         * Python version:
+         * flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv_frag, gij, gij)
+         *        - ( np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv_frag, gij, gij)
+         *            + np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv_frag, gij, gij))
+         */
+
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = 0; m < nbins; ++m) {
+                auto term = dv_frag(l, m) * gij[l] * gij[m];
+                for (int j = 0; j < nbins; ++j) {
+                    flux[j] += (tensor_tabflux_coag(j, l, m) - tensor_tabflux_frag_T1(j, l, m)
+                                - tensor_tabflux_frag_T2(j, l, m))
+                               * term;
+                }
+            }
+        }
+    }
+
+    /**
      * @brief Convert interface fluxes to a mass-bin coagulation source term
      *
      * Applies the DG \f$k=0\f$ divergence operator (finite difference across bin
@@ -190,4 +279,32 @@ namespace shamphys {
         shamphys::coala_flux_diff(flux, S_coag);
     }
 
+    template<class T, class FuncDv, class FuncRhoDust>
+    void coala_k0_source_term(
+        int nbins,
+        /* inputs */
+        FuncDv &&dv,
+        FuncRhoDust &&rho_dust,
+        T rho_eps,
+        shambase::is_mdspan_rank<1> auto massgrid,
+        /* COALA inputs */
+        shambase::is_mdspan_rank<3> auto tabflux_coag,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T1,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T2,
+        /* internal */
+        shambase::is_mdspan_rank<1> auto gij,
+        shambase::is_mdspan_rank<1> auto flux,
+        /* output */
+        shambase::is_mdspan_rank<1> auto S_coag) {
+
+        // init the gij coefficients
+        shamphys::compute_gij_k0(rho_dust, rho_eps, massgrid, gij);
+
+        // compute flux for all dust bins
+        shamphys::compute_flux_coag_frag_k0_kdv(
+            nbins, gij, tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, flux);
+
+        // compute flux diff and store result
+        shamphys::coala_flux_diff(flux, S_coag);
+    }
 } // namespace shamphys

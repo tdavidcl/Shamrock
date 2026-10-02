@@ -387,58 +387,80 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal rhodust_eps,
                Tscal dv_max,
                std::vector<Tscal> massgrid,
-               py::array_t<Tscal> tabflux_coag) {
+               py::array_t<Tscal> tabflux_coag,
+               std::optional<py::array_t<Tscal>> tabflux_frag_T1,
+               std::optional<py::array_t<Tscal>> tabflux_frag_T2) {
                 if (massgrid.size() == 0) {
                     throw shambase::make_except_with_loc<std::invalid_argument>(
                         "massgrid must not be empty");
                 }
 
+                if (tabflux_frag_T1.has_value() != tabflux_frag_T2.has_value()) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "tabflux_frag_T1 and tabflux_frag_T2 must be either both set or both "
+                        "unset");
+                }
+
                 u32 nbins = massgrid.size() - 1;
 
-                // tabflux_coag is a 3D array of shape (nbins ** 3)
+                // convert a 3D array of shape (nbins, nbins, nbins) to a flat vector
+                auto tab_to_vec = [nbins](py::array_t<Tscal> &tab, const std::string &name) {
+                    // assert rank is 3
+                    if (tab.ndim() != 3) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            name + " must be a 3D array, got ndim=" + std::to_string(tab.ndim()));
+                    }
 
-                // assert rank is 3
-                if (tabflux_coag.ndim() != 3) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(
-                        "tabflux_coag must be a 3D array, got ndim="
-                        + std::to_string(tabflux_coag.ndim()));
-                }
+                    // assert shape is (nbins, nbins, nbins)
+                    if (tab.shape(0) != nbins || tab.shape(1) != nbins || tab.shape(2) != nbins) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            name
+                            + " must be a 3D array of shape (nbins, nbins, nbins) with "
+                              "nbins="
+                            + std::to_string(nbins) + " (massgrid.size() - 1), got shape ("
+                            + std::to_string(tab.shape(0)) + ", " + std::to_string(tab.shape(1))
+                            + ", " + std::to_string(tab.shape(2)) + ")");
+                    }
 
-                // assert shape is (nbins, nbins, nbins)
-                if (tabflux_coag.shape(0) != nbins || tabflux_coag.shape(1) != nbins
-                    || tabflux_coag.shape(2) != nbins) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(
-                        "tabflux_coag must be a 3D array of shape (nbins, nbins, nbins) with "
-                        "nbins="
-                        + std::to_string(nbins) + " (massgrid.size() - 1), got shape ("
-                        + std::to_string(tabflux_coag.shape(0)) + ", "
-                        + std::to_string(tabflux_coag.shape(1)) + ", "
-                        + std::to_string(tabflux_coag.shape(2)) + ")");
-                }
+                    std::vector<Tscal> tab_vec(nbins * nbins * nbins);
 
-                std::vector<Tscal> tabflux_coag_vec(nbins * nbins * nbins);
+                    using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
+                    mdspan_rank_3 tab_mdspan(tab_vec.data(), nbins, nbins, nbins);
 
-                using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
-                mdspan_rank_3 tabflux_coag_mdspan(tabflux_coag_vec.data(), nbins, nbins, nbins);
-
-                for (u32 i = 0; i < nbins; i++) {
-                    for (u32 j = 0; j < nbins; j++) {
-                        for (u32 k = 0; k < nbins; k++) {
-                            tabflux_coag_mdspan(i, j, k) = tabflux_coag.mutable_at(i, j, k);
+                    for (u32 i = 0; i < nbins; i++) {
+                        for (u32 j = 0; j < nbins; j++) {
+                            for (u32 k = 0; k < nbins; k++) {
+                                tab_mdspan(i, j, k) = tab.mutable_at(i, j, k);
+                            }
                         }
                     }
-                }
+
+                    return tab_vec;
+                };
+
+                auto opt_tab_to_vec
+                    = [&](std::optional<py::array_t<Tscal>> &tab,
+                          const std::string &name) -> std::optional<std::vector<Tscal>> {
+                    if (!tab) {
+                        return std::nullopt;
+                    }
+                    return tab_to_vec(*tab, name);
+                };
 
                 self.dust_config.set_dust_evol_coala(
-                    {.rhodust_eps  = rhodust_eps,
-                     .dv_max       = dv_max,
-                     .massgrid     = massgrid,
-                     .tabflux_coag = tabflux_coag_vec});
+                    {.rhodust_eps     = rhodust_eps,
+                     .dv_max          = dv_max,
+                     .massgrid        = massgrid,
+                     .tabflux_coag    = tab_to_vec(tabflux_coag, "tabflux_coag"),
+                     .tabflux_frag_T1 = opt_tab_to_vec(tabflux_frag_T1, "tabflux_frag_T1"),
+                     .tabflux_frag_T2 = opt_tab_to_vec(tabflux_frag_T2, "tabflux_frag_T2")});
             },
             py::arg("rhodust_eps"),
             py::arg("dv_max"),
             py::arg("massgrid"),
-            py::arg("tabflux_coag"))
+            py::arg("tabflux_coag"),
+            py::arg("tabflux_frag_T1") = std::nullopt,
+            py::arg("tabflux_frag_T2") = std::nullopt)
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {
