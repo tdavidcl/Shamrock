@@ -19,6 +19,7 @@
 #include "shambase/string.hpp"
 #include "sham/term/tty.hpp"
 #include "shambindings/pybindaliases.hpp"
+#include "shambindings/pybindings.hpp"
 #include <pybind11/eval.h>
 #include <pybind11/iostream.h>
 #include <pybind11/pybind11.h>
