@@ -47,7 +47,7 @@ namespace sham {
         static constexpr T get_zero() { return 0; }
     };
 
-    template<class T, u32 dim>
+    template<class T, int dim>
     struct VectorProperties<sycl::vec<T, dim>> {
         using component_type           = T;
         static constexpr u32 dimension = dim;
