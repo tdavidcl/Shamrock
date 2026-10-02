@@ -157,6 +157,10 @@ def _copy_shared_libs(srcdir, destdir):
     if not srcdir.is_dir():
         raise RuntimeError(f"bundle-libs directory does not exist: {srcdir}")
     for f in srcdir.rglob("*"):
+        # unversioned development symlinks (libfoo.so -> libfoo.so.1.2.3) are only used at link
+        # time, the versioned file they point to is bundled
+        if f.is_symlink() and f.name.endswith(".so"):
+            continue
         if f.is_file() and re.search(r"\.so(\.\d+)*$", f.name):
             dest = Path(destdir) / f.relative_to(srcdir)
             dest.parent.mkdir(parents=True, exist_ok=True)

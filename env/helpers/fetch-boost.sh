@@ -38,12 +38,15 @@ EOF
 
     if [ ! -f "$BOOST_INSTALL_DIR/include/boost/version.hpp" ]; then
         echo " ------ Building Boost (context, fiber) ------ "
+        # Shared libraries are required: with omp.library-only the fiber based nd_range execution
+        # is compiled into every Shamrock library, a static Boost would then end up duplicated in
+        # each of them (with separate fiber schedulers, which deadlocks group barriers)
         cmake -S "$BOOST_SRC_DIR" -B "$BOOST_BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$BOOST_INSTALL_DIR" \
+            -DCMAKE_INSTALL_LIBDIR=lib \
             -DBOOST_INCLUDE_LIBRARIES="context;fiber" \
-            -DBUILD_SHARED_LIBS=Off \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=On \
+            -DBUILD_SHARED_LIBS=On \
             -DBUILD_TESTING=Off || return
         cmake --build "$BOOST_BUILD_DIR" || return
         cmake --install "$BOOST_BUILD_DIR" || return
