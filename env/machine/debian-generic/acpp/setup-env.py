@@ -25,8 +25,23 @@ def setup(arg: SetupArg, envgen: EnvGen):
     parser.add_argument("--backend", action="store", help="sycl backend to use")
     parser.add_argument("--arch", action="store", help="arch to build")
     parser.add_argument("--gen", action="store", help="generator to use (ninja or make)")
+    parser.add_argument(
+        "--self-contained",
+        action="store_true",
+        help="do not rely on a system LLVM or Boost: Boost is built from source and AdaptiveCpp "
+        "is built without its clang plugin (only the omp.library-only backend is available)",
+    )
 
     args = parser.parse_args(argv)
+
+    if args.self_contained:
+        if args.backend == None:
+            args.backend = "omp.library-only"
+        elif args.backend != "omp.library-only":
+            raise ValueError(
+                "--self-contained only supports the omp.library-only backend "
+                "(the other backends require the AdaptiveCpp clang plugin, hence LLVM)"
+            )
 
     acpp_target = utils.acpp.get_acpp_target_env(args)
     if acpp_target == None:
@@ -42,6 +57,14 @@ def setup(arg: SetupArg, envgen: EnvGen):
     elif lib_mode == "object":
         cmake_extra_args += " -DSHAMROCK_USE_SHARED_LIB=Off"
 
+    acpp_cmake_opt = ""
+    if args.self_contained:
+        acpp_cmake_opt += " -DACPP_COMPILER_FEATURE_PROFILE=none"
+        acpp_cmake_opt += " -DWITH_CUDA_BACKEND=Off"
+        acpp_cmake_opt += " -DWITH_ROCM_BACKEND=Off"
+        acpp_cmake_opt += " -DWITH_OPENCL_BACKEND=Off"
+        acpp_cmake_opt += " -DWITH_LEVEL_ZERO_BACKEND=Off"
+
     envgen.export_list = {
         "SHAMROCK_DIR": shamrockdir,
         "BUILD_DIR": builddir,
@@ -52,10 +75,13 @@ def setup(arg: SetupArg, envgen: EnvGen):
         "SHAMROCK_BUILD_TYPE": f"'{cmake_build_type}'",
         "SHAMROCK_CXX_FLAGS": "\" --acpp-targets='" + acpp_target + "'\"",
         "SPHINX_VENV_DIR": builddir + "/.sphinxvenv",
+        "ACPP_FETCH_BOOST": "On" if args.self_contained else "Off",
+        "ACPP_CMAKE_OPT": f"({acpp_cmake_opt})",
     }
 
     envgen.ext_script_list = [
         shamrockdir + "/env/helpers/clone-acpp.sh",
+        shamrockdir + "/env/helpers/fetch-boost.sh",
         shamrockdir + "/env/helpers/pull_reffiles.sh",
         shamrockdir + "/env/helpers/sphinx.sh",
     ]

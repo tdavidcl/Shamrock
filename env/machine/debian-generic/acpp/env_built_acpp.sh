@@ -14,9 +14,21 @@ export ACPP_BUILD_DIR=$BUILD_DIR/.env/acpp-builddir
 export ACPP_INSTALL_DIR=$BUILD_DIR/.env/acpp-installdir
 export ACPP_DEBUG_LEVEL=0
 
+# Only used if ACPP_FETCH_BOOST=On (--self-contained)
+export BOOST_VERSION=1.88.0
+export BOOST_SRC_DIR=$BUILD_DIR/.env/boost-src
+export BOOST_BUILD_DIR=$BUILD_DIR/.env/boost-builddir
+export BOOST_INSTALL_DIR=$BUILD_DIR/.env/boost-installdir
+
 function setupcompiler {
+    local acpp_cmake_opt=("${ACPP_CMAKE_OPT[@]}")
+    if [ "$ACPP_FETCH_BOOST" = "On" ]; then
+        setup_boost || return
+        acpp_cmake_opt+=(-DBoost_ROOT=${BOOST_INSTALL_DIR} -DBoost_NO_SYSTEM_PATHS=On)
+    fi
+
     clone_acpp || return
-    cmake -S ${ACPP_GIT_DIR} -B ${ACPP_BUILD_DIR} ${CCACHE_CMAKE_ARG} -DCMAKE_INSTALL_PREFIX=${ACPP_INSTALL_DIR} || return
+    cmake -S ${ACPP_GIT_DIR} -B ${ACPP_BUILD_DIR} ${CCACHE_CMAKE_ARG} -DCMAKE_INSTALL_PREFIX=${ACPP_INSTALL_DIR} "${acpp_cmake_opt[@]}" || return
     (cd ${ACPP_BUILD_DIR} && $MAKE_EXEC "${MAKE_OPT[@]}" && $MAKE_EXEC install) || return
 }
 

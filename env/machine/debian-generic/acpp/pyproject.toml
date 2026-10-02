@@ -1,0 +1,33 @@
+# Build a self-contained Shamrock wheel for the debian-generic.acpp env using only pip:
+#
+#     pip install ./env/machine/debian-generic/acpp
+#
+# Only a C++ compiler, git, and a python with its headers are needed from the system:
+# cmake, ninja and MPI (Open MPI) come from PyPI, Boost is built from source and AdaptiveCpp is
+# built without its LLVM-based compiler (omp.library-only backend, see `--self-contained` in
+# setup-env.py). AdaptiveCpp's runtime libraries are bundled in the wheel.
+#
+# Optional settings (pip install -C key=value ...):
+#   -C builddir=<path>   keep the build directory (reuse it with --no-build-isolation)
+#   -C jobs=<n>          number of parallel build jobs
+#
+# See env/helpers/pip_backend.py for the details.
+
+[build-system]
+requires = ["cmake>=3.24", "ninja", "openmpi>=5,<6", "tomli; python_version<'3.11'"]
+build-backend = "_pip_backend"
+backend-path = ["."]
+
+[project]
+name = "shamrock"
+dynamic = ["version"]
+description = "SHAMROCK Code for astrophysics"
+requires-python = ">=3.8"
+# libmpi is not bundled, it is loaded from the openmpi wheel at runtime
+dependencies = ["openmpi>=5,<6"]
+
+[tool.shamrock-env]
+machine = "debian-generic.acpp"
+env-args = ["--self-contained"]
+mpi-dist = "openmpi"
+bundle-libs = ["$ACPP_INSTALL_DIR/lib"]
