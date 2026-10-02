@@ -11,7 +11,8 @@ then:
    into a staging directory,
 3. bundles the runtime libraries listed in ``[tool.shamrock-env] bundle-libs``
    (e.g. AdaptiveCpp's) next to the Shamrock libraries,
-4. packs everything into a wheel.
+4. strips the absolute (build-time) entries from the RUNPATHs (requires ``patchelf``),
+5. packs everything into a wheel.
 
 The wheel uses the same layout as the legacy ``pip install .`` from a build directory
 (see ``env/helpers/_pysetup.py``):
@@ -163,6 +164,39 @@ def _copy_shared_libs(srcdir, destdir):
             _log(f"bundled {f} -> {dest}")
 
 
+def _is_elf(path):
+    with open(path, "rb") as f:
+        return f.read(4) == b"\x7fELF"
+
+
+def _sanitize_rpaths(root):
+    """Keep only the $ORIGIN relative RUNPATH entries of the ELF files in root
+
+    The build leaves absolute paths in the RUNPATHs (pip's temporary build environment, the
+    AdaptiveCpp & Boost install directories in the build directory, ...). They must not end up in
+    the wheel: everything needed at runtime is found relative to $ORIGIN.
+    """
+    patchelf = shutil.which("patchelf")
+    if patchelf is None:
+        raise RuntimeError("patchelf is required to fix the RUNPATHs of the wheel libraries")
+
+    for f in sorted(Path(root).rglob("*")):
+        if f.is_symlink() or not f.is_file() or not _is_elf(f):
+            continue
+        rpath = subprocess.run(
+            [patchelf, "--print-rpath", str(f)], check=True, stdout=subprocess.PIPE, text=True
+        ).stdout.strip()
+        entries = [e for e in rpath.split(":") if e]
+        keep = list(dict.fromkeys(e for e in entries if e.startswith("$ORIGIN")))
+        if keep == entries:
+            continue
+        if keep:
+            subprocess.run([patchelf, "--set-rpath", ":".join(keep), str(f)], check=True)
+        else:
+            subprocess.run([patchelf, "--remove-rpath", str(f)], check=True)
+        _log(f"RUNPATH of {f.name}: {':'.join(keep) or '<removed>'}")
+
+
 def _build(config_settings, stagedir):
     config_settings = config_settings or {}
     pyproject = _load_pyproject()
@@ -232,6 +266,9 @@ def _build(config_settings, stagedir):
         dirs = out.split("@@SHAMROCK_BUNDLE@@", 1)[1].split()
         for d in dirs:
             _copy_shared_libs(d, datadir / "lib")
+
+    _sanitize_rpaths(datadir)
+    _sanitize_rpaths(platlib)
 
 
 def _record_hash(data):

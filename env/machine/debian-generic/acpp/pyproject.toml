@@ -14,7 +14,13 @@
 # See env/helpers/pip_backend.py for the details.
 
 [build-system]
-requires = ["cmake>=3.24", "ninja", "openmpi>=5,<6", "tomli; python_version<'3.11'"]
+requires = [
+    "cmake>=3.24",
+    "ninja",
+    "openmpi>=5,<6",
+    "patchelf",
+    "tomli; python_version<'3.11'",
+]
 build-backend = "_pip_backend"
 backend-path = ["."]
 
