@@ -144,7 +144,7 @@ namespace shamalgs::numeric::details {
         }
 
         if (idxs.empty()) {
-            return {{}, 0};
+            return {std::nullopt, 0};
         }
 
         return {memory::vec_to_buf(idxs), idxs.size()};

@@ -49,7 +49,7 @@ namespace shamalgs::numeric::details {
         shamlog_debug_sycl_ln("StreamCompact", "number of element : ", new_len);
 
         if (new_len == 0) {
-            return {{}, 0};
+            return {std::nullopt, 0};
         }
 
         constexpr u32 group_size = 256;
