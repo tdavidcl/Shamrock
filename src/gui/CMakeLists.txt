@@ -7,7 +7,7 @@
 
 # Shamrock control GUI (Dear ImGui docking + GLFW + OpenGL 3), built with -DSHAMROCK_BUILD_GUI=ON.
 # Its dependencies are set up in cmake/ShamConfigureGUILibs.cmake.
-# For now it only shows an empty dock area and is not linked against any Shamrock library.
+# Not linked against any Shamrock library yet: it runs on demo data only.
 
 cmake_minimum_required(VERSION 3.9...3.10)
 
@@ -22,9 +22,11 @@ add_library(
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imgui_color_text_edit_SOURCE_DIR}/TextEditor.cpp
 )
 target_include_directories(
     shamrock_gui_imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends
+                              ${imgui_color_text_edit_SOURCE_DIR}
 )
 target_link_libraries(shamrock_gui_imgui PUBLIC glfw OpenGL::GL)
 # OpenGL is deprecated on macOS (10.14+) but still works; silence the per-call warnings until the
@@ -32,11 +34,45 @@ target_link_libraries(shamrock_gui_imgui PUBLIC glfw OpenGL::GL)
 if(APPLE)
     target_compile_definitions(shamrock_gui_imgui PUBLIC GL_SILENCE_DEPRECATION)
 endif()
+if(SHAMROCK_GUI_FREETYPE AND FREETYPE_FOUND)
+    target_sources(shamrock_gui_imgui PRIVATE ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp)
+    target_compile_definitions(shamrock_gui_imgui PUBLIC IMGUI_ENABLE_FREETYPE)
+    target_link_libraries(shamrock_gui_imgui PUBLIC Freetype::Freetype)
+    message(STATUS "shamrock_gui fonts: FreeType")
+else()
+    message(STATUS "shamrock_gui fonts: stb_truetype")
+endif()
 
-set(sources src/main.cpp src/screenshot.cpp)
+set(sources
+    src/main.cpp
+    src/DemoSimulation.cpp
+    src/GraphPane.cpp
+    src/ProfilePane.cpp
+    src/ScriptPane.cpp
+    src/screenshot.cpp
+    src/ViewerPane.cpp
+)
 add_executable(shamrock_gui ${sources})
-
 target_include_directories(
     shamrock_gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${stb_SOURCE_DIR}
 )
 target_link_libraries(shamrock_gui PRIVATE shamrock_gui_imgui)
+if(MSVC)
+    target_compile_options(shamrock_gui PRIVATE /utf-8)
+    target_compile_options(shamrock_gui_imgui PRIVATE /utf-8)
+endif()
+
+# Fonts and logo next to the executable (the app also looks in ./assets).
+# The logo is the one from the documentation.
+set(SHAMROCK_GUI_LOGO ${CMAKE_SOURCE_DIR}/doc/mkdocs/docs/assets/no_background_nocolor.png)
+add_custom_command(
+    TARGET shamrock_gui
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_LOGO}
+            $<TARGET_FILE_DIR:shamrock_gui>/assets/shamrock_logo.png
+    COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_FONTS}
+            $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy ${SHAMROCK_GUI_FONTS_LICENSE}
+            $<TARGET_FILE_DIR:shamrock_gui>/assets/fonts/OFL.txt
+)

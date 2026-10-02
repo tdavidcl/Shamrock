@@ -10,24 +10,43 @@
 /**
  * @file main.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Shamrock control GUI: for now a Dear ImGui (docking branch) frame loop showing an empty
- * dock area that fills the window, with a headless test mode (deterministic 60 fps clock for
- * --screenshot).
+ * @brief Shamrock control GUI: C++ app with dockable panes (Dear ImGui docking branch).
  *
- * Interactive runs remember the dock arrangement in shamrock_gui_layout.ini.
+ * Four panes (Viewer, Graph, Script, Profile) live in one dock area arranged by kitty-style layouts
+ * (Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits). Tabs can be dragged onto drop targets,
+ * dividers resized; interactive runs remember everything in shamrock_gui_layout.ini. All data is
+ * demo data from DemoSimulation (deterministic 60 fps clock and SplitMix64 seeds for --screenshot /
+ * --bench).
  *
  * Usage:
  *
  *     ./shamrock_gui                        interactive
+ *     ./shamrock_gui --layout NAME          stack|tall|fat|grid|horizontal|vertical|splits
+ *     ./shamrock_gui --profile              start with the Profile pane shown
+ *     ./shamrock_gui --ui-scale 1.5         start at 150 %
  *     ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
+ *     ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
  *
  */
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_internal.h" // DockBuilder API (layout presets)
+#include "sham/gui/DemoSimulation.hpp"
+#include "sham/gui/GLTexture.hpp"
+#include "sham/gui/GraphPane.hpp"
 #include "sham/gui/GuiClock.hpp"
+#include "sham/gui/ProfilePane.hpp"
+#include "sham/gui/ScriptPane.hpp"
+#include "sham/gui/ViewerPane.hpp"
+#include "sham/gui/colormap.hpp"
+#include "sham/gui/font.hpp"
+#include "sham/gui/format.hpp"
+#include "sham/gui/icons.hpp"
 #include "sham/gui/screenshot.hpp"
+#include "sham/gui/style.hpp"
+#include "sham/gui/ui.hpp"
 #include <GLFW/glfw3.h>
 #if defined(__APPLE__)
     #include <OpenGL/gl3.h>
@@ -35,29 +54,1241 @@
     #include <GL/gl.h>
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+// scalar path only: the NEON code uses C99 compound literals, rejected by -pedantic-errors, and the
+// logo is resized once at startup
+#define STBIR_NO_SIMD
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize2.h"
+#include <unordered_map>
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <deque>
+#include <filesystem>
+#include <functional>
+#include <map>
+#include <numeric>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace sham::gui {
 
-    /// Build one frame: a full-screen host window holding the dock area.
-    void gui() {
-        const ImGuiViewport *vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(vp->Pos);
-        ImGui::SetNextWindowSize(vp->Size);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
-                                 | ImGuiWindowFlags_NoSavedSettings
-                                 | ImGuiWindowFlags_NoBringToFrontOnFocus
-                                 | ImGuiWindowFlags_NoScrollWithMouse;
-        // no padding or border, so the dock area covers the whole window
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::Begin("##shamrock_main", nullptr, flags);
-        ImGui::PopStyleVar(2);
-        ImGui::DockSpace(ImGui::GetID("##body_dockspace"), ImVec2(0, 0));
-        ImGui::End();
+    namespace fs             = std::filesystem;
+    static fs::path g_assets = "assets";
+
+    // ============================================================================
+    //  Application
+    // ============================================================================
+    // Kitty-style layouts. The dockspace is the single "tab"; every layout except Splits is
+    // recomputed from the ordered list of visible panes, Splits is the free-form tree the user
+    // builds by dragging.
+    enum class Lay { Stack, Tall, Fat, Grid, Horizontal, Vertical, Splits };
+    static const char *LAY_ID[7]
+        = {"stack", "tall", "fat", "grid", "horizontal", "vertical", "splits"};
+    static const char *LAY_NAME[7]
+        = {"Stack", "Tall", "Fat", "Grid", "Horizontal", "Vertical", "Splits"};
+    static Lay parse_lay(const std::string &s) {
+        for (int i = 0; i < 7; ++i)
+            if (s == LAY_ID[i])
+                return Lay(i);
+        if (s == "columns")
+            return Lay::Horizontal; // names of the old presets
+        if (s == "rows")
+            return Lay::Fat;
+        return Lay::Tall;
+    }
+    struct PaneRect {
+        double x, y, w, h;
+    };
+
+    struct App {
+        DemoSimulation sim;
+        // panes
+        ViewerPane viewer;
+        GraphPane graph;
+        ScriptPane script;
+        ProfilePane profile;
+        // layout state
+        Lay lay = Lay::Tall, lay_before_stack = Lay::Tall;
+        float bias    = 0.6f;  // Tall / Fat: share of the main area
+        int full_size = 1;     // Tall / Fat: panes in the main area
+        bool mirrored = false; // Tall: main on the right, Fat: main at the bottom
+        std::vector<char> order{
+            'g', 'v', 's', 'f'}; // pane order; the first panes are the "main" ones
+        char focused = 'g', pending_focus = 0;
+        int place        = 0; // new panes: 0 after focused, 1 before focused, 2 first, 3 last
+        int split_axis   = 0; // Splits, new panes: 0 auto (longer side), 1 side by side, 2 stacked
+        ImGuiID dock_id_ = 0;
+        ImVec2 body_px_{};
+        std::string built_sig;
+        bool sig_pending = false, profile_from_cli = false;
+        std::map<char, bool> visible{
+            {'v', true}, {'g', true}, {'s', true}, {'f', false}}; // profile pane off by default
+        GLTexture logo;
+        GuiClock clock; // fixed 60 fps virtual clock for --screenshot / --bench, else wall clock
+        int frames_left, bench_frames;
+        double ui_scale    = 1.0; // applied at the start of each frame
+        bool style_applied = false, first_frame = true, need_layout = true, layout_from_cli = false;
+        std::map<char, bool> was_visible{{'v', true}, {'g', true}, {'s', true}, {'f', false}};
+        bool screenshot, want_exit = false;
+        std::map<std::string, std::vector<double>> timings{
+            {"update", {}}, {"ui", {}}, {"frame", {}}};
+        double prev_frame_start = -1, last_time = 0;
+        double bytes_per_s = 0; // preview traffic estimate (all panes)
+
+        App(std::string layout_, bool screenshot_, int frames, int bench)
+            : lay(parse_lay(layout_)), clock(screenshot_ || bench > 0), frames_left(frames),
+              bench_frames(bench), screenshot(screenshot_) {
+            last_time = clock.now();
+        }
+        // panes keep callbacks into the app (see post_init), so it must stay where it is
+        App(const App &)            = delete;
+        App &operator=(const App &) = delete;
+
+        // wall clock, for the --bench CPU timings
+        static double wall() {
+            using namespace std::chrono;
+            return duration<double>(steady_clock::now().time_since_epoch()).count();
+        }
+
+        void post_init() {
+            viewer.on_field_change = [this] {
+                refresh_previews(true);
+            };
+            viewer.create_textures();
+            graph.create_textures();
+            int lw, lh, ch;
+            unsigned char *px
+                = stbi_load((g_assets / "shamrock_logo.png").string().c_str(), &lw, &lh, &ch, 4);
+            IM_ASSERT(px && "logo not found: run from the project folder or pass --assets");
+            // The logo is the full-resolution one from the docs; downscale it once to the size the
+            // top bar was designed for, since textures have no mipmaps to minify it cleanly.
+            const int logo_tex_h = 96, logo_tex_w = int(std::lround(double(lw) * logo_tex_h / lh));
+            std::vector<unsigned char> logo_px(size_t(logo_tex_w) * logo_tex_h * 4);
+            stbir_resize_uint8_srgb(
+                px, lw, lh, 0, logo_px.data(), logo_tex_w, logo_tex_h, 0, STBIR_RGBA);
+            logo.create(logo_tex_w, logo_tex_h, logo_px.data());
+            stbi_image_free(px);
+            script.init();
+            refresh_previews(true);
+        }
+
+        static inline ImGuiStyle base_style;
+
+        static void setup_style() {
+            ImGuiStyle &style                    = ImGui::GetStyle();
+            style.FramePadding                   = ImVec2(12, 6); // dock tab height = font + 2 * 6
+            style.TabRounding                    = 0;
+            style.TabBarBorderSize               = 1;
+            style.TabBarOverlineSize             = 2;
+            style.TabBorderSize                  = 0;
+            style.DockingSeparatorSize           = 1;
+            style.WindowMenuButtonPosition       = ImGuiDir_None;
+            style.TabCloseButtonMinWidthSelected = 0; // close cross only when hovered
+            style.TabCloseButtonMinWidthUnselected  = 0;
+            style.WindowPadding                     = ImVec2(0, 0);
+            style.WindowBorderSize                  = 0;
+            style.ChildBorderSize                   = 0;
+            style.WindowRounding                    = 0;
+            style.ScrollbarSize                     = 10;
+            style.ScrollbarRounding                 = 4;
+            style.ItemSpacing                       = ImVec2(0, 0);
+            const std::pair<ImGuiCol, ImU32> cols[] = {
+                {ImGuiCol_WindowBg, C::APP_BG},
+                {ImGuiCol_ChildBg, C::CANVAS},
+                {ImGuiCol_ScrollbarBg, C::CANVAS},
+                {ImGuiCol_ScrollbarGrab, C::BORDER},
+                {ImGuiCol_ScrollbarGrabHovered, C::NODE_BORDER},
+                {ImGuiCol_ScrollbarGrabActive, C::MUTED},
+                {ImGuiCol_Text, C::TEXT},
+                {ImGuiCol_PopupBg, C::PANEL},
+                {ImGuiCol_Border, C::BORDER},
+                {ImGuiCol_TextSelectedBg, rgba("#e8a33d", 0.25)},
+                // docking: tab bars, drop preview, dividers
+                {ImGuiCol_TitleBg, C::PANEL},
+                {ImGuiCol_TitleBgActive, C::PANEL},
+                {ImGuiCol_TitleBgCollapsed, C::PANEL},
+                {ImGuiCol_Tab, C::PANEL},
+                {ImGuiCol_TabHovered, C::BUTTON},
+                {ImGuiCol_TabSelected, C::CANVAS},
+                {ImGuiCol_TabSelectedOverline, C::ACCENT},
+                {ImGuiCol_TabDimmed, C::PANEL},
+                {ImGuiCol_TabDimmedSelected, C::CANVAS},
+                {ImGuiCol_TabDimmedSelectedOverline, rgba("#e8a33d", 0.35)},
+                {ImGuiCol_DockingPreview, rgba("#e8a33d", 0.30)},
+                {ImGuiCol_DockingEmptyBg, C::CANVAS},
+                {ImGuiCol_Separator, C::DIVIDER},
+                {ImGuiCol_SeparatorHovered, rgba("#e8a33d", 0.6)},
+                {ImGuiCol_SeparatorActive, C::ACCENT},
+                {ImGuiCol_Button, 0},
+                {ImGuiCol_ButtonHovered, C::ROW_HL},
+                {ImGuiCol_ButtonActive, C::ACCENT_BG},
+                {ImGuiCol_FrameBg, C::BUTTON},
+            };
+            for (auto &[k, v] : cols)
+                style.Colors[k] = ImGui::ColorConvertU32ToFloat4(v);
+            base_style = style;
+        }
+
+        // ImGui's own widgets (dock tabs, dividers, drop overlay, scrollbars) follow the UI scale
+        // too.
+        static void apply_scale(double s) {
+            ImGuiStyle &style = ImGui::GetStyle();
+            style             = base_style;
+            style.ScaleAllSizes(float(s));
+            style.FontSizeBase         = float(13 * s);
+            style.DockingSeparatorSize = std::max(1.0f, float(s));
+        }
+
+        // --- data --------------------------------------------------------------
+        void refresh_previews(bool force = false) {
+            double t    = clock.now();
+            double sent = viewer.refresh(sim, t, force);
+            sent += graph.refresh(sim, t, force);
+            profile.refresh(sim, t, force, visible['f']);
+            if (sent != 0)
+                bytes_per_s = bytes_per_s != 0 ? 0.8 * bytes_per_s + 0.2 * sent : sent;
+        }
+
+        // --- frame -------------------------------------------------------------
+        // Called before ImGui::NewFrame(): ImGui reads the base font size (used by dock tabs) at
+        // NewFrame.
+        void pre_frame() {
+            if (UI::scale != ui_scale || !style_applied) {
+                UI::scale = ui_scale;
+                apply_scale(UI::scale);
+                style_applied = true;
+            }
+        }
+
+        void gui() {
+            double t0 = wall();
+            double t  = clock.now();
+            sim.advance(clock.deterministic ? 1.0 / 60.0 : t - last_time);
+            last_time = t;
+            refresh_previews();
+            double t1 = wall();
+
+            const ImGuiViewport *vp = ImGui::GetMainViewport();
+            UI::origin              = vp->Pos;
+            g_sdl_next              = 0;
+            ImGui::SetNextWindowPos(vp->Pos);
+            ImGui::SetNextWindowSize(vp->Size);
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
+                                     | ImGuiWindowFlags_NoSavedSettings
+                                     | ImGuiWindowFlags_NoBringToFrontOnFocus
+                                     | ImGuiWindowFlags_NoScrollWithMouse;
+            ImGui::Begin("##shamrock_main", nullptr, flags);
+            double W = vp->Size.x / UI::scale, H = vp->Size.y / UI::scale, X = vp->Pos.x,
+                   Y = vp->Pos.y; // logical
+            SDL *dl  = window_draw_list();
+
+            PaneRect body{X, Y + TOP_H, W, H - TOP_H - STATUS_H};
+            const ImGuiID dock_id = ImGui::GetID("##body_dockspace");
+            const ImVec2 body_px  = V(body.w * UI::scale, body.h * UI::scale);
+            dock_id_              = dock_id;
+            body_px_              = body_px;
+            if (first_frame) { // Splits keeps its saved tree; the other layouts are recomputed from
+                               // the pane list
+                ImGuiDockNode *node = ImGui::DockBuilderGetNode(dock_id);
+                need_layout
+                    = layout_from_cli || lay != Lay::Splits || !node || !node->IsSplitNode();
+                first_frame = false;
+            }
+            handle_shortcuts();
+            top_bar(dl, X, Y, W);
+            apply_pending_tree();
+            on_visibility_changes();
+            if (need_layout) {
+                build_layout(
+                    lay == Lay::Splits ? Lay::Tall : lay); // a fresh Splits tree starts from Tall
+                need_layout = false;
+            }
+            bool any = visible['v'] || visible['g'] || visible['s'] || visible['f'];
+            drop_central_node(dock_id);
+            dl->AddRectFilled(V(body.x, body.y), V(body.x + body.w, body.y + body.h), C::CANVAS);
+            set_cursor(V(body.x, body.y));
+            ImGui::PushStyleColor(
+                ImGuiCol_WindowBg, C::DIVIDER); // idle divider colour (docking uses WindowBg)
+            ImGui::DockSpace(
+                dock_id, body_px, any ? ImGuiDockNodeFlags_None : ImGuiDockNodeFlags_KeepAliveOnly);
+            ImGui::PopStyleColor();
+            if (!any) {
+                std::string msg
+                    = "All panes are hidden. Turn one back on from the toggles in the top bar.";
+                double mw = text_w(g_fonts.sans, 14, msg);
+                draw_text_vc(
+                    dl,
+                    g_fonts.sans,
+                    14,
+                    body.x + (body.w - mw) / 2,
+                    body.y + body.h / 2,
+                    C::MUTED,
+                    msg);
+            }
+            status_bar(dl, X, Y + H - STATUS_H, W);
+
+            set_cursor(V(X, Y));
+            ImGui::Dummy(ImVec2(0, 0));
+            ImGui::End();
+
+            for (char key : {'v', 'g', 's', 'f'})
+                if (visible[key])
+                    dock_pane(key);
+            for (char key : {'v', 'g', 's', 'f'})
+                was_visible[key] = visible[key];
+            after_panes();
+
+            double t2 = wall();
+            if (bench_frames) {
+                timings["update"].push_back(t1 - t0);
+                timings["ui"].push_back(t2 - t1);
+                if (prev_frame_start >= 0)
+                    timings["frame"].push_back(t0 - prev_frame_start);
+                prev_frame_start = t0;
+            }
+            clock.end_frame();
+            if (screenshot || bench_frames)
+                if (--frames_left <= 0)
+                    want_exit = true;
+        }
+
+        // --- top bar -----------------------------------------------------------
+        void top_bar(SDL *dl, double X, double Y, double W) {
+            dl->AddRectFilled(V(X, Y), V(X + W, Y + TOP_H), C::PANEL);
+            dl->AddLine(V(X, Y + TOP_H - 0.5), V(X + W, Y + TOP_H - 0.5), C::DIVIDER);
+            double cy = Y + TOP_H / 2;
+
+            double lx = X + 16, logo_h = 34.0, logo_w = logo_h * logo.w / logo.h;
+            dl->AddImage(logo.ref, V(lx, cy - logo_h / 2), V(lx + logo_w, cy + logo_h / 2));
+            const std::string script = "run_sedov.py";
+            double name_w            = 12 + 13 + text_w(g_fonts.mono, 12, script);
+
+            // measure everything, then drop the least important parts until it fits the (logical)
+            // width
+            std::string pill_name = "gpu-node-042", pill_via = "ssh";
+            std::string layout_label = LAY_NAME[int(lay)];
+            double group_w           = 2 + 32 * 4 + 2 * 3 + 2 + 2;
+            double scale_w           = 24 + text_w(g_fonts.mono, 12, "000%");
+            std::pair<std::string, std::string> readouts[3]
+                = {{"step", fmt_thousands(sim.step)},
+                   {"t", fmt("%.3e", sim.t)},
+                   {"dt", fmt("%.2e", sim.dt())}};
+            std::string run_label = sim.running ? "Running" : "Paused";
+            double run_w          = 14 + 14 + 8 + text_w(g_fonts.semibold, 13, run_label) + 14;
+            double ro_w           = 18 * 2;
+            for (auto &[k, v] : readouts)
+                ro_w += text_w(g_fonts.mono, 12, k + " " + v);
+            double buttons_w = run_w + 6 + 36 * 3 + 6 * 2;
+            // levels: (show readouts, compact layout button + pill, show script name)
+            const bool levels[4][3]
+                = {{true, false, true},
+                   {false, false, true},
+                   {false, true, true},
+                   {false, true, false}};
+            bool show_ro = true, compact = false, show_name = true;
+            double pill_w = 0, lay_w = 0, right_w = 0, rx = 0, left_end = 0, centre_w = 0;
+            for (auto &lv : levels) {
+                show_ro   = lv[0];
+                compact   = lv[1];
+                show_name = lv[2];
+                pill_w    = 12 + 8 + 8 + text_w(g_fonts.mono, 12, pill_name) + 12;
+                lay_w     = 12 + 18 + 8 + 12 + 12;
+                if (!compact) {
+                    pill_w += 8 + text_w(g_fonts.sans, 12, pill_via);
+                    lay_w += text_w(g_fonts.sans, 12, layout_label) + 8;
+                }
+                right_w  = scale_w + 10 + group_w + 10 + lay_w + 10 + pill_w + 10 + 36;
+                rx       = X + W - 16 - right_w;
+                left_end = lx + logo_w + (show_name ? name_w : 0);
+                centre_w = buttons_w + (show_ro ? 16 + ro_w : 0);
+                if (left_end + 24 + centre_w + 24 <= rx)
+                    break;
+            }
+            if (show_name) {
+                double nx = lx + logo_w + 12;
+                dl->AddLine(V(nx, cy - 10), V(nx, cy + 10), C::BORDER);
+                draw_text_vc(dl, g_fonts.mono, 12, nx + 13, cy, C::TEXT_3, script);
+            }
+
+            double cx = std::max(left_end + 24, left_end + (rx - left_end - centre_w) / 2);
+
+            Hit r = hit("##run", cx, cy - 18, run_w, 36);
+            dl->AddRectFilled(
+                V(cx, cy - 18),
+                V(cx + run_w, cy + 18),
+                r.hovered ? lighten(C::ACCENT, 10) : C::ACCENT,
+                6);
+            if (sim.running)
+                icon_play(dl, cx + 14 + 6, cy, C::ON_ACCENT, 6);
+            else
+                icon_pause(dl, cx + 14 + 7, cy, C::ON_ACCENT);
+            draw_text_vc(dl, g_fonts.semibold, 13, cx + 14 + 14 + 8, cy, C::ON_ACCENT, run_label);
+            if (r.clicked)
+                sim.running = !sim.running;
+            double bx = cx + run_w + 6;
+            struct Ctl {
+                const char *name;
+                void (*icon)(SDL *, double, double, ImU32);
+            };
+            const Ctl ctls[3]
+                = {{"Pause", icon_pause}, {"Step once", icon_step}, {"Stop", icon_stop}};
+            for (const Ctl &c : ctls) {
+                std::string id = std::string("##") + c.name;
+                if (framed_button(dl, id.c_str(), bx, cy - 18, 36, 36, C::BUTTON, C::BORDER, 6)) {
+                    sim.running = false;
+                    if (!std::strcmp(c.name, "Step once")) {
+                        sim.step += 1;
+                        sim.t += sim.dt();
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                    tooltip(c.name);
+                c.icon(dl, bx + 18, cy, C::TEXT);
+                bx += 36 + 6;
+            }
+            double tx = bx + 10;
+            for (auto &[k, v] : readouts) {
+                if (!show_ro)
+                    break;
+                draw_text_vc(dl, g_fonts.mono, 12, tx, cy, C::TEXT_3, k + " ");
+                double kw = text_w(g_fonts.mono, 12, k + " ");
+                draw_text_vc(dl, g_fonts.mono, 12, tx + kw, cy, C::TEXT, v);
+                tx += text_w(g_fonts.mono, 12, k + " " + v) + 18;
+            }
+
+            scale_control(dl, rx, cy, scale_w);
+            double gx = rx + scale_w + 10;
+            dl->AddRectFilled(V(gx, cy - 18), V(gx + group_w, cy + 18), C::CANVAS, 8);
+            dl->AddRect(V(gx + 0.5, cy - 17.5), V(gx + group_w - 0.5, cy + 17.5), C::BORDER, 8);
+            double px = gx + 3;
+            struct Tog {
+                char key;
+                void (*icon)(SDL *, double, double, ImU32);
+                const char *tip;
+            };
+            const Tog togs[4]
+                = {{'v', icon_viewer, "viewer pane"},
+                   {'g', icon_graph, "graph pane"},
+                   {'s', icon_code, "script pane"},
+                   {'f', icon_flame, "profile pane"}};
+            for (const Tog &tg : togs) {
+                bool on        = visible[tg.key];
+                std::string id = std::string("##toggle_") + tg.key;
+                Hit h          = hit(id.c_str(), px, cy - 16, 32, 32);
+                if (on)
+                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), C::ACCENT_BG, 6);
+                else if (h.hovered)
+                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), C::BUTTON, 6);
+                tg.icon(dl, px + 16, cy, on ? C::ACCENT : C::DIM);
+                if (h.hovered)
+                    tooltip((std::string(on ? "Hide " : "Show ") + tg.tip).c_str());
+                if (h.clicked)
+                    visible[tg.key] = !on;
+                px += 32 + 2;
+            }
+            double lx2 = gx + group_w + 10;
+            if (framed_button(dl, "##layout", lx2, cy - 18, lay_w, 36, C::BUTTON, C::BORDER, 6))
+                ImGui::OpenPopup("##layout_menu");
+            // start allow utf-8
+            if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##layout_menu"))
+                tooltip("Layout  ·  ctrl+shift+L cycles");
+            // end allow utf-8
+            layout_menu(lx2, cy + 22);
+            icon_layout(dl, lx2 + 12 + 9, cy, C::TEXT, int(lay));
+            if (!compact)
+                draw_text_vc(dl, g_fonts.sans, 12, lx2 + 12 + 18 + 8, cy, C::TEXT, layout_label);
+            icon_chevron(dl, lx2 + lay_w - 12 - 6, cy, C::MUTED);
+            double ppx = lx2 + lay_w + 10;
+            dl->AddRectFilled(V(ppx, cy - 16), V(ppx + pill_w, cy + 16), C::PILL_BG, 16);
+            dl->AddRect(
+                V(ppx + 0.5, cy - 15.5), V(ppx + pill_w - 0.5, cy + 15.5), C::PILL_BORDER, 16);
+            dl->AddCircleFilled(V(ppx + 16, cy), 4, C::TEAL);
+            draw_text_vc(dl, g_fonts.mono, 12, ppx + 28, cy, C::PILL_TEXT, pill_name);
+            if (!compact)
+                draw_text_vc(
+                    dl,
+                    g_fonts.sans,
+                    12,
+                    ppx + 28 + text_w(g_fonts.mono, 12, pill_name) + 8,
+                    cy,
+                    C::TEAL_TEXT,
+                    pill_via);
+            double sx = ppx + pill_w + 10;
+            framed_button(dl, "##settings", sx, cy - 18, 36, 36, C::BUTTON, C::BORDER, 6);
+            if (ImGui::IsItemHovered())
+                tooltip("Connection settings");
+            icon_gear(dl, sx + 18, cy, C::TEXT_3);
+        }
+
+        // Rounded percentage box: scroll over it to change the UI scale, click to reset to 100 %.
+        void scale_control(SDL *dl, double x, double cy, double w) {
+            const double h = 28.0;
+            Hit r          = hit("##ui_scale", x, cy - h / 2, w, h);
+            dl->AddRectFilled(
+                V(x, cy - h / 2),
+                V(x + w, cy + h / 2),
+                r.hovered ? C::BUTTON : C::CANVAS,
+                float(h / 2));
+            dl->AddRect(
+                V(x + 0.5, cy - h / 2 + 0.5),
+                V(x + w - 0.5, cy + h / 2 - 0.5),
+                r.hovered ? C::ACCENT : C::BORDER,
+                float(h / 2));
+            std::string label = std::to_string(int(std::nearbyint(UI::scale * 100))) + "%";
+            draw_text_vc(
+                dl,
+                g_fonts.mono,
+                12,
+                x + (w - text_w(g_fonts.mono, 12, label)) / 2,
+                cy,
+                r.hovered ? C::TEXT : C::TEXT_3,
+                label);
+            if (r.hovered) {
+                float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f) {
+                    double steps = std::nearbyint(UI::scale / UI::STEP) + (wheel > 0 ? 1 : -1);
+                    ui_scale     = std::min(UI::MAX, std::max(UI::MIN, steps * UI::STEP));
+                }
+                // start allow utf-8
+                tooltip("UI scale · scroll to change · click to reset");
+                // end allow utf-8
+            }
+            if (r.clicked)
+                ui_scale = 1.0;
+        }
+
+        // --- layout ------------------------------------------------------------
+        // --- docking ---------------------------------------------------------
+        static const char *pane_window(char key) {
+            return key == 'v'   ? "Viewer###pane_v"
+                   : key == 'g' ? "Graph###pane_g"
+                   : key == 's' ? "Script###pane_s"
+                                : "Profile###pane_f";
+        }
+
+        std::vector<char> visible_order() {
+            std::vector<char> v;
+            for (char k : order)
+                if (visible[k])
+                    v.push_back(k);
+            return v;
+        }
+        static char key_of(const ImGuiWindow *w) {
+            for (char k : {'v', 'g', 's', 'f'})
+                if (!std::strcmp(w->Name, pane_window(k)))
+                    return k;
+            return 0;
+        }
+
+        // Computed layouts. Hidden panes are left out; showing one rebuilds with it included.
+        void build_layout(Lay l) {
+            const ImGuiID dock_id   = dock_id_;
+            std::vector<char> panes = visible_order();
+            const int n             = int(panes.size());
+            undock_hidden();
+            ImGui::DockBuilderRemoveNode(dock_id);
+            ImGui::DockBuilderAddNode(dock_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dock_id, body_px_);
+            auto dock = [&](char k, ImGuiID id) {
+                ImGui::DockBuilderDockWindow(pane_window(k), id);
+            };
+            auto slots = [&](ImGuiID node, int k, ImGuiAxis axis) { // k equal slots along an axis
+                std::vector<ImGuiID> ids;
+                for (int i = 0; i < k - 1; ++i)
+                    ids.push_back(
+                        ImGui::DockBuilderSplitNode(
+                            node,
+                            axis == ImGuiAxis_X ? ImGuiDir_Left : ImGuiDir_Up,
+                            1.0f / float(k - i),
+                            nullptr,
+                            &node));
+                ids.push_back(node);
+                return ids;
+            };
+            auto row = [&](ImGuiID node, const std::vector<char> &ps, ImGuiAxis axis) {
+                auto ids = slots(node, int(ps.size()), axis);
+                for (size_t i = 0; i < ps.size(); ++i)
+                    dock(ps[i], ids[i]);
+            };
+            if (n == 0) {
+            } else if (n == 1 || l == Lay::Stack) { // stack: all panes as tabs of one area, the
+                                                    // focused one in front
+                for (char k : panes)
+                    dock(k, dock_id);
+                pending_focus = visible[focused] ? focused : panes[0];
+            } else if (l == Lay::Horizontal) {
+                row(dock_id, panes, ImGuiAxis_X);
+            } else if (l == Lay::Vertical) {
+                row(dock_id, panes, ImGuiAxis_Y);
+            } else if (l == Lay::Tall || l == Lay::Fat) {
+                const int m = std::clamp(full_size, 1, n - 1);
+                std::vector<char> mains(panes.begin(), panes.begin() + m),
+                    rest(panes.begin() + m, panes.end());
+                ImGuiDir dir    = l == Lay::Tall ? (mirrored ? ImGuiDir_Right : ImGuiDir_Left)
+                                                 : (mirrored ? ImGuiDir_Down : ImGuiDir_Up);
+                ImGuiID other   = 0,
+                        main_id = ImGui::DockBuilderSplitNode(dock_id, dir, bias, nullptr, &other);
+                const ImGuiAxis along = l == Lay::Tall ? ImGuiAxis_Y : ImGuiAxis_X;
+                row(main_id, mains, along);
+                row(other, rest, along);
+            } else { // grid: about sqrt(n) columns, filled column by column, counts differ by at
+                     // most one
+                const int cols = int(std::ceil(std::sqrt(double(n))));
+                auto col_ids   = slots(dock_id, cols, ImGuiAxis_X);
+                const int base = n / cols, extra = n % cols;
+                int k = 0;
+                for (int c = 0; c < cols; ++c) {
+                    int cnt = base + (c < extra ? 1 : 0);
+                    row(col_ids[c],
+                        std::vector<char>(panes.begin() + k, panes.begin() + k + cnt),
+                        ImGuiAxis_Y);
+                    k += cnt;
+                }
+            }
+            ImGui::DockBuilderFinish(dock_id);
+            sig_pending = true;
+        }
+
+        // --- Splits: read the live dock tree into a small model, edit it, write it back
+        // -------------
+        struct SNode {
+            bool leaf      = true;
+            ImGuiAxis axis = ImGuiAxis_X;
+            float ratio    = 0.5f;
+            std::vector<char> panes;
+            std::unique_ptr<SNode> a, b;
+        };
+        std::unique_ptr<SNode> saved_splits; // the Splits tree kept while zoomed into Stack
+
+        static std::unique_ptr<SNode> read_tree(const ImGuiDockNode *n) {
+            auto s = std::make_unique<SNode>();
+            if (!n)
+                return s;
+            if (n->IsSplitNode()) {
+                s->leaf  = false;
+                s->axis  = n->SplitAxis;
+                float a0 = n->ChildNodes[0]->Size[n->SplitAxis],
+                      a1 = n->ChildNodes[1]->Size[n->SplitAxis];
+                s->ratio = a0 / std::max(1.0f, a0 + a1);
+                s->a     = read_tree(n->ChildNodes[0]);
+                s->b     = read_tree(n->ChildNodes[1]);
+            } else {
+                for (const ImGuiWindow *w : n->Windows)
+                    if (char k = key_of(w))
+                        s->panes.push_back(k);
+            }
+            return s;
+        }
+        static void write_tree(const SNode &s, ImGuiID node) {
+            if (s.leaf) {
+                for (char k : s.panes)
+                    ImGui::DockBuilderDockWindow(pane_window(k), node);
+                return;
+            }
+            ImGuiID second = 0;
+            ImGuiID first  = ImGui::DockBuilderSplitNode(
+                node,
+                s.axis == ImGuiAxis_X ? ImGuiDir_Left : ImGuiDir_Up,
+                std::clamp(s.ratio, 0.05f, 0.95f),
+                nullptr,
+                &second);
+            write_tree(*s.a, first);
+            write_tree(*s.b, second);
+        }
+        // Tree edits are applied in the next frame, from inside the main window (the builder needs
+        // the host window current; the layout menu runs inside its own popup window).
+        std::unique_ptr<SNode> pending_tree;
+        // Empty areas (their pane is hidden) are dropped; a hidden pane shown later splits the
+        // focused area.
+        static void prune(std::unique_ptr<SNode> &s) {
+            if (s->leaf)
+                return;
+            prune(s->a);
+            prune(s->b);
+            if (s->a->leaf && s->a->panes.empty())
+                s = std::move(s->b);
+            else if (s->b->leaf && s->b->panes.empty())
+                s = std::move(s->a);
+        }
+        void rebuild_splits(std::unique_ptr<SNode> root) {
+            prune(root);
+            pending_tree = std::move(root);
+        }
+        // Hidden panes are undocked before a rebuild: node ids are reused by the builder, so an old
+        // id could put a pane shown later into an unrelated area.
+        void undock_hidden() {
+            for (char k : {'v', 'g', 's', 'f'})
+                if (!visible[k] && ImGui::FindWindowByName(pane_window(k)))
+                    ImGui::DockBuilderDockWindow(pane_window(k), 0);
+        }
+        void apply_pending_tree() {
+            if (!pending_tree)
+                return;
+            undock_hidden();
+            ImGui::DockBuilderRemoveNode(dock_id_);
+            ImGui::DockBuilderAddNode(dock_id_, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dock_id_, body_px_);
+            write_tree(*pending_tree, dock_id_);
+            ImGui::DockBuilderFinish(dock_id_);
+            pending_tree.reset();
+            sig_pending = true;
+            need_layout = false; // the edited tree wins over a recompute queued in the same frame
+        }
+        static SNode *find_parent_of(SNode *s, char k, SNode *parent = nullptr) {
+            if (s->leaf)
+                return std::find(s->panes.begin(), s->panes.end(), k) != s->panes.end() ? parent
+                                                                                        : nullptr;
+            if (SNode *r = find_parent_of(s->a.get(), k, s))
+                return r;
+            return find_parent_of(s->b.get(), k, s);
+        }
+        static void remove_pane(
+            std::unique_ptr<SNode> &s, char k) { // drops k; collapses splits left with one side
+            if (s->leaf) {
+                s->panes.erase(std::remove(s->panes.begin(), s->panes.end(), k), s->panes.end());
+                return;
+            }
+            remove_pane(s->a, k);
+            remove_pane(s->b, k);
+            if (s->a->leaf && s->a->panes.empty())
+                s = std::move(s->b);
+            else if (s->b->leaf && s->b->panes.empty())
+                s = std::move(s->a);
+        }
+        void rotate_split() { // flip the axis of the split that holds the focused pane
+            auto root = read_tree(ImGui::DockBuilderGetNode(dock_id_));
+            prune(root); // first, so the split being flipped is one that stays
+            if (SNode *p = find_parent_of(root.get(), focused)) {
+                p->axis = p->axis == ImGuiAxis_X ? ImGuiAxis_Y : ImGuiAxis_X;
+                set_layout(Lay::Splits);
+                rebuild_splits(std::move(root));
+            }
+        }
+        void move_to_edge(
+            ImGuiDir dir) { // the focused pane spans the whole width or height at that edge
+            auto root = read_tree(ImGui::DockBuilderGetNode(dock_id_));
+            if (root->leaf && root->panes.size() <= 1)
+                return;
+            remove_pane(root, focused);
+            auto leaf   = std::make_unique<SNode>();
+            leaf->panes = {focused};
+            auto top    = std::make_unique<SNode>();
+            top->leaf   = false;
+            top->axis = (dir == ImGuiDir_Left || dir == ImGuiDir_Right) ? ImGuiAxis_X : ImGuiAxis_Y;
+            bool first = dir == ImGuiDir_Left || dir == ImGuiDir_Up;
+            top->ratio = first ? 0.3f : 0.7f;
+            top->a     = first ? std::move(leaf) : std::move(root);
+            top->b     = first ? std::move(root) : std::move(leaf);
+            lay        = Lay::Splits;
+            rebuild_splits(std::move(top));
+            ImGui::MarkIniSettingsDirty();
+        }
+
+        // --- layout switching and pane order
+        // --------------------------------------------------------
+        void set_layout(Lay l) {
+            if (l == lay)
+                return;
+            if (l == Lay::Stack) {
+                lay_before_stack = lay;
+                if (lay == Lay::Splits)
+                    saved_splits = read_tree(ImGui::DockBuilderGetNode(dock_id_));
+            }
+            const Lay prev = lay;
+            lay            = l;
+            if (l == Lay::Splits) {
+                if (prev == Lay::Stack && saved_splits)
+                    rebuild_splits(std::move(saved_splits)); // back from the zoom
+                saved_splits.reset();                        // else keep the tree
+            } else {
+                need_layout = true;
+            }
+            ImGui::MarkIniSettingsDirty();
+        }
+        void toggle_stack() { set_layout(lay == Lay::Stack ? lay_before_stack : Lay::Stack); }
+        void cycle_layout() {
+            static const Lay cycle[7]
+                = {Lay::Tall,
+                   Lay::Fat,
+                   Lay::Grid,
+                   Lay::Horizontal,
+                   Lay::Vertical,
+                   Lay::Splits,
+                   Lay::Stack};
+            int i = 0;
+            while (cycle[i] != lay)
+                ++i;
+            set_layout(cycle[(i + 1) % 7]);
+        }
+        void cycle_focus(int d) {
+            auto v = visible_order();
+            if (v.empty())
+                return;
+            int i         = int(std::find(v.begin(), v.end(), focused) - v.begin());
+            focused       = v[size_t((i + d + int(v.size())) % int(v.size()))];
+            pending_focus = focused;
+        }
+        void move_focused(
+            int d) { // swap with the next / previous visible pane; d == 0 moves it to the front
+            auto it = std::find(order.begin(), order.end(), focused);
+            if (it == order.end())
+                return;
+            if (d == 0) {
+                order.erase(it);
+                order.insert(order.begin(), focused);
+            } else {
+                int i = int(it - order.begin()), j = i;
+                do {
+                    j += d;
+                } while (j >= 0 && j < int(order.size()) && !visible[order[j]]);
+                if (j < 0 || j >= int(order.size()))
+                    return;
+                std::swap(order[i], order[j]);
+            }
+            if (lay != Lay::Splits)
+                need_layout = true;
+            ImGui::MarkIniSettingsDirty();
+        }
+
+        void handle_shortcuts() { // kitty-like defaults
+            auto chord = [](ImGuiKey k) {
+                return ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | k);
+            };
+            if (chord(ImGuiKey_L))
+                cycle_layout();
+            if (chord(ImGuiKey_Z))
+                toggle_stack();
+            if (chord(ImGuiKey_RightBracket))
+                cycle_focus(+1);
+            if (chord(ImGuiKey_LeftBracket))
+                cycle_focus(-1);
+            if (chord(ImGuiKey_F))
+                move_focused(+1);
+            if (chord(ImGuiKey_B))
+                move_focused(-1);
+            if (chord(ImGuiKey_GraveAccent))
+                move_focused(0);
+            if (chord(ImGuiKey_R))
+                rotate_split();
+        }
+
+        // Panes switched on or off since the last frame.
+        void on_visibility_changes() {
+            for (char k : {'v', 'g', 's', 'f'}) {
+                if (visible[k] == was_visible[k])
+                    continue;
+                ImGui::MarkIniSettingsDirty();
+                if (!visible[k]) { // hidden
+                    if (focused == k) {
+                        auto v = visible_order();
+                        if (!v.empty())
+                            focused = v[0];
+                    }
+                    if (lay != Lay::Splits)
+                        need_layout = true; // in Splits its area simply collapses
+                    continue;
+                }
+                if (lay != Lay::Splits) { // shown: insert it in the pane order, then recompute
+                    order.erase(std::remove(order.begin(), order.end(), k), order.end());
+                    auto at = std::find(order.begin(), order.end(), focused);
+                    if (place == 3)
+                        order.push_back(k);
+                    else if (place == 2 || at == order.end())
+                        order.insert(order.begin(), k);
+                    else if (place == 0)
+                        order.insert(at + 1, k);
+                    else
+                        order.insert(at, k);
+                    need_layout = true;
+                    continue;
+                }
+                // Splits: back to its old area if that still exists, else split the focused pane's
+                // area
+                ImGuiWindow *w = ImGui::FindWindowByName(pane_window(k));
+                if (w && w->DockId && ImGui::DockBuilderGetNode(w->DockId))
+                    continue;
+                ImGuiWindow *fw = ImGui::FindWindowByName(pane_window(focused));
+                ImGuiDockNode *target
+                    = (fw && visible[focused] && fw->DockNode) ? fw->DockNode : nullptr;
+                if (!target) { // fall back to the largest area
+                    std::function<void(ImGuiDockNode *)> visit = [&](ImGuiDockNode *n) {
+                        if (!n)
+                            return;
+                        if (n->IsLeafNode()) {
+                            if (!target || n->Size.x * n->Size.y > target->Size.x * target->Size.y)
+                                target = n;
+                            return;
+                        }
+                        visit(n->ChildNodes[0]);
+                        visit(n->ChildNodes[1]);
+                    };
+                    visit(ImGui::DockBuilderGetNode(dock_id_));
+                }
+                if (!target)
+                    continue;
+                bool side
+                    = split_axis == 1 || (split_axis == 0 && target->Size.x >= target->Size.y);
+                ImGuiDir dir  = side ? (place == 1 ? ImGuiDir_Left : ImGuiDir_Right)
+                                     : (place == 1 ? ImGuiDir_Up : ImGuiDir_Down);
+                ImGuiID rest  = 0,
+                        fresh = ImGui::DockBuilderSplitNode(target->ID, dir, 0.5f, nullptr, &rest);
+                ImGui::DockBuilderDockWindow(pane_window(k), fresh);
+                ImGui::DockBuilderFinish(dock_id_);
+            }
+        }
+
+        static std::string tree_signature(const ImGuiDockNode *n) {
+            if (!n)
+                return "-";
+            if (n->IsSplitNode())
+                return std::string("(") + (n->SplitAxis == ImGuiAxis_X ? "x" : "y")
+                       + tree_signature(n->ChildNodes[0]) + tree_signature(n->ChildNodes[1]) + ")";
+            std::string s = "[";
+            for (const ImGuiWindow *w : n->Windows)
+                if (char k = key_of(w))
+                    s += k;
+            std::sort(s.begin() + 1, s.end());
+            return s + "]";
+        }
+
+        void after_panes() {
+            const ImGuiDockNode *root = ImGui::DockBuilderGetNode(dock_id_);
+            std::string sig           = tree_signature(root);
+            if (sig_pending) {
+                built_sig   = sig;
+                sig_pending = false;
+            } else if (lay != Lay::Splits && !need_layout && sig != built_sig) {
+                lay = Lay::Splits; // the user rearranged panes by hand: keep that as a Splits
+                                   // layout
+                ImGui::MarkIniSettingsDirty();
+            }
+            // Tall / Fat: dragging the main divider changes the bias
+            if ((lay == Lay::Tall || lay == Lay::Fat) && root && root->IsSplitNode()
+                && !ImGui::IsPopupOpen("##layout_menu")) {
+                const ImGuiAxis ax = lay == Lay::Tall ? ImGuiAxis_X : ImGuiAxis_Y;
+                if (root->SplitAxis == ax && root->Size[ax] > 1) {
+                    const ImGuiDockNode *main = root->ChildNodes[mirrored ? 1 : 0];
+                    float b = std::clamp(main->Size[ax] / root->Size[ax], 0.15f, 0.85f);
+                    if (std::abs(b - bias) > 0.002f) {
+                        bias = b;
+                        ImGui::MarkIniSettingsDirty();
+                    }
+                }
+            }
+        }
+
+        // --- layout menu (top bar)
+        // ------------------------------------------------------------------
+        void layout_menu(double x, double y) {
+            const float s = float(UI::scale);
+            ImGui::SetNextWindowPos(P(V(x, y)));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * s, 10 * s));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * s, 6 * s));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8 * s, 4 * s));
+            ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 8 * s);
+            ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4 * s);
+            ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3 * s);
+            const std::pair<ImGuiCol, ImU32> cols[] = {
+                {ImGuiCol_Header, C::ACCENT_BG},
+                {ImGuiCol_HeaderHovered, C::ROW_HL},
+                {ImGuiCol_HeaderActive, C::ACCENT_BG},
+                {ImGuiCol_FrameBg, C::BUTTON},
+                {ImGuiCol_FrameBgHovered, C::ROW_HL},
+                {ImGuiCol_FrameBgActive, C::ACCENT_BG},
+                {ImGuiCol_SliderGrab, C::ACCENT},
+                {ImGuiCol_SliderGrabActive, C::ACCENT},
+                {ImGuiCol_CheckMark, C::ACCENT},
+                {ImGuiCol_Button, C::BUTTON},
+                {ImGuiCol_ButtonHovered, C::ROW_HL},
+                {ImGuiCol_ButtonActive, C::ACCENT_BG},
+                {ImGuiCol_TextDisabled, C::MUTED},
+                {ImGuiCol_Separator, C::DIVIDER},
+                {ImGuiCol_PopupBg, C::PANEL},
+                {ImGuiCol_Border, C::BORDER},
+            };
+            for (auto &[k, v] : cols)
+                ImGui::PushStyleColor(k, v);
+            if (ImGui::BeginPopup("##layout_menu")) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+                    ImGui::CloseCurrentPopup();
+                SDL *dl      = window_draw_list();
+                auto logical = [](ImVec2 p) {
+                    return V(
+                        UI::origin.x + (p.x - UI::origin.x) / UI::scale,
+                        UI::origin.y + (p.y - UI::origin.y) / UI::scale);
+                };
+                const int nvis = int(visible_order().size());
+                ImGui::TextDisabled("LAYOUT");
+                for (int i = 0; i < 7; ++i) {
+                    ImVec2 p       = logical(ImGui::GetCursorScreenPos());
+                    std::string id = std::string("##lay_") + LAY_ID[i];
+                    if (ImGui::Selectable(id.c_str(), int(lay) == i, 0, ImVec2(250 * s, 24 * s)))
+                        set_layout(Lay(i));
+                    bool on = int(lay) == i;
+                    icon_layout(dl, p.x + 12, p.y + 12, on ? C::ACCENT : C::TEXT_2, i);
+                    draw_text_vc(
+                        dl,
+                        g_fonts.sans,
+                        13,
+                        p.x + 32,
+                        p.y + 12,
+                        on ? C::ACCENT_TEXT : C::TEXT,
+                        LAY_NAME[i]);
+                    const char *hint = i == 0 ? "ctrl+shift+Z" : "";
+                    if (*hint)
+                        draw_text_vc(
+                            dl,
+                            g_fonts.mono,
+                            11,
+                            p.x + 250 - 8 - text_w(g_fonts.mono, 11, hint),
+                            p.y + 12,
+                            C::MUTED,
+                            hint);
+                }
+                ImGui::PushItemWidth(150 * s);
+                if (lay == Lay::Tall || lay == Lay::Fat) {
+                    ImGui::Separator();
+                    ImGui::TextDisabled("MAIN AREA");
+                    float pct = bias * 100;
+                    if (ImGui::SliderFloat("Size", &pct, 20, 80, "%.0f %%")) {
+                        bias        = pct / 100;
+                        need_layout = true;
+                    }
+                    int fs_max = std::max(1, nvis - 1);
+                    if (ImGui::SliderInt("Panes", &full_size, 1, fs_max))
+                        need_layout = true;
+                    if (ImGui::Checkbox(
+                            lay == Lay::Tall ? "Main on the right" : "Main at the bottom",
+                            &mirrored))
+                        need_layout = true;
+                    if (ImGui::Button("Make focused pane main"))
+                        move_focused(0);
+                    if (need_layout)
+                        ImGui::MarkIniSettingsDirty();
+                }
+                if (lay == Lay::Splits) {
+                    ImGui::Separator();
+                    ImGui::TextDisabled("SPLITS");
+                    if (ImGui::Button("Rotate split  (ctrl+shift+R)"))
+                        rotate_split();
+                    ImGui::TextUnformatted("Move focused pane to edge");
+                    if (ImGui::Button("Left"))
+                        move_to_edge(ImGuiDir_Left);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Top"))
+                        move_to_edge(ImGuiDir_Up);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Right"))
+                        move_to_edge(ImGuiDir_Right);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Bottom"))
+                        move_to_edge(ImGuiDir_Down);
+                    ImGui::Combo(
+                        "Split axis", &split_axis, "Auto (longer side)\0Side by side\0Stacked\0");
+                }
+                ImGui::Separator();
+                ImGui::TextDisabled("SHOWN PANES GO");
+                ImGui::Combo(
+                    "##place",
+                    &place,
+                    "After the focused pane\0Before the focused pane\0First\0Last\0");
+                ImGui::PopItemWidth();
+                ImGui::Separator();
+                ImGui::TextDisabled("ctrl+shift+L  next layout      ctrl+shift+] [  focus");
+                ImGui::TextDisabled("ctrl+shift+F B  move pane      ctrl+shift+`  make main");
+                ImGui::EndPopup();
+            }
+            ImGui::PopStyleColor(int(std::size(cols)));
+            ImGui::PopStyleVar(7);
+        }
+
+        // ImGui keeps a dockspace's "central node" on screen even when its pane is hidden, which
+        // leaves a hole. Without a central node every area behaves the same: hiding its pane gives
+        // the space to the neighbours, showing it again restores it. (ImGui re-creates one when a
+        // single area remains.)
+        static void drop_central_node(ImGuiID dock_id) {
+            ImGuiDockNode *root = ImGui::DockBuilderGetNode(dock_id);
+            if (!root || !root->IsSplitNode())
+                return;
+            std::function<void(ImGuiDockNode *)> visit = [&](ImGuiDockNode *n) {
+                if (!n)
+                    return;
+                if (n->IsCentralNode())
+                    n->SetLocalFlags(n->LocalFlags & ~ImGuiDockNodeFlags_CentralNode);
+                visit(n->ChildNodes[0]);
+                visit(n->ChildNodes[1]);
+            };
+            visit(root);
+            root->CentralNode = nullptr;
+        }
+
+        void dock_pane(char key) {
+            bool open = true;
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, key == 'v' ? C::PANEL : C::CANVAS);
+            ImGui::SetNextWindowSize(
+                V(480 * UI::scale, 360 * UI::scale), ImGuiCond_FirstUseEver); // when floating
+            if (pending_focus == key) {
+                ImGui::SetNextWindowFocus(); // also brings its tab to the front (Stack)
+                pending_focus = 0;
+            }
+            bool shown = ImGui::Begin(
+                pane_window(key),
+                &open,
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar
+                    | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+            ImGui::PopStyleColor();
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+                focused = key;
+            if (shown) {
+                ImVec2 p = ImGui::GetCursorScreenPos(), a = ImGui::GetContentRegionAvail();
+                // back to logical pixels
+                double x = UI::origin.x + (p.x - UI::origin.x) / UI::scale,
+                       y = UI::origin.y + (p.y - UI::origin.y) / UI::scale;
+                double w = a.x / UI::scale, h = a.y / UI::scale;
+                if (w > 1 && h > 1) {
+                    SDL *dl = window_draw_list();
+                    if (key == 'v')
+                        viewer.draw(
+                            dl,
+                            x,
+                            y,
+                            w,
+                            h,
+                            sim,
+                            {graph.view.previews_on, visible['f'] && profile.live, bytes_per_s});
+                    else if (key == 'g')
+                        graph.draw(dl, x, y, w, h, sim);
+                    else if (key == 's')
+                        script.draw(dl, x, y, w, h);
+                    else
+                        profile.draw(dl, x, y, w, h, sim);
+                    set_cursor(V(x, y));
+                    ImGui::Dummy(ImVec2(0, 0));
+                }
+            }
+            ImGui::End();
+            if (!open)
+                visible[key] = false; // closed from the tab's cross
+        }
+
+        // --- status bar --------------------------------------------------------
+        void status_bar(SDL *dl, double X, double Y, double W) {
+            dl->AddRectFilled(V(X, Y), V(X + W, Y + STATUS_H), C::PANEL);
+            dl->AddLine(V(X, Y + 0.5), V(X + W, Y + 0.5), C::DIVIDER);
+            double cy = Y + STATUS_H / 2, wob = std::sin(clock.now() * 0.7);
+            // start allow utf-8
+            std::string left[3]
+                = {"8 MPI ranks · control on rank 0",
+                   "GPU util " + fmt("%.0f", 87 + 2 * wob) + "%",
+                   "GPU mem 61 / 80 GB"};
+            // end allow utf-8
+            std::string right[3]
+                = {"step " + fmt("%.1f", sim.step_ms) + " ms",
+                   "preview extract 0.3 ms",
+                   "link latency " + fmt("%.0f", 38 + 3 * wob) + " ms"};
+            double tx = X + 16;
+            for (auto &t : left) {
+                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, t);
+                tx += text_w(g_fonts.mono, 11, t) + 20;
+            }
+            tx = X + W - 16;
+            for (int i = 2; i >= 0; --i) {
+                tx -= text_w(g_fonts.mono, 11, right[i]);
+                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, right[i]);
+                tx -= 20;
+            }
+        }
+    };
+
+    // Layout settings in the .ini file (next to ImGui's own dock tree)
+    // ---------------------------------
+    static App *g_app = nullptr;
+    static void *ini_open(ImGuiContext *, ImGuiSettingsHandler *, const char *name) {
+        return std::strcmp(name, "Layout") == 0 ? (void *) 1 : nullptr;
+    }
+    static void ini_line(ImGuiContext *, ImGuiSettingsHandler *, void *, const char *line) {
+        App &a = *g_app;
+        char buf[64];
+        float f;
+        int i;
+        if (std::sscanf(line, "Layout=%63s", buf) == 1 && !a.layout_from_cli)
+            a.lay = parse_lay(buf);
+        else if (std::sscanf(line, "Bias=%f", &f) == 1)
+            a.bias = std::clamp(f, 0.15f, 0.85f);
+        else if (std::sscanf(line, "Main=%d", &i) == 1)
+            a.full_size = std::max(1, i);
+        else if (std::sscanf(line, "Mirrored=%d", &i) == 1)
+            a.mirrored = i != 0;
+        else if (std::sscanf(line, "Place=%d", &i) == 1)
+            a.place = std::clamp(i, 0, 3);
+        else if (std::sscanf(line, "Axis=%d", &i) == 1)
+            a.split_axis = std::clamp(i, 0, 2);
+        else if (std::sscanf(line, "Order=%63s", buf) == 1 && std::strlen(buf) == 4)
+            a.order.assign(buf, buf + 4);
+        else if (std::sscanf(line, "Visible=%63s", buf) == 1 && !a.profile_from_cli)
+            for (char k : {'v', 'g', 's', 'f'})
+                a.visible[k] = a.was_visible[k] = std::strchr(buf, k) != nullptr;
+        else if (std::strncmp(line, "Visible=", 8) == 0 && !a.profile_from_cli)
+            for (char k : {'v', 'g', 's', 'f'})
+                a.visible[k] = a.was_visible[k] = false;
+    }
+    static void ini_write(ImGuiContext *, ImGuiSettingsHandler *h, ImGuiTextBuffer *out) {
+        App &a = *g_app;
+        std::string vis, ord(a.order.begin(), a.order.end());
+        for (char k : {'v', 'g', 's', 'f'})
+            if (a.visible[k])
+                vis += k;
+        out->appendf(
+            "[%s][Layout]\nLayout=%s\nBias=%.3f\nMain=%d\nMirrored=%d\nPlace=%d\nAxis=%d\nOrder=%"
+            "s\nVisible=%s\n\n",
+            h->TypeName,
+            LAY_ID[int(a.lay)],
+            a.bias,
+            a.full_size,
+            a.mirrored ? 1 : 0,
+            a.place,
+            a.split_axis,
+            ord.c_str(),
+            vis.c_str());
+    }
+
+    // ============================================================================
+    //  Entry point
+    // ============================================================================
+    static void print_bench(const App &app, int warmup) {
+        std::printf("BENCH {\"impl\": \"cpp\"");
+        for (const char *k : {"update", "ui", "frame"}) {
+            std::vector<double> a(
+                app.timings.at(k).begin() + std::min<size_t>(warmup, app.timings.at(k).size()),
+                app.timings.at(k).end());
+            for (double &v : a)
+                v *= 1e3;
+            std::sort(a.begin(), a.end());
+            double mean = a.empty() ? 0 : std::accumulate(a.begin(), a.end(), 0.0) / a.size();
+            auto pct    = [&](double p) { // numpy's default (linear) percentile
+                if (a.empty())
+                    return 0.0;
+                double idx = p / 100.0 * (a.size() - 1);
+                size_t lo = size_t(idx), hi = std::min(lo + 1, a.size() - 1);
+                return a[lo] + (a[hi] - a[lo]) * (idx - lo);
+            };
+            std::printf(
+                ", \"%s\": {\"mean_ms\": %.3f, \"median_ms\": %.3f, \"p95_ms\": %.3f}",
+                k,
+                mean,
+                pct(50),
+                pct(95));
+        }
+        std::printf("}\n");
     }
 
     /// Command-line options of shamrock_gui: the flags as given, and what follows from them.
@@ -68,18 +1299,35 @@ namespace sham::gui {
         /// --frames N: frames rendered before saving the screenshot
         std::optional<int> frames = std::nullopt;
 
+        /// --bench N: render N frames (after 30 warm-up frames) and print per-frame timings
+        std::optional<int> bench = std::nullopt;
+
+        /// --layout NAME: start with this layout instead of the saved one
+        std::optional<std::string> layout = std::nullopt;
+
+        /// --ui-scale S: initial UI scale (clamped to [UI::MIN, UI::MAX])
+        std::optional<double> ui_scale = std::nullopt;
+
+        /// --profile: start with the Profile pane shown
+        std::optional<bool> profile = std::nullopt;
+
+        /// --assets DIR: folder holding fonts/ and the logo
+        std::optional<std::string> assets = std::nullopt;
+
         /// -h / --help
         std::optional<bool> is_help = std::nullopt;
 
         /// first unrecognised argument (parsing stops there)
         std::optional<std::string> unknown_arg = std::nullopt;
 
-        /// false for headless runs (--screenshot): deterministic clock, no vsync, no .ini
-        bool interactive_mode() const { return !screenshot; }
+        /// false for headless runs (--screenshot, --bench): deterministic clock, no vsync, no .ini
+        bool interactive_mode() const { return !screenshot && !bench; }
 
-        /// frames rendered before exiting: --frames (default 45) with --screenshot, empty for an
-        /// interactive run
+        /// frames rendered before exiting: --bench N + 30 warm-up frames, else --frames (default
+        /// 45) with --screenshot, empty for an interactive run
         std::optional<int> frames_before_exit() const {
+            if (bench)
+                return *bench + 30;
             if (screenshot)
                 return frames.value_or(45);
             return std::nullopt;
@@ -108,6 +1356,17 @@ namespace sham::gui {
                     cli.screenshot = path;
             } else if (a == "--frames") {
                 cli.frames = std::stoi(next());
+            } else if (a == "--bench") {
+                if (int n = std::stoi(next()); n > 0)
+                    cli.bench = n;
+            } else if (a == "--layout") {
+                cli.layout = next();
+            } else if (a == "--ui-scale") {
+                cli.ui_scale = std::stod(next());
+            } else if (a == "--profile") {
+                cli.profile = true;
+            } else if (a == "--assets") {
+                cli.assets = next();
             } else if (a == "-h" || a == "--help") {
                 cli.is_help = true;
                 break;
@@ -125,22 +1384,27 @@ int main(int argc, char **argv) {
     using namespace sham::gui;
     const CliArgs cli = parse_cli(argc, argv);
     if (std::optional<int> code = cli.exit_code()) {
-        std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
+        std::printf(
+            "usage: %s [--layout stack|tall|fat|grid|horizontal|vertical|splits] [--ui-scale "
+            "1.5] [--profile] [--screenshot out.png] [--frames N] "
+            "[--bench N] [--assets DIR]\n",
+            argv[0]);
         return *code;
     }
+    if (cli.assets)
+        g_assets = *cli.assets;
+    if (!fs::exists(g_assets / "fonts"))
+        g_assets = fs::path(argv[0]).parent_path() / "assets";
 
-    if (!glfwInit()) {
+    if (!glfwInit())
         return 1;
-    }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     GLFWwindow *window = glfwCreateWindow(1440, 960, "Shamrock", nullptr, nullptr);
-    if (window == nullptr) {
-        glfwTerminate();
+    if (!window)
         return 1;
-    }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(cli.interactive_mode() ? 1 : 0);
 
@@ -148,44 +1412,57 @@ int main(int argc, char **argv) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // interactive runs remember the arrangement; screenshots always start from scratch
+    // interactive runs remember the arrangement; screenshots and benchmarks always start from the
+    // preset
     io.IniFilename = cli.interactive_mode() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
+    g_fonts = load_fonts(g_assets / "fonts");
+    App::setup_style();
 
-    GuiClock gui_clock(!cli.interactive_mode());
+    App app(
+        cli.layout.value_or("tall"),
+        cli.screenshot.has_value(),
+        cli.frames_before_exit().value_or(0),
+        cli.bench.value_or(0));
+    app.layout_from_cli  = cli.layout.has_value();
+    app.profile_from_cli = cli.profile.value_or(false);
+    app.visible['f'] = app.was_visible['f'] = cli.profile.value_or(false);
+    g_app                                   = &app;
+    { // layout options live in the same .ini as the dock tree
+        ImGuiSettingsHandler h;
+        h.TypeName   = "Shamrock";
+        h.TypeHash   = ImHashStr("Shamrock");
+        h.ReadOpenFn = ini_open;
+        h.ReadLineFn = ini_line;
+        h.WriteAllFn = ini_write;
+        ImGui::AddSettingsHandler(&h);
+    }
+    app.ui_scale = std::min(UI::MAX, std::max(UI::MIN, cli.ui_scale.value_or(1.0)));
+    app.post_init();
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+        app.pre_frame();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        gui();
-        gui_clock.end_frame();
-        const bool want_exit
-            = cli.frames_before_exit() && gui_clock.frame_counter >= *cli.frames_before_exit();
-        // temporary: something moving to check --screenshot, removed with the real panes
-        {
-            const double t = gui_clock.now();
-            const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
-            ImGui::GetForegroundDrawList()->AddRectFilled(
-                ImVec2(c.x - 20, c.y - 20),
-                ImVec2(c.x + 20, c.y + 20),
-                IM_COL32(232, 163, 61, 255));
-        }
+        app.gui();
         ImGui::Render();
         glfwGetFramebufferSize(window, &fbw, &fbh);
         glViewport(0, 0, fbw, fbh);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (want_exit && cli.screenshot)
+        if (app.want_exit && cli.screenshot)
             take_screenshot(*cli.screenshot);
         glfwSwapBuffers(window);
-        if (want_exit)
+        if (app.want_exit)
             break;
     }
+    if (cli.bench)
+        print_bench(app, 30);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
