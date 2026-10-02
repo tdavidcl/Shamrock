@@ -38,7 +38,7 @@ namespace shammodels::basegodunov::modules {
         using Storage          = SolverStorage<Tvec, TgridVec, u64>;
         using u_morton         = u64;
         using AMRBlock         = typename Config::AMRBlock;
-        using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+        using OrientedAMRGraph = shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>;
 
         ShamrockCtx &context;
         Config &solver_config;

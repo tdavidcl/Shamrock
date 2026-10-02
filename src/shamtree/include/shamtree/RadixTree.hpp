@@ -189,7 +189,7 @@ class RadixTree {
     }
 
     template<class T>
-    using RadixTreeField = RadixTreeField<T>;
+    using RadixTreeField = ::RadixTreeField<T>;
 
     template<class T, class LambdaComputeLeaf, class LambdaCombinator>
     RadixTreeField<T> compute_field(

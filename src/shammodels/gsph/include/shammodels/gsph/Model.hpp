@@ -66,7 +66,7 @@ namespace shammodels::gsph {
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
         using Kernel             = SPHKernel<Tscal>;
 
-        using Solver       = Solver<Tvec, SPHKernel>;
+        using Solver       = shammodels::gsph::Solver<Tvec, SPHKernel>;
         using SolverConfig = typename Solver::Config;
 
         ShamrockCtx &ctx;

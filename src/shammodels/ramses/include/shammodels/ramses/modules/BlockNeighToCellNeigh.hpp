@@ -30,7 +30,7 @@ namespace shammodels::basegodunov::modules {
     class BlockNeighToCellNeigh : public shamrock::solvergraph::INode {
         using Tscal            = shambase::VecComponent<Tvec>;
         using RTree            = RadixTree<Tmorton, TgridVec>;
-        using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+        using OrientedAMRGraph = shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>;
 
         template<class AMRBlock>
         class AMRLowering;

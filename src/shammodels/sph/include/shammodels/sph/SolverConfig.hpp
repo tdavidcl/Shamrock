@@ -647,7 +647,7 @@ struct shammodels::sph::SolverConfig {
     // MHD Config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    using MHDConfig      = MHDConfig<Tvec>;
+    using MHDConfig      = shammodels::sph::MHDConfig<Tvec>;
     MHDConfig mhd_config = {};
 
     /// disable MHD in the SPH solver
@@ -687,7 +687,7 @@ struct shammodels::sph::SolverConfig {
     // Dust config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    using DustConfig       = DustConfig<Tscal>;
+    using DustConfig       = shammodels::sph::DustConfig<Tscal>;
     DustConfig dust_config = {};
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -914,7 +914,7 @@ struct shammodels::sph::SolverConfig {
      * - VaryingCD10: AV with a varying value, using the Cullen & Dehnen 2010 prescription
      * - ConstantDisc: AV with a constant value, but only in the disc plane
      */
-    using AVConfig = AVConfig<Tvec>;
+    using AVConfig = shammodels::sph::AVConfig<Tvec>;
 
     /// Configuration for the Artificial Viscosity (AV)
     AVConfig artif_viscosity;
@@ -975,7 +975,7 @@ struct shammodels::sph::SolverConfig {
     /**
      * @brief Configuration of the boundary conditions
      */
-    using BCConfig = BCConfig<Tvec>;
+    using BCConfig = shammodels::sph::BCConfig<Tvec>;
 
     /**
      * @brief Boundary condition configuration

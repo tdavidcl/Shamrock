@@ -29,7 +29,7 @@ namespace shammodels::basegodunov::modules {
     class FindBlockNeigh : public shamrock::solvergraph::INode {
         using Tscal            = shambase::VecComponent<Tvec>;
         using RTree            = RadixTree<Tmorton, TgridVec>;
-        using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+        using OrientedAMRGraph = shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>;
 
         class AMRBlockFinder;
 

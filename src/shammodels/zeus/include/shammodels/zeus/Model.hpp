@@ -41,7 +41,7 @@ namespace shammodels::zeus {
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
         ShamrockCtx &ctx;
 
-        using Solver = Solver<Tvec, TgridVec>;
+        using Solver = shammodels::zeus::Solver<Tvec, TgridVec>;
         Solver solver;
 
         Model(ShamrockCtx &ctx) : ctx(ctx), solver(ctx) {};

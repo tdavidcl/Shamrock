@@ -142,7 +142,7 @@ struct shammodels::gsph::SolverConfig {
     // Riemann Solver Config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    using RiemannConfig = RiemannConfig<Tvec>;
+    using RiemannConfig = shammodels::gsph::RiemannConfig<Tvec>;
     RiemannConfig riemann_config;
 
     inline void set_riemann_iterative(Tscal tol = Tscal{1e-6}, u32 max_iter = 20) {
@@ -163,7 +163,7 @@ struct shammodels::gsph::SolverConfig {
     // Reconstruction Config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    using ReconstructConfig = ReconstructConfig<Tvec>;
+    using ReconstructConfig = shammodels::gsph::ReconstructConfig<Tvec>;
     ReconstructConfig reconstruct_config;
 
     inline void set_reconstruct_piecewise_constant() {
@@ -185,7 +185,7 @@ struct shammodels::gsph::SolverConfig {
     // Force Formulation Config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    using ForceFormulationConfig = ForceFormulationConfig<Tvec>;
+    using ForceFormulationConfig = shammodels::gsph::ForceFormulationConfig<Tvec>;
     ForceFormulationConfig force_formulation_config;
 
     inline void set_force_cha_whitworth() { force_formulation_config.set_cha_whitworth(); }

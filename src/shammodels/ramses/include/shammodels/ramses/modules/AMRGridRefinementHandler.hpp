@@ -45,7 +45,7 @@ namespace shammodels::basegodunov::modules {
         using u_morton         = u64;
         using AMRBlock         = typename Config::AMRBlock;
         using BlockCoord       = shamrock::amr::AMRBlockCoord<TgridVec, 3>;
-        using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
+        using OrientedAMRGraph = shammodels::basegodunov::modules::OrientedAMRGraph<Tvec, TgridVec>;
 
         using TgridUint = typename std::make_unsigned<shambase::VecComponent<TgridVec>>::type;
 

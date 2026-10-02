@@ -34,7 +34,7 @@ namespace shammodels::sph::modules {
         using Tscal              = shambase::VecComponent<Tvec>;
         static constexpr u32 dim = shambase::VectorProperties<Tvec>::dimension;
 
-        using Solver = Solver<Tvec, SPHKernel>;
+        using Solver = shammodels::sph::Solver<Tvec, SPHKernel>;
 
         using Kernel = SPHKernel<Tscal>;
 
