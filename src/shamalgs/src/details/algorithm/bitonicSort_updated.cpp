@@ -15,6 +15,7 @@
  */
 
 #include "shambase/integer.hpp"
+#include "shambase/type_traits.hpp"
 #include "shamalgs/details/algorithm/bitonicSort.hpp"
 #include "shambackends/sycl_utils.hpp"
 
@@ -51,232 +52,205 @@ namespace shamalgs::algorithm::details {
         }
 
         template<u32 stencil_size>
-        static void order_stencil(Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse);
-
-        template<>
-        inline void order_stencil<2>(
+        inline static void order_stencil(
             Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse) {
-            _orderV(x, vx, a, a + 1, reverse);
-        }
-
-        template<>
-        inline void order_stencil<4>(
-            Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse) {
+            if constexpr (stencil_size == 2) {
+                _orderV(x, vx, a, a + 1, reverse);
+            } else if constexpr (stencil_size == 4) {
 #pragma unroll
-            for (int i4 = 0; i4 < 2; i4++) {
-                _orderV(x, vx, a + i4, a + i4 + 2, reverse);
-            }
-            order_stencil<2>(x, vx, a, reverse);
-            order_stencil<2>(x, vx, a + 2, reverse);
-        }
-
-        template<>
-        inline void order_stencil<8>(
-            Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse) {
+                for (int i4 = 0; i4 < 2; i4++) {
+                    _orderV(x, vx, a + i4, a + i4 + 2, reverse);
+                }
+                order_stencil<2>(x, vx, a, reverse);
+                order_stencil<2>(x, vx, a + 2, reverse);
+            } else if constexpr (stencil_size == 8) {
 #pragma unroll
-            for (int i8 = 0; i8 < 4; i8++) {
-                _orderV(x, vx, a + i8, a + i8 + 4, reverse);
-            }
-            order_stencil<4>(x, vx, a, reverse);
-            order_stencil<4>(x, vx, a + 4, reverse);
-        }
-
-        template<>
-        inline void order_stencil<16>(
-            Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse) {
+                for (int i8 = 0; i8 < 4; i8++) {
+                    _orderV(x, vx, a + i8, a + i8 + 4, reverse);
+                }
+                order_stencil<4>(x, vx, a, reverse);
+                order_stencil<4>(x, vx, a + 4, reverse);
+            } else if constexpr (stencil_size == 16) {
 #pragma unroll
-            for (int i16 = 0; i16 < 8; i16++) {
-                _orderV(x, vx, a + i16, a + i16 + 8, reverse);
-            }
-            order_stencil<8>(x, vx, a, reverse);
-            order_stencil<8>(x, vx, a + 8, reverse);
-        }
-
-        template<>
-        inline void order_stencil<32>(
-            Tkey *__restrict__ x, Tval *__restrict__ vx, u32 a, bool reverse) {
+                for (int i16 = 0; i16 < 8; i16++) {
+                    _orderV(x, vx, a + i16, a + i16 + 8, reverse);
+                }
+                order_stencil<8>(x, vx, a, reverse);
+                order_stencil<8>(x, vx, a + 8, reverse);
+            } else if constexpr (stencil_size == 32) {
 #pragma unroll
-            for (int i32 = 0; i32 < 16; i32++) {
-                _orderV(x, vx, a + i32, a + i32 + 16, reverse);
+                for (int i32 = 0; i32 < 16; i32++) {
+                    _orderV(x, vx, a + i32, a + i32 + 16, reverse);
+                }
+                order_stencil<16>(x, vx, a, reverse);
+                order_stencil<16>(x, vx, a + 16, reverse);
+            } else {
+                static_assert(
+                    shambase::always_false_v<std::integral_constant<u32, stencil_size>>,
+                    "unsupported stencil_size");
             }
-            order_stencil<16>(x, vx, a, reverse);
-            order_stencil<16>(x, vx, a + 16, reverse);
         }
 
         template<u32 stencil_size>
-        static void order_kernel(
-            Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t);
-
-        template<>
-        inline void order_kernel<32>(
+        inline static void order_kernel(
             Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t) {
-            u32 _inc = inc;
-            u32 _dir = length << 1U;
+            if constexpr (stencil_size == 32) {
+                u32 _inc = inc;
+                u32 _dir = length << 1U;
 
-            _inc >>= 4;
-            int low      = t & (_inc - 1);         // low order bits (below INC)
-            int i        = ((t - low) << 5) + low; // insert 000 at position INC
-            bool reverse = ((_dir & i) == 0);      // asc/desc order
+                _inc >>= 4;
+                int low      = t & (_inc - 1);         // low order bits (below INC)
+                int i        = ((t - low) << 5) + low; // insert 000 at position INC
+                bool reverse = ((_dir & i) == 0);      // asc/desc order
 
-            // Load
-            Tkey x[32];
+                // Load
+                Tkey x[32];
 #pragma unroll
-            for (int k = 0; k < 32; k++)
-                x[k] = m[k * _inc + i];
+                for (int k = 0; k < 32; k++)
+                    x[k] = m[k * _inc + i];
 
-            uint idx[32];
+                uint idx[32];
 #pragma unroll
-            for (int k = 0; k < 32; k++)
-                idx[k] = id[k * _inc + i];
+                for (int k = 0; k < 32; k++)
+                    idx[k] = id[k * _inc + i];
 
-            // Sort
-            order_stencil<32>(x, idx, 0, reverse);
+                // Sort
+                order_stencil<32>(x, idx, 0, reverse);
 
-// Store
+                // Store
 #pragma unroll
-            for (int k = 0; k < 32; k++)
-                m[k * _inc + i] = x[k];
+                for (int k = 0; k < 32; k++)
+                    m[k * _inc + i] = x[k];
 #pragma unroll
-            for (int k = 0; k < 32; k++)
-                id[k * _inc + i] = idx[k];
-        }
+                for (int k = 0; k < 32; k++)
+                    id[k * _inc + i] = idx[k];
+            } else if constexpr (stencil_size == 16) {
 
-        template<>
-        inline void order_kernel<16>(
-            Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t) {
+                u32 _inc = inc;
+                u32 _dir = length << 1;
 
-            u32 _inc = inc;
-            u32 _dir = length << 1;
+                _inc >>= 3;
+                int low      = t & (_inc - 1);         // low order bits (below INC)
+                int i        = ((t - low) << 4) + low; // insert 000 at position INC
+                bool reverse = ((_dir & i) == 0);      // asc/desc order
 
-            _inc >>= 3;
-            int low      = t & (_inc - 1);         // low order bits (below INC)
-            int i        = ((t - low) << 4) + low; // insert 000 at position INC
-            bool reverse = ((_dir & i) == 0);      // asc/desc order
-
-            // Load
-            Tkey x[16];
+                // Load
+                Tkey x[16];
 #pragma unroll
-            for (int k = 0; k < 16; k++)
-                x[k] = m[k * _inc + i];
+                for (int k = 0; k < 16; k++)
+                    x[k] = m[k * _inc + i];
 
-            Tval idx[16];
+                Tval idx[16];
 #pragma unroll
-            for (int k = 0; k < 16; k++)
-                idx[k] = id[k * _inc + i];
+                for (int k = 0; k < 16; k++)
+                    idx[k] = id[k * _inc + i];
 
-            // Sort
-            order_stencil<16>(x, idx, 0, reverse);
+                // Sort
+                order_stencil<16>(x, idx, 0, reverse);
 
-// Store
+                // Store
 #pragma unroll
-            for (int k = 0; k < 16; k++)
-                m[k * _inc + i] = x[k];
+                for (int k = 0; k < 16; k++)
+                    m[k * _inc + i] = x[k];
 #pragma unroll
-            for (int k = 0; k < 16; k++)
-                id[k * _inc + i] = idx[k];
-        }
+                for (int k = 0; k < 16; k++)
+                    id[k * _inc + i] = idx[k];
+            } else if constexpr (stencil_size == 8) {
+                u32 _inc = inc;
+                u32 _dir = length << 1;
 
-        template<>
-        inline void order_kernel<8>(
-            Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t) {
-            u32 _inc = inc;
-            u32 _dir = length << 1;
+                _inc >>= 2;
+                int low      = t & (_inc - 1);         // low order bits (below INC)
+                int i        = ((t - low) << 3) + low; // insert 000 at position INC
+                bool reverse = ((_dir & i) == 0);      // asc/desc order
 
-            _inc >>= 2;
-            int low      = t & (_inc - 1);         // low order bits (below INC)
-            int i        = ((t - low) << 3) + low; // insert 000 at position INC
-            bool reverse = ((_dir & i) == 0);      // asc/desc order
-
-            // Load
-            Tkey x[8];
+                // Load
+                Tkey x[8];
 #pragma unroll
-            for (int k = 0; k < 8; k++)
-                x[k] = m[k * _inc + i];
+                for (int k = 0; k < 8; k++)
+                    x[k] = m[k * _inc + i];
 
-            Tval idx[8];
+                Tval idx[8];
 #pragma unroll
-            for (int k = 0; k < 8; k++)
-                idx[k] = id[k * _inc + i];
+                for (int k = 0; k < 8; k++)
+                    idx[k] = id[k * _inc + i];
 
-            // Sort
-            order_stencil<8>(x, idx, 0, reverse);
+                // Sort
+                order_stencil<8>(x, idx, 0, reverse);
 
-// Store
+                // Store
 #pragma unroll
-            for (int k = 0; k < 8; k++)
-                m[k * _inc + i] = x[k];
+                for (int k = 0; k < 8; k++)
+                    m[k * _inc + i] = x[k];
 #pragma unroll
-            for (int k = 0; k < 8; k++)
-                id[k * _inc + i] = idx[k];
-        }
+                for (int k = 0; k < 8; k++)
+                    id[k * _inc + i] = idx[k];
+            } else if constexpr (stencil_size == 4) {
+                u32 _inc = inc;
+                u32 _dir = length << 1;
 
-        template<>
-        inline void order_kernel<4>(
-            Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t) {
-            u32 _inc = inc;
-            u32 _dir = length << 1;
+                _inc >>= 1;
+                int low      = t & (_inc - 1);         // low order bits (below INC)
+                int i        = ((t - low) << 2) + low; // insert 00 at position INC
+                bool reverse = ((_dir & i) == 0);      // asc/desc order
 
-            _inc >>= 1;
-            int low      = t & (_inc - 1);         // low order bits (below INC)
-            int i        = ((t - low) << 2) + low; // insert 00 at position INC
-            bool reverse = ((_dir & i) == 0);      // asc/desc order
+                // Load
+                Tkey x0 = m[0 + i];
+                Tkey x1 = m[_inc + i];
+                Tkey x2 = m[2 * _inc + i];
+                Tkey x3 = m[3 * _inc + i];
 
-            // Load
-            Tkey x0 = m[0 + i];
-            Tkey x1 = m[_inc + i];
-            Tkey x2 = m[2 * _inc + i];
-            Tkey x3 = m[3 * _inc + i];
+                Tval idx0 = id[0 + i];
+                Tval idx1 = id[_inc + i];
+                Tval idx2 = id[2 * _inc + i];
+                Tval idx3 = id[3 * _inc + i];
 
-            Tval idx0 = id[0 + i];
-            Tval idx1 = id[_inc + i];
-            Tval idx2 = id[2 * _inc + i];
-            Tval idx3 = id[3 * _inc + i];
+                // Sort
+                _order(x0, x2, idx0, idx2, reverse);
+                _order(x1, x3, idx1, idx3, reverse);
+                _order(x0, x1, idx0, idx1, reverse);
+                _order(x2, x3, idx2, idx3, reverse);
 
-            // Sort
-            _order(x0, x2, idx0, idx2, reverse);
-            _order(x1, x3, idx1, idx3, reverse);
-            _order(x0, x1, idx0, idx1, reverse);
-            _order(x2, x3, idx2, idx3, reverse);
+                // Store
+                m[0 + i]        = x0;
+                m[_inc + i]     = x1;
+                m[2 * _inc + i] = x2;
+                m[3 * _inc + i] = x3;
 
-            // Store
-            m[0 + i]        = x0;
-            m[_inc + i]     = x1;
-            m[2 * _inc + i] = x2;
-            m[3 * _inc + i] = x3;
+                id[0 + i]        = idx0;
+                id[_inc + i]     = idx1;
+                id[2 * _inc + i] = idx2;
+                id[3 * _inc + i] = idx3;
+            } else if constexpr (stencil_size == 2) {
+                u32 _inc = inc;
+                u32 _dir = length << 1;
 
-            id[0 + i]        = idx0;
-            id[_inc + i]     = idx1;
-            id[2 * _inc + i] = idx2;
-            id[3 * _inc + i] = idx3;
-        }
+                int low      = t & (_inc - 1);    // low order bits (below INC)
+                int i        = (t << 1) - low;    // insert 0 at position INC
+                bool reverse = ((_dir & i) == 0); // asc/desc order
 
-        template<>
-        inline void order_kernel<2>(
-            Tkey *__restrict__ m, Tval *__restrict__ id, u32 inc, u32 length, i32 t) {
-            u32 _inc = inc;
-            u32 _dir = length << 1;
+                u32 addr_1 = 0 + i;
+                u32 addr_2 = _inc + i;
 
-            int low      = t & (_inc - 1);    // low order bits (below INC)
-            int i        = (t << 1) - low;    // insert 0 at position INC
-            bool reverse = ((_dir & i) == 0); // asc/desc order
+                // Load
+                Tkey x0   = m[addr_1];
+                Tkey x1   = m[addr_2];
+                Tval idx0 = id[addr_1];
+                Tval idx1 = id[addr_2];
 
-            u32 addr_1 = 0 + i;
-            u32 addr_2 = _inc + i;
+                // Sort
+                _order(x0, x1, idx0, idx1, reverse);
 
-            // Load
-            Tkey x0   = m[addr_1];
-            Tkey x1   = m[addr_2];
-            Tval idx0 = id[addr_1];
-            Tval idx1 = id[addr_2];
-
-            // Sort
-            _order(x0, x1, idx0, idx1, reverse);
-
-            // Store
-            m[addr_1]  = x0;
-            m[addr_2]  = x1;
-            id[addr_1] = idx0;
-            id[addr_2] = idx1;
+                // Store
+                m[addr_1]  = x0;
+                m[addr_2]  = x1;
+                id[addr_1] = idx0;
+                id[addr_2] = idx1;
+            } else {
+                static_assert(
+                    shambase::always_false_v<std::integral_constant<u32, stencil_size>>,
+                    "unsupported stencil_size");
+            }
         }
     };
 
