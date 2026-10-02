@@ -28,11 +28,24 @@
 /// alias to pybind11 namespace
 namespace py = pybind11;
 
+/**
+ * @brief Force default visibility on functions exported across Shamrock libraries
+ *
+ * pybind11 declares its namespace with hidden visibility, and GCC gives every function
+ * taking a pybind11 type as parameter the same hidden visibility. Such functions are then not
+ * exported from the shared library defining them, unless marked explicitly.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+    #define SHAMBINDINGS_EXPORT __attribute__((visibility("default")))
+#else
+    #define SHAMBINDINGS_EXPORT
+#endif
+
 /// function signature used to register python modules
 using fct_sig = std::function<void(py::module &)>;
 
 /// Register a python module init function to be ran on init
-void register_pybind_init_func(fct_sig);
+SHAMBINDINGS_EXPORT void register_pybind_init_func(fct_sig);
 
 /**
  * @brief Internal helper that creates static symbols to register a Python init function via a
