@@ -36,4 +36,9 @@ dependencies = ["openmpi>=5,<6"]
 machine = "debian-generic.acpp"
 env-args = ["--self-contained"]
 mpi-dist = "openmpi"
-bundle-libs = ["$ACPP_INSTALL_DIR/lib", "$BOOST_INSTALL_DIR/lib"]
+bundle-libs = [
+    "$ACPP_INSTALL_DIR/lib",
+    # only the Boost libraries AdaptiveCpp links to (fiber_numa would require the system libnuma)
+    "$BOOST_INSTALL_DIR/lib/libboost_fiber.so*",
+    "$BOOST_INSTALL_DIR/lib/libboost_context.so*",
+]

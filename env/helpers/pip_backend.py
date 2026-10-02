@@ -29,7 +29,8 @@ Supported ``[tool.shamrock-env]`` keys:
 * ``build-type``: ``new-env --type`` (default ``release``)
 * ``mpi-dist``: name of a python distribution providing MPI (e.g. ``openmpi``), used as MPI_HOME
 * ``bundle-libs``: directories (expanded after sourcing ``activate``) whose shared libraries
-  are copied into the wheel's ``lib`` directory, preserving their sub-directory layout
+  are copied into the wheel's ``lib`` directory, preserving their sub-directory layout, or glob
+  patterns of library files to copy there
 
 Supported config settings (``pip install -C key=value``):
 
@@ -41,6 +42,7 @@ Supported config settings (``pip install -C key=value``):
 
 import base64
 import csv
+import glob
 import hashlib
 import io
 import os
@@ -152,6 +154,23 @@ def _run_in_env(builddir, cmds, env, capture=False):
     subprocess.run(["bash", "-c", script], cwd=builddir, env=env, check=True)
 
 
+def _bundle_libs(entry, destdir):
+    """Bundle a directory (all its shared libraries, keeping the layout) or a glob of files"""
+    if any(c in entry for c in "*?["):
+        files = sorted(Path(p) for p in glob.glob(entry))
+        if not files:
+            raise RuntimeError(f"bundle-libs pattern matches no file: {entry}")
+        for f in files:
+            if f.is_symlink() and f.name.endswith(".so"):
+                continue
+            dest = Path(destdir) / f.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, dest, follow_symlinks=True)
+            _log(f"bundled {f} -> {dest}")
+    else:
+        _copy_shared_libs(entry, destdir)
+
+
 def _copy_shared_libs(srcdir, destdir):
     srcdir = Path(srcdir)
     if not srcdir.is_dir():
@@ -193,13 +212,13 @@ def _sanitize_rpaths(root, env):
         ).stdout.strip()
         entries = [e for e in rpath.split(":") if e]
         keep = list(dict.fromkeys(e for e in entries if e.startswith("$ORIGIN")))
+        # bundled libraries depend on each other and all live in the same directory
+        if not keep:
+            keep = ["$ORIGIN"]
         if keep == entries:
             continue
-        if keep:
-            subprocess.run([patchelf, "--set-rpath", ":".join(keep), str(f)], check=True)
-        else:
-            subprocess.run([patchelf, "--remove-rpath", str(f)], check=True)
-        _log(f"RUNPATH of {f.name}: {':'.join(keep) or '<removed>'}")
+        subprocess.run([patchelf, "--set-rpath", ":".join(keep), str(f)], check=True)
+        _log(f"RUNPATH of {f.name}: {':'.join(keep)}")
 
 
 def _build(config_settings, builddir, stagedir):
@@ -272,7 +291,7 @@ def _build(config_settings, builddir, stagedir):
         )
         dirs = out.split("@@SHAMROCK_BUNDLE@@", 1)[1].split()
         for d in dirs:
-            _copy_shared_libs(d, datadir / "lib")
+            _bundle_libs(d, datadir / "lib")
 
     _sanitize_rpaths(datadir, env)
     _sanitize_rpaths(platlib, env)
