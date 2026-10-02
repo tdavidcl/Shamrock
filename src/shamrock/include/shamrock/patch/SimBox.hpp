@@ -176,15 +176,17 @@ namespace shamrock::patch {
         /// @todo replace vectype primtype in the code by primtype and sycl::vec<primtype,3> for the
         /// others
         template<class primtype>
-        void clean_box(primtype tol);
+        inline void clean_box(primtype tol) {
+            static_assert(
+                std::is_same_v<primtype, f32> || std::is_same_v<primtype, f64>,
+                "clean_box is only implemented for f32 & f64");
 
-        template<>
-        inline void clean_box<f32>(f32 tol) {
+            using T3 = sycl::vec<primtype, 3>;
 
-            auto [bmin, bmax] = get_bounding_box<f32_3>();
+            auto [bmin, bmax] = get_bounding_box<T3>();
 
-            f32_3 center   = (bmin + bmax) / 2;
-            f32_3 cur_delt = bmax - bmin;
+            T3 center   = (bmin + bmax) / 2;
+            T3 cur_delt = bmax - bmin;
             cur_delt /= 2;
 
             cur_delt *= tol;
@@ -192,23 +194,7 @@ namespace shamrock::patch {
             bmin = center - cur_delt;
             bmax = center + cur_delt;
 
-            set_bounding_box<f32_3>({bmin, bmax});
-        }
-
-        template<>
-        inline void clean_box<f64>(f64 tol) {
-            auto [bmin, bmax] = get_bounding_box<f64_3>();
-
-            f64_3 center   = (bmin + bmax) / 2;
-            f64_3 cur_delt = bmax - bmin;
-            cur_delt /= 2;
-
-            cur_delt *= tol;
-
-            bmin = center - cur_delt;
-            bmax = center + cur_delt;
-
-            set_bounding_box<f64_3>({bmin, bmax});
+            set_bounding_box<T3>({bmin, bmax});
         }
 
         template<class primtype>
