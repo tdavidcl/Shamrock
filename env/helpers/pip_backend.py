@@ -170,14 +170,14 @@ def _is_elf(path):
         return f.read(4) == b"\x7fELF"
 
 
-def _sanitize_rpaths(root):
+def _sanitize_rpaths(root, env):
     """Keep only the $ORIGIN relative RUNPATH entries of the ELF files in root
 
     The build leaves absolute paths in the RUNPATHs (pip's temporary build environment, the
     AdaptiveCpp & Boost install directories in the build directory, ...). They must not end up in
     the wheel: everything needed at runtime is found relative to $ORIGIN.
     """
-    patchelf = shutil.which("patchelf")
+    patchelf = shutil.which("patchelf", path=env["PATH"])
     if patchelf is None:
         raise RuntimeError("patchelf is required to fix the RUNPATHs of the wheel libraries")
 
@@ -206,6 +206,12 @@ def _build(config_settings, builddir, stagedir):
     _log(f"build directory: {builddir}")
 
     env = dict(os.environ)
+
+    # With --no-build-isolation, the scripts dir of the environment (where pip installs cmake, ninja,
+    # patchelf, ...) is not necessarily in PATH. Append it, so that the tools of an isolated build
+    # environment (already in PATH) still take precedence.
+    scripts_dir = sysconfig.get_path("scripts")
+    env["PATH"] = env.get("PATH", "") + os.pathsep + scripts_dir
     if cfg.get("mpi-dist"):
         mpi_home = _dist_prefix(cfg["mpi-dist"])
         _log(f"using MPI from the '{cfg['mpi-dist']}' distribution: {mpi_home}")
@@ -264,8 +270,8 @@ def _build(config_settings, builddir, stagedir):
         for d in dirs:
             _copy_shared_libs(d, datadir / "lib")
 
-    _sanitize_rpaths(datadir)
-    _sanitize_rpaths(platlib)
+    _sanitize_rpaths(datadir, env)
+    _sanitize_rpaths(platlib, env)
 
 
 def _record_hash(data):
