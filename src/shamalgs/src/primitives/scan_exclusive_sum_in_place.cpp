@@ -164,7 +164,8 @@ namespace shamalgs::primitives {
                 self.set(StdScan{});
     #endif
 #else
-    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
+    #if defined(SYCL2020_FEATURE_GROUP_REDUCTION)                                                  \
+        && !defined(SHAMROCK_NO_INTERGROUP_FORWARD_PROGRESS)
                 self.set(DecoupledLookback512{});
     #else
                 self.set(StdScan{});
