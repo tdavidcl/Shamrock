@@ -74,6 +74,7 @@
 #include <functional>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -1290,47 +1291,110 @@ namespace sham::gui {
         std::printf("}\n");
     }
 
+    /// Command-line options of shamrock_gui: the flags as given, and what follows from them.
+    struct CliArgs {
+        /// --screenshot PATH: save a PNG of the window before exiting (an empty PATH is ignored)
+        std::optional<std::string> screenshot = std::nullopt;
+
+        /// --frames N: frames rendered before saving the screenshot
+        std::optional<int> frames = std::nullopt;
+
+        /// --bench N: render N frames (after 30 warm-up frames) and print per-frame timings
+        std::optional<int> bench = std::nullopt;
+
+        /// --layout NAME: start with this layout instead of the saved one
+        std::optional<std::string> layout = std::nullopt;
+
+        /// --ui-scale S: initial UI scale (clamped to [UI::MIN, UI::MAX])
+        std::optional<double> ui_scale = std::nullopt;
+
+        /// --profile: start with the Profile pane shown
+        std::optional<bool> profile = std::nullopt;
+
+        /// --assets DIR: folder holding fonts/ and the logo
+        std::optional<std::string> assets = std::nullopt;
+
+        /// -h / --help
+        std::optional<bool> is_help = std::nullopt;
+
+        /// first unrecognised argument (parsing stops there)
+        std::optional<std::string> unknown_arg = std::nullopt;
+
+        /// false for headless runs (--screenshot, --bench): deterministic clock, no vsync, no .ini
+        bool interactive_mode() const { return !screenshot && !bench; }
+
+        /// frames rendered before exiting: --bench N + 30 warm-up frames, else --frames (default
+        /// 45) with --screenshot, empty for an interactive run
+        std::optional<int> frames_before_exit() const {
+            if (bench)
+                return *bench + 30;
+            if (screenshot)
+                return frames.value_or(45);
+            return std::nullopt;
+        }
+
+        /// set when main must print the usage and return right away
+        std::optional<int> exit_code() const {
+            if (is_help.value_or(false))
+                return 0;
+            if (unknown_arg)
+                return 1;
+            return std::nullopt;
+        }
+    };
+
+    /// Parse argv into CliArgs; stops at -h / --help or at the first unknown option.
+    static CliArgs parse_cli(int argc, char **argv) {
+        CliArgs cli;
+        for (int i = 1; i < argc; ++i) {
+            std::string a = argv[i];
+            auto next     = [&]() {
+                return i + 1 < argc ? std::string(argv[++i]) : std::string();
+            };
+            if (a == "--screenshot") {
+                if (std::string path = next(); !path.empty())
+                    cli.screenshot = path;
+            } else if (a == "--frames") {
+                cli.frames = std::stoi(next());
+            } else if (a == "--bench") {
+                if (int n = std::stoi(next()); n > 0)
+                    cli.bench = n;
+            } else if (a == "--layout") {
+                cli.layout = next();
+            } else if (a == "--ui-scale") {
+                cli.ui_scale = std::stod(next());
+            } else if (a == "--profile") {
+                cli.profile = true;
+            } else if (a == "--assets") {
+                cli.assets = next();
+            } else if (a == "-h" || a == "--help") {
+                cli.is_help = true;
+                break;
+            } else {
+                cli.unknown_arg = a;
+                break;
+            }
+        }
+        return cli;
+    }
+
 } // namespace sham::gui
 
 int main(int argc, char **argv) {
     using namespace sham::gui;
-    std::string layout = "tall", screenshot;
-    int frames = 45, bench = 0;
-    double ui_scale      = 1.0;
-    bool layout_from_cli = false, show_profile = false;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next     = [&]() {
-            return i + 1 < argc ? std::string(argv[++i]) : std::string();
-        };
-        if (a == "--layout") {
-            layout          = next();
-            layout_from_cli = true;
-        } else if (a == "--screenshot")
-            screenshot = next();
-        else if (a == "--frames")
-            frames = std::stoi(next());
-        else if (a == "--bench")
-            bench = std::stoi(next());
-        else if (a == "--ui-scale")
-            ui_scale = std::stod(next());
-        else if (a == "--profile")
-            show_profile = true;
-        else if (a == "--assets")
-            g_assets = next();
-        else {
-            std::printf(
-                "usage: %s [--layout stack|tall|fat|grid|horizontal|vertical|splits] [--ui-scale "
-                "1.5] [--profile] [--screenshot out.png] [--frames N] "
-                "[--bench N] [--assets DIR]\n",
-                argv[0]);
-            return a == "-h" || a == "--help" ? 0 : 1;
-        }
+    const CliArgs cli = parse_cli(argc, argv);
+    if (std::optional<int> code = cli.exit_code()) {
+        std::printf(
+            "usage: %s [--layout stack|tall|fat|grid|horizontal|vertical|splits] [--ui-scale "
+            "1.5] [--profile] [--screenshot out.png] [--frames N] "
+            "[--bench N] [--assets DIR]\n",
+            argv[0]);
+        return *code;
     }
+    if (cli.assets)
+        g_assets = *cli.assets;
     if (!fs::exists(g_assets / "fonts"))
         g_assets = fs::path(argv[0]).parent_path() / "assets";
-    if (bench)
-        frames = bench + 30;
 
     if (!glfwInit())
         return 1;
@@ -1342,7 +1406,7 @@ int main(int argc, char **argv) {
     if (!window)
         return 1;
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(bench || !screenshot.empty() ? 0 : 1);
+    glfwSwapInterval(cli.interactive_mode() ? 1 : 0);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -1350,16 +1414,20 @@ int main(int argc, char **argv) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // interactive runs remember the arrangement; screenshots and benchmarks always start from the
     // preset
-    io.IniFilename = (bench || !screenshot.empty()) ? nullptr : "shamrock_gui_layout.ini";
+    io.IniFilename = cli.interactive_mode() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
     g_fonts = load_fonts(g_assets / "fonts");
     App::setup_style();
 
-    App app(layout, !screenshot.empty(), frames, bench);
-    app.layout_from_cli  = layout_from_cli;
-    app.profile_from_cli = show_profile;
-    app.visible['f'] = app.was_visible['f'] = show_profile;
+    App app(
+        cli.layout.value_or("tall"),
+        cli.screenshot.has_value(),
+        cli.frames_before_exit().value_or(0),
+        cli.bench.value_or(0));
+    app.layout_from_cli  = cli.layout.has_value();
+    app.profile_from_cli = cli.profile.value_or(false);
+    app.visible['f'] = app.was_visible['f'] = cli.profile.value_or(false);
     g_app                                   = &app;
     { // layout options live in the same .ini as the dock tree
         ImGuiSettingsHandler h;
@@ -1370,7 +1438,7 @@ int main(int argc, char **argv) {
         h.WriteAllFn = ini_write;
         ImGui::AddSettingsHandler(&h);
     }
-    app.ui_scale = std::min(UI::MAX, std::max(UI::MIN, ui_scale));
+    app.ui_scale = std::min(UI::MAX, std::max(UI::MIN, cli.ui_scale.value_or(1.0)));
     app.post_init();
 
     int fbw = 0, fbh = 0;
@@ -1387,13 +1455,13 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (app.want_exit && !screenshot.empty())
-            take_screenshot(screenshot);
+        if (app.want_exit && cli.screenshot)
+            take_screenshot(*cli.screenshot);
         glfwSwapBuffers(window);
         if (app.want_exit)
             break;
     }
-    if (bench)
+    if (cli.bench)
         print_bench(app, 30);
 
     ImGui_ImplOpenGL3_Shutdown();
