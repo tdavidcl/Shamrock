@@ -64,7 +64,12 @@ class RadixTree {
     RadixTree() = default;
 
     public:
-    using ipos_t  = typename shamrock::sfc::MortonCodes<Umorton, dim>::int_vec_repr;
+    using ipos_t = typename shamrock::sfc::MortonCodes<Umorton, dim>::int_vec_repr;
+
+    // declared before any use so that RadixTreeField has one meaning in the class
+    template<class T>
+    using RadixTreeField = ::RadixTreeField<T>;
+
     using coord_t = typename shambase::VectorProperties<Tvec>::component_type;
 
     static constexpr u32 tree_depth = Morton::significant_bits + 1;
@@ -187,9 +192,6 @@ class RadixTree {
 
         return cmp;
     }
-
-    template<class T>
-    using RadixTreeField = ::RadixTreeField<T>;
 
     template<class T, class LambdaComputeLeaf, class LambdaCombinator>
     RadixTreeField<T> compute_field(
