@@ -43,8 +43,14 @@ else()
     message(STATUS "shamrock_gui fonts: stb_truetype")
 endif()
 
-set(sources src/main.cpp src/DemoSimulation.cpp src/GraphPane.cpp src/ProfilePane.cpp
-            src/ScriptPane.cpp src/ViewerPane.cpp
+set(sources
+    src/main.cpp
+    src/DemoSimulation.cpp
+    src/GraphPane.cpp
+    src/ProfilePane.cpp
+    src/ScriptPane.cpp
+    src/screenshot.cpp
+    src/ViewerPane.cpp
 )
 add_executable(shamrock_gui ${sources})
 target_include_directories(

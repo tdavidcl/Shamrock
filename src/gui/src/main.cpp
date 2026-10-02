@@ -44,6 +44,7 @@
 #include "sham/gui/font.hpp"
 #include "sham/gui/format.hpp"
 #include "sham/gui/icons.hpp"
+#include "sham/gui/screenshot.hpp"
 #include "sham/gui/style.hpp"
 #include "sham/gui/ui.hpp"
 #include <GLFW/glfw3.h>
@@ -55,8 +56,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 // scalar path only: the NEON code uses C99 compound literals, rejected by -pedantic-errors, and the
 // logo is resized once at startup
 #define STBIR_NO_SIMD
@@ -1388,20 +1387,8 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (app.want_exit && !screenshot.empty()) {
-            std::vector<uint8_t> px(size_t(fbw) * fbh * 4), flipped(px.size());
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            glReadPixels(0, 0, fbw, fbh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-            for (int j = 0; j < fbh; ++j)
-                std::memcpy(
-                    &flipped[size_t(j) * fbw * 4],
-                    &px[size_t(fbh - 1 - j) * fbw * 4],
-                    size_t(fbw) * 4);
-            for (size_t k = 3; k < flipped.size(); k += 4)
-                flipped[k] = 255;
-            stbi_write_png(screenshot.c_str(), fbw, fbh, 4, flipped.data(), fbw * 4);
-            std::printf("saved %s\n", screenshot.c_str());
-        }
+        if (app.want_exit && !screenshot.empty())
+            take_screenshot(screenshot);
         glfwSwapBuffers(window);
         if (app.want_exit)
             break;
