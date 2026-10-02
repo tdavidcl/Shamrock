@@ -36,8 +36,7 @@ namespace shamalgs::numeric {
 #ifdef __MACH__ // decoupled lookback perf on mac os is awful
         return details::exclusive_sum_fallback(q, buf1, len);
 #else
-    #if defined(SYCL2020_FEATURE_GROUP_REDUCTION)                                                  \
-        && !defined(SHAMROCK_NO_INTERGROUP_FORWARD_PROGRESS)
+    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
         return details::exclusive_sum_atomic_decoupled_v5<T, 512>(q, buf1, len);
     #else
         return details::exclusive_sum_fallback(q, buf1, len);
@@ -51,8 +50,7 @@ namespace shamalgs::numeric {
 #ifdef __MACH__ // decoupled lookback perf on mac os is awful
         return details::exclusive_sum_fallback_usm(sched, buf1, len);
 #else
-    #if defined(SYCL2020_FEATURE_GROUP_REDUCTION)                                                  \
-        && !defined(SHAMROCK_NO_INTERGROUP_FORWARD_PROGRESS)
+    #ifdef SYCL2020_FEATURE_GROUP_REDUCTION
         return details::exclusive_sum_atomic_decoupled_v5_usm<T, 512>(sched, buf1, len);
     #else
         return details::exclusive_sum_fallback_usm(sched, buf1, len);
@@ -67,11 +65,7 @@ namespace shamalgs::numeric {
 
     template<class T>
     void scan_exclusive_in_place(sycl::queue &q, sycl::buffer<T> &buf1, u32 len) {
-#ifdef SHAMROCK_NO_INTERGROUP_FORWARD_PROGRESS
-        buf1 = details::exclusive_sum_fallback(q, buf1, len);
-#else
         buf1 = details::exclusive_sum_atomic_decoupled_v5<T, 256>(q, buf1, len);
-#endif
     }
 
     template<class T>
