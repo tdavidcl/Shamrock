@@ -62,11 +62,8 @@ namespace sham::gui {
 
     /// Command-line options of shamrock_gui.
     struct CliArgs {
-        /// --screenshot: save PNG of window before exit
-        std::string screenshot = {};
-
-        /// false for headless runs (--screenshot): deterministic clock, no vsync, no .ini
-        bool interactive_mode = true;
+        /// --screenshot: save PNG of window before exit, empty for an interactive run
+        std::optional<std::string> screenshot = std::nullopt;
 
         /// frames rendered before exiting: --frames N (default 45) with --screenshot, empty for an
         /// interactive run
@@ -74,6 +71,9 @@ namespace sham::gui {
 
         /// set when main must return right away (usage printed)
         std::optional<int> exit_code = std::nullopt;
+
+        /// false for headless runs (--screenshot): deterministic clock, no vsync, no .ini
+        bool interactive_mode() const { return !screenshot; }
     };
 
     /// Parse argv; prints the usage and sets exit_code on -h / --help or an unknown option.
@@ -85,9 +85,11 @@ namespace sham::gui {
             auto next     = [&]() {
                 return i + 1 < argc ? std::string(argv[++i]) : std::string();
             };
-            if (a == "--screenshot")
-                cli.screenshot = next();
-            else if (a == "--frames")
+            if (a == "--screenshot") {
+                // an empty path keeps the interactive mode
+                if (std::string path = next(); !path.empty())
+                    cli.screenshot = path;
+            } else if (a == "--frames")
                 frames = std::stoi(next());
             else {
                 std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
@@ -95,8 +97,7 @@ namespace sham::gui {
                 return cli;
             }
         }
-        cli.interactive_mode = cli.screenshot.empty();
-        if (!cli.screenshot.empty())
+        if (cli.screenshot)
             cli.frames_before_exit = frames.value_or(45);
         return cli;
     }
@@ -122,18 +123,18 @@ int main(int argc, char **argv) {
         return 1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(cli.interactive_mode ? 1 : 0);
+    glfwSwapInterval(cli.interactive_mode() ? 1 : 0);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // interactive runs remember the arrangement; screenshots always start from scratch
-    io.IniFilename = cli.interactive_mode ? "shamrock_gui_layout.ini" : nullptr;
+    io.IniFilename = cli.interactive_mode() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    GuiClock gui_clock(!cli.interactive_mode);
+    GuiClock gui_clock(!cli.interactive_mode());
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -160,8 +161,8 @@ int main(int argc, char **argv) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (want_exit && !cli.screenshot.empty())
-            take_screenshot(cli.screenshot);
+        if (want_exit && cli.screenshot)
+            take_screenshot(*cli.screenshot);
         glfwSwapBuffers(window);
         if (want_exit)
             break;
