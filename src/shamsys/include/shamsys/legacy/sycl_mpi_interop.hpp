@@ -80,7 +80,7 @@ namespace mpi_sycl_interop {
         u32 comm_sz;
         std::unique_ptr<sycl::buffer<T>> &sycl_buf;
 
-        BufferMpiRequest<T>(
+        BufferMpiRequest(
             std::unique_ptr<sycl::buffer<T>> &sycl_buf,
             comm_type comm_mode,
             op_type comm_op,
