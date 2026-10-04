@@ -38,7 +38,17 @@
      RCaption(const std::string& caption, time_t timestamp, const FXFont& font);
 --- a/src/gource.cpp
 +++ b/src/gource.cpp
-@@ -881,6 +881,7 @@
+@@ -55,7 +55,8 @@
+     fontmedium.dropShadow(true);
+     fontmedium.roundCoordinates(false);
+
+-    fontcaption = fontmanager.grab(gGourceSettings.font_file, gGourceSettings.caption_size);
++    // scale captions like the other fonts so they keep the same relative size at higher resolutions
++    fontcaption = fontmanager.grab(gGourceSettings.font_file, glm::clamp((int)(gGourceSettings.caption_size * gGourceSettings.font_scale), 1, 200));
+     fontcaption.dropShadow(true);
+     fontcaption.roundCoordinates(false);
+     fontcaption.alignTop(false);
+@@ -881,6 +882,7 @@
      dir_bounds.reset();
      commitqueue.clear();
      tagusermap.clear();
@@ -46,7 +56,7 @@
      gGourceRemovedFiles.clear();
 
      if(userTree!=0) delete userTree;
-@@ -1187,6 +1188,27 @@
+@@ -1187,6 +1189,27 @@
 
  void Gource::processCommit(const RCommit& commit, float t) {
 
@@ -74,7 +84,7 @@
      //find files of this commit or create it
      for(std::list<RCommitFile>::const_iterator it = commit.files.begin(); it != commit.files.end(); it++) {
 
-@@ -1813,23 +1835,6 @@
+@@ -1813,23 +1836,6 @@
 
          float y = caption_start_y;
 
@@ -98,7 +108,7 @@
          int caption_offset_x = gGourceSettings.caption_offset;
 
          // centre
-@@ -1859,6 +1864,25 @@
+@@ -1859,6 +1865,25 @@
           it++;
      }
 
@@ -124,7 +134,7 @@
      //reset loop counters
      gGourceUserInnerLoops = 0;
      gGourceDirNodeInnerLoops = 0;
-@@ -2398,6 +2422,82 @@
+@@ -2398,6 +2423,83 @@
 
  }
 
@@ -145,11 +155,12 @@
 +
 +    const float text_h    = fontmedium.getMaxHeight();
 +    const float icon_size = glm::floor(text_h * 1.2f);
-+    const float row_h     = glm::max(text_h, icon_size) + 6.0f;
-+    const float right_x   = display.width - 20.0f;
-+    const float top_y     = 20.0f;
++    const float fs        = gGourceSettings.font_scale;
++    const float row_h     = glm::max(text_h, icon_size) + 6.0f * fs;
++    const float right_x   = display.width - 20.0f * fs;
++    const float top_y     = 20.0f * fs;
 +    const float count_w   = fontmedium.getWidth("00000");
-+    const float name_r    = right_x - count_w - 12.0f;
++    const float name_r    = right_x - count_w - 12.0f * fs;
 +    const float ease      = glm::min(1.0f, dt * 6.0f);
 +
 +    fontmedium.setColour(vec4(gGourceSettings.font_colour, 0.7f));
@@ -173,11 +184,11 @@
 +        char count_str[32];
 +        snprintf(count_str, sizeof(count_str), "%d", e.count);
 +
-+        float text_y = glm::floor(e.y + (row_h - text_h) * 0.5f - 3.0f);
++        float text_y = glm::floor(e.y + (row_h - text_h) * 0.5f - 3.0f * fs);
 +        float name_w = fontmedium.getWidth(name);
 +
 +        if(e.icon != 0) {
-+            float ix = glm::floor(name_r - name_w - 8.0f - icon_size);
++            float ix = glm::floor(name_r - name_w - 8.0f * fs - icon_size);
 +            float iy = glm::floor(e.y);
 +
 +            glEnable(GL_BLEND);
@@ -207,7 +218,7 @@
  void Gource::draw(float t, float dt) {
 
      display.mode2D();
-@@ -2661,6 +2761,8 @@
+@@ -2661,6 +2763,8 @@
          caption->draw();
      }
 

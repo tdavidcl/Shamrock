@@ -51,6 +51,8 @@ rm -f avatar.tmp
 
 w=${RESOLUTION%x*}
 h=${RESOLUTION#*x}
+# fonts are scaled by the patched gource, keep the caption margin proportional too
+caption_offset=$(( -20 * h / 1080 ))
 
 echo "==> rendering ${RESOLUTION} to /out/${OUTPUT}"
 GOURCE_USER_COUNTS="$COUNT_ROWS" GOURCE_CAPTION_MAX_LINES="$CAPTION_LINES" \
@@ -58,7 +60,7 @@ xvfb-run -a -s "-screen 0 ${w}x${h}x24" \
     gource repo.log "-${RESOLUTION}" \
         --title "$TITLE" \
         --caption-file captions.txt --caption-size 18 --caption-colour DDDDDD \
-        --caption-duration 3 --caption-offset -20 \
+        --caption-duration 3 --caption-offset "$caption_offset" \
         --user-image-dir avatars --user-scale 1.5 \
         --highlight-users --highlight-colour FFD54F \
         --seconds-per-day "$SECONDS_PER_DAY" --auto-skip-seconds 0.3 \
