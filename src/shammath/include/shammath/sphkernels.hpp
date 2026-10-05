@@ -22,6 +22,7 @@
 #include "shambase/type_name_info.hpp"
 #include "shambackends/math.hpp"
 #include "shammath/integrator.hpp"
+#include <array>
 
 namespace shammath::details {
 
@@ -2342,10 +2343,95 @@ namespace shammath {
             return -(BaseKernel::norm_3d) * (3 * f(r / h) + (r / h) * df(r / h)) / (h * h * h * h);
         }
 
+        /**
+         * @brief Sample points of the z grid used by @ref f3d_integ_z
+         *
+         * Replays exactly the points visited by
+         * `integ_riemann_sum(-Rkern, Rkern, Rkern / np, ...)` and checks whether they form the
+         * grid `z_k = -Rkern + k * Rkern / np` for `k = 0, ..., 2np - 1` that is exactly symmetric
+         * around 0, i.e. `z_{2np - k} == -z_k` for `k = 1, ..., 2np - 1`.
+         */
+        template<int np>
+        struct ColumnZGrid {
+            static constexpr int n = 2 * np;
+            std::array<Tscal, n> z{};
+            bool symmetric = false;
+        };
+
+        template<int np>
+        static constexpr ColumnZGrid<np> make_column_z_grid() {
+            ColumnZGrid<np> grid{};
+            constexpr Tscal step = Rkern / np;
+
+            // same loop as integ_riemann_sum
+            int cnt = 0;
+            for (Tscal z = -Rkern; z < Rkern; z += step) {
+                if (cnt == grid.n) {
+                    return grid; // more samples than expected, not symmetric
+                }
+                grid.z[cnt++] = z;
+            }
+
+            if (cnt != grid.n || grid.z[np] != 0) {
+                return grid;
+            }
+            for (int k = 1; k < grid.n; k++) {
+                if (grid.z[grid.n - k] != -grid.z[k]) {
+                    return grid;
+                }
+            }
+
+            grid.symmetric = true;
+            return grid;
+        }
+
+        /**
+         * @brief Riemann sum of \f$ f(\sqrt{x^2 + z^2}) \f$ along z over the kernel support
+         *
+         * When the z grid is exactly symmetric (true for every kernel here with a power of two
+         * `np`), \f$ f(\sqrt{x^2 + z^2}) \f$ is only evaluated at the `np + 1` samples with
+         * \f$ z \le 0 \f$ and reused for their mirror. The terms are still summed in the original
+         * order and `x * x + z * z` is computed as `fma(z, z, x * x)` (exact `z * z`), so the
+         * result is bitwise identical to the plain Riemann sum (as long as the compiler makes the
+         * same FMA contraction choices for both, which is not guaranteed under
+         * `-ffp-contract=fast`, e.g. x86 with `-march=native`).
+         */
+        template<int np>
+        inline static Tscal f3d_integ_z(Tscal x) {
+            constexpr ColumnZGrid<np> grid = make_column_z_grid<np>();
+            constexpr Tscal step           = Rkern / np;
+
+            if constexpr (grid.symmetric) {
+                Tscal xx = x * x;
+
+                Tscal fz[np + 1];
+                for (int k = 0; k <= np; k++) {
+                    fz[k] = f(sqrt(sycl::fma(grid.z[k], grid.z[k], xx)));
+                }
+
+                Tscal acc = {};
+                for (int k = 0; k < grid.n; k++) {
+                    acc += fz[(k <= np) ? k : grid.n - k] * step;
+                }
+                return acc;
+            } else {
+                return integ_riemann_sum<Tscal>(-Rkern, Rkern, step, [&](Tscal z) {
+                    return f(sqrt(x * x + z * z));
+                });
+            }
+        }
+
         inline static Tscal f3d_integ_z(Tscal x, int np = 32) {
-            return integ_riemann_sum<Tscal>(-Rkern, Rkern, Rkern / np, [&](Tscal z) {
-                return f(sqrt(x * x + z * z));
-            });
+            switch (np) {
+            case 4 : return f3d_integ_z<4>(x);
+            case 8 : return f3d_integ_z<8>(x);
+            case 16: return f3d_integ_z<16>(x);
+            case 32: return f3d_integ_z<32>(x);
+            default:
+                return integ_riemann_sum<Tscal>(-Rkern, Rkern, Rkern / np, [&](Tscal z) {
+                    return f(sqrt(x * x + z * z));
+                });
+            }
         }
 
         inline static Tscal Y_3d(Tscal r, Tscal h, int np = 32) {
