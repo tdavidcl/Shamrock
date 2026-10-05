@@ -2370,16 +2370,9 @@ namespace shammath {
         }
 
         inline static Tscal f3d_integ_z(Tscal x, int np = 32) {
-            switch (np) {
-            case 4 : return f3d_integ_z<4>(x);
-            case 8 : return f3d_integ_z<8>(x);
-            case 16: return f3d_integ_z<16>(x);
-            case 32: return f3d_integ_z<32>(x);
-            default:
-                return integ_riemann_sum<Tscal>(-Rkern, Rkern, Rkern / np, [&](Tscal z) {
-                    return f(sqrt(x * x + z * z));
-                });
-            }
+            return integ_riemann_sum<Tscal>(-Rkern, Rkern, Rkern / np, [&](Tscal z) {
+                return f(sqrt(x * x + z * z));
+            });
         }
 
         inline static Tscal Y_3d(Tscal r, Tscal h, int np) {
