@@ -1,8 +1,8 @@
 # SPH kernel optimisations
 
 This page documents optimisations of the SPH kernel functions defined in
-`shammath/sphkernels.hpp` (`shammath::SPHKernelGen`): what was changed, why it is valid, and what
-it costs in accuracy.
+`shammath/sphkernels.hpp` (`shammath::SPHKernelGen`): the underlying choices of optimisations, why
+they are valid, and what they cost in accuracy, if anything.
 
 ## Column-integrated kernel `Y_3d`
 
