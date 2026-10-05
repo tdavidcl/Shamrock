@@ -32,7 +32,10 @@ render kernels.
 
 ### Symmetric sampling
 
-![Y_3d z samples before and after](sph_kernel_y3d_sampling.svg)
+<!-- inlined (not an <img>) so that the figure picks up the theme colours and the light/dark switch -->
+```{raw} html
+:file: sph_kernel_y3d_sampling.svg
+```
 
 Three properties of the sum reduce the number of kernel evaluations from $2 n_p$ to $n_p$:
 
