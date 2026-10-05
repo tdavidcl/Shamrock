@@ -2346,13 +2346,19 @@ namespace shammath {
         /**
          * @brief Riemann sum of \f$ f(\sqrt{x^2 + z^2}) \f$ along z over the kernel support
          *
-         * Samples the grid `z_k = k * Rkern / np` for `k = -np, ..., np - 1`, i.e. the same
-         * points as `integ_riemann_sum(-Rkern, Rkern, Rkern / np, ...)`. The grid is symmetric
-         * around 0, so \f$ f(\sqrt{x^2 + z^2}) \f$ is evaluated once at `z = 0` and once per
-         * `k = 1, ..., np - 1`, counting the latter twice for their mirror `-z_k`. The
-         * `z = -Rkern` sample is dropped since `f(Rkern) == 0` for every kernel (compact
-         * support). The floating point additions are reordered with respect to the plain Riemann
-         * sum, so both match only up to a few ulp per term, not bitwise.
+         * Samples the grid `z_k = k * step`, `step = Rkern / np`, for `k = -np, ..., np - 1`.
+         * These are the points visited by `integ_riemann_sum(-Rkern, Rkern, step, ...)` whenever
+         * its accumulated `z += step` is exact (e.g. a power of two `np` with the kernels here).
+         * The grid is symmetric around 0, so \f$ f(\sqrt{x^2 + z^2}) \f$ is evaluated once at
+         * `z = 0` (as `f(|x|)`, equal to `f(sqrt(x * x))` barring over/underflow) and once per
+         * `k = 1, ..., np - 1`, counted twice for its mirror `-z_k`. The `z = -Rkern` sample is
+         * dropped since its argument \f$ \sqrt{x^2 + R_{\rm kern}^2} \ge R_{\rm kern} \f$ is
+         * outside the compact support, where `f` is 0.
+         *
+         * `x * x + z * z` is computed as `fma(z, z, x * x)` and `step` is factored out of the
+         * sum, so the operations are reordered with respect to the plain Riemann sum: both match
+         * up to a few ulp per term, not bitwise. The runtime `np` overload below still computes
+         * the plain Riemann sum.
          */
         template<int np>
         inline static Tscal f3d_integ_z(Tscal x) {
