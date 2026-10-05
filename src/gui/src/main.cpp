@@ -11,8 +11,8 @@
  * @file main.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Shamrock control GUI: for now a Dear ImGui (docking branch) frame loop showing an empty
- * dock area that fills the window, with a headless test mode (deterministic 60 fps clock for
- * --screenshot).
+ * dock area that fills the window, with headless test modes (deterministic 60 fps clock for
+ * --screenshot / --bench).
  *
  * Interactive runs remember the dock arrangement in shamrock_gui_layout.ini.
  *
@@ -20,12 +20,14 @@
  *
  *     ./shamrock_gui                        interactive
  *     ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
+ *     ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
  *
  */
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "sham/gui/FrameTimings.hpp"
 #include "sham/gui/GuiClock.hpp"
 #include "sham/gui/screenshot.hpp"
 #include <GLFW/glfw3.h>
@@ -68,18 +70,23 @@ namespace sham::gui {
         /// --frames N: frames rendered before saving the screenshot
         std::optional<int> frames = std::nullopt;
 
+        /// --bench N: render N frames (after 30 warm-up frames) and print per-frame timings
+        std::optional<int> bench = std::nullopt;
+
         /// -h / --help
         std::optional<bool> is_help = std::nullopt;
 
         /// first unrecognised argument (parsing stops there)
         std::optional<std::string> unknown_arg = std::nullopt;
 
-        /// false for headless runs (--screenshot): deterministic clock, no vsync, no .ini
-        bool interactive_mode() const { return !screenshot; }
+        /// false for headless runs (--screenshot, --bench): deterministic clock, no vsync, no .ini
+        bool interactive_mode() const { return !screenshot && !bench; }
 
-        /// frames rendered before exiting: --frames (default 45) with --screenshot, empty for an
-        /// interactive run
+        /// frames rendered before exiting: --bench N + 30 warm-up frames, else --frames (default
+        /// 45) with --screenshot, empty for an interactive run
         std::optional<int> frames_before_exit() const {
+            if (bench)
+                return *bench + 30;
             if (screenshot)
                 return frames.value_or(45);
             return std::nullopt;
@@ -108,6 +115,9 @@ namespace sham::gui {
                     cli.screenshot = path;
             } else if (a == "--frames") {
                 cli.frames = std::stoi(next());
+            } else if (a == "--bench") {
+                if (int n = std::stoi(next()); n > 0)
+                    cli.bench = n;
             } else if (a == "-h" || a == "--help") {
                 cli.is_help = true;
                 break;
@@ -125,7 +135,7 @@ int main(int argc, char **argv) {
     using namespace sham::gui;
     const CliArgs cli = parse_cli(argc, argv);
     if (std::optional<int> code = cli.exit_code()) {
-        std::printf("usage: %s [--screenshot out.png] [--frames N]\n", argv[0]);
+        std::printf("usage: %s [--screenshot out.png] [--frames N] [--bench N]\n", argv[0]);
         return *code;
     }
 
@@ -148,12 +158,14 @@ int main(int argc, char **argv) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // interactive runs remember the arrangement; screenshots always start from scratch
+    // interactive runs remember the arrangement; screenshots and benchmarks always start from
+    // scratch
     io.IniFilename = cli.interactive_mode() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
     GuiClock gui_clock(!cli.interactive_mode());
+    FrameTimings timings; // only recorded with --bench
 
     int fbw = 0, fbh = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -161,7 +173,15 @@ int main(int argc, char **argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        if (cli.bench) {
+            timings.begin_frame();
+            // no data update yet (the demo data arrives later): "update" is timed around this
+            // empty step (about 0 ms) so the BENCH JSON keeps the same keys once it lands
+            timings.mark_update();
+        }
         gui();
+        if (cli.bench)
+            timings.mark_ui();
         gui_clock.end_frame();
         const bool want_exit
             = cli.frames_before_exit() && gui_clock.frame_counter >= *cli.frames_before_exit();
@@ -186,6 +206,8 @@ int main(int argc, char **argv) {
         if (want_exit)
             break;
     }
+    if (cli.bench)
+        timings.print(30);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
