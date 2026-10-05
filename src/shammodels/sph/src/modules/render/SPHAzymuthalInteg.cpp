@@ -120,6 +120,14 @@ namespace {
                     if (z[i] == start) {
                         // y >= Rkern^2 always (or NaN), see below
                         fz[i] = 0;
+                    } else if (z[i] == 0) {
+                        // y = fma(0, 0, xx) = xx = RN(x^2) and in radix 2 with round to nearest
+                        // sqrt(RN(x^2)) == |x| as long as x^2 does not underflow (x >= 0 here)
+                        Tscal q = x;
+                        if (!(x >= Tscal(0x1p-511))) [[unlikely]] {
+                            q = sqrt(sycl::fma(z[i], z[i], xx));
+                        }
+                        fz[i] = (xx < Rkern2) ? Kernel::f(q) : Tscal{0};
                     } else {
                         Tscal y = sycl::fma(z[i], z[i], xx);
                         // f(q) is exactly 0 for q >= Rkern (and for NaN) and sqrt(y) >= Rkern
