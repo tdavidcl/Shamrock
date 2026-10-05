@@ -186,7 +186,9 @@ namespace {
         T *__restrict staging_term,
         u32 *__restrict staging_ok,
         Tvec *__restrict ray_origins,
-        Tvec *__restrict ray_directions) {
+        Tvec *__restrict ray_directions,
+        sycl::vec<f32, 4> *__restrict ray_orig_f,
+        sycl::vec<f32, 4> *__restrict ray_dir_f) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -264,11 +266,19 @@ namespace {
 
         // fp32 copies of the direction and of the origin relative to the patch center for the
         // conservative prefilter
-        sycl::vec<f32, 3> dir_f{
-            f32(ray.direction.x()), f32(ray.direction.y()), f32(ray.direction.z())};
-        Tvec orig_rel = ray.origin - center;
-        sycl::vec<f32, 3> orig_f{f32(orig_rel.x()), f32(orig_rel.y()), f32(orig_rel.z())};
-        f32 orig_f_l1 = sycl::fabs(orig_f.x()) + sycl::fabs(orig_f.y()) + sycl::fabs(orig_f.z());
+        // (kept in local memory, otherwise the compiler rematerializes the conversions in the
+        // particle loop)
+        {
+            Tvec orig_rel = ray.origin - center;
+            f32 ox        = f32(orig_rel.x());
+            f32 oy        = f32(orig_rel.y());
+            f32 oz        = f32(orig_rel.z());
+
+            ray_orig_f[st_base + lane]
+                = {ox, oy, oz, sycl::fabs(ox) + sycl::fabs(oy) + sycl::fabs(oz)};
+            ray_dir_f[st_base + lane]
+                = {f32(ray.direction.x()), f32(ray.direction.y()), f32(ray.direction.z()), 0.f};
+        }
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -377,9 +387,11 @@ namespace {
                     // so r_32 > H + 32 e B^2 (+ 1e-30 for fp32 underflows) implies r_64 > H.
                     // NaN / inf never reject.
                     sycl::vec<f32, 4> xf = xyz_rel_f[id_b];
-                    sycl::vec<f32, 3> af{
-                        orig_f.x() - xf.x(), orig_f.y() - xf.y(), orig_f.z() - xf.z()};
-                    f32 bound = orig_f_l1 + xf.w() + sycl::fabs(af.x()) + sycl::fabs(af.y())
+                    sycl::vec<f32, 4> of = ray_orig_f[st_base + lane];
+                    sycl::vec<f32, 4> d4 = ray_dir_f[st_base + lane];
+                    sycl::vec<f32, 3> dir_f{d4.x(), d4.y(), d4.z()};
+                    sycl::vec<f32, 3> af{of.x() - xf.x(), of.y() - xf.y(), of.z() - xf.z()};
+                    f32 bound = of.w() + xf.w() + sycl::fabs(af.x()) + sycl::fabs(af.y())
                                 + sycl::fabs(af.z());
 
                     f32 sf                = sycl::dot(af, dir_f);
@@ -564,6 +576,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                     sycl::local_accessor<u32> staging_ok{column_group_size, cgh};
                     sycl::local_accessor<Tvec> ray_origins{column_group_size, cgh};
                     sycl::local_accessor<Tvec> ray_directions{column_group_size, cgh};
+                    sycl::local_accessor<sycl::vec<f32, 4>> ray_orig_f{column_group_size, cgh};
+                    sycl::local_accessor<sycl::vec<f32, 4>> ray_dir_f{column_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, column_group_size},
@@ -587,7 +601,9 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 &(staging_term[0]),
                                 &(staging_ok[0]),
                                 &(ray_origins[0]),
-                                &(ray_directions[0]));
+                                &(ray_directions[0]),
+                                &(ray_orig_f[0]),
+                                &(ray_dir_f[0]));
                         });
                 };
             });
