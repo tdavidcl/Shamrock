@@ -175,12 +175,16 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict hpart,
         const T *__restrict partmass_val,
         const shambase::VecComponent<Tvec> *__restrict rho_part,
+        const f32 *__restrict hsupport2_up,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field,
         u32 *__restrict staging_id,
-        shambase::VecComponent<Tvec> *__restrict staging_rab2,
-        T *__restrict staging_term) {
+        u32 *__restrict staging_owner,
+        T *__restrict staging_term,
+        u32 *__restrict staging_ok,
+        Tvec *__restrict ray_origins,
+        Tvec *__restrict ray_directions) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -213,25 +217,38 @@ namespace {
         u32 queue_head = 0;
         u32 queue_cnt  = 0;
 
-        // buffer of the particles intersecting the ray, in traversal order
+        // buffer of the candidate particles (that may intersect the ray), in traversal order
         u32 buf_id[column_buf_size];
-        Tscal buf_rab2[column_buf_size];
         u32 buf_cnt = 0;
 
-        // contribution of the particle id_b at squared distance rab2 of the ray
-        auto contrib = [&](u32 id_b, Tscal rab2) -> T {
-            Tscal h_b = hpart[id_b];
+        // Exact test + contribution of the particle id_b for the ray (o, d), this is exactly the
+        // code of the direct computation. Returns false if the particle does not intersect the ray
+        auto contrib = [&](u32 id_b, const Tvec &origin, const Tvec &direction, T &ret) -> bool {
+            Tvec dr = origin - xyz[id_b];
+
+            dr -= direction * sycl::dot(dr, direction);
+
+            Tscal rab2 = sycl::dot(dr, dr);
+            Tscal h_b  = hpart[id_b];
+
+            if (rab2 > h_b * h_b * Rker2) {
+                return false;
+            }
 
             Tscal rab = sycl::sqrt(rab2);
 
             // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
-            return partmass_val[id_b] * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+            ret = partmass_val[id_b] * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+            return true;
         };
 
         // flush computed by this thread only (only used if the buffer is full within a leaf)
         auto flush = [&]() {
             for (u32 i = 0; i < buf_cnt; i++) {
-                acc += contrib(buf_id[i], buf_rab2[i]);
+                T term;
+                if (contrib(buf_id[i], ray.origin, ray.direction, term)) {
+                    acc += term;
+                }
             }
             buf_cnt = 0;
         };
@@ -240,7 +257,14 @@ namespace {
         const u32 lane    = sg.get_local_linear_id();
         const u32 st_base = sg.get_group_linear_id() * sg_size;
 
-        // flush of the whole sub-group: the buffered entries of all threads are computed by
+        ray_origins[st_base + lane]    = ray.origin;
+        ray_directions[st_base + lane] = ray.direction;
+
+        // fp32 copy of the direction for the conservative prefilter
+        sycl::vec<f32, 3> dir_f{
+            f32(ray.direction.x()), f32(ray.direction.y()), f32(ray.direction.z())};
+
+        // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
         // thread adds its own results in its buffer order
         auto flush_cooperative = [&]() {
@@ -256,22 +280,32 @@ namespace {
                                : buf_cnt;
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    u32 w                     = off + j - r0;
-                    staging_id[st_base + w]   = buf_id[j];
-                    staging_rab2[st_base + w] = buf_rab2[j];
+                    u32 w                      = off + j - r0;
+                    staging_id[st_base + w]    = buf_id[j];
+                    staging_owner[st_base + w] = lane;
                 }
 
                 sycl::group_barrier(sg);
 
                 if (r0 + lane < tot) {
-                    staging_term[st_base + lane]
-                        = contrib(staging_id[st_base + lane], staging_rab2[st_base + lane]);
+                    u32 owner = staging_owner[st_base + lane];
+                    T term;
+                    bool ok = contrib(
+                        staging_id[st_base + lane],
+                        ray_origins[st_base + owner],
+                        ray_directions[st_base + owner],
+                        term);
+                    staging_term[st_base + lane] = term;
+                    staging_ok[st_base + lane]   = ok;
                 }
 
                 sycl::group_barrier(sg);
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    acc += staging_term[st_base + off + j - r0];
+                    u32 w = st_base + off + j - r0;
+                    if (staging_ok[w]) {
+                        acc += staging_term[w];
+                    }
                 }
 
                 sycl::group_barrier(sg);
@@ -327,19 +361,27 @@ namespace {
                 u32 leaf_id = leaf_node - tree.offset_leaf;
 
                 particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                    Tvec dr = ray.origin - xyz[id_b];
+                    // same fp64 operation as the exact test (A = o - x_b)
+                    Tvec a = ray.origin - xyz[id_b];
 
-                    dr -= ray.direction * sycl::dot(dr, ray.direction);
+                    // conservative fp32 prefilter: rejects only particles that the exact test
+                    // rejects. |r_32 - R| <= ~20 eps_32 |A|^2 and |r_64 - R| <= ~20 eps_64 |A|^2,
+                    // where R = |A - d (A.d)|^2, r_32 / r_64 the fp32 / fp64 evaluations, so
+                    // r_32 > H + 64 * 2^-23 * |A|^2 (+ 1e-30 for fp32 underflows) implies
+                    // r_64 > H. NaN / inf never reject.
+                    sycl::vec<f32, 3> af{f32(a.x()), f32(a.y()), f32(a.z())};
+                    f32 sf                = sycl::dot(af, dir_f);
+                    sycl::vec<f32, 3> drf = af - dir_f * sf;
+                    f32 r2f               = sycl::dot(drf, drf);
+                    f32 a2f               = sycl::dot(af, af);
 
-                    Tscal rab2 = sycl::dot(dr, dr);
-                    Tscal h_b  = hpart[id_b];
+                    constexpr f32 margin_coef = 64.f / 8388608.f; // 64 * 2^-23
 
-                    if (rab2 > h_b * h_b * Rker2) {
+                    if (r2f > hsupport2_up[id_b] + margin_coef * a2f + 1e-30f) {
                         return;
                     }
 
-                    buf_id[buf_cnt]   = id_b;
-                    buf_rab2[buf_cnt] = rab2;
+                    buf_id[buf_cnt] = id_b;
                     buf_cnt++;
 
                     if (buf_cnt == column_buf_size) {
@@ -439,20 +481,29 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
         // computation `partmass * val * Y / rho_h(partmass, h_b, hfactd)`, hence same bits)
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<f32> hsupport2_up_buf(obj_cnt, dev_sched);
 
         sham::kernel_call(
             queue,
             sham::MultiRef{buf_hpart, buf_field},
-            sham::MultiRef{partmass_val_buf, rho_part_buf},
+            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport2_up_buf},
             obj_cnt,
             [partmass](
                 u32 id_b,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
                 T *__restrict partmass_val,
-                Tscal *__restrict rho_part) {
+                Tscal *__restrict rho_part,
+                f32 *__restrict hsupport2_up) {
+                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+                Tscal h_b = hpart[id_b];
+
                 partmass_val[id_b] = partmass * torender[id_b];
-                rho_part[id_b]     = shamrock::sph::rho_h(partmass, hpart[id_b], Kernel::hfactd);
+                rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                // fp32 upper bound of the exact test threshold h_b * h_b * Rker2
+                hsupport2_up[id_b] = f32(h_b * h_b * Rker2) * (1.f + 1.f / 1048576.f);
             });
 
         u32 group_cnt     = shambase::group_count(nrays, column_group_size);
@@ -466,6 +517,7 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 buf_hpart,
                 partmass_val_buf,
                 rho_part_buf,
+                hsupport2_up_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -476,13 +528,17 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 const Tscal *__restrict hpart,
                 const T *__restrict partmass_val,
                 const Tscal *__restrict rho_part,
+                const f32 *__restrict hsupport2_up,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
                 return [=](sycl::handler &cgh) {
                     sycl::local_accessor<u32> staging_id{column_group_size, cgh};
-                    sycl::local_accessor<Tscal> staging_rab2{column_group_size, cgh};
+                    sycl::local_accessor<u32> staging_owner{column_group_size, cgh};
                     sycl::local_accessor<T> staging_term{column_group_size, cgh};
+                    sycl::local_accessor<u32> staging_ok{column_group_size, cgh};
+                    sycl::local_accessor<Tvec> ray_origins{column_group_size, cgh};
+                    sycl::local_accessor<Tvec> ray_directions{column_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, column_group_size},
@@ -495,12 +551,16 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 hpart,
                                 partmass_val,
                                 rho_part,
+                                hsupport2_up,
                                 particle_looper,
                                 hmax,
                                 render_field,
                                 &(staging_id[0]),
-                                &(staging_rab2[0]),
-                                &(staging_term[0]));
+                                &(staging_owner[0]),
+                                &(staging_term[0]),
+                                &(staging_ok[0]),
+                                &(ray_origins[0]),
+                                &(ray_directions[0]));
                         });
                 };
             });
