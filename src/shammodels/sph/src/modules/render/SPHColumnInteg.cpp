@@ -82,6 +82,39 @@ namespace {
         }
     }
 
+    /**
+     * @brief `Kernel::f(q)` for q >= +0 or NaN
+     *
+     * For M4 this is a copy of `KernelDefM4::f` where the comparisons are done on the bit
+     * patterns (exact for q >= +0 or NaN, and avoiding fp64 comparisons), other kernels use
+     * `Kernel::f` directly.
+     */
+    template<class Kernel>
+    inline typename Kernel::Tscal kernel_f_pos(typename Kernel::Tscal q) {
+        using Tscal = typename Kernel::Tscal;
+        if constexpr (
+            std::is_same_v<typename Kernel::Generator, shammath::details::KernelDefM4<Tscal>>) {
+            Tscal t1 = 2 - q;
+            Tscal t2 = 1 - q;
+
+            t1 = t1 * t1 * t1;
+            t2 = t2 * t2 * t2;
+
+            constexpr Tscal div1_4 = (1. / 4.);
+            t1 *= div1_4;
+            t2 *= -1;
+
+            if (lt_pos(q, Tscal(1))) {
+                return t1 + t2;
+            } else if (lt_pos(q, Tscal(2))) {
+                return t1;
+            } else
+                return 0;
+        } else {
+            return Kernel::f(q);
+        }
+    }
+
     /// index of the per particle data in a sycl::vec<f64, 8>
     enum ColumnPartData : int { PdH = 0, PdInvH, PdHH, PdInvHH, PdRho, PdInvRho, PdSupport2 };
 
@@ -183,12 +216,12 @@ namespace {
                             || !(lt_pos(x, shambase::get_infty<Tscal>()))) [[unlikely]] {
                             q = sqrt(sycl::fma(z[i], z[i], xx));
                         }
-                        fz[i] = lt_pos(xx, Rkern2) ? Kernel::f(q) : Tscal{0};
+                        fz[i] = lt_pos(xx, Rkern2) ? kernel_f_pos<Kernel>(q) : Tscal{0};
                     } else {
                         Tscal y = sycl::fma(z[i], z[i], xx);
                         // f(q) is exactly 0 for q >= Rkern (and for NaN) and sqrt(y) >= Rkern
                         // whenever y >= Rkern^2, so these samples are exactly 0
-                        fz[i] = lt_pos(y, Rkern2) ? Kernel::f(sqrt(y)) : Tscal{0};
+                        fz[i] = lt_pos(y, Rkern2) ? kernel_f_pos<Kernel>(sqrt(y)) : Tscal{0};
                     }
                 }
             }
