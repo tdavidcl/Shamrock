@@ -176,6 +176,8 @@ namespace {
         const T *__restrict partmass_val,
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const f32 *__restrict hsupport_up,
+        const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+        Tvec center,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field,
@@ -300,6 +302,11 @@ namespace {
                            * (1.f + 1.f / 1048576.f);
         f32 radius_abs_f = sycl::fabs(radius_f);
 
+        // ring center relative to the patch center in fp32 (+ its L1 norm)
+        Tvec center_rel = ring_ray.center - center;
+        sycl::vec<f32, 3> of{f32(center_rel.x()), f32(center_rel.y()), f32(center_rel.z())};
+        f32 of_l1 = sycl::fabs(of.x()) + sycl::fabs(of.y()) + sycl::fabs(of.z());
+
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
         // thread adds its own results in its buffer order
@@ -400,20 +407,23 @@ namespace {
                 u32 leaf_id = leaf_node - tree.offset_leaf;
 
                 particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                    // same fp64 operation as the exact test (A = center - x_b)
-                    Tvec a = ring_ray.center - xyz[id_b];
-
                     // Conservative fp32 prefilter: rejects only particles that the exact test
-                    // rejects. With e = 2^-24, g(A) = |(sqrt(x^2 + y^2) - R, z)| the distance to
-                    // the ring ((x, y, z) = (A.e_x, A.e_y, A.e_z)) is L-Lipschitz in A, and the
-                    // fp32 evaluation from af = f32(A) differs from g(A) by at most
-                    // Eg = e (16 L |af|_1 + 8 |R|) (rounding of A, of the frame, of the dot
-                    // products, of the sqrt and of r - R). So
+                    // rejects. With e = 2^-24, A = center - x_b, c the patch center:
+                    //  - af = f32(center - c) - f32(x_b - c) satisfies |af - A| <= 1.01 e B,
+                    //    B = |f32(center - c)|_1 + |f32(x_b - c)|_1 + |af|_1,
+                    //  - g(A) = |(sqrt(x^2 + y^2) - R, z)| the distance to the ring
+                    //    ((x, y, z) = (A.e_x, A.e_y, A.e_z)) is L-Lipschitz in A,
+                    //  - the fp32 evaluation from af differs from g(af) by at most
+                    //    e (16 L |af|_1 + 8 |R|) (rounding of the frame, of the dot products, of
+                    //    the sqrt and of r - R),
+                    // so with Eg = e (L (2 B + 16 |af|_1) + 8 |R|),
                     // g2_32 > (sqrt(H) + Eg)^2 (1 + 16 e) + 2e-15 (L |af|_1 + |R|)^2 (the later
                     // bounding the fp64 rounding of the exact test) implies that the fp64 test
                     // rejects the particle. NaN / inf never reject.
-                    sycl::vec<f32, 3> af{f32(a.x()), f32(a.y()), f32(a.z())};
-                    f32 an = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
+                    sycl::vec<f32, 4> xr = xyz_rel_f[id_b];
+                    sycl::vec<f32, 3> af{of.x() - xr.x(), of.y() - xr.y(), of.z() - xr.z()};
+                    f32 an    = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
+                    f32 bound = of_l1 + xr.w() + an;
 
                     f32 xf  = sycl::dot(af, exf);
                     f32 yf  = sycl::dot(af, eyf);
@@ -425,10 +435,10 @@ namespace {
                     constexpr f32 e = 1.f / 16777216.f; // 2^-24
 
                     f32 scale = lip_f * an + radius_abs_f;
-                    f32 eg    = e * (16.f * lip_f * an + 8.f * radius_abs_f);
+                    f32 eg    = e * (lip_f * (2.f * bound + 16.f * an) + 8.f * radius_abs_f);
                     f32 lim   = hsupport_up[id_b] + eg;
 
-                    if (an < 1e15f
+                    if (bound < 1e15f
                         && g2f > lim * lim * (1.f + 16.f * e) + 2e-15f * scale * scale + 1e-30f) {
                         return;
                     }
@@ -534,20 +544,32 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<f32> hsupport_up_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f32, 4>> xyz_rel_f_buf(obj_cnt, dev_sched);
+
+        Tvec center = (bmin + bmax) / 2;
 
         sham::kernel_call(
             queue,
-            sham::MultiRef{buf_hpart, buf_field},
-            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport_up_buf},
+            sham::MultiRef{buf_hpart, buf_field, pos.get_buf()},
+            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport_up_buf, xyz_rel_f_buf},
             obj_cnt,
-            [partmass](
+            [partmass, center](
                 u32 id_b,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
+                const Tvec *__restrict xyz,
                 T *__restrict partmass_val,
                 Tscal *__restrict rho_part,
-                f32 *__restrict hsupport_up) {
+                f32 *__restrict hsupport_up,
+                sycl::vec<f32, 4> *__restrict xyz_rel_f) {
                 Tscal h_b = hpart[id_b];
+
+                // position relative to the patch center in fp32 (+ its L1 norm)
+                Tvec rel        = xyz[id_b] - center;
+                f32 x           = f32(rel.x());
+                f32 y           = f32(rel.y());
+                f32 z           = f32(rel.z());
+                xyz_rel_f[id_b] = {x, y, z, sycl::fabs(x) + sycl::fabs(y) + sycl::fabs(z)};
 
                 partmass_val[id_b] = partmass * torender[id_b];
                 rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
@@ -568,6 +590,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 partmass_val_buf,
                 rho_part_buf,
                 hsupport_up_buf,
+                xyz_rel_f_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -579,6 +602,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 const T *__restrict partmass_val,
                 const Tscal *__restrict rho_part,
                 const f32 *__restrict hsupport_up,
+                const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -605,6 +629,8 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 partmass_val,
                                 rho_part,
                                 hsupport_up,
+                                xyz_rel_f,
+                                center,
                                 particle_looper,
                                 hmax,
                                 render_field,
