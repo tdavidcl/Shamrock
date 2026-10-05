@@ -124,6 +124,9 @@ namespace {
         }
     };
 
+    /// capacity of the per thread buffer of particles intersecting the ring
+    constexpr u32 azymuthal_buf_size = 16;
+
 } // namespace
 
 template<class Tvec, class T, template<class> class SPHKernel>
@@ -219,37 +222,73 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
 
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                particle_looper.rtree_for_leaf_coherent(
+                // contribution of the particle id_b (rab2_ring is its squared distance to the ring)
+                auto add_contrib = [&](u32 id_b, Tscal rab2_ring) {
+                    Tscal h_b = hpart[id_b];
+
+                    Tscal rab = sycl::sqrt(rab2_ring);
+
+                    T val = torender[id_b];
+
+                    Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                    // TODO: account for curvature
+                    acc += partmass * val * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_b;
+                };
+
+                // the particles intersecting the ring are first gathered (cheap test) and only
+                // then processed (expensive part), so that the threads of a warp run the
+                // expensive part together rather than whenever they find a particle.
+                // The processing order is unchanged.
+                constexpr u32 buf_size = azymuthal_buf_size;
+                u32 buf_id[buf_size];
+                Tscal buf_rab2[buf_size];
+                u32 buf_cnt = 0;
+
+                auto flush = [&]() {
+                    for (u32 i = 0; i < buf_cnt; i++) {
+                        add_contrib(buf_id[i], buf_rab2[i]);
+                    }
+                    buf_cnt = 0;
+                };
+
+                particle_looper.tree_traverser.rtree_for_leaf_coherent(
                     [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                         Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
 
                         return node_aabb.expand_all(rint_cell).intersect_ring_ray_approx(ring_ray);
                     },
-                    [&](u32 id_b) {
-                        Tvec r_center = ring_ray.center - xyz[id_b];
+                    [&](u32 node_id) {
+                        u32 leaf_id
+                            = node_id - particle_looper.tree_traverser.tree_traverser.offset_leaf;
 
-                        Tscal z_val = sycl::dot(r_center, ez);
-                        Tscal x_val = sycl::dot(r_center, ring_ray.e_x);
-                        Tscal y_val = sycl::dot(r_center, ring_ray.e_y);
-                        Tscal r_val = sycl::sqrt(x_val * x_val + y_val * y_val);
+                        particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
+                            Tvec r_center = ring_ray.center - xyz[id_b];
 
-                        Tscal delta_r = r_val - ring_ray.radius;
+                            Tscal z_val = sycl::dot(r_center, ez);
+                            Tscal x_val = sycl::dot(r_center, ring_ray.e_x);
+                            Tscal y_val = sycl::dot(r_center, ring_ray.e_y);
+                            Tscal r_val = sycl::sqrt(x_val * x_val + y_val * y_val);
 
-                        Tscal rab2_ring = z_val * z_val + delta_r * delta_r;
-                        Tscal h_b       = hpart[id_b];
+                            Tscal delta_r = r_val - ring_ray.radius;
 
-                        if (rab2_ring > h_b * h_b * Rker2) {
-                            return;
-                        }
+                            Tscal rab2_ring = z_val * z_val + delta_r * delta_r;
+                            Tscal h_b       = hpart[id_b];
 
-                        Tscal rab = sycl::sqrt(rab2_ring);
+                            if (rab2_ring > h_b * h_b * Rker2) {
+                                return;
+                            }
 
-                        T val = torender[id_b];
+                            buf_id[buf_cnt]   = id_b;
+                            buf_rab2[buf_cnt] = rab2_ring;
+                            buf_cnt++;
 
-                        Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+                            if (buf_cnt == buf_size) {
+                                flush();
+                            }
+                        });
 
-                        // TODO: account for curvature
-                        acc += partmass * val * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_b;
+                        flush();
                     });
 
                 render_field[gid] += acc;
