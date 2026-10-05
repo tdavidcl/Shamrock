@@ -177,6 +177,8 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const f32 *__restrict hsupport2_up,
         const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+        const sycl::vec<f32, 4> *__restrict node_lo_f,
+        const sycl::vec<f32, 4> *__restrict node_up_f,
         Tvec center,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
@@ -188,7 +190,8 @@ namespace {
         Tvec *__restrict ray_origins,
         Tvec *__restrict ray_directions,
         sycl::vec<f32, 4> *__restrict ray_orig_f,
-        sycl::vec<f32, 4> *__restrict ray_dir_f) {
+        sycl::vec<f32, 4> *__restrict ray_dir_f,
+        sycl::vec<f32, 4> *__restrict ray_inv_f) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -278,7 +281,105 @@ namespace {
                 = {ox, oy, oz, sycl::fabs(ox) + sycl::fabs(oy) + sycl::fabs(oz)};
             ray_dir_f[st_base + lane]
                 = {f32(ray.direction.x()), f32(ray.direction.y()), f32(ray.direction.z()), 0.f};
+
+            // the fp32 node test is only used if every component of inv_direction is either
+            // infinite or small enough for fp32 (w = 1)
+            auto inv_ok = [](Tscal v) {
+                return sycl::isinf(v) || sycl::fabs(v) < Tscal(1e30);
+            };
+            bool fast = inv_ok(ray.inv_direction.x()) && inv_ok(ray.inv_direction.y())
+                        && inv_ok(ray.inv_direction.z());
+            ray_inv_f[st_base + lane]
+                = {f32(ray.inv_direction.x()),
+                   f32(ray.inv_direction.y()),
+                   f32(ray.inv_direction.z()),
+                   fast ? 1.f : 0.f};
         }
+
+        // Certified fp32 version of the node test `expand_all(hmax * Rkern).intersect_ray(ray)`
+        // returns 1 if the fp64 test surely returns true, 0 if it surely returns false and 2 if
+        // the fp32 evaluation cannot decide (the fp64 test must then be performed).
+        // With e = 2^-24, lo / up the expanded node box relative to the patch center c,
+        // s >= |lower - c| + |upper - c| + 2 hmax Rkern + |lower| + |upper| + |c| (inf norms) and
+        // o_f the fp32 ray origin relative to c (|o_f|_1 stored in w):
+        //  - dl = lo_f - o_f approximates lo_64 - o (real) within El = 2 e (s + |o_f|_1 + |dl|),
+        //    which also covers the fp64 rounding of lo_64 - o_64,
+        //  - for a finite inv, t = dl * inv_f approximates the fp64 t within |inv| El + 3 e |t|,
+        //    so tmin / tmax of fp32 and fp64 differ by at most et (max of these bounds) as min /
+        //    max are 1-Lipschitz, and the fp64 result is tmax >= tmin,
+        //  - for an infinite inv (direction component exactly 0), the fp64 slab is either no
+        //    constraint (o strictly inside the slab), empty (o strictly outside) or involves a
+        //    NaN (o exactly on a face), the later being always reported as undecided.
+        // NaN or inf in the fp32 evaluation are always reported as undecided.
+        auto node_test_f32 = [&](u32 node_id) -> u32 {
+            sycl::vec<f32, 4> iv = ray_inv_f[st_base + lane];
+            if (iv.w() == 0.f) {
+                return 2;
+            }
+
+            sycl::vec<f32, 4> lo = node_lo_f[node_id];
+            sycl::vec<f32, 4> up = node_up_f[node_id];
+            sycl::vec<f32, 4> of = ray_orig_f[st_base + lane];
+
+            constexpr f32 e2 = 2.f / 16777216.f; // 2 * 2^-24
+            constexpr f32 e3 = 3.f / 16777216.f; // 3 * 2^-24
+
+            f32 base = e2 * (lo.w() + of.w());
+
+            f32 tmin       = -shambase::get_infty<f32>();
+            f32 tmax       = shambase::get_infty<f32>();
+            f32 et         = 0;
+            bool undecided = false;
+
+            auto axis = [&](f32 l, f32 u, f32 o, f32 inv) -> bool {
+                f32 dl = l - o;
+                f32 du = u - o;
+                f32 El = base + e2 * sycl::fabs(dl);
+                f32 Eu = base + e2 * sycl::fabs(du);
+                if (sycl::isinf(inv)) {
+                    if (dl > El || du < -Eu) {
+                        return false; // o surely outside the slab
+                    }
+                    if (!(dl < -El && du > Eu)) {
+                        undecided = true; // o not surely strictly inside the slab
+                    }
+                } else {
+                    f32 t1 = dl * inv;
+                    f32 t2 = du * inv;
+                    f32 a  = sycl::fabs(inv);
+                    f32 e1 = a * El + e3 * sycl::fabs(t1);
+                    f32 eu = a * Eu + e3 * sycl::fabs(t2);
+                    tmin   = sycl::fmax(tmin, sycl::fmin(t1, t2));
+                    tmax   = sycl::fmin(tmax, sycl::fmax(t1, t2));
+                    et     = sycl::fmax(et, sycl::fmax(e1, eu));
+                }
+                return true;
+            };
+
+            if (!axis(lo.x(), up.x(), of.x(), iv.x())) {
+                return 0;
+            }
+            if (!axis(lo.y(), up.y(), of.y(), iv.y())) {
+                return 0;
+            }
+            if (!axis(lo.z(), up.z(), of.z(), iv.z())) {
+                return 0;
+            }
+            if (undecided) {
+                return 2;
+            }
+
+            f32 gap = tmax - tmin;
+            f32 tol = 2.f * et + e2 * (sycl::fabs(tmax) + sycl::fabs(tmin));
+
+            if (gap > tol) {
+                return 1;
+            }
+            if (gap < -tol) {
+                return 0;
+            }
+            return 2;
+        };
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -344,12 +445,23 @@ namespace {
                     u32 current_node_id = id_stack[stack_cursor];
                     stack_cursor++;
 
-                    Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
+                    u32 cert = node_test_f32(current_node_id);
 
-                    shammath::AABB<Tvec> node_aabb{
-                        traverser.aabb_min[current_node_id], traverser.aabb_max[current_node_id]};
+                    bool node_hit;
+                    if (cert == 2) {
+                        // exact test
+                        Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
 
-                    if (node_aabb.expand_all(rint_cell).intersect_ray(ray)) {
+                        shammath::AABB<Tvec> node_aabb{
+                            traverser.aabb_min[current_node_id],
+                            traverser.aabb_max[current_node_id]};
+
+                        node_hit = node_aabb.expand_all(rint_cell).intersect_ray(ray);
+                    } else {
+                        node_hit = (cert == 1);
+                    }
+
+                    if (node_hit) {
                         if (tree.is_id_leaf(current_node_id)) {
                             leaf_queue[(queue_head + queue_cnt) % column_leaf_queue_size]
                                 = current_node_id;
@@ -541,6 +653,44 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 hsupport2_up[id_b] = f32(h_b * h_b * Rker2) * (1.f + 1.f / 1048576.f);
             });
 
+        // fp32 expanded node boxes relative to the patch center for the certified node test
+        u32 node_cnt = tree.aabbs.buf_aabb_min.get_size();
+        sham::DeviceBuffer<sycl::vec<f32, 4>> node_lo_f_buf(node_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f32, 4>> node_up_f_buf(node_cnt, dev_sched);
+
+        sham::kernel_call(
+            queue,
+            sham::MultiRef{tree.aabbs.buf_aabb_min, tree.aabbs.buf_aabb_max, hmax_tree.buf_field},
+            sham::MultiRef{node_lo_f_buf, node_up_f_buf},
+            node_cnt,
+            [center](
+                u32 id,
+                const Tvec *__restrict aabb_min,
+                const Tvec *__restrict aabb_max,
+                const Tscal *__restrict hmax,
+                sycl::vec<f32, 4> *__restrict node_lo_f,
+                sycl::vec<f32, 4> *__restrict node_up_f) {
+                Tvec lower      = aabb_min[id];
+                Tvec upper      = aabb_max[id];
+                Tscal rint_cell = hmax[id] * Kernel::Rkern;
+
+                Tvec lo = (lower - center) - rint_cell;
+                Tvec up = (upper - center) + rint_cell;
+
+                auto ninf = [](Tvec v) {
+                    return sycl::fmax(
+                        sycl::fabs(v.x()), sycl::fmax(sycl::fabs(v.y()), sycl::fabs(v.z())));
+                };
+
+                Tscal scale = ninf(lower - center) + ninf(upper - center)
+                              + 2 * sycl::fabs(rint_cell) + ninf(lower) + ninf(upper)
+                              + ninf(center);
+
+                node_lo_f[id]
+                    = {f32(lo.x()), f32(lo.y()), f32(lo.z()), f32(scale) * (1.f + 1.f / 1048576.f)};
+                node_up_f[id] = {f32(up.x()), f32(up.y()), f32(up.z()), 0.f};
+            });
+
         u32 group_cnt     = shambase::group_count(nrays, column_group_size);
         u32 corrected_len = group_cnt * column_group_size;
 
@@ -554,6 +704,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 rho_part_buf,
                 hsupport2_up_buf,
                 xyz_rel_f_buf,
+                node_lo_f_buf,
+                node_up_f_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -566,6 +718,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 const Tscal *__restrict rho_part,
                 const f32 *__restrict hsupport2_up,
                 const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+                const sycl::vec<f32, 4> *__restrict node_lo_f,
+                const sycl::vec<f32, 4> *__restrict node_up_f,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -578,6 +732,7 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                     sycl::local_accessor<Tvec> ray_directions{column_group_size, cgh};
                     sycl::local_accessor<sycl::vec<f32, 4>> ray_orig_f{column_group_size, cgh};
                     sycl::local_accessor<sycl::vec<f32, 4>> ray_dir_f{column_group_size, cgh};
+                    sycl::local_accessor<sycl::vec<f32, 4>> ray_inv_f{column_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, column_group_size},
@@ -592,6 +747,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 rho_part,
                                 hsupport2_up,
                                 xyz_rel_f,
+                                node_lo_f,
+                                node_up_f,
                                 center,
                                 particle_looper,
                                 hmax,
@@ -603,7 +760,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 &(ray_origins[0]),
                                 &(ray_directions[0]),
                                 &(ray_orig_f[0]),
-                                &(ray_dir_f[0]));
+                                &(ray_dir_f[0]),
+                                &(ray_inv_f[0]));
                         });
                 };
             });
