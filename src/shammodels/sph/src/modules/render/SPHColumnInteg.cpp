@@ -16,7 +16,6 @@
 
 #include "shambase/stacktrace.hpp"
 #include "shamalgs/collective/reduction.hpp"
-#include "shambackends/Device.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shammath/AABB.hpp"
 #include "shammath/sphkernels.hpp"
@@ -27,33 +26,6 @@
 #include "shamtree/KarrasRadixTreeField.hpp"
 #include <cmath>
 #include <limits>
-
-namespace {
-
-    // persistent kernel helpers, same as in the persistent neighbour cache (PR #2417)
-
-    u32 get_persistent_worker_group_count(sham::DeviceProperties &dev) {
-        return dev.max_compute_units * 2;
-    }
-
-    u32 get_persistent_thread_count(sham::DeviceProperties &dev) {
-        return get_persistent_worker_group_count(dev)
-               * (dev.type == sham::DeviceType::GPU ? 256 : 1);
-    }
-
-    template<class T>
-    T global_fetch_add_relaxed(T *ptr, T offset) {
-        sycl::atomic_ref<
-            T,
-            sycl::memory_order_relaxed,
-            sycl::memory_scope_device,
-            sycl::access::address_space::global_space>
-            ref(*ptr);
-
-        return ref.fetch_add(offset);
-    }
-
-} // namespace
 
 template<class Tvec, class T, template<class> class SPHKernel>
 void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluate_internal() {
@@ -84,10 +56,6 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
     u32 tree_reduction_level = edges.tree_reduction_level.data;
     sham::DeviceQueue &queue = shamsys::instance::get_compute_scheduler().get_queue();
     auto dev_sched           = shamsys::instance::get_compute_scheduler_ptr();
-
-    // persistent kernel handling
-    u32 persistent_tcount = get_persistent_thread_count(queue.get_device_prop());
-    sham::DeviceBuffer<u32> work_index(1, dev_sched);
 
     part_counts.for_each([&](u64 id, u32 count) {
         if (count == 0) {
@@ -131,48 +99,27 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
 
         auto obj_it = tree.get_object_iterator();
 
-        // reset the work queue to 0 to start the persistent kernel
-        work_index.fill(0);
-
         sham::kernel_call(
             queue,
             sham::MultiRef{
                 rays_buf, pos.get_buf(), buf_hpart, buf_field, obj_it, hmax_tree.buf_field},
-            sham::MultiRef{work_index, output_buf},
-            persistent_tcount,
-            [=](u32,
+            sham::MultiRef{output_buf},
+            nrays,
+            [=](u32 gid,
                 const shammath::Ray<Tvec> *__restrict image_rays,
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
-                u32 *work_index,
                 T *__restrict render_field) {
+                T acc = sham::VectorProperties<T>::get_zero();
+
+                shammath::Ray<Tvec> ray = image_rays[gid];
+
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                // current work item state, set by next_work
-                u32 ray_id = nrays;
-                shammath::Ray<Tvec> ray;
-                T acc;
-
-                particle_looper.rtree_for_persistent(
-                    [&]() -> bool {
-                        // store the result of the finished ray (if any)
-                        if (ray_id < nrays) {
-                            render_field[ray_id] += acc;
-                        }
-
-                        // fetch the next ray
-                        ray_id = global_fetch_add_relaxed<u32>(work_index, 1);
-                        if (ray_id >= nrays) {
-                            return false;
-                        }
-
-                        ray = image_rays[ray_id];
-                        acc = sham::VectorProperties<T>::get_zero();
-                        return true;
-                    },
+                particle_looper.rtree_for(
                     [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                         Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
 
@@ -198,6 +145,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
 
                         acc += partmass * val * Kernel::Y_3d(rab, h_b, 4) / rho_b;
                     });
+
+                render_field[gid] += acc;
             });
     });
 
