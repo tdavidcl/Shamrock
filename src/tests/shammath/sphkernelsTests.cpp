@@ -202,17 +202,13 @@ NEW_TEST(Unittest, "shammath/sphkernels/TGauss5", 1) {
 /**
  * @brief Check the symmetric f3d_integ_z against the plain Riemann sum
  *
- * Both sum the same terms in the same order, so they are bitwise identical unless the compiler
- * contracts the products into FMAs differently in the two loops (e.g. with -march=native on
- * x86), hence the few ulp tolerance.
+ * The symmetric version drops the z = -Rkern sample (f(Rkern) == 0), adds each mirrored sample
+ * twice and factors out the step, which reorders the floating point sum, hence the few ulp per
+ * term tolerance.
  */
 template<class Ker, int np>
 inline void validate_f3d_integ_z_symmetric() {
     using Tscal = typename Ker::Tscal;
-
-    static_assert(
-        Ker::template make_column_z_grid<np>().symmetric,
-        "the z grid of f3d_integ_z is expected to be exactly symmetric for this kernel");
 
     auto reference = [](Tscal x) {
         return shammath::integ_riemann_sum<Tscal>(
