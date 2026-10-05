@@ -175,12 +175,19 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict hpart,
         const T *__restrict partmass_val,
         const shambase::VecComponent<Tvec> *__restrict rho_part,
+        const f32 *__restrict hsupport_up,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field,
         u32 *__restrict staging_id,
-        shambase::VecComponent<Tvec> *__restrict staging_rab2,
-        T *__restrict staging_term) {
+        u32 *__restrict staging_owner,
+        T *__restrict staging_term,
+        u32 *__restrict staging_ok,
+        Tvec *__restrict ring_centers,
+        Tvec *__restrict ring_exs,
+        Tvec *__restrict ring_eys,
+        Tvec *__restrict ring_ezs,
+        shambase::VecComponent<Tvec> *__restrict ring_radii) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -214,26 +221,58 @@ namespace {
         u32 queue_head = 0;
         u32 queue_cnt  = 0;
 
-        // buffer of the particles intersecting the ring, in traversal order
+        // buffer of the candidate particles (that may intersect the ring), in traversal order
         u32 buf_id[azymuthal_buf_size];
-        Tscal buf_rab2[azymuthal_buf_size];
         u32 buf_cnt = 0;
 
-        // contribution of the particle id_b at squared distance rab2 of the ring
-        auto contrib = [&](u32 id_b, Tscal rab2) -> T {
-            Tscal h_b = hpart[id_b];
+        // Exact test + contribution of the particle id_b for the ring (center, e_x, e_y, ez,
+        // radius), this is exactly the code of the direct computation. Returns false if the
+        // particle does not intersect the ring
+        auto contrib = [&](u32 id_b,
+                           const Tvec &center,
+                           const Tvec &e_x,
+                           const Tvec &e_y,
+                           const Tvec &e_z,
+                           Tscal radius,
+                           T &ret) -> bool {
+            Tvec r_center = center - xyz[id_b];
 
-            Tscal rab = sycl::sqrt(rab2);
+            Tscal z_val = sycl::dot(r_center, e_z);
+            Tscal x_val = sycl::dot(r_center, e_x);
+            Tscal y_val = sycl::dot(r_center, e_y);
+            Tscal r_val = sycl::sqrt(x_val * x_val + y_val * y_val);
+
+            Tscal delta_r = r_val - radius;
+
+            Tscal rab2_ring = z_val * z_val + delta_r * delta_r;
+            Tscal h_b       = hpart[id_b];
+
+            if (rab2_ring > h_b * h_b * Rker2) {
+                return false;
+            }
+
+            Tscal rab = sycl::sqrt(rab2_ring);
 
             // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
             // TODO: account for curvature
-            return partmass_val[id_b] * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+            ret = partmass_val[id_b] * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+            return true;
         };
 
         // flush computed by this thread only (only used if the buffer is full within a leaf)
         auto flush = [&]() {
             for (u32 i = 0; i < buf_cnt; i++) {
-                acc += contrib(buf_id[i], buf_rab2[i]);
+                T term;
+                if (contrib(
+                        buf_id[i],
+                        ring_ray.center,
+                        ring_ray.e_x,
+                        ring_ray.e_y,
+                        ez,
+                        ring_ray.radius,
+                        term)) {
+                    acc += term;
+                }
             }
             buf_cnt = 0;
         };
@@ -242,7 +281,26 @@ namespace {
         const u32 lane    = sg.get_local_linear_id();
         const u32 st_base = sg.get_group_linear_id() * sg_size;
 
-        // flush of the whole sub-group: the buffered entries of all threads are computed by
+        ring_centers[st_base + lane] = ring_ray.center;
+        ring_exs[st_base + lane]     = ring_ray.e_x;
+        ring_eys[st_base + lane]     = ring_ray.e_y;
+        ring_ezs[st_base + lane]     = ez;
+        ring_radii[st_base + lane]   = ring_ray.radius;
+
+        // fp32 copies of the ring frame for the conservative prefilter, and the Lipschitz
+        // constant L = sqrt(|e_x|^2 + |e_y|^2 + |e_z|^2) of the distance to the ring with
+        // respect to the position (rounded up)
+        sycl::vec<f32, 3> exf{f32(ring_ray.e_x.x()), f32(ring_ray.e_x.y()), f32(ring_ray.e_x.z())};
+        sycl::vec<f32, 3> eyf{f32(ring_ray.e_y.x()), f32(ring_ray.e_y.y()), f32(ring_ray.e_y.z())};
+        sycl::vec<f32, 3> ezf{f32(ez.x()), f32(ez.y()), f32(ez.z())};
+        f32 radius_f     = f32(ring_ray.radius);
+        f32 lip_f        = f32(sycl::sqrt(
+                               sycl::dot(ring_ray.e_x, ring_ray.e_x)
+                               + sycl::dot(ring_ray.e_y, ring_ray.e_y) + sycl::dot(ez, ez)))
+                           * (1.f + 1.f / 1048576.f);
+        f32 radius_abs_f = sycl::fabs(radius_f);
+
+        // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
         // thread adds its own results in its buffer order
         auto flush_cooperative = [&]() {
@@ -258,22 +316,35 @@ namespace {
                                : buf_cnt;
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    u32 w                     = off + j - r0;
-                    staging_id[st_base + w]   = buf_id[j];
-                    staging_rab2[st_base + w] = buf_rab2[j];
+                    u32 w                      = off + j - r0;
+                    staging_id[st_base + w]    = buf_id[j];
+                    staging_owner[st_base + w] = lane;
                 }
 
                 sycl::group_barrier(sg);
 
                 if (r0 + lane < tot) {
-                    staging_term[st_base + lane]
-                        = contrib(staging_id[st_base + lane], staging_rab2[st_base + lane]);
+                    u32 owner = st_base + staging_owner[st_base + lane];
+                    T term;
+                    bool ok = contrib(
+                        staging_id[st_base + lane],
+                        ring_centers[owner],
+                        ring_exs[owner],
+                        ring_eys[owner],
+                        ring_ezs[owner],
+                        ring_radii[owner],
+                        term);
+                    staging_term[st_base + lane] = term;
+                    staging_ok[st_base + lane]   = ok;
                 }
 
                 sycl::group_barrier(sg);
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    acc += staging_term[st_base + off + j - r0];
+                    u32 w = st_base + off + j - r0;
+                    if (staging_ok[w]) {
+                        acc += staging_term[w];
+                    }
                 }
 
                 sycl::group_barrier(sg);
@@ -329,24 +400,40 @@ namespace {
                 u32 leaf_id = leaf_node - tree.offset_leaf;
 
                 particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                    Tvec r_center = ring_ray.center - xyz[id_b];
+                    // same fp64 operation as the exact test (A = center - x_b)
+                    Tvec a = ring_ray.center - xyz[id_b];
 
-                    Tscal z_val = sycl::dot(r_center, ez);
-                    Tscal x_val = sycl::dot(r_center, ring_ray.e_x);
-                    Tscal y_val = sycl::dot(r_center, ring_ray.e_y);
-                    Tscal r_val = sycl::sqrt(x_val * x_val + y_val * y_val);
+                    // Conservative fp32 prefilter: rejects only particles that the exact test
+                    // rejects. With e = 2^-24, g(A) = |(sqrt(x^2 + y^2) - R, z)| the distance to
+                    // the ring ((x, y, z) = (A.e_x, A.e_y, A.e_z)) is L-Lipschitz in A, and the
+                    // fp32 evaluation from af = f32(A) differs from g(A) by at most
+                    // Eg = e (16 L |af|_1 + 8 |R|) (rounding of A, of the frame, of the dot
+                    // products, of the sqrt and of r - R). So
+                    // g2_32 > (sqrt(H) + Eg)^2 (1 + 16 e) + 2e-15 (L |af|_1 + |R|)^2 (the later
+                    // bounding the fp64 rounding of the exact test) implies that the fp64 test
+                    // rejects the particle. NaN / inf never reject.
+                    sycl::vec<f32, 3> af{f32(a.x()), f32(a.y()), f32(a.z())};
+                    f32 an = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
 
-                    Tscal delta_r = r_val - ring_ray.radius;
+                    f32 xf  = sycl::dot(af, exf);
+                    f32 yf  = sycl::dot(af, eyf);
+                    f32 zf  = sycl::dot(af, ezf);
+                    f32 rf  = sycl::sqrt(xf * xf + yf * yf);
+                    f32 drf = rf - radius_f;
+                    f32 g2f = zf * zf + drf * drf;
 
-                    Tscal rab2_ring = z_val * z_val + delta_r * delta_r;
-                    Tscal h_b       = hpart[id_b];
+                    constexpr f32 e = 1.f / 16777216.f; // 2^-24
 
-                    if (rab2_ring > h_b * h_b * Rker2) {
+                    f32 scale = lip_f * an + radius_abs_f;
+                    f32 eg    = e * (16.f * lip_f * an + 8.f * radius_abs_f);
+                    f32 lim   = hsupport_up[id_b] + eg;
+
+                    if (an < 1e15f
+                        && g2f > lim * lim * (1.f + 16.f * e) + 2e-15f * scale * scale + 1e-30f) {
                         return;
                     }
 
-                    buf_id[buf_cnt]   = id_b;
-                    buf_rab2[buf_cnt] = rab2_ring;
+                    buf_id[buf_cnt] = id_b;
                     buf_cnt++;
 
                     if (buf_cnt == azymuthal_buf_size) {
@@ -446,20 +533,27 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
         // computation `partmass * val * Y / rho_h(partmass, h_b, hfactd)`, hence same bits)
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<f32> hsupport_up_buf(obj_cnt, dev_sched);
 
         sham::kernel_call(
             queue,
             sham::MultiRef{buf_hpart, buf_field},
-            sham::MultiRef{partmass_val_buf, rho_part_buf},
+            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport_up_buf},
             obj_cnt,
             [partmass](
                 u32 id_b,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
                 T *__restrict partmass_val,
-                Tscal *__restrict rho_part) {
+                Tscal *__restrict rho_part,
+                f32 *__restrict hsupport_up) {
+                Tscal h_b = hpart[id_b];
+
                 partmass_val[id_b] = partmass * torender[id_b];
-                rho_part[id_b]     = shamrock::sph::rho_h(partmass, hpart[id_b], Kernel::hfactd);
+                rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                // fp32 upper bound of sqrt(h_b * h_b * Rker2) (the exact test threshold)
+                hsupport_up[id_b] = f32(h_b * Kernel::Rkern) * (1.f + 1.f / 1048576.f);
             });
 
         u32 group_cnt     = shambase::group_count(nring_rays, azymuthal_group_size);
@@ -473,6 +567,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 buf_hpart,
                 partmass_val_buf,
                 rho_part_buf,
+                hsupport_up_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -483,13 +578,20 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 const Tscal *__restrict hpart,
                 const T *__restrict partmass_val,
                 const Tscal *__restrict rho_part,
+                const f32 *__restrict hsupport_up,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
                 return [=](sycl::handler &cgh) {
                     sycl::local_accessor<u32> staging_id{azymuthal_group_size, cgh};
-                    sycl::local_accessor<Tscal> staging_rab2{azymuthal_group_size, cgh};
+                    sycl::local_accessor<u32> staging_owner{azymuthal_group_size, cgh};
                     sycl::local_accessor<T> staging_term{azymuthal_group_size, cgh};
+                    sycl::local_accessor<u32> staging_ok{azymuthal_group_size, cgh};
+                    sycl::local_accessor<Tvec> ring_centers{azymuthal_group_size, cgh};
+                    sycl::local_accessor<Tvec> ring_exs{azymuthal_group_size, cgh};
+                    sycl::local_accessor<Tvec> ring_eys{azymuthal_group_size, cgh};
+                    sycl::local_accessor<Tvec> ring_ezs{azymuthal_group_size, cgh};
+                    sycl::local_accessor<Tscal> ring_radii{azymuthal_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, azymuthal_group_size},
@@ -502,12 +604,19 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 hpart,
                                 partmass_val,
                                 rho_part,
+                                hsupport_up,
                                 particle_looper,
                                 hmax,
                                 render_field,
                                 &(staging_id[0]),
-                                &(staging_rab2[0]),
-                                &(staging_term[0]));
+                                &(staging_owner[0]),
+                                &(staging_term[0]),
+                                &(staging_ok[0]),
+                                &(ring_centers[0]),
+                                &(ring_exs[0]),
+                                &(ring_eys[0]),
+                                &(ring_ezs[0]),
+                                &(ring_radii[0]));
                         });
                 };
             });
