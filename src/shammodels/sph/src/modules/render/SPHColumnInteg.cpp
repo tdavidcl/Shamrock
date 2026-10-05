@@ -391,24 +391,42 @@ namespace {
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
-        // thread adds its own results in its buffer order
+        // thread adds its own results in its buffer order.
+        // The entries are staged level by level (entry j of every thread, then entry j + 1, ...)
+        // so that in each round every thread only adds a few terms, all the threads together,
+        // instead of one thread adding all its consecutive terms alone.
         auto flush_cooperative = [&]() {
-            u32 off = sycl::exclusive_scan_over_group(sg, buf_cnt, sycl::plus<u32>{});
-            u32 tot = sycl::reduce_over_group(sg, buf_cnt, sycl::plus<u32>{});
+            u32 tot    = sycl::reduce_over_group(sg, buf_cnt, sycl::plus<u32>{});
+            u32 maxcnt = sycl::reduce_over_group(sg, buf_cnt, sycl::maximum<u32>{});
+
+            // first level with items in the current round, and number of items before it
+            u32 lvl_start = 0;
+            u32 cnt_start = 0;
 
             for (u32 r0 = 0; r0 < tot; r0 += sg_size) {
+                u32 r1 = r0 + sg_size;
 
-                // range of my entries in this round
-                u32 jbeg = (off < r0) ? sycl::min(r0 - off, buf_cnt) : 0;
-                u32 jend = (off + buf_cnt > r0 + sg_size)
-                               ? ((r0 + sg_size > off) ? r0 + sg_size - off : 0)
-                               : buf_cnt;
+                // walk the levels of this round, calling func(j, w) for my entries in it
+                auto for_my_entries = [&](auto &&func) {
+                    u32 lvl     = lvl_start;
+                    u32 cnt_lvl = cnt_start;
+                    while (lvl < maxcnt && cnt_lvl < r1) {
+                        u32 part = (buf_cnt > lvl) ? 1 : 0;
+                        u32 rank = sycl::exclusive_scan_over_group(sg, part, sycl::plus<u32>{});
+                        u32 n    = sycl::reduce_over_group(sg, part, sycl::plus<u32>{});
+                        u32 w    = cnt_lvl + rank;
+                        if (part && w >= r0 && w < r1) {
+                            func(lvl, w - r0);
+                        }
+                        cnt_lvl += n;
+                        lvl++;
+                    }
+                };
 
-                for (u32 j = jbeg; j < jend; j++) {
-                    u32 w                      = off + j - r0;
-                    staging_id[st_base + w]    = buf_id[j];
-                    staging_owner[st_base + w] = lane;
-                }
+                for_my_entries([&](u32 j, u32 slot) {
+                    staging_id[st_base + slot]    = buf_id[j];
+                    staging_owner[st_base + slot] = lane;
+                });
 
                 sycl::group_barrier(sg);
 
@@ -426,14 +444,24 @@ namespace {
 
                 sycl::group_barrier(sg);
 
-                for (u32 j = jbeg; j < jend; j++) {
-                    u32 w = st_base + off + j - r0;
-                    if (staging_ok[w]) {
-                        acc += staging_term[w];
+                for_my_entries([&](u32 j, u32 slot) {
+                    if (staging_ok[st_base + slot]) {
+                        acc += staging_term[st_base + slot];
                     }
-                }
+                });
 
                 sycl::group_barrier(sg);
+
+                // advance to the level containing the item r1
+                while (lvl_start < maxcnt) {
+                    u32 part = (buf_cnt > lvl_start) ? 1 : 0;
+                    u32 n    = sycl::reduce_over_group(sg, part, sycl::plus<u32>{});
+                    if (cnt_start + n > r1) {
+                        break;
+                    }
+                    cnt_start += n;
+                    lvl_start++;
+                }
             }
 
             buf_cnt = 0;
