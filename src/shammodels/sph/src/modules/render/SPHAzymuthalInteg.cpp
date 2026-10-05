@@ -126,13 +126,13 @@ namespace {
     };
 
     /// capacity of the per thread buffer of particles intersecting the ring
-    constexpr u32 azymuthal_buf_size = 32;
+    constexpr u32 azymuthal_buf_size = 192;
 
     /// the warp flushes its buffers once a thread has this many particles in it
-    constexpr u32 azymuthal_flush_threshold = 16;
+    constexpr u32 azymuthal_flush_threshold = 160;
 
     /// capacity of the per thread queue of leaves found by the traversal
-    constexpr u32 azymuthal_leaf_queue_size = 4;
+    constexpr u32 azymuthal_leaf_queue_size = 16;
 
     /// work group size of the column integration kernel
     constexpr u32 azymuthal_group_size = 128;
