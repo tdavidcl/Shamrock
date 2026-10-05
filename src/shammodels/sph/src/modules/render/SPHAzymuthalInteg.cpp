@@ -31,6 +31,60 @@
 
 namespace {
 
+    /// raw bits of a double
+    inline u64 f64_bits(f64 v) { return sycl::bit_cast<u64>(v); }
+
+    /// biased exponent field of a double
+    inline u32 f64_exp(f64 v) { return u32((f64_bits(v) >> 52) & 0x7ff); }
+
+    /// `a < b` for a >= +0 or NaN and b > 0 finite (integer comparison of the bit patterns,
+    /// NaN gives false as the floating point comparison)
+    inline bool lt_pos(f64 a, f64 b) { return f64_bits(a) < f64_bits(b); }
+
+    /**
+     * @brief Bit identical equivalent of `a / b` given `y = RN(1 / b)`
+     *
+     * Uses two Markstein refinements of `a * y`: the first one gives a quotient within 1 ulp of
+     * a / b, the second one is then correctly rounded (Markstein's theorem, the residuals being
+     * exact with fma). This holds without underflow / overflow of the intermediates, so the
+     * hardware division is used outside of a safe exponent range (and for zero / inf / NaN /
+     * subnormals).
+     */
+    inline f64 div_rn(f64 a, f64 b, f64 y) {
+        i32 ea = i32(f64_exp(a)) - 1023;
+        i32 eb = i32(f64_exp(b)) - 1023;
+        i32 ed = ea - eb;
+
+        bool safe = ea >= -900 && ea <= 900 && eb >= -450 && eb <= 450 && ed >= -850 && ed <= 850;
+
+        if (safe) [[likely]] {
+            f64 q0 = a * y;
+            f64 e0 = sycl::fma(-b, q0, a);
+            f64 q1 = sycl::fma(e0, y, q0);
+            f64 e1 = sycl::fma(-b, q1, a);
+            return sycl::fma(e1, y, q1);
+        }
+        return a / b;
+    }
+
+    /// div_rn applied per component (as `T / f64` does)
+    template<class T>
+    inline T div_rn_vec(T a, f64 b, f64 y) {
+        if constexpr (sham::VectorProperties<T>::dimension == 1) {
+            return div_rn(a, b, y);
+        } else {
+            T ret;
+#pragma unroll
+            for (u32 i = 0; i < sham::VectorProperties<T>::dimension; i++) {
+                ret[i] = div_rn(a[i], b, y);
+            }
+            return ret;
+        }
+    }
+
+    /// index of the per particle data in a sycl::vec<f64, 8>
+    enum IntegPartData : int { PdH = 0, PdInvH, PdHH, PdInvHH, PdRho, PdInvRho, PdSupport2 };
+
     /**
      * @brief Bit identical equivalent of `Kernel::Y_3d(r, h, np)` exploiting the z symmetry
      *
@@ -107,8 +161,9 @@ namespace {
             Kernel::Rkern * 8 == Tscal(i64(Kernel::Rkern * 8)) && Kernel::Rkern < 64,
             "Rkern must be a multiple of 1/8 for Rkern^2 to be exact");
 
-        static inline Tscal Y_3d(Tscal r, Tscal h) {
-            Tscal x = r / h;
+        /// pd: per particle data (see IntegPartData)
+        static inline Tscal Y_3d(Tscal r, const sycl::vec<f64, 8> &pd) {
+            Tscal x = div_rn(r, pd[PdH], pd[PdInvH]);
 
             // the original loop compiles `x * x + z * z` to fma(z, z, x * x), match it explicitly
             Tscal xx = x * x;
@@ -124,15 +179,16 @@ namespace {
                         // y = fma(0, 0, xx) = xx = RN(x^2) and in radix 2 with round to nearest
                         // sqrt(RN(x^2)) == |x| as long as x^2 does not underflow (x >= 0 here)
                         Tscal q = x;
-                        if (!(x >= Tscal(0x1p-511))) [[unlikely]] {
+                        if (lt_pos(x, Tscal(0x1p-511))
+                            || !(lt_pos(x, shambase::get_infty<Tscal>()))) [[unlikely]] {
                             q = sqrt(sycl::fma(z[i], z[i], xx));
                         }
-                        fz[i] = (xx < Rkern2) ? Kernel::f(q) : Tscal{0};
+                        fz[i] = lt_pos(xx, Rkern2) ? Kernel::f(q) : Tscal{0};
                     } else {
                         Tscal y = sycl::fma(z[i], z[i], xx);
                         // f(q) is exactly 0 for q >= Rkern (and for NaN) and sqrt(y) >= Rkern
                         // whenever y >= Rkern^2, so these samples are exactly 0
-                        fz[i] = (y < Rkern2) ? Kernel::f(sqrt(y)) : Tscal{0};
+                        fz[i] = lt_pos(y, Rkern2) ? Kernel::f(sqrt(y)) : Tscal{0};
                     }
                 }
             }
@@ -144,7 +200,7 @@ namespace {
                 acc += fz[mirror[i]] * step;
             }
 
-            return Kernel::Generator::norm_3d * acc / (h * h);
+            return div_rn(Kernel::Generator::norm_3d * acc, pd[PdHH], pd[PdInvHH]);
         }
     };
 
@@ -182,7 +238,7 @@ namespace {
         const Tvec *__restrict xyz,
         const shambase::VecComponent<Tvec> *__restrict hpart,
         const T *__restrict partmass_val,
-        const shambase::VecComponent<Tvec> *__restrict rho_part,
+        const sycl::vec<f64, 8> *__restrict part_data,
         const f32 *__restrict hsupport_up,
         const sycl::vec<f32, 4> *__restrict xyz_rel_f,
         const sycl::vec<f32, 4> *__restrict node_center_f,
@@ -258,17 +314,26 @@ namespace {
             Tscal delta_r = r_val - radius;
 
             Tscal rab2_ring = z_val * z_val + delta_r * delta_r;
-            Tscal h_b       = hpart[id_b];
 
-            if (rab2_ring > h_b * h_b * Rker2) {
-                return false;
+            sycl::vec<f64, 8> pd = part_data[id_b];
+
+            // rab2_ring > h_b * h_b * Rker2 (precomputed), as an integer comparison: rab2_ring
+            // >= +0 and the threshold >= +0, NaN never rejects (as the floating point comparison)
+            {
+                u64 rb       = f64_bits(rab2_ring);
+                u64 hb       = f64_bits(pd[PdSupport2]);
+                u64 inf_bits = f64_bits(shambase::get_infty<f64>());
+                if (rb > hb && rb <= inf_bits && hb <= inf_bits) {
+                    return false;
+                }
             }
 
             Tscal rab = sycl::sqrt(rab2_ring);
 
             // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
             // TODO: account for curvature
-            ret = partmass_val[id_b] * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+            ret = div_rn_vec(
+                partmass_val[id_b] * IntegZGrid<Kernel, 4>::Y_3d(rab, pd), pd[PdRho], pd[PdInvRho]);
             return true;
         };
 
@@ -665,7 +730,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
         // per particle quantities independent of the ring ray (same expressions as in the direct
         // computation `partmass * val * Y / rho_h(partmass, h_b, hfactd)`, hence same bits)
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
-        sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f64, 8>> part_data_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<f32> hsupport_up_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<sycl::vec<f32, 4>> xyz_rel_f_buf(obj_cnt, dev_sched);
 
@@ -674,7 +739,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
         sham::kernel_call(
             queue,
             sham::MultiRef{buf_hpart, buf_field, pos.get_buf()},
-            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport_up_buf, xyz_rel_f_buf},
+            sham::MultiRef{partmass_val_buf, part_data_buf, hsupport_up_buf, xyz_rel_f_buf},
             obj_cnt,
             [partmass, center](
                 u32 id_b,
@@ -682,7 +747,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 const T *__restrict torender,
                 const Tvec *__restrict xyz,
                 T *__restrict partmass_val,
-                Tscal *__restrict rho_part,
+                sycl::vec<f64, 8> *__restrict part_data,
                 f32 *__restrict hsupport_up,
                 sycl::vec<f32, 4> *__restrict xyz_rel_f) {
                 Tscal h_b = hpart[id_b];
@@ -694,8 +759,24 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 f32 z           = f32(rel.z());
                 xyz_rel_f[id_b] = {x, y, z, sycl::fabs(x) + sycl::fabs(y) + sycl::fabs(z)};
 
+                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
                 partmass_val[id_b] = partmass * torender[id_b];
-                rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                // same expressions as in the direct computation, and correctly rounded
+                // reciprocals of the divisors
+                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+                Tscal hh    = h_b * h_b;
+                sycl::vec<f64, 8> pd;
+                pd[PdH]         = h_b;
+                pd[PdInvH]      = 1 / h_b;
+                pd[PdHH]        = hh;
+                pd[PdInvHH]     = 1 / hh;
+                pd[PdRho]       = rho_b;
+                pd[PdInvRho]    = 1 / rho_b;
+                pd[PdSupport2]  = h_b * h_b * Rker2;
+                pd[7]           = 0;
+                part_data[id_b] = pd;
 
                 // fp32 upper bound of sqrt(h_b * h_b * Rker2) (the exact test threshold)
                 hsupport_up[id_b] = f32(h_b * Kernel::Rkern) * (1.f + 1.f / 1048576.f);
@@ -755,7 +836,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 pos.get_buf(),
                 buf_hpart,
                 partmass_val_buf,
-                rho_part_buf,
+                part_data_buf,
                 hsupport_up_buf,
                 xyz_rel_f_buf,
                 node_center_f_buf,
@@ -769,7 +850,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
                 const T *__restrict partmass_val,
-                const Tscal *__restrict rho_part,
+                const sycl::vec<f64, 8> *__restrict part_data,
                 const f32 *__restrict hsupport_up,
                 const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 const sycl::vec<f32, 4> *__restrict node_center_f,
@@ -799,7 +880,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 xyz,
                                 hpart,
                                 partmass_val,
-                                rho_part,
+                                part_data,
                                 hsupport_up,
                                 xyz_rel_f,
                                 node_center_f,
