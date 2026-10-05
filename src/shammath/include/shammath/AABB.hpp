@@ -39,6 +39,9 @@ namespace shammath {
         T direction;
         T inv_direction;
 
+        /// Default constructor, members are left uninitialized (e.g. for a ray set later)
+        Ray() = default;
+
         /**
          * @brief Construct a normalized ray from origin and direction
          *

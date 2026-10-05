@@ -134,6 +134,100 @@ struct shamtree::KarrasTreeTraverserAccessed {
             std::forward<Functor3>(on_excluded_node));
     }
 
+    /**
+     * @brief Persistent variant of the stack based tree traversal (for persistent kernels)
+     *
+     * Instead of exiting once the stack is empty, `next_work()` is called to update the caller's
+     * internal state (e.g. store the previous result and fetch the next ray) and returns whether
+     * a new traversal from `root_node` should start. `next_work()` is also called before the first
+     * traversal, so the state does not need to be initialized beforehand.
+     *
+     * Everything runs in a single while loop, so that work items finishing at different times
+     * within a warp do not leave threads idling in a nested loop.
+     *
+     * @param root_node the node from which every traversal starts
+     * @param next_work `() -> bool`, update the internal state, return true to restart the
+     * traversal and false to stop
+     * @param traverse_condition `(u32 node_id) -> bool`, whether to traverse the node
+     * @param on_found_leaf `(u32 node_id)`, called on each leaf satisfying the condition
+     * @param on_excluded_node `(u32 node_id)`, called on each node not satisfying the condition
+     */
+    template<u32 tree_depth, class FunctorNext, class Functor1, class Functor2, class Functor3>
+    inline void persistent_stack_based_traversal(
+        u32 root_node,
+        FunctorNext &&next_work,
+        Functor1 &&traverse_condition,
+        Functor2 &&on_found_leaf,
+        Functor3 &&on_excluded_node) const {
+
+        // Init the stack state (empty, the root is pushed when fetching the first work item)
+        std::array<u32, tree_depth> id_stack;
+
+        u32 stack_cursor = tree_depth;
+
+        // single loop over both the work items and the traversal
+        while (true) {
+
+            // the stack is empty => the current traversal is done, fetch the next work item
+            if (stack_cursor >= tree_depth) {
+                if (!next_work()) {
+                    break;
+                }
+
+                stack_cursor           = tree_depth - 1;
+                id_stack[stack_cursor] = root_node;
+            }
+
+            // Pop the top of the stack
+            u32 current_node_id = id_stack[stack_cursor];
+            stack_cursor++;
+
+            // check iteraction creteria
+            bool cur_id_valid = traverse_condition(current_node_id);
+
+            if (cur_id_valid) { // leaf or cell satisfies the criteria
+
+                if (is_id_leaf(current_node_id)) { // I found a leaf !!!!!
+
+                    on_found_leaf(current_node_id);
+
+                } else { // it can interact & not leaf => stack
+
+                    u32 lid = get_left_child(current_node_id);
+                    u32 rid = get_right_child(current_node_id);
+
+                    id_stack[stack_cursor - 1] = rid;
+                    stack_cursor--;
+
+                    id_stack[stack_cursor - 1] = lid;
+                    stack_cursor--;
+                }
+            } else {
+                // This does not satisfy the criteria => excluded case (gravity for ex.)
+                on_excluded_node(current_node_id);
+            }
+        }
+    }
+
+    /// Persistent variant of the stack based tree traversal (root = 0)
+    template<u32 tree_depth, class FunctorNext, class Functor1, class Functor2, class Functor3>
+    inline void persistent_stack_based_traversal(
+        FunctorNext &&next_work,
+        Functor1 &&traverse_condition,
+        Functor2 &&on_found_leaf,
+        Functor3 &&on_excluded_node) const {
+
+        // On a Karras tree, the root is always 0
+        u32 root_node = 0;
+
+        persistent_stack_based_traversal<tree_depth>(
+            root_node,
+            std::forward<FunctorNext>(next_work),
+            std::forward<Functor1>(traverse_condition),
+            std::forward<Functor2>(on_found_leaf),
+            std::forward<Functor3>(on_excluded_node));
+    }
+
     /// stack based tree traversal using a stack supplied by the caller instead of an
     /// internal std::array (e.g. a slice of a local_accessor for shared memory offload).
     /// `stack` is a functor `(u32 id) -> u32 &` giving access to the entry `id` of the stack.
