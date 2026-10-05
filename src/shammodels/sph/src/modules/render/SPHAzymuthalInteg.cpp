@@ -189,7 +189,8 @@ namespace {
         Tvec *__restrict ring_exs,
         Tvec *__restrict ring_eys,
         Tvec *__restrict ring_ezs,
-        shambase::VecComponent<Tvec> *__restrict ring_radii) {
+        shambase::VecComponent<Tvec> *__restrict ring_radii,
+        sycl::vec<f32, 4> *__restrict ring_f) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -291,21 +292,29 @@ namespace {
 
         // fp32 copies of the ring frame for the conservative prefilter, and the Lipschitz
         // constant L = sqrt(|e_x|^2 + |e_y|^2 + |e_z|^2) of the distance to the ring with
-        // respect to the position (rounded up)
-        sycl::vec<f32, 3> exf{f32(ring_ray.e_x.x()), f32(ring_ray.e_x.y()), f32(ring_ray.e_x.z())};
-        sycl::vec<f32, 3> eyf{f32(ring_ray.e_y.x()), f32(ring_ray.e_y.y()), f32(ring_ray.e_y.z())};
-        sycl::vec<f32, 3> ezf{f32(ez.x()), f32(ez.y()), f32(ez.z())};
-        f32 radius_f     = f32(ring_ray.radius);
-        f32 lip_f        = f32(sycl::sqrt(
+        // respect to the position (rounded up). They are kept in local memory (4 entries per
+        // thread), otherwise the compiler rematerializes the conversions in the particle loop.
+        {
+            f32 lip_f    = f32(sycl::sqrt(
                                sycl::dot(ring_ray.e_x, ring_ray.e_x)
                                + sycl::dot(ring_ray.e_y, ring_ray.e_y) + sycl::dot(ez, ez)))
                            * (1.f + 1.f / 1048576.f);
-        f32 radius_abs_f = sycl::fabs(radius_f);
+            f32 radius_f = f32(ring_ray.radius);
 
-        // ring center relative to the patch center in fp32 (+ its L1 norm)
-        Tvec center_rel = ring_ray.center - center;
-        sycl::vec<f32, 3> of{f32(center_rel.x()), f32(center_rel.y()), f32(center_rel.z())};
-        f32 of_l1 = sycl::fabs(of.x()) + sycl::fabs(of.y()) + sycl::fabs(of.z());
+            // ring center relative to the patch center in fp32 (+ its L1 norm)
+            Tvec center_rel = ring_ray.center - center;
+            f32 ox          = f32(center_rel.x());
+            f32 oy          = f32(center_rel.y());
+            f32 oz          = f32(center_rel.z());
+
+            u32 rfi = 4 * (st_base + lane);
+            ring_f[rfi + 0]
+                = {f32(ring_ray.e_x.x()), f32(ring_ray.e_x.y()), f32(ring_ray.e_x.z()), lip_f};
+            ring_f[rfi + 1]
+                = {f32(ring_ray.e_y.x()), f32(ring_ray.e_y.y()), f32(ring_ray.e_y.z()), radius_f};
+            ring_f[rfi + 2] = {f32(ez.x()), f32(ez.y()), f32(ez.z()), sycl::fabs(radius_f)};
+            ring_f[rfi + 3] = {ox, oy, oz, sycl::fabs(ox) + sycl::fabs(oy) + sycl::fabs(oz)};
+        }
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -420,14 +429,24 @@ namespace {
                     // g2_32 > (sqrt(H) + Eg)^2 (1 + 16 e) + 2e-15 (L |af|_1 + |R|)^2 (the later
                     // bounding the fp64 rounding of the exact test) implies that the fp64 test
                     // rejects the particle. NaN / inf never reject.
-                    sycl::vec<f32, 4> xr = xyz_rel_f[id_b];
-                    sycl::vec<f32, 3> af{of.x() - xr.x(), of.y() - xr.y(), of.z() - xr.z()};
-                    f32 an    = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
-                    f32 bound = of_l1 + xr.w() + an;
+                    u32 rfi               = 4 * (st_base + lane);
+                    sycl::vec<f32, 4> ex4 = ring_f[rfi + 0];
+                    sycl::vec<f32, 4> ey4 = ring_f[rfi + 1];
+                    sycl::vec<f32, 4> ez4 = ring_f[rfi + 2];
+                    sycl::vec<f32, 4> of4 = ring_f[rfi + 3];
 
-                    f32 xf  = sycl::dot(af, exf);
-                    f32 yf  = sycl::dot(af, eyf);
-                    f32 zf  = sycl::dot(af, ezf);
+                    f32 lip_f        = ex4.w();
+                    f32 radius_f     = ey4.w();
+                    f32 radius_abs_f = ez4.w();
+
+                    sycl::vec<f32, 4> xr = xyz_rel_f[id_b];
+                    sycl::vec<f32, 3> af{of4.x() - xr.x(), of4.y() - xr.y(), of4.z() - xr.z()};
+                    f32 an    = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
+                    f32 bound = of4.w() + xr.w() + an;
+
+                    f32 xf  = af.x() * ex4.x() + af.y() * ex4.y() + af.z() * ex4.z();
+                    f32 yf  = af.x() * ey4.x() + af.y() * ey4.y() + af.z() * ey4.z();
+                    f32 zf  = af.x() * ez4.x() + af.y() * ez4.y() + af.z() * ez4.z();
                     f32 rf  = sycl::sqrt(xf * xf + yf * yf);
                     f32 drf = rf - radius_f;
                     f32 g2f = zf * zf + drf * drf;
@@ -616,6 +635,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                     sycl::local_accessor<Tvec> ring_eys{azymuthal_group_size, cgh};
                     sycl::local_accessor<Tvec> ring_ezs{azymuthal_group_size, cgh};
                     sycl::local_accessor<Tscal> ring_radii{azymuthal_group_size, cgh};
+                    sycl::local_accessor<sycl::vec<f32, 4>> ring_f{4 * azymuthal_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, azymuthal_group_size},
@@ -642,7 +662,8 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 &(ring_exs[0]),
                                 &(ring_eys[0]),
                                 &(ring_ezs[0]),
-                                &(ring_radii[0]));
+                                &(ring_radii[0]),
+                                &(ring_f[0]));
                         });
                 };
             });
