@@ -219,7 +219,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
 
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                particle_looper.rtree_for(
+                particle_looper.rtree_for_leaf_coherent(
                     [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                         Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
 
