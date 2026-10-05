@@ -176,6 +176,8 @@ namespace {
         const T *__restrict partmass_val,
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const f32 *__restrict hsupport2_up,
+        const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+        Tvec center,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field,
@@ -260,9 +262,13 @@ namespace {
         ray_origins[st_base + lane]    = ray.origin;
         ray_directions[st_base + lane] = ray.direction;
 
-        // fp32 copy of the direction for the conservative prefilter
+        // fp32 copies of the direction and of the origin relative to the patch center for the
+        // conservative prefilter
         sycl::vec<f32, 3> dir_f{
             f32(ray.direction.x()), f32(ray.direction.y()), f32(ray.direction.z())};
+        Tvec orig_rel = ray.origin - center;
+        sycl::vec<f32, 3> orig_f{f32(orig_rel.x()), f32(orig_rel.y()), f32(orig_rel.z())};
+        f32 orig_f_l1 = sycl::fabs(orig_f.x()) + sycl::fabs(orig_f.y()) + sycl::fabs(orig_f.z());
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -361,23 +367,28 @@ namespace {
                 u32 leaf_id = leaf_node - tree.offset_leaf;
 
                 particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                    // same fp64 operation as the exact test (A = o - x_b)
-                    Tvec a = ray.origin - xyz[id_b];
+                    // Conservative fp32 prefilter: rejects only particles that the exact test
+                    // rejects. With A = o - x_b (fp64), P = o - c, Q = x_b - c, e = 2^-24 :
+                    //  - af = f32(P) - f32(Q) satisfies |af - A| <= 1.01 e B,
+                    //    B = |f32(P)|_1 + |f32(Q)|_1 + |af|_1,
+                    //  - the fp32 evaluation r_32 of the distance^2 of af to the ray satisfies
+                    //    |r_32 - R(af)| <= 20 e |af|^2, the fp64 one |r_64 - R(A)| <= 32 u |A|^2,
+                    //  - the distance to the ray is 1-Lipschitz : |R(af) - R(A)| <= 2.1 e B^2,
+                    // so r_32 > H + 32 e B^2 (+ 1e-30 for fp32 underflows) implies r_64 > H.
+                    // NaN / inf never reject.
+                    sycl::vec<f32, 4> xf = xyz_rel_f[id_b];
+                    sycl::vec<f32, 3> af{
+                        orig_f.x() - xf.x(), orig_f.y() - xf.y(), orig_f.z() - xf.z()};
+                    f32 bound = orig_f_l1 + xf.w() + sycl::fabs(af.x()) + sycl::fabs(af.y())
+                                + sycl::fabs(af.z());
 
-                    // conservative fp32 prefilter: rejects only particles that the exact test
-                    // rejects. |r_32 - R| <= ~20 eps_32 |A|^2 and |r_64 - R| <= ~20 eps_64 |A|^2,
-                    // where R = |A - d (A.d)|^2, r_32 / r_64 the fp32 / fp64 evaluations, so
-                    // r_32 > H + 64 * 2^-23 * |A|^2 (+ 1e-30 for fp32 underflows) implies
-                    // r_64 > H. NaN / inf never reject.
-                    sycl::vec<f32, 3> af{f32(a.x()), f32(a.y()), f32(a.z())};
                     f32 sf                = sycl::dot(af, dir_f);
                     sycl::vec<f32, 3> drf = af - dir_f * sf;
                     f32 r2f               = sycl::dot(drf, drf);
-                    f32 a2f               = sycl::dot(af, af);
 
-                    constexpr f32 margin_coef = 64.f / 8388608.f; // 64 * 2^-23
+                    constexpr f32 margin_coef = 32.f / 16777216.f; // 32 * 2^-24
 
-                    if (r2f > hsupport2_up[id_b] + margin_coef * a2f + 1e-30f) {
+                    if (r2f > hsupport2_up[id_b] + margin_coef * bound * bound + 1e-30f) {
                         return;
                     }
 
@@ -482,19 +493,31 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<f32> hsupport2_up_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f32, 4>> xyz_rel_f_buf(obj_cnt, dev_sched);
+
+        Tvec center = (bmin + bmax) / 2;
 
         sham::kernel_call(
             queue,
-            sham::MultiRef{buf_hpart, buf_field},
-            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport2_up_buf},
+            sham::MultiRef{buf_hpart, buf_field, pos.get_buf()},
+            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport2_up_buf, xyz_rel_f_buf},
             obj_cnt,
-            [partmass](
+            [partmass, center](
                 u32 id_b,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
+                const Tvec *__restrict xyz,
                 T *__restrict partmass_val,
                 Tscal *__restrict rho_part,
-                f32 *__restrict hsupport2_up) {
+                f32 *__restrict hsupport2_up,
+                sycl::vec<f32, 4> *__restrict xyz_rel_f) {
+                // position relative to the patch center in fp32 (+ its L1 norm)
+                Tvec rel        = xyz[id_b] - center;
+                f32 x           = f32(rel.x());
+                f32 y           = f32(rel.y());
+                f32 z           = f32(rel.z());
+                xyz_rel_f[id_b] = {x, y, z, sycl::fabs(x) + sycl::fabs(y) + sycl::fabs(z)};
+
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 Tscal h_b = hpart[id_b];
@@ -518,6 +541,7 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 partmass_val_buf,
                 rho_part_buf,
                 hsupport2_up_buf,
+                xyz_rel_f_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -529,6 +553,7 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 const T *__restrict partmass_val,
                 const Tscal *__restrict rho_part,
                 const f32 *__restrict hsupport2_up,
+                const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -552,6 +577,8 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 partmass_val,
                                 rho_part,
                                 hsupport2_up,
+                                xyz_rel_f,
+                                center,
                                 particle_looper,
                                 hmax,
                                 render_field,
