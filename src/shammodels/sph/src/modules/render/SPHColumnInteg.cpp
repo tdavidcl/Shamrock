@@ -126,13 +126,13 @@ namespace {
     };
 
     /// capacity of the per thread buffer of particles intersecting the ray
-    constexpr u32 column_buf_size = 32;
+    constexpr u32 column_buf_size = 96;
 
     /// the warp flushes its buffers once a thread has this many particles in it
-    constexpr u32 column_flush_threshold = 16;
+    constexpr u32 column_flush_threshold = 64;
 
     /// capacity of the per thread queue of leaves found by the traversal
-    constexpr u32 column_leaf_queue_size = 4;
+    constexpr u32 column_leaf_queue_size = 8;
 
     /// work group size of the column integration kernel
     constexpr u32 column_group_size = 128;
