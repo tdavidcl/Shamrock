@@ -24,8 +24,107 @@
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
+#include <array>
 #include <cmath>
 #include <limits>
+
+namespace {
+
+    /**
+     * @brief Bit identical equivalent of `Kernel::Y_3d(r, h, np)` exploiting the z symmetry
+     *
+     * `Y_3d` is a Riemann sum over `z = -Rkern, -Rkern + step, ...` of `f(sqrt(x^2 + z^2))`.
+     * When this grid is exact and symmetric, the terms at `z` and `-z` are identical, so only
+     * the samples with `z <= 0` are evaluated and the sum is then accumulated in the original
+     * order, giving the same bits as `Y_3d`.
+     */
+    template<class Kernel, int np>
+    struct IntegZGrid {
+        using Tscal = typename Kernel::Tscal;
+
+        static constexpr Tscal start = -Kernel::Rkern;
+        static constexpr Tscal end   = Kernel::Rkern;
+        static constexpr Tscal step  = Kernel::Rkern / np;
+
+        // same loop as shammath::integ_riemann_sum
+        static constexpr int count() {
+            int n = 0;
+            for (Tscal z = start; z < end; z += step) {
+                n++;
+            }
+            return n;
+        }
+
+        static constexpr int n = count();
+
+        static constexpr std::array<Tscal, n> zs() {
+            std::array<Tscal, n> ret{};
+            int i = 0;
+            for (Tscal z = start; z < end; z += step) {
+                ret[i++] = z;
+            }
+            return ret;
+        }
+
+        static constexpr std::array<Tscal, n> z = zs();
+
+        // index of the sample with the same z^2 and z <= 0 (-1 if there is none)
+        static constexpr std::array<int, n> mirrors() {
+            std::array<int, n> ret{};
+            for (int i = 0; i < n; i++) {
+                ret[i] = -1;
+                if (z[i] <= 0) {
+                    ret[i] = i;
+                    continue;
+                }
+                for (int j = 0; j < n; j++) {
+                    if (z[j] <= 0 && z[j] == -z[i]) {
+                        ret[i] = j;
+                    }
+                }
+            }
+            return ret;
+        }
+
+        static constexpr std::array<int, n> mirror = mirrors();
+
+        static constexpr bool is_symmetric() {
+            for (int i = 0; i < n; i++) {
+                if (mirror[i] < 0) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        static_assert(is_symmetric(), "the Riemann grid of Y_3d must be exactly symmetric");
+
+        static inline Tscal Y_3d(Tscal r, Tscal h) {
+            Tscal x = r / h;
+
+            // the original loop compiles `x * x + z * z` to fma(z, z, x * x), match it explicitly
+            Tscal xx = x * x;
+
+            Tscal fz[n];
+#pragma unroll
+            for (int i = 0; i < n; i++) {
+                if (z[i] <= 0) {
+                    fz[i] = Kernel::f(sqrt(sycl::fma(z[i], z[i], xx)));
+                }
+            }
+
+            // same accumulation as shammath::integ_riemann_sum
+            Tscal acc = {};
+#pragma unroll
+            for (int i = 0; i < n; i++) {
+                acc += fz[mirror[i]] * step;
+            }
+
+            return Kernel::Generator::norm_3d * acc / (h * h);
+        }
+    };
+
+} // namespace
 
 template<class Tvec, class T, template<class> class SPHKernel>
 void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_evaluate_internal() {
@@ -150,7 +249,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                         Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
 
                         // TODO: account for curvature
-                        acc += partmass * val * Kernel::Y_3d(rab, h_b, 4) / rho_b;
+                        acc += partmass * val * IntegZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_b;
                     });
 
                 render_field[gid] += acc;
