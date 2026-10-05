@@ -177,6 +177,8 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const f32 *__restrict hsupport_up,
         const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+        const sycl::vec<f32, 4> *__restrict node_center_f,
+        const sycl::vec<f32, 2> *__restrict node_radius_f,
         Tvec center,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
@@ -316,6 +318,74 @@ namespace {
             ring_f[rfi + 3] = {ox, oy, oz, sycl::fabs(ox) + sycl::fabs(oy) + sycl::fabs(oz)};
         }
 
+        // fp32 squared distance to my ring of the point at af (relative to the ring center) and
+        // its error bound eg (see the particle prefilter below for the derivation)
+        auto ring_dist2_f32 = [&](sycl::vec<f32, 3> af, f32 bound, f32 &eg, f32 &scale) -> f32 {
+            u32 rfi               = 4 * (st_base + lane);
+            sycl::vec<f32, 4> ex4 = ring_f[rfi + 0];
+            sycl::vec<f32, 4> ey4 = ring_f[rfi + 1];
+            sycl::vec<f32, 4> ez4 = ring_f[rfi + 2];
+
+            f32 lip_f        = ex4.w();
+            f32 radius_f     = ey4.w();
+            f32 radius_abs_f = ez4.w();
+
+            f32 an = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
+
+            f32 xf  = af.x() * ex4.x() + af.y() * ex4.y() + af.z() * ex4.z();
+            f32 yf  = af.x() * ey4.x() + af.y() * ey4.y() + af.z() * ey4.z();
+            f32 zf  = af.x() * ez4.x() + af.y() * ez4.y() + af.z() * ez4.z();
+            f32 rf  = sycl::sqrt(xf * xf + yf * yf);
+            f32 drf = rf - radius_f;
+
+            constexpr f32 e = 1.f / 16777216.f; // 2^-24
+
+            scale = lip_f * an + radius_abs_f;
+            eg    = e * (lip_f * (2.f * (bound + an) + 16.f * an) + 8.f * radius_abs_f);
+            return zf * zf + drf * drf;
+        };
+
+        // Certified fp32 version of the node test
+        // `expand_all(hmax * Rkern).intersect_ring_ray_approx(ring_ray)`, which compares the
+        // distance g(P) of the expanded box center P to the ring with the box bounding radius.
+        // Returns 1 if the fp64 test surely returns true, 0 if it surely returns false and 2
+        // if the fp32 evaluation cannot decide (the fp64 test must then be performed).
+        // node_center_f holds f32(P - c) and in w a bound on |f32(P - c)|_1 that also covers the
+        // fp64 rounding of P in absolute coordinates, node_radius_f holds fp32 upper / lower
+        // bounds of the bounding radius.
+        auto node_test_f32 = [&](u32 node_id) -> u32 {
+            u32 rfi               = 4 * (st_base + lane);
+            sycl::vec<f32, 4> of4 = ring_f[rfi + 3];
+            sycl::vec<f32, 4> pc  = node_center_f[node_id];
+            sycl::vec<f32, 2> nr  = node_radius_f[node_id];
+
+            sycl::vec<f32, 3> af{of4.x() - pc.x(), of4.y() - pc.y(), of4.z() - pc.z()};
+            f32 bound = of4.w() + pc.w();
+
+            f32 eg, scale;
+            f32 g2f = ring_dist2_f32(af, bound, eg, scale);
+
+            constexpr f32 e = 1.f / 16777216.f; // 2^-24
+
+            if (!(bound < 1e15f)) {
+                return 2;
+            }
+
+            f32 slack = 2e-15f * scale * scale + 1e-30f;
+
+            f32 out = nr.x() + eg;
+            if (g2f > out * out * (1.f + 16.f * e) + slack) {
+                return 0;
+            }
+
+            f32 in = nr.y() - eg;
+            if (in > 0 && g2f * (1.f + 16.f * e) + slack < in * in) {
+                return 1;
+            }
+
+            return 2;
+        };
+
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
         // thread adds its own results in its buffer order
@@ -383,12 +453,24 @@ namespace {
                     u32 current_node_id = id_stack[stack_cursor];
                     stack_cursor++;
 
-                    Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
+                    u32 cert = node_test_f32(current_node_id);
 
-                    shammath::AABB<Tvec> node_aabb{
-                        traverser.aabb_min[current_node_id], traverser.aabb_max[current_node_id]};
+                    bool node_hit;
+                    if (cert == 2) {
+                        // exact test
+                        Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
 
-                    if (node_aabb.expand_all(rint_cell).intersect_ring_ray_approx(ring_ray)) {
+                        shammath::AABB<Tvec> node_aabb{
+                            traverser.aabb_min[current_node_id],
+                            traverser.aabb_max[current_node_id]};
+
+                        node_hit
+                            = node_aabb.expand_all(rint_cell).intersect_ring_ray_approx(ring_ray);
+                    } else {
+                        node_hit = (cert == 1);
+                    }
+
+                    if (node_hit) {
                         if (tree.is_id_leaf(current_node_id)) {
                             leaf_queue[(queue_head + queue_cnt) % azymuthal_leaf_queue_size]
                                 = current_node_id;
@@ -430,32 +512,18 @@ namespace {
                     // bounding the fp64 rounding of the exact test) implies that the fp64 test
                     // rejects the particle. NaN / inf never reject.
                     u32 rfi               = 4 * (st_base + lane);
-                    sycl::vec<f32, 4> ex4 = ring_f[rfi + 0];
-                    sycl::vec<f32, 4> ey4 = ring_f[rfi + 1];
-                    sycl::vec<f32, 4> ez4 = ring_f[rfi + 2];
                     sycl::vec<f32, 4> of4 = ring_f[rfi + 3];
-
-                    f32 lip_f        = ex4.w();
-                    f32 radius_f     = ey4.w();
-                    f32 radius_abs_f = ez4.w();
 
                     sycl::vec<f32, 4> xr = xyz_rel_f[id_b];
                     sycl::vec<f32, 3> af{of4.x() - xr.x(), of4.y() - xr.y(), of4.z() - xr.z()};
-                    f32 an    = sycl::fabs(af.x()) + sycl::fabs(af.y()) + sycl::fabs(af.z());
-                    f32 bound = of4.w() + xr.w() + an;
+                    f32 bound = of4.w() + xr.w();
 
-                    f32 xf  = af.x() * ex4.x() + af.y() * ex4.y() + af.z() * ex4.z();
-                    f32 yf  = af.x() * ey4.x() + af.y() * ey4.y() + af.z() * ey4.z();
-                    f32 zf  = af.x() * ez4.x() + af.y() * ez4.y() + af.z() * ez4.z();
-                    f32 rf  = sycl::sqrt(xf * xf + yf * yf);
-                    f32 drf = rf - radius_f;
-                    f32 g2f = zf * zf + drf * drf;
+                    f32 eg, scale;
+                    f32 g2f = ring_dist2_f32(af, bound, eg, scale);
 
                     constexpr f32 e = 1.f / 16777216.f; // 2^-24
 
-                    f32 scale = lip_f * an + radius_abs_f;
-                    f32 eg    = e * (lip_f * (2.f * bound + 16.f * an) + 8.f * radius_abs_f);
-                    f32 lim   = hsupport_up[id_b] + eg;
+                    f32 lim = hsupport_up[id_b] + eg;
 
                     if (bound < 1e15f
                         && g2f > lim * lim * (1.f + 16.f * e) + 2e-15f * scale * scale + 1e-30f) {
@@ -597,6 +665,50 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 hsupport_up[id_b] = f32(h_b * Kernel::Rkern) * (1.f + 1.f / 1048576.f);
             });
 
+        // fp32 centers and bounding radii of the expanded node boxes, relative to the patch
+        // center, for the certified node test
+        u32 node_cnt = tree.aabbs.buf_aabb_min.get_size();
+        sham::DeviceBuffer<sycl::vec<f32, 4>> node_center_f_buf(node_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f32, 2>> node_radius_f_buf(node_cnt, dev_sched);
+
+        sham::kernel_call(
+            queue,
+            sham::MultiRef{tree.aabbs.buf_aabb_min, tree.aabbs.buf_aabb_max, hmax_tree.buf_field},
+            sham::MultiRef{node_center_f_buf, node_radius_f_buf},
+            node_cnt,
+            [center](
+                u32 id,
+                const Tvec *__restrict aabb_min,
+                const Tvec *__restrict aabb_max,
+                const Tscal *__restrict hmax,
+                sycl::vec<f32, 4> *__restrict node_center_f,
+                sycl::vec<f32, 2> *__restrict node_radius_f) {
+                Tscal rint_cell = hmax[id] * Kernel::Rkern;
+
+                shammath::AABB<Tvec> box
+                    = shammath::AABB<Tvec>{aabb_min[id], aabb_max[id]}.expand_all(rint_cell);
+
+                Tvec pc    = box.get_center() - center;
+                Tscal brad = box.get_radius();
+
+                auto nl1 = [](Tvec v) {
+                    return sycl::fabs(v.x()) + sycl::fabs(v.y()) + sycl::fabs(v.z());
+                };
+
+                f32 x = f32(pc.x());
+                f32 y = f32(pc.y());
+                f32 z = f32(pc.z());
+
+                // |f32(P - c)|_1, plus a term covering the fp64 rounding of P in absolute
+                // coordinates in the exact test
+                f32 w = (sycl::fabs(x) + sycl::fabs(y) + sycl::fabs(z)) * (1.f + 1.f / 1048576.f)
+                        + f32((nl1(box.lower) + nl1(box.upper) + nl1(center)) * 0x1p-28);
+
+                node_center_f[id] = {x, y, z, w};
+                node_radius_f[id]
+                    = {f32(brad) * (1.f + 1.f / 1048576.f), f32(brad) * (1.f - 1.f / 1048576.f)};
+            });
+
         u32 group_cnt     = shambase::group_count(nring_rays, azymuthal_group_size);
         u32 corrected_len = group_cnt * azymuthal_group_size;
 
@@ -610,6 +722,8 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 rho_part_buf,
                 hsupport_up_buf,
                 xyz_rel_f_buf,
+                node_center_f_buf,
+                node_radius_f_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -622,6 +736,8 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                 const Tscal *__restrict rho_part,
                 const f32 *__restrict hsupport_up,
                 const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+                const sycl::vec<f32, 4> *__restrict node_center_f,
+                const sycl::vec<f32, 2> *__restrict node_radius_f,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -650,6 +766,8 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 rho_part,
                                 hsupport_up,
                                 xyz_rel_f,
+                                node_center_f,
+                                node_radius_f,
                                 center,
                                 particle_looper,
                                 hmax,
