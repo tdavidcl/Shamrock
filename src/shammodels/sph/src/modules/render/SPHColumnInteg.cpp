@@ -100,6 +100,13 @@ namespace {
 
         static_assert(is_symmetric(), "the Riemann grid of Y_3d must be exactly symmetric");
 
+        static constexpr Tscal Rkern2 = Kernel::Rkern * Kernel::Rkern;
+
+        // Rkern^2 must be exact for sqrt(Rkern^2) == Rkern (Rkern has a short dyadic expansion)
+        static_assert(
+            Kernel::Rkern * 8 == Tscal(i64(Kernel::Rkern * 8)) && Kernel::Rkern < 64,
+            "Rkern must be a multiple of 1/8 for Rkern^2 to be exact");
+
         static inline Tscal Y_3d(Tscal r, Tscal h) {
             Tscal x = r / h;
 
@@ -110,7 +117,15 @@ namespace {
 #pragma unroll
             for (int i = 0; i < n; i++) {
                 if (z[i] <= 0) {
-                    fz[i] = Kernel::f(sqrt(sycl::fma(z[i], z[i], xx)));
+                    if (z[i] == start) {
+                        // y >= Rkern^2 always (or NaN), see below
+                        fz[i] = 0;
+                    } else {
+                        Tscal y = sycl::fma(z[i], z[i], xx);
+                        // f(q) is exactly 0 for q >= Rkern (and for NaN) and sqrt(y) >= Rkern
+                        // whenever y >= Rkern^2, so these samples are exactly 0
+                        fz[i] = (y < Rkern2) ? Kernel::f(sqrt(y)) : Tscal{0};
+                    }
                 }
             }
 
@@ -155,11 +170,11 @@ namespace {
     inline void column_integ_warp_cooperative(
         const sycl::nd_item<1> &item,
         u32 nrays,
-        shambase::VecComponent<Tvec> partmass,
         const shammath::Ray<Tvec> *__restrict image_rays,
         const Tvec *__restrict xyz,
         const shambase::VecComponent<Tvec> *__restrict hpart,
-        const T *__restrict torender,
+        const T *__restrict partmass_val,
+        const shambase::VecComponent<Tvec> *__restrict rho_part,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field) {
@@ -209,11 +224,8 @@ namespace {
 
                 Tscal rab = sycl::sqrt(rab2);
 
-                T val = torender[id_b];
-
-                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
-
-                acc += partmass * val * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_b;
+                // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
+                acc += partmass_val[id_b] * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
             }
             buf_cnt = 0;
         };
@@ -373,20 +385,47 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
 
         auto obj_it = tree.get_object_iterator();
 
+        // per particle quantities independent of the ray (same expressions as in the direct
+        // computation `partmass * val * Y / rho_h(partmass, h_b, hfactd)`, hence same bits)
+        sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+
+        sham::kernel_call(
+            queue,
+            sham::MultiRef{buf_hpart, buf_field},
+            sham::MultiRef{partmass_val_buf, rho_part_buf},
+            obj_cnt,
+            [partmass](
+                u32 id_b,
+                const Tscal *__restrict hpart,
+                const T *__restrict torender,
+                T *__restrict partmass_val,
+                Tscal *__restrict rho_part) {
+                partmass_val[id_b] = partmass * torender[id_b];
+                rho_part[id_b]     = shamrock::sph::rho_h(partmass, hpart[id_b], Kernel::hfactd);
+            });
+
         u32 group_cnt     = shambase::group_count(nrays, column_group_size);
         u32 corrected_len = group_cnt * column_group_size;
 
         sham::kernel_call_hndl(
             queue,
             sham::MultiRef{
-                rays_buf, pos.get_buf(), buf_hpart, buf_field, obj_it, hmax_tree.buf_field},
+                rays_buf,
+                pos.get_buf(),
+                buf_hpart,
+                partmass_val_buf,
+                rho_part_buf,
+                obj_it,
+                hmax_tree.buf_field},
             sham::MultiRef{output_buf},
             nrays,
             [=](u32,
                 const shammath::Ray<Tvec> *__restrict image_rays,
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
-                const T *__restrict torender,
+                const T *__restrict partmass_val,
+                const Tscal *__restrict rho_part,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -397,11 +436,11 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                             column_integ_warp_cooperative<Tvec, T, Kernel>(
                                 item,
                                 nrays,
-                                partmass,
                                 image_rays,
                                 xyz,
                                 hpart,
-                                torender,
+                                partmass_val,
+                                rho_part,
                                 particle_looper,
                                 hmax,
                                 render_field);
