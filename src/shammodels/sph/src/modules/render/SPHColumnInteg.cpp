@@ -177,7 +177,10 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
-        T *__restrict render_field) {
+        T *__restrict render_field,
+        u32 *__restrict staging_id,
+        shambase::VecComponent<Tvec> *__restrict staging_rab2,
+        T *__restrict staging_term) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -215,18 +218,65 @@ namespace {
         Tscal buf_rab2[column_buf_size];
         u32 buf_cnt = 0;
 
+        // contribution of the particle id_b at squared distance rab2 of the ray
+        auto contrib = [&](u32 id_b, Tscal rab2) -> T {
+            Tscal h_b = hpart[id_b];
+
+            Tscal rab = sycl::sqrt(rab2);
+
+            // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
+            return partmass_val[id_b] * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+        };
+
+        // flush computed by this thread only (only used if the buffer is full within a leaf)
         auto flush = [&]() {
             for (u32 i = 0; i < buf_cnt; i++) {
-                u32 id_b   = buf_id[i];
-                Tscal rab2 = buf_rab2[i];
-
-                Tscal h_b = hpart[id_b];
-
-                Tscal rab = sycl::sqrt(rab2);
-
-                // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
-                acc += partmass_val[id_b] * ColumnZGrid<Kernel, 4>::Y_3d(rab, h_b) / rho_part[id_b];
+                acc += contrib(buf_id[i], buf_rab2[i]);
             }
+            buf_cnt = 0;
+        };
+
+        const u32 sg_size = sg.get_local_range()[0];
+        const u32 lane    = sg.get_local_linear_id();
+        const u32 st_base = sg.get_group_linear_id() * sg_size;
+
+        // flush of the whole sub-group: the buffered entries of all threads are computed by
+        // all the threads (sg_size entries per round, through the staging area), then each
+        // thread adds its own results in its buffer order
+        auto flush_cooperative = [&]() {
+            u32 off = sycl::exclusive_scan_over_group(sg, buf_cnt, sycl::plus<u32>{});
+            u32 tot = sycl::reduce_over_group(sg, buf_cnt, sycl::plus<u32>{});
+
+            for (u32 r0 = 0; r0 < tot; r0 += sg_size) {
+
+                // range of my entries in this round
+                u32 jbeg = (off < r0) ? sycl::min(r0 - off, buf_cnt) : 0;
+                u32 jend = (off + buf_cnt > r0 + sg_size)
+                               ? ((r0 + sg_size > off) ? r0 + sg_size - off : 0)
+                               : buf_cnt;
+
+                for (u32 j = jbeg; j < jend; j++) {
+                    u32 w                     = off + j - r0;
+                    staging_id[st_base + w]   = buf_id[j];
+                    staging_rab2[st_base + w] = buf_rab2[j];
+                }
+
+                sycl::group_barrier(sg);
+
+                if (r0 + lane < tot) {
+                    staging_term[st_base + lane]
+                        = contrib(staging_id[st_base + lane], staging_rab2[st_base + lane]);
+                }
+
+                sycl::group_barrier(sg);
+
+                for (u32 j = jbeg; j < jend; j++) {
+                    acc += staging_term[st_base + off + j - r0];
+                }
+
+                sycl::group_barrier(sg);
+            }
+
             buf_cnt = 0;
         };
 
@@ -302,7 +352,7 @@ namespace {
             bool lane_done = !has_nodes() && queue_cnt == 0;
             if (sycl::any_of_group(
                     sg, buf_cnt >= column_flush_threshold || (lane_done && buf_cnt > 0))) {
-                flush();
+                flush_cooperative();
             }
         }
 
@@ -430,6 +480,10 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
                 return [=](sycl::handler &cgh) {
+                    sycl::local_accessor<u32> staging_id{column_group_size, cgh};
+                    sycl::local_accessor<Tscal> staging_rab2{column_group_size, cgh};
+                    sycl::local_accessor<T> staging_term{column_group_size, cgh};
+
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, column_group_size},
                         [=](sycl::nd_item<1> item) {
@@ -443,7 +497,10 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
                                 rho_part,
                                 particle_looper,
                                 hmax,
-                                render_field);
+                                render_field,
+                                &(staging_id[0]),
+                                &(staging_rab2[0]),
+                                &(staging_term[0]));
                         });
                 };
             });
