@@ -218,7 +218,7 @@ void shammodels::sph::modules::SPHColumnInteg<Tvec, T, SPHKernel>::_impl_evaluat
 
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
-                particle_looper.rtree_for(
+                particle_looper.rtree_for_leaf_coherent(
                     [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
                         Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
 
