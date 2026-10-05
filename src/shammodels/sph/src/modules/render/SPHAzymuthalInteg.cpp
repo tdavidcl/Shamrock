@@ -284,11 +284,7 @@ namespace {
         u32 *__restrict staging_owner,
         T *__restrict staging_term,
         u32 *__restrict staging_ok,
-        Tvec *__restrict ring_centers,
-        Tvec *__restrict ring_exs,
-        Tvec *__restrict ring_eys,
         Tvec *__restrict ring_ezs,
-        shambase::VecComponent<Tvec> *__restrict ring_radii,
         sycl::vec<f32, 4> *__restrict ring_f) {
 
         using Tscal = shambase::VecComponent<Tvec>;
@@ -392,11 +388,10 @@ namespace {
         const u32 lane    = sg.get_local_linear_id();
         const u32 st_base = sg.get_group_linear_id() * sg_size;
 
-        ring_centers[st_base + lane] = ring_ray.center;
-        ring_exs[st_base + lane]     = ring_ray.e_x;
-        ring_eys[st_base + lane]     = ring_ray.e_y;
-        ring_ezs[st_base + lane]     = ez;
-        ring_radii[st_base + lane]   = ring_ray.radius;
+        // the ring of another thread of the sub-group is read back from the (read only, cached)
+        // ring ray buffer, only the computed e_z is kept in local memory
+        ring_ezs[st_base + lane] = ez;
+        const u32 sg_gid_base    = gid - lane;
 
         // fp32 copies of the ring frame for the conservative prefilter, and the Lipschitz
         // constant L = sqrt(|e_x|^2 + |e_y|^2 + |e_z|^2) of the distance to the ring with
@@ -534,15 +529,19 @@ namespace {
                 sycl::group_barrier(sg);
 
                 if (r0 + lane < tot) {
-                    u32 owner = st_base + staging_owner[st_base + lane];
+                    u32 owner = staging_owner[st_base + lane];
+
+                    // the owner has candidates, hence is an active thread
+                    const shammath::RingRay<Tvec> &owner_ring = ring_rays_ptr[sg_gid_base + owner];
+
                     T term;
                     bool ok = contrib(
                         staging_id[st_base + lane],
-                        ring_centers[owner],
-                        ring_exs[owner],
-                        ring_eys[owner],
-                        ring_ezs[owner],
-                        ring_radii[owner],
+                        owner_ring.center,
+                        owner_ring.e_x,
+                        owner_ring.e_y,
+                        ring_ezs[st_base + owner],
+                        owner_ring.radius,
                         term);
                     staging_term[st_base + lane] = term;
                     staging_ok[st_base + lane]   = ok;
@@ -896,11 +895,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                     sycl::local_accessor<u32> staging_owner{azymuthal_group_size, cgh};
                     sycl::local_accessor<T> staging_term{azymuthal_group_size, cgh};
                     sycl::local_accessor<u32> staging_ok{azymuthal_group_size, cgh};
-                    sycl::local_accessor<Tvec> ring_centers{azymuthal_group_size, cgh};
-                    sycl::local_accessor<Tvec> ring_exs{azymuthal_group_size, cgh};
-                    sycl::local_accessor<Tvec> ring_eys{azymuthal_group_size, cgh};
                     sycl::local_accessor<Tvec> ring_ezs{azymuthal_group_size, cgh};
-                    sycl::local_accessor<Tscal> ring_radii{azymuthal_group_size, cgh};
                     sycl::local_accessor<sycl::vec<f32, 4>> ring_f{4 * azymuthal_group_size, cgh};
 
                     cgh.parallel_for(
@@ -926,11 +921,7 @@ void shammodels::sph::modules::SPHAzymuthalInteg<Tvec, T, SPHKernel>::_impl_eval
                                 &(staging_owner[0]),
                                 &(staging_term[0]),
                                 &(staging_ok[0]),
-                                &(ring_centers[0]),
-                                &(ring_exs[0]),
-                                &(ring_eys[0]),
                                 &(ring_ezs[0]),
-                                &(ring_radii[0]),
                                 &(ring_f[0]));
                         });
                 };
