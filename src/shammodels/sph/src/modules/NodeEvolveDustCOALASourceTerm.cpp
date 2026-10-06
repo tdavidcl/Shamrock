@@ -84,7 +84,7 @@ namespace shammodels::sph::modules {
                     u32 id_a_d = id_a * nbins;
 
                     /* inputs */
-                    shamphys::TabfluxCoagK0SymSparseView<Tscal> tabflux_coag{
+                    shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_coag{
                         tabflux_pair_offset, tabflux_pair_jmin, tabflux_values};
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
@@ -159,8 +159,8 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> massgrid_buf(nbins + 1, dev_sched);
         massgrid_buf.copy_from_stdvec(massgrid);
 
-        // only the symmetrised non-zero part of the tensor is used on device
-        auto tabflux_sparse = shamphys::make_tabflux_coag_k0_sym_sparse<Tscal>(
+        // only the non-zero part of the tensor is used on device
+        auto tabflux_sparse = shamphys::make_tabflux_coag_k0_sparse<Tscal>(
             nbins,
             std::mdspan<const Tscal, std::dextents<u32, 3>>(
                 tensor_tabflux_coag.data(), nbins, nbins, nbins));

@@ -17,8 +17,8 @@
 #include <random>
 #include <vector>
 
-/// compare the sparse symmetrised flux to the dense reference on random inputs
-void test_coala_flux_sym_sparse(int nbins, f64 zero_fraction) {
+/// compare the sparse flux to the dense reference on random inputs
+void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
 
     std::mt19937 eng(0x1111 + nbins);
     std::uniform_real_distribution<f64> distval(0.1, 1.0);
@@ -48,9 +48,10 @@ void test_coala_flux_sym_sparse(int nbins, f64 zero_fraction) {
     for (auto &vi : v) {
         vi = {distvel(eng), distvel(eng), distvel(eng)};
     }
+    // not symmetric and non-zero on the diagonal on purpose, nothing should assume otherwise
     auto dv = [&](int l, int m) {
         f64 dx = v[m][0] - v[l][0], dy = v[m][1] - v[l][1], dz = v[m][2] - v[l][2];
-        return std::sqrt(dx * dx + dy * dy + dz * dz);
+        return std::sqrt(dx * dx + dy * dy + dz * dz) + 0.1 * (l + 1) / (m + 2);
     };
 
     std::mdspan<f64, std::dextents<u32, 1>> gij_span(gij.data(), nbins);
@@ -59,12 +60,12 @@ void test_coala_flux_sym_sparse(int nbins, f64 zero_fraction) {
     std::mdspan<f64, std::dextents<u32, 1>> flux_ref_span(flux_ref.data(), nbins);
     shamphys::compute_flux_coag_k0_kdv(nbins, gij_span, tab_span, dv, flux_ref_span);
 
-    auto sparse = shamphys::make_tabflux_coag_k0_sym_sparse<f64>(nbins, tab_span);
+    auto sparse = shamphys::make_tabflux_coag_k0_sparse<f64>(nbins, tab_span);
 
-    REQUIRE_EQUAL(sparse.pair_offset.size(), usize(nbins * (nbins - 1) / 2 + 1));
-    REQUIRE_EQUAL(sparse.pair_jmin.size(), usize(nbins * (nbins - 1) / 2));
+    REQUIRE_EQUAL(sparse.pair_offset.size(), usize(nbins * nbins + 1));
+    REQUIRE_EQUAL(sparse.pair_jmin.size(), usize(nbins * nbins));
 
-    shamphys::TabfluxCoagK0SymSparseView<f64> view{
+    shamphys::TabfluxCoagK0SparseView<f64> view{
         sparse.pair_offset.data(), sparse.pair_jmin.data(), sparse.values.data()};
 
     std::vector<f64> flux(nbins);
@@ -76,10 +77,10 @@ void test_coala_flux_sym_sparse(int nbins, f64 zero_fraction) {
     }
 }
 
-NEW_TEST(Unittest, "shamphys/coala_interface/flux_sym_sparse", 1) {
+NEW_TEST(Unittest, "shamphys/coala_interface/flux_sparse", 1) {
     for (int nbins : {1, 2, 3, 7, 20}) {
         for (f64 zero_fraction : {0.0, 0.5, 0.9}) {
-            test_coala_flux_sym_sparse(nbins, zero_fraction);
+            test_coala_flux_sparse(nbins, zero_fraction);
         }
     }
 }
