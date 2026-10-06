@@ -37,21 +37,41 @@ namespace shammodels::basegodunov::modules::details {
     /// Size of the buffer of the link counts of the 6 directions
     inline u32 neigh_6dir_count_size(u32 obj_cnt) { return 6 * (obj_cnt + 1) + 1; }
 
-    /// Per direction offsets of the links of each object, and number of links
+    /**
+     * @brief Result of scan_link_counts_6dir
+     *
+     * node_link_offset is allocated but, except when there is no object, filled by the fill
+     * kernel (see neigh_6dir_link_offset).
+     */
     struct NeighGraph6DirOffsets {
         std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> node_link_offset;
         std::array<u32, 6> link_count;
+
+        /// exclusive scan of the concatenated counts
+        std::unique_ptr<sham::DeviceBuffer<u32>> scanned;
+        /// value of the scan at the start of each direction
+        std::array<u32, 6> start;
     };
+
+    /**
+     * @brief Offset of the first link of object i for direction dir (i == obj_cnt gives the link
+     * count of the direction)
+     *
+     * The fill kernel of the graphs must store it in node_link_offset[dir][i] for every object i,
+     * and in node_link_offset[dir][obj_cnt] for the last object. This is exactly the exclusive scan
+     * of the counts of the direction alone.
+     */
+    inline u32 neigh_6dir_link_offset(const u32 *scanned, u32 start, u32 dir, u32 i, u32 obj_cnt) {
+        return scanned[neigh_6dir_count_idx(dir, i, obj_cnt)] - start;
+    }
 
     /**
      * @brief Exclusive scan of the link counts of the 6 directions with one scan
      *
      * `counts` (neigh_6dir_count_size(obj_cnt) entries) must hold the link count of object i for
      * direction dir at neigh_6dir_count_idx(dir, i, obj_cnt); the separator slots are set to 0
-     * here. For each direction the returned node_link_offset (obj_cnt + 1 entries) is the
-     * exclusive scan of its counts, the last entry being its link count, exactly as if it had
-     * been scanned on its own: the scan of the concatenated counts minus its value at the start
-     * of the direction.
+     * here. The offsets of a direction are the scan of the concatenated counts minus its value at
+     * the start of the direction (neigh_6dir_link_offset), written by the fill kernel.
      */
     inline NeighGraph6DirOffsets scan_link_counts_6dir(
         const sham::DeviceScheduler_ptr &dev_sched, sham::DeviceBuffer<u32> &counts, u32 obj_cnt) {
@@ -67,13 +87,15 @@ namespace shammodels::basegodunov::modules::details {
                 c[k * stride + ((k < 6) ? stride - 1 : 0)] = 0;
             });
 
-        sham::DeviceBuffer<u32> scanned = shamalgs::numeric::scan_exclusive(dev_sched, counts, len);
+        NeighGraph6DirOffsets ret;
+        ret.scanned = std::make_unique<sham::DeviceBuffer<u32>>(
+            shamalgs::numeric::scan_exclusive(dev_sched, counts, len));
 
         // start of each direction in the scan (the 7th is the total)
         sham::DeviceBuffer<u32> starts(7, dev_sched);
         sham::kernel_call(
             q,
-            sham::MultiRef{scanned},
+            sham::MultiRef{*ret.scanned},
             sham::MultiRef{starts},
             7,
             [stride](u32 k, const u32 *__restrict s, u32 *__restrict st) {
@@ -81,46 +103,17 @@ namespace shammodels::basegodunov::modules::details {
             });
         std::vector<u32> base = starts.copy_to_stdvec();
 
-        NeighGraph6DirOffsets ret;
         for (u32 dir = 0; dir < 6; dir++) {
             ret.node_link_offset[dir]
                 = std::make_unique<sham::DeviceBuffer<u32>>(stride, dev_sched);
             ret.link_count[dir] = base[dir + 1] - base[dir];
-        }
+            ret.start[dir]      = base[dir];
 
-        sham::kernel_call(
-            q,
-            sham::MultiRef{scanned},
-            sham::MultiRef{
-                *ret.node_link_offset[0],
-                *ret.node_link_offset[1],
-                *ret.node_link_offset[2],
-                *ret.node_link_offset[3],
-                *ret.node_link_offset[4],
-                *ret.node_link_offset[5]},
-            stride,
-            [stride,
-             b0 = base[0],
-             b1 = base[1],
-             b2 = base[2],
-             b3 = base[3],
-             b4 = base[4],
-             b5 = base[5]](
-                u32 i,
-                const u32 *__restrict s,
-                u32 *__restrict o0,
-                u32 *__restrict o1,
-                u32 *__restrict o2,
-                u32 *__restrict o3,
-                u32 *__restrict o4,
-                u32 *__restrict o5) {
-                o0[i] = s[0 * stride + i] - b0;
-                o1[i] = s[1 * stride + i] - b1;
-                o2[i] = s[2 * stride + i] - b2;
-                o3[i] = s[3 * stride + i] - b3;
-                o4[i] = s[4 * stride + i] - b4;
-                o5[i] = s[5 * stride + i] - b5;
-            });
+            if (obj_cnt == 0) {
+                // no fill kernel to write it
+                ret.node_link_offset[dir]->set_val_at_idx(0, 0);
+            }
+        }
 
         return ret;
     }

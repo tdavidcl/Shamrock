@@ -238,12 +238,13 @@ namespace shammodels::basegodunov::modules {
                 auto g5              = block_graph[5]->get_read_access(deps);
                 const TgridVec *bmin = buf_block_min.get_read_access(deps);
                 const TgridVec *bmax = buf_block_max.get_read_access(deps);
-                const u32 *off0      = scanned.node_link_offset[0]->get_read_access(deps);
-                const u32 *off1      = scanned.node_link_offset[1]->get_read_access(deps);
-                const u32 *off2      = scanned.node_link_offset[2]->get_read_access(deps);
-                const u32 *off3      = scanned.node_link_offset[3]->get_read_access(deps);
-                const u32 *off4      = scanned.node_link_offset[4]->get_read_access(deps);
-                const u32 *off5      = scanned.node_link_offset[5]->get_read_access(deps);
+                const u32 *sc        = scanned.scanned->get_read_access(deps);
+                u32 *off0            = scanned.node_link_offset[0]->get_write_access(deps);
+                u32 *off1            = scanned.node_link_offset[1]->get_write_access(deps);
+                u32 *off2            = scanned.node_link_offset[2]->get_write_access(deps);
+                u32 *off3            = scanned.node_link_offset[3]->get_write_access(deps);
+                u32 *off4            = scanned.node_link_offset[4]->get_write_access(deps);
+                u32 *off5            = scanned.node_link_offset[5]->get_write_access(deps);
                 u32 *ids0            = links[0]->get_write_access(deps);
                 u32 *ids1            = links[1]->get_write_access(deps);
                 u32 *ids2            = links[2]->get_write_access(deps);
@@ -251,13 +252,38 @@ namespace shammodels::basegodunov::modules {
                 u32 *ids4            = links[4]->get_write_access(deps);
                 u32 *ids5            = links[5]->get_write_access(deps);
 
-                auto e = q.submit(deps, [&, off, cell_count](sycl::handler &cgh) {
+                std::array<u32, 6> start = scanned.start;
+
+                auto e = q.submit(deps, [&, off, cell_count, start](sycl::handler &cgh) {
                     shambase::parallel_for(
                         cgh, cell_count, "get ids cell graph links (6 dirs)", [=](u64 gid) {
                             u32 id_a = (u32) gid;
 
-                            u32 w0 = off0[id_a], w1 = off1[id_a], w2 = off2[id_a];
-                            u32 w3 = off3[id_a], w4 = off4[id_a], w5 = off5[id_a];
+                            // offsets from the single scan, stored in the graphs here
+                            auto link_offset = [&](u32 dir, u32 i) {
+                                return details::neigh_6dir_link_offset(
+                                    sc, start[dir], dir, i, cell_count);
+                            };
+
+                            u32 w0 = link_offset(0, id_a), w1 = link_offset(1, id_a);
+                            u32 w2 = link_offset(2, id_a), w3 = link_offset(3, id_a);
+                            u32 w4 = link_offset(4, id_a), w5 = link_offset(5, id_a);
+
+                            off0[id_a] = w0;
+                            off1[id_a] = w1;
+                            off2[id_a] = w2;
+                            off3[id_a] = w3;
+                            off4[id_a] = w4;
+                            off5[id_a] = w5;
+
+                            if (id_a == cell_count - 1) {
+                                off0[cell_count] = link_offset(0, cell_count);
+                                off1[cell_count] = link_offset(1, cell_count);
+                                off2[cell_count] = link_offset(2, cell_count);
+                                off3[cell_count] = link_offset(3, cell_count);
+                                off4[cell_count] = link_offset(4, cell_count);
+                                off5[cell_count] = link_offset(5, cell_count);
+                            }
 
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g0, bmin, bmax, off[0], [&](u32 idx) {
@@ -286,6 +312,7 @@ namespace shammodels::basegodunov::modules {
                         });
                 });
 
+                scanned.scanned->complete_event_state(e);
                 for (u32 dir = 0; dir < 6; dir++) {
                     block_graph[dir]->complete_event_state(e);
                     scanned.node_link_offset[dir]->complete_event_state(e);

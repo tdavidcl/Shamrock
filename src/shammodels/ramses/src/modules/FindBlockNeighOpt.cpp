@@ -579,11 +579,13 @@ namespace shammodels::basegodunov::modules {
 
                 {
                     sham::EventList deps;
-                    auto ker = finder.get_read_access(deps);
-                    std::array<const u32 *, 6> offsets;
+                    auto ker                 = finder.get_read_access(deps);
+                    const u32 *sc            = scanned.scanned->get_read_access(deps);
+                    std::array<u32, 6> start = scanned.start;
+                    std::array<u32 *, 6> offsets;
                     std::array<u32 *, 6> ids;
                     for (u32 dir = 0; dir < 6; dir++) {
-                        offsets[dir] = link_offsets[dir]->get_read_access(deps);
+                        offsets[dir] = link_offsets[dir]->get_write_access(deps);
                         ids[dir]     = links[dir]->get_write_access(deps);
                     }
 
@@ -602,10 +604,17 @@ namespace shammodels::basegodunov::modules {
                                 u32 *sh_stack = &stack_local[item.get_local_linear_id()];
                                 u32 sh_stride = (u32) item.get_local_range(0);
 
+                                // offsets from the single scan, stored in the graphs here
                                 std::array<u32, 6> next_link_idx;
 #pragma unroll
                                 for (u32 dir = 0; dir < 6; dir++) {
-                                    next_link_idx[dir] = offsets[dir][id_a];
+                                    next_link_idx[dir] = details::neigh_6dir_link_offset(
+                                        sc, start[dir], dir, id_a, block_count);
+                                    offsets[dir][id_a] = next_link_idx[dir];
+                                    if (id_a == block_count - 1) {
+                                        offsets[dir][block_count] = details::neigh_6dir_link_offset(
+                                            sc, start[dir], dir, block_count, block_count);
+                                    }
                                 }
 
                                 ker.for_each_neigh_6dir(
@@ -622,6 +631,7 @@ namespace shammodels::basegodunov::modules {
                     });
 
                     finder.complete_event_state(e);
+                    scanned.scanned->complete_event_state(e);
                     for (u32 dir = 0; dir < 6; dir++) {
                         link_offsets[dir]->complete_event_state(e);
                         links[dir]->complete_event_state(e);
