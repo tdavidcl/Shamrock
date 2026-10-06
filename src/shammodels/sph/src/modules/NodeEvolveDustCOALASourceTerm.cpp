@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
@@ -153,7 +154,22 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins * nbins * nbins, dev_sched);
         tensor_tabflux_coag_buf.copy_from_stdvec(tensor_tabflux_coag);
 
+        // per thread local memory: gij & flux, one per bin
+        usize local_mem_per_thread = nbins * 2 * sizeof(Tscal);
+        usize local_mem_size       = q.get_device_prop().local_mem_size;
+
         u32 group_size = 64;
+        while (group_size > 1 && group_size * local_mem_per_thread > local_mem_size) {
+            group_size /= 2;
+        }
+        if (group_size * local_mem_per_thread > local_mem_size) {
+            shambase::throw_with_loc<std::runtime_error>(shambase::format(
+                "COALA kernel: not enough local memory for nbins = {} ({} B per thread, {} B "
+                "available)",
+                nbins,
+                local_mem_per_thread,
+                local_mem_size));
+        }
 
         counts.for_each([&](u64 id_patch, u64 count) {
             u32 group_cnt     = shambase::group_count(count, group_size);
