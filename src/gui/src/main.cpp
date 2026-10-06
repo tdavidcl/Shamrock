@@ -34,6 +34,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h" // DockBuilder API (layout presets)
 #include "sham/gui/DemoSimulation.hpp"
+#include "sham/gui/FrameTimings.hpp"
 #include "sham/gui/GLTexture.hpp"
 #include "sham/gui/GraphPane.hpp"
 #include "sham/gui/GuiClock.hpp"
@@ -138,9 +139,8 @@ namespace sham::gui {
         bool style_applied = false, first_frame = true, need_layout = true, layout_from_cli = false;
         std::map<char, bool> was_visible{{'v', true}, {'g', true}, {'s', true}, {'f', false}};
         bool screenshot, want_exit = false;
-        std::map<std::string, std::vector<double>> timings{
-            {"update", {}}, {"ui", {}}, {"frame", {}}};
-        double prev_frame_start = -1, last_time = 0;
+        FrameTimings timings; // only filled with --bench
+        double last_time   = 0;
         double bytes_per_s = 0; // preview traffic estimate (all panes)
 
         App(std::string layout_, bool screenshot_, int frames, int bench)
@@ -151,12 +151,6 @@ namespace sham::gui {
         // panes keep callbacks into the app (see post_init), so it must stay where it is
         App(const App &)            = delete;
         App &operator=(const App &) = delete;
-
-        // wall clock, for the --bench CPU timings
-        static double wall() {
-            using namespace std::chrono;
-            return duration<double>(steady_clock::now().time_since_epoch()).count();
-        }
 
         void post_init() {
             viewer.on_field_change = [this] {
@@ -269,12 +263,14 @@ namespace sham::gui {
         }
 
         void gui() {
-            double t0 = wall();
-            double t  = clock.now();
+            if (bench_frames)
+                timings.begin_frame();
+            double t = clock.now();
             sim.advance(clock.deterministic ? 1.0 / 60.0 : t - last_time);
             last_time = t;
             refresh_previews();
-            double t1 = wall();
+            if (bench_frames)
+                timings.mark_update();
 
             const ImGuiViewport *vp = ImGui::GetMainViewport();
             UI::origin              = vp->Pos;
@@ -346,14 +342,8 @@ namespace sham::gui {
                 was_visible[key] = visible[key];
             after_panes();
 
-            double t2 = wall();
-            if (bench_frames) {
-                timings["update"].push_back(t1 - t0);
-                timings["ui"].push_back(t2 - t1);
-                if (prev_frame_start >= 0)
-                    timings["frame"].push_back(t0 - prev_frame_start);
-                prev_frame_start = t0;
-            }
+            if (bench_frames)
+                timings.mark_ui();
             clock.end_frame();
             if (screenshot || bench_frames)
                 if (--frames_left <= 0)
@@ -1264,33 +1254,6 @@ namespace sham::gui {
     // ============================================================================
     //  Entry point
     // ============================================================================
-    static void print_bench(const App &app, int warmup) {
-        std::printf("BENCH {\"impl\": \"cpp\"");
-        for (const char *k : {"update", "ui", "frame"}) {
-            std::vector<double> a(
-                app.timings.at(k).begin() + std::min<size_t>(warmup, app.timings.at(k).size()),
-                app.timings.at(k).end());
-            for (double &v : a)
-                v *= 1e3;
-            std::sort(a.begin(), a.end());
-            double mean = a.empty() ? 0 : std::accumulate(a.begin(), a.end(), 0.0) / a.size();
-            auto pct    = [&](double p) { // numpy's default (linear) percentile
-                if (a.empty())
-                    return 0.0;
-                double idx = p / 100.0 * (a.size() - 1);
-                size_t lo = size_t(idx), hi = std::min(lo + 1, a.size() - 1);
-                return a[lo] + (a[hi] - a[lo]) * (idx - lo);
-            };
-            std::printf(
-                ", \"%s\": {\"mean_ms\": %.3f, \"median_ms\": %.3f, \"p95_ms\": %.3f}",
-                k,
-                mean,
-                pct(50),
-                pct(95));
-        }
-        std::printf("}\n");
-    }
-
     /// Command-line options of shamrock_gui: the flags as given, and what follows from them.
     struct CliArgs {
         /// --screenshot PATH: save a PNG of the window before exiting (an empty PATH is ignored)
@@ -1320,6 +1283,9 @@ namespace sham::gui {
         /// first unrecognised argument (parsing stops there)
         std::optional<std::string> unknown_arg = std::nullopt;
 
+        /// frames rendered and discarded before the --bench timings are kept
+        static constexpr int bench_warmup_frames = 30;
+
         /// false for headless runs (--screenshot, --bench): deterministic clock, no vsync, no .ini
         bool interactive_mode() const { return !screenshot && !bench; }
 
@@ -1327,7 +1293,7 @@ namespace sham::gui {
         /// 45) with --screenshot, empty for an interactive run
         std::optional<int> frames_before_exit() const {
             if (bench)
-                return *bench + 30;
+                return *bench + bench_warmup_frames;
             if (screenshot)
                 return frames.value_or(45);
             return std::nullopt;
@@ -1461,13 +1427,13 @@ int main(int argc, char **argv) {
         if (app.want_exit)
             break;
     }
-    if (cli.bench)
-        print_bench(app, 30);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
+    if (cli.bench)
+        app.timings.print(CliArgs::bench_warmup_frames);
     return 0;
 }

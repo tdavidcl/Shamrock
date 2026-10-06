@@ -46,6 +46,7 @@ endif()
 set(sources
     src/main.cpp
     src/DemoSimulation.cpp
+    src/FrameTimings.cpp
     src/GraphPane.cpp
     src/ProfilePane.cpp
     src/ScriptPane.cpp
