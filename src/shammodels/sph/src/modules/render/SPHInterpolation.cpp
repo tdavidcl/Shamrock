@@ -66,12 +66,15 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict hpart,
         const T *__restrict partmass_val,
         const shambase::VecComponent<Tvec> *__restrict rho_part,
+        const f32 *__restrict hsupport2_up,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field,
         u32 *__restrict staging_id,
-        shambase::VecComponent<Tvec> *__restrict staging_rab2,
-        T *__restrict staging_term) {
+        u32 *__restrict staging_owner,
+        T *__restrict staging_term,
+        u32 *__restrict staging_ok,
+        Tvec *__restrict points) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -104,25 +107,37 @@ namespace {
         u32 queue_head = 0;
         u32 queue_cnt  = 0;
 
-        // buffer of the particles around the point, in traversal order
+        // buffer of the candidate particles (whose support may contain the point), in traversal
+        // order
         u32 buf_id[interp_buf_size];
-        Tscal buf_rab2[interp_buf_size];
         u32 buf_cnt = 0;
 
-        // contribution of the particle id_b at squared distance rab2 of the point
-        auto contrib = [&](u32 id_b, Tscal rab2) -> T {
-            Tscal h_b = hpart[id_b];
+        // Exact test + contribution of the particle id_b at the point p, this is exactly the code
+        // of the direct computation. Returns false if the support of the particle does not
+        // contain the point
+        auto contrib = [&](u32 id_b, const Tvec &p, T &ret) -> bool {
+            Tvec dr    = p - xyz[id_b];
+            Tscal rab2 = sycl::dot(dr, dr);
+            Tscal h_b  = hpart[id_b];
+
+            if (rab2 > h_b * h_b * Rker2) {
+                return false;
+            }
 
             Tscal rab = sycl::sqrt(rab2);
 
             // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
-            return partmass_val[id_b] * Kernel::W_3d(rab, h_b) / rho_part[id_b];
+            ret = partmass_val[id_b] * Kernel::W_3d(rab, h_b) / rho_part[id_b];
+            return true;
         };
 
         // flush computed by this thread only (only used if the buffer is full within a leaf)
         auto flush = [&]() {
             for (u32 i = 0; i < buf_cnt; i++) {
-                acc += contrib(buf_id[i], buf_rab2[i]);
+                T term;
+                if (contrib(buf_id[i], pos_render, term)) {
+                    acc += term;
+                }
             }
             buf_cnt = 0;
         };
@@ -131,7 +146,9 @@ namespace {
         const u32 lane    = sg.get_local_linear_id();
         const u32 st_base = sg.get_group_linear_id() * sg_size;
 
-        // flush of the whole sub-group: the buffered entries of all threads are computed by
+        points[st_base + lane] = pos_render;
+
+        // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
         // thread adds its own results in its buffer order
         auto flush_cooperative = [&]() {
@@ -147,22 +164,28 @@ namespace {
                                : buf_cnt;
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    u32 w                     = off + j - r0;
-                    staging_id[st_base + w]   = buf_id[j];
-                    staging_rab2[st_base + w] = buf_rab2[j];
+                    u32 w                      = off + j - r0;
+                    staging_id[st_base + w]    = buf_id[j];
+                    staging_owner[st_base + w] = lane;
                 }
 
                 sycl::group_barrier(sg);
 
                 if (r0 + lane < tot) {
-                    staging_term[st_base + lane]
-                        = contrib(staging_id[st_base + lane], staging_rab2[st_base + lane]);
+                    u32 owner = staging_owner[st_base + lane];
+                    T term;
+                    bool ok = contrib(staging_id[st_base + lane], points[st_base + owner], term);
+                    staging_term[st_base + lane] = term;
+                    staging_ok[st_base + lane]   = ok;
                 }
 
                 sycl::group_barrier(sg);
 
                 for (u32 j = jbeg; j < jend; j++) {
-                    acc += staging_term[st_base + off + j - r0];
+                    u32 w = st_base + off + j - r0;
+                    if (staging_ok[w]) {
+                        acc += staging_term[w];
+                    }
                 }
 
                 sycl::group_barrier(sg);
@@ -218,16 +241,24 @@ namespace {
                 u32 leaf_id = leaf_node - tree.offset_leaf;
 
                 particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                    Tvec dr    = pos_render - xyz[id_b];
-                    Tscal rab2 = sycl::dot(dr, dr);
-                    Tscal h_b  = hpart[id_b];
+                    // same fp64 operation as the exact test (A = p - x_b)
+                    Tvec a = pos_render - xyz[id_b];
 
-                    if (rab2 > h_b * h_b * Rker2) {
+                    // Conservative fp32 prefilter: rejects only particles that the exact test
+                    // rejects. With e = 2^-24, the fp32 evaluation r2_32 of |A|^2 from f32(A)
+                    // satisfies r2_32 <= |A|^2 (1 + 5.1 e) and the fp64 one rab2 >= |A|^2 (1 - 3
+                    // u), so r2_32 > H_up (1 + 16 e) (+ 1e-30 for fp32 underflows) implies rab2 >
+                    // H. NaN / inf (and fp32 overflows) never reject.
+                    sycl::vec<f32, 3> af{f32(a.x()), f32(a.y()), f32(a.z())};
+                    f32 r2f = sycl::dot(af, af);
+
+                    constexpr f32 e = 1.f / 16777216.f; // 2^-24
+
+                    if (r2f < 1e38f && r2f > hsupport2_up[id_b] * (1.f + 16.f * e) + 1e-30f) {
                         return;
                     }
 
-                    buf_id[buf_cnt]   = id_b;
-                    buf_rab2[buf_cnt] = rab2;
+                    buf_id[buf_cnt] = id_b;
                     buf_cnt++;
 
                     if (buf_cnt == interp_buf_size) {
@@ -327,20 +358,29 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
         // computation `partmass * val * W / rho_h(partmass, h_b, hfactd)`, hence same bits)
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<f32> hsupport2_up_buf(obj_cnt, dev_sched);
 
         sham::kernel_call(
             queue,
             sham::MultiRef{buf_hpart, buf_field},
-            sham::MultiRef{partmass_val_buf, rho_part_buf},
+            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport2_up_buf},
             obj_cnt,
             [partmass](
                 u32 id_b,
                 const Tscal *__restrict hpart,
                 const T *__restrict torender,
                 T *__restrict partmass_val,
-                Tscal *__restrict rho_part) {
+                Tscal *__restrict rho_part,
+                f32 *__restrict hsupport2_up) {
+                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+                Tscal h_b = hpart[id_b];
+
                 partmass_val[id_b] = partmass * torender[id_b];
-                rho_part[id_b]     = shamrock::sph::rho_h(partmass, hpart[id_b], Kernel::hfactd);
+                rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                // fp32 upper bound of the exact test threshold h_b * h_b * Rker2
+                hsupport2_up[id_b] = f32(h_b * h_b * Rker2) * (1.f + 1.f / 1048576.f);
             });
 
         u32 group_cnt     = shambase::group_count(npoints, interp_group_size);
@@ -354,6 +394,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 buf_hpart,
                 partmass_val_buf,
                 rho_part_buf,
+                hsupport2_up_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -364,13 +405,16 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 const Tscal *__restrict hpart,
                 const T *__restrict partmass_val,
                 const Tscal *__restrict rho_part,
+                const f32 *__restrict hsupport2_up,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
                 return [=](sycl::handler &cgh) {
                     sycl::local_accessor<u32> staging_id{interp_group_size, cgh};
-                    sycl::local_accessor<Tscal> staging_rab2{interp_group_size, cgh};
+                    sycl::local_accessor<u32> staging_owner{interp_group_size, cgh};
                     sycl::local_accessor<T> staging_term{interp_group_size, cgh};
+                    sycl::local_accessor<u32> staging_ok{interp_group_size, cgh};
+                    sycl::local_accessor<Tvec> points{interp_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, interp_group_size},
@@ -383,12 +427,15 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                                 hpart,
                                 partmass_val,
                                 rho_part,
+                                hsupport2_up,
                                 particle_looper,
                                 hmax,
                                 render_field,
                                 &(staging_id[0]),
-                                &(staging_rab2[0]),
-                                &(staging_term[0]));
+                                &(staging_owner[0]),
+                                &(staging_term[0]),
+                                &(staging_ok[0]),
+                                &(points[0]));
                         });
                 };
             });
