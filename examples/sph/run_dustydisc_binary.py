@@ -727,6 +727,65 @@ def ColumnAverageDustEvolSizePlot(
     )
 
 
+def ColumnAverageDVeffPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+):
+    def compute_dveff_integ(helper):
+        return helper.column_average_render(compute_effective_dust_col_speed_field(model), "f64")
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_dveff_integ,
+    )
+
+
+def ColumnIntegFieldPlot(
+    model,
+    ext_r,
+    nx,
+    ny,
+    ex,
+    ey,
+    center,
+    analysis_folder,
+    analysis_prefix,
+    compute_field,
+):
+    """Column integral of the field returned by ``compute_field(model)``"""
+
+    def compute_integ(helper):
+        return helper.column_integ_render(compute_field(model), "f64")
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_integ,
+    )
+
+
 def SliceRhoGasPlot(
     model,
     ext_r,
@@ -1085,6 +1144,17 @@ sink_params = {
 
 max_rho_plot = 1e-9
 min_rho_plot = 1e-16
+max_rho_integ_plot = 1e4
+min_rho_integ_plot = 1e-3
+
+face_on_params = {
+    "ext_r": disc.rout,  # face-on view from -rout to rout
+    "nx": 1024,
+    "ny": 1024,
+    "ex": (1, 0, 0),
+    "ey": (0, 1, 0),
+    "center": (0, 0, 0),
+}
 
 if ndust > 0:
     col_smean_plot = ColumnAverageDustSizePlot(
@@ -1191,6 +1261,77 @@ if ndust > 0:
     }
 
     sim.analysis_modules.append(col_smean_evol_plot)
+
+    col_dveff = ColumnAverageDVeffPlot(
+        model,
+        **face_on_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="delta_v_eff_column/plot",
+    )
+
+    col_dveff.render_args = {
+        **slice_dveff.render_args,
+        **sink_params,
+    }
+
+    sim.analysis_modules.append(col_dveff)
+
+    # Column densities, as in the basic disc example of the documentation
+    col_rhog = ColumnIntegFieldPlot(
+        model,
+        **face_on_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="rho_gas_column/plot",
+        compute_field=compute_rho_g,
+    )
+
+    col_rhog.render_args = {
+        **face_on_render_kwargs,
+        "field_unit": "kg.m^-2",
+        "field_label": "$\\int \\rho_{{\\rm g}} \\, \\mathrm{{d}} z$",
+        "vmin": min_rho_integ_plot,
+        "vmax": max_rho_integ_plot,
+        "norm": "log",
+        **sink_params,
+    }
+
+    sim.analysis_modules.append(col_rhog)
+
+    col_rhod = ColumnIntegFieldPlot(
+        model,
+        **face_on_params,
+        analysis_folder=analysis_folder,
+        analysis_prefix="rho_dust_column_all/plot",
+        compute_field=compute_rho_d,
+    )
+
+    col_rhod.render_args = {
+        **col_rhog.render_args,
+        "field_label": "$\\int \\rho_{{\\rm d}} \\, \\mathrm{{d}} z$",
+        "vmin": 0.02 * min_rho_integ_plot,
+        "vmax": 0.02 * max_rho_integ_plot,
+    }
+
+    sim.analysis_modules.append(col_rhod)
+
+    for j in range(ndust):
+        col_rhodj = ColumnIntegFieldPlot(
+            model,
+            **face_on_params,
+            analysis_folder=analysis_folder,
+            analysis_prefix=f"rho_dust_column_{j}/plot",
+            compute_field=lambda model, j=j: compute_rho_dj(model, j),
+        )
+
+        col_rhodj.render_args = {
+            **col_rhog.render_args,
+            "field_label": f"$\\int \\rho_{{\\rm d , {j} }} \\, \\mathrm{{d}} z$",
+            "vmin": 0.01 * min_rho_integ_plot,
+            "vmax": 0.01 * max_rho_integ_plot,
+            "extra_title": f"[$s_{{grain}}$ = {mrn_distribution.grain_size_si[j]:.2e} m]",
+        }
+
+        sim.analysis_modules.append(col_rhodj)
 
     slice_rhog = SliceRhoGasPlot(
         model,
