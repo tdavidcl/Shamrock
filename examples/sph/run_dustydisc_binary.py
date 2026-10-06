@@ -1367,6 +1367,28 @@ def SliceDustEvolSizePlot(
     )
 
 
+def ColumnAverageDustEvolSizePlot(
+    model, ext_r, nx, ny, ex, ey, center, analysis_folder, analysis_prefix, ndust, grain_size
+):
+    def compute_s_mean_evol_integ(helper):
+        return helper.column_average_render(
+            "custom", "f64", custom_getter=get_s_mean_evol_getter(model, ndust, grain_size)
+        )
+
+    return StandardPlotHelper(
+        model,
+        ext_r,
+        nx,
+        ny,
+        ex,
+        ey,
+        center,
+        analysis_folder,
+        analysis_prefix,
+        compute_function=compute_s_mean_evol_integ,
+    )
+
+
 if ndust > 0:
     slice_smean_evol_plot = SliceDustEvolSizePlot(
         model,
@@ -1391,6 +1413,25 @@ if ndust > 0:
         "cmap": "seismic",
         "cmap_bad_color": "white",
         "norm": rnorm,
+    }
+
+    col_smean_evol_plot = ColumnAverageDustEvolSizePlot(
+        model,
+        ext_r=disc.rout * 1.5,
+        nx=1024,
+        ny=1024,
+        ex=(1, 0, 0),
+        ey=(0, 1, 0),
+        center=(0, 0, 0),
+        analysis_folder=analysis_folder,
+        analysis_prefix="s_mean_evol_column",
+        ndust=ndust,
+        grain_size=grain_size,
+    )
+
+    col_smean_evol_plot.render_args = {
+        **slice_smean_evol_plot.render_args,
+        **sink_params,
     }
 
 
@@ -1421,6 +1462,7 @@ def analysis(ianalysis):
         col_smean_plot.analysis_save(ianalysis)
         slice_smean_plot.analysis_save(ianalysis)
         slice_smean_evol_plot.analysis_save(ianalysis)
+        col_smean_evol_plot.analysis_save(ianalysis)
 
 
 def render_analysis(iplot):
@@ -1482,6 +1524,7 @@ def render_analysis(iplot):
         slice_smean_plot.make_plot(iplot, **slice_smean_plot.render_args)
 
         slice_smean_evol_plot.make_plot(iplot, **slice_smean_evol_plot.render_args)
+        col_smean_evol_plot.make_plot(iplot, **col_smean_evol_plot.render_args)
 
 
 # %%
