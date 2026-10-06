@@ -12,7 +12,7 @@
 /**
  * @file style.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Design tokens of the GUI: colours from the mockup and fixed bar heights.
+ * @brief Design tokens of the GUI: colours and fixed bar heights.
  *
  */
 
@@ -22,7 +22,7 @@
 namespace sham::gui {
 
     // ============================================================================
-    //  Design tokens (taken from the mockup)
+    //  Design tokens
     // ============================================================================
     namespace theme {
         constexpr ImU32 APP_BG = rgba("#141517"), PANEL = rgba("#1b1c1f"), CANVAS = rgba("#17181b"),
