@@ -14,6 +14,8 @@
  *
  */
 
+#include "shambase/exception.hpp"
+#include "shambase/integer.hpp"
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
@@ -27,98 +29,185 @@
 #include "shamrock/patch/PatchDataField.hpp" // IWYU pragma: keep
 #include "shamsys/NodeInstance.hpp"
 #include <experimental/mdspan>
+#include <algorithm>
+#include <stdexcept>
 #include <vector>
 
 namespace shammodels::sph::modules {
 
+    /**
+     * @brief Differential velocity between dust bins, evaluated on staged (local memory) data.
+     *
+     * This is the only place that defines the form of dv; the kernel below only requires
+     * `dv(particle, l, m)`, nothing is assumed on its symmetry or on its diagonal.
+     */
     template<class Tvec>
+    struct CoalaDvMonofluid {
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        Tscal dv_max;
+
+        // staged delta_v of the particles of the group, SoA: [particle * nbins + bin]
+        const Tscal *vx;
+        const Tscal *vy;
+        const Tscal *vz;
+
+        inline Tscal operator()(u32 off, u32 l, u32 m) const {
+            // dv_lm = v_dust_m - v_dust_l = delta_v[m] - delta_v[l]
+            Tscal dx  = vx[off + m] - vx[off + l];
+            Tscal dy  = vy[off + m] - vy[off + l];
+            Tscal dz  = vz[off + m] - vz[off + l];
+            Tscal tmp = sycl::sqrt(dx * dx + dy * dy + dz * dz);
+            return (tmp > dv_max) ? 0 : tmp;
+        }
+    };
+
+    /**
+     * @brief COALA k=0 source term.
+     *
+     * One work-group handles `ppg` particles. Per particle, g_j and delta_v are staged once in
+     * local memory (coalesced loads, O(nbins) local memory per particle instead of
+     * O(nbins * group_size)). Then, chunk by chunk, the group cooperatively evaluates
+     * term(l,m) = dv(l,m) g_l g_m in local memory while each thread owns one output bin j and
+     * accumulates S[j] = sum_p C[j,p] term[p] (coefficients coalesced along j, flux difference
+     * already folded in, see shamphys::CoalaFluxDiffTable).
+     */
+    template<class Tvec, u32 ppg>
     struct KernelGenCoala_k0 {
         using Tscal = shambase::VecComponent<Tvec>;
 
-        using mdspan_rank_1 = std::mdspan<Tscal, std::dextents<u32, 1>>;
-        using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
-
-        using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
-        using const_mdspan_rank_3 = std::mdspan<const Tscal, std::dextents<u32, 3>>;
-
         u32 nbins;
+        u32 npairs;
+        u32 chunk;
         Tscal rho_eps;
         Tscal dv_max;
-        u32 corrected_len;
         u32 group_size;
+        u32 n_groups;
         u32 true_size;
 
         auto operator()(
             u32 /**/,
             // common to all kernel calls
             const Tscal *__restrict massgrid_ptr,
-            const Tscal *__restrict tensor_tabflux_coag,
+            const Tscal *__restrict coeff,
+            const u32 *__restrict pairs,
             // field specific data
             const Tscal *__restrict s_j,
             const Tvec *__restrict delta_v_j,
             Tscal *__restrict S_coag) const {
 
-            auto range = sycl::nd_range<1>{corrected_len, group_size};
+            auto range = sycl::nd_range<1>{n_groups * group_size, group_size};
 
-            auto local_acc_sz_nbins = sycl::range<1>{group_size * nbins};
+            auto nbins      = this->nbins;
+            auto npairs     = this->npairs;
+            auto chunk      = this->chunk;
+            auto rho_eps    = this->rho_eps;
+            auto dv_max     = this->dv_max;
+            auto group_size = this->group_size;
+            auto true_size  = this->true_size;
 
-            auto true_size = this->true_size;
-            auto rho_eps   = this->rho_eps;
-            auto dv_max    = this->dv_max;
-
-            return [=, nbins = this->nbins](sycl::handler &cgh) {
-                auto gij_acc  = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
-                auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
+            return [=](sycl::handler &cgh) {
+                sycl::local_accessor<Tscal> g_acc{sycl::range<1>{ppg * nbins}, cgh};
+                sycl::local_accessor<Tscal> vx_acc{sycl::range<1>{ppg * nbins}, cgh};
+                sycl::local_accessor<Tscal> vy_acc{sycl::range<1>{ppg * nbins}, cgh};
+                sycl::local_accessor<Tscal> vz_acc{sycl::range<1>{ppg * nbins}, cgh};
+                sycl::local_accessor<Tscal> term_acc{sycl::range<1>{ppg * chunk}, cgh};
 
                 cgh.parallel_for(range, [=](sycl::nd_item<1> tid) {
-                    const u64 id_a = tid.get_global_linear_id();
-                    const u64 lid  = tid.get_local_linear_id();
+                    const u32 lid    = tid.get_local_linear_id();
+                    const u64 first  = u64(tid.get_group_linear_id()) * ppg;
+                    const u32 n_part = (first + ppg <= true_size) ? ppg : u32(true_size - first);
 
-                    if (id_a >= true_size) {
-                        return;
+                    Tscal *g    = &g_acc[0];
+                    Tscal *vx   = &vx_acc[0];
+                    Tscal *vy   = &vy_acc[0];
+                    Tscal *vz   = &vz_acc[0];
+                    Tscal *term = &term_acc[0];
+
+                    // stage g_j and delta_v of the group's particles (coalesced)
+                    for (u32 idx = lid; idx < ppg * nbins; idx += group_size) {
+                        u32 pp = idx / nbins;
+                        u32 b  = idx - pp * nbins;
+
+                        Tscal gj = 0;
+                        Tvec v{0, 0, 0};
+                        if (pp < n_part) {
+                            u64 gid   = (first + pp) * nbins + b;
+                            Tscal s   = s_j[gid];
+                            Tscal rho = s * s;
+                            gj = (rho > rho_eps) ? rho / (massgrid_ptr[b + 1] - massgrid_ptr[b])
+                                                 : 0;
+                            v  = delta_v_j[gid];
+                        }
+                        g[idx]  = gj;
+                        vx[idx] = v[0];
+                        vy[idx] = v[1];
+                        vz[idx] = v[2];
                     }
+                    tid.barrier(sycl::access::fence_space::local_space);
 
-                    u32 id_a_d = id_a * nbins;
+                    CoalaDvMonofluid<Tvec> dv{dv_max, vx, vy, vz};
 
-                    /* inputs */
-                    const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
-                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
+                    // output bins are spread over threads; nbins > group_size loops again
+                    for (u32 j0 = 0; j0 < nbins; j0 += group_size) {
+                        // recomputed at each use rather than kept alive across the barriers below:
+                        // the AdaptiveCpp OpenMP work-item splitting collapsed it to lane 0
+                        auto out_bin = [&]() -> u32 {
+                            return j0 + u32(tid.get_local_linear_id());
+                        };
 
-                    /* internal */
-                    auto gij_loc  = &(gij_acc[nbins * lid]);
-                    auto flux_loc = &(flux_acc[nbins * lid]);
+                        Tscal acc[ppg];
+                        for (u32 pp = 0; pp < ppg; ++pp) {
+                            acc[pp] = 0;
+                        }
 
-                    mdspan_rank_1 gij(gij_loc, nbins);
-                    mdspan_rank_1 flux(flux_loc, nbins);
+                        for (u32 p0 = 0; p0 < npairs; p0 += chunk) {
+                            const u32 cnt = (npairs - p0 < chunk) ? (npairs - p0) : chunk;
 
-                    /* output */
-                    mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
+                            // cooperative evaluation of term(l,m) for the chunk
+                            for (u32 idx = lid; idx < ppg * cnt; idx += group_size) {
+                                u32 pp   = idx / cnt;
+                                u32 c    = idx - pp * cnt;
+                                u32 pair = pairs[p0 + c];
+                                u32 l    = pair & 0xffff;
+                                u32 m    = pair >> 16;
+                                u32 off  = pp * nbins;
 
-                    /* lambda getters */
-                    auto rho_dust = [&](int j) {
-                        auto tmp = s_j[id_a_d + j];
-                        return tmp * tmp;
-                    };
+                                Tscal gg = g[off + l] * g[off + m];
+                                // dv is only evaluated when it can matter (finite dv assumed)
+                                term[pp * chunk + c] = (gg != 0) ? dv(off, l, m) * gg : Tscal(0);
+                            }
+                            tid.barrier(sycl::access::fence_space::local_space);
 
-                    auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
-                        // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
-                        auto tmp = sycl::length(delta_v[j] - delta_v[i]);
-                        return (tmp > dv_max) ? 0 : tmp;
-                    };
+                            if (out_bin() < nbins) {
+                                for (u32 c = 0; c < cnt; ++c) {
+                                    Tscal t[ppg];
+                                    bool any = false;
+                                    for (u32 pp = 0; pp < ppg; ++pp) {
+                                        t[pp] = term[pp * chunk + c];
+                                        any   = any || (t[pp] != 0);
+                                    }
+                                    // uniform over the group: skips the coefficient load
+                                    if (!any) {
+                                        continue;
+                                    }
+                                    Tscal C = coeff[u64(p0 + c) * nbins + out_bin()];
+                                    for (u32 pp = 0; pp < ppg; ++pp) {
+                                        acc[pp] += C * t[pp];
+                                    }
+                                }
+                            }
+                            tid.barrier(sycl::access::fence_space::local_space);
+                        }
 
-                    // should implement the same content as
-                    // src/pylib/shamrock/external/coala/interface_coala_shamrock.py
-
-                    shamphys::coala_k0_source_term(
-                        nbins,
-                        dv,
-                        rho_dust,
-                        rho_eps,
-                        massgrid,
-                        tabflux_coag,
-                        gij,
-                        flux,
-                        S_coag_span);
+                        if (out_bin() < nbins) {
+                            for (u32 pp = 0; pp < ppg; ++pp) {
+                                if (pp < n_part) {
+                                    S_coag[(first + pp) * nbins + out_bin()] = acc[pp];
+                                }
+                            }
+                        }
+                    }
                 });
             };
         }
@@ -147,34 +236,82 @@ namespace shammodels::sph::modules {
         auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
         auto &q        = shambase::get_check_ref(dev_sched).get_queue();
 
+        // fold the flux difference into the tensor and drop the all-zero (l,m) pairs
+        auto table = shamphys::build_coala_flux_diff_table<Tscal>(
+            nbins,
+            std::mdspan<const Tscal, std::dextents<u32, 3>>(
+                tensor_tabflux_coag.data(), nbins, nbins, nbins));
+
         sham::DeviceBuffer<Tscal> massgrid_buf(nbins + 1, dev_sched);
         massgrid_buf.copy_from_stdvec(massgrid);
 
-        sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins * nbins * nbins, dev_sched);
-        tensor_tabflux_coag_buf.copy_from_stdvec(tensor_tabflux_coag);
+        // keep buffers non-empty even for a fully null tensor
+        sham::DeviceBuffer<Tscal> coeff_buf(std::max<u32>(table.coeff.size(), 1), dev_sched);
+        sham::DeviceBuffer<u32> pairs_buf(std::max<u32>(table.pairs.size(), 1), dev_sched);
+        if (table.npairs > 0) {
+            coeff_buf.copy_from_stdvec(table.coeff);
+            pairs_buf.copy_from_stdvec(table.pairs);
+        }
 
-        u32 group_size = 64;
+        // threads own output bins: one thread per bin, multiple of 32, capped
+        const u32 group_size = std::min<u32>(256, ((nbins + 31) / 32) * 32);
+
+        // local memory budget: stay well below the device limit to keep occupancy
+        const u64 lmem_budget
+            = std::min<u64>(q.get_device_prop().local_mem_size, 48 * 1024) * 2 / 3;
+
+        // particles per group (as many as fit), then shrink the pair chunk if needed
+        auto lmem_bytes = [&](u32 ppg, u32 chunk) {
+            return u64(ppg) * (4 * u64(nbins) + chunk) * sizeof(Tscal);
+        };
+        u32 chunk = std::max<u32>(1, std::min<u32>(256, table.npairs));
+        u32 ppg   = 8;
+        while (ppg > 1 && lmem_bytes(ppg, chunk) > lmem_budget) {
+            ppg /= 2;
+        }
+        while (chunk > 1 && lmem_bytes(ppg, chunk) > lmem_budget) {
+            chunk /= 2;
+        }
+        if (lmem_bytes(ppg, chunk) > q.get_device_prop().local_mem_size) {
+            shambase::throw_with_loc<std::runtime_error>(sham::format(
+                "COALA source term: nbins={} needs {} of local memory per group",
+                nbins,
+                shambase::readable_sizeof(lmem_bytes(ppg, chunk))));
+        }
 
         counts.for_each([&](u64 id_patch, u64 count) {
-            u32 group_cnt     = shambase::group_count(count, group_size);
-            u32 corrected_len = group_cnt * group_size;
+            if (count == 0) {
+                return;
+            }
 
-            sham::kernel_call_hndl(
-                q,
-                sham::MultiRef{
-                    massgrid_buf,
-                    tensor_tabflux_coag_buf,
-                    s_j_spans.get(id_patch),
-                    delta_v_j_spans.get(id_patch)},
-                sham::MultiRef{S_coag_spans.get(id_patch)},
-                count,
-                KernelGenCoala_k0<Tvec>{
-                    .nbins         = nbins,
-                    .rho_eps       = rho_eps,
-                    .dv_max        = dv_max,
-                    .corrected_len = corrected_len,
-                    .group_size    = group_size,
-                    .true_size     = u32(count)});
+            auto launch = [&]<u32 PPG>() {
+                sham::kernel_call_hndl(
+                    q,
+                    sham::MultiRef{
+                        massgrid_buf,
+                        coeff_buf,
+                        pairs_buf,
+                        s_j_spans.get(id_patch),
+                        delta_v_j_spans.get(id_patch)},
+                    sham::MultiRef{S_coag_spans.get(id_patch)},
+                    count,
+                    KernelGenCoala_k0<Tvec, PPG>{
+                        .nbins      = nbins,
+                        .npairs     = table.npairs,
+                        .chunk      = chunk,
+                        .rho_eps    = rho_eps,
+                        .dv_max     = dv_max,
+                        .group_size = group_size,
+                        .n_groups   = shambase::group_count(u32(count), PPG),
+                        .true_size  = u32(count)});
+            };
+
+            switch (ppg) {
+            case 8 : launch.template operator()<8>(); break;
+            case 4 : launch.template operator()<4>(); break;
+            case 2 : launch.template operator()<2>(); break;
+            default: launch.template operator()<1>(); break;
+            }
         });
     }
 

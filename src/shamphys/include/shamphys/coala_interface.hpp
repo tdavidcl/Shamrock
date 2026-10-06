@@ -24,10 +24,12 @@
  * Only the coagulation flux with \f$k=0\f$ approximation.
  */
 
+#include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
 #include "shambase/mdspan_concepts.hpp"
 #include <experimental/mdspan>
 #include <concepts>
+#include <vector>
 
 namespace shamphys {
 
@@ -161,6 +163,90 @@ namespace shamphys {
         S_coag(0) = -flux(0);
         for (int j = 1; j < flux.extent(0); ++j) {
             S_coag(j) = flux(j - 1) - flux(j);
+        }
+    }
+
+    /**
+     * @brief Pre-contracted coagulation table, flux difference folded in (\f$k=0\f$)
+     *
+     * Since \f$S[j] = \mathrm{flux}[j-1] - \mathrm{flux}[j]\f$ is linear in the flux, the
+     * flux difference can be folded into the tensor once:
+     *
+     * \f[
+     *     S[j] = \sum_{(l,m)} C[j,(l,m)]\, \mathrm{dv}(l,m)\, g_l\, g_m, \qquad
+     *     C[j,\cdot] = T[j-1,\cdot] - T[j,\cdot], \quad C[0,\cdot] = -T[0,\cdot]
+     * \f]
+     *
+     * Ordered pairs \f$(l,m)\f$ whose coefficients vanish for every \f$j\f$ are dropped
+     * (the tensor is triangular: \f$T[j,l,m] = 0\f$ for \f$l > j\f$). Nothing is assumed about
+     * \f$\mathrm{dv}\f$ (no symmetry, no zero diagonal), so this stays valid for any
+     * differential-velocity form.
+     *
+     * Layout: pair-major, `coeff[p * nbins + j]`, so that consecutive \f$j\f$ are contiguous.
+     */
+    template<class T>
+    struct CoalaFluxDiffTable {
+        u32 nbins  = 0;
+        u32 npairs = 0;
+        /// packed pair index: `l | (m << 16)`
+        std::vector<u32> pairs;
+        /// `coeff[p * nbins + j]`
+        std::vector<T> coeff;
+    };
+
+    /// Build the table from the dense \f$T[j,l,m]\f$ tensor (requires `nbins < 65536`)
+    template<class T>
+    inline CoalaFluxDiffTable<T> build_coala_flux_diff_table(
+        u32 nbins, shambase::is_mdspan_rank<3> auto tabflux_coag) {
+
+        SHAM_ASSERT(nbins < 65536);
+        SHAM_ASSERT(tabflux_coag.extent(0) == nbins);
+        SHAM_ASSERT(tabflux_coag.extent(1) == nbins);
+        SHAM_ASSERT(tabflux_coag.extent(2) == nbins);
+
+        CoalaFluxDiffTable<T> table;
+        table.nbins = nbins;
+
+        std::vector<T> col(nbins);
+        for (u32 l = 0; l < nbins; ++l) {
+            for (u32 m = 0; m < nbins; ++m) {
+                bool any = false;
+                for (u32 j = 0; j < nbins; ++j) {
+                    T prev = (j == 0) ? T(0) : T(tabflux_coag(j - 1, l, m));
+                    col[j] = prev - T(tabflux_coag(j, l, m));
+                    any    = any || (col[j] != T(0));
+                }
+                if (any) {
+                    table.pairs.push_back(l | (m << 16));
+                    table.coeff.insert(table.coeff.end(), col.begin(), col.end());
+                }
+            }
+        }
+        table.npairs = u32(table.pairs.size());
+        return table;
+    }
+
+    /**
+     * @brief CPU reference of the table-based source term; same result as
+     * @ref coala_k0_source_term up to rounding.
+     */
+    template<class T, class FuncDv>
+    inline void coala_k0_source_term_table(
+        const CoalaFluxDiffTable<T> &table,
+        FuncDv &&dv,
+        shambase::is_mdspan_rank<1> auto gij,
+        shambase::is_mdspan_rank<1> auto S_coag) {
+
+        for (u32 j = 0; j < table.nbins; ++j) {
+            S_coag(j) = 0;
+        }
+        for (u32 p = 0; p < table.npairs; ++p) {
+            u32 l  = table.pairs[p] & 0xffff;
+            u32 m  = table.pairs[p] >> 16;
+            T term = dv(l, m) * gij[l] * gij[m];
+            for (u32 j = 0; j < table.nbins; ++j) {
+                S_coag(j) += table.coeff[p * table.nbins + j] * term;
+            }
         }
     }
 
