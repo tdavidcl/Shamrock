@@ -9,6 +9,10 @@ The binary is set only by its mass ratio ``q = M2/M1`` and its eccentricity.
 Its semi-major axis comes from the empirical cavity-size relation of
 Ragusa et al. (2026): we ask for the binary that would carve a cavity whose
 periastron is the inner edge of the disc.
+
+The run is configured through environment variables: ``BINARY_Q`` (default 1),
+``BINARY_E`` (default 0), ``NPART`` (default 1e5, scientific notation accepted)
+and ``NDUST`` (default 0).
 """
 
 # sphinx_gallery_multi_image = "single"
@@ -53,8 +57,8 @@ codeu = shamrock.UnitSystem(
 ucte = shamrock.Constants(codeu)
 
 
-# Resolution
-Npart = 100000
+# Resolution, through float so that e.g. NPART=1e7 works
+Npart = int(float(os.environ.get("NPART", "1e5")))
 
 # Domain decomposition parameters
 scheduler_split_val = int(1.0e7)  # split patches with more than 1e7 particles
@@ -68,8 +72,8 @@ dt_stop = 10
 
 # Central binary: these are the only free binary parameters
 center_mass = 1.0  # total mass of the binary (sol mass)
-binary_q = 1.0  # mass ratio M2/M1
-binary_e = 0.0  # eccentricity
+binary_q = float(os.environ.get("BINARY_Q", "1.0"))  # mass ratio M2/M1
+binary_e = float(os.environ.get("BINARY_E", "0.0"))  # eccentricity
 
 binary_varpi = 0.0  # longitude of periastron (rad)
 binary_nu = 0.0  # initial true anomaly (rad), 0 = start at periastron
@@ -201,7 +205,7 @@ ndust = int(os.environ.get("NDUST", "0"))
 use_coala = True
 gamma = 1.4
 
-print(f"ndust = {ndust}")
+print(f"ndust = {ndust}, Npart = {Npart}")
 
 mrn_pow = 3.5
 mrn_cutoff_si = 250e-9  # would be 250e-9 normally
