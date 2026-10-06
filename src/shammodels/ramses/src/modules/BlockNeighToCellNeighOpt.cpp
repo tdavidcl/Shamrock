@@ -66,27 +66,40 @@ namespace {
         const shammath::AABB<TgridVec> current_cell_aabb_shifted
             = {current_cell_aabb.lower + dir_offset, current_cell_aabb.upper + dir_offset};
 
+        // The cells of a block are a tensor product of Nside slabs per axis, so the volume test
+        // of the original (max of the lowers < min of the uppers on every axis) splits into per
+        // axis tests of the slabs, done once per block and combined in the original loop order.
+        const TgridVec sh_lo = current_cell_aabb_shifted.lower;
+        const TgridVec sh_up = current_cell_aabb_shifted.upper;
+
         auto on_block = [&](u32 block_b) {
             TgridVec block_b_min = acc_block_min[block_b];
             TgridVec block_b_max = acc_block_max[block_b];
 
             const TgridVec delta_cell_b = (block_b_max - block_b_min) / AMRBlock::Nside;
 
-            for (u32 lx = 0; lx < AMRBlock::Nside; lx++) {
-                for (u32 ly = 0; ly < AMRBlock::Nside; ly++) {
-                    for (u32 lz = 0; lz < AMRBlock::Nside; lz++) {
+            std::array<bool, AMRBlock::Nside> ov_x, ov_y, ov_z;
+#pragma unroll
+            for (u32 l = 0; l < AMRBlock::Nside; l++) {
+                TgridVec cell_lo = block_b_min + TgridVec{l, l, l} * delta_cell_b;
+                TgridVec cell_up = block_b_min + TgridVec{l + 1, l + 1, l + 1} * delta_cell_b;
 
-                        shammath::AABB<TgridVec> found_cell
-                            = {TgridVec{block_b_min + TgridVec{lx, ly, lz} * delta_cell_b},
-                               TgridVec{
-                                   block_b_min + TgridVec{lx + 1, ly + 1, lz + 1} * delta_cell_b}};
+                ov_x[l] = sycl::min(cell_up.x(), sh_up.x()) > sycl::max(cell_lo.x(), sh_lo.x());
+                ov_y[l] = sycl::min(cell_up.y(), sh_up.y()) > sycl::max(cell_lo.y(), sh_lo.y());
+                ov_z[l] = sycl::min(cell_up.z(), sh_up.z()) > sycl::max(cell_lo.z(), sh_lo.z());
+            }
+
+#pragma unroll
+            for (u32 lx = 0; lx < AMRBlock::Nside; lx++) {
+#pragma unroll
+                for (u32 ly = 0; ly < AMRBlock::Nside; ly++) {
+#pragma unroll
+                    for (u32 lz = 0; lz < AMRBlock::Nside; lz++) {
 
                         u32 idx
                             = block_b * AMRBlock::block_size + AMRBlock::get_index({lx, ly, lz});
 
-                        bool overlap = found_cell.get_intersect(current_cell_aabb_shifted)
-                                           .is_volume_not_null()
-                                       && id_a != idx;
+                        bool overlap = ov_x[lx] && ov_y[ly] && ov_z[lz] && id_a != idx;
 
                         if (overlap) {
                             fct(idx);
