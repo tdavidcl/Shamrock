@@ -11,16 +11,18 @@
  * @file main.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Shamrock control GUI: for now a Dear ImGui (docking branch) frame loop showing an empty
- * dock area that fills the window, with headless modes (deterministic 60 fps clock for
- * --screenshot and --bench).
+ * dock area that fills the window, in the dark theme with IBM Plex fonts, with headless modes
+ * (deterministic 60 fps clock for --screenshot and --bench).
  *
- * Interactive runs remember the dock arrangement in shamrock_gui_layout.ini.
+ * Interactive runs remember the dock arrangement in shamrock_gui_layout.ini. The fonts are read
+ * from assets/fonts (or --assets DIR), falling back to the assets folder next to the executable.
  *
  * Usage:
  *
  *     ./shamrock_gui                        interactive
  *     ./shamrock_gui --screenshot shot.png  render 45 frames (or --frames N), save PNG, exit
  *     ./shamrock_gui --bench 300            print per-frame CPU timings as JSON
+ *     ./shamrock_gui --assets DIR           read the fonts from DIR/fonts
  *
  */
 
@@ -29,7 +31,9 @@
 #include "imgui_impl_opengl3.h"
 #include "sham/gui/FrameTimings.hpp"
 #include "sham/gui/GuiClock.hpp"
+#include "sham/gui/font.hpp"
 #include "sham/gui/screenshot.hpp"
+#include "sham/gui/style.hpp"
 #include <GLFW/glfw3.h>
 #if defined(__APPLE__)
     #include <OpenGL/gl3.h>
@@ -39,10 +43,74 @@
 
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace sham::gui {
+
+    namespace fs             = std::filesystem;
+    static fs::path g_assets = "assets";
+
+    // moves to ui.hpp with the rest of the UI state
+    static Fonts g_fonts;
+
+    /// Size settings and colour table of the dark theme (ImGui's own widgets: dock tabs,
+    /// dividers, drop overlay, scrollbars).
+    void setup_style() {
+        ImGuiStyle &style                       = ImGui::GetStyle();
+        style.FramePadding                      = ImVec2(12, 6); // dock tab height = font + 2 * 6
+        style.TabRounding                       = 0;
+        style.TabBarBorderSize                  = 1;
+        style.TabBarOverlineSize                = 2;
+        style.TabBorderSize                     = 0;
+        style.DockingSeparatorSize              = 1;
+        style.WindowMenuButtonPosition          = ImGuiDir_None;
+        style.TabCloseButtonMinWidthSelected    = 0; // close cross only when hovered
+        style.TabCloseButtonMinWidthUnselected  = 0;
+        style.WindowPadding                     = ImVec2(0, 0);
+        style.WindowBorderSize                  = 0;
+        style.ChildBorderSize                   = 0;
+        style.WindowRounding                    = 0;
+        style.ScrollbarSize                     = 10;
+        style.ScrollbarRounding                 = 4;
+        style.ItemSpacing                       = ImVec2(0, 0);
+        const std::pair<ImGuiCol, ImU32> cols[] = {
+            {ImGuiCol_WindowBg, C::APP_BG},
+            {ImGuiCol_ChildBg, C::CANVAS},
+            {ImGuiCol_ScrollbarBg, C::CANVAS},
+            {ImGuiCol_ScrollbarGrab, C::BORDER},
+            {ImGuiCol_ScrollbarGrabHovered, C::NODE_BORDER},
+            {ImGuiCol_ScrollbarGrabActive, C::MUTED},
+            {ImGuiCol_Text, C::TEXT},
+            {ImGuiCol_PopupBg, C::PANEL},
+            {ImGuiCol_Border, C::BORDER},
+            {ImGuiCol_TextSelectedBg, rgba("#e8a33d", 0.25)},
+            // docking: tab bars, drop preview, dividers
+            {ImGuiCol_TitleBg, C::PANEL},
+            {ImGuiCol_TitleBgActive, C::PANEL},
+            {ImGuiCol_TitleBgCollapsed, C::PANEL},
+            {ImGuiCol_Tab, C::PANEL},
+            {ImGuiCol_TabHovered, C::BUTTON},
+            {ImGuiCol_TabSelected, C::CANVAS},
+            {ImGuiCol_TabSelectedOverline, C::ACCENT},
+            {ImGuiCol_TabDimmed, C::PANEL},
+            {ImGuiCol_TabDimmedSelected, C::CANVAS},
+            {ImGuiCol_TabDimmedSelectedOverline, rgba("#e8a33d", 0.35)},
+            {ImGuiCol_DockingPreview, rgba("#e8a33d", 0.30)},
+            {ImGuiCol_DockingEmptyBg, C::CANVAS},
+            {ImGuiCol_Separator, C::DIVIDER},
+            {ImGuiCol_SeparatorHovered, rgba("#e8a33d", 0.6)},
+            {ImGuiCol_SeparatorActive, C::ACCENT},
+            {ImGuiCol_Button, 0},
+            {ImGuiCol_ButtonHovered, C::ROW_HL},
+            {ImGuiCol_ButtonActive, C::ACCENT_BG},
+            {ImGuiCol_FrameBg, C::BUTTON},
+        };
+        for (auto &[k, v] : cols)
+            style.Colors[k] = ImGui::ColorConvertU32ToFloat4(v);
+    }
 
     /// Build one frame: a full-screen host window holding the dock area.
     void gui() {
@@ -72,6 +140,9 @@ namespace sham::gui {
 
         /// --bench N: render N frames (after 30 warm-up frames) and print per-frame timings
         std::optional<int> bench = std::nullopt;
+
+        /// --assets DIR: folder holding fonts/
+        std::optional<std::string> assets = std::nullopt;
 
         /// -h / --help
         std::optional<bool> is_help = std::nullopt;
@@ -121,6 +192,8 @@ namespace sham::gui {
             } else if (a == "--bench") {
                 if (int n = std::stoi(next()); n > 0)
                     cli.bench = n;
+            } else if (a == "--assets") {
+                cli.assets = next();
             } else if (a == "-h" || a == "--help") {
                 cli.is_help = true;
                 break;
@@ -138,9 +211,14 @@ int main(int argc, char **argv) {
     using namespace sham::gui;
     const CliArgs cli = parse_cli(argc, argv);
     if (std::optional<int> code = cli.exit_code()) {
-        std::printf("usage: %s [--screenshot out.png] [--frames N] [--bench N]\n", argv[0]);
+        std::printf(
+            "usage: %s [--screenshot out.png] [--frames N] [--bench N] [--assets DIR]\n", argv[0]);
         return *code;
     }
+    if (cli.assets)
+        g_assets = *cli.assets;
+    if (!fs::exists(g_assets / "fonts"))
+        g_assets = fs::path(argv[0]).parent_path() / "assets";
 
     if (!glfwInit()) {
         return 1;
@@ -165,6 +243,8 @@ int main(int argc, char **argv) {
     io.IniFilename = cli.interactive_mode() ? "shamrock_gui_layout.ini" : nullptr;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
+    g_fonts = load_fonts(g_assets / "fonts");
+    setup_style();
 
     GuiClock gui_clock(!cli.interactive_mode());
     FrameTimings timings; // only filled with --bench
