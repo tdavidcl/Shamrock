@@ -28,10 +28,10 @@
 namespace {
 
     /// work group size of the fused block graph kernels
-    constexpr u32 block_finder_group_size = 128;
+    constexpr u32 block_finder_group_size = 64;
 
     /// number of traversal stack entries (from the bottom) kept in work-group local memory
-    constexpr u32 block_finder_shared_stack_depth = 32;
+    constexpr u32 block_finder_shared_stack_depth = 24;
 
 } // namespace
 
