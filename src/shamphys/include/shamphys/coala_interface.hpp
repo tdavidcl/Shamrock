@@ -34,6 +34,27 @@
 namespace shamphys {
 
     /**
+     * @brief DG \f$k=0\f$ coefficient of one bin, see compute_gij_k0
+     *
+     * @param rho_d    Dust density in the bin
+     * @param rho_eps  Density threshold below which \f$g_j\f$ is set to zero
+     * @param dm       Bin width \f$\Delta m_j\f$
+     */
+    template<class T>
+    inline T gij_k0(T rho_d, T rho_eps, T dm) {
+        return (rho_d > rho_eps) ? rho_d / dm : 0;
+    }
+
+    /**
+     * @brief Same as gij_k0 but using the precomputed inverse bin width \f$1 / \Delta m_j\f$,
+     * which avoids a division when \f$g_j\f$ is evaluated repeatedly
+     */
+    template<class T>
+    inline T gij_k0_inv_dm(T rho_d, T rho_eps, T inv_dm) {
+        return (rho_d > rho_eps) ? rho_d * inv_dm : 0;
+    }
+
+    /**
      * @brief Build \f$g_j\f$ coefficients on the piecewise-constant DG basis (\f$k=0\f$)
      *
      * For each mass bin \f$j\f$, converts the dust density to the polynomial coefficient
@@ -66,8 +87,7 @@ namespace shamphys {
         SHAM_ASSERT(massgrid.extent(0) == gij.extent(0) + 1);
 
         for (std::size_t j = 0; j < gij.extent(0); ++j) {
-            T rho_d = rho_dust(j);
-            gij(j)  = (rho_d > rho_eps) ? rho_d / (massgrid[j + 1] - massgrid[j]) : 0;
+            gij(j) = gij_k0<T>(rho_dust(j), rho_eps, massgrid[j + 1] - massgrid[j]);
         }
     }
 
@@ -143,8 +163,9 @@ namespace shamphys {
      * @brief Sparse, m-blocked storage of `tensor_tabflux_coag` (\f$k=0\f$)
      *
      * The ordered pairs \f$(l,m)\f$ are grouped in blocks \f$p = (l, m_0)\f$ of @p B
-     * consecutive \f$m \in [m_0, m_0 + B)\f$, enumerated as `for l, for m0 in [0, nbins) by
-     * steps of B`. For each block only the range \f$j \in [{\rm block\_jmin}[p],
+     * consecutive \f$m \in [m_0, m_0 + B)\f$, enumerated as `for m0 in [0, nbins) by
+     * steps of B, for l`, such that the \f$g_m\f$ and \f$\Delta v_m\f$ of a block are loaded once
+     * for all \f$l\f$. For each block only the range \f$j \in [{\rm block\_jmin}[p],
      * {\rm block\_jmin}[p] + ({\rm block\_offset}[p+1] - {\rm block\_offset}[p]) / B)\f$
      * containing all the non-zero entries of the block is stored, starting at
      * `block_offset[p]` in `values`, with the @p B entries of a given \f$j\f$ contiguous:
@@ -201,8 +222,8 @@ namespace shamphys {
         TabfluxCoagK0Sparse<T, B, Tidx> ret;
         ret.block_offset.push_back(0);
 
-        for (int l = 0; l < nbins; ++l) {
-            for (int m0 = 0; m0 < nbins; m0 += B) {
+        for (int m0 = 0; m0 < nbins; m0 += B) {
+            for (int l = 0; l < nbins; ++l) {
                 auto tab = [&](int j, unsigned b) -> T {
                     int m = m0 + b;
                     return (m < nbins) ? tensor_tabflux_coag(j, l, m) : 0;
@@ -270,14 +291,26 @@ namespace shamphys {
         }
 
         Tidx p = 0;
-        for (int l = 0; l < nbins; ++l) {
-            T gl = gij[l];
-            for (int m0 = 0; m0 < nbins; m0 += B, ++p) {
+        for (int m0 = 0; m0 < nbins; m0 += B) {
+
+            // g_m of the block, loaded once for all l
+            T gm[B];
+#pragma unroll
+            for (unsigned b = 0; b < B; ++b) {
+                gm[b] = (m0 + b < nbins) ? T(gij[m0 + b]) : T(0);
+            }
+
+            for (int l = 0; l < nbins; ++l, ++p) {
                 Tidx beg = tabflux.block_offset[p];
                 Tidx end = tabflux.block_offset[p + 1];
                 Tidx j   = tabflux.block_jmin[p];
 
-                if (beg == end || gl == 0) {
+                if (beg == end) {
+                    continue;
+                }
+
+                T gl = gij[l];
+                if (gl == 0) {
                     continue;
                 }
 
@@ -285,9 +318,8 @@ namespace shamphys {
                 T term[B];
 #pragma unroll
                 for (unsigned b = 0; b < B; ++b) {
-                    int m   = m0 + b;
-                    T gg    = (m < nbins) ? gl * gij[m] : 0;
-                    term[b] = (gg == 0) ? 0 : dv(l, m) * gg;
+                    T gg    = gl * gm[b];
+                    term[b] = (gg == 0) ? 0 : dv(l, m0 + b) * gg;
                 }
 
                 for (Tidx k = beg; k < end; k += B, ++j) {
