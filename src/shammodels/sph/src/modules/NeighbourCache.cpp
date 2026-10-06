@@ -1268,23 +1268,40 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
         // fp32 lower / upper bounds of the interaction threshold rint * rint * Rker2 of every
         // (merged) particle, computed with the same expression as the exact test
+        // and the fp32 positions relative to the center of the tree root box (+ their L1 norm)
         u32 merged_cnt = mfield.get_obj_cnt();
         sham::DeviceBuffer<sycl::vec<f32, 2>> thr_f_buf(
             merged_cnt, shamsys::instance::get_compute_scheduler_ptr());
+        sham::DeviceBuffer<sycl::vec<f32, 4>> xyz_rel_f_buf(
+            merged_cnt, shamsys::instance::get_compute_scheduler_ptr());
+
+        Tvec center = (tree.aabbs.buf_aabb_min.get_val_at_idx(0)
+                       + tree.aabbs.buf_aabb_max.get_val_at_idx(0))
+                      / 2;
 
         sham::kernel_call(
             shamsys::instance::get_compute_scheduler().get_queue(),
-            sham::MultiRef{buf_hpart},
-            sham::MultiRef{thr_f_buf},
+            sham::MultiRef{buf_hpart, buf_xyz},
+            sham::MultiRef{thr_f_buf, xyz_rel_f_buf},
             merged_cnt,
-            [h_tolerance](
-                u32 id, const Tscal *__restrict hpart, sycl::vec<f32, 2> *__restrict thr_f) {
+            [h_tolerance, center](
+                u32 id,
+                const Tscal *__restrict hpart,
+                const Tvec *__restrict xyz,
+                sycl::vec<f32, 2> *__restrict thr_f,
+                sycl::vec<f32, 4> *__restrict xyz_rel_f) {
                 constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
 
                 Tscal rint = hpart[id] * h_tolerance;
                 f32 thr    = f32(rint * rint * Rker2);
 
                 thr_f[id] = {thr * (1.f - 1.f / 1048576.f), thr * (1.f + 1.f / 1048576.f)};
+
+                Tvec rel      = xyz[id] - center;
+                f32 x         = f32(rel.x());
+                f32 y         = f32(rel.y());
+                f32 z         = f32(rel.z());
+                xyz_rel_f[id] = {x, y, z, sycl::fabs(x) + sycl::fabs(y) + sycl::fabs(z)};
             });
 
         NamedStackEntry stack_loc1{"init cache"};
@@ -1299,7 +1316,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         shamlog_debug_sycl_ln("Cache", "generate cache for N=", obj_cnt);
         sham::kernel_call_hndl(
             q,
-            sham::MultiRef{buf_xyz, buf_hpart, thr_f_buf, tree_field_rint, obj_it},
+            sham::MultiRef{buf_xyz, buf_hpart, thr_f_buf, xyz_rel_f_buf, tree_field_rint, obj_it},
             sham::MultiRef{neigh_count},
             obj_cnt,
             [h_tolerance, stack_size](
@@ -1307,6 +1324,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
                 const sycl::vec<f32, 2> *__restrict thr_f,
+                const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 const Tscal *__restrict rint_tree,
                 auto particle_looper,
                 u32 *__restrict neigh_cnt) {
@@ -1326,6 +1344,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         Tscal rint_a = hpart[active ? id_a : 0] * h_tolerance;
 
                         sycl::vec<f32, 2> thr_a = thr_f[active ? id_a : 0];
+                        sycl::vec<f32, 4> xa_f  = xyz_rel_f[active ? id_a : 0];
 
                         Tvec xyz_a = xyz[active ? id_a : 0];
 
@@ -1345,30 +1364,37 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             inter_box_a_min,
                             inter_box_a_max,
                             [&](u32 id_b) {
-                                Tvec dr = xyz_a - xyz[id_b];
-
                                 // Certified fp32 version of the interaction test: with
-                                // e = 2^-24, the fp32 r2 from f32(dr) and the fp64 rab2 satisfy
-                                // rab2 in r2 [1 - 8 e, 1 + 8 e], and thr_f holds bounds of the fp64
-                                // thresholds, so the result is decided in fp32 unless r2 is within
-                                // 16 e of a threshold (or NaN / inf), in which case the exact test
-                                // is performed.
-                                sycl::vec<f32, 3> drf{f32(dr.x()), f32(dr.y()), f32(dr.z())};
-                                f32 r2f                 = sycl::dot(drf, drf);
+                                // e = 2^-24, c the root box center, xf = f32(x - c) and
+                                // af = xa_f - xb_f, |af - dr| <= 1.01 e B with
+                                // B = |xa_f|_1 + |xb_f|_1 + |af|_1, so the fp64 rab2 lies within
+                                // r2 [1 -+ 16 e] -+ 4 e B^2 of the fp32 r2 = |af|^2, and thr_f
+                                // holds bounds of the fp64 thresholds: the result is decided in
+                                // fp32 unless r2 is that close to a threshold (or NaN / inf), in
+                                // which case the exact test is performed.
+                                sycl::vec<f32, 4> xb_f  = xyz_rel_f[id_b];
                                 sycl::vec<f32, 2> thr_b = thr_f[id_b];
+                                sycl::vec<f32, 3> af{
+                                    xa_f.x() - xb_f.x(), xa_f.y() - xb_f.y(), xa_f.z() - xb_f.z()};
+                                f32 bound = xa_f.w() + xb_f.w() + sycl::fabs(af.x())
+                                            + sycl::fabs(af.y()) + sycl::fabs(af.z());
+                                f32 r2f   = sycl::dot(af, af);
 
                                 constexpr f32 e = 1.f / 16777216.f; // 2^-24
 
-                                f32 r2_hi = r2f * (1.f + 16.f * e) + 1e-30f;
-                                f32 r2_lo = r2f * (1.f - 16.f * e) - 1e-30f;
+                                f32 slack = 4.f * e * bound * bound + 1e-30f;
+                                f32 r2_hi = r2f * (1.f + 16.f * e) + slack;
+                                f32 r2_lo = r2f * (1.f - 16.f * e) - slack;
 
                                 bool interact;
-                                if (r2f < 1e38f && (r2_hi < thr_a.x() || r2_hi < thr_b.x())) {
+                                if (bound < 1e15f && (r2_hi < thr_a.x() || r2_hi < thr_b.x())) {
                                     interact = true;
-                                } else if (r2f < 1e38f && r2_lo > thr_a.y() && r2_lo > thr_b.y()) {
+                                } else if (
+                                    bound < 1e15f && r2_lo > thr_a.y() && r2_lo > thr_b.y()) {
                                     interact = false;
                                 } else {
                                     // exact test
+                                    Tvec dr      = xyz_a - xyz[id_b];
                                     Tscal rab2   = sycl::dot(dr, dr);
                                     Tscal rint_b = hpart[id_b] * h_tolerance;
 
@@ -1393,7 +1419,13 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         sham::kernel_call_hndl(
             q,
             sham::MultiRef{
-                buf_xyz, buf_hpart, thr_f_buf, tree_field_rint, pcache.scanned_cnt, obj_it},
+                buf_xyz,
+                buf_hpart,
+                thr_f_buf,
+                xyz_rel_f_buf,
+                tree_field_rint,
+                pcache.scanned_cnt,
+                obj_it},
             sham::MultiRef{pcache.index_neigh_map},
             obj_cnt,
             [h_tolerance, stack_size](
@@ -1401,6 +1433,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
                 const sycl::vec<f32, 2> *__restrict thr_f,
+                const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 const Tscal *__restrict rint_tree,
                 const u32 *__restrict scanned_neigh_cnt,
                 auto particle_looper,
@@ -1421,6 +1454,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                         Tscal rint_a = hpart[active ? id_a : 0] * h_tolerance;
 
                         sycl::vec<f32, 2> thr_a = thr_f[active ? id_a : 0];
+                        sycl::vec<f32, 4> xa_f  = xyz_rel_f[active ? id_a : 0];
 
                         Tvec xyz_a = xyz[active ? id_a : 0];
 
@@ -1440,30 +1474,37 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                             inter_box_a_min,
                             inter_box_a_max,
                             [&](u32 id_b) {
-                                Tvec dr = xyz_a - xyz[id_b];
-
                                 // Certified fp32 version of the interaction test: with
-                                // e = 2^-24, the fp32 r2 from f32(dr) and the fp64 rab2 satisfy
-                                // rab2 in r2 [1 - 8 e, 1 + 8 e], and thr_f holds bounds of the fp64
-                                // thresholds, so the result is decided in fp32 unless r2 is within
-                                // 16 e of a threshold (or NaN / inf), in which case the exact test
-                                // is performed.
-                                sycl::vec<f32, 3> drf{f32(dr.x()), f32(dr.y()), f32(dr.z())};
-                                f32 r2f                 = sycl::dot(drf, drf);
+                                // e = 2^-24, c the root box center, xf = f32(x - c) and
+                                // af = xa_f - xb_f, |af - dr| <= 1.01 e B with
+                                // B = |xa_f|_1 + |xb_f|_1 + |af|_1, so the fp64 rab2 lies within
+                                // r2 [1 -+ 16 e] -+ 4 e B^2 of the fp32 r2 = |af|^2, and thr_f
+                                // holds bounds of the fp64 thresholds: the result is decided in
+                                // fp32 unless r2 is that close to a threshold (or NaN / inf), in
+                                // which case the exact test is performed.
+                                sycl::vec<f32, 4> xb_f  = xyz_rel_f[id_b];
                                 sycl::vec<f32, 2> thr_b = thr_f[id_b];
+                                sycl::vec<f32, 3> af{
+                                    xa_f.x() - xb_f.x(), xa_f.y() - xb_f.y(), xa_f.z() - xb_f.z()};
+                                f32 bound = xa_f.w() + xb_f.w() + sycl::fabs(af.x())
+                                            + sycl::fabs(af.y()) + sycl::fabs(af.z());
+                                f32 r2f   = sycl::dot(af, af);
 
                                 constexpr f32 e = 1.f / 16777216.f; // 2^-24
 
-                                f32 r2_hi = r2f * (1.f + 16.f * e) + 1e-30f;
-                                f32 r2_lo = r2f * (1.f - 16.f * e) - 1e-30f;
+                                f32 slack = 4.f * e * bound * bound + 1e-30f;
+                                f32 r2_hi = r2f * (1.f + 16.f * e) + slack;
+                                f32 r2_lo = r2f * (1.f - 16.f * e) - slack;
 
                                 bool interact;
-                                if (r2f < 1e38f && (r2_hi < thr_a.x() || r2_hi < thr_b.x())) {
+                                if (bound < 1e15f && (r2_hi < thr_a.x() || r2_hi < thr_b.x())) {
                                     interact = true;
-                                } else if (r2f < 1e38f && r2_lo > thr_a.y() && r2_lo > thr_b.y()) {
+                                } else if (
+                                    bound < 1e15f && r2_lo > thr_a.y() && r2_lo > thr_b.y()) {
                                     interact = false;
                                 } else {
                                     // exact test
+                                    Tvec dr      = xyz_a - xyz[id_b];
                                     Tscal rab2   = sycl::dot(dr, dr);
                                     Tscal rint_b = hpart[id_b] * h_tolerance;
 
