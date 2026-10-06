@@ -124,8 +124,7 @@ namespace shammodels::basegodunov::modules {
                 u32 found_leaf = _nindex;
 
                 while (stack_cursor < tree_depth) {
-                    u32 current_node_id    = id_stack[stack_cursor];
-                    id_stack[stack_cursor] = _nindex;
+                    u32 current_node_id = id_stack[stack_cursor];
                     stack_cursor++;
 
                     if (node_test(current_node_id)) {
