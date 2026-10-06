@@ -140,24 +140,35 @@ namespace shamphys {
     }
 
     /**
-     * @brief Sparse storage of `tensor_tabflux_coag` (\f$k=0\f$)
+     * @brief Sparse, m-blocked storage of `tensor_tabflux_coag` (\f$k=0\f$)
      *
-     * For each ordered pair \f$p = (l,m)\f$, enumerated as `for l, for m`, only the range
-     * \f$j \in [{\rm pair\_jmin}[p], {\rm pair\_jmin}[p] + {\rm pair\_offset}[p+1] -
-     * {\rm pair\_offset}[p])\f$ containing all the non-zero entries
-     * \f$\mathrm{tensor\_tabflux\_coag}[j,l,m]\f$ is stored, contiguously in `values` starting
-     * at `pair_offset[p]`. The range is found from the tensor itself, so no assumption is made
-     * on its sparsity pattern, nor on the symmetry of \f$\mathrm{dv}\f$.
+     * The ordered pairs \f$(l,m)\f$ are grouped in blocks \f$p = (l, m_0)\f$ of @p B
+     * consecutive \f$m \in [m_0, m_0 + B)\f$, enumerated as `for l, for m0 in [0, nbins) by
+     * steps of B`. For each block only the range \f$j \in [{\rm block\_jmin}[p],
+     * {\rm block\_jmin}[p] + ({\rm block\_offset}[p+1] - {\rm block\_offset}[p]) / B)\f$
+     * containing all the non-zero entries of the block is stored, starting at
+     * `block_offset[p]` in `values`, with the @p B entries of a given \f$j\f$ contiguous:
+     *
+     * \f[
+     *     {\rm values}[{\rm block\_offset}[p] + (j - {\rm block\_jmin}[p]) B + b]
+     *     = \mathrm{tensor\_tabflux\_coag}[j, l, m_0 + b]
+     * \f]
+     *
+     * (zero for \f$m_0 + b \ge n_{\rm bins}\f$). The ranges are found from the tensor itself, so
+     * no assumption is made on its sparsity pattern, nor on the symmetry of \f$\mathrm{dv}\f$.
+     * Blocking lets the flux of a bin be updated once per @p B products instead of once per
+     * product, at the cost of the zeros padding the union of the ranges of a block.
      *
      * @tparam T     Floating-point scalar type
+     * @tparam B     Number of \f$m\f$ per block
      * @tparam Tidx  Index type
      */
-    template<class T, class Tidx = u32>
+    template<class T, unsigned B = 1, class Tidx = u32>
     struct TabfluxCoagK0Sparse {
-        /// Offset in values of each pair, size nbins^2 + 1
-        std::vector<Tidx> pair_offset;
-        /// First bin \f$j\f$ stored for each pair, size nbins^2
-        std::vector<Tidx> pair_jmin;
+        /// Offset in values of each block, size nbins * ceil(nbins / B) + 1
+        std::vector<Tidx> block_offset;
+        /// First bin \f$j\f$ stored for each block, size nbins * ceil(nbins / B)
+        std::vector<Tidx> block_jmin;
         /// Stored entries
         std::vector<T> values;
     };
@@ -165,10 +176,10 @@ namespace shamphys {
     /**
      * @brief Device view of a TabfluxCoagK0Sparse (see its documentation for the layout)
      */
-    template<class T, class Tidx = u32>
+    template<class T, unsigned B = 1, class Tidx = u32>
     struct TabfluxCoagK0SparseView {
-        const Tidx *pair_offset;
-        const Tidx *pair_jmin;
+        const Tidx *block_offset;
+        const Tidx *block_jmin;
         const T *values;
     };
 
@@ -179,37 +190,48 @@ namespace shamphys {
      * @param tensor_tabflux_coag  Rank-3 `std::mdspan` of the dense tensor; extents
      *                             @p nbins \(\times\) @p nbins \(\times\) @p nbins
      */
-    template<class T, class Tidx = u32>
-    inline TabfluxCoagK0Sparse<T, Tidx> make_tabflux_coag_k0_sparse(
+    template<class T, unsigned B = 1, class Tidx = u32>
+    inline TabfluxCoagK0Sparse<T, B, Tidx> make_tabflux_coag_k0_sparse(
         int nbins, shambase::is_mdspan_rank<3> auto tensor_tabflux_coag) {
 
         SHAM_ASSERT(tensor_tabflux_coag.extent(0) == nbins);
         SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
         SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
 
-        TabfluxCoagK0Sparse<T, Tidx> ret;
-        ret.pair_offset.push_back(0);
+        TabfluxCoagK0Sparse<T, B, Tidx> ret;
+        ret.block_offset.push_back(0);
 
         for (int l = 0; l < nbins; ++l) {
-            for (int m = 0; m < nbins; ++m) {
-                auto tab = [&](int j) -> T {
-                    return tensor_tabflux_coag(j, l, m);
+            for (int m0 = 0; m0 < nbins; m0 += B) {
+                auto tab = [&](int j, unsigned b) -> T {
+                    int m = m0 + b;
+                    return (m < nbins) ? tensor_tabflux_coag(j, l, m) : 0;
+                };
+                auto row_is_zero = [&](int j) {
+                    for (unsigned b = 0; b < B; ++b) {
+                        if (tab(j, b) != 0) {
+                            return false;
+                        }
+                    }
+                    return true;
                 };
 
                 int jmin = 0;
                 int jend = nbins;
-                while (jmin < jend && tab(jmin) == 0) {
+                while (jmin < jend && row_is_zero(jmin)) {
                     ++jmin;
                 }
-                while (jend > jmin && tab(jend - 1) == 0) {
+                while (jend > jmin && row_is_zero(jend - 1)) {
                     --jend;
                 }
 
                 for (int j = jmin; j < jend; ++j) {
-                    ret.values.push_back(tab(j));
+                    for (unsigned b = 0; b < B; ++b) {
+                        ret.values.push_back(tab(j, b));
+                    }
                 }
-                ret.pair_jmin.push_back(jmin);
-                ret.pair_offset.push_back(ret.values.size());
+                ret.block_jmin.push_back(jmin);
+                ret.block_offset.push_back(ret.values.size());
             }
         }
 
@@ -219,8 +241,9 @@ namespace shamphys {
     /**
      * @brief Same as compute_flux_coag_k0_kdv but using the TabfluxCoagK0Sparse form
      *
-     * Pairs \f$(l,m)\f$ without any non-zero entry, or with \f$g_l g_m = 0\f$, are skipped
-     * before evaluating \f$\mathrm{dv}(l,m)\f$.
+     * The @p B products \f$\mathrm{dv}(l,m)\, g_l\, g_m\f$ of a block are kept in registers.
+     * Blocks without any non-zero entry, or with \f$g_l = 0\f$, are skipped before evaluating
+     * \f$\mathrm{dv}\f$.
      *
      * @param nbins    Number of dust mass bins
      * @param gij      Rank-1 `std::mdspan` of DG coefficients \f$g_l\f$; extent @p nbins
@@ -228,14 +251,14 @@ namespace shamphys {
      * @param dv       Pair-wise differential-velocity callable, invoked as `dv(l, m)`
      * @param flux     Rank-1 `std::mdspan` of output fluxes; extent @p nbins, written in place
      */
-    template<class T, class Tidx, class Func>
+    template<class T, unsigned B, class Tidx, class Func>
         requires requires(Func f, int a, int b) {
             { f(a, b) };
         }
     inline void compute_flux_coag_k0_kdv(
         int nbins,
         shambase::is_mdspan_rank<1> auto gij,
-        TabfluxCoagK0SparseView<T, Tidx> tabflux,
+        TabfluxCoagK0SparseView<T, B, Tidx> tabflux,
         Func &&dv,
         shambase::is_mdspan_rank<1> auto flux) {
 
@@ -248,19 +271,32 @@ namespace shamphys {
 
         Tidx p = 0;
         for (int l = 0; l < nbins; ++l) {
-            for (int m = 0; m < nbins; ++m, ++p) {
-                Tidx beg = tabflux.pair_offset[p];
-                Tidx end = tabflux.pair_offset[p + 1];
-                Tidx j   = tabflux.pair_jmin[p];
+            T gl = gij[l];
+            for (int m0 = 0; m0 < nbins; m0 += B, ++p) {
+                Tidx beg = tabflux.block_offset[p];
+                Tidx end = tabflux.block_offset[p + 1];
+                Tidx j   = tabflux.block_jmin[p];
 
-                auto gg = gij[l] * gij[m];
-                if (beg == end || gg == 0) {
+                if (beg == end || gl == 0) {
                     continue;
                 }
 
-                auto term = dv(l, m) * gg;
-                for (Tidx k = beg; k < end; ++k, ++j) {
-                    flux[j] += tabflux.values[k] * term;
+                // dv(l,m) g_l g_m for the m of the block
+                T term[B];
+#pragma unroll
+                for (unsigned b = 0; b < B; ++b) {
+                    int m   = m0 + b;
+                    T gg    = (m < nbins) ? gl * gij[m] : 0;
+                    term[b] = (gg == 0) ? 0 : dv(l, m) * gg;
+                }
+
+                for (Tidx k = beg; k < end; k += B, ++j) {
+                    T acc = flux[j];
+#pragma unroll
+                    for (unsigned b = 0; b < B; ++b) {
+                        acc += tabflux.values[k + b] * term[b];
+                    }
+                    flux[j] = acc;
                 }
             }
         }

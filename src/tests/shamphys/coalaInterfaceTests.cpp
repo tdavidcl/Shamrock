@@ -9,6 +9,7 @@
 
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
+#include "shambase/integer.hpp"
 #include "shamphys/coala_interface.hpp"
 #include "shamtest/shamtest.hpp"
 #include <experimental/mdspan>
@@ -18,6 +19,7 @@
 #include <vector>
 
 /// compare the sparse flux to the dense reference on random inputs
+template<unsigned B>
 void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
 
     std::mt19937 eng(0x1111 + nbins);
@@ -60,13 +62,14 @@ void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
     std::mdspan<f64, std::dextents<u32, 1>> flux_ref_span(flux_ref.data(), nbins);
     shamphys::compute_flux_coag_k0_kdv(nbins, gij_span, tab_span, dv, flux_ref_span);
 
-    auto sparse = shamphys::make_tabflux_coag_k0_sparse<f64>(nbins, tab_span);
+    auto sparse = shamphys::make_tabflux_coag_k0_sparse<f64, B>(nbins, tab_span);
 
-    REQUIRE_EQUAL(sparse.pair_offset.size(), usize(nbins * nbins + 1));
-    REQUIRE_EQUAL(sparse.pair_jmin.size(), usize(nbins * nbins));
+    usize nblocks = nbins * shambase::group_count(nbins, B);
+    REQUIRE_EQUAL(sparse.block_offset.size(), nblocks + 1);
+    REQUIRE_EQUAL(sparse.block_jmin.size(), nblocks);
 
-    shamphys::TabfluxCoagK0SparseView<f64> view{
-        sparse.pair_offset.data(), sparse.pair_jmin.data(), sparse.values.data()};
+    shamphys::TabfluxCoagK0SparseView<f64, B> view{
+        sparse.block_offset.data(), sparse.block_jmin.data(), sparse.values.data()};
 
     std::vector<f64> flux(nbins);
     std::mdspan<f64, std::dextents<u32, 1>> flux_span(flux.data(), nbins);
@@ -80,7 +83,9 @@ void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
 NEW_TEST(Unittest, "shamphys/coala_interface/flux_sparse", 1) {
     for (int nbins : {1, 2, 3, 7, 20}) {
         for (f64 zero_fraction : {0.0, 0.5, 0.9}) {
-            test_coala_flux_sparse(nbins, zero_fraction);
+            test_coala_flux_sparse<1>(nbins, zero_fraction);
+            test_coala_flux_sparse<2>(nbins, zero_fraction);
+            test_coala_flux_sparse<4>(nbins, zero_fraction);
         }
     }
 }
