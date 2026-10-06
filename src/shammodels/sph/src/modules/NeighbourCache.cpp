@@ -1202,7 +1202,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         u32 cnt = 0;
 
-                        particle_looper.rtree_for(
+                        particle_looper.rtree_for_leaf_coherent(
                             stack_id,
                             stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
@@ -1279,7 +1279,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
 
                         u32 cnt = scanned_neigh_cnt[id_a];
 
-                        particle_looper.rtree_for(
+                        particle_looper.rtree_for_leaf_coherent(
                             stack_id,
                             stack_size,
                             [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
