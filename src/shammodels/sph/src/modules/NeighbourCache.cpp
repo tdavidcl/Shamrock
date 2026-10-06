@@ -31,7 +31,7 @@
 namespace {
 
     /// capacity of the per thread queue of leaves found by the traversal
-    constexpr u32 nc_leaf_queue_size = 8;
+    constexpr u32 nc_leaf_queue_size = 32;
 
     /**
      * @brief Neighbour search traversal of one particle per thread, with the threads of a
