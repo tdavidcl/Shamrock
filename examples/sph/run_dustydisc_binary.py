@@ -872,7 +872,7 @@ def SliceAlphaAVPlot(
 
 def compute_vz_cs(model):
 
-    def int_getter(size: int, dic_out: dict, ndust: int = ndust, jdust=j) -> np.array:
+    def int_getter(size: int, dic_out: dict) -> np.array:
         return dic_out["vxyz"][:, 2] / dic_out["soundspeed"]
 
     return model.compute_field("custom", "f64", maybe_njit(int_getter))
