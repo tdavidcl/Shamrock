@@ -12,7 +12,9 @@ periastron is the inner edge of the disc.
 
 The run is configured through environment variables: ``BINARY_Q`` (default 1),
 ``BINARY_E`` (default 0), ``NPART`` (default 1e5, scientific notation accepted),
-``NDUST`` (default 0) and ``COALA`` (default False).
+``NDUST`` (default 0) and ``COALA`` (default False). ``SINGLE_STAR=True`` replaces
+the binary by a single star of the same total mass, for comparison with the
+binary runs (``BINARY_Q`` and ``BINARY_E`` are then ignored).
 """
 
 # sphinx_gallery_multi_image = "single"
@@ -71,6 +73,7 @@ codeu_kg_m3 = codeu.get("kg") * codeu.get("m", power=-3)
 Npart = int(float(os.environ.get("NPART", "1e5")))
 ndust = int(os.environ.get("NDUST", "0"))
 use_coala = os.environ.get("COALA", "False") == "True"
+single_star = os.environ.get("SINGLE_STAR", "False") == "True"
 binary_q = float(os.environ.get("BINARY_Q", "1.0"))  # mass ratio M2/M1
 binary_e = float(os.environ.get("BINARY_E", "0.0"))  # eccentricity
 
@@ -81,9 +84,10 @@ if shamrock.sys.world_rank() == 0:
         ("Npart", Npart),
         ("ndust", ndust),
         ("use_coala", use_coala),
-        ("binary_q", binary_q),
-        ("binary_e", binary_e),
+        ("single_star", single_star),
     ]
+    if not single_star:
+        params += [("binary_q", binary_q), ("binary_e", binary_e)]
     name_w = max(len(name) for name, _ in params)
     val_w = max(len(str(val)) for _, val in params)
     sep = "+-" + "-" * name_w + "-+-" + "-" * val_w + "-+"
@@ -190,44 +194,77 @@ cavity_e = 0.0
 cavity_varpi = 0.0
 cavity_h = disc.get_profiles().H(cavity_Rp) / cavity_Rp
 
-binary_a = calculate_abin(
-    R_p=cavity_Rp,
-    q=binary_q,
-    e_bin=binary_e,
-    e_cav=cavity_e,
-    varpi_bin=binary_varpi,
-    varpi_cav=cavity_varpi,
-    alpha=alpha_ss,
-    h=cavity_h,
-)
+# Central sinks as (mass, position, velocity, accretion radius), added in setup_model
+# once the disc momentum and barycenter are zeroed.
+if single_star:
+    # Same rule as for the binary below: the sink reaches binary_racc_cavity_frac * R_p
+    central_sinks = [
+        (center_mass, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), binary_racc_cavity_frac * cavity_Rp)
+    ]
 
-binary_m1 = center_mass / (1.0 + binary_q)
-binary_m2 = center_mass * binary_q / (1.0 + binary_q)
+    if shamrock.sys.world_rank() == 0:
+        print(f"cavity: R_p = {cavity_Rp} au")
+        print(f"single star: m = {center_mass}, racc = {central_sinks[0][3]} au")
 
-# Large sinks keep the timestep from being set by gas falling close to the stars.
-# Star i orbits the center of mass on an ellipse scaled by m_other/M, so its largest
-# distance from the origin is (m_other/M) * a * (1 + e). Its sink then reaches at most
-# racc_i + (m_other/M) * a * (1 + e) = binary_racc_cavity_frac * R_p.
-# The sinks may overlap or contain the other star: sinks do not accrete each other.
-binary_apoastron = binary_a * (1.0 + binary_e)
-binary_rmax1 = binary_m2 / center_mass * binary_apoastron
-binary_rmax2 = binary_m1 / center_mass * binary_apoastron
-binary_racc1 = binary_racc_cavity_frac * cavity_Rp - binary_rmax1
-binary_racc2 = binary_racc_cavity_frac * cavity_Rp - binary_rmax2
-
-if min(binary_racc1, binary_racc2) <= 0:
-    raise ValueError(
-        f"a star goes beyond {binary_racc_cavity_frac} R_p on its orbit, no room left for its sink"
+else:
+    binary_a = calculate_abin(
+        R_p=cavity_Rp,
+        q=binary_q,
+        e_bin=binary_e,
+        e_cav=cavity_e,
+        varpi_bin=binary_varpi,
+        varpi_cav=cavity_varpi,
+        alpha=alpha_ss,
+        h=cavity_h,
     )
 
-if binary_apoastron >= cavity_Rp:
-    raise ValueError("binary apoastron is outside the cavity, the setup makes no sense")
+    binary_m1 = center_mass / (1.0 + binary_q)
+    binary_m2 = center_mass * binary_q / (1.0 + binary_q)
 
-if shamrock.sys.world_rank() == 0:
-    print(f"cavity: R_p = {cavity_Rp} au, e = {cavity_e}, h = {cavity_h}")
-    print(f"binary: a = {binary_a} au, R_p / a = {cavity_Rp / binary_a}")
-    print(f"binary: m1 = {binary_m1}, m2 = {binary_m2}")
-    print(f"binary: racc1 = {binary_racc1} au, racc2 = {binary_racc2} au")
+    # Large sinks keep the timestep from being set by gas falling close to the stars.
+    # Star i orbits the center of mass on an ellipse scaled by m_other/M, so its largest
+    # distance from the origin is (m_other/M) * a * (1 + e). Its sink then reaches at most
+    # racc_i + (m_other/M) * a * (1 + e) = binary_racc_cavity_frac * R_p.
+    # The sinks may overlap or contain the other star: sinks do not accrete each other.
+    binary_apoastron = binary_a * (1.0 + binary_e)
+    binary_rmax1 = binary_m2 / center_mass * binary_apoastron
+    binary_rmax2 = binary_m1 / center_mass * binary_apoastron
+    binary_racc1 = binary_racc_cavity_frac * cavity_Rp - binary_rmax1
+    binary_racc2 = binary_racc_cavity_frac * cavity_Rp - binary_rmax2
+
+    if min(binary_racc1, binary_racc2) <= 0:
+        raise ValueError(
+            f"a star goes beyond {binary_racc_cavity_frac} R_p on its orbit, no room left for its sink"
+        )
+
+    if binary_apoastron >= cavity_Rp:
+        raise ValueError("binary apoastron is outside the cavity, the setup makes no sense")
+
+    # get_binary_rotated puts the center of mass of the binary at rest at the origin
+    x1, x2, v1, v2 = shamrock.phys.get_binary_rotated(
+        m1=binary_m1,
+        m2=binary_m2,
+        a=binary_a,
+        e=binary_e,
+        nu=binary_nu,
+        G=ucte.G(),
+        roll=0.0,
+        pitch=0.0,
+        yaw=binary_varpi,
+    )
+
+    central_sinks = [
+        (binary_m1, tuple(x1), tuple(v1), binary_racc1),
+        (binary_m2, tuple(x2), tuple(v2), binary_racc2),
+    ]
+
+    if shamrock.sys.world_rank() == 0:
+        print(f"cavity: R_p = {cavity_Rp} au, e = {cavity_e}, h = {cavity_h}")
+        print(f"binary: a = {binary_a} au, R_p / a = {cavity_Rp / binary_a}")
+        print(f"binary: m1 = {binary_m1}, m2 = {binary_m2}")
+        print(f"binary: racc1 = {binary_racc1} au, racc2 = {binary_racc2} au")
+        print(f"star 1: x = {x1}, v = {v1}")
+        print(f"star 2: x = {x2}, v = {v2}")
 
 # Dust parameters
 kernel = "M6"
@@ -257,10 +294,8 @@ if ndust > 0 and use_coala is True:
 C_cour = 0.1
 C_force = 0.1
 
-sim_folder = (
-    f"_to_trash/binary_dustydisc_q{binary_q}_e{binary_e}"
-    f"_{ndust}_{Npart}_{kernel}_coala_{use_coala}/"
-)
+central_tag = "single_dustydisc" if single_star else f"binary_dustydisc_q{binary_q}_e{binary_e}"
+sim_folder = f"_to_trash/{central_tag}_{ndust}_{Npart}_{kernel}_coala_{use_coala}/"
 
 dump_folder = sim_folder + "dump/"
 analysis_folder = sim_folder + "analysis/"
@@ -338,9 +373,14 @@ def setup_model():
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
 
-    # Farris et al. (2014) locally isothermal EOS: same as LP07 far from the binary,
-    # but the sound speed follows the potential of both stars near them
-    cfg.set_eos_locally_isothermalFA2014_extended(cs0=disc.cs0(), q=disc.q, r0=disc.r0, n_sinks=2)
+    if single_star:
+        cfg.set_eos_locally_isothermalLP07(cs0=disc.cs0(), q=disc.q, r0=disc.r0)
+    else:
+        # Farris et al. (2014) locally isothermal EOS: same as LP07 far from the binary,
+        # but the sound speed follows the potential of both stars near them
+        cfg.set_eos_locally_isothermalFA2014_extended(
+            cs0=disc.cs0(), q=disc.q, r0=disc.r0, n_sinks=2
+        )
 
     if ndust > 0:
         cfg.set_dust_mode_monofluid_tva(
@@ -423,26 +463,9 @@ def setup_model():
     if not np.allclose(barycenter, 0.0):
         raise RuntimeError("disc barycenter is not 0")
 
-    # now that the barycenter & momentum are 0, we can add the binary
-    # (get_binary_rotated puts its center of mass at rest at the origin)
-    x1, x2, v1, v2 = shamrock.phys.get_binary_rotated(
-        m1=binary_m1,
-        m2=binary_m2,
-        a=binary_a,
-        e=binary_e,
-        nu=binary_nu,
-        G=ucte.G(),
-        roll=0.0,
-        pitch=0.0,
-        yaw=binary_varpi,
-    )
-
-    if shamrock.sys.world_rank() == 0:
-        print(f"star 1: x = {x1}, v = {v1}")
-        print(f"star 2: x = {x2}, v = {v2}")
-
-    model.add_sink(binary_m1, tuple(x1), tuple(v1), binary_racc1)
-    model.add_sink(binary_m2, tuple(x2), tuple(v2), binary_racc2)
+    # now that the barycenter & momentum are 0, we can add the central star(s)
+    for mass, pos, vel, racc in central_sinks:
+        model.add_sink(mass, pos, vel, racc)
 
     # Run a single step to init the integrator and smoothing length of the particles
     # Here the htolerance is the maximum factor of evolution of the smoothing length in each
@@ -1384,7 +1407,7 @@ class radial_profile_plot:
                 dic_out["xyz"][:, 1],
             )
 
-        x_min = min(binary_racc1, binary_racc2) / 1.1
+        x_min = min(racc for *_, racc in central_sinks) / 1.1
         x_max = disc.rout * 2
         x_min_log = np.log10(x_min)
         x_max_log = np.log10(x_max)
