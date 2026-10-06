@@ -22,6 +22,7 @@
 #include "shammath/AABB.hpp"
 #include "shammodels/ramses/modules/FindBlockNeighOpt.hpp"
 #include "shammodels/ramses/modules/details/compute_neigh_graph.hpp"
+#include "shammodels/ramses/modules/details/neigh_graph_6dir.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/TreeTraversal.hpp"
 
@@ -517,20 +518,14 @@ namespace shammodels::basegodunov::modules {
                     internal_cell_count,
                     origin};
 
-                // [i] is the number of link for block i (last value is 0)
-                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> link_counts;
-                for (u32 dir = 0; dir < 6; dir++) {
-                    link_counts[dir]
-                        = std::make_unique<sham::DeviceBuffer<u32>>(block_count + 1, dev_sched);
-                }
+                // link counts of the 6 directions in one buffer (see details::neigh_6dir_count_idx)
+                sham::DeviceBuffer<u32> link_counts(
+                    details::neigh_6dir_count_size(block_count), dev_sched);
 
                 {
                     sham::EventList deps;
                     auto ker = finder.get_read_access(deps);
-                    std::array<u32 *, 6> cnt;
-                    for (u32 dir = 0; dir < 6; dir++) {
-                        cnt[dir] = link_counts[dir]->get_write_access(deps);
-                    }
+                    u32 *cnt = link_counts.get_write_access(deps);
 
                     auto e = q.submit(deps, [&](sycl::handler &cgh) {
                         sycl::local_accessor<u32, 1> stack_local(
@@ -559,29 +554,25 @@ namespace shammodels::basegodunov::modules {
 
 #pragma unroll
                                 for (u32 dir = 0; dir < 6; dir++) {
-                                    cnt[dir][id_a] = found[dir];
+                                    cnt[details::neigh_6dir_count_idx(dir, id_a, block_count)]
+                                        = found[dir];
                                 }
                             });
                     });
 
                     finder.complete_event_state(e);
-                    for (u32 dir = 0; dir < 6; dir++) {
-                        link_counts[dir]->complete_event_state(e);
-                    }
+                    link_counts.complete_event_state(e);
                 }
 
-                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> link_offsets;
+                details::NeighGraph6DirOffsets scanned
+                    = details::scan_link_counts_6dir(dev_sched, link_counts, block_count);
+
+                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> &link_offsets
+                    = scanned.node_link_offset;
+                std::array<u32, 6> &link_cnt = scanned.link_count;
+
                 std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> links;
-                std::array<u32, 6> link_cnt;
                 for (u32 dir = 0; dir < 6; dir++) {
-                    // set the last val to 0 so that the last slot after exclusive scan is the sum
-                    link_counts[dir]->set_val_at_idx(block_count, 0);
-
-                    link_offsets[dir] = std::make_unique<sham::DeviceBuffer<u32>>(
-                        shamalgs::numeric::scan_exclusive(
-                            dev_sched, *link_counts[dir], block_count + 1));
-
-                    link_cnt[dir] = link_offsets[dir]->get_val_at_idx(block_count);
                     links[dir]
                         = std::make_unique<sham::DeviceBuffer<u32>>(link_cnt[dir], dev_sched);
                 }
