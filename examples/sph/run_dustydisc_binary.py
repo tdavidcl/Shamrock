@@ -1089,7 +1089,7 @@ min_rho_plot = 1e-16
 if ndust > 0:
     col_smean_plot = ColumnAverageDustSizePlot(
         model,
-        ext_r=disc.rout * 1.5,
+        ext_r=disc.rout,  # face-on view from -rout to rout
         nx=1024,
         ny=1024,
         ex=(1, 0, 0),
@@ -1175,7 +1175,7 @@ if ndust > 0:
 
     col_smean_evol_plot = ColumnAverageDustEvolSizePlot(
         model,
-        ext_r=disc.rout * 1.5,
+        ext_r=disc.rout,  # face-on view from -rout to rout
         nx=1024,
         ny=1024,
         ex=(1, 0, 0),
@@ -1318,7 +1318,7 @@ sim.analysis_modules.append(dt_part_slice_plot)
 
 column_particle_count_plot = ColumnParticleCount(
     model,
-    ext_r=disc.rout * 1.5,
+    ext_r=disc.rout,  # face-on view from -rout to rout
     nx=1024,
     ny=1024,
     ex=(1, 0, 0),
