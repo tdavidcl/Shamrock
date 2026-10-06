@@ -27,10 +27,27 @@ namespace shammodels::basegodunov::modules {
     template<class Tvec, class TgridVec, class Tmorton>
     class FindBlockNeighOpt<Tvec, TgridVec, Tmorton>::AMRBlockFinder {
         public:
-        shamrock::tree::ObjectIterator<Tmorton, TgridVec> block_looper;
+        using acc_u32 = sycl::accessor<u32, 1, sycl::access::mode::read, sycl::target::device>;
+        using acc_u8  = sycl::accessor<u8, 1, sycl::access::mode::read, sycl::target::device>;
+        using acc_grid
+            = sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device>;
 
-        sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_min;
-        sycl::accessor<TgridVec, 1, sycl::access::mode::read, sycl::target::device> acc_block_max;
+        static constexpr u32 tree_depth = RTree::tree_depth;
+        static constexpr u32 _nindex    = 4294967295;
+
+        // radix tree (same data as shamrock::tree::ObjectIterator)
+        acc_u32 particle_index_map;
+        acc_u32 cell_index_map;
+        acc_u32 rchild_id;
+        acc_u32 lchild_id;
+        acc_u8 rchild_flag;
+        acc_u8 lchild_flag;
+        acc_grid pos_min_cell;
+        acc_grid pos_max_cell;
+        u32 leaf_offset;
+
+        acc_grid acc_block_min;
+        acc_grid acc_block_max;
 
         TgridVec dir_offset;
 
@@ -40,7 +57,32 @@ namespace shammodels::basegodunov::modules {
             sycl::buffer<TgridVec> &buf_block_min,
             sycl::buffer<TgridVec> &buf_block_max,
             TgridVec dir_offset)
-            : block_looper(tree, cgh), acc_block_min{buf_block_min, cgh, sycl::read_only},
+            : particle_index_map{
+                  shambase::get_check_ref(tree.tree_morton_codes.buf_particle_index_map),
+                  cgh,
+                  sycl::read_only},
+              cell_index_map{
+                  shambase::get_check_ref(tree.tree_reduced_morton_codes.buf_reduc_index_map),
+                  cgh,
+                  sycl::read_only},
+              rchild_id{
+                  shambase::get_check_ref(tree.tree_struct.buf_rchild_id), cgh, sycl::read_only},
+              lchild_id{
+                  shambase::get_check_ref(tree.tree_struct.buf_lchild_id), cgh, sycl::read_only},
+              rchild_flag{
+                  shambase::get_check_ref(tree.tree_struct.buf_rchild_flag), cgh, sycl::read_only},
+              lchild_flag{
+                  shambase::get_check_ref(tree.tree_struct.buf_lchild_flag), cgh, sycl::read_only},
+              pos_min_cell{
+                  shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_min_cell_flt),
+                  cgh,
+                  sycl::read_only},
+              pos_max_cell{
+                  shambase::get_check_ref(tree.tree_cell_ranges.buf_pos_max_cell_flt),
+                  cgh,
+                  sycl::read_only},
+              leaf_offset(tree.tree_struct.internal_cell_count),
+              acc_block_min{buf_block_min, cgh, sycl::read_only},
               acc_block_max{buf_block_max, cgh, sycl::read_only},
               dir_offset(std::move(dir_offset)) {}
 
@@ -54,23 +96,65 @@ namespace shammodels::basegodunov::modules {
             shammath::AABB<TgridVec> check_aabb{
                 block_aabb.lower + dir_offset, block_aabb.upper + dir_offset};
 
-            block_looper.rtree_for(
-                [&](u32 node_id, TgridVec bmin, TgridVec bmax) -> bool {
-                    return shammath::AABB<TgridVec>{bmin, bmax}
-                        .get_intersect(check_aabb)
-                        .is_volume_not_null();
-                },
-                [&](u32 id_b) {
-                    bool interact
-                        = shammath::AABB<TgridVec>{acc_block_min[id_b], acc_block_max[id_b]}
-                              .get_intersect(check_aabb)
-                              .is_volume_not_null()
-                          && id_b != id_a;
+            auto node_test = [&](u32 node_id) -> bool {
+                return shammath::AABB<TgridVec>{pos_min_cell[node_id], pos_max_cell[node_id]}
+                    .get_intersect(check_aabb)
+                    .is_volume_not_null();
+            };
 
-                    if (interact) {
-                        fct(id_b);
+            auto on_object = [&](u32 id_b) {
+                bool interact = shammath::AABB<TgridVec>{acc_block_min[id_b], acc_block_max[id_b]}
+                                    .get_intersect(check_aabb)
+                                    .is_volume_not_null()
+                                && id_b != id_a;
+
+                if (interact) {
+                    fct(id_b);
+                }
+            };
+
+            // Same depth first traversal as ObjectIterator::rtree_for, but the inner loop stops
+            // on the first hit leaf, whose objects are scanned once the warp has reconverged
+            u32 stack_cursor = tree_depth - 1;
+            std::array<u32, tree_depth> id_stack;
+            id_stack[stack_cursor] = 0;
+
+            while (stack_cursor < tree_depth) {
+
+                u32 found_leaf = _nindex;
+
+                while (stack_cursor < tree_depth) {
+                    u32 current_node_id    = id_stack[stack_cursor];
+                    id_stack[stack_cursor] = _nindex;
+                    stack_cursor++;
+
+                    if (node_test(current_node_id)) {
+                        if (current_node_id >= leaf_offset) {
+                            found_leaf = current_node_id;
+                            break;
+                        }
+
+                        u32 lid = lchild_id[current_node_id]
+                                  + leaf_offset * lchild_flag[current_node_id];
+                        u32 rid = rchild_id[current_node_id]
+                                  + leaf_offset * rchild_flag[current_node_id];
+
+                        id_stack[stack_cursor - 1] = rid;
+                        stack_cursor--;
+
+                        id_stack[stack_cursor - 1] = lid;
+                        stack_cursor--;
                     }
-                });
+                }
+
+                if (found_leaf != _nindex) {
+                    u32 min_ids = cell_index_map[found_leaf - leaf_offset];
+                    u32 max_ids = cell_index_map[found_leaf + 1 - leaf_offset];
+                    for (u32 id_s = min_ids; id_s < max_ids; id_s++) {
+                        on_object(particle_index_map[id_s]);
+                    }
+                }
+            }
         }
     };
 
