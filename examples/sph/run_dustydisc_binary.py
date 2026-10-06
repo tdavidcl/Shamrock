@@ -73,8 +73,9 @@ binary_e = 0.0  # eccentricity
 
 binary_varpi = 0.0  # longitude of periastron (rad)
 binary_nu = 0.0  # initial true anomaly (rad), 0 = start at periastron
-# accretion radius of each star, as a fraction of its Roche lobe at periastron
-binary_racc_roche_frac = 0.5
+# Largest accretion radii that stay inside the cavity: each sink is sized so that, at the
+# farthest point of its star's orbit, it reaches this fraction of the cavity radius
+binary_racc_cavity_frac = 0.8
 
 # Disc parameters
 disc = shamrock.utils.disc_setup.StandardDisc(
@@ -150,15 +151,6 @@ def calculate_abin(R_p, q, e_bin, e_cav, varpi_bin, varpi_cav, alpha, h, coeffs=
     return R_p / denom
 
 
-def roche_lobe_eggleton(q):
-    """
-    Eggleton (1983) Roche lobe radius of the star of mass ratio ``q`` (its mass over
-    the companion's), in units of the separation.
-    """
-    q23 = q ** (2.0 / 3.0)
-    return 0.49 * q23 / (0.6 * q23 + np.log(1.0 + q ** (1.0 / 3.0)))
-
-
 cavity_Rp = disc.rin
 cavity_e = 0.0
 cavity_varpi = 0.0
@@ -178,10 +170,21 @@ binary_a = calculate_abin(
 binary_m1 = center_mass / (1.0 + binary_q)
 binary_m2 = center_mass * binary_q / (1.0 + binary_q)
 
-# Size the accretion radii on the Roche lobes at periastron so that they never overlap
-binary_periastron = binary_a * (1.0 - binary_e)
-binary_racc1 = binary_racc_roche_frac * roche_lobe_eggleton(1.0 / binary_q) * binary_periastron
-binary_racc2 = binary_racc_roche_frac * roche_lobe_eggleton(binary_q) * binary_periastron
+# Large sinks keep the timestep from being set by gas falling close to the stars.
+# Star i orbits the center of mass on an ellipse scaled by m_other/M, so its largest
+# distance from the origin is (m_other/M) * a * (1 + e). Its sink then reaches at most
+# racc_i + (m_other/M) * a * (1 + e) = binary_racc_cavity_frac * R_p.
+# The sinks may overlap or contain the other star: sinks do not accrete each other.
+binary_apoastron = binary_a * (1.0 + binary_e)
+binary_rmax1 = binary_m2 / center_mass * binary_apoastron
+binary_rmax2 = binary_m1 / center_mass * binary_apoastron
+binary_racc1 = binary_racc_cavity_frac * cavity_Rp - binary_rmax1
+binary_racc2 = binary_racc_cavity_frac * cavity_Rp - binary_rmax2
+
+if min(binary_racc1, binary_racc2) <= 0:
+    raise ValueError(
+        f"a star goes beyond {binary_racc_cavity_frac} R_p on its orbit, no room left for its sink"
+    )
 
 print(f"cavity: R_p = {cavity_Rp} au, e = {cavity_e}, h = {cavity_h}")
 print(
@@ -189,7 +192,7 @@ print(
 )
 print(f"binary: m1 = {binary_m1}, m2 = {binary_m2}, racc1 = {binary_racc1}, racc2 = {binary_racc2}")
 
-if binary_a * (1.0 + binary_e) >= cavity_Rp:
+if binary_apoastron >= cavity_Rp:
     raise ValueError("binary apoastron is outside the cavity, the setup makes no sense")
 
 # Dust parameters
