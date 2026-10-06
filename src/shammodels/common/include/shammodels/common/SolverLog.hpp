@@ -11,6 +11,7 @@
 
 /**
  * @file SolverLog.hpp
+ * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -22,15 +23,15 @@
 #include <optional>
 #include <vector>
 
-namespace shammodels::sph {
+namespace shammodels {
     struct SolverLog;
-} // namespace shammodels::sph
+} // namespace shammodels
 
 /**
  * @brief Class holding the logs of the solver
  * /todo add a variable to keep only a definite number of steps in the step_logs
  */
-struct shammodels::sph::SolverLog {
+struct shammodels::SolverLog {
 
     struct StepInfo {
         f64 solver_t;

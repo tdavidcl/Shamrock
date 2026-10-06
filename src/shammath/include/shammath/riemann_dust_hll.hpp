@@ -20,44 +20,40 @@
 
 namespace shammath {
 
-    // Krapp et al. 2024, A Fast second-order solver for stiff multifluid dust and gas hydrodynamics
-    // Appendice E
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_x(Tprim d_primL, Tprim d_primR) {
-        const auto S = sham::max(sham::abs(d_primL.vel[0]), sham::abs(d_primR.vel[0]));
+    /**
+     * @brief Dust HLL flux across a face with unit normal n
+     *
+     * Krapp et al. 2024, A Fast second-order solver for stiff multifluid dust and gas
+     * hydrodynamics, Appendice E
+     * @tparam FSpec
+     * @param fspec dust state spec (flux/vn operations, no equation of state)
+     * @param prim_l left  primitive state
+     * @param prim_r right primitive state
+     * @param n face unit normal
+     */
+    template<DustFluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons d_hll_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        using Tscal = typename FSpec::Tscal;
+        using Tcons = typename FSpec::Tcons;
 
-        const auto fL = d_hydro_flux_x(d_primL);
-        const auto fR = d_hydro_flux_x(d_primR);
+        const Tscal vn_l = fspec.vn(prim_l, n);
+        const Tscal vn_r = fspec.vn(prim_r, n);
 
-        const auto cL = d_prim_to_cons(d_primL);
-        const auto cR = d_prim_to_cons(d_primR);
+        // NOLINTBEGIN(readability-identifier-naming)
+        const Tscal S = sham::max(sham::abs(vn_l), sham::abs(vn_r));
+        // NOLINTEND(readability-identifier-naming)
 
-        return 0.5 * ((fL + fR) - S * (cR - cL));
-    }
+        const Tcons f_l = fspec.flux(prim_l, n, vn_l);
+        const Tcons f_r = fspec.flux(prim_r, n, vn_r);
 
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_y(Tprim pL, Tprim pR) {
-        return d_x_to_y(d_hll_flux_x(d_prim_y_to_x(pL), d_prim_y_to_x(pR)));
-    }
+        const Tcons c_l = fspec.prim_to_cons(prim_l);
+        const Tcons c_r = fspec.prim_to_cons(prim_r);
 
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_z(Tprim pL, Tprim pR) {
-        return d_x_to_z(d_hll_flux_x(d_prim_z_to_x(pL), d_prim_z_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_mx(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_x(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_my(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_y(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto d_hll_flux_mz(Tprim pL, Tprim pR) {
-        return d_invert_axis(d_hll_flux_z(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
+        return 0.5 * ((f_l + f_r) - S * (c_r - c_l));
     }
 
 } // namespace shammath

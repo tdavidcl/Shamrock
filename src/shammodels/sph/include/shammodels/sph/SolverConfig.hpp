@@ -30,6 +30,7 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/common/EOSConfig.hpp"
 #include "shammodels/common/ExtForceConfig.hpp"
+#include "shammodels/common/config/enum_NeighCacheStrategy.hpp"
 #include "shammodels/sph/config/MHDConfig.hpp"
 #include "shamrock/experimental_features.hpp"
 #include "shamrock/io/json_print_diff.hpp"
@@ -70,12 +71,17 @@ namespace shammodels::sph {
         /**
          * @brief The CFL condition for the courant factor
          */
-        Tscal cfl_cour;
+        Tscal cfl_cour = 0.3;
 
         /**
          * @brief The CFL condition for the force
          */
-        Tscal cfl_force;
+        Tscal cfl_force = 0.25;
+
+        /**
+         * @brief The CFL condition for the non-ideal MHD terms
+         */
+        Tscal cfl_NIMHD = 1. / (2 * shambase::constants::pi<Tscal>); // as in phantom
 
         /**
          * @brief The CFL multiplier stiffness
@@ -551,7 +557,7 @@ struct shammodels::sph::SolverConfig {
     /// The radius of the sph kernel
     static constexpr Tscal Rkern = Kernel::Rkern;
 
-    Tscal gpart_mass; ///< The mass of each gas particle
+    Tscal gpart_mass{0}; ///< The mass of each gas particle (must be set before use)
 
     bool track_particles_id = false;
 
@@ -650,11 +656,27 @@ struct shammodels::sph::SolverConfig {
     }
 
     /// Enable the ideal MHD hydro solver
-    inline void set_IdealMHD(typename MHDConfig::IdealMHD_constrained_hyper_para v) {
+    inline void set_ideal_mhd(typename MHDConfig::IdealMhdConstrainedHyperPara v) {
         mhd_config.set(v);
     }
 
-    inline void set_NonIdealMHD(typename MHDConfig::NonIdealMHD v) { mhd_config.set(v); }
+    inline void set_non_ideal_mhd(typename MHDConfig::NonIdealMHD v) {
+        logger::raw_ln("$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$");
+        logger::raw_ln(" ______   _______  __    _  _______  _______  ______  ");
+        logger::raw_ln("|      | |   _   ||  |  | ||       ||       ||    _ | ");
+        logger::raw_ln("|  _    ||  |_|  ||   |_| ||    ___||    ___||   | ||");
+        logger::raw_ln("| | |   ||       ||       ||   | __ |   |___ |   |_||_");
+        logger::raw_ln("| |_|   ||       ||  _    ||   ||  ||    ___||    __  |");
+        logger::raw_ln("|       ||   _   || | |   ||   |_| ||   |___ |   |  | |");
+        logger::raw_ln("|______| |__| |__||_|  |__||_______||_______||___|  |_|");
+        logger::raw_ln("$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$DANGER$");
+        logger::raw_ln("The Non-ideal MHD solver is UNDER DEVELOPMENT.");
+        logger::raw_ln("It is. NOT. FULLY. TESTED. YET.");
+        logger::raw_ln("Use at your own risk.");
+        shamrock::experimental_feature_check(
+            "Non-ideal MHD is experimental, please enable experimental features to use it");
+        mhd_config.set(v);
+    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // MHD Config (END)
@@ -685,13 +707,31 @@ struct shammodels::sph::SolverConfig {
     // Tree config
     //////////////////////////////////////////////////////////////////////////////////////////////
 
-    u32 tree_reduction_level  = 3;    ///< Reduction level to be used in the tree build
-    bool use_two_stage_search = true; ///< Use two stage neighbors search (see shamrock paper)
+    u32 tree_reduction_level = 3; ///< Reduction level to be used in the tree build
+
+    /// Strategy used to build the neighbours cache out of the tree traversal
+    NeighCacheStrategy neigh_cache_strategy = NeighCacheStrategy::TwoStage;
 
     /// Setter for the tree reduction level
     inline void set_tree_reduction_level(u32 level) { tree_reduction_level = level; }
-    /// Setter for the two stage search
-    inline void set_two_stage_search(bool enable) { use_two_stage_search = enable; }
+
+    /// Setter for the neighbours cache strategy
+    inline void set_neigh_cache_strategy(NeighCacheStrategy strategy) {
+        neigh_cache_strategy = strategy;
+    }
+
+    /**
+     * @brief Setter for the two stage search
+     * @deprecated Use set_neigh_cache_strategy instead
+     */
+    inline void set_two_stage_search(bool enable) {
+        ON_RANK_0(shamlog_warn_ln(
+                      "SPH::SolverConfig",
+                      "set_two_stage_search() is deprecated,\n"
+                      "    -> use set_neigh_cache_strategy(NeighCacheStrategy.TwoStage) or\n"
+                      "       set_neigh_cache_strategy(NeighCacheStrategy.SingleStage) instead"););
+        neigh_cache_strategy = neigh_cache_strategy_from_two_stage_search(enable);
+    }
 
     bool show_neigh_stats = false;
     inline void set_show_neigh_stats(bool enable) { show_neigh_stats = enable; }
@@ -999,9 +1039,11 @@ struct shammodels::sph::SolverConfig {
      *
      * @param[in] central_mass The mass of the central object
      * @param[in] Racc The accretion radius of the central object
+     * @param[in] central_pos The position of the central object
      */
-    inline void add_ext_force_point_mass(Tscal central_mass, Tscal Racc) {
-        ext_force_config.add_point_mass(central_mass, Racc);
+    inline void add_ext_force_point_mass(
+        Tscal central_mass, Tscal Racc, Tvec central_pos = Tvec{}) {
+        ext_force_config.add_point_mass(central_mass, Racc, central_pos);
     }
 
     /**
@@ -1021,10 +1063,11 @@ struct shammodels::sph::SolverConfig {
      * @param[in] Racc The accretion radius of the central object
      * @param[in] a_spin The spin of the central object
      * @param[in] dir_spin The direction of the spin of the central object
+     * @param[in] central_pos The position of the central object
      */
     inline void add_ext_force_lense_thirring(
-        Tscal central_mass, Tscal Racc, Tscal a_spin, Tvec dir_spin) {
-        ext_force_config.add_lense_thirring(central_mass, Racc, a_spin, dir_spin);
+        Tscal central_mass, Tscal Racc, Tscal a_spin, Tvec dir_spin, Tvec central_pos = Tvec{}) {
+        ext_force_config.add_lense_thirring(central_mass, Racc, a_spin, dir_spin, central_pos);
     }
 
     /**
@@ -1099,24 +1142,34 @@ struct shammodels::sph::SolverConfig {
         return artif_viscosity.has_field_soundspeed() || is_eos_locally_isothermal();
     }
 
+    /// @brief Whether the solver is set for non ideal MHD
+    inline bool do_nimhd() { return mhd_config.do_nimhd(); }
+
     /// @brief Whether the solver has a field for B_on_rho
-    inline bool has_field_B_on_rho() { return mhd_config.has_B_field() && (dim == 3); }
+    inline bool has_field_b_on_rho() { return mhd_config.has_b_field() && (dim == 3); }
 
     /// @brief Whether the solver has a field for psi_on_ch
     inline bool has_field_psi_on_ch() { return mhd_config.has_psi_field(); }
 
     /// @brief Whether the solver has a field for divB
-    inline bool has_field_divB() { return mhd_config.has_divB_field(); }
+    inline bool has_field_div_b() { return mhd_config.has_div_b_field(); }
 
     /// @brief Whether the solver has a field for curlB
-    inline bool has_field_curlB() { return mhd_config.has_curlB_field() && (dim == 3); }
+    inline bool has_field_curl_b() { return mhd_config.has_curl_b_field() && (dim == 3); }
 
     /// @brief Whether the solver has a field for dt divB
-    inline bool has_field_dtdivB() { return mhd_config.has_dtdivB_field(); }
+    inline bool has_field_dtdiv_b() { return mhd_config.has_dtdiv_b_field(); }
 
     /// @brief Whether to store luminosity
     bool compute_luminosity = false;
     inline void use_luminosity(bool enable) { compute_luminosity = enable; }
+
+    /// @brief Whether to compute GW
+    bool compute_gw = false;
+    inline void use_GW(bool enable) {
+        shamrock::experimental_feature_check("GW computation is experimental.");
+        compute_gw = enable;
+    }
 
     /// Print the current status of the solver config
     inline void print_status() {
@@ -1130,6 +1183,7 @@ struct shammodels::sph::SolverConfig {
 
     inline void check_config() {
         dust_config.check_config();
+        mhd_config.check_config();
 
         if (track_particles_id && false /*particle injection when added*/) {
             shamrock::experimental_feature_check(
@@ -1143,6 +1197,11 @@ struct shammodels::sph::SolverConfig {
         if (!self_grav_config.is_none()) {
             shamrock::experimental_feature_check(
                 "Self gravity is experimental, please enable experimental features to use it");
+        }
+
+        if (mhd_config.do_nimhd()) {
+            shamrock::experimental_feature_check(
+                "Non-ideal MHD is experimental, please enable experimental features to use it");
         }
     }
 
@@ -1388,7 +1447,7 @@ namespace shammodels::sph {
             {"self_grav_config", p.self_grav_config},
             // tree config
             {"tree_reduction_level", p.tree_reduction_level},
-            {"use_two_stage_search", p.use_two_stage_search},
+            {shammodels::neigh_cache_strategy_json_key, p.neigh_cache_strategy},
             {"show_neigh_stats", p.show_neigh_stats},
             // solver behavior config
             {"combined_dtdiv_divcurlv_compute", p.combined_dtdiv_divcurlv_compute},
@@ -1477,7 +1536,9 @@ namespace shammodels::sph {
         _get_to_if_contains("dust_config", p.dust_config);
         _get_to_if_contains("self_grav_config", p.self_grav_config);
         _get_to_if_contains("tree_reduction_level", p.tree_reduction_level);
-        _get_to_if_contains("use_two_stage_search", p.use_two_stage_search);
+        // Reads the new enum key, falling back on the legacy `use_two_stage_search` boolean
+        shammodels::get_to_neigh_cache_strategy(
+            j, p.neigh_cache_strategy, "SPH::SolverConfig", has_used_defaults, has_updated_config);
         _get_to_if_contains("show_neigh_stats", p.show_neigh_stats);
         _get_to_if_contains("combined_dtdiv_divcurlv_compute", p.combined_dtdiv_divcurlv_compute);
 

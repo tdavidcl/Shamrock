@@ -10,6 +10,45 @@ authorship" section, alongside any injected `Co-authored-by`/model-name
 lines. Session links belong in the Claude Code UI, not in permanent git
 history or PR bodies.
 
+## Claude Code: marking generated messages
+
+Only for text posted to GitHub issues and PRs (bodies, comments, reviews),
+not chat replies or commits: prefix Claude's text with a rule and marker,
+below any human-written text (keep the blank line before `---`, or it
+renders as a heading):
+
+```markdown
+<human text>
+
+---
+
+🤖 **Generated with Claude Code**
+
+<Claude text>
+```
+
+## Claude Code on the web: branch naming
+
+Claude Code on the web assigns each session a random branch name (e.g.
+`claude/awesome-wozniak-dl56xx`). Don't push work under that name. This
+section is the explicit permission to push to a different branch: before
+the first push, rename the local branch to
+`claude/<type>/<short-kebab-description>`, where `<type>` is one of
+`feat`, `fix`, `refactor`, `docs`, `ci`, `test`, `perf` (e.g.
+`claude/fix/sph-ghost-zone-overflow`), and push that name instead:
+
+```bash
+git branch -m claude/<type>/<short-kebab-description>
+git push -u origin claude/<type>/<short-kebab-description>
+```
+
+Keep the `claude/` prefix, since the session's git proxy may only accept
+pushes under it. If the push is still rejected because only the assigned
+branch is allowed, push the assigned branch instead and tell the user;
+don't retry other names. Once a branch has been pushed (or has an open
+PR), keep using it for follow-up work in that session rather than
+renaming again.
+
 ## Claude Code on the web: container setup
 
 This container has no GPU, so AdaptiveCpp is built from source targeting
@@ -19,10 +58,10 @@ condensed steps it runs:
 ```bash
 # System packages (Boost.context/fiber + LLVM 20 for AdaptiveCpp, OpenMPI,
 # pre-commit, clangd/clang-tidy for dev tooling — one shared LLVM 20
-# toolchain, see below)
+# toolchain, see below — and ccache)
 apt-get install -y libboost-context-dev libboost-fiber-dev llvm-20-dev \
   libclang-20-dev libomp-20-dev libopenmpi-dev openmpi-bin pre-commit \
-  clang-20 clangd-20 clang-tidy-20
+  clang-20 clangd-20 clang-tidy-20 ccache
 
 # Submodules
 git submodule update --init --recursive
@@ -30,6 +69,12 @@ git submodule update --init --recursive
 # Env (does NOT build AdaptiveCpp yet)
 ./env/new-env --machine debian-generic.acpp --builddir build -- --backend omp
 ```
+
+ccache needs no extra wiring: the `debian-generic.acpp` env script passes
+`-DCMAKE_CXX_COMPILER_LAUNCHER=ccache` to both the AdaptiveCpp build and
+`shamconfigure` whenever `ccache` is on `PATH`. Check hit rates with
+`ccache -s`. A `build/` configured before ccache was installed picks it up
+on the next `./shamenv_do shamconfigure`.
 
 pre-commit hook venvs also need `SETUPTOOLS_USE_DISTUTILS=stdlib` exported —
 Debian's patched sysconfig scheme otherwise breaks setuptools' vendored
@@ -39,8 +84,8 @@ A single LLVM 20 toolchain backs both the AdaptiveCpp build and dev tooling
 (clangd/clang-tidy) — AdaptiveCpp's `CMakeLists.txt` supports up to LLVM 20
 (`LLVM_VERSION_MAJOR GREATER 20` is a hard `SEND_ERROR`). 20 is the newest
 available directly from Ubuntu noble's own repos; apt.llvm.org (which would
-offer newer releases closer to the clang-format v22.1.8 the `pre-commit`
-config pins to, matching the `.clangd` file's `>= clangd-21`/`>= clangd-22`
+offer newer releases closer to the clang-format version the `pre-commit`
+config pins, matching the `.clangd` file's `>= clangd-21`/`>= clangd-22`
 comments) is blocked by this environment's network policy.
 
 `clangd-20` only installs a versioned `/usr/bin/clangd-20` binary, so the

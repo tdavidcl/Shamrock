@@ -24,6 +24,7 @@
 #include "shamcomm/worldInfo.hpp"
 #include "shammath/crystalLattice.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/common/modules/ComputeGravWave.hpp"
 #include "shammodels/common/shamrock_json_to_py_json.hpp"
 #include "shammodels/sph/Model.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
@@ -85,7 +86,27 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("split_load_value"),
             py::arg("merge_load_value"))
         .def("set_tree_reduction_level", &TConfig::set_tree_reduction_level)
-        .def("set_two_stage_search", &TConfig::set_two_stage_search)
+        .def(
+            "set_neigh_cache_strategy",
+            &TConfig::set_neigh_cache_strategy,
+            R"==(
+    Set the strategy used to build the neighbours cache.
+
+    Parameters
+    ----------
+    strategy : NeighCacheStrategy
+        Either ``NeighCacheStrategy.SingleStage`` or ``NeighCacheStrategy.TwoStage``
+        (the default), as obtained from ``from shamrock import NeighCacheStrategy``.
+)==")
+        .def(
+            "set_two_stage_search",
+            &TConfig::set_two_stage_search,
+            R"==(
+    Set the neighbours cache strategy from a boolean.
+
+    .. deprecated::
+        Use :py:meth:`set_neigh_cache_strategy` instead.
+)==")
         .def("set_show_neigh_stats", &TConfig::set_show_neigh_stats)
         .def(
             "set_max_neigh_cache_size",
@@ -104,6 +125,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def("set_particle_reordering_step_freq", &TConfig::set_particle_reordering_step_freq)
         .def("set_show_ghost_zone_graph", &TConfig::set_show_ghost_zone_graph)
         .def("use_luminosity", &TConfig::use_luminosity)
+        .def("compute_GW", &TConfig::use_GW)
         .def("set_save_dt_to_fields", &TConfig::set_save_dt_to_fields)
         .def("should_save_dt_to_fields", &TConfig::should_save_dt_to_fields)
         .def("set_eos_isothermal", &TConfig::set_eos_isothermal)
@@ -198,12 +220,43 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("beta_AV"))
         .def(
             "set_IdealMHD",
-            [](TConfig &self, Tscal sigma_mhd, Tscal sigma_u) {
-                self.set_IdealMHD({sigma_mhd, sigma_u});
+            [](TConfig &self,
+               Tscal sigma_mhd,
+               Tscal sigma_u,
+               Tscal alpha_B,
+               Tscal alpha_AV,
+               Tscal beta_AV) {
+                self.set_ideal_mhd({sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV});
             },
             py::kw_only(),
             py::arg("sigma_mhd"),
-            py::arg("sigma_u"))
+            py::arg("sigma_u"),
+            py::arg("alpha_B")  = 1.0,
+            py::arg("alpha_AV") = 1.0,
+            py::arg("beta_AV")  = 1.0)
+        .def(
+            "set_NonIdealMHD",
+            [](TConfig &self,
+               Tscal sigma_mhd,
+               Tscal sigma_u,
+               Tscal etaO,
+               Tscal etaH,
+               Tscal etaAD,
+               Tscal alpha_B,
+               Tscal alpha_AV,
+               Tscal beta_AV) {
+                self.set_non_ideal_mhd(
+                    {sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV, etaO, etaH, etaAD});
+            },
+            py::kw_only(),
+            py::arg("sigma_mhd"),
+            py::arg("sigma_u"),
+            py::arg("etaO"),
+            py::arg("etaH"),
+            py::arg("etaAD"),
+            py::arg("alpha_B")  = 1.0,
+            py::arg("alpha_AV") = 1.0,
+            py::arg("beta_AV")  = 1.0)
         .def(
             "set_self_gravity_none",
             [](TConfig &self) {
@@ -392,18 +445,33 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 self.dust_config.ballabio_ts_limiter = enabled;
             },
             py::arg("enabled"))
-        .def("add_ext_force_point_mass", &TConfig::add_ext_force_point_mass)
+        .def(
+            "add_ext_force_point_mass",
+            [](TConfig &self, Tscal central_mass, Tscal Racc, Tvec central_pos) {
+                self.add_ext_force_point_mass(central_mass, Racc, central_pos);
+            },
+            py::arg("central_mass"),
+            py::arg("Racc"),
+            py::kw_only(),
+            py::arg("central_pos") = Tvec{0, 0, 0})
         .def("add_ext_force_paczynski_wiita", &TConfig::add_ext_force_paczynski_wiita)
         .def(
             "add_ext_force_lense_thirring",
-            [](TConfig &self, Tscal central_mass, Tscal Racc, Tscal a_spin, Tvec dir_spin) {
-                self.add_ext_force_lense_thirring(central_mass, Racc, a_spin, dir_spin);
+            [](TConfig &self,
+               Tscal central_mass,
+               Tscal Racc,
+               Tscal a_spin,
+               Tvec dir_spin,
+               Tvec central_pos) {
+                self.add_ext_force_lense_thirring(
+                    central_mass, Racc, a_spin, dir_spin, central_pos);
             },
             py::kw_only(),
             py::arg("central_mass"),
             py::arg("Racc"),
             py::arg("a_spin"),
-            py::arg("dir_spin"))
+            py::arg("dir_spin"),
+            py::arg("central_pos") = Tvec{0, 0, 0})
         .def(
             "add_ext_force_shearing_box",
             [](TConfig &self, Tscal Omega_0, Tscal eta, Tscal q) {
@@ -514,13 +582,53 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
     py::class_<TSPHSetup>(m, setup_name.c_str())
         .def(
             "make_generator_lattice_hcp",
-            [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max, bool discontinuous) {
-                return self.make_generator_lattice_hcp(dr, {box_min, box_max}, discontinuous);
+            [](TSPHSetup &self,
+               Tscal dr,
+               Tvec box_min,
+               Tvec box_max,
+               bool discontinuous,
+               Tscal init_h_factor) {
+                return self.make_generator_lattice_hcp(
+                    dr, {box_min, box_max}, discontinuous, init_h_factor);
             },
             py::arg("dr"),
             py::arg("box_min"),
             py::arg("box_max"),
-            py::arg("discontinuous") = true)
+            py::arg("discontinuous") = true,
+            py::arg("init_h_factor") = modules::GeneratorLatticeHCP<Tvec>::default_init_h_factor,
+            R"==(
+    Generate particles on a HCP lattice of parameter dr (neighbours are 2 dr apart)
+
+    The initial smoothing length is set to init_h_factor * dr. The default 2^(5/6)
+    is the equilibrium smoothing length for hfact = 1 (the smallest hfact of all
+    the SPH kernels), so the initial guess never exceeds the equilibrium value.
+)==")
+        .def(
+            "make_generator_lattice_fcc",
+            [](TSPHSetup &self,
+               Tscal dr,
+               Tvec box_min,
+               Tvec box_max,
+               bool discontinuous,
+               Tscal init_h_factor) {
+                return self.make_generator_lattice_fcc(
+                    dr, {box_min, box_max}, discontinuous, init_h_factor);
+            },
+            py::arg("dr"),
+            py::arg("box_min"),
+            py::arg("box_max"),
+            py::arg("discontinuous") = true,
+            py::arg("init_h_factor") = modules::GeneratorLatticeFCC<Tvec>::default_init_h_factor,
+            R"==(
+    Generate particles on a true FCC lattice (ABC stacking of close-packed layers along z)
+    of parameter dr (neighbours are 2 dr apart)
+
+    The number of layers along z must be a multiple of 3, the number of rows along y even
+
+    The initial smoothing length is set to init_h_factor * dr. The default 2^(5/6)
+    is the equilibrium smoothing length for hfact = 1 (the smallest hfact of all
+    the SPH kernels), so the initial guess never exceeds the equilibrium value.
+)==")
         .def(
             "make_generator_lattice_cubic",
             [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max) {
@@ -867,6 +975,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](T &self, f64 dr, u32 xcnt, u32 ycnt, u32 zcnt) {
                 return self.get_box_dim_fcc_3d(dr, xcnt, ycnt, zcnt);
             })
+        .def(
+            "get_box_dim_true_fcc_3d",
+            [](T &self, f64 dr, u32 xcnt, u32 ycnt, u32 zcnt) {
+                return self.get_box_dim_true_fcc_3d(dr, xcnt, ycnt, zcnt);
+            },
+            py::arg("dr"),
+            py::arg("xcnt"),
+            py::arg("ycnt"),
+            py::arg("zcnt"),
+            R"==(
+    Get the dimensions of a periodic box holding a true FCC lattice of xcnt * ycnt * zcnt
+    (see setup.make_generator_lattice_fcc). Unlike get_box_dim_fcc_3d (which actually
+    describes a HCP lattice and is kept for backward compatibility), this throws if the box
+    cannot be periodic: xcnt must be >= 2, ycnt even and zcnt a multiple of 3.
+)==")
         .def(
             "get_ideal_fcc_box",
             [](T &self, f64 dr, f64_3 box_min, f64_3 box_max) {

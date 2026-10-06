@@ -20,50 +20,44 @@
 
 namespace shammath {
 
-    // Huang & Bai, 2022 ,A Multifluid Dust Module in Athena++: Algorithms and Numerical Tests
-    // Equation (32)
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_x(Tprim d_primL, Tprim d_primR) {
-        const auto fL = d_hydro_flux_x(d_primL);
-        const auto fR = d_hydro_flux_x(d_primR);
+    /**
+     * @brief Huang & Bai dust flux across a face with unit normal n
+     *
+     * Huang & Bai, 2022, A Multifluid Dust Module in Athena++: Algorithms and Numerical
+     * Tests, Equation (32)
+     * @tparam FSpec
+     * @param fspec dust state spec (flux/vn operations, no equation of state)
+     * @param prim_l left  primitive state
+     * @param prim_r right primitive state
+     * @param n face unit normal
+     */
+    template<DustFluidStateSpec FSpec>
+    inline constexpr typename FSpec::Tcons huang_bai_flux(
+        const FSpec &fspec,
+        const typename FSpec::Tprim &prim_l,
+        const typename FSpec::Tprim &prim_r,
+        const typename FSpec::Tvec &n) {
+        using Tscal = typename FSpec::Tscal;
+        using Tcons = typename FSpec::Tcons;
 
-        DustConsState<typename Tprim::Tvec> d_flux{};
+        const Tscal vn_l = fspec.vn(prim_l, n);
+        const Tscal vn_r = fspec.vn(prim_r, n);
 
-        if (d_primL.vel[0] > 0 && d_primR.vel[0] > 0)
-            d_flux = fL;
-        else if (d_primL.vel[0] < 0 && d_primR.vel[0] < 0)
-            d_flux = fR;
-        else if (d_primL.vel[0] < 0 && d_primR.vel[0] > 0)
-            d_flux *= 0;
-        else if (d_primL.vel[0] > 0 && d_primR.vel[0] < 0)
-            d_flux = (fL + fR);
+        const Tcons f_l = fspec.flux(prim_l, n, vn_l);
+        const Tcons f_r = fspec.flux(prim_r, n, vn_r);
 
-        return d_flux;
-    }
+        Tcons flux{};
 
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_y(Tprim pL, Tprim pR) {
-        return d_x_to_y(huang_bai_flux_x(d_prim_y_to_x(pL), d_prim_y_to_x(pR)));
-    }
+        if (vn_l > 0 && vn_r > 0)
+            flux = f_l;
+        else if (vn_l < 0 && vn_r < 0)
+            flux = f_r;
+        else if (vn_l < 0 && vn_r > 0)
+            flux *= 0;
+        else if (vn_l > 0 && vn_r < 0)
+            flux = (f_l + f_r);
 
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_z(Tprim pL, Tprim pR) {
-        return d_x_to_z(huang_bai_flux_x(d_prim_z_to_x(pL), d_prim_z_to_x(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_mx(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_x(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_my(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_y(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
-    }
-
-    template<class Tprim>
-    inline constexpr auto huang_bai_flux_mz(Tprim pL, Tprim pR) {
-        return d_invert_axis(huang_bai_flux_z(d_prim_invert_axis(pL), d_prim_invert_axis(pR)));
+        return flux;
     }
 
 } // namespace shammath
