@@ -17,6 +17,7 @@
 #include "shambase/exception.hpp"
 #include "shamalgs/details/numeric/numeric.hpp"
 #include "shambackends/EventList.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shammath/AABB.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
 #include "shammodels/common/amr/NeighGraph.hpp"
@@ -357,10 +358,57 @@ namespace shammodels::basegodunov::modules {
 
         shamlog_debug_ln("[AMR cell graph]", "compute antecedent map");
         cell_graph_links.for_each([&](u64 id, OrientedAMRGraph &oriented_block_graph) {
-            auto ptr       = shamsys::instance::get_compute_scheduler_ptr();
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
             u32 cell_count = (edges.sizes.indexes.get(id)) * AMRBlock::block_size;
+
+            // same as AMRGraph::compute_antecedent on each direction, in one kernel
+            std::array<AMRGraph *, 6> g;
+            std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> ante;
             for (u32 dir = 0; dir < 6; dir++) {
-                oriented_block_graph.graph_links[dir]->compute_antecedent(ptr);
+                g[dir] = oriented_block_graph.graph_links[dir].get();
+                ante[dir]
+                    = std::make_unique<sham::DeviceBuffer<u32>>(g[dir]->link_count, dev_sched);
+            }
+
+            sham::kernel_call(
+                dev_sched->get_queue(),
+                sham::MultiRef{
+                    g[0]->node_link_offset,
+                    g[1]->node_link_offset,
+                    g[2]->node_link_offset,
+                    g[3]->node_link_offset,
+                    g[4]->node_link_offset,
+                    g[5]->node_link_offset},
+                sham::MultiRef{*ante[0], *ante[1], *ante[2], *ante[3], *ante[4], *ante[5]},
+                cell_count,
+                [](u32 gid,
+                   const u32 *__restrict off0,
+                   const u32 *__restrict off1,
+                   const u32 *__restrict off2,
+                   const u32 *__restrict off3,
+                   const u32 *__restrict off4,
+                   const u32 *__restrict off5,
+                   u32 *__restrict ante0,
+                   u32 *__restrict ante1,
+                   u32 *__restrict ante2,
+                   u32 *__restrict ante3,
+                   u32 *__restrict ante4,
+                   u32 *__restrict ante5) {
+                    auto fill = [gid](const u32 *__restrict offset, u32 *__restrict a) {
+                        for (u32 id_s = offset[gid]; id_s < offset[gid + 1]; id_s++) {
+                            a[id_s] = gid;
+                        }
+                    };
+                    fill(off0, ante0);
+                    fill(off1, ante1);
+                    fill(off2, ante2);
+                    fill(off3, ante3);
+                    fill(off4, ante4);
+                    fill(off5, ante5);
+                });
+
+            for (u32 dir = 0; dir < 6; dir++) {
+                g[dir]->antecedent = std::move(*ante[dir]);
             }
         });
 
