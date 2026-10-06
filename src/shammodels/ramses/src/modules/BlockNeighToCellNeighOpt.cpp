@@ -18,6 +18,7 @@
 #include "shamalgs/details/numeric/numeric.hpp"
 #include "shambackends/EventList.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shambackends/make_ndrange.hpp"
 #include "shammath/AABB.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
 #include "shammodels/common/amr/NeighGraph.hpp"
@@ -30,6 +31,9 @@
 #include "shamtree/TreeTraversal.hpp"
 
 namespace {
+
+    /// work group size of the cell graph kernels (a multiple of the block size)
+    constexpr u32 cell_graph_group_size = 128;
 
     /**
      * @brief Call fct on the cells sharing a face with cell id_a in the direction dir_offset
@@ -168,9 +172,18 @@ namespace shammodels::basegodunov::modules {
             // The 6 directions are handled by the same thread one after the other, each in the
             // order of for_each_other_index_safe, so each link list is unchanged.
 
-            // link counts of the 6 directions in one buffer (see details::neigh_6dir_count_idx)
+            // The links of a direction are ordered by cell and the cells of a block are
+            // contiguous, so the scan is done on the link counts of the blocks (8 times smaller):
+            // the offset of a cell is the one of its block plus the links of the previous cells
+            // of the block, summed in work-group memory (a work group holds whole blocks).
+            static_assert(cell_graph_group_size % AMRBlock::block_size == 0);
+            u32 block_count = edges.sizes.indexes.get(id);
+
+            // link counts of the blocks for the 6 directions in one buffer (see
+            // details::neigh_6dir_count_idx), and of the cells (cell_counts[dir * cell_count + i])
             sham::DeviceBuffer<u32> link_counts(
-                details::neigh_6dir_count_size(cell_count), dev_sched);
+                details::neigh_6dir_count_size(block_count), dev_sched);
+            sham::DeviceBuffer<u32> cell_counts(6 * cell_count, dev_sched);
 
             if (cell_count > 0) {
                 sham::EventList deps;
@@ -183,14 +196,20 @@ namespace shammodels::basegodunov::modules {
                 const TgridVec *bmin = buf_block_min.get_read_access(deps);
                 const TgridVec *bmax = buf_block_max.get_read_access(deps);
                 u32 *cnt             = link_counts.get_write_access(deps);
+                u32 *cc              = cell_counts.get_write_access(deps);
 
-                auto e = q.submit(deps, [&, off, cell_count](sycl::handler &cgh) {
-                    shambase::parallel_for(
-                        cgh, cell_count, "count cell graph links (6 dirs)", [=](u64 gid) {
-                            u32 id_a = (u32) gid;
+                auto e = q.submit(deps, [&, off, cell_count, block_count](sycl::handler &cgh) {
+                    constexpr u32 G = cell_graph_group_size;
+                    sycl::local_accessor<u32, 1> lc(6 * G, cgh);
 
-                            u32 c0 = 0, c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0;
+                    cgh.parallel_for(sham::make_ndrange(G, cell_count), [=](sycl::nd_item<1> item) {
+                        u32 id_a    = (u32) item.get_global_linear_id();
+                        u32 lid     = (u32) item.get_local_linear_id();
+                        bool active = id_a < cell_count;
 
+                        u32 c0 = 0, c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0;
+
+                        if (active) {
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g0, bmin, bmax, off[0], [&](u32) {
                                     c0++;
@@ -216,13 +235,35 @@ namespace shammodels::basegodunov::modules {
                                     c5++;
                                 });
 
-                            cnt[details::neigh_6dir_count_idx(0, id_a, cell_count)] = c0;
-                            cnt[details::neigh_6dir_count_idx(1, id_a, cell_count)] = c1;
-                            cnt[details::neigh_6dir_count_idx(2, id_a, cell_count)] = c2;
-                            cnt[details::neigh_6dir_count_idx(3, id_a, cell_count)] = c3;
-                            cnt[details::neigh_6dir_count_idx(4, id_a, cell_count)] = c4;
-                            cnt[details::neigh_6dir_count_idx(5, id_a, cell_count)] = c5;
-                        });
+                            cc[0 * cell_count + id_a] = c0;
+                            cc[1 * cell_count + id_a] = c1;
+                            cc[2 * cell_count + id_a] = c2;
+                            cc[3 * cell_count + id_a] = c3;
+                            cc[4 * cell_count + id_a] = c4;
+                            cc[5 * cell_count + id_a] = c5;
+                        }
+
+                        lc[0 * G + lid] = c0;
+                        lc[1 * G + lid] = c1;
+                        lc[2 * G + lid] = c2;
+                        lc[3 * G + lid] = c3;
+                        lc[4 * G + lid] = c4;
+                        lc[5 * G + lid] = c5;
+
+                        sycl::group_barrier(item.get_group());
+
+                        // first cell of a block : link counts of the block
+                        if (active && (lid % AMRBlock::block_size) == 0) {
+                            u32 block = id_a / AMRBlock::block_size;
+                            for (u32 dir = 0; dir < 6; dir++) {
+                                u32 sum = 0;
+                                for (u32 k = 0; k < AMRBlock::block_size; k++) {
+                                    sum += lc[dir * G + lid + k];
+                                }
+                                cnt[details::neigh_6dir_count_idx(dir, block, block_count)] = sum;
+                            }
+                        }
+                    });
                 });
 
                 for (u32 dir = 0; dir < 6; dir++) {
@@ -231,10 +272,11 @@ namespace shammodels::basegodunov::modules {
                 buf_block_min.complete_event_state(e);
                 buf_block_max.complete_event_state(e);
                 link_counts.complete_event_state(e);
+                cell_counts.complete_event_state(e);
             }
 
             details::NeighGraph6DirOffsets scanned
-                = details::scan_link_counts_6dir(dev_sched, link_counts, cell_count);
+                = details::scan_link_counts_6dir(dev_sched, link_counts, block_count, cell_count);
 
             // links and antecedent maps (link -> cell, as AMRGraph::compute_antecedent)
             std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> links;
@@ -257,6 +299,7 @@ namespace shammodels::basegodunov::modules {
                 const TgridVec *bmin = buf_block_min.get_read_access(deps);
                 const TgridVec *bmax = buf_block_max.get_read_access(deps);
                 const u32 *sc        = scanned.scanned->get_read_access(deps);
+                const u32 *cc        = cell_counts.get_read_access(deps);
                 u32 *off0            = scanned.node_link_offset[0]->get_write_access(deps);
                 u32 *off1            = scanned.node_link_offset[1]->get_write_access(deps);
                 u32 *off2            = scanned.node_link_offset[2]->get_write_access(deps);
@@ -278,71 +321,101 @@ namespace shammodels::basegodunov::modules {
 
                 std::array<u32, 6> start = scanned.start;
 
-                auto e = q.submit(deps, [&, off, cell_count, start](sycl::handler &cgh) {
-                    shambase::parallel_for(
-                        cgh, cell_count, "get ids cell graph links (6 dirs)", [=](u64 gid) {
-                            u32 id_a = (u32) gid;
+                auto e
+                    = q.submit(deps, [&, off, cell_count, block_count, start](sycl::handler &cgh) {
+                          constexpr u32 G = cell_graph_group_size;
+                          sycl::local_accessor<u32, 1> lc(6 * G, cgh);
 
-                            // offsets from the single scan, stored in the graphs here
-                            auto link_offset = [&](u32 dir, u32 i) {
-                                return details::neigh_6dir_link_offset(
-                                    sc, start[dir], dir, i, cell_count);
-                            };
+                          cgh.parallel_for(
+                              sham::make_ndrange(G, cell_count), [=](sycl::nd_item<1> item) {
+                                  u32 id_a    = (u32) item.get_global_linear_id();
+                                  u32 lid     = (u32) item.get_local_linear_id();
+                                  bool active = id_a < cell_count;
 
-                            u32 w0 = link_offset(0, id_a), w1 = link_offset(1, id_a);
-                            u32 w2 = link_offset(2, id_a), w3 = link_offset(3, id_a);
-                            u32 w4 = link_offset(4, id_a), w5 = link_offset(5, id_a);
+                                  for (u32 dir = 0; dir < 6; dir++) {
+                                      lc[dir * G + lid]
+                                          = (active) ? cc[dir * cell_count + id_a] : 0;
+                                  }
 
-                            off0[id_a] = w0;
-                            off1[id_a] = w1;
-                            off2[id_a] = w2;
-                            off3[id_a] = w3;
-                            off4[id_a] = w4;
-                            off5[id_a] = w5;
+                                  sycl::group_barrier(item.get_group());
 
-                            if (id_a == cell_count - 1) {
-                                off0[cell_count] = link_offset(0, cell_count);
-                                off1[cell_count] = link_offset(1, cell_count);
-                                off2[cell_count] = link_offset(2, cell_count);
-                                off3[cell_count] = link_offset(3, cell_count);
-                                off4[cell_count] = link_offset(4, cell_count);
-                                off5[cell_count] = link_offset(5, cell_count);
-                            }
+                                  if (!active) {
+                                      return;
+                                  }
 
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g0, bmin, bmax, off[0], [&](u32 idx) {
-                                    ante0[w0]  = id_a;
-                                    ids0[w0++] = idx;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g1, bmin, bmax, off[1], [&](u32 idx) {
-                                    ante1[w1]  = id_a;
-                                    ids1[w1++] = idx;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g2, bmin, bmax, off[2], [&](u32 idx) {
-                                    ante2[w2]  = id_a;
-                                    ids2[w2++] = idx;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g3, bmin, bmax, off[3], [&](u32 idx) {
-                                    ante3[w3]  = id_a;
-                                    ids3[w3++] = idx;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g4, bmin, bmax, off[4], [&](u32 idx) {
-                                    ante4[w4]  = id_a;
-                                    ids4[w4++] = idx;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g5, bmin, bmax, off[5], [&](u32 idx) {
-                                    ante5[w5]  = id_a;
-                                    ids5[w5++] = idx;
-                                });
-                        });
-                });
+                                  u32 block      = id_a / AMRBlock::block_size;
+                                  u32 cell       = id_a % AMRBlock::block_size;
+                                  u32 block_lid0 = lid - cell;
+
+                                  // offset of the block from the single scan + links of the
+                                  // previous cells of the block
+                                  auto link_offset = [&](u32 dir) {
+                                      u32 o = details::neigh_6dir_link_offset(
+                                          sc, start[dir], dir, block, block_count);
+                                      for (u32 k = 0; k < cell; k++) {
+                                          o += lc[dir * G + block_lid0 + k];
+                                      }
+                                      return o;
+                                  };
+
+                                  u32 w0 = link_offset(0), w1 = link_offset(1), w2 = link_offset(2);
+                                  u32 w3 = link_offset(3), w4 = link_offset(4), w5 = link_offset(5);
+
+                                  off0[id_a] = w0;
+                                  off1[id_a] = w1;
+                                  off2[id_a] = w2;
+                                  off3[id_a] = w3;
+                                  off4[id_a] = w4;
+                                  off5[id_a] = w5;
+
+                                  if (id_a == cell_count - 1) {
+                                      auto total = [&](u32 dir) {
+                                          return details::neigh_6dir_link_offset(
+                                              sc, start[dir], dir, block_count, block_count);
+                                      };
+                                      off0[cell_count] = total(0);
+                                      off1[cell_count] = total(1);
+                                      off2[cell_count] = total(2);
+                                      off3[cell_count] = total(3);
+                                      off4[cell_count] = total(4);
+                                      off5[cell_count] = total(5);
+                                  }
+
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g0, bmin, bmax, off[0], [&](u32 idx) {
+                                          ante0[w0]  = id_a;
+                                          ids0[w0++] = idx;
+                                      });
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g1, bmin, bmax, off[1], [&](u32 idx) {
+                                          ante1[w1]  = id_a;
+                                          ids1[w1++] = idx;
+                                      });
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g2, bmin, bmax, off[2], [&](u32 idx) {
+                                          ante2[w2]  = id_a;
+                                          ids2[w2++] = idx;
+                                      });
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g3, bmin, bmax, off[3], [&](u32 idx) {
+                                          ante3[w3]  = id_a;
+                                          ids3[w3++] = idx;
+                                      });
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g4, bmin, bmax, off[4], [&](u32 idx) {
+                                          ante4[w4]  = id_a;
+                                          ids4[w4++] = idx;
+                                      });
+                                  for_each_cell_neigh_safe<AMRBlock>(
+                                      id_a, g5, bmin, bmax, off[5], [&](u32 idx) {
+                                          ante5[w5]  = id_a;
+                                          ids5[w5++] = idx;
+                                      });
+                              });
+                      });
 
                 scanned.scanned->complete_event_state(e);
+                cell_counts.complete_event_state(e);
                 for (u32 dir = 0; dir < 6; dir++) {
                     block_graph[dir]->complete_event_state(e);
                     scanned.node_link_offset[dir]->complete_event_state(e);
