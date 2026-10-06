@@ -394,6 +394,7 @@ def setup_model():
     # Set the CFL
     cfg.set_cfl_cour(C_cour)
     cfg.set_cfl_force(C_force)
+    cfg.set_eta_sink(0.1)
     cfg.set_show_cfl_detail(True)
 
     # On a chaotic disc, we disable to two stage search to avoid giant leaves
