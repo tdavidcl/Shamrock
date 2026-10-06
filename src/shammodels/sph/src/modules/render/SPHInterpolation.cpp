@@ -14,6 +14,7 @@
  *
  */
 
+#include "shambase/integer.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shamalgs/collective/reduction.hpp"
 #include "shambackends/kernel_call.hpp"
@@ -24,13 +25,182 @@
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
+#include <array>
 #include <cmath>
 #include <limits>
 
 namespace {
 
     /// capacity of the per thread buffer of particles around the interpolation point
-    constexpr u32 interp_buf_size = 16;
+    constexpr u32 interp_buf_size = 32;
+
+    /// the warp flushes its buffers once a thread has this many particles in it
+    constexpr u32 interp_flush_threshold = 16;
+
+    /// capacity of the per thread queue of leaves found by the traversal
+    constexpr u32 interp_leaf_queue_size = 4;
+
+    /// work group size of the column integration kernel
+    constexpr u32 interp_group_size = 128;
+
+    /**
+     * @brief SPH interpolation at one point per thread, with the threads of a sub-group
+     * cooperating to stay converged
+     *
+     * Each thread computes exactly the same operations, in the same order, as a plain
+     * `rtree_for` traversal accumulating every particle whose support contains the point. Only the
+     * moment at which each part of the work is done changes:
+     *  - (A) the tree is traversed until every thread of the sub-group found a leaf, threads which
+     *    already have one keep traversing and queue the next leaves (in traversal order),
+     *  - (B) each thread then tests the particles of its oldest leaf (cheap) and buffers the ones
+     *    around the point,
+     *  - (C) the expensive contributions of the buffered particles are computed by the whole
+     *    sub-group at once, in buffer order.
+     */
+    template<class Tvec, class T, class Kernel, class ParticleLooper>
+    inline void interp_warp_cooperative(
+        const sycl::nd_item<1> &item,
+        u32 npoints,
+        shambase::VecComponent<Tvec> partmass,
+        const Tvec *__restrict pixel_positions,
+        const Tvec *__restrict xyz,
+        const shambase::VecComponent<Tvec> *__restrict hpart,
+        const T *__restrict torender,
+        const ParticleLooper &particle_looper,
+        const shambase::VecComponent<Tvec> *__restrict hmax,
+        T *__restrict render_field) {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        const auto &traverser = particle_looper.tree_traverser;
+        const auto &tree      = traverser.tree_traverser;
+
+        static constexpr u32 tree_depth = std::remove_cvref_t<decltype(traverser)>::tree_depth_max;
+
+        constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
+
+        auto sg = item.get_sub_group();
+
+        const u32 gid     = item.get_global_linear_id();
+        const bool active = gid < npoints;
+
+        T acc = sham::VectorProperties<T>::get_zero();
+
+        Tvec pos_render = pixel_positions[active ? gid : 0];
+
+        // traversal stack (empty for inactive threads)
+        std::array<u32, tree_depth> id_stack;
+        u32 stack_cursor = tree_depth;
+        if (active) {
+            stack_cursor           = tree_depth - 1;
+            id_stack[stack_cursor] = 0; // On a Karras tree, the root is always 0
+        }
+
+        // queue of the leaves found by the traversal, in traversal order
+        u32 leaf_queue[interp_leaf_queue_size];
+        u32 queue_head = 0;
+        u32 queue_cnt  = 0;
+
+        // buffer of the particles around the point, in traversal order
+        u32 buf_id[interp_buf_size];
+        Tscal buf_rab2[interp_buf_size];
+        u32 buf_cnt = 0;
+
+        auto flush = [&]() {
+            for (u32 i = 0; i < buf_cnt; i++) {
+                u32 id_b   = buf_id[i];
+                Tscal rab2 = buf_rab2[i];
+
+                Tscal h_b = hpart[id_b];
+
+                Tscal rab = sycl::sqrt(rab2);
+
+                T val = torender[id_b];
+
+                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                acc += partmass * val * Kernel::W_3d(rab, h_b) / rho_b;
+            }
+            buf_cnt = 0;
+        };
+
+        auto has_nodes = [&]() {
+            return stack_cursor < tree_depth;
+        };
+
+        while (sycl::any_of_group(sg, has_nodes() || queue_cnt > 0 || buf_cnt > 0)) {
+
+            // (A) traverse until every thread has a leaf or no nodes left
+            while (sycl::any_of_group(sg, has_nodes() && queue_cnt == 0)) {
+                if (has_nodes() && queue_cnt < interp_leaf_queue_size) {
+
+                    // Pop the top of the stack
+                    u32 current_node_id = id_stack[stack_cursor];
+                    stack_cursor++;
+
+                    Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
+
+                    shammath::AABB<Tvec> node_aabb{
+                        traverser.aabb_min[current_node_id], traverser.aabb_max[current_node_id]};
+
+                    if (node_aabb.expand_all(rint_cell).contains_asymmetric(pos_render)) {
+                        if (tree.is_id_leaf(current_node_id)) {
+                            leaf_queue[(queue_head + queue_cnt) % interp_leaf_queue_size]
+                                = current_node_id;
+                            queue_cnt++;
+                        } else {
+                            u32 lid = tree.get_left_child(current_node_id);
+                            u32 rid = tree.get_right_child(current_node_id);
+
+                            id_stack[stack_cursor - 1] = rid;
+                            stack_cursor--;
+
+                            id_stack[stack_cursor - 1] = lid;
+                            stack_cursor--;
+                        }
+                    }
+                }
+            }
+
+            // (B) test the particles of the oldest leaf
+            if (queue_cnt > 0) {
+                u32 leaf_node = leaf_queue[queue_head];
+                queue_head    = (queue_head + 1) % interp_leaf_queue_size;
+                queue_cnt--;
+
+                u32 leaf_id = leaf_node - tree.offset_leaf;
+
+                particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
+                    Tvec dr    = pos_render - xyz[id_b];
+                    Tscal rab2 = sycl::dot(dr, dr);
+                    Tscal h_b  = hpart[id_b];
+
+                    if (rab2 > h_b * h_b * Rker2) {
+                        return;
+                    }
+
+                    buf_id[buf_cnt]   = id_b;
+                    buf_rab2[buf_cnt] = rab2;
+                    buf_cnt++;
+
+                    if (buf_cnt == interp_buf_size) {
+                        flush();
+                    }
+                });
+            }
+
+            // (C) compute the buffered contributions together
+            bool lane_done = !has_nodes() && queue_cnt == 0;
+            if (sycl::any_of_group(
+                    sg, buf_cnt >= interp_flush_threshold || (lane_done && buf_cnt > 0))) {
+                flush();
+            }
+        }
+
+        if (active) {
+            render_field[gid] += acc;
+        }
+    }
 
 } // namespace
 
@@ -106,7 +276,10 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
 
         auto obj_it = tree.get_object_iterator();
 
-        sham::kernel_call(
+        u32 group_cnt     = shambase::group_count(npoints, interp_group_size);
+        u32 corrected_len = group_cnt * interp_group_size;
+
+        sham::kernel_call_hndl(
             queue,
             sham::MultiRef{
                 interp_points_buf,
@@ -117,7 +290,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
             npoints,
-            [=](u32 gid,
+            [=](u32,
                 const Tvec *__restrict pixel_positions,
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
@@ -125,73 +298,23 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
-                Tvec pos_render = pixel_positions[gid];
-
-                T acc = sham::VectorProperties<T>::get_zero();
-
-                constexpr Tscal Rker2 = Kernel::Rkern * Kernel::Rkern;
-
-                // contribution of the particle id_b (rab2 is its squared distance to the point)
-                auto add_contrib = [&](u32 id_b, Tscal rab2) {
-                    Tscal h_b = hpart[id_b];
-
-                    Tscal rab = sycl::sqrt(rab2);
-
-                    T val = torender[id_b];
-
-                    Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
-
-                    acc += partmass * val * Kernel::W_3d(rab, h_b) / rho_b;
-                };
-
-                // the particles around the point are first gathered (cheap test) and only then
-                // processed (expensive part), so that the threads of a warp run the expensive
-                // part together rather than whenever they find a particle.
-                // The processing order is unchanged.
-                constexpr u32 buf_size = interp_buf_size;
-                u32 buf_id[buf_size];
-                Tscal buf_rab2[buf_size];
-                u32 buf_cnt = 0;
-
-                auto flush = [&]() {
-                    for (u32 i = 0; i < buf_cnt; i++) {
-                        add_contrib(buf_id[i], buf_rab2[i]);
-                    }
-                    buf_cnt = 0;
-                };
-
-                particle_looper.tree_traverser.rtree_for_leaf_coherent(
-                    [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                        Tscal rint_cell = hmax[node_id] * Kernel::Rkern;
-
-                        return node_aabb.expand_all(rint_cell).contains_asymmetric(pos_render);
-                    },
-                    [&](u32 node_id) {
-                        u32 leaf_id
-                            = node_id - particle_looper.tree_traverser.tree_traverser.offset_leaf;
-
-                        particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, [&](u32 id_b) {
-                            Tvec dr    = pos_render - xyz[id_b];
-                            Tscal rab2 = sycl::dot(dr, dr);
-                            Tscal h_b  = hpart[id_b];
-
-                            if (rab2 > h_b * h_b * Rker2) {
-                                return;
-                            }
-
-                            buf_id[buf_cnt]   = id_b;
-                            buf_rab2[buf_cnt] = rab2;
-                            buf_cnt++;
-
-                            if (buf_cnt == buf_size) {
-                                flush();
-                            }
+                return [=](sycl::handler &cgh) {
+                    cgh.parallel_for(
+                        sycl::nd_range<1>{corrected_len, interp_group_size},
+                        [=](sycl::nd_item<1> item) {
+                            interp_warp_cooperative<Tvec, T, Kernel>(
+                                item,
+                                npoints,
+                                partmass,
+                                pixel_positions,
+                                xyz,
+                                hpart,
+                                torender,
+                                particle_looper,
+                                hmax,
+                                render_field);
                         });
-
-                        flush();
-                    });
-
-                render_field[gid] += acc;
+                };
             });
     });
 
