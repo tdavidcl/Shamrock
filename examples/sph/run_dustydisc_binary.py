@@ -304,6 +304,10 @@ analysis_folder = sim_folder + "analysis/"
 plot_folder = analysis_folder + "plots/"
 
 dump_prefix = dump_folder + "dump_"
+# Permanent snapshots, kept apart from the checkpoints (dump_prefix), which are purged and
+# used to restart the run
+snapshot_prefix = dump_folder + "snapshot_"
+snapshot_every = 50  # write a snapshot every 50 analyses
 
 # %%
 # Create the dump directory if it does not exist
@@ -522,6 +526,9 @@ class Simulation(SimulationRunner):
     def analysis(self, ianalysis):
         for a in self.analysis_modules:
             self.ana_module_run(a, ianalysis)
+
+        if ianalysis % snapshot_every == 0:
+            self.model.dump(snapshot_prefix + f"{ianalysis:07}.sham")
 
     @callback(tsim_interval=dt_stop_fast)  # Do the analysis every dt_stop
     def analysis_fast(self, ianalysis):
