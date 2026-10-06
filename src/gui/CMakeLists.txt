@@ -41,7 +41,7 @@ else()
     message(STATUS "shamrock_gui fonts: stb_truetype")
 endif()
 
-set(sources src/main.cpp src/screenshot.cpp src/FrameTimings.cpp)
+set(sources src/main.cpp src/screenshot.cpp src/FrameTimings.cpp src/style.cpp)
 add_executable(shamrock_gui ${sources})
 
 target_include_directories(

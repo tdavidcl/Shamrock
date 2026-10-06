@@ -51,4 +51,8 @@ namespace sham::gui {
     // Heights of the top bar, status bar and pane headers (logical pixels).
     inline constexpr double TOP_H = 52.0, STATUS_H = 28.0, PANE_HDR = 36.0;
 
+    /// Size settings and colour table of the dark theme (ImGui's own widgets: dock tabs,
+    /// dividers, drop overlay, scrollbars).
+    void setup_style();
+
 } // namespace sham::gui
