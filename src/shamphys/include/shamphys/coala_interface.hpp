@@ -24,10 +24,12 @@
  * Only the coagulation flux with \f$k=0\f$ approximation.
  */
 
+#include "shambase/aliases_int.hpp"
 #include "shambase/assert.hpp"
 #include "shambase/mdspan_concepts.hpp"
 #include <experimental/mdspan>
 #include <concepts>
+#include <vector>
 
 namespace shamphys {
 
@@ -138,6 +140,145 @@ namespace shamphys {
     }
 
     /**
+     * @brief Symmetrised & sparse storage of `tensor_tabflux_coag` (\f$k=0\f$)
+     *
+     * Since \f$\mathrm{dv}(l,m)\, g_l\, g_m\f$ is symmetric in \f$(l,m)\f$ and vanishes for
+     * \f$l = m\f$ (\f$\mathrm{dv}(l,l) = 0\f$), the flux only needs the pairs \f$l < m\f$ with the
+     * symmetrised entries
+     *
+     * \f[
+     *     \mathrm{tab}^{\rm sym}[j,l,m] = \mathrm{tensor\_tabflux\_coag}[j,l,m]
+     *                                    + \mathrm{tensor\_tabflux\_coag}[j,m,l]
+     * \f]
+     *
+     * For each pair \f$p = (l,m)\f$, enumerated as `for l, for m > l`, only the range
+     * \f$j \in [{\rm pair\_jmin}[p], {\rm pair\_jmin}[p] + {\rm pair\_offset}[p+1] -
+     * {\rm pair\_offset}[p])\f$ containing all the non-zero entries is stored, contiguously in
+     * `values` starting at `pair_offset[p]`.
+     *
+     * @tparam T  Floating-point scalar type
+     */
+    template<class T, class Tidx = u32>
+    struct TabfluxCoagK0SymSparse {
+        /// Offset in values of each pair, size npairs + 1
+        std::vector<Tidx> pair_offset;
+        /// First bin \f$j\f$ stored for each pair, size npairs
+        std::vector<Tidx> pair_jmin;
+        /// Stored symmetrised entries
+        std::vector<T> values;
+    };
+
+    /**
+     * @brief Device view of a TabfluxCoagK0SymSparse (see its documentation for the layout)
+     */
+    template<class T, class Tidx = u32>
+    struct TabfluxCoagK0SymSparseView {
+        const Tidx *pair_offset;
+        const Tidx *pair_jmin;
+        const T *values;
+    };
+
+    /**
+     * @brief Build the TabfluxCoagK0SymSparse form of `tensor_tabflux_coag`
+     *
+     * @param nbins                Number of dust mass bins
+     * @param tensor_tabflux_coag  Rank-3 `std::mdspan` of the dense tensor; extents
+     *                             @p nbins \(\times\) @p nbins \(\times\) @p nbins
+     */
+    template<class T, class Tidx = u32>
+    inline TabfluxCoagK0SymSparse<T, Tidx> make_tabflux_coag_k0_sym_sparse(
+        int nbins, shambase::is_mdspan_rank<3> auto tensor_tabflux_coag) {
+
+        SHAM_ASSERT(tensor_tabflux_coag.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
+
+        TabfluxCoagK0SymSparse<T, Tidx> ret;
+        ret.pair_offset.push_back(0);
+
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = l + 1; m < nbins; ++m) {
+                auto tab_sym = [&](int j) -> T {
+                    return tensor_tabflux_coag(j, l, m) + tensor_tabflux_coag(j, m, l);
+                };
+
+                int jmin = 0;
+                int jend = nbins;
+                while (jmin < jend && tab_sym(jmin) == 0) {
+                    ++jmin;
+                }
+                while (jend > jmin && tab_sym(jend - 1) == 0) {
+                    --jend;
+                }
+
+                for (int j = jmin; j < jend; ++j) {
+                    ret.values.push_back(tab_sym(j));
+                }
+                ret.pair_jmin.push_back(jmin);
+                ret.pair_offset.push_back(ret.values.size());
+            }
+        }
+
+        return ret;
+    }
+
+    /**
+     * @brief Same as compute_flux_coag_k0_kdv but using the TabfluxCoagK0SymSparse form
+     *
+     * \f[
+     *     \mathrm{flux}[j] = \sum_{l < m}
+     *         \mathrm{tab}^{\rm sym}[j,l,m]\,
+     *         \mathrm{dv}(l,m)\, g_l\, g_m
+     * \f]
+     *
+     * which is equal to the result of compute_flux_coag_k0_kdv (up to round-off) provided that
+     * \f$\mathrm{dv}(l,m) = \mathrm{dv}(m,l)\f$ and \f$\mathrm{dv}(l,l) = 0\f$.
+     *
+     * @param nbins    Number of dust mass bins
+     * @param gij      Rank-1 `std::mdspan` of DG coefficients \f$g_l\f$; extent @p nbins
+     * @param tabflux  View of the TabfluxCoagK0SymSparse tensor
+     * @param dv       Pair-wise differential-velocity callable, invoked as `dv(l, m)`
+     * @param flux     Rank-1 `std::mdspan` of output fluxes; extent @p nbins, written in place
+     */
+    template<class T, class Tidx, class Func>
+        requires requires(Func f, int a, int b) {
+            { f(a, b) };
+        }
+    inline void compute_flux_coag_k0_kdv(
+        int nbins,
+        shambase::is_mdspan_rank<1> auto gij,
+        TabfluxCoagK0SymSparseView<T, Tidx> tabflux,
+        Func &&dv,
+        shambase::is_mdspan_rank<1> auto flux) {
+
+        SHAM_ASSERT(gij.extent(0) == nbins);
+        SHAM_ASSERT(flux.extent(0) == nbins);
+
+        for (int j = 0; j < nbins; ++j) {
+            flux[j] = 0;
+        }
+
+        Tidx p = 0;
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = l + 1; m < nbins; ++m, ++p) {
+                Tidx beg = tabflux.pair_offset[p];
+                Tidx end = tabflux.pair_offset[p + 1];
+                Tidx j   = tabflux.pair_jmin[p];
+
+                auto gg = gij[l] * gij[m];
+                if (beg == end || gg == 0) {
+                    continue;
+                }
+
+                auto term = dv(l, m) * gg;
+                for (Tidx k = beg; k < end; ++k, ++j) {
+                    flux[j] += tabflux.values[k] * term;
+                }
+            }
+        }
+    }
+
+    /**
      * @brief Convert interface fluxes to a mass-bin coagulation source term
      *
      * Applies the DG \f$k=0\f$ divergence operator (finite difference across bin
@@ -172,8 +313,8 @@ namespace shamphys {
         FuncRhoDust &&rho_dust,
         T rho_eps,
         shambase::is_mdspan_rank<1> auto massgrid,
-        /* COALA inputs */
-        shambase::is_mdspan_rank<3> auto tabflux_coag,
+        /* COALA inputs (dense rank-3 mdspan or TabfluxCoagK0SymSparseView) */
+        auto tabflux_coag,
         /* internal */
         shambase::is_mdspan_rank<1> auto gij,
         shambase::is_mdspan_rank<1> auto flux,
