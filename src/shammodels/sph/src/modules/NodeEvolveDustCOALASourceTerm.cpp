@@ -28,6 +28,7 @@
 #include "shamrock/patch/PatchDataField.hpp" // IWYU pragma: keep
 #include "shamsys/NodeInstance.hpp"
 #include <experimental/mdspan>
+#include <array>
 #include <vector>
 
 namespace shammodels::sph::modules {
@@ -36,8 +37,9 @@ namespace shammodels::sph::modules {
     struct KernelGenCoala_k0 {
         using Tscal = shambase::VecComponent<Tvec>;
 
-        using mdspan_rank_1       = std::mdspan<Tscal, std::dextents<u32, 1>>;
-        using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
+        using mdspan_rank_1         = std::mdspan<Tscal, std::dextents<u32, 1>>;
+        using mdspan_rank_1_strided = std::mdspan<Tscal, std::dextents<u32, 1>, std::layout_stride>;
+        using const_mdspan_rank_1   = std::mdspan<const Tscal, std::dextents<u32, 1>>;
 
         u32 nbins;
         Tscal rho_eps;
@@ -56,7 +58,9 @@ namespace shammodels::sph::modules {
             // field specific data
             const Tscal *__restrict s_j,
             const Tvec *__restrict delta_v_j,
-            Tscal *__restrict S_coag) const {
+            Tscal *__restrict S_coag,
+            // scratch
+            Tscal *__restrict gij_scratch) const {
 
             auto range = sycl::nd_range<1>{corrected_len, group_size};
 
@@ -67,7 +71,6 @@ namespace shammodels::sph::modules {
             auto dv_max    = this->dv_max;
 
             return [=, nbins = this->nbins](sycl::handler &cgh) {
-                auto gij_acc  = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
                 auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
 
                 cgh.parallel_for(range, [=](sycl::nd_item<1> tid) {
@@ -86,10 +89,15 @@ namespace shammodels::sph::modules {
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
                     /* internal */
-                    auto gij_loc  = &(gij_acc[nbins * lid]);
                     auto flux_loc = &(flux_acc[nbins * lid]);
 
-                    mdspan_rank_1 gij(gij_loc, nbins);
+                    // gij in global memory with a particle-major layout, such that the
+                    // work-items of a sub-group, which access the same bin at the same time,
+                    // read contiguous addresses
+                    mdspan_rank_1_strided gij(
+                        gij_scratch + id_a,
+                        typename mdspan_rank_1_strided::mapping_type(
+                            std::dextents<u32, 1>(nbins), std::array<u32, 1>{true_size}));
                     mdspan_rank_1 flux(flux_loc, nbins);
 
                     /* output */
@@ -167,8 +175,8 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> tabflux_values_buf(tabflux_sparse.values.size(), dev_sched);
         tabflux_values_buf.copy_from_stdvec(tabflux_sparse.values);
 
-        // per thread local memory: gij & flux, one per bin
-        usize local_mem_per_thread = nbins * 2 * sizeof(Tscal);
+        // per thread local memory: flux, one per bin
+        usize local_mem_per_thread = nbins * sizeof(Tscal);
         usize local_mem_size       = q.get_device_prop().local_mem_size;
 
         u32 group_size = 64;
@@ -188,6 +196,8 @@ namespace shammodels::sph::modules {
             u32 group_cnt     = shambase::group_count(count, group_size);
             u32 corrected_len = group_cnt * group_size;
 
+            sham::DeviceBuffer<Tscal> gij_scratch(count * nbins, dev_sched);
+
             sham::kernel_call_hndl(
                 q,
                 sham::MultiRef{
@@ -197,7 +207,7 @@ namespace shammodels::sph::modules {
                     tabflux_values_buf,
                     s_j_spans.get(id_patch),
                     delta_v_j_spans.get(id_patch)},
-                sham::MultiRef{S_coag_spans.get(id_patch)},
+                sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
                 count,
                 KernelGenCoala_k0<Tvec>{
                     .nbins         = nbins,
