@@ -17,26 +17,13 @@
  */
 
 #include "imgui.h"
+#include "sham/gui/color_utils.hpp"
 
 namespace sham::gui {
 
     // ============================================================================
     //  Design tokens (taken from the mockup)
     // ============================================================================
-    /// Value of one hexadecimal digit ('0'-'9', 'a'-'f' or 'A'-'F').
-    constexpr int hexv(char c) { return c <= '9' ? c - '0' : (c | 32) - 'a' + 10; }
-
-    constexpr ImU32 rgb_u32(int r, int g, int b, int a = 255) {
-        return (ImU32(a) << 24) | (ImU32(b) << 16) | (ImU32(g) << 8) | ImU32(r);
-    }
-    constexpr ImU32 rgba(const char *h, double a = 1.0) {
-        return rgb_u32(
-            hexv(h[1]) * 16 + hexv(h[2]),
-            hexv(h[3]) * 16 + hexv(h[4]),
-            hexv(h[5]) * 16 + hexv(h[6]),
-            int(a * 255 + 0.5));
-    }
-
     namespace C {
         constexpr ImU32 APP_BG = rgba("#141517"), PANEL = rgba("#1b1c1f"), CANVAS = rgba("#17181b"),
                         DIVIDER = rgba("#2e3035"), BORDER = rgba("#34363c"),
