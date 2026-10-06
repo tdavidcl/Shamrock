@@ -68,6 +68,8 @@ namespace {
         const shambase::VecComponent<Tvec> *__restrict rho_part,
         const f32 *__restrict hsupport2_up,
         const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+        const sycl::vec<f32, 4> *__restrict node_lo_f,
+        const sycl::vec<f32, 4> *__restrict node_up_f,
         Tvec center,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
@@ -160,9 +162,49 @@ namespace {
             f32 py       = f32(pos_rel.y());
             f32 pz       = f32(pos_rel.z());
 
-            points_f[st_base + lane]
-                = {px, py, pz, sycl::fabs(px) + sycl::fabs(py) + sycl::fabs(pz)};
+            // w: |f32(p - c)|_1, plus a term covering the fp64 rounding of p in absolute
+            // coordinates in the exact node test (only makes the particle prefilter bound larger)
+            f32 w = (sycl::fabs(px) + sycl::fabs(py) + sycl::fabs(pz)) * (1.f + 1.f / 1048576.f)
+                    + f32(
+                        (sycl::fabs(pos_render.x()) + sycl::fabs(pos_render.y())
+                         + sycl::fabs(pos_render.z()))
+                        * 0x1p-28);
+
+            points_f[st_base + lane] = {px, py, pz, w};
         }
+
+        // Certified fp32 version of the node test
+        // `expand_all(hmax * Rkern).contains_asymmetric(p)` (lo <= p && up > p componentwise).
+        // Returns 1 if the fp64 test surely returns true, 0 if it surely returns false and 2 if
+        // the fp32 evaluation cannot decide (the fp64 test must then be performed).
+        // With e = 2^-24, lo_f / up_f the fp32 expanded node box relative to the patch center c,
+        // s a bound on |lo_f|_1 + |up_f|_1 (+ the fp64 rounding of the box in absolute
+        // coordinates) and p_f, w the same for the point, (p - lo) and (p_f - lo_f) differ by at
+        // most e (s + w), so a margin M = 4 e (s + w) (also covering the fp32 rounding of
+        // lo_f +- M) decides the comparisons. NaN never decides.
+        auto node_test_f32 = [&](u32 node_id) -> u32 {
+            sycl::vec<f32, 4> lo = node_lo_f[node_id];
+            sycl::vec<f32, 4> up = node_up_f[node_id];
+            sycl::vec<f32, 4> pf = points_f[st_base + lane];
+
+            constexpr f32 e = 1.f / 16777216.f; // 2^-24
+
+            f32 m = 4.f * e * (lo.w() + pf.w());
+
+            bool miss = pf.x() < lo.x() - m || pf.y() < lo.y() - m || pf.z() < lo.z() - m
+                        || pf.x() > up.x() + m || pf.y() > up.y() + m || pf.z() > up.z() + m;
+            if (miss) {
+                return 0;
+            }
+
+            bool hit = pf.x() > lo.x() + m && pf.y() > lo.y() + m && pf.z() > lo.z() + m
+                       && pf.x() < up.x() - m && pf.y() < up.y() - m && pf.z() < up.z() - m;
+            if (hit) {
+                return 1;
+            }
+
+            return 2;
+        };
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -224,12 +266,23 @@ namespace {
                     u32 current_node_id = id_stack[stack_cursor];
                     stack_cursor++;
 
-                    Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
+                    u32 cert = node_test_f32(current_node_id);
 
-                    shammath::AABB<Tvec> node_aabb{
-                        traverser.aabb_min[current_node_id], traverser.aabb_max[current_node_id]};
+                    bool node_hit;
+                    if (cert == 2) {
+                        // exact test
+                        Tscal rint_cell = hmax[current_node_id] * Kernel::Rkern;
 
-                    if (node_aabb.expand_all(rint_cell).contains_asymmetric(pos_render)) {
+                        shammath::AABB<Tvec> node_aabb{
+                            traverser.aabb_min[current_node_id],
+                            traverser.aabb_max[current_node_id]};
+
+                        node_hit = node_aabb.expand_all(rint_cell).contains_asymmetric(pos_render);
+                    } else {
+                        node_hit = (cert == 1);
+                    }
+
+                    if (node_hit) {
                         if (tree.is_id_leaf(current_node_id)) {
                             leaf_queue[(queue_head + queue_cnt) % interp_leaf_queue_size]
                                 = current_node_id;
@@ -418,6 +471,48 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 hsupport2_up[id_b] = f32(h_b * h_b * Rker2) * (1.f + 1.f / 1048576.f);
             });
 
+        // fp32 expanded node boxes relative to the patch center for the certified node test
+        u32 node_cnt = tree.aabbs.buf_aabb_min.get_size();
+        sham::DeviceBuffer<sycl::vec<f32, 4>> node_lo_f_buf(node_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f32, 4>> node_up_f_buf(node_cnt, dev_sched);
+
+        sham::kernel_call(
+            queue,
+            sham::MultiRef{tree.aabbs.buf_aabb_min, tree.aabbs.buf_aabb_max, hmax_tree.buf_field},
+            sham::MultiRef{node_lo_f_buf, node_up_f_buf},
+            node_cnt,
+            [center](
+                u32 id,
+                const Tvec *__restrict aabb_min,
+                const Tvec *__restrict aabb_max,
+                const Tscal *__restrict hmax,
+                sycl::vec<f32, 4> *__restrict node_lo_f,
+                sycl::vec<f32, 4> *__restrict node_up_f) {
+                Tvec lower      = aabb_min[id];
+                Tvec upper      = aabb_max[id];
+                Tscal rint_cell = hmax[id] * Kernel::Rkern;
+
+                Tvec lo = (lower - center) - rint_cell;
+                Tvec up = (upper - center) + rint_cell;
+
+                auto nl1 = [](Tvec v) {
+                    return sycl::fabs(v.x()) + sycl::fabs(v.y()) + sycl::fabs(v.z());
+                };
+
+                f32 lx = f32(lo.x()), ly = f32(lo.y()), lz = f32(lo.z());
+                f32 ux = f32(up.x()), uy = f32(up.y()), uz = f32(up.z());
+
+                f32 s = (sycl::fabs(lx) + sycl::fabs(ly) + sycl::fabs(lz) + sycl::fabs(ux)
+                         + sycl::fabs(uy) + sycl::fabs(uz))
+                            * (1.f + 1.f / 1048576.f)
+                        + f32(
+                            (nl1(lower) + nl1(upper) + nl1(center) + 6 * sycl::fabs(rint_cell))
+                            * 0x1p-28);
+
+                node_lo_f[id] = {lx, ly, lz, s};
+                node_up_f[id] = {ux, uy, uz, 0.f};
+            });
+
         u32 group_cnt     = shambase::group_count(npoints, interp_group_size);
         u32 corrected_len = group_cnt * interp_group_size;
 
@@ -431,6 +526,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 rho_part_buf,
                 hsupport2_up_buf,
                 xyz_rel_f_buf,
+                node_lo_f_buf,
+                node_up_f_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -443,6 +540,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 const Tscal *__restrict rho_part,
                 const f32 *__restrict hsupport2_up,
                 const sycl::vec<f32, 4> *__restrict xyz_rel_f,
+                const sycl::vec<f32, 4> *__restrict node_lo_f,
+                const sycl::vec<f32, 4> *__restrict node_up_f,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -467,6 +566,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                                 rho_part,
                                 hsupport2_up,
                                 xyz_rel_f,
+                                node_lo_f,
+                                node_up_f,
                                 center,
                                 particle_looper,
                                 hmax,
