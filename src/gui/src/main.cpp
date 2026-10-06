@@ -210,14 +210,21 @@ int main(int argc, char **argv) {
         gui_clock.end_frame();
         const bool want_exit
             = cli.frames_before_exit() && gui_clock.frame_counter >= *cli.frames_before_exit();
-        // temporary: something moving to check --screenshot, removed with the real panes
+        // temporary: something moving to check --screenshot, with a label to check the fonts,
+        // removed with the real panes
         {
             const double t = gui_clock.now();
             const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
-            ImGui::GetForegroundDrawList()->AddRectFilled(
+            ImDrawList *dl = ImGui::GetForegroundDrawList();
+            dl->AddRectFilled(
                 ImVec2(c.x - 20, c.y - 20),
                 ImVec2(c.x + 20, c.y + 20),
                 IM_COL32(232, 163, 61, 255));
+            const char *label       = "Placeholder text";
+            const float size        = 13.0f;
+            const ImVec2 label_size = g_fonts.sans->CalcTextSizeA(size, FLT_MAX, 0.0f, label);
+            dl->AddText(
+                g_fonts.sans, size, ImVec2(c.x + 28, c.y - label_size.y / 2), theme::TEXT, label);
         }
         ImGui::Render();
         glfwGetFramebufferSize(window, &fbw, &fbh);
