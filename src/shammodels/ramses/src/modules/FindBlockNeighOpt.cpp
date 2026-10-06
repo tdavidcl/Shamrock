@@ -18,11 +18,22 @@
 #include "shamalgs/details/numeric/numeric.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/EventList.hpp"
+#include "shambackends/make_ndrange.hpp"
 #include "shammath/AABB.hpp"
 #include "shammodels/ramses/modules/FindBlockNeighOpt.hpp"
 #include "shammodels/ramses/modules/details/compute_neigh_graph.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/TreeTraversal.hpp"
+
+namespace {
+
+    /// work group size of the fused block graph kernels
+    constexpr u32 block_finder_group_size = 128;
+
+    /// number of traversal stack entries (from the bottom) kept in work-group local memory
+    constexpr u32 block_finder_shared_stack_depth = 32;
+
+} // namespace
 
 namespace shammodels::basegodunov::modules {
 
@@ -206,7 +217,7 @@ namespace shammodels::basegodunov::modules {
              * offset_check[d] = +x, -x, +y, -y, +z, -z)
              */
             template<class Func>
-            void for_each_neigh_6dir(u32 id_a, Func &&fct) const {
+            void for_each_neigh_6dir(u32 id_a, u32 *sh_stack, u32 sh_stride, Func &&fct) const {
 
                 TgridVec qlo64 = block_min[id_a] - origin;
                 TgridVec qup64 = block_max[id_a] - origin;
@@ -242,10 +253,26 @@ namespace shammodels::basegodunov::modules {
                 };
 
                 // Same traversal as AMRBlockFinder::for_each_other_index, the direction mask
-                // travelling with the node ids
-                u32 stack_cursor = tree_depth - 1;
+                // travelling with the node ids. The stack grows down from tree_depth - 1: its
+                // first block_finder_shared_stack_depth entries live in work-group local memory
+                // (sh_stack, entry j at sh_stack[j * sh_stride]), deeper ones in id_stack.
+                constexpr u32 sh_lo = tree_depth - block_finder_shared_stack_depth;
+
                 std::array<u32, tree_depth> id_stack;
-                id_stack[stack_cursor] = (all_dirs << dir_mask_shift) | 0;
+
+                auto stack_get = [&](u32 idx) -> u32 {
+                    return (idx >= sh_lo) ? sh_stack[(idx - sh_lo) * sh_stride] : id_stack[idx];
+                };
+                auto stack_set = [&](u32 idx, u32 val) {
+                    if (idx >= sh_lo) {
+                        sh_stack[(idx - sh_lo) * sh_stride] = val;
+                    } else {
+                        id_stack[idx] = val;
+                    }
+                };
+
+                u32 stack_cursor = tree_depth - 1;
+                stack_set(stack_cursor, (all_dirs << dir_mask_shift) | 0);
 
                 while (stack_cursor < tree_depth) {
 
@@ -254,7 +281,7 @@ namespace shammodels::basegodunov::modules {
                     u32 obj_end   = 0;
 
                     while (stack_cursor < tree_depth) {
-                        u32 entry = id_stack[stack_cursor];
+                        u32 entry = stack_get(stack_cursor);
                         stack_cursor++;
 
                         u32 current_node_id = entry & node_id_mask;
@@ -272,10 +299,10 @@ namespace shammodels::basegodunov::modules {
                                 break;
                             }
 
-                            id_stack[stack_cursor - 1] = (dirs << dir_mask_shift) | u32(up.w());
+                            stack_set(stack_cursor - 1, (dirs << dir_mask_shift) | u32(up.w()));
                             stack_cursor--;
 
-                            id_stack[stack_cursor - 1] = (dirs << dir_mask_shift) | u32(lo.w());
+                            stack_set(stack_cursor - 1, (dirs << dir_mask_shift) | u32(lo.w()));
                             stack_cursor--;
                         }
                     }
@@ -506,18 +533,29 @@ namespace shammodels::basegodunov::modules {
                     }
 
                     auto e = q.submit(deps, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, block_count, "count block graph links (6 dirs)", [=](u64 gid) {
-                                u32 id_a = (u32) gid;
+                        sycl::local_accessor<u32, 1> stack_local(
+                            block_finder_shared_stack_depth * block_finder_group_size, cgh);
+
+                        cgh.parallel_for(
+                            sham::make_ndrange(block_finder_group_size, block_count),
+                            [=](sycl::nd_item<1> item) {
+                                u32 id_a = (u32) item.get_global_linear_id();
+                                if (id_a >= block_count) {
+                                    return;
+                                }
+
+                                u32 *sh_stack = &stack_local[item.get_local_linear_id()];
+                                u32 sh_stride = (u32) item.get_local_range(0);
 
                                 std::array<u32, 6> found{0, 0, 0, 0, 0, 0};
 
-                                ker.for_each_neigh_6dir(id_a, [&](u32 dirs, u32 id_b) {
+                                ker.for_each_neigh_6dir(
+                                    id_a, sh_stack, sh_stride, [&](u32 dirs, u32 id_b) {
 #pragma unroll
-                                    for (u32 dir = 0; dir < 6; dir++) {
-                                        found[dir] += (dirs >> dir) & 1;
-                                    }
-                                });
+                                        for (u32 dir = 0; dir < 6; dir++) {
+                                            found[dir] += (dirs >> dir) & 1;
+                                        }
+                                    });
 
 #pragma unroll
                                 for (u32 dir = 0; dir < 6; dir++) {
@@ -559,9 +597,19 @@ namespace shammodels::basegodunov::modules {
                     }
 
                     auto e = q.submit(deps, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, block_count, "get ids block graph links (6 dirs)", [=](u64 gid) {
-                                u32 id_a = (u32) gid;
+                        sycl::local_accessor<u32, 1> stack_local(
+                            block_finder_shared_stack_depth * block_finder_group_size, cgh);
+
+                        cgh.parallel_for(
+                            sham::make_ndrange(block_finder_group_size, block_count),
+                            [=](sycl::nd_item<1> item) {
+                                u32 id_a = (u32) item.get_global_linear_id();
+                                if (id_a >= block_count) {
+                                    return;
+                                }
+
+                                u32 *sh_stack = &stack_local[item.get_local_linear_id()];
+                                u32 sh_stride = (u32) item.get_local_range(0);
 
                                 std::array<u32, 6> next_link_idx;
 #pragma unroll
@@ -569,15 +617,16 @@ namespace shammodels::basegodunov::modules {
                                     next_link_idx[dir] = offsets[dir][id_a];
                                 }
 
-                                ker.for_each_neigh_6dir(id_a, [&](u32 dirs, u32 id_b) {
+                                ker.for_each_neigh_6dir(
+                                    id_a, sh_stack, sh_stride, [&](u32 dirs, u32 id_b) {
 #pragma unroll
-                                    for (u32 dir = 0; dir < 6; dir++) {
-                                        if ((dirs >> dir) & 1) {
-                                            ids[dir][next_link_idx[dir]] = id_b;
-                                            next_link_idx[dir]++;
+                                        for (u32 dir = 0; dir < 6; dir++) {
+                                            if ((dirs >> dir) & 1) {
+                                                ids[dir][next_link_idx[dir]] = id_b;
+                                                next_link_idx[dir]++;
+                                            }
                                         }
-                                    }
-                                });
+                                    });
                             });
                     });
 
