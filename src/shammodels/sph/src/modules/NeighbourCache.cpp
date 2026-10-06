@@ -28,6 +28,120 @@
 #include "shamtree/kernels/geometry_utils.hpp"
 #include "shamunits/Constants.hpp"
 
+namespace {
+
+    /// capacity of the per thread queue of leaves found by the traversal
+    constexpr u32 nc_leaf_queue_size = 8;
+
+    /**
+     * @brief Neighbour search traversal of one particle per thread, with the threads of a
+     * sub-group cooperating to stay converged
+     *
+     * Visits exactly the same particles, in the same order, as a plain `rtree_for` traversal
+     * with the `sph_radix_cell_crit` node criterion. Only the moment at which each part of the
+     * work is done changes:
+     *  - (A) the tree is traversed until every thread of the sub-group found a leaf, threads which
+     *    already have one keep traversing and queue the next leaves (in traversal order),
+     *  - (B) each thread then calls `on_candidate(id_b)` for the particles of its oldest leaf.
+     *
+     * `stack` is the thread's slice of the shared memory traversal stack (stack_size entries).
+     * Inactive threads (beyond the particle count) take part in the votes with an empty stack.
+     */
+    template<class Tvec, class Kernel, class ParticleLooper, class FuncCandidate>
+    inline void nc_traverse_warp_cooperative(
+        const sycl::nd_item<1> &item,
+        bool active,
+        u32 *__restrict stack,
+        u32 stack_size,
+        const ParticleLooper &particle_looper,
+        const shambase::VecComponent<Tvec> *__restrict rint_tree,
+        Tvec xyz_a,
+        Tvec inter_box_a_min,
+        Tvec inter_box_a_max,
+        FuncCandidate &&on_candidate) {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        const auto &traverser = particle_looper.tree_traverser;
+        const auto &tree      = traverser.tree_traverser;
+
+        auto sg = item.get_sub_group();
+
+        // traversal stack (empty for inactive threads)
+        u32 stack_cursor = stack_size;
+        if (active) {
+            stack_cursor        = stack_size - 1;
+            stack[stack_cursor] = 0; // On a Karras tree, the root is always 0
+        }
+
+        // queue of the leaves found by the traversal, in traversal order
+        u32 leaf_queue[nc_leaf_queue_size];
+        u32 queue_head = 0;
+        u32 queue_cnt  = 0;
+
+        auto has_nodes = [&]() {
+            return stack_cursor < stack_size;
+        };
+
+        while (sycl::any_of_group(sg, has_nodes() || queue_cnt > 0)) {
+
+            // (A) traverse until every thread has a leaf or no nodes left
+            while (sycl::any_of_group(sg, has_nodes() && queue_cnt == 0)) {
+                if (has_nodes() && queue_cnt < nc_leaf_queue_size) {
+
+                    // Pop the top of the stack
+                    u32 current_node_id = stack[stack_cursor];
+                    stack_cursor++;
+
+                    Tscal int_r_max_cell = rint_tree[current_node_id] * Kernel::Rkern;
+
+                    shammath::AABB<Tvec> node_aabb{
+                        traverser.aabb_min[current_node_id], traverser.aabb_max[current_node_id]};
+
+                    using namespace walker::interaction_crit;
+
+                    bool node_hit = sph_radix_cell_crit(
+                        xyz_a,
+                        inter_box_a_min,
+                        inter_box_a_max,
+                        node_aabb.lower,
+                        node_aabb.upper,
+                        int_r_max_cell);
+
+                    if (node_hit) {
+                        if (tree.is_id_leaf(current_node_id)) {
+                            leaf_queue[(queue_head + queue_cnt) % nc_leaf_queue_size]
+                                = current_node_id;
+                            queue_cnt++;
+                        } else {
+                            u32 lid = tree.get_left_child(current_node_id);
+                            u32 rid = tree.get_right_child(current_node_id);
+
+                            stack[stack_cursor - 1] = rid;
+                            stack_cursor--;
+
+                            stack[stack_cursor - 1] = lid;
+                            stack_cursor--;
+                        }
+                    }
+                }
+            }
+
+            // (B) scan the particles of the oldest leaf
+            if (queue_cnt > 0) {
+                u32 leaf_node = leaf_queue[queue_head];
+                queue_head    = (queue_head + 1) % nc_leaf_queue_size;
+                queue_cnt--;
+
+                u32 leaf_id = leaf_node - tree.offset_leaf;
+
+                particle_looper.cell_iterator.for_each_in_leaf_cell(leaf_id, on_candidate);
+            }
+        }
+    }
+
+} // namespace
+
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
 
@@ -1181,43 +1295,31 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
 
                     cgh.parallel_for(sham::make_ndrange(group_size, n), [=](sycl::nd_item<1> item) {
-                        u32 id_a = (u32) item.get_global_linear_id();
-
-                        if (id_a >= n) {
-                            return;
-                        }
+                        u32 id_a    = (u32) item.get_global_linear_id();
+                        bool active = id_a < n;
 
                         u32 group_id   = (u32) item.get_local_id(0);
                         u32 *stack_ptr = &stack_local[group_id * stack_size];
-                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
-                            return stack_ptr[id];
-                        };
 
-                        Tscal rint_a = hpart[id_a] * h_tolerance;
+                        Tscal rint_a = hpart[active ? id_a : 0] * h_tolerance;
 
-                        Tvec xyz_a = xyz[id_a];
+                        Tvec xyz_a = xyz[active ? id_a : 0];
 
                         Tvec inter_box_a_min = xyz_a - rint_a * Kernel::Rkern;
                         Tvec inter_box_a_max = xyz_a + rint_a * Kernel::Rkern;
 
                         u32 cnt = 0;
 
-                        particle_looper.rtree_for_leaf_coherent(
-                            stack_id,
+                        nc_traverse_warp_cooperative<Tvec, Kernel>(
+                            item,
+                            active,
+                            stack_ptr,
                             stack_size,
-                            [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                                Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
-
-                                using namespace walker::interaction_crit;
-
-                                return sph_radix_cell_crit(
-                                    xyz_a,
-                                    inter_box_a_min,
-                                    inter_box_a_max,
-                                    node_aabb.lower,
-                                    node_aabb.upper,
-                                    int_r_max_cell);
-                            },
+                            particle_looper,
+                            rint_tree,
+                            xyz_a,
+                            inter_box_a_min,
+                            inter_box_a_max,
                             [&](u32 id_b) {
                                 // compute only omega_a
                                 Tvec dr      = xyz_a - xyz[id_b];
@@ -1230,7 +1332,9 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                                 cnt += (no_interact) ? 0 : 1;
                             });
 
-                        neigh_cnt[id_a] = cnt;
+                        if (active) {
+                            neigh_cnt[id_a] = cnt;
+                        }
                     });
                 };
             });
@@ -1258,43 +1362,31 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
                     sycl::local_accessor<u32, 1> stack_local(stack_size * group_size, cgh);
 
                     cgh.parallel_for(sham::make_ndrange(group_size, n), [=](sycl::nd_item<1> item) {
-                        u32 id_a = (u32) item.get_global_linear_id();
-
-                        if (id_a >= n) {
-                            return;
-                        }
+                        u32 id_a    = (u32) item.get_global_linear_id();
+                        bool active = id_a < n;
 
                         u32 group_id   = (u32) item.get_local_id(0);
                         u32 *stack_ptr = &stack_local[group_id * stack_size];
-                        auto stack_id  = [&stack_ptr](u32 id) -> u32  &{
-                            return stack_ptr[id];
-                        };
 
-                        Tscal rint_a = hpart[id_a] * h_tolerance;
+                        Tscal rint_a = hpart[active ? id_a : 0] * h_tolerance;
 
-                        Tvec xyz_a = xyz[id_a];
+                        Tvec xyz_a = xyz[active ? id_a : 0];
 
                         Tvec inter_box_a_min = xyz_a - rint_a * Kernel::Rkern;
                         Tvec inter_box_a_max = xyz_a + rint_a * Kernel::Rkern;
 
-                        u32 cnt = scanned_neigh_cnt[id_a];
+                        u32 cnt = active ? scanned_neigh_cnt[id_a] : 0;
 
-                        particle_looper.rtree_for_leaf_coherent(
-                            stack_id,
+                        nc_traverse_warp_cooperative<Tvec, Kernel>(
+                            item,
+                            active,
+                            stack_ptr,
                             stack_size,
-                            [&](u32 node_id, shammath::AABB<Tvec> node_aabb) -> bool {
-                                Tscal int_r_max_cell = rint_tree[node_id] * Kernel::Rkern;
-
-                                using namespace walker::interaction_crit;
-
-                                return sph_radix_cell_crit(
-                                    xyz_a,
-                                    inter_box_a_min,
-                                    inter_box_a_max,
-                                    node_aabb.lower,
-                                    node_aabb.upper,
-                                    int_r_max_cell);
-                            },
+                            particle_looper,
+                            rint_tree,
+                            xyz_a,
+                            inter_box_a_min,
+                            inter_box_a_max,
                             [&](u32 id_b) {
                                 // compute only omega_a
                                 Tvec dr      = xyz_a - xyz[id_b];
