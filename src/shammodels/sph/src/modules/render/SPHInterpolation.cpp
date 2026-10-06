@@ -76,7 +76,8 @@ namespace {
         u32 *__restrict staging_owner,
         T *__restrict staging_term,
         u32 *__restrict staging_ok,
-        Tvec *__restrict points) {
+        Tvec *__restrict points,
+        sycl::vec<f32, 4> *__restrict points_f) {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
@@ -151,9 +152,17 @@ namespace {
         points[st_base + lane] = pos_render;
 
         // fp32 copy of the point relative to the patch center for the conservative prefilter
-        Tvec pos_rel = pos_render - center;
-        sycl::vec<f32, 3> pf{f32(pos_rel.x()), f32(pos_rel.y()), f32(pos_rel.z())};
-        f32 pf_l1 = sycl::fabs(pf.x()) + sycl::fabs(pf.y()) + sycl::fabs(pf.z());
+        // (kept in local memory, otherwise the compiler rematerializes the conversions in the
+        // particle loop)
+        {
+            Tvec pos_rel = pos_render - center;
+            f32 px       = f32(pos_rel.x());
+            f32 py       = f32(pos_rel.y());
+            f32 pz       = f32(pos_rel.z());
+
+            points_f[st_base + lane]
+                = {px, py, pz, sycl::fabs(px) + sycl::fabs(py) + sycl::fabs(pz)};
+        }
 
         // flush of the whole sub-group: the buffered candidates of all threads are computed by
         // all the threads (sg_size entries per round, through the staging area), then each
@@ -258,8 +267,9 @@ namespace {
                     // so r2_32 > H_up (1 + 16 e) + 4 e B^2 (+ 1e-30 for fp32 underflows) implies
                     // rab2 > H. NaN / inf (and fp32 overflows) never reject.
                     sycl::vec<f32, 4> xf = xyz_rel_f[id_b];
+                    sycl::vec<f32, 4> pf = points_f[st_base + lane];
                     sycl::vec<f32, 3> af{pf.x() - xf.x(), pf.y() - xf.y(), pf.z() - xf.z()};
-                    f32 bound = pf_l1 + xf.w() + sycl::fabs(af.x()) + sycl::fabs(af.y())
+                    f32 bound = pf.w() + xf.w() + sycl::fabs(af.x()) + sycl::fabs(af.y())
                                 + sycl::fabs(af.z());
                     f32 r2f   = sycl::dot(af, af);
 
@@ -442,6 +452,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                     sycl::local_accessor<T> staging_term{interp_group_size, cgh};
                     sycl::local_accessor<u32> staging_ok{interp_group_size, cgh};
                     sycl::local_accessor<Tvec> points{interp_group_size, cgh};
+                    sycl::local_accessor<sycl::vec<f32, 4>> points_f{interp_group_size, cgh};
 
                     cgh.parallel_for(
                         sycl::nd_range<1>{corrected_len, interp_group_size},
@@ -464,7 +475,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                                 &(staging_owner[0]),
                                 &(staging_term[0]),
                                 &(staging_ok[0]),
-                                &(points[0]));
+                                &(points[0]),
+                                &(points_f[0]));
                         });
                 };
             });
