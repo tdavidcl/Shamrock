@@ -160,7 +160,8 @@ namespace shammodels::basegodunov::modules {
     };
 
     /**
-     * @brief Block finder working on packed i32 records relative to the first block of the patch
+     * @brief Block finder working on packed i32 records relative to the first block of the patch,
+     * for the 6 directions at once
      *
      * node_rec holds two vec<i32, 4> per tree node: {lower - origin, a} and {upper - origin, b},
      * with (a, b) the left & right child ids of an internal node, or the range of objects of a
@@ -168,11 +169,21 @@ namespace shammodels::basegodunov::modules {
      * and {upper - origin, 0}. The intersection tests are translation invariant on integers, so
      * as long as every coordinate fits (checked when building the records) they give exactly the
      * same results as the TgridVec ones of AMRBlockFinder.
+     *
+     * One traversal serves the 6 directions of OrientedAMRGraph::offset_check: each stack entry
+     * carries the mask of the directions for which the node and all its ancestors are hit, so a
+     * direction sees exactly the nodes, leaves and objects of its own traversal, in the same
+     * order.
      */
     template<class Tvec, class TgridVec, class Tmorton>
     class FindBlockNeighOpt<Tvec, TgridVec, Tmorton>::AMRBlockFinderI32 {
         public:
         static constexpr u32 tree_depth = RTree::tree_depth;
+
+        /// stack entries are (direction mask << dir_mask_shift) | node id
+        static constexpr u32 dir_mask_shift = 26;
+        static constexpr u32 node_id_mask   = (u32(1) << dir_mask_shift) - 1;
+        static constexpr u32 all_dirs       = 0x3F;
 
         sham::DeviceBuffer<sycl::vec<i32, 4>> &node_rec;
         sham::DeviceBuffer<sycl::vec<i32, 4>> &obj_rec;
@@ -180,19 +191,6 @@ namespace shammodels::basegodunov::modules {
         sham::DeviceBuffer<TgridVec> &buf_block_max;
         u32 leaf_offset;
         TgridVec origin;
-        TgridVec dir_offset;
-
-        AMRBlockFinderI32(
-            sham::DeviceBuffer<sycl::vec<i32, 4>> &node_rec,
-            sham::DeviceBuffer<sycl::vec<i32, 4>> &obj_rec,
-            sham::DeviceBuffer<TgridVec> &buf_block_min,
-            sham::DeviceBuffer<TgridVec> &buf_block_max,
-            u32 leaf_offset,
-            TgridVec origin,
-            TgridVec dir_offset)
-            : node_rec(node_rec), obj_rec(obj_rec), buf_block_min(buf_block_min),
-              buf_block_max(buf_block_max), leaf_offset(leaf_offset), origin(origin),
-              dir_offset(dir_offset) {}
 
         struct ro_access {
             const sycl::vec<i32, 4> *node_rec;
@@ -201,72 +199,97 @@ namespace shammodels::basegodunov::modules {
             const TgridVec *block_max;
             u32 leaf_offset;
             TgridVec origin;
-            TgridVec dir_offset;
 
-            template<class IndexFunctor>
-            void for_each_other_index(u32 id_a, IndexFunctor &&fct) const {
+            /**
+             * @brief Call fct(dir_mask, id_b) on every block id_b intersecting the block id_a
+             * shifted in one of the directions, dir_mask holding these directions (bit d for
+             * offset_check[d] = +x, -x, +y, -y, +z, -z)
+             */
+            template<class Func>
+            void for_each_neigh_6dir(u32 id_a, Func &&fct) const {
 
-                using AABBi = shammath::AABB<i32_3>;
+                TgridVec qlo64 = block_min[id_a] - origin;
+                TgridVec qup64 = block_max[id_a] - origin;
 
-                auto to_i32 = [](TgridVec v) -> i32_3 {
-                    return {i32(v.x()), i32(v.y()), i32(v.z())};
+                i32_3 qlo = {i32(qlo64.x()), i32(qlo64.y()), i32(qlo64.z())};
+                i32_3 qup = {i32(qup64.x()), i32(qup64.y()), i32(qup64.z())};
+
+                // directions whose shifted query box intersects the box [lo, up] (non null
+                // volume), from the overlaps per axis of the query shifted by -1, 0 or +1
+                auto dir_hits = [&](sycl::vec<i32, 4> lo, sycl::vec<i32, 4> up) -> u32 {
+                    auto ov = [](i32 lo, i32 up, i32 qlo, i32 qup, i32 s) -> bool {
+                        return sycl::min(up, qup + s) > sycl::max(lo, qlo + s);
+                    };
+
+                    bool x0 = ov(lo.x(), up.x(), qlo.x(), qup.x(), 0);
+                    bool y0 = ov(lo.y(), up.y(), qlo.y(), qup.y(), 0);
+                    bool z0 = ov(lo.z(), up.z(), qlo.z(), qup.z(), 0);
+
+                    u32 m = 0;
+                    if (y0 && z0) {
+                        m |= u32(ov(lo.x(), up.x(), qlo.x(), qup.x(), 1)) << 0;
+                        m |= u32(ov(lo.x(), up.x(), qlo.x(), qup.x(), -1)) << 1;
+                    }
+                    if (x0 && z0) {
+                        m |= u32(ov(lo.y(), up.y(), qlo.y(), qup.y(), 1)) << 2;
+                        m |= u32(ov(lo.y(), up.y(), qlo.y(), qup.y(), -1)) << 3;
+                    }
+                    if (x0 && y0) {
+                        m |= u32(ov(lo.z(), up.z(), qlo.z(), qup.z(), 1)) << 4;
+                        m |= u32(ov(lo.z(), up.z(), qlo.z(), qup.z(), -1)) << 5;
+                    }
+                    return m;
                 };
 
-                // The wanted AABB (the block we look for), relative to the origin
-                AABBi check_aabb{
-                    to_i32(block_min[id_a] - origin + dir_offset),
-                    to_i32(block_max[id_a] - origin + dir_offset)};
-
-                auto rec_aabb = [](sycl::vec<i32, 4> lo, sycl::vec<i32, 4> up) -> AABBi {
-                    return {i32_3{lo.x(), lo.y(), lo.z()}, i32_3{up.x(), up.y(), up.z()}};
-                };
-
-                // Same traversal as AMRBlockFinder::for_each_other_index
+                // Same traversal as AMRBlockFinder::for_each_other_index, the direction mask
+                // travelling with the node ids
                 u32 stack_cursor = tree_depth - 1;
                 std::array<u32, tree_depth> id_stack;
-                id_stack[stack_cursor] = 0;
+                id_stack[stack_cursor] = (all_dirs << dir_mask_shift) | 0;
 
                 while (stack_cursor < tree_depth) {
 
-                    bool found_leaf = false;
-                    u32 obj_begin   = 0;
-                    u32 obj_end     = 0;
+                    u32 leaf_dirs = 0;
+                    u32 obj_begin = 0;
+                    u32 obj_end   = 0;
 
                     while (stack_cursor < tree_depth) {
-                        u32 current_node_id = id_stack[stack_cursor];
+                        u32 entry = id_stack[stack_cursor];
                         stack_cursor++;
+
+                        u32 current_node_id = entry & node_id_mask;
 
                         sycl::vec<i32, 4> lo = node_rec[2 * current_node_id];
                         sycl::vec<i32, 4> up = node_rec[2 * current_node_id + 1];
 
-                        if (rec_aabb(lo, up).get_intersect(check_aabb).is_volume_not_null()) {
+                        u32 dirs = (entry >> dir_mask_shift) & dir_hits(lo, up);
+
+                        if (dirs != 0) {
                             if (current_node_id >= leaf_offset) {
-                                found_leaf = true;
-                                obj_begin  = u32(lo.w());
-                                obj_end    = u32(up.w());
+                                leaf_dirs = dirs;
+                                obj_begin = u32(lo.w());
+                                obj_end   = u32(up.w());
                                 break;
                             }
 
-                            id_stack[stack_cursor - 1] = u32(up.w()); // right child
+                            id_stack[stack_cursor - 1] = (dirs << dir_mask_shift) | u32(up.w());
                             stack_cursor--;
 
-                            id_stack[stack_cursor - 1] = u32(lo.w()); // left child
+                            id_stack[stack_cursor - 1] = (dirs << dir_mask_shift) | u32(lo.w());
                             stack_cursor--;
                         }
                     }
 
-                    if (found_leaf) {
+                    if (leaf_dirs != 0) {
                         for (u32 id_s = obj_begin; id_s < obj_end; id_s++) {
                             sycl::vec<i32, 4> lo = obj_rec[2 * id_s];
                             sycl::vec<i32, 4> up = obj_rec[2 * id_s + 1];
                             u32 id_b             = u32(lo.w());
 
-                            bool interact
-                                = rec_aabb(lo, up).get_intersect(check_aabb).is_volume_not_null()
-                                  && id_b != id_a;
+                            u32 dirs = (id_b != id_a) ? (leaf_dirs & dir_hits(lo, up)) : 0;
 
-                            if (interact) {
-                                fct(id_b);
+                            if (dirs != 0) {
+                                fct(dirs, id_b);
                             }
                         }
                     }
@@ -281,8 +304,7 @@ namespace shammodels::basegodunov::modules {
                 buf_block_min.get_read_access(deps),
                 buf_block_max.get_read_access(deps),
                 leaf_offset,
-                origin,
-                dir_offset};
+                origin};
         }
 
         void complete_event_state(sycl::event &e) {
@@ -441,24 +463,132 @@ namespace shammodels::basegodunov::modules {
                 block_max.get_buf().complete_event_state(e2);
             }
 
-            bool use_i32 = (block_count > 0) && (out_of_range.get_val_at_idx(0) == 0);
+            // the fused traversal assumes the unit offsets +x, -x, +y, -y, +z, -z and packs the
+            // node ids with the direction masks
+            const std::array<TgridVec, 6> unit_offsets{
+                TgridVec{1, 0, 0},
+                TgridVec{-1, 0, 0},
+                TgridVec{0, 1, 0},
+                TgridVec{0, -1, 0},
+                TgridVec{0, 0, 1},
+                TgridVec{0, 0, -1}};
+            bool offsets_ok = true;
+            for (u32 dir = 0; dir < 6; dir++) {
+                offsets_ok
+                    = offsets_ok && sham::equals(result.offset_check[dir], unit_offsets[dir]);
+            }
+
+            bool use_i32 = (block_count > 0) && (out_of_range.get_val_at_idx(0) == 0) && offsets_ok
+                           && (tot_count <= AMRBlockFinderI32::node_id_mask);
 
             if (use_i32) {
+                AMRBlockFinderI32 finder{
+                    node_rec,
+                    obj_rec,
+                    block_min.get_buf(),
+                    block_max.get_buf(),
+                    internal_cell_count,
+                    origin};
+
+                // [i] is the number of link for block i (last value is 0)
+                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> link_counts;
                 for (u32 dir = 0; dir < 6; dir++) {
+                    link_counts[dir]
+                        = std::make_unique<sham::DeviceBuffer<u32>>(block_count + 1, dev_sched);
+                }
 
-                    TgridVec dir_offset = result.offset_check[dir];
+                {
+                    sham::EventList deps;
+                    auto ker = finder.get_read_access(deps);
+                    std::array<u32 *, 6> cnt;
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        cnt[dir] = link_counts[dir]->get_write_access(deps);
+                    }
 
-                    AMRGraph rslt = details::compute_neigh_graph<AMRBlockFinderI32>(
-                        dev_sched,
-                        block_count,
-                        node_rec,
-                        obj_rec,
-                        block_min.get_buf(),
-                        block_max.get_buf(),
-                        internal_cell_count,
-                        origin,
-                        dir_offset);
+                    auto e = q.submit(deps, [&](sycl::handler &cgh) {
+                        shambase::parallel_for(
+                            cgh, block_count, "count block graph links (6 dirs)", [=](u64 gid) {
+                                u32 id_a = (u32) gid;
 
+                                std::array<u32, 6> found{0, 0, 0, 0, 0, 0};
+
+                                ker.for_each_neigh_6dir(id_a, [&](u32 dirs, u32 id_b) {
+#pragma unroll
+                                    for (u32 dir = 0; dir < 6; dir++) {
+                                        found[dir] += (dirs >> dir) & 1;
+                                    }
+                                });
+
+#pragma unroll
+                                for (u32 dir = 0; dir < 6; dir++) {
+                                    cnt[dir][id_a] = found[dir];
+                                }
+                            });
+                    });
+
+                    finder.complete_event_state(e);
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        link_counts[dir]->complete_event_state(e);
+                    }
+                }
+
+                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> link_offsets;
+                std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> links;
+                std::array<u32, 6> link_cnt;
+                for (u32 dir = 0; dir < 6; dir++) {
+                    // set the last val to 0 so that the last slot after exclusive scan is the sum
+                    link_counts[dir]->set_val_at_idx(block_count, 0);
+
+                    link_offsets[dir] = std::make_unique<sham::DeviceBuffer<u32>>(
+                        shamalgs::numeric::scan_exclusive(
+                            dev_sched, *link_counts[dir], block_count + 1));
+
+                    link_cnt[dir] = link_offsets[dir]->get_val_at_idx(block_count);
+                    links[dir]
+                        = std::make_unique<sham::DeviceBuffer<u32>>(link_cnt[dir], dev_sched);
+                }
+
+                {
+                    sham::EventList deps;
+                    auto ker = finder.get_read_access(deps);
+                    std::array<const u32 *, 6> offsets;
+                    std::array<u32 *, 6> ids;
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        offsets[dir] = link_offsets[dir]->get_read_access(deps);
+                        ids[dir]     = links[dir]->get_write_access(deps);
+                    }
+
+                    auto e = q.submit(deps, [&](sycl::handler &cgh) {
+                        shambase::parallel_for(
+                            cgh, block_count, "get ids block graph links (6 dirs)", [=](u64 gid) {
+                                u32 id_a = (u32) gid;
+
+                                std::array<u32, 6> next_link_idx;
+#pragma unroll
+                                for (u32 dir = 0; dir < 6; dir++) {
+                                    next_link_idx[dir] = offsets[dir][id_a];
+                                }
+
+                                ker.for_each_neigh_6dir(id_a, [&](u32 dirs, u32 id_b) {
+#pragma unroll
+                                    for (u32 dir = 0; dir < 6; dir++) {
+                                        if ((dirs >> dir) & 1) {
+                                            ids[dir][next_link_idx[dir]] = id_b;
+                                            next_link_idx[dir]++;
+                                        }
+                                    }
+                                });
+                            });
+                    });
+
+                    finder.complete_event_state(e);
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        link_offsets[dir]->complete_event_state(e);
+                        links[dir]->complete_event_state(e);
+                    }
+                }
+
+                for (u32 dir = 0; dir < 6; dir++) {
                     shamlog_debug_ln(
                         "AMR Block Graph",
                         "Patch",
@@ -466,9 +596,13 @@ namespace shammodels::basegodunov::modules {
                         "direction",
                         dir,
                         "link cnt",
-                        rslt.link_count);
+                        link_cnt[dir]);
 
-                    result.graph_links[dir] = std::make_unique<AMRGraph>(std::move(rslt));
+                    result.graph_links[dir] = std::make_unique<AMRGraph>(AMRGraph{
+                        .node_link_offset = std::move(*link_offsets[dir]),
+                        .node_links       = std::move(*links[dir]),
+                        .link_count       = link_cnt[dir],
+                        .obj_cnt          = block_count});
                 }
             } else {
                 sycl::buffer<TgridVec> buf_block_min_sycl
