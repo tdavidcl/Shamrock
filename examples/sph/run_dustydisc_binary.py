@@ -109,7 +109,9 @@ dt_stop_fast = 10
 
 # Central binary (q and e are read from the environment above)
 center_mass = 1.0  # total mass of the binary (sol mass)
-binary_varpi = 0.0  # longitude of periastron (rad)
+# longitude of periastron (rad). With pi the periastron points to -x, so the secondary reaches
+# its apoastron, its closest approach to the cavity edge, on the +x side
+binary_varpi = np.pi
 binary_nu = 0.0  # initial true anomaly (rad), 0 = start at periastron
 # Largest accretion radii that stay inside the cavity: each sink is sized so that, at the
 # farthest point of its star's orbit, it reaches this fraction of the cavity radius
