@@ -373,14 +373,11 @@ def setup_model():
         alpha_min=0.0, alpha_max=1, sigma_decay=0.1, alpha_u=1, beta_AV=2
     )
 
-    if single_star:
-        cfg.set_eos_locally_isothermalLP07(cs0=disc.cs0(), q=disc.q, r0=disc.r0)
-    else:
-        # Farris et al. (2014) locally isothermal EOS: same as LP07 far from the binary,
-        # but the sound speed follows the potential of both stars near them
-        cfg.set_eos_locally_isothermalFA2014_extended(
-            cs0=disc.cs0(), q=disc.q, r0=disc.r0, n_sinks=2
-        )
+    # Farris et al. (2014) locally isothermal EOS: the sound speed follows the potential of
+    # the central star(s). Same as LP07 for a single star, or far from the binary.
+    cfg.set_eos_locally_isothermalFA2014_extended(
+        cs0=disc.cs0(), q=disc.q, r0=disc.r0, n_sinks=len(central_sinks)
+    )
 
     if ndust > 0:
         cfg.set_dust_mode_monofluid_tva(
