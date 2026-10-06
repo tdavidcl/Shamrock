@@ -61,11 +61,11 @@ namespace {
     inline void interp_warp_cooperative(
         const sycl::nd_item<1> &item,
         u32 npoints,
-        shambase::VecComponent<Tvec> partmass,
         const Tvec *__restrict pixel_positions,
         const Tvec *__restrict xyz,
         const shambase::VecComponent<Tvec> *__restrict hpart,
-        const T *__restrict torender,
+        const T *__restrict partmass_val,
+        const shambase::VecComponent<Tvec> *__restrict rho_part,
         const ParticleLooper &particle_looper,
         const shambase::VecComponent<Tvec> *__restrict hmax,
         T *__restrict render_field) {
@@ -115,11 +115,8 @@ namespace {
 
                 Tscal rab = sycl::sqrt(rab2);
 
-                T val = torender[id_b];
-
-                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
-
-                acc += partmass * val * Kernel::W_3d(rab, h_b) / rho_b;
+                // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
+                acc += partmass_val[id_b] * Kernel::W_3d(rab, h_b) / rho_part[id_b];
             }
             buf_cnt = 0;
         };
@@ -276,6 +273,26 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
 
         auto obj_it = tree.get_object_iterator();
 
+        // per particle quantities independent of the point (same expressions as in the direct
+        // computation `partmass * val * W / rho_h(partmass, h_b, hfactd)`, hence same bits)
+        sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+
+        sham::kernel_call(
+            queue,
+            sham::MultiRef{buf_hpart, buf_field},
+            sham::MultiRef{partmass_val_buf, rho_part_buf},
+            obj_cnt,
+            [partmass](
+                u32 id_b,
+                const Tscal *__restrict hpart,
+                const T *__restrict torender,
+                T *__restrict partmass_val,
+                Tscal *__restrict rho_part) {
+                partmass_val[id_b] = partmass * torender[id_b];
+                rho_part[id_b]     = shamrock::sph::rho_h(partmass, hpart[id_b], Kernel::hfactd);
+            });
+
         u32 group_cnt     = shambase::group_count(npoints, interp_group_size);
         u32 corrected_len = group_cnt * interp_group_size;
 
@@ -285,7 +302,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 interp_points_buf,
                 pos.get_buf(),
                 buf_hpart,
-                buf_field,
+                partmass_val_buf,
+                rho_part_buf,
                 obj_it,
                 hmax_tree.buf_field},
             sham::MultiRef{output_buf},
@@ -294,7 +312,8 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 const Tvec *__restrict pixel_positions,
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
-                const T *__restrict torender,
+                const T *__restrict partmass_val,
+                const Tscal *__restrict rho_part,
                 auto particle_looper,
                 const Tscal *__restrict hmax,
                 T *__restrict render_field) {
@@ -305,11 +324,11 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                             interp_warp_cooperative<Tvec, T, Kernel>(
                                 item,
                                 npoints,
-                                partmass,
                                 pixel_positions,
                                 xyz,
                                 hpart,
-                                torender,
+                                partmass_val,
+                                rho_part,
                                 particle_looper,
                                 hmax,
                                 render_field);
