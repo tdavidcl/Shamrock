@@ -42,7 +42,9 @@ namespace {
     template<class Kernel>
     inline f64 interp_W_3d(f64 r, const sycl::vec<f64, 8> &pd) {
         f64 q = div_rn(r, pd[IpH], pd[IpInvH]);
-        return div_rn(Kernel::Generator::norm_3d * Kernel::f(q), pd[IpHHH], pd[IpInvHHH]);
+        // q >= +0 or NaN, so the M4 kernel function can compare on bit patterns
+        return div_rn(
+            Kernel::Generator::norm_3d * kernel_f_pos<Kernel>(q), pd[IpHHH], pd[IpInvHHH]);
     }
 
     /// capacity of the per thread buffer of particles around the interpolation point
