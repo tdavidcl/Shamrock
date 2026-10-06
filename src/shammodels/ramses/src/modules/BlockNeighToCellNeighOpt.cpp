@@ -29,6 +29,7 @@
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamtree/TreeTraversal.hpp"
+#include <vector>
 
 namespace {
 
@@ -147,305 +148,409 @@ namespace shammodels::basegodunov::modules {
 
         shambase::DistributedData<OrientedAMRGraph> cell_graph_links;
 
-        edges.block_neigh_graph.graph.for_each([&](u64 id,
-                                                   const OrientedAMRGraph &oriented_block_graph) {
-            OrientedAMRGraph result;
+        auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+        auto &q        = dev_sched->get_queue();
 
-            PatchDataField<TgridVec> &block_min = edges.spans_block_min.get_refs().get(id);
-            PatchDataField<TgridVec> &block_max = edges.spans_block_max.get_refs().get(id);
+        const std::array<TgridVec, 6> off = OrientedAMRGraph{}.offset_check;
 
-            sham::DeviceBuffer<TgridVec> &buf_block_min = block_min.get_buf();
-            sham::DeviceBuffer<TgridVec> &buf_block_max = block_max.get_buf();
+        // The links of a direction are ordered by cell and the cells of a block are contiguous,
+        // so the scan is done on the link counts of the blocks (8 times smaller): the offset of a
+        // cell is the one of its block plus the links of the previous cells of the block, summed
+        // in work-group memory (a work group holds whole blocks).
+        static_assert(cell_graph_group_size % AMRBlock::block_size == 0);
 
-            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
-            auto &q        = dev_sched->get_queue();
+        // The patches are batched (as in FindBlockNeighOpt): one count kernel, one scan and one
+        // fill kernel build the 6 cell graphs of every patch. A thread handles one cell, finds
+        // its patch by a binary search on the cell offsets, and reaches the block graphs, block
+        // boxes and output buffers of its patch through tables of pointers. Each thread handles
+        // the 6 directions of its cell one after the other, each with the same candidates in the
+        // same order as AMRLowering's safe mode, so each link list is unchanged.
+        struct PatchInfo {
+            u64 id;
+            u32 block_count;
+            const OrientedAMRGraph *block_graph;
+        };
+        std::vector<PatchInfo> patches;
 
-            u32 cell_count = (edges.sizes.indexes.get(id)) * AMRBlock::block_size;
-
-            std::array<AMRGraph *, 6> block_graph;
-            for (u32 dir = 0; dir < 6; dir++) {
-                block_graph[dir] = &shambase::get_check_ref(oriented_block_graph.graph_links[dir]);
+        edges.block_neigh_graph.graph.for_each([&](u64 id, const OrientedAMRGraph &bg) {
+            u32 block_count = edges.sizes.indexes.get(id);
+            if (block_count > 0) {
+                patches.push_back({id, block_count, &bg});
+                return;
             }
 
-            const std::array<TgridVec, 6> &off = result.offset_check;
+            // no cell: empty graphs (as computed by the standard path)
+            OrientedAMRGraph result;
+            for (u32 dir = 0; dir < 6; dir++) {
+                sham::DeviceBuffer<u32> offsets(1, dev_sched);
+                offsets.set_val_at_idx(0, 0);
+                result.graph_links[dir] = std::make_unique<AMRGraph>(AMRGraph{
+                    .node_link_offset = std::move(offsets),
+                    .node_links       = sham::DeviceBuffer<u32>(0, dev_sched),
+                    .link_count       = 0,
+                    .obj_cnt          = 0,
+                    .antecedent       = sham::DeviceBuffer<u32>(0, dev_sched)});
+            }
+            cell_graph_links.add_obj(id, std::move(result));
+        });
 
-            // The 6 directions are handled by the same thread one after the other, each in the
-            // order of for_each_other_index_safe, so each link list is unchanged.
+        u32 S = patches.size();
 
-            // The links of a direction are ordered by cell and the cells of a block are
-            // contiguous, so the scan is done on the link counts of the blocks (8 times smaller):
-            // the offset of a cell is the one of its block plus the links of the previous cells
-            // of the block, summed in work-group memory (a work group holds whole blocks).
-            static_assert(cell_graph_group_size % AMRBlock::block_size == 0);
-            u32 block_count = edges.sizes.indexes.get(id);
+        if (S > 0) {
+            // per patch s: first cell (cell_base) and first block link count slot (cnt_base, a
+            // segment of block_count + 1 slots per direction, the last one being a separator)
+            std::vector<u32> h_cell_base(S + 1), h_cnt_base(S + 1);
+            h_cell_base[0] = 0;
+            h_cnt_base[0]  = 0;
+            for (u32 s = 0; s < S; s++) {
+                h_cell_base[s + 1] = h_cell_base[s] + patches[s].block_count * AMRBlock::block_size;
+                h_cnt_base[s + 1]  = h_cnt_base[s] + 6 * (patches[s].block_count + 1);
+            }
+            u32 C         = h_cell_base[S];
+            u32 cnt_total = h_cnt_base[S];
 
-            // link counts of the blocks for the 6 directions in one buffer (see
-            // details::neigh_6dir_count_idx), and of the cells (cell_counts[dir * cell_count + i])
-            sham::DeviceBuffer<u32> link_counts(
-                details::neigh_6dir_count_size(block_count), dev_sched);
-            sham::DeviceBuffer<u32> cell_counts(6 * cell_count, dev_sched);
+            sham::DeviceBuffer<u32> cell_base(S + 1, dev_sched);
+            sham::DeviceBuffer<u32> cnt_base(S + 1, dev_sched);
+            cell_base.copy_from_stdvec(h_cell_base);
+            cnt_base.copy_from_stdvec(h_cnt_base);
 
-            if (cell_count > 0) {
+            // patch of thread t: the last s with cell_base[s] <= t
+            auto find_patch = [S](const u32 *__restrict cell_base, u32 t) -> u32 {
+                u32 lo = 0, hi = S;
+                while (hi - lo > 1) {
+                    u32 mid = (lo + hi) / 2;
+                    if (cell_base[mid] <= t) {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                return lo;
+            };
+
+            auto block_min_buf = [&](u64 id) -> sham::DeviceBuffer<TgridVec> & {
+                PatchDataField<TgridVec> &f = edges.spans_block_min.get_refs().get(id);
+                return f.get_buf();
+            };
+            auto block_max_buf = [&](u64 id) -> sham::DeviceBuffer<TgridVec> & {
+                PatchDataField<TgridVec> &f = edges.spans_block_max.get_refs().get(id);
+                return f.get_buf();
+            };
+
+            // read access to the block graphs and block boxes of every patch, returns the tables
+            // of pointers (filled the first time)
+            sham::DeviceBuffer<u64> bg_offsets_ptr(6 * S, dev_sched);
+            sham::DeviceBuffer<u64> bg_links_ptr(6 * S, dev_sched);
+            sham::DeviceBuffer<u64> bmin_ptr(S, dev_sched);
+            sham::DeviceBuffer<u64> bmax_ptr(S, dev_sched);
+            bool tables_filled = false;
+
+            auto block_data_access = [&](sham::EventList &deps) {
+                std::vector<u64> h_bgo(6 * S), h_bgl(6 * S), h_bmin(S), h_bmax(S);
+                for (u32 s = 0; s < S; s++) {
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        AMRGraph::ro_access acc
+                            = shambase::get_check_ref(patches[s].block_graph->graph_links[dir])
+                                  .get_read_access(deps);
+                        h_bgo[6 * s + dir] = reinterpret_cast<u64>(acc.node_link_offset);
+                        h_bgl[6 * s + dir] = reinterpret_cast<u64>(acc.node_links);
+                    }
+                    h_bmin[s]
+                        = reinterpret_cast<u64>(block_min_buf(patches[s].id).get_read_access(deps));
+                    h_bmax[s]
+                        = reinterpret_cast<u64>(block_max_buf(patches[s].id).get_read_access(deps));
+                }
+                if (!tables_filled) {
+                    bg_offsets_ptr.copy_from_stdvec(h_bgo);
+                    bg_links_ptr.copy_from_stdvec(h_bgl);
+                    bmin_ptr.copy_from_stdvec(h_bmin);
+                    bmax_ptr.copy_from_stdvec(h_bmax);
+                    tables_filled = true;
+                }
+            };
+            auto block_data_complete = [&](sycl::event &e) {
+                for (u32 s = 0; s < S; s++) {
+                    for (u32 dir = 0; dir < 6; dir++) {
+                        shambase::get_check_ref(patches[s].block_graph->graph_links[dir])
+                            .complete_event_state(e);
+                    }
+                    block_min_buf(patches[s].id).complete_event_state(e);
+                    block_max_buf(patches[s].id).complete_event_state(e);
+                }
+            };
+
+            // link counts of the cells (cell_counts[dir * C + t]) and of the blocks (patch s,
+            // direction dir, block i at cnt_base[s] + dir * (n_s + 1) + i, plus a final slot)
+            sham::DeviceBuffer<u32> cell_counts(6 * C, dev_sched);
+            sham::DeviceBuffer<u32> link_counts(cnt_total + 1, dev_sched);
+
+            {
                 sham::EventList deps;
-                auto g0              = block_graph[0]->get_read_access(deps);
-                auto g1              = block_graph[1]->get_read_access(deps);
-                auto g2              = block_graph[2]->get_read_access(deps);
-                auto g3              = block_graph[3]->get_read_access(deps);
-                auto g4              = block_graph[4]->get_read_access(deps);
-                auto g5              = block_graph[5]->get_read_access(deps);
-                const TgridVec *bmin = buf_block_min.get_read_access(deps);
-                const TgridVec *bmax = buf_block_max.get_read_access(deps);
-                u32 *cnt             = link_counts.get_write_access(deps);
-                u32 *cc              = cell_counts.get_write_access(deps);
+                block_data_access(deps);
+                auto bgo = bg_offsets_ptr.get_read_access(deps);
+                auto bgl = bg_links_ptr.get_read_access(deps);
+                auto bmn = bmin_ptr.get_read_access(deps);
+                auto bmx = bmax_ptr.get_read_access(deps);
+                auto cb  = cell_base.get_read_access(deps);
+                auto nb  = cnt_base.get_read_access(deps);
+                u32 *cc  = cell_counts.get_write_access(deps);
+                u32 *cnt = link_counts.get_write_access(deps);
 
-                auto e = q.submit(deps, [&, off, cell_count, block_count](sycl::handler &cgh) {
+                auto e = q.submit(deps, [&, off, C, S, cnt_total](sycl::handler &cgh) {
                     constexpr u32 G = cell_graph_group_size;
                     sycl::local_accessor<u32, 1> lc(6 * G, cgh);
 
-                    cgh.parallel_for(sham::make_ndrange(G, cell_count), [=](sycl::nd_item<1> item) {
-                        u32 id_a    = (u32) item.get_global_linear_id();
+                    cgh.parallel_for(sham::make_ndrange(G, C), [=](sycl::nd_item<1> item) {
+                        u32 t       = (u32) item.get_global_linear_id();
                         u32 lid     = (u32) item.get_local_linear_id();
-                        bool active = id_a < cell_count;
+                        bool active = t < C;
 
-                        u32 c0 = 0, c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0;
+                        std::array<u32, 6> c{0, 0, 0, 0, 0, 0};
+
+                        u32 s    = (active) ? find_patch(cb, t) : 0;
+                        u32 id_a = t - cb[s];
 
                         if (active) {
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g0, bmin, bmax, off[0], [&](u32) {
-                                    c0++;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g1, bmin, bmax, off[1], [&](u32) {
-                                    c1++;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g2, bmin, bmax, off[2], [&](u32) {
-                                    c2++;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g3, bmin, bmax, off[3], [&](u32) {
-                                    c3++;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g4, bmin, bmax, off[4], [&](u32) {
-                                    c4++;
-                                });
-                            for_each_cell_neigh_safe<AMRBlock>(
-                                id_a, g5, bmin, bmax, off[5], [&](u32) {
-                                    c5++;
-                                });
+                            const TgridVec *bmin = reinterpret_cast<const TgridVec *>(bmn[s]);
+                            const TgridVec *bmax = reinterpret_cast<const TgridVec *>(bmx[s]);
 
-                            cc[0 * cell_count + id_a] = c0;
-                            cc[1 * cell_count + id_a] = c1;
-                            cc[2 * cell_count + id_a] = c2;
-                            cc[3 * cell_count + id_a] = c3;
-                            cc[4 * cell_count + id_a] = c4;
-                            cc[5 * cell_count + id_a] = c5;
+#pragma unroll
+                            for (u32 dir = 0; dir < 6; dir++) {
+                                AMRGraph::ro_access g{
+                                    reinterpret_cast<const u32 *>(bgo[6 * s + dir]),
+                                    reinterpret_cast<const u32 *>(bgl[6 * s + dir])};
+                                for_each_cell_neigh_safe<AMRBlock>(
+                                    id_a, g, bmin, bmax, off[dir], [&](u32) {
+                                        c[dir]++;
+                                    });
+                                cc[dir * C + t] = c[dir];
+                            }
                         }
 
-                        lc[0 * G + lid] = c0;
-                        lc[1 * G + lid] = c1;
-                        lc[2 * G + lid] = c2;
-                        lc[3 * G + lid] = c3;
-                        lc[4 * G + lid] = c4;
-                        lc[5 * G + lid] = c5;
+#pragma unroll
+                        for (u32 dir = 0; dir < 6; dir++) {
+                            lc[dir * G + lid] = c[dir];
+                        }
 
                         sycl::group_barrier(item.get_group());
 
+                        if (!active) {
+                            return;
+                        }
+
+                        u32 n_b   = (cb[s + 1] - cb[s]) / AMRBlock::block_size;
+                        u32 block = id_a / AMRBlock::block_size;
+
                         // first cell of a block : link counts of the block
-                        if (active && (lid % AMRBlock::block_size) == 0) {
-                            u32 block = id_a / AMRBlock::block_size;
+                        if ((lid % AMRBlock::block_size) == 0) {
                             for (u32 dir = 0; dir < 6; dir++) {
                                 u32 sum = 0;
                                 for (u32 k = 0; k < AMRBlock::block_size; k++) {
                                     sum += lc[dir * G + lid + k];
                                 }
-                                cnt[details::neigh_6dir_count_idx(dir, block, block_count)] = sum;
+                                cnt[nb[s] + dir * (n_b + 1) + block] = sum;
+                                if (block == n_b - 1) {
+                                    cnt[nb[s] + dir * (n_b + 1) + n_b] = 0; // separator
+                                }
                             }
+                        }
+                        if (t == C - 1) {
+                            cnt[cnt_total] = 0;
                         }
                     });
                 });
 
-                for (u32 dir = 0; dir < 6; dir++) {
-                    block_graph[dir]->complete_event_state(e);
-                }
-                buf_block_min.complete_event_state(e);
-                buf_block_max.complete_event_state(e);
+                block_data_complete(e);
+                bg_offsets_ptr.complete_event_state(e);
+                bg_links_ptr.complete_event_state(e);
+                bmin_ptr.complete_event_state(e);
+                bmax_ptr.complete_event_state(e);
+                cell_base.complete_event_state(e);
+                cnt_base.complete_event_state(e);
+                cell_counts.complete_event_state(e);
                 link_counts.complete_event_state(e);
-                cell_counts.complete_event_state(e);
             }
 
-            details::NeighGraph6DirOffsets scanned
-                = details::scan_link_counts_6dir(dev_sched, link_counts, block_count, cell_count);
+            // one scan for all the patches and directions; the offsets of (patch, direction) are
+            // the scan minus its value at the start of the (patch, direction)
+            sham::DeviceBuffer<u32> scanned
+                = shamalgs::numeric::scan_exclusive(dev_sched, link_counts, cnt_total + 1);
 
-            // links and antecedent maps (link -> cell, as AMRGraph::compute_antecedent)
-            std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> links;
-            std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> ante;
-            for (u32 dir = 0; dir < 6; dir++) {
-                links[dir]
-                    = std::make_unique<sham::DeviceBuffer<u32>>(scanned.link_count[dir], dev_sched);
-                ante[dir]
-                    = std::make_unique<sham::DeviceBuffer<u32>>(scanned.link_count[dir], dev_sched);
+            sham::DeviceBuffer<u32> starts(6 * S + 1, dev_sched);
+            sham::kernel_call(
+                q,
+                sham::MultiRef{scanned, cell_base, cnt_base},
+                sham::MultiRef{starts},
+                6 * S + 1,
+                [S, cnt_total](
+                    u32 k,
+                    const u32 *__restrict sc,
+                    const u32 *__restrict cb,
+                    const u32 *__restrict nb,
+                    u32 *__restrict st) {
+                    if (k == 6 * S) {
+                        st[k] = sc[cnt_total];
+                    } else {
+                        u32 s   = k / 6;
+                        u32 dir = k % 6;
+                        u32 n_b = (cb[s + 1] - cb[s]) / AMRBlock::block_size;
+                        st[k]   = sc[nb[s] + dir * (n_b + 1)];
+                    }
+                });
+            std::vector<u32> h_starts = starts.copy_to_stdvec();
+
+            // graph buffers of every (patch, direction): offsets, links and antecedent maps (link
+            // -> cell, as AMRGraph::compute_antecedent)
+            std::vector<std::unique_ptr<sham::DeviceBuffer<u32>>> offsets(6 * S), links(6 * S),
+                ante(6 * S);
+            for (u32 k = 0; k < 6 * S; k++) {
+                u32 n_cell = patches[k / 6].block_count * AMRBlock::block_size;
+                u32 n_link = h_starts[k + 1] - h_starts[k];
+                offsets[k] = std::make_unique<sham::DeviceBuffer<u32>>(n_cell + 1, dev_sched);
+                links[k]   = std::make_unique<sham::DeviceBuffer<u32>>(n_link, dev_sched);
+                ante[k]    = std::make_unique<sham::DeviceBuffer<u32>>(n_link, dev_sched);
             }
 
-            if (cell_count > 0) {
+            sham::DeviceBuffer<u64> offsets_ptr(6 * S, dev_sched);
+            sham::DeviceBuffer<u64> links_ptr(6 * S, dev_sched);
+            sham::DeviceBuffer<u64> ante_ptr(6 * S, dev_sched);
+
+            {
                 sham::EventList deps;
-                auto g0              = block_graph[0]->get_read_access(deps);
-                auto g1              = block_graph[1]->get_read_access(deps);
-                auto g2              = block_graph[2]->get_read_access(deps);
-                auto g3              = block_graph[3]->get_read_access(deps);
-                auto g4              = block_graph[4]->get_read_access(deps);
-                auto g5              = block_graph[5]->get_read_access(deps);
-                const TgridVec *bmin = buf_block_min.get_read_access(deps);
-                const TgridVec *bmax = buf_block_max.get_read_access(deps);
-                const u32 *sc        = scanned.scanned->get_read_access(deps);
-                const u32 *cc        = cell_counts.get_read_access(deps);
-                u32 *off0            = scanned.node_link_offset[0]->get_write_access(deps);
-                u32 *off1            = scanned.node_link_offset[1]->get_write_access(deps);
-                u32 *off2            = scanned.node_link_offset[2]->get_write_access(deps);
-                u32 *off3            = scanned.node_link_offset[3]->get_write_access(deps);
-                u32 *off4            = scanned.node_link_offset[4]->get_write_access(deps);
-                u32 *off5            = scanned.node_link_offset[5]->get_write_access(deps);
-                u32 *ids0            = links[0]->get_write_access(deps);
-                u32 *ids1            = links[1]->get_write_access(deps);
-                u32 *ids2            = links[2]->get_write_access(deps);
-                u32 *ids3            = links[3]->get_write_access(deps);
-                u32 *ids4            = links[4]->get_write_access(deps);
-                u32 *ids5            = links[5]->get_write_access(deps);
-                u32 *ante0           = ante[0]->get_write_access(deps);
-                u32 *ante1           = ante[1]->get_write_access(deps);
-                u32 *ante2           = ante[2]->get_write_access(deps);
-                u32 *ante3           = ante[3]->get_write_access(deps);
-                u32 *ante4           = ante[4]->get_write_access(deps);
-                u32 *ante5           = ante[5]->get_write_access(deps);
-
-                std::array<u32, 6> start = scanned.start;
-
-                auto e
-                    = q.submit(deps, [&, off, cell_count, block_count, start](sycl::handler &cgh) {
-                          constexpr u32 G = cell_graph_group_size;
-                          sycl::local_accessor<u32, 1> lc(6 * G, cgh);
-
-                          cgh.parallel_for(
-                              sham::make_ndrange(G, cell_count), [=](sycl::nd_item<1> item) {
-                                  u32 id_a    = (u32) item.get_global_linear_id();
-                                  u32 lid     = (u32) item.get_local_linear_id();
-                                  bool active = id_a < cell_count;
-
-                                  for (u32 dir = 0; dir < 6; dir++) {
-                                      lc[dir * G + lid]
-                                          = (active) ? cc[dir * cell_count + id_a] : 0;
-                                  }
-
-                                  sycl::group_barrier(item.get_group());
-
-                                  if (!active) {
-                                      return;
-                                  }
-
-                                  u32 block      = id_a / AMRBlock::block_size;
-                                  u32 cell       = id_a % AMRBlock::block_size;
-                                  u32 block_lid0 = lid - cell;
-
-                                  // offset of the block from the single scan + links of the
-                                  // previous cells of the block
-                                  auto link_offset = [&](u32 dir) {
-                                      u32 o = details::neigh_6dir_link_offset(
-                                          sc, start[dir], dir, block, block_count);
-                                      for (u32 k = 0; k < cell; k++) {
-                                          o += lc[dir * G + block_lid0 + k];
-                                      }
-                                      return o;
-                                  };
-
-                                  u32 w0 = link_offset(0), w1 = link_offset(1), w2 = link_offset(2);
-                                  u32 w3 = link_offset(3), w4 = link_offset(4), w5 = link_offset(5);
-
-                                  off0[id_a] = w0;
-                                  off1[id_a] = w1;
-                                  off2[id_a] = w2;
-                                  off3[id_a] = w3;
-                                  off4[id_a] = w4;
-                                  off5[id_a] = w5;
-
-                                  if (id_a == cell_count - 1) {
-                                      auto total = [&](u32 dir) {
-                                          return details::neigh_6dir_link_offset(
-                                              sc, start[dir], dir, block_count, block_count);
-                                      };
-                                      off0[cell_count] = total(0);
-                                      off1[cell_count] = total(1);
-                                      off2[cell_count] = total(2);
-                                      off3[cell_count] = total(3);
-                                      off4[cell_count] = total(4);
-                                      off5[cell_count] = total(5);
-                                  }
-
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g0, bmin, bmax, off[0], [&](u32 idx) {
-                                          ante0[w0]  = id_a;
-                                          ids0[w0++] = idx;
-                                      });
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g1, bmin, bmax, off[1], [&](u32 idx) {
-                                          ante1[w1]  = id_a;
-                                          ids1[w1++] = idx;
-                                      });
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g2, bmin, bmax, off[2], [&](u32 idx) {
-                                          ante2[w2]  = id_a;
-                                          ids2[w2++] = idx;
-                                      });
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g3, bmin, bmax, off[3], [&](u32 idx) {
-                                          ante3[w3]  = id_a;
-                                          ids3[w3++] = idx;
-                                      });
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g4, bmin, bmax, off[4], [&](u32 idx) {
-                                          ante4[w4]  = id_a;
-                                          ids4[w4++] = idx;
-                                      });
-                                  for_each_cell_neigh_safe<AMRBlock>(
-                                      id_a, g5, bmin, bmax, off[5], [&](u32 idx) {
-                                          ante5[w5]  = id_a;
-                                          ids5[w5++] = idx;
-                                      });
-                              });
-                      });
-
-                scanned.scanned->complete_event_state(e);
-                cell_counts.complete_event_state(e);
-                for (u32 dir = 0; dir < 6; dir++) {
-                    block_graph[dir]->complete_event_state(e);
-                    scanned.node_link_offset[dir]->complete_event_state(e);
-                    links[dir]->complete_event_state(e);
-                    ante[dir]->complete_event_state(e);
+                std::vector<u64> h_off(6 * S), h_lnk(6 * S), h_ante(6 * S);
+                for (u32 k = 0; k < 6 * S; k++) {
+                    h_off[k]  = reinterpret_cast<u64>(offsets[k]->get_write_access(deps));
+                    h_lnk[k]  = reinterpret_cast<u64>(links[k]->get_write_access(deps));
+                    h_ante[k] = reinterpret_cast<u64>(ante[k]->get_write_access(deps));
                 }
-                buf_block_min.complete_event_state(e);
-                buf_block_max.complete_event_state(e);
+                offsets_ptr.copy_from_stdvec(h_off);
+                links_ptr.copy_from_stdvec(h_lnk);
+                ante_ptr.copy_from_stdvec(h_ante);
+
+                block_data_access(deps);
+                auto bgo  = bg_offsets_ptr.get_read_access(deps);
+                auto bgl  = bg_links_ptr.get_read_access(deps);
+                auto bmn  = bmin_ptr.get_read_access(deps);
+                auto bmx  = bmax_ptr.get_read_access(deps);
+                auto cb   = cell_base.get_read_access(deps);
+                auto nb   = cnt_base.get_read_access(deps);
+                auto cc   = cell_counts.get_read_access(deps);
+                auto sc   = scanned.get_read_access(deps);
+                auto st   = starts.get_read_access(deps);
+                auto optr = offsets_ptr.get_read_access(deps);
+                auto lptr = links_ptr.get_read_access(deps);
+                auto aptr = ante_ptr.get_read_access(deps);
+
+                auto e = q.submit(deps, [&, off, C](sycl::handler &cgh) {
+                    constexpr u32 G = cell_graph_group_size;
+                    sycl::local_accessor<u32, 1> lc(6 * G, cgh);
+
+                    cgh.parallel_for(sham::make_ndrange(G, C), [=](sycl::nd_item<1> item) {
+                        u32 t       = (u32) item.get_global_linear_id();
+                        u32 lid     = (u32) item.get_local_linear_id();
+                        bool active = t < C;
+
+#pragma unroll
+                        for (u32 dir = 0; dir < 6; dir++) {
+                            lc[dir * G + lid] = (active) ? cc[dir * C + t] : 0;
+                        }
+
+                        sycl::group_barrier(item.get_group());
+
+                        if (!active) {
+                            return;
+                        }
+
+                        u32 s      = find_patch(cb, t);
+                        u32 id_a   = t - cb[s];
+                        u32 n_cell = cb[s + 1] - cb[s];
+                        u32 n_b    = n_cell / AMRBlock::block_size;
+
+                        u32 block      = id_a / AMRBlock::block_size;
+                        u32 cell       = id_a % AMRBlock::block_size;
+                        u32 block_lid0 = lid - cell;
+
+                        const TgridVec *bmin = reinterpret_cast<const TgridVec *>(bmn[s]);
+                        const TgridVec *bmax = reinterpret_cast<const TgridVec *>(bmx[s]);
+
+#pragma unroll
+                        for (u32 dir = 0; dir < 6; dir++) {
+                            u32 k     = 6 * s + dir;
+                            u32 *offs = reinterpret_cast<u32 *>(optr[k]);
+                            u32 *ids  = reinterpret_cast<u32 *>(lptr[k]);
+                            u32 *ant  = reinterpret_cast<u32 *>(aptr[k]);
+
+                            // offset of the block from the single scan + links of the previous
+                            // cells of the block
+                            u32 w = sc[nb[s] + dir * (n_b + 1) + block] - st[k];
+                            for (u32 kk = 0; kk < cell; kk++) {
+                                w += lc[dir * G + block_lid0 + kk];
+                            }
+
+                            offs[id_a] = w;
+                            if (id_a == n_cell - 1) {
+                                offs[n_cell] = sc[nb[s] + dir * (n_b + 1) + n_b] - st[k];
+                            }
+
+                            AMRGraph::ro_access g{
+                                reinterpret_cast<const u32 *>(bgo[k]),
+                                reinterpret_cast<const u32 *>(bgl[k])};
+                            for_each_cell_neigh_safe<AMRBlock>(
+                                id_a, g, bmin, bmax, off[dir], [&](u32 idx) {
+                                    ant[w] = id_a;
+                                    ids[w] = idx;
+                                    w++;
+                                });
+                        }
+                    });
+                });
+
+                block_data_complete(e);
+                bg_offsets_ptr.complete_event_state(e);
+                bg_links_ptr.complete_event_state(e);
+                bmin_ptr.complete_event_state(e);
+                bmax_ptr.complete_event_state(e);
+                cell_base.complete_event_state(e);
+                cnt_base.complete_event_state(e);
+                cell_counts.complete_event_state(e);
+                scanned.complete_event_state(e);
+                starts.complete_event_state(e);
+                offsets_ptr.complete_event_state(e);
+                links_ptr.complete_event_state(e);
+                ante_ptr.complete_event_state(e);
+                for (u32 k = 0; k < 6 * S; k++) {
+                    offsets[k]->complete_event_state(e);
+                    links[k]->complete_event_state(e);
+                    ante[k]->complete_event_state(e);
+                }
             }
 
-            for (u32 dir = 0; dir < 6; dir++) {
-                shamlog_debug_ln(
-                    "AMR Cell Graph",
-                    "Patch",
-                    id,
-                    "direction",
-                    dir,
-                    "link cnt",
-                    scanned.link_count[dir]);
+            for (u32 s = 0; s < S; s++) {
+                OrientedAMRGraph result;
+                u32 n_cell = patches[s].block_count * AMRBlock::block_size;
+                for (u32 dir = 0; dir < 6; dir++) {
+                    u32 k      = 6 * s + dir;
+                    u32 n_link = h_starts[k + 1] - h_starts[k];
 
-                result.graph_links[dir] = std::make_unique<AMRGraph>(AMRGraph{
-                    .node_link_offset = std::move(*scanned.node_link_offset[dir]),
-                    .node_links       = std::move(*links[dir]),
-                    .link_count       = scanned.link_count[dir],
-                    .obj_cnt          = cell_count,
-                    .antecedent       = std::move(*ante[dir])});
+                    shamlog_debug_ln(
+                        "AMR Cell Graph",
+                        "Patch",
+                        patches[s].id,
+                        "direction",
+                        dir,
+                        "link cnt",
+                        n_link);
+
+                    result.graph_links[dir] = std::make_unique<AMRGraph>(AMRGraph{
+                        .node_link_offset = std::move(*offsets[k]),
+                        .node_links       = std::move(*links[k]),
+                        .link_count       = n_link,
+                        .obj_cnt          = n_cell,
+                        .antecedent       = std::move(*ante[k])});
+                }
+                cell_graph_links.add_obj(patches[s].id, std::move(result));
             }
-
-            cell_graph_links.add_obj(id, std::move(result));
-        });
+        }
 
         edges.cell_neigh_graph.graph = std::move(cell_graph_links);
     }
