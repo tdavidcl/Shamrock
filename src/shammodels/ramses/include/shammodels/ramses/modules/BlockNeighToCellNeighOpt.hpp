@@ -32,9 +32,6 @@ namespace shammodels::basegodunov::modules {
         using RTree            = RadixTree<Tmorton, TgridVec>;
         using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
 
-        template<class AMRBlock>
-        class AMRLowering;
-
         u32 block_nside_pow;
 
         public:
