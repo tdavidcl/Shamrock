@@ -22,6 +22,7 @@
 #include "shammath/sphkernels.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/modules/render/SPHInterpolation.hpp"
+#include "shammodels/sph/modules/render/exact_integ_helpers.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
@@ -30,6 +31,19 @@
 #include <limits>
 
 namespace {
+
+    using namespace shammodels::sph::modules::details;
+
+    /// index of the per particle data of the interpolation in a sycl::vec<f64, 8>
+    enum InterpPartData : int { IpH = 0, IpInvH, IpHHH, IpInvHHH, IpRho, IpInvRho, IpSupport2 };
+
+    /// Bit identical equivalent of `Kernel::W_3d(r, h)` (`norm_3d * f(r / h) / (h * h * h)`)
+    /// using the precomputed correctly rounded reciprocals of h and h * h * h
+    template<class Kernel>
+    inline f64 interp_W_3d(f64 r, const sycl::vec<f64, 8> &pd) {
+        f64 q = div_rn(r, pd[IpH], pd[IpInvH]);
+        return div_rn(Kernel::Generator::norm_3d * Kernel::f(q), pd[IpHHH], pd[IpInvHHH]);
+    }
 
     /// capacity of the per thread buffer of particles around the interpolation point
     constexpr u32 interp_buf_size = 96;
@@ -65,7 +79,7 @@ namespace {
         const Tvec *__restrict xyz,
         const shambase::VecComponent<Tvec> *__restrict hpart,
         const T *__restrict partmass_val,
-        const shambase::VecComponent<Tvec> *__restrict rho_part,
+        const sycl::vec<f64, 8> *__restrict part_data,
         const f32 *__restrict hsupport2_up,
         const sycl::vec<f32, 4> *__restrict xyz_rel_f,
         const sycl::vec<f32, 4> *__restrict node_lo_f,
@@ -123,16 +137,25 @@ namespace {
         auto contrib = [&](u32 id_b, const Tvec &p, T &ret) -> bool {
             Tvec dr    = p - xyz[id_b];
             Tscal rab2 = sycl::dot(dr, dr);
-            Tscal h_b  = hpart[id_b];
 
-            if (rab2 > h_b * h_b * Rker2) {
-                return false;
+            sycl::vec<f64, 8> pd = part_data[id_b];
+
+            // rab2 > h_b * h_b * Rker2 (precomputed), as an integer comparison: rab2 >= +0 and the
+            // threshold >= +0, NaN never rejects (as the floating point comparison)
+            {
+                u64 rb       = f64_bits(rab2);
+                u64 hb       = f64_bits(pd[IpSupport2]);
+                u64 inf_bits = f64_bits(shambase::get_infty<f64>());
+                if (rb > hb && rb <= inf_bits && hb <= inf_bits) {
+                    return false;
+                }
             }
 
             Tscal rab = sycl::sqrt(rab2);
 
             // partmass * val and rho_h(partmass, h_b, hfactd) precomputed per particle
-            ret = partmass_val[id_b] * Kernel::W_3d(rab, h_b) / rho_part[id_b];
+            ret = div_rn_vec(
+                partmass_val[id_b] * interp_W_3d<Kernel>(rab, pd), pd[IpRho], pd[IpInvRho]);
             return true;
         };
 
@@ -461,7 +484,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
         // per particle quantities independent of the point (same expressions as in the direct
         // computation `partmass * val * W / rho_h(partmass, h_b, hfactd)`, hence same bits)
         sham::DeviceBuffer<T> partmass_val_buf(obj_cnt, dev_sched);
-        sham::DeviceBuffer<Tscal> rho_part_buf(obj_cnt, dev_sched);
+        sham::DeviceBuffer<sycl::vec<f64, 8>> part_data_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<f32> hsupport2_up_buf(obj_cnt, dev_sched);
         sham::DeviceBuffer<sycl::vec<f32, 4>> xyz_rel_f_buf(obj_cnt, dev_sched);
 
@@ -470,7 +493,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
         sham::kernel_call(
             queue,
             sham::MultiRef{buf_hpart, buf_field, pos.get_buf()},
-            sham::MultiRef{partmass_val_buf, rho_part_buf, hsupport2_up_buf, xyz_rel_f_buf},
+            sham::MultiRef{partmass_val_buf, part_data_buf, hsupport2_up_buf, xyz_rel_f_buf},
             obj_cnt,
             [partmass, center](
                 u32 id_b,
@@ -478,7 +501,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 const T *__restrict torender,
                 const Tvec *__restrict xyz,
                 T *__restrict partmass_val,
-                Tscal *__restrict rho_part,
+                sycl::vec<f64, 8> *__restrict part_data,
                 f32 *__restrict hsupport2_up,
                 sycl::vec<f32, 4> *__restrict xyz_rel_f) {
                 // position relative to the patch center in fp32 (+ its L1 norm)
@@ -493,7 +516,21 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 Tscal h_b = hpart[id_b];
 
                 partmass_val[id_b] = partmass * torender[id_b];
-                rho_part[id_b]     = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+
+                // same expressions as in the direct computation, and correctly rounded
+                // reciprocals of the divisors
+                Tscal rho_b = shamrock::sph::rho_h(partmass, h_b, Kernel::hfactd);
+                Tscal hhh   = h_b * h_b * h_b;
+                sycl::vec<f64, 8> pd;
+                pd[IpH]         = h_b;
+                pd[IpInvH]      = 1 / h_b;
+                pd[IpHHH]       = hhh;
+                pd[IpInvHHH]    = 1 / hhh;
+                pd[IpRho]       = rho_b;
+                pd[IpInvRho]    = 1 / rho_b;
+                pd[IpSupport2]  = h_b * h_b * Rker2;
+                pd[7]           = 0;
+                part_data[id_b] = pd;
 
                 // fp32 upper bound of the exact test threshold h_b * h_b * Rker2
                 hsupport2_up[id_b] = f32(h_b * h_b * Rker2) * (1.f + 1.f / 1048576.f);
@@ -551,7 +588,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 pos.get_buf(),
                 buf_hpart,
                 partmass_val_buf,
-                rho_part_buf,
+                part_data_buf,
                 hsupport2_up_buf,
                 xyz_rel_f_buf,
                 node_lo_f_buf,
@@ -565,7 +602,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                 const Tvec *__restrict xyz,
                 const Tscal *__restrict hpart,
                 const T *__restrict partmass_val,
-                const Tscal *__restrict rho_part,
+                const sycl::vec<f64, 8> *__restrict part_data,
                 const f32 *__restrict hsupport2_up,
                 const sycl::vec<f32, 4> *__restrict xyz_rel_f,
                 const sycl::vec<f32, 4> *__restrict node_lo_f,
@@ -591,7 +628,7 @@ void shammodels::sph::modules::SPHInterpolation<Tvec, T, SPHKernel>::_impl_evalu
                                 xyz,
                                 hpart,
                                 partmass_val,
-                                rho_part,
+                                part_data,
                                 hsupport2_up,
                                 xyz_rel_f,
                                 node_lo_f,
