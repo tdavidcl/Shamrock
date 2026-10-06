@@ -236,9 +236,13 @@ namespace shammodels::basegodunov::modules {
             details::NeighGraph6DirOffsets scanned
                 = details::scan_link_counts_6dir(dev_sched, link_counts, cell_count);
 
+            // links and antecedent maps (link -> cell, as AMRGraph::compute_antecedent)
             std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> links;
+            std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> ante;
             for (u32 dir = 0; dir < 6; dir++) {
                 links[dir]
+                    = std::make_unique<sham::DeviceBuffer<u32>>(scanned.link_count[dir], dev_sched);
+                ante[dir]
                     = std::make_unique<sham::DeviceBuffer<u32>>(scanned.link_count[dir], dev_sched);
             }
 
@@ -265,6 +269,12 @@ namespace shammodels::basegodunov::modules {
                 u32 *ids3            = links[3]->get_write_access(deps);
                 u32 *ids4            = links[4]->get_write_access(deps);
                 u32 *ids5            = links[5]->get_write_access(deps);
+                u32 *ante0           = ante[0]->get_write_access(deps);
+                u32 *ante1           = ante[1]->get_write_access(deps);
+                u32 *ante2           = ante[2]->get_write_access(deps);
+                u32 *ante3           = ante[3]->get_write_access(deps);
+                u32 *ante4           = ante[4]->get_write_access(deps);
+                u32 *ante5           = ante[5]->get_write_access(deps);
 
                 std::array<u32, 6> start = scanned.start;
 
@@ -301,26 +311,32 @@ namespace shammodels::basegodunov::modules {
 
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g0, bmin, bmax, off[0], [&](u32 idx) {
+                                    ante0[w0]  = id_a;
                                     ids0[w0++] = idx;
                                 });
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g1, bmin, bmax, off[1], [&](u32 idx) {
+                                    ante1[w1]  = id_a;
                                     ids1[w1++] = idx;
                                 });
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g2, bmin, bmax, off[2], [&](u32 idx) {
+                                    ante2[w2]  = id_a;
                                     ids2[w2++] = idx;
                                 });
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g3, bmin, bmax, off[3], [&](u32 idx) {
+                                    ante3[w3]  = id_a;
                                     ids3[w3++] = idx;
                                 });
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g4, bmin, bmax, off[4], [&](u32 idx) {
+                                    ante4[w4]  = id_a;
                                     ids4[w4++] = idx;
                                 });
                             for_each_cell_neigh_safe<AMRBlock>(
                                 id_a, g5, bmin, bmax, off[5], [&](u32 idx) {
+                                    ante5[w5]  = id_a;
                                     ids5[w5++] = idx;
                                 });
                         });
@@ -331,6 +347,7 @@ namespace shammodels::basegodunov::modules {
                     block_graph[dir]->complete_event_state(e);
                     scanned.node_link_offset[dir]->complete_event_state(e);
                     links[dir]->complete_event_state(e);
+                    ante[dir]->complete_event_state(e);
                 }
                 buf_block_min.complete_event_state(e);
                 buf_block_max.complete_event_state(e);
@@ -350,66 +367,11 @@ namespace shammodels::basegodunov::modules {
                     .node_link_offset = std::move(*scanned.node_link_offset[dir]),
                     .node_links       = std::move(*links[dir]),
                     .link_count       = scanned.link_count[dir],
-                    .obj_cnt          = cell_count});
+                    .obj_cnt          = cell_count,
+                    .antecedent       = std::move(*ante[dir])});
             }
 
             cell_graph_links.add_obj(id, std::move(result));
-        });
-
-        shamlog_debug_ln("[AMR cell graph]", "compute antecedent map");
-        cell_graph_links.for_each([&](u64 id, OrientedAMRGraph &oriented_block_graph) {
-            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
-            u32 cell_count = (edges.sizes.indexes.get(id)) * AMRBlock::block_size;
-
-            // same as AMRGraph::compute_antecedent on each direction, in one kernel
-            std::array<AMRGraph *, 6> g;
-            std::array<std::unique_ptr<sham::DeviceBuffer<u32>>, 6> ante;
-            for (u32 dir = 0; dir < 6; dir++) {
-                g[dir] = oriented_block_graph.graph_links[dir].get();
-                ante[dir]
-                    = std::make_unique<sham::DeviceBuffer<u32>>(g[dir]->link_count, dev_sched);
-            }
-
-            sham::kernel_call(
-                dev_sched->get_queue(),
-                sham::MultiRef{
-                    g[0]->node_link_offset,
-                    g[1]->node_link_offset,
-                    g[2]->node_link_offset,
-                    g[3]->node_link_offset,
-                    g[4]->node_link_offset,
-                    g[5]->node_link_offset},
-                sham::MultiRef{*ante[0], *ante[1], *ante[2], *ante[3], *ante[4], *ante[5]},
-                cell_count,
-                [](u32 gid,
-                   const u32 *__restrict off0,
-                   const u32 *__restrict off1,
-                   const u32 *__restrict off2,
-                   const u32 *__restrict off3,
-                   const u32 *__restrict off4,
-                   const u32 *__restrict off5,
-                   u32 *__restrict ante0,
-                   u32 *__restrict ante1,
-                   u32 *__restrict ante2,
-                   u32 *__restrict ante3,
-                   u32 *__restrict ante4,
-                   u32 *__restrict ante5) {
-                    auto fill = [gid](const u32 *__restrict offset, u32 *__restrict a) {
-                        for (u32 id_s = offset[gid]; id_s < offset[gid + 1]; id_s++) {
-                            a[id_s] = gid;
-                        }
-                    };
-                    fill(off0, ante0);
-                    fill(off1, ante1);
-                    fill(off2, ante2);
-                    fill(off3, ante3);
-                    fill(off4, ante4);
-                    fill(off5, ante5);
-                });
-
-            for (u32 dir = 0; dir < 6; dir++) {
-                g[dir]->antecedent = std::move(*ante[dir]);
-            }
         });
 
         edges.cell_neigh_graph.graph = std::move(cell_graph_links);
