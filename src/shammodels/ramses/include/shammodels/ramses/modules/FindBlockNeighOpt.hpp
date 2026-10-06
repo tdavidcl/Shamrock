@@ -32,6 +32,7 @@ namespace shammodels::basegodunov::modules {
         using OrientedAMRGraph = OrientedAMRGraph<Tvec, TgridVec>;
 
         class AMRBlockFinder;
+        class AMRBlockFinderI32;
 
         public:
         FindBlockNeighOpt() {}

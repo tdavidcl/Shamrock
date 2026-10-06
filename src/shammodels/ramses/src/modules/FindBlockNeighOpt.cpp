@@ -16,6 +16,8 @@
 
 #include "shambase/stacktrace.hpp"
 #include "shamalgs/details/numeric/numeric.hpp"
+#include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/EventList.hpp"
 #include "shammath/AABB.hpp"
 #include "shammodels/ramses/modules/FindBlockNeighOpt.hpp"
 #include "shammodels/ramses/modules/details/compute_neigh_graph.hpp"
@@ -157,6 +159,140 @@ namespace shammodels::basegodunov::modules {
         }
     };
 
+    /**
+     * @brief Block finder working on packed i32 records relative to the first block of the patch
+     *
+     * node_rec holds two vec<i32, 4> per tree node: {lower - origin, a} and {upper - origin, b},
+     * with (a, b) the left & right child ids of an internal node, or the range of objects of a
+     * leaf. obj_rec holds two vec<i32, 4> per object, in leaf order: {lower - origin, block id}
+     * and {upper - origin, 0}. The intersection tests are translation invariant on integers, so
+     * as long as every coordinate fits (checked when building the records) they give exactly the
+     * same results as the TgridVec ones of AMRBlockFinder.
+     */
+    template<class Tvec, class TgridVec, class Tmorton>
+    class FindBlockNeighOpt<Tvec, TgridVec, Tmorton>::AMRBlockFinderI32 {
+        public:
+        static constexpr u32 tree_depth = RTree::tree_depth;
+
+        sham::DeviceBuffer<sycl::vec<i32, 4>> &node_rec;
+        sham::DeviceBuffer<sycl::vec<i32, 4>> &obj_rec;
+        sham::DeviceBuffer<TgridVec> &buf_block_min;
+        sham::DeviceBuffer<TgridVec> &buf_block_max;
+        u32 leaf_offset;
+        TgridVec origin;
+        TgridVec dir_offset;
+
+        AMRBlockFinderI32(
+            sham::DeviceBuffer<sycl::vec<i32, 4>> &node_rec,
+            sham::DeviceBuffer<sycl::vec<i32, 4>> &obj_rec,
+            sham::DeviceBuffer<TgridVec> &buf_block_min,
+            sham::DeviceBuffer<TgridVec> &buf_block_max,
+            u32 leaf_offset,
+            TgridVec origin,
+            TgridVec dir_offset)
+            : node_rec(node_rec), obj_rec(obj_rec), buf_block_min(buf_block_min),
+              buf_block_max(buf_block_max), leaf_offset(leaf_offset), origin(origin),
+              dir_offset(dir_offset) {}
+
+        struct ro_access {
+            const sycl::vec<i32, 4> *node_rec;
+            const sycl::vec<i32, 4> *obj_rec;
+            const TgridVec *block_min;
+            const TgridVec *block_max;
+            u32 leaf_offset;
+            TgridVec origin;
+            TgridVec dir_offset;
+
+            template<class IndexFunctor>
+            void for_each_other_index(u32 id_a, IndexFunctor &&fct) const {
+
+                using AABBi = shammath::AABB<i32_3>;
+
+                auto to_i32 = [](TgridVec v) -> i32_3 {
+                    return {i32(v.x()), i32(v.y()), i32(v.z())};
+                };
+
+                // The wanted AABB (the block we look for), relative to the origin
+                AABBi check_aabb{
+                    to_i32(block_min[id_a] - origin + dir_offset),
+                    to_i32(block_max[id_a] - origin + dir_offset)};
+
+                auto rec_aabb = [](sycl::vec<i32, 4> lo, sycl::vec<i32, 4> up) -> AABBi {
+                    return {i32_3{lo.x(), lo.y(), lo.z()}, i32_3{up.x(), up.y(), up.z()}};
+                };
+
+                // Same traversal as AMRBlockFinder::for_each_other_index
+                u32 stack_cursor = tree_depth - 1;
+                std::array<u32, tree_depth> id_stack;
+                id_stack[stack_cursor] = 0;
+
+                while (stack_cursor < tree_depth) {
+
+                    bool found_leaf = false;
+                    u32 obj_begin   = 0;
+                    u32 obj_end     = 0;
+
+                    while (stack_cursor < tree_depth) {
+                        u32 current_node_id = id_stack[stack_cursor];
+                        stack_cursor++;
+
+                        sycl::vec<i32, 4> lo = node_rec[2 * current_node_id];
+                        sycl::vec<i32, 4> up = node_rec[2 * current_node_id + 1];
+
+                        if (rec_aabb(lo, up).get_intersect(check_aabb).is_volume_not_null()) {
+                            if (current_node_id >= leaf_offset) {
+                                found_leaf = true;
+                                obj_begin  = u32(lo.w());
+                                obj_end    = u32(up.w());
+                                break;
+                            }
+
+                            id_stack[stack_cursor - 1] = u32(up.w()); // right child
+                            stack_cursor--;
+
+                            id_stack[stack_cursor - 1] = u32(lo.w()); // left child
+                            stack_cursor--;
+                        }
+                    }
+
+                    if (found_leaf) {
+                        for (u32 id_s = obj_begin; id_s < obj_end; id_s++) {
+                            sycl::vec<i32, 4> lo = obj_rec[2 * id_s];
+                            sycl::vec<i32, 4> up = obj_rec[2 * id_s + 1];
+                            u32 id_b             = u32(lo.w());
+
+                            bool interact
+                                = rec_aabb(lo, up).get_intersect(check_aabb).is_volume_not_null()
+                                  && id_b != id_a;
+
+                            if (interact) {
+                                fct(id_b);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        ro_access get_read_access(sham::EventList &deps) {
+            return ro_access{
+                node_rec.get_read_access(deps),
+                obj_rec.get_read_access(deps),
+                buf_block_min.get_read_access(deps),
+                buf_block_max.get_read_access(deps),
+                leaf_offset,
+                origin,
+                dir_offset};
+        }
+
+        void complete_event_state(sycl::event &e) {
+            node_rec.complete_event_state(e);
+            obj_rec.complete_event_state(e);
+            buf_block_min.complete_event_state(e);
+            buf_block_max.complete_event_state(e);
+        }
+    };
+
     template<class Tvec, class TgridVec, class Tmorton>
     void FindBlockNeighOpt<Tvec, TgridVec, Tmorton>::_impl_evaluate_internal() {
         __shamrock_stack_entry();
@@ -185,27 +321,184 @@ namespace shammodels::basegodunov::modules {
             PatchDataField<TgridVec> &block_min = edges.spans_block_min.get_refs().get(id);
             PatchDataField<TgridVec> &block_max = edges.spans_block_max.get_refs().get(id);
 
-            sycl::buffer<TgridVec> buf_block_min_sycl = block_min.get_buf().copy_to_sycl_buffer();
-            sycl::buffer<TgridVec> buf_block_max_sycl = block_max.get_buf().copy_to_sycl_buffer();
+            u32 block_count = edges.sizes.indexes.get(id);
 
-            for (u32 dir = 0; dir < 6; dir++) {
+            auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
-                TgridVec dir_offset = result.offset_check[dir];
+            // packed i32 records of the tree nodes and of the objects (blocks), relative to the
+            // first block of the patch. The flag is raised if a coordinate does not fit, in which
+            // case the TgridVec path is used for this patch.
+            TgridVec origin
+                = (block_count > 0) ? block_min.get_buf().get_val_at_idx(0) : TgridVec{};
 
-                AMRGraph rslt = details::compute_neigh_graph_deprecated<AMRBlockFinder>(
-                    shamsys::instance::get_compute_scheduler_ptr(),
-                    edges.sizes.indexes.get(id),
-                    tree,
-                    buf_block_min_sycl,
-                    buf_block_max_sycl,
-                    dir_offset);
+            sham::DeviceBuffer<sycl::vec<i32, 4>> node_rec(2 * tot_count, dev_sched);
+            sham::DeviceBuffer<sycl::vec<i32, 4>> obj_rec(2 * block_count, dev_sched);
+            sham::DeviceBuffer<u32> out_of_range(1, dev_sched);
+            out_of_range.set_val_at_idx(0, 0);
 
-                shamlog_debug_ln(
-                    "AMR Block Graph", "Patch", id, "direction", dir, "link cnt", rslt.link_count);
+            if (block_count > 0) {
+                // bound on the relative coordinates, so that the query boxes (+-1) and every
+                // comparison stay far from the i32 limits
+                constexpr i64 max_rel = i64(1) << 30;
 
-                std::unique_ptr<AMRGraph> tmp_graph = std::make_unique<AMRGraph>(std::move(rslt));
+                auto to_rel = [](TgridVec v, TgridVec origin, bool &bad) -> sycl::vec<i32, 3> {
+                    TgridVec d = v - origin;
+                    bad = bad || (d.x() < -max_rel) || (d.x() > max_rel) || (d.y() < -max_rel)
+                          || (d.y() > max_rel) || (d.z() < -max_rel) || (d.z() > max_rel);
+                    return {i32(d.x()), i32(d.y()), i32(d.z())};
+                };
 
-                result.graph_links[dir] = std::move(tmp_graph);
+                sham::EventList deps;
+                auto rec  = node_rec.get_write_access(deps);
+                auto flag = out_of_range.get_write_access(deps);
+
+                auto e = q.submit(deps, [&, origin, tot_count](sycl::handler &cgh) {
+                    sycl::accessor pos_min{tree_bmin, cgh, sycl::read_only};
+                    sycl::accessor pos_max{tree_bmax, cgh, sycl::read_only};
+                    sycl::accessor lchild_id{
+                        shambase::get_check_ref(tree.tree_struct.buf_lchild_id),
+                        cgh,
+                        sycl::read_only};
+                    sycl::accessor rchild_id{
+                        shambase::get_check_ref(tree.tree_struct.buf_rchild_id),
+                        cgh,
+                        sycl::read_only};
+                    sycl::accessor lchild_flag{
+                        shambase::get_check_ref(tree.tree_struct.buf_lchild_flag),
+                        cgh,
+                        sycl::read_only};
+                    sycl::accessor rchild_flag{
+                        shambase::get_check_ref(tree.tree_struct.buf_rchild_flag),
+                        cgh,
+                        sycl::read_only};
+                    sycl::accessor cell_index_map{
+                        shambase::get_check_ref(tree.tree_reduced_morton_codes.buf_reduc_index_map),
+                        cgh,
+                        sycl::read_only};
+                    u32 leaf_offset = internal_cell_count;
+
+                    shambase::parallel_for(cgh, tot_count, "pack i32 node records", [=](u64 gid) {
+                        u32 node = (u32) gid;
+
+                        bool bad             = false;
+                        sycl::vec<i32, 3> lo = to_rel(pos_min[node], origin, bad);
+                        sycl::vec<i32, 3> up = to_rel(pos_max[node], origin, bad);
+
+                        u32 a, b;
+                        if (node >= leaf_offset) {
+                            a = cell_index_map[node - leaf_offset];
+                            b = cell_index_map[node + 1 - leaf_offset];
+                        } else {
+                            a = lchild_id[node] + leaf_offset * lchild_flag[node];
+                            b = rchild_id[node] + leaf_offset * rchild_flag[node];
+                        }
+
+                        rec[2 * node]     = {lo.x(), lo.y(), lo.z(), i32(a)};
+                        rec[2 * node + 1] = {up.x(), up.y(), up.z(), i32(b)};
+
+                        if (bad) {
+                            flag[0] = 1;
+                        }
+                    });
+                });
+
+                node_rec.complete_event_state(e);
+                out_of_range.complete_event_state(e);
+
+                sham::EventList deps2;
+                auto orec  = obj_rec.get_write_access(deps2);
+                auto flag2 = out_of_range.get_write_access(deps2);
+                auto bmin  = block_min.get_buf().get_read_access(deps2);
+                auto bmax  = block_max.get_buf().get_read_access(deps2);
+
+                auto e2 = q.submit(deps2, [&, origin, block_count](sycl::handler &cgh) {
+                    sycl::accessor particle_index_map{
+                        shambase::get_check_ref(tree.tree_morton_codes.buf_particle_index_map),
+                        cgh,
+                        sycl::read_only};
+
+                    shambase::parallel_for(
+                        cgh, block_count, "pack i32 object records", [=](u64 gid) {
+                            u32 id_s = (u32) gid;
+                            u32 id_b = particle_index_map[id_s];
+
+                            bool bad             = false;
+                            sycl::vec<i32, 3> lo = to_rel(bmin[id_b], origin, bad);
+                            sycl::vec<i32, 3> up = to_rel(bmax[id_b], origin, bad);
+
+                            orec[2 * id_s]     = {lo.x(), lo.y(), lo.z(), i32(id_b)};
+                            orec[2 * id_s + 1] = {up.x(), up.y(), up.z(), 0};
+
+                            if (bad) {
+                                flag2[0] = 1;
+                            }
+                        });
+                });
+
+                obj_rec.complete_event_state(e2);
+                out_of_range.complete_event_state(e2);
+                block_min.get_buf().complete_event_state(e2);
+                block_max.get_buf().complete_event_state(e2);
+            }
+
+            bool use_i32 = (block_count > 0) && (out_of_range.get_val_at_idx(0) == 0);
+
+            if (use_i32) {
+                for (u32 dir = 0; dir < 6; dir++) {
+
+                    TgridVec dir_offset = result.offset_check[dir];
+
+                    AMRGraph rslt = details::compute_neigh_graph<AMRBlockFinderI32>(
+                        dev_sched,
+                        block_count,
+                        node_rec,
+                        obj_rec,
+                        block_min.get_buf(),
+                        block_max.get_buf(),
+                        internal_cell_count,
+                        origin,
+                        dir_offset);
+
+                    shamlog_debug_ln(
+                        "AMR Block Graph",
+                        "Patch",
+                        id,
+                        "direction",
+                        dir,
+                        "link cnt",
+                        rslt.link_count);
+
+                    result.graph_links[dir] = std::make_unique<AMRGraph>(std::move(rslt));
+                }
+            } else {
+                sycl::buffer<TgridVec> buf_block_min_sycl
+                    = block_min.get_buf().copy_to_sycl_buffer();
+                sycl::buffer<TgridVec> buf_block_max_sycl
+                    = block_max.get_buf().copy_to_sycl_buffer();
+
+                for (u32 dir = 0; dir < 6; dir++) {
+
+                    TgridVec dir_offset = result.offset_check[dir];
+
+                    AMRGraph rslt = details::compute_neigh_graph_deprecated<AMRBlockFinder>(
+                        dev_sched,
+                        block_count,
+                        tree,
+                        buf_block_min_sycl,
+                        buf_block_max_sycl,
+                        dir_offset);
+
+                    shamlog_debug_ln(
+                        "AMR Block Graph",
+                        "Patch",
+                        id,
+                        "direction",
+                        dir,
+                        "link cnt",
+                        rslt.link_count);
+
+                    result.graph_links[dir] = std::make_unique<AMRGraph>(std::move(rslt));
+                }
             }
 
             graph.add_obj(id, std::move(result));
