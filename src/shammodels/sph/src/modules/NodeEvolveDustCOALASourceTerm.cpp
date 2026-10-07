@@ -67,9 +67,10 @@ namespace shammodels::sph::modules {
 
             auto local_acc_sz_nbins = sycl::range<1>{group_size * nbins};
 
-            auto true_size = this->true_size;
-            auto rho_eps   = this->rho_eps;
-            auto dv_max    = this->dv_max;
+            auto true_size  = this->true_size;
+            auto rho_eps    = this->rho_eps;
+            auto dv_max     = this->dv_max;
+            auto group_size = this->group_size;
 
             return [=, nbins = this->nbins](sycl::handler &cgh) {
                 auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
@@ -89,7 +90,13 @@ namespace shammodels::sph::modules {
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
                     /* internal */
-                    auto flux_loc = &(flux_acc[nbins * lid]);
+                    // flux in local memory with a bin-major layout (stride group_size), such
+                    // that the work-items of a sub-group, which access the same bin at the
+                    // same time, hit distinct banks
+                    mdspan_rank_1_strided flux(
+                        &(flux_acc[lid]),
+                        typename mdspan_rank_1_strided::mapping_type(
+                            std::dextents<u32, 1>(nbins), std::array<u32, 1>{group_size}));
 
                     // gij in global memory with a particle-major layout, such that the
                     // work-items of a sub-group, which access the same bin at the same time,
@@ -98,7 +105,6 @@ namespace shammodels::sph::modules {
                         gij_scratch + id_a,
                         typename mdspan_rank_1_strided::mapping_type(
                             std::dextents<u32, 1>(nbins), std::array<u32, 1>{true_size}));
-                    mdspan_rank_1 flux(flux_loc, nbins);
 
                     /* output */
                     mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
