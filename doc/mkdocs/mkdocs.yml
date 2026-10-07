@@ -61,6 +61,7 @@ nav:
     - 'PatchList' : 'devdoc/scheduler/patchlist.md'
     - 'PatchTree' : 'devdoc/scheduler/patchtree.md'
     - 'SolverGraph Migration' : 'devdoc/solvergraph_migration_guide.md'
+    - 'SolverGraph Tracing' : 'devdoc/solvergraph_tracing.md'
 
   - 'Sycl guide' :
 
