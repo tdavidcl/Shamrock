@@ -10,6 +10,7 @@ from enum import Enum
 
 import matplotlib.pyplot as plt
 import numpy as np
+from shamrock.external import coala
 from shamrock.utils.analysis import StandardPlotHelper
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.SimulationRunner import SimulationRunner, callback, simulation_setup
@@ -30,13 +31,15 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 
 
 # %%
+# COALA only acts on dust, so ndust = 0 runs without it
 configs = [
-    {"kernel": "M4", "ndust": 0},
-    {"kernel": "M6", "ndust": 0},
+    {"kernel": "M4", "ndust": 0, "coala": False},
+    {"kernel": "M6", "ndust": 0, "coala": False},
 ]
 
 for n in range(1, 100):
-    configs.append({"kernel": "M6", "ndust": n})
+    for use_coala in (False, True):
+        configs.append({"kernel": "M6", "ndust": n, "coala": use_coala})
 
 
 for c in configs:
@@ -50,6 +53,7 @@ for c in configs:
         unit_mass=sicte.sol_mass(),
     )
     ucte = shamrock.Constants(codeu)
+    codeu_kg_m3 = codeu.get("kg") * codeu.get("m", power=-3)
 
     # Resolution
     Npart = int(os.environ.get("NPART", "100000"))
@@ -98,7 +102,9 @@ for c in configs:
     ndust = c["ndust"]
     gamma = 1.4
 
-    print(f"ndust = {ndust}")
+    use_coala = c["coala"] and ndust > 0
+
+    print(f"ndust = {ndust}, use_coala = {use_coala}")
 
     mrn_pow = 3.5
     mrn_cutoff_si = np.inf  # would be 250e-9 normally
@@ -122,11 +128,19 @@ for c in configs:
     limiter = DustLimiter(_dust_limiter_env)
     print(f"limiter = {limiter} (DUST_LIMITER={_dust_limiter_env!r})")
 
+    if use_coala:
+        dv_max = 1000000 * codeu.get("m") / codeu.get("s")
+        Q = 5
+        rhodust_eps = 1e-23 * codeu_kg_m3
+        K0_multiplier = 1
+
     # Integrator parameters
     C_cour = 0.1
     C_force = 0.1
 
-    sim_folder = f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}_{limiter.value}/"
+    sim_folder = (
+        f"_to_trash/circular_dustydisc_{ndust}_{Npart}_{kernel}_{limiter.value}_coala_{use_coala}/"
+    )
 
     dump_folder = sim_folder + "dump/"
     analysis_folder = sim_folder + "analysis/"
@@ -157,6 +171,13 @@ for c in configs:
     rho_grains = mrn_distribution.rho_grains
     massgrid_edges = mrn_distribution.massgrid_edges
     mrn_weight = mrn_distribution.mrn_weight
+
+    if use_coala:
+        K0 = np.pi * ((4.0 / 3.0) * np.pi * rho_grains[0]) ** (-2.0 / 3.0)
+        K0 *= K0_multiplier
+        print(f"K0 = {K0}")
+
+        tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
 
     # %%
     # Start the context
@@ -203,6 +224,9 @@ for c in configs:
             cfg.set_dust_mode_monofluid_tva(
                 nvar=ndust, ensure_s_j_positivity=True, smooth_s_positivity_limiter=False
             )
+
+        if use_coala:
+            cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
 
     cfg.add_kill_sphere(center=(0, 0, 0), radius=bsize)  # kill particles outside the simulation box
 
