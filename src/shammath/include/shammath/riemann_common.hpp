@@ -656,6 +656,16 @@ namespace shammath {
         /// Barotropic pressure \f$ P(\rho) \f$
         Tscal pressure(Tscal rho) const { return m_cs0_sq * rho * (1 + adiab_ratio(rho)); }
 
+        Tscal sound_speed(Tprim p) const {
+            return sycl::sqrt(m_cs0_sq * (1 + m_gamma * adiab_ratio(p.rho)));
+        }
+
+        /// Local effective adiabatic index \f$ d \ln P / d \ln \rho \f$
+        Tscal gamma(Tprim p) const {
+            const Tscal x = adiab_ratio(p.rho);
+            return (1 + m_gamma * x) / (1 + x);
+        }
+
         Tprim cons_to_prim(Tcons c) const {
             Tprim p;
             p.rho   = c.rho;
@@ -664,20 +674,11 @@ namespace shammath {
             return p;
         }
         Tcons prim_to_cons(Tprim p) const { return shammath::prim_to_cons(p, m_gamma); }
-        Tscal sound_speed(Tprim p) const {
-            return sycl::sqrt(m_cs0_sq * (1 + m_gamma * adiab_ratio(p.rho)));
-        }
         Tscal vn(Tprim p, Tvec n) const { return sham::dot(p.vel, n); }
         Tcons flux(Tprim p, Tvec n, Tscal vn) const {
             return shammath::hydro_flux_n(p, n, vn, m_gamma);
         }
         Tcons flux(Tprim p, Tvec n) const { return shammath::hydro_flux_n(p, n, m_gamma); }
-
-        /// Local effective adiabatic index \f$ d \ln P / d \ln \rho \f$
-        Tscal gamma(Tprim p) const {
-            const Tscal x = adiab_ratio(p.rho);
-            return (1 + m_gamma * x) / (1 + x);
-        }
 
         private:
         /// \f$ (\rho/\rho_c)^{\gamma - 1} \f$, the adiabatic to isothermal pressure ratio
