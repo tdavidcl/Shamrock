@@ -1176,6 +1176,19 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("offset") = 0)
         .def("overwrite_field_value_f64", &T::template overwrite_field_value<f64>)
         .def("overwrite_field_value_f64_3", &T::template overwrite_field_value<f64_3>)
+        .def(
+            "overwrite_field_all_vars_f64",
+            &T::template overwrite_field_all_vars<f64>,
+            py::arg("field_name"),
+            py::arg("field_compute"),
+            R"==(
+    Overwrite all the variables of a scalar field in a single pass
+
+    ``field_compute(patchdata)`` is called once per patch and must return the
+    ``obj_cnt * nvar`` new values, either flat or of shape ``(obj_cnt, nvar)``.
+    ``patchdata[name]`` fetches a single field as a numpy array on demand,
+    so only the fields actually used are copied.
+)==")
         .def("remap_positions", &T::remap_positions)
         //.def("set_field_value_lambda_f64_3",[](T&self,std::string field_name, const
         // std::function<f64_3 (Tscal, Tscal , Tscal)> pos_to_val){
