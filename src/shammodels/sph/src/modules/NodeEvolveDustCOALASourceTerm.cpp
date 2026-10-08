@@ -140,6 +140,39 @@ namespace shammodels::sph::modules {
         }
     };
 
+    /// Device buffers holding a shamphys::TabfluxCoagK0Sparse tensor
+    template<class Tscal>
+    struct TabfluxK0SparseBuffers {
+        sham::DeviceBuffer<u32> pair_offset;
+        sham::DeviceBuffer<u32> pair_jmin;
+        sham::DeviceBuffer<Tscal> values;
+    };
+
+    /// Build the sparse form of a dense nbins^3 tabflux tensor and upload it to the device
+    template<class Tscal>
+    inline TabfluxK0SparseBuffers<Tscal> make_tabflux_k0_sparse_buffers(
+        u32 nbins,
+        const std::vector<Tscal> &tensor_tabflux,
+        const sham::DeviceScheduler_ptr &dev_sched) {
+
+        // only the non-zero part of the tensor is used on device
+        auto tabflux_sparse = shamphys::make_tabflux_coag_k0_sparse<Tscal>(
+            nbins,
+            std::mdspan<const Tscal, std::dextents<u32, 3>>(
+                tensor_tabflux.data(), nbins, nbins, nbins));
+
+        TabfluxK0SparseBuffers<Tscal> ret{
+            sham::DeviceBuffer<u32>(tabflux_sparse.pair_offset.size(), dev_sched),
+            sham::DeviceBuffer<u32>(tabflux_sparse.pair_jmin.size(), dev_sched),
+            sham::DeviceBuffer<Tscal>(tabflux_sparse.values.size(), dev_sched)};
+
+        ret.pair_offset.copy_from_stdvec(tabflux_sparse.pair_offset);
+        ret.pair_jmin.copy_from_stdvec(tabflux_sparse.pair_jmin);
+        ret.values.copy_from_stdvec(tabflux_sparse.values);
+
+        return ret;
+    }
+
     template<class Tvec>
     inline void NodeEvolveDustCOALASourceTerm<Tvec>::_impl_evaluate_internal() {
 
@@ -166,21 +199,8 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> massgrid_buf(nbins + 1, dev_sched);
         massgrid_buf.copy_from_stdvec(massgrid);
 
-        // only the non-zero part of the tensor is used on device
-        auto tabflux_sparse = shamphys::make_tabflux_coag_k0_sparse<Tscal>(
-            nbins,
-            std::mdspan<const Tscal, std::dextents<u32, 3>>(
-                tensor_tabflux_coag.data(), nbins, nbins, nbins));
-
-        sham::DeviceBuffer<u32> tabflux_pair_offset_buf(
-            tabflux_sparse.pair_offset.size(), dev_sched);
-        tabflux_pair_offset_buf.copy_from_stdvec(tabflux_sparse.pair_offset);
-
-        sham::DeviceBuffer<u32> tabflux_pair_jmin_buf(tabflux_sparse.pair_jmin.size(), dev_sched);
-        tabflux_pair_jmin_buf.copy_from_stdvec(tabflux_sparse.pair_jmin);
-
-        sham::DeviceBuffer<Tscal> tabflux_values_buf(tabflux_sparse.values.size(), dev_sched);
-        tabflux_values_buf.copy_from_stdvec(tabflux_sparse.values);
+        auto tabflux_coag_bufs
+            = make_tabflux_k0_sparse_buffers<Tscal>(nbins, tensor_tabflux_coag, dev_sched);
 
         // per thread local memory: flux, one per bin
         usize local_mem_per_thread = nbins * sizeof(Tscal);
@@ -209,9 +229,9 @@ namespace shammodels::sph::modules {
                 q,
                 sham::MultiRef{
                     massgrid_buf,
-                    tabflux_pair_offset_buf,
-                    tabflux_pair_jmin_buf,
-                    tabflux_values_buf,
+                    tabflux_coag_bufs.pair_offset,
+                    tabflux_coag_bufs.pair_jmin,
+                    tabflux_coag_bufs.values,
                     s_j_spans.get(id_patch),
                     delta_v_j_spans.get(id_patch)},
                 sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
