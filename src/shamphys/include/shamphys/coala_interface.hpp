@@ -170,6 +170,44 @@ namespace shamphys {
         const Tidx *pair_offset;
         const Tidx *pair_jmin;
         const T *values;
+
+        /// The stored entries of one pair \f$(l,m)\f$: \f$j \in [j_{\rm min}, j_{\rm min} +
+        /// {\rm count})\f$
+        struct PairEntries {
+            const T *values;
+            Tidx jmin;
+            Tidx count;
+
+            /// Call `func(j, tensor_tabflux_coag[j,l,m])` for each stored entry of the pair
+            template<class Func>
+            inline void for_each_sparse(Func &&func) const {
+                for (Tidx k = 0; k < count; ++k) {
+                    func(jmin + k, values[k]);
+                }
+            }
+        };
+
+        /**
+         * @brief Call `func(l, m, entries)` for each pair \f$(l,m)\f$ holding at least one stored
+         * entry, `entries` being its PairEntries
+         *
+         * Pairs without entries are skipped, so that per-pair work done in @p func (e.g.
+         * evaluating \f$\mathrm{dv}(l,m)\f$) is only done for the pairs that contribute.
+         */
+        template<class Func>
+        inline void for_each_pair(int nbins, Func &&func) const {
+            Tidx p = 0;
+            for (int l = 0; l < nbins; ++l) {
+                for (int m = 0; m < nbins; ++m, ++p) {
+                    Tidx beg = pair_offset[p];
+                    Tidx end = pair_offset[p + 1];
+                    if (beg == end) {
+                        continue;
+                    }
+                    func(l, m, PairEntries{values + beg, pair_jmin[p], end - beg});
+                }
+            }
+        }
     };
 
     /**
@@ -219,8 +257,8 @@ namespace shamphys {
     /**
      * @brief Same as compute_flux_coag_k0_kdv but using the TabfluxCoagK0Sparse form
      *
-     * Pairs \f$(l,m)\f$ without any non-zero entry, or with \f$g_l g_m = 0\f$, are skipped
-     * before evaluating \f$\mathrm{dv}(l,m)\f$.
+     * Pairs \f$(l,m)\f$ without any non-zero entry are skipped before evaluating
+     * \f$\mathrm{dv}(l,m)\f$.
      *
      * @param nbins    Number of dust mass bins
      * @param gij      Rank-1 `std::mdspan` of DG coefficients \f$g_l\f$; extent @p nbins
@@ -246,24 +284,12 @@ namespace shamphys {
             flux[j] = 0;
         }
 
-        Tidx p = 0;
-        for (int l = 0; l < nbins; ++l) {
-            for (int m = 0; m < nbins; ++m, ++p) {
-                Tidx beg = tabflux.pair_offset[p];
-                Tidx end = tabflux.pair_offset[p + 1];
-                Tidx j   = tabflux.pair_jmin[p];
-
-                auto gg = gij[l] * gij[m];
-                if (beg == end || gg == 0) {
-                    continue;
-                }
-
-                auto term = dv(l, m) * gg;
-                for (Tidx k = beg; k < end; ++k, ++j) {
-                    flux[j] += tabflux.values[k] * term;
-                }
-            }
-        }
+        tabflux.for_each_pair(nbins, [&](int l, int m, auto entries) {
+            auto term = dv(l, m) * gij[l] * gij[m];
+            entries.for_each_sparse([&](Tidx j, T val) {
+                flux[j] += val * term;
+            });
+        });
     }
 
     /**
