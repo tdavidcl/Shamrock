@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------//
 
+#include "shambackends/sycl.hpp" // before <experimental/mdspan>, which uses sycl:: under DPC++
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
 #include "shamphys/coala_interface.hpp"
