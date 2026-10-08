@@ -22,6 +22,7 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/overloaded.hpp"
 #include "shambase/string.hpp"
 #include "shambackends/vec.hpp"
 #include "shamcomm/logs.hpp"
@@ -470,17 +471,20 @@ namespace shammodels::basegodunov {
     inline void to_json(nlohmann::json &j, const EOSConfig<Tvec> &p) {
         using EOS = EOSConfig<Tvec>;
 
-        if (const auto *cfg = std::get_if<typename EOS::Adiabatic>(&p.config)) {
-            j = {{"type", "adiabatic"}, {"gamma", cfg->gamma}};
-        } else if (const auto *cfg = std::get_if<typename EOS::Barotropic>(&p.config)) {
-            j
-                = {{"type", "barotropic"},
-                   {"rho_crit", cfg->rho_crit},
-                   {"cs0", cfg->cs0},
-                   {"gamma", cfg->gamma}};
-        } else {
-            shambase::throw_unimplemented();
-        }
+        std::visit(
+            shambase::overloaded{
+                [&](const typename EOS::Adiabatic &cfg) {
+                    j = {{"type", "adiabatic"}, {"gamma", cfg.gamma}};
+                },
+                [&](const typename EOS::Barotropic &cfg) {
+                    j
+                        = {{"type", "barotropic"},
+                           {"rho_crit", cfg.rho_crit},
+                           {"cs0", cfg.cs0},
+                           {"gamma", cfg.gamma}};
+                },
+            },
+            p.config);
     }
 
     template<class Tvec>
