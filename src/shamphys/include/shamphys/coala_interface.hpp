@@ -127,10 +127,10 @@ namespace shamphys {
          * flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij)
          */
 
-        for (int l = 0; l < nbins; ++l) {
-            for (int m = 0; m < nbins; ++m) {
-                auto term = dv(l, m) * gij[l] * gij[m];
-                for (int j = 0; j < nbins; ++j) {
+        for (int j = 0; j < nbins; ++j) {
+            for (int l = 0; l < nbins; ++l) {
+                for (int m = 0; m < nbins; ++m) {
+                    auto term = dv(l, m) * gij[l] * gij[m];
                     flux[j] += tensor_tabflux_coag(j, l, m) * term;
                 }
             }
