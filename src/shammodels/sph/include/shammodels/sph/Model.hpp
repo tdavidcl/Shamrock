@@ -247,7 +247,7 @@ namespace shammodels::sph {
         template<class T>
         inline void overwrite_field_value(
             std::string field_name,
-            const std::function<std::vector<T>(py::dict)> field_compute,
+            const std::function<std::vector<T>(shamrock::PatchDataLazyGetter &)> field_compute,
             const u32 offset) {
 
             StackEntry stack_loc{};
@@ -269,7 +269,8 @@ namespace shammodels::sph {
                             f_nvar));
                     }
 
-                    auto result = field_compute(shamrock::pdat_to_dic(pdat));
+                    shamrock::PatchDataLazyGetter getter(pdat);
+                    auto result = field_compute(getter);
 
                     if (result.size() != f.get_obj_cnt()) {
                         throw shambase::make_except_with_loc<std::runtime_error>(sham::format(
@@ -292,10 +293,9 @@ namespace shammodels::sph {
         /**
          * @brief Overwrite every variable of a (possibly multi-variable) scalar field in one pass
          *
-         * Unlike overwrite_field_value, which sets a single variable per call and eagerly copies
-         * every field of the patch into a python dict, this only copies the fields actually
-         * queried by `field_compute` (through a PatchDataLazyGetter) and writes all `nvar`
-         * variables of the field at once, so the field buffer is never read back.
+         * Unlike overwrite_field_value, which sets a single variable per call (reading the whole
+         * field back to the host to patch one slot per object), this writes all `nvar` variables
+         * of the field at once, so the field buffer is never read back.
          *
          * @param field_name name of the field to overwrite
          * @param field_compute returns for each patch an array of `obj_cnt * nvar` values, either
