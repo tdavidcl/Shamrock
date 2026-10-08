@@ -25,6 +25,7 @@
 #include "shambase/string.hpp"
 #include "shambackends/vec.hpp"
 #include "shamcomm/logs.hpp"
+#include "shammath/riemann_common.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
 #include "shammodels/ramses/config/enum_AMRInterpMode.hpp"
 #include "shammodels/ramses/config/enum_DragSolverMode.hpp"
@@ -137,6 +138,45 @@ namespace shammodels::basegodunov {
         bool need_amr_level_compute() { return !old_amr; }
     };
 
+    /**
+     * @brief Equation of state of the gas, each alternative maps to a shammath FluidStateSpec
+     *
+     * Not used by the solver yet (it still reads SolverConfig::eos_gamma).
+     */
+    template<class Tvec>
+    struct EOSConfig {
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        /// Ideal gas equation of state, see shammath::FluidStateAdiabatic
+        struct Adiabatic {
+            Tscal gamma = 5. / 3.;
+
+            inline shammath::FluidStateAdiabatic<Tvec> get_spec() const {
+                return shammath::FluidStateAdiabatic<Tvec>{.m_gamma = gamma};
+            }
+        };
+
+        /// Isothermal below rho_crit and adiabatic above, see shammath::FluidStateBarotropic
+        struct Barotropic {
+            Tscal rho_crit;
+            Tscal cs0;
+            Tscal gamma = 5. / 3.;
+
+            inline shammath::FluidStateBarotropic<Tvec> get_spec() const {
+                return shammath::FluidStateBarotropic<Tvec>(rho_crit, cs0, gamma);
+            }
+        };
+
+        using Variant = std::variant<Adiabatic, Barotropic>;
+
+        Variant config = Adiabatic{};
+
+        inline void set_adiabatic(Tscal gamma) { config = Adiabatic{gamma}; }
+        inline void set_barotropic(Tscal rho_crit, Tscal cs0, Tscal gamma) {
+            config = Barotropic{rho_crit, cs0, gamma};
+        }
+    };
+
     struct BCConfig {
         enum class GhostType { Periodic = 0, Reflective = 1, Outflow = 2 };
 
@@ -171,6 +211,9 @@ struct shammodels::basegodunov::SolverConfig {
     using AMRBlock                     = amr::AMRBlock<Tvec, TgridVec, NsideBlockPow>;
 
     inline void set_eos_gamma(Tscal gamma) { eos_gamma = gamma; }
+
+    /// Equation of state (unused for now, the solver still uses eos_gamma)
+    EOSConfig<Tvec> eos_config{};
 
     RiemannSolverMode riemann_config  = HLL;
     SlopeMode slope_config            = VanLeer_sym;
