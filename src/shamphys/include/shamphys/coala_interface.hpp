@@ -128,12 +128,13 @@ namespace shamphys {
          */
 
         for (int j = 0; j < nbins; ++j) {
+            double sum = 0.0;
             for (int l = 0; l < nbins; ++l) {
                 for (int m = 0; m < nbins; ++m) {
-                    auto term = dv(l, m) * gij[l] * gij[m];
-                    flux[j] += tensor_tabflux_coag(j, l, m) * term;
+                    sum += tensor_tabflux_coag(j, l, m) * dv(l, m) * gij[l] * gij[m];
                 }
             }
+            flux[j] = sum;
         }
     }
 
