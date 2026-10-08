@@ -118,6 +118,9 @@ namespace shammodels::sph::modules {
                     auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
                         // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
                         auto tmp = sycl::length(delta_v[j] - delta_v[i]);
+                        // Coag-only mode: "poor man" fragmentation, pairs faster than
+                        // vfrag_threshold do not coagulate (dv_ij = 0). To be replaced once the
+                        // coagulation + fragmentation source term is implemented.
                         return (tmp > vfrag_threshold) ? 0 : tmp;
                     };
 

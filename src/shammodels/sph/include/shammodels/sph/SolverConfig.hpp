@@ -112,6 +112,10 @@ namespace shammodels::sph {
     template<class Tscal>
     struct DustEvolCoalaCoag {
         Tscal rhodust_eps;
+
+        /// Fragmentation velocity threshold, must be positive (infinity disables it).
+        /// In coagulation-only mode, a dust pair whose differential velocity exceeds it gets
+        /// dv_ij = 0 ("poor man" fragmentation, not a real fragmentation model).
         Tscal vfrag_threshold;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;

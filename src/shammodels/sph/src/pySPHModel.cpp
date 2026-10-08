@@ -438,7 +438,22 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("rhodust_eps"),
             py::arg("vfrag_threshold"),
             py::arg("massgrid"),
-            py::arg("tabflux_coag"))
+            py::arg("tabflux_coag"),
+            R"pbdoc(
+        Enable the COALA dust coagulation source term.
+
+        Args:
+            rhodust_eps: Dust density floor.
+            vfrag_threshold: Fragmentation velocity threshold, must be positive.
+                In this coagulation-only mode, a pair of dust bins whose
+                differential velocity ``|dv_ij|`` exceeds this value gets
+                ``dv_ij = 0``. This is a crude stand-in for fragmentation
+                ("poor man" fragmentation), not a fragmentation model. Pass
+                ``math.inf`` to disable it.
+            massgrid: Dust mass grid bin edges, of size ``nbins + 1``.
+            tabflux_coag: Tabulated coagulation flux, of shape
+                ``(nbins, nbins, nbins)``.
+        )pbdoc")
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {
