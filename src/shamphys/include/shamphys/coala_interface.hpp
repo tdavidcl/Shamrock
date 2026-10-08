@@ -28,6 +28,7 @@
 #include "shambase/assert.hpp"
 #include "shambase/mdspan_concepts.hpp"
 #include <experimental/mdspan>
+#include <type_traits>
 #include <concepts>
 #include <vector>
 
@@ -290,6 +291,184 @@ namespace shamphys {
         }
     }
 
+    template<class T>
+    struct PEvol {
+        T pcoag, pfrag;
+    };
+
+    /**
+     * @brief Coagulation + fragmentation variant of compute_flux_coag_k0_kdv (dense tensors)
+     *
+     * Takes the fragmentation tensors \f$T_1\f$ and \f$T_2\f$ in addition to
+     * `tensor_tabflux_coag`, and weights each pair \f$(l,m)\f$ by the coagulation and
+     * fragmentation probabilities returned by `evol_prob(dv(l, m))`:
+     *
+     * \f[
+     *     \mathrm{flux}_j = \sum_{l,m} \mathrm{dv}_{lm}\, g_l\, g_m \left[
+     *         T^{\rm coag}_{jlm} \left(p^{\rm coag}_{lm} + p^{\rm frag}_{lm}\right)
+     *         - \left(T^{\rm frag,1}_{jlm} + T^{\rm frag,2}_{jlm}\right) p^{\rm frag}_{lm}
+     *     \right]
+     * \f]
+     *
+     * @param nbins                   Number of dust mass bins
+     * @param gij                     Rank-1 `std::mdspan` of DG coefficients \f$g_l\f$; extent
+     *                                @p nbins
+     * @param tensor_tabflux_coag     Rank-3 `std::mdspan` of the coagulation flux tensor; extents
+     *                                @p nbins \(\times\) @p nbins \(\times\) @p nbins
+     * @param tensor_tabflux_frag_T1  Rank-3 `std::mdspan` of the fragmentation tensor
+     *                                \f$T_1\f$; same extents
+     * @param tensor_tabflux_frag_T2  Rank-3 `std::mdspan` of the fragmentation tensor
+     *                                \f$T_2\f$; same extents
+     * @param dv                      Pair-wise differential-velocity callable
+     * @param evol_prob               Callable returning the coagulation / fragmentation
+     *                                probabilities (PEvol) for a given differential velocity
+     * @param flux                    Rank-1 `std::mdspan` of output fluxes; extent @p nbins,
+     *                                written in place
+     */
+    template<class Func, class FuncEvol>
+        requires requires(Func f, int a, int b) {
+            { f(a, b) };
+        }
+    inline void compute_flux_coagfrag_k0_kdv(
+        int nbins,
+        shambase::is_mdspan_rank<1> auto gij,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_coag,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T1,
+        shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T2,
+        Func &&dv,
+        FuncEvol &&evol_prob,
+        shambase::is_mdspan_rank<1> auto flux) {
+
+        using Tscal = typename decltype(gij)::value_type;
+        static_assert(
+            std::is_same_v<std::invoke_result_t<FuncEvol, Tscal>, PEvol<Tscal>>,
+            "evol_prob must take a dv value and return a PEvol<Tscal>");
+
+        SHAM_ASSERT(gij.extent(0) == nbins);
+        SHAM_ASSERT(flux.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_coag.extent(2) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T1.extent(2) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(0) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(1) == nbins);
+        SHAM_ASSERT(tensor_tabflux_frag_T2.extent(2) == nbins);
+
+        // initialize flux to 0
+        for (int j = 0; j < nbins; ++j) {
+            flux[j] = 0;
+        }
+
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = 0; m < nbins; ++m) {
+                auto dv_lm = dv(l, m);
+                auto term  = dv_lm * gij[l] * gij[m];
+
+                PEvol<Tscal> probas = evol_prob(dv_lm);
+
+                auto term_coag = probas.pcoag * term;
+                auto term_frag = probas.pfrag * term;
+
+                // note that pcoag + pfrag = 1 - pbouncing so we can not collapse the
+                // term_coag + term_frag into a simpler term
+
+                // term_coag + term_frag is the contribution of tabflux_coag to both the
+                // coagulation and the fragmentation flux, since tabflux_coag also appears in the
+                // fragmentation flux. The coagulation flux terms are the ones multiplied by
+                // term_coag, and the fragmentation flux terms the ones multiplied by term_frag
+
+                for (int j = 0; j < nbins; ++j) {
+                    flux[j] += tensor_tabflux_coag(j, l, m) * (term_coag + term_frag)
+                               - (tensor_tabflux_frag_T1(j, l, m) + tensor_tabflux_frag_T2(j, l, m))
+                                     * term_frag;
+                }
+            }
+        }
+    }
+
+    /**
+     * @brief Same as compute_flux_coagfrag_k0_kdv but using the TabfluxCoagK0Sparse form
+     *
+     * The three tensors are stored with their own sparsity pattern, so the entries of each are
+     * accumulated separately. Pairs \f$(l,m)\f$ without any entry in any of the three tensors
+     * are skipped before evaluating \f$\mathrm{dv}(l,m)\f$.
+     *
+     * @param nbins            Number of dust mass bins
+     * @param gij              Rank-1 `std::mdspan` of DG coefficients \f$g_l\f$; extent @p nbins
+     * @param tabflux_coag     View of the sparse coagulation flux tensor
+     * @param tabflux_frag_T1  View of the sparse fragmentation tensor \f$T_1\f$
+     * @param tabflux_frag_T2  View of the sparse fragmentation tensor \f$T_2\f$
+     * @param dv               Pair-wise differential-velocity callable, invoked as `dv(l, m)`
+     * @param evol_prob        Callable returning the coagulation / fragmentation probabilities
+     *                         (PEvol) for a given differential velocity
+     * @param flux             Rank-1 `std::mdspan` of output fluxes; extent @p nbins, written in
+     *                         place
+     */
+    template<class T, class Tidx, class Func, class FuncEvol>
+        requires requires(Func f, int a, int b, FuncEvol fe, T dv_val) {
+            { f(a, b) };
+            { fe(dv_val) } -> std::same_as<PEvol<T>>;
+        }
+    inline void compute_flux_coagfrag_k0_kdv(
+        int nbins,
+        shambase::is_mdspan_rank<1> auto gij,
+        TabfluxCoagK0SparseView<T, Tidx> tabflux_coag,
+        TabfluxCoagK0SparseView<T, Tidx> tabflux_frag_T1,
+        TabfluxCoagK0SparseView<T, Tidx> tabflux_frag_T2,
+        Func &&dv,
+        FuncEvol &&evol_prob,
+        shambase::is_mdspan_rank<1> auto flux) {
+
+        SHAM_ASSERT(gij.extent(0) == nbins);
+        SHAM_ASSERT(flux.extent(0) == nbins);
+
+        for (int j = 0; j < nbins; ++j) {
+            flux[j] = 0;
+        }
+
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = 0; m < nbins; ++m) {
+                auto entries_coag    = tabflux_coag.get_entries(l, m);
+                auto entries_frag_T1 = tabflux_frag_T1.get_entries(l, m);
+                auto entries_frag_T2 = tabflux_frag_T2.get_entries(l, m);
+
+                // skip the pairs without entries before evaluating dv
+                if (entries_coag.is_empty() && entries_frag_T1.is_empty()
+                    && entries_frag_T2.is_empty()) {
+                    continue;
+                }
+
+                auto dv_lm = dv(l, m);
+                auto term  = dv_lm * gij[l] * gij[m];
+
+                PEvol<T> probas = evol_prob(dv_lm);
+
+                auto term_coag = probas.pcoag * term;
+                auto term_frag = probas.pfrag * term;
+
+                // note that pcoag + pfrag = 1 - pbouncing so we can not collapse the
+                // term_coag + term_frag into a simpler term
+
+                // term_coag + term_frag is the contribution of tabflux_coag to both the
+                // coagulation and the fragmentation flux, since tabflux_coag also appears in the
+                // fragmentation flux. The coagulation flux terms are the ones multiplied by
+                // term_coag, and the fragmentation flux terms the ones multiplied by term_frag
+
+                entries_coag.for_each_sparse([&](Tidx j, T val) {
+                    flux[j] += val * (term_coag + term_frag);
+                });
+                entries_frag_T1.for_each_sparse([&](Tidx j, T val) {
+                    flux[j] -= val * term_frag;
+                });
+                entries_frag_T2.for_each_sparse([&](Tidx j, T val) {
+                    flux[j] -= val * term_frag;
+                });
+            }
+        }
+    }
+
     /**
      * @brief Convert interface fluxes to a mass-bin coagulation source term
      *
@@ -338,6 +517,37 @@ namespace shamphys {
 
         // compute flux for all dust bins
         shamphys::compute_flux_coag_k0_kdv(nbins, gij, tabflux_coag, dv, flux);
+
+        // compute flux diff and store result
+        shamphys::coala_flux_diff(flux, S_coag);
+    }
+
+    /// Coagulation + fragmentation variant of coala_k0_source_term
+    template<class T, class FuncDv, class FuncEvol, class FuncRhoDust>
+    void coala_k0_coagfrag_source_term(
+        int nbins,
+        /* inputs */
+        FuncDv &&dv,
+        FuncEvol &&evol_prob,
+        FuncRhoDust &&rho_dust,
+        T rho_eps,
+        shambase::is_mdspan_rank<1> auto massgrid,
+        /* COALA inputs (dense rank-3 mdspan or TabfluxCoagK0SparseView) */
+        auto tabflux_coag,
+        auto tabflux_frag_T1,
+        auto tabflux_frag_T2,
+        /* internal */
+        shambase::is_mdspan_rank<1> auto gij,
+        shambase::is_mdspan_rank<1> auto flux,
+        /* output */
+        shambase::is_mdspan_rank<1> auto S_coag) {
+
+        // init the gij coefficients
+        shamphys::compute_gij_k0(rho_dust, rho_eps, massgrid, gij);
+
+        // compute flux for all dust bins
+        shamphys::compute_flux_coagfrag_k0_kdv(
+            nbins, gij, tabflux_coag, tabflux_frag_T1, tabflux_frag_T2, dv, evol_prob, flux);
 
         // compute flux diff and store result
         shamphys::coala_flux_diff(flux, S_coag);
