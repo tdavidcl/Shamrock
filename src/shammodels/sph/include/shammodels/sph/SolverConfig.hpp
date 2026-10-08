@@ -112,7 +112,7 @@ namespace shammodels::sph {
     template<class Tscal>
     struct DustEvolCoalaCoag {
         Tscal rhodust_eps;
-        Tscal dv_max;
+        Tscal vfrag_threshold;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;
     };
@@ -337,7 +337,7 @@ namespace shammodels::sph {
                         j
                             = {{"type", "coala_coag"},
                                {"rhodust_eps", cfg.rhodust_eps},
-                               {"dv_max", cfg.dv_max},
+                               {"vfrag_threshold", cfg.vfrag_threshold},
                                {"massgrid", cfg.massgrid},
                                {"tabflux_coag", cfg.tabflux_coag}};
                     },
@@ -350,10 +350,10 @@ namespace shammodels::sph {
                 dust_evol_config = None{};
             } else if (j.at("type").get<std::string>() == "coala_coag") {
                 dust_evol_config = DustEvolCoalaCoag<Tscal>{
-                    .rhodust_eps  = j.at("rhodust_eps").get<Tscal>(),
-                    .dv_max       = j.at("dv_max").get<Tscal>(),
-                    .massgrid     = j.at("massgrid").get<std::vector<Tscal>>(),
-                    .tabflux_coag = j.at("tabflux_coag").get<std::vector<Tscal>>()};
+                    .rhodust_eps     = j.at("rhodust_eps").get<Tscal>(),
+                    .vfrag_threshold = j.at("vfrag_threshold").get<Tscal>(),
+                    .massgrid        = j.at("massgrid").get<std::vector<Tscal>>(),
+                    .tabflux_coag    = j.at("tabflux_coag").get<std::vector<Tscal>>()};
             } else {
                 shambase::throw_unimplemented();
             }
@@ -426,9 +426,10 @@ namespace shammodels::sph {
                             + std::to_string(cfg->rhodust_eps));
                     }
 
-                    if (cfg->dv_max <= 0) {
+                    if (cfg->vfrag_threshold <= 0) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(
-                            "dv_max must be positive, got " + std::to_string(cfg->dv_max));
+                            "vfrag_threshold must be positive, got "
+                            + std::to_string(cfg->vfrag_threshold));
                     }
 
                 } else {
