@@ -318,18 +318,30 @@ for c in configs:
     model.timestep()
     model.change_htolerances(coarse=1.1, fine=1.1)
 
-    # Add the dust: s_j = sqrt(rho * epsilon_j) for every species at once
-    pmass = model.get_particle_mass()
-    hfact = model.get_hfact()
-    epsilon_target = epsilon_base * np.asarray(mrn_weight)
+    def compute_sj_new_j(patchdata, j):
+        pmass = model.get_particle_mass()
 
-    def compute_sj_all(patchdata):
-        rho = pmass * (hfact / patchdata["hpart"]) ** 3
-        # shape (obj_cnt, ndust), matching the s_j storage order (i * ndust + j)
-        return np.sqrt(np.outer(rho, epsilon_target))
+        hpart = patchdata["hpart"]
+        rho = pmass * (model.get_hfact() / np.array(hpart)) ** 3
 
-    if ndust > 0:
-        model.overwrite_field_all_vars_f64("s_j", compute_sj_all)
+        epsilon_target = epsilon_base * mrn_weight[j]
+        print(f"epsilon_target = {epsilon_target} {j}")
+        s = np.sqrt(rho * epsilon_target)
+
+        print(
+            f"s = {s} {np.isnan(s).any()} epsilon_target = {epsilon_target} mrn_weight = {mrn_weight[j]}, rho = {rho}"
+        )
+
+        return s
+
+        # Add the dust
+
+    for k in range(ndust):
+
+        def compute_sj_new(patchdata):
+            return compute_sj_new_j(patchdata, k)
+
+        model.overwrite_field_value_f64("s_j", compute_sj_new, k)
 
     model.set_dt(0.0)  # to help the corrector on next step after adding dust
 

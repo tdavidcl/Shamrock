@@ -291,56 +291,6 @@ namespace shammodels::sph {
         }
 
         /**
-         * @brief Overwrite every variable of a (possibly multi-variable) scalar field in one pass
-         *
-         * Unlike overwrite_field_value, which sets a single variable per call (reading the whole
-         * field back to the host to patch one slot per object), this writes all `nvar` variables
-         * of the field at once, so the field buffer is never read back.
-         *
-         * @param field_name name of the field to overwrite
-         * @param field_compute returns for each patch an array of `obj_cnt * nvar` values, either
-         * flat or of shape (obj_cnt, nvar), in the field's storage order (`i * nvar + var`)
-         */
-        template<class T>
-        inline void overwrite_field_all_vars(
-            std::string field_name,
-            const std::function<py::array_t<T, py::array::c_style | py::array::forcecast>(
-                shamrock::PatchDataLazyGetter &)> field_compute) {
-
-            static_assert(std::is_arithmetic_v<T>, "only scalar fields are supported");
-
-            StackEntry stack_loc{};
-
-            PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
-
-            u32 ifield = sched.pdl_old().get_field_idx<T>(field_name);
-
-            sched.patch_data.for_each_patchdata(
-                [&](u64 patch_id, shamrock::patch::PatchDataLayer &pdat) {
-                    PatchDataField<T> &f = pdat.template get_field<T>(ifield);
-
-                    u32 val_cnt = f.get_val_cnt();
-                    if (val_cnt == 0) {
-                        return;
-                    }
-
-                    shamrock::PatchDataLazyGetter getter(pdat);
-                    auto result = field_compute(getter);
-
-                    if (result.size() != val_cnt) {
-                        throw shambase::make_except_with_loc<std::runtime_error>(sham::format(
-                            "result.size() != obj_cnt * nvar ({} != {} * {})",
-                            result.size(),
-                            f.get_obj_cnt(),
-                            f.get_nvar()));
-                    }
-
-                    const T *ptr = result.data();
-                    f.get_buf().copy_from_stdvec(std::vector<T>(ptr, ptr + val_cnt), val_cnt);
-                });
-        }
-
-        /**
          * @brief Add a disc distribution
          *
          * @param center position of the center of the disc
