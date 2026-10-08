@@ -16,6 +16,9 @@
 #include <cmath>
 #include <optional>
 
+// truncated value of pi used by phantom (physcon.f90) in units.f90
+static constexpr f64 phantom_pi = 3.1415926536;
+
 NEW_TEST(Unittest, "shammodels/sph/phantom-units-cgs", 1) {
     using namespace shamunits;
 
@@ -44,7 +47,7 @@ NEW_TEST(Unittest, "shammodels/sph/phantom-units-cgs", 1) {
     // phantom's units.f90:
     //   unit_charge = sqrt(umass*udist/(4 pi))
     //   umagfd      = umass/(utime*unit_charge)
-    f64 ucharge_ref = std::sqrt(1.98847e33 * 1.495978707e13 / (4 * shambase::constants::pi<f64>) );
+    f64 ucharge_ref = std::sqrt(1.98847e33 * 1.495978707e13 / (4 * phantom_pi));
     f64 umagfd_ref  = 1.98847e33 / (utime * ucharge_ref);
     REQUIRE_FLOAT_EQUAL(umagfd / umagfd_ref, 1., 1e-12);
 
@@ -71,7 +74,7 @@ NEW_TEST(Unittest, "shammodels/sph/phantom-units-cgs-no-units", 1) {
     REQUIRE_FLOAT_EQUAL(dump.read_header_float<f64>("udist"), 100., 1e-12);
     REQUIRE_FLOAT_EQUAL(dump.read_header_float<f64>("umass"), 1000., 1e-12);
     REQUIRE_FLOAT_EQUAL(dump.read_header_float<f64>("utime"), 1., 1e-12);
-    REQUIRE_FLOAT_EQUAL(dump.read_header_float<f64>("umagfd"), 11.209982432795858, 1e-10);
+    REQUIRE_FLOAT_EQUAL(dump.read_header_float<f64>("umagfd"), 11.209982432814067, 1e-12);
 
     shamunits::UnitSystem<f64> read_units = shammodels::sph::get_shamrock_units<f64>(dump);
 
@@ -93,7 +96,9 @@ NEW_TEST(Unittest, "shammodels/sph/phantom-units-cgs-read", 1) {
     dump.table_header_f64.add("udist", udist);
     dump.table_header_f64.add("umass", umass);
     dump.table_header_f64.add("utime", utime);
-    dump.table_header_f64.add("umagfd", 8137.2191582804335);
+    // phantom's units.f90, ~8137.2 G for these units
+    f64 umagfd = umass / (utime * std::sqrt(umass * udist / (4 * phantom_pi)));
+    dump.table_header_f64.add("umagfd", umagfd);
 
     UnitSystem<f64> read_units = shammodels::sph::get_shamrock_units<f64>(dump);
 
@@ -111,5 +116,5 @@ NEW_TEST(Unittest, "shammodels/sph/phantom-units-cgs-read", 1) {
     REQUIRE_FLOAT_EQUAL(dump_out.read_header_float<f64>("udist") / udist, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(dump_out.read_header_float<f64>("umass") / umass, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(dump_out.read_header_float<f64>("utime") / utime, 1., 1e-12);
-    REQUIRE_FLOAT_EQUAL(dump_out.read_header_float<f64>("umagfd") / 8137.2191582804335, 1., 1e-10);
+    REQUIRE_FLOAT_EQUAL(dump_out.read_header_float<f64>("umagfd") / umagfd, 1., 1e-12);
 }

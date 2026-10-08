@@ -14,9 +14,8 @@
  *
  */
 
-#include "shambase/constants.hpp"
-#include "shammodels/sph/config/BCConfig.hpp"
 #include "shammodels/sph/io/Phantom2Shamrock.hpp"
+#include "shammodels/sph/config/BCConfig.hpp"
 #include "shammodels/sph/io/PhantomDump.hpp"
 #include "shammodels/sph/io/PhantomDumpEOSUtils.hpp"
 
@@ -149,9 +148,13 @@ namespace shammodels::sph {
         constexpr f64 m_to_cm = 1e2;
         constexpr f64 kg_to_g = 1e3;
 
+        // truncated value of pi used by phantom (physcon.f90), using it makes umagfd bit-identical
+        // to the one phantom writes
+        constexpr f64 phantom_pi = 3.1415926536;
+
         /// Phantom's cgs magnetic field unit (in G) from cgs udist (cm), umass (g), utime (s)
         f64 get_phantom_umagfd(f64 udist, f64 umass, f64 utime) {
-            f64 ucharge = sycl::sqrt(umass * udist / (4. * shambase::constants::pi<f64>) );
+            f64 ucharge = sycl::sqrt(umass * udist / (4. * phantom_pi));
             return umass / (utime * ucharge);
         }
     } // namespace
