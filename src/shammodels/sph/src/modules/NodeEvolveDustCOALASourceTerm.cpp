@@ -29,6 +29,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include <experimental/mdspan>
 #include <array>
+#include <optional>
 #include <vector>
 
 namespace shammodels::sph::modules {
@@ -140,6 +141,147 @@ namespace shammodels::sph::modules {
         }
     };
 
+    template<class Tvec>
+    struct KernelGenCoala_k0_coag_frag {
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        using mdspan_rank_1         = std::mdspan<Tscal, std::dextents<u32, 1>>;
+        using mdspan_rank_1_strided = std::mdspan<Tscal, std::dextents<u32, 1>, std::layout_stride>;
+
+        using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
+
+        u32 nbins;
+        Tscal rho_eps;
+        Tscal vfrag_threshold;
+        u32 corrected_len;
+        u32 group_size;
+        u32 true_size;
+
+        auto operator()(
+            u32 /**/,
+            // common to all kernel calls
+            const Tscal *__restrict massgrid_ptr,
+            const u32 *__restrict tabflux_pair_offset,
+            const u32 *__restrict tabflux_pair_jmin,
+            const Tscal *__restrict tabflux_values,
+            const u32 *__restrict tabflux_frag_T1_pair_offset,
+            const u32 *__restrict tabflux_frag_T1_pair_jmin,
+            const Tscal *__restrict tabflux_frag_T1_values,
+            const u32 *__restrict tabflux_frag_T2_pair_offset,
+            const u32 *__restrict tabflux_frag_T2_pair_jmin,
+            const Tscal *__restrict tabflux_frag_T2_values,
+            // field specific data
+            const Tscal *__restrict s_j,
+            const Tvec *__restrict delta_v_j,
+            Tscal *__restrict S_coag,
+            // scratch
+            Tscal *__restrict gij_scratch) const {
+
+            auto range = sycl::nd_range<1>{corrected_len, group_size};
+
+            auto local_acc_sz_nbins = sycl::range<1>{group_size * nbins};
+
+            auto true_size       = this->true_size;
+            auto rho_eps         = this->rho_eps;
+            auto vfrag_threshold = this->vfrag_threshold;
+            auto group_size      = this->group_size;
+
+            return [=, nbins = this->nbins](sycl::handler &cgh) {
+                auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
+
+                cgh.parallel_for(range, [=](sycl::nd_item<1> tid) {
+                    const u64 id_a = tid.get_global_linear_id();
+                    const u64 lid  = tid.get_local_linear_id();
+
+                    if (id_a >= true_size) {
+                        return;
+                    }
+
+                    u32 id_a_d = id_a * nbins;
+
+                    /* inputs */
+                    shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_coag{
+                        nbins, tabflux_pair_offset, tabflux_pair_jmin, tabflux_values};
+                    shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_frag_T1{
+                        nbins,
+                        tabflux_frag_T1_pair_offset,
+                        tabflux_frag_T1_pair_jmin,
+                        tabflux_frag_T1_values};
+                    shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_frag_T2{
+                        nbins,
+                        tabflux_frag_T2_pair_offset,
+                        tabflux_frag_T2_pair_jmin,
+                        tabflux_frag_T2_values};
+                    const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
+
+                    /* internal */
+                    // flux in local memory with a bin-major layout (stride group_size), such
+                    // that the work-items of a sub-group, which access the same bin at the
+                    // same time, hit distinct banks
+                    mdspan_rank_1_strided flux(
+                        &(flux_acc[lid]),
+                        typename mdspan_rank_1_strided::mapping_type(
+                            std::dextents<u32, 1>(nbins), std::array<u32, 1>{group_size}));
+
+                    // gij in global memory with a particle-major layout, such that the
+                    // work-items of a sub-group, which access the same bin at the same time,
+                    // read contiguous addresses
+                    mdspan_rank_1_strided gij(
+                        gij_scratch + id_a,
+                        typename mdspan_rank_1_strided::mapping_type(
+                            std::dextents<u32, 1>(nbins), std::array<u32, 1>{true_size}));
+
+                    /* output */
+                    mdspan_rank_1 S_coag_span(S_coag + id_a_d, nbins);
+
+                    /* lambda getters */
+                    auto rho_dust = [&](int j) {
+                        auto tmp = s_j[id_a_d + j];
+                        return tmp * tmp;
+                    };
+
+                    auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
+                        // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
+                        auto tmp = sycl::length(delta_v[j] - delta_v[i]);
+                        return (tmp > vfrag_threshold) ? 0 : tmp;
+                    };
+
+                    auto evol_prob = [&](Tscal dv_val) {
+                        // pfrag -> 0 when dv -> 0, handled explicitly since
+                        // vfrag_threshold / dv would give inf * 0 = NaN
+                        Tscal pfrag = 0;
+                        if (dv_val > 0) {
+                            Tscal x2 = vfrag_threshold / dv_val;
+                            x2 *= x2;
+                            pfrag = (Tscal(1.5) * x2 + 1) * sycl::exp(Tscal(-1.5) * x2);
+                        }
+                        return shamphys::PEvol<Tscal>{
+                            .pcoag = 1 - pfrag,
+                            .pfrag = pfrag,
+                        };
+                    };
+
+                    // should implement the same content as
+                    // src/pylib/shamrock/external/coala/interface_coala_shamrock.py
+
+                    shamphys::coala_k0_coagfrag_source_term(
+                        nbins,
+                        dv,
+                        evol_prob,
+                        rho_dust,
+                        rho_eps,
+                        massgrid,
+                        tabflux_coag,
+                        tabflux_frag_T1,
+                        tabflux_frag_T2,
+                        gij,
+                        flux,
+                        S_coag_span);
+                });
+            };
+        }
+    };
+
     /// Device buffers holding a shamphys::TabfluxCoagK0Sparse tensor
     template<class Tscal>
     struct TabfluxK0SparseBuffers {
@@ -180,6 +322,17 @@ namespace shammodels::sph::modules {
 
         auto edges = get_edges();
 
+        bool has_frag_T1 = edges.tensor_tabflux_frag_T1.has_value();
+        bool has_frag_T2 = edges.tensor_tabflux_frag_T2.has_value();
+
+        if (has_frag_T1 != has_frag_T2) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(
+                "tensor_tabflux_frag_T1 and tensor_tabflux_frag_T2 must be either both set or both "
+                "unset");
+        }
+
+        bool has_frag = has_frag_T1 && has_frag_T2;
+
         auto s_j_spans       = edges.s_j.get_spans();
         auto delta_v_j_spans = edges.delta_v_j.get_spans();
 
@@ -201,6 +354,15 @@ namespace shammodels::sph::modules {
 
         auto tabflux_coag_bufs
             = make_tabflux_k0_sparse_buffers<Tscal>(nbins, tensor_tabflux_coag, dev_sched);
+
+        std::optional<TabfluxK0SparseBuffers<Tscal>> tabflux_frag_T1_bufs;
+        std::optional<TabfluxK0SparseBuffers<Tscal>> tabflux_frag_T2_bufs;
+        if (has_frag) {
+            tabflux_frag_T1_bufs = make_tabflux_k0_sparse_buffers<Tscal>(
+                nbins, edges.tensor_tabflux_frag_T1.value().get().data, dev_sched);
+            tabflux_frag_T2_bufs = make_tabflux_k0_sparse_buffers<Tscal>(
+                nbins, edges.tensor_tabflux_frag_T2.value().get().data, dev_sched);
+        }
 
         // per thread local memory: flux, one per bin
         usize local_mem_per_thread = nbins * sizeof(Tscal);
@@ -225,24 +387,54 @@ namespace shammodels::sph::modules {
 
             sham::DeviceBuffer<Tscal> gij_scratch(count * nbins, dev_sched);
 
-            sham::kernel_call_hndl(
-                q,
-                sham::MultiRef{
-                    massgrid_buf,
-                    tabflux_coag_bufs.pair_offset,
-                    tabflux_coag_bufs.pair_jmin,
-                    tabflux_coag_bufs.values,
-                    s_j_spans.get(id_patch),
-                    delta_v_j_spans.get(id_patch)},
-                sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
-                count,
-                KernelGenCoala_k0<Tvec>{
-                    .nbins           = nbins,
-                    .rho_eps         = rho_eps,
-                    .vfrag_threshold = vfrag_threshold,
-                    .corrected_len   = corrected_len,
-                    .group_size      = group_size,
-                    .true_size       = u32(count)});
+            if (!has_frag) {
+                sham::kernel_call_hndl(
+                    q,
+                    sham::MultiRef{
+                        massgrid_buf,
+                        tabflux_coag_bufs.pair_offset,
+                        tabflux_coag_bufs.pair_jmin,
+                        tabflux_coag_bufs.values,
+                        s_j_spans.get(id_patch),
+                        delta_v_j_spans.get(id_patch)},
+                    sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
+                    count,
+                    KernelGenCoala_k0<Tvec>{
+                        .nbins           = nbins,
+                        .rho_eps         = rho_eps,
+                        .vfrag_threshold = vfrag_threshold,
+                        .corrected_len   = corrected_len,
+                        .group_size      = group_size,
+                        .true_size       = u32(count)});
+            } else {
+                auto &frag_T1_bufs = tabflux_frag_T1_bufs.value();
+                auto &frag_T2_bufs = tabflux_frag_T2_bufs.value();
+
+                sham::kernel_call_hndl(
+                    q,
+                    sham::MultiRef{
+                        massgrid_buf,
+                        tabflux_coag_bufs.pair_offset,
+                        tabflux_coag_bufs.pair_jmin,
+                        tabflux_coag_bufs.values,
+                        frag_T1_bufs.pair_offset,
+                        frag_T1_bufs.pair_jmin,
+                        frag_T1_bufs.values,
+                        frag_T2_bufs.pair_offset,
+                        frag_T2_bufs.pair_jmin,
+                        frag_T2_bufs.values,
+                        s_j_spans.get(id_patch),
+                        delta_v_j_spans.get(id_patch)},
+                    sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
+                    count,
+                    KernelGenCoala_k0_coag_frag<Tvec>{
+                        .nbins           = nbins,
+                        .rho_eps         = rho_eps,
+                        .vfrag_threshold = vfrag_threshold,
+                        .corrected_len   = corrected_len,
+                        .group_size      = group_size,
+                        .true_size       = u32(count)});
+            }
         });
     }
 

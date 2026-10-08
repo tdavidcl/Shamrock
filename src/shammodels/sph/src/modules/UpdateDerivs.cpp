@@ -47,6 +47,7 @@
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include <memory>
+#include <optional>
 #include <vector>
 
 template<class Tvec, template<class> class SPHKernel>
@@ -1330,6 +1331,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             vfrag_threshold,
             massgrid,
             tabflux_coag,
+            std::nullopt,
+            std::nullopt,
             part_counts,
             s_j_refs,
             delta_v,
