@@ -387,7 +387,9 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal rhodust_eps,
                Tscal vfrag_threshold,
                std::vector<Tscal> massgrid,
-               py::array_t<Tscal> tabflux_coag) {
+               py::array_t<Tscal> tabflux_coag,
+               std::optional<py::array_t<Tscal>> tensor_tabflux_frag_T1,
+               std::optional<py::array_t<Tscal>> tensor_tabflux_frag_T2) {
                 if (massgrid.size() == 0) {
                     throw shambase::make_except_with_loc<std::invalid_argument>(
                         "massgrid must not be empty");
@@ -395,50 +397,73 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
 
                 u32 nbins = massgrid.size() - 1;
 
-                // tabflux_coag is a 3D array of shape (nbins ** 3)
+                // convert a numpy array of shape (nbins, nbins, nbins) to a flat vector
+                auto tensor_to_vec = [&](py::array_t<Tscal> &tensor, const std::string &name) {
+                    // assert rank is 3
+                    if (tensor.ndim() != 3) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            name
+                            + " must be a 3D array, got ndim=" + std::to_string(tensor.ndim()));
+                    }
 
-                // assert rank is 3
-                if (tabflux_coag.ndim() != 3) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(
-                        "tabflux_coag must be a 3D array, got ndim="
-                        + std::to_string(tabflux_coag.ndim()));
-                }
+                    // assert shape is (nbins, nbins, nbins)
+                    if (tensor.shape(0) != nbins || tensor.shape(1) != nbins
+                        || tensor.shape(2) != nbins) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            name
+                            + " must be a 3D array of shape (nbins, nbins, nbins) with "
+                              "nbins="
+                            + std::to_string(nbins) + " (massgrid.size() - 1), got shape ("
+                            + std::to_string(tensor.shape(0)) + ", "
+                            + std::to_string(tensor.shape(1)) + ", "
+                            + std::to_string(tensor.shape(2)) + ")");
+                    }
 
-                // assert shape is (nbins, nbins, nbins)
-                if (tabflux_coag.shape(0) != nbins || tabflux_coag.shape(1) != nbins
-                    || tabflux_coag.shape(2) != nbins) {
-                    throw shambase::make_except_with_loc<std::invalid_argument>(
-                        "tabflux_coag must be a 3D array of shape (nbins, nbins, nbins) with "
-                        "nbins="
-                        + std::to_string(nbins) + " (massgrid.size() - 1), got shape ("
-                        + std::to_string(tabflux_coag.shape(0)) + ", "
-                        + std::to_string(tabflux_coag.shape(1)) + ", "
-                        + std::to_string(tabflux_coag.shape(2)) + ")");
-                }
+                    std::vector<Tscal> ret(nbins * nbins * nbins);
 
-                std::vector<Tscal> tabflux_coag_vec(nbins * nbins * nbins);
+                    using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
+                    mdspan_rank_3 ret_mdspan(ret.data(), nbins, nbins, nbins);
 
-                using mdspan_rank_3 = std::mdspan<Tscal, std::dextents<u32, 3>>;
-                mdspan_rank_3 tabflux_coag_mdspan(tabflux_coag_vec.data(), nbins, nbins, nbins);
-
-                for (u32 i = 0; i < nbins; i++) {
-                    for (u32 j = 0; j < nbins; j++) {
-                        for (u32 k = 0; k < nbins; k++) {
-                            tabflux_coag_mdspan(i, j, k) = tabflux_coag.mutable_at(i, j, k);
+                    for (u32 i = 0; i < nbins; i++) {
+                        for (u32 j = 0; j < nbins; j++) {
+                            for (u32 k = 0; k < nbins; k++) {
+                                ret_mdspan(i, j, k) = tensor.mutable_at(i, j, k);
+                            }
                         }
                     }
+
+                    return ret;
+                };
+
+                if (tensor_tabflux_frag_T1.has_value() != tensor_tabflux_frag_T2.has_value()) {
+                    throw shambase::make_except_with_loc<std::invalid_argument>(
+                        "tensor_tabflux_frag_T1 and tensor_tabflux_frag_T2 must be either both set "
+                        "or both unset");
+                }
+
+                std::optional<std::vector<Tscal>> frag_T1_vec = std::nullopt;
+                std::optional<std::vector<Tscal>> frag_T2_vec = std::nullopt;
+                if (tensor_tabflux_frag_T1.has_value()) {
+                    frag_T1_vec
+                        = tensor_to_vec(tensor_tabflux_frag_T1.value(), "tensor_tabflux_frag_T1");
+                    frag_T2_vec
+                        = tensor_to_vec(tensor_tabflux_frag_T2.value(), "tensor_tabflux_frag_T2");
                 }
 
                 self.dust_config.set_dust_evol_coala(
-                    {.rhodust_eps     = rhodust_eps,
-                     .vfrag_threshold = vfrag_threshold,
-                     .massgrid        = massgrid,
-                     .tabflux_coag    = tabflux_coag_vec});
+                    {.rhodust_eps            = rhodust_eps,
+                     .vfrag_threshold        = vfrag_threshold,
+                     .massgrid               = massgrid,
+                     .tabflux_coag           = tensor_to_vec(tabflux_coag, "tabflux_coag"),
+                     .tensor_tabflux_frag_T1 = std::move(frag_T1_vec),
+                     .tensor_tabflux_frag_T2 = std::move(frag_T2_vec)});
             },
             py::arg("rhodust_eps"),
             py::arg("vfrag_threshold"),
             py::arg("massgrid"),
-            py::arg("tabflux_coag"))
+            py::arg("tabflux_coag"),
+            py::arg("tensor_tabflux_frag_T1") = std::nullopt,
+            py::arg("tensor_tabflux_frag_T2") = std::nullopt)
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {

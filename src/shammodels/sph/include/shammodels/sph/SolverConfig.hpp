@@ -45,6 +45,7 @@
 #include "shamtree/RadixTree.hpp"
 #include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
+#include <optional>
 #include <stdexcept>
 #include <variant>
 #include <vector>
@@ -115,6 +116,14 @@ namespace shammodels::sph {
         Tscal vfrag_threshold;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;
+
+        /// fragmentation tensors (nbins^3 each), either both or neither must be set
+        std::optional<std::vector<Tscal>> tensor_tabflux_frag_T1 = std::nullopt;
+        std::optional<std::vector<Tscal>> tensor_tabflux_frag_T2 = std::nullopt;
+
+        inline bool has_frag() const {
+            return tensor_tabflux_frag_T1.has_value() && tensor_tabflux_frag_T2.has_value();
+        }
     };
 
     template<class Tscal>
@@ -339,7 +348,9 @@ namespace shammodels::sph {
                                {"rhodust_eps", cfg.rhodust_eps},
                                {"vfrag_threshold", cfg.vfrag_threshold},
                                {"massgrid", cfg.massgrid},
-                               {"tabflux_coag", cfg.tabflux_coag}};
+                               {"tabflux_coag", cfg.tabflux_coag},
+                               {"tensor_tabflux_frag_T1", cfg.tensor_tabflux_frag_T1},
+                               {"tensor_tabflux_frag_T2", cfg.tensor_tabflux_frag_T2}};
                     },
                 },
                 dust_evol_config);
@@ -349,11 +360,21 @@ namespace shammodels::sph {
             if (j.at("type").get<std::string>() == "none") {
                 dust_evol_config = None{};
             } else if (j.at("type").get<std::string>() == "coala_coag") {
+                // the fragmentation tensors are optional, a missing key means unset
+                auto get_opt_tensor = [&](const char *key) -> std::optional<std::vector<Tscal>> {
+                    if (!j.contains(key)) {
+                        return std::nullopt;
+                    }
+                    return j.at(key).get<std::optional<std::vector<Tscal>>>();
+                };
+
                 dust_evol_config = DustEvolCoalaCoag<Tscal>{
-                    .rhodust_eps     = j.at("rhodust_eps").get<Tscal>(),
-                    .vfrag_threshold = j.at("vfrag_threshold").get<Tscal>(),
-                    .massgrid        = j.at("massgrid").get<std::vector<Tscal>>(),
-                    .tabflux_coag    = j.at("tabflux_coag").get<std::vector<Tscal>>()};
+                    .rhodust_eps            = j.at("rhodust_eps").get<Tscal>(),
+                    .vfrag_threshold        = j.at("vfrag_threshold").get<Tscal>(),
+                    .massgrid               = j.at("massgrid").get<std::vector<Tscal>>(),
+                    .tabflux_coag           = j.at("tabflux_coag").get<std::vector<Tscal>>(),
+                    .tensor_tabflux_frag_T1 = get_opt_tensor("tensor_tabflux_frag_T1"),
+                    .tensor_tabflux_frag_T2 = get_opt_tensor("tensor_tabflux_frag_T2")};
             } else {
                 shambase::throw_unimplemented();
             }
@@ -419,6 +440,26 @@ namespace shammodels::sph {
                             + " entries for ndust = " + std::to_string(ndust) + ", got "
                             + std::to_string(cfg->tabflux_coag.size()));
                     }
+
+                    if (cfg->tensor_tabflux_frag_T1.has_value()
+                        != cfg->tensor_tabflux_frag_T2.has_value()) {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(
+                            "tensor_tabflux_frag_T1 and tensor_tabflux_frag_T2 must be either both "
+                            "set or both unset");
+                    }
+
+                    auto check_frag_size
+                        = [&](const std::optional<std::vector<Tscal>> &tensor, const char *name) {
+                              if (tensor.has_value() && tensor->size() != ndust * ndust * ndust) {
+                                  throw shambase::make_except_with_loc<std::invalid_argument>(
+                                      std::string(name) + " must have ndust^3 = "
+                                      + std::to_string(ndust * ndust * ndust)
+                                      + " entries for ndust = " + std::to_string(ndust) + ", got "
+                                      + std::to_string(tensor->size()));
+                              }
+                          };
+                    check_frag_size(cfg->tensor_tabflux_frag_T1, "tensor_tabflux_frag_T1");
+                    check_frag_size(cfg->tensor_tabflux_frag_T2, "tensor_tabflux_frag_T2");
 
                     if (cfg->rhodust_eps <= 0) {
                         throw shambase::make_except_with_loc<std::invalid_argument>(

@@ -1289,6 +1289,21 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
         tabflux_coag->data = cfg_evol->tabflux_coag;
 
+        // fragmentation tensors, only set if fragmentation is enabled
+        std::optional<std::shared_ptr<shamrock::solvergraph::IDataEdge<std::vector<Tscal>>>>
+            tensor_tabflux_frag_T1 = std::nullopt;
+        std::optional<std::shared_ptr<shamrock::solvergraph::IDataEdge<std::vector<Tscal>>>>
+            tensor_tabflux_frag_T2 = std::nullopt;
+        if (cfg_evol->has_frag()) {
+            tensor_tabflux_frag_T1
+                = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
+            tensor_tabflux_frag_T1.value()->data = cfg_evol->tensor_tabflux_frag_T1.value();
+
+            tensor_tabflux_frag_T2
+                = shamrock::solvergraph::IDataEdge<std::vector<Tscal>>::make_shared("", "");
+            tensor_tabflux_frag_T2.value()->data = cfg_evol->tensor_tabflux_frag_T2.value();
+        }
+
         auto rhodust_eps  = shamrock::solvergraph::IDataEdge<Tscal>::make_shared("", "");
         rhodust_eps->data = cfg_evol->rhodust_eps;
 
@@ -1331,8 +1346,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
             vfrag_threshold,
             massgrid,
             tabflux_coag,
-            std::nullopt,
-            std::nullopt,
+            tensor_tabflux_frag_T1,
+            tensor_tabflux_frag_T2,
             part_counts,
             s_j_refs,
             delta_v,
