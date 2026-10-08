@@ -87,7 +87,7 @@ namespace shammodels::sph::modules {
 
                     /* inputs */
                     shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_coag{
-                        tabflux_pair_offset, tabflux_pair_jmin, tabflux_values};
+                        nbins, tabflux_pair_offset, tabflux_pair_jmin, tabflux_values};
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
                     /* internal */

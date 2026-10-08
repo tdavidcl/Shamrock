@@ -167,6 +167,7 @@ namespace shamphys {
      */
     template<class T, class Tidx = u32>
     struct TabfluxCoagK0SparseView {
+        Tidx nbins;
         const Tidx *pair_offset;
         const Tidx *pair_jmin;
         const T *values;
@@ -178,6 +179,9 @@ namespace shamphys {
             Tidx jmin;
             Tidx count;
 
+            /// Whether the pair has no stored entry (it does not contribute to the flux)
+            inline bool is_empty() const { return count == 0; }
+
             /// Call `func(j, tensor_tabflux_coag[j,l,m])` for each stored entry of the pair
             template<class Func>
             inline void for_each_sparse(Func &&func) const {
@@ -187,26 +191,11 @@ namespace shamphys {
             }
         };
 
-        /**
-         * @brief Call `func(l, m, entries)` for each pair \f$(l,m)\f$ holding at least one stored
-         * entry, `entries` being its PairEntries
-         *
-         * Pairs without entries are skipped, so that per-pair work done in @p func (e.g.
-         * evaluating \f$\mathrm{dv}(l,m)\f$) is only done for the pairs that contribute.
-         */
-        template<class Func>
-        inline void for_each_pair(int nbins, Func &&func) const {
-            Tidx p = 0;
-            for (int l = 0; l < nbins; ++l) {
-                for (int m = 0; m < nbins; ++m, ++p) {
-                    Tidx beg = pair_offset[p];
-                    Tidx end = pair_offset[p + 1];
-                    if (beg == end) {
-                        continue;
-                    }
-                    func(l, m, PairEntries{values + beg, pair_jmin[p], end - beg});
-                }
-            }
+        /// Stored entries of the pair \f$(l,m)\f$
+        inline PairEntries get_entries(Tidx l, Tidx m) const {
+            Tidx p   = l * nbins + m;
+            Tidx beg = pair_offset[p];
+            return PairEntries{values + beg, pair_jmin[p], pair_offset[p + 1] - beg};
         }
     };
 
@@ -284,12 +273,21 @@ namespace shamphys {
             flux[j] = 0;
         }
 
-        tabflux.for_each_pair(nbins, [&](int l, int m, auto entries) {
-            auto term = dv(l, m) * gij[l] * gij[m];
-            entries.for_each_sparse([&](Tidx j, T val) {
-                flux[j] += val * term;
-            });
-        });
+        for (int l = 0; l < nbins; ++l) {
+            for (int m = 0; m < nbins; ++m) {
+                auto entries = tabflux.get_entries(l, m);
+
+                // skip the pairs without entries before evaluating dv
+                if (entries.is_empty()) {
+                    continue;
+                }
+
+                auto term = dv(l, m) * gij[l] * gij[m];
+                entries.for_each_sparse([&](Tidx j, T val) {
+                    flux[j] += val * term;
+                });
+            }
+        }
     }
 
     /**

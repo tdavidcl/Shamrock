@@ -66,6 +66,7 @@ void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
     REQUIRE_EQUAL(sparse.pair_jmin.size(), usize(nbins * nbins));
 
     shamphys::TabfluxCoagK0SparseView<f64> view{
+        u32(nbins),
         sparse.pair_offset.data(), sparse.pair_jmin.data(), sparse.values.data()};
 
     std::vector<f64> flux(nbins);
