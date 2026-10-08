@@ -172,7 +172,8 @@ namespace shammodels::sph::modules {
             std::mdspan<const Tscal, std::dextents<u32, 3>>(
                 tensor_tabflux_coag.data(), nbins, nbins, nbins));
 
-        sham::DeviceBuffer<u32> tabflux_pair_offset_buf(tabflux_sparse.pair_offset.size(), dev_sched);
+        sham::DeviceBuffer<u32> tabflux_pair_offset_buf(
+            tabflux_sparse.pair_offset.size(), dev_sched);
         tabflux_pair_offset_buf.copy_from_stdvec(tabflux_sparse.pair_offset);
 
         sham::DeviceBuffer<u32> tabflux_pair_jmin_buf(tabflux_sparse.pair_jmin.size(), dev_sched);

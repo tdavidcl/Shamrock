@@ -7,9 +7,9 @@
 //
 // -------------------------------------------------------//
 
-#include "shambackends/sycl.hpp" // before <experimental/mdspan>, which uses sycl:: under DPC++
 #include "shambase/aliases_float.hpp"
 #include "shambase/aliases_int.hpp"
+#include "shambackends/sycl.hpp" // before <experimental/mdspan>, which uses sycl:: under DPC++
 #include "shamphys/coala_interface.hpp"
 #include "shamtest/shamtest.hpp"
 #include <experimental/mdspan>
@@ -67,8 +67,7 @@ void test_coala_flux_sparse(int nbins, f64 zero_fraction) {
     REQUIRE_EQUAL(sparse.pair_jmin.size(), usize(nbins * nbins));
 
     shamphys::TabfluxCoagK0SparseView<f64> view{
-        u32(nbins),
-        sparse.pair_offset.data(), sparse.pair_jmin.data(), sparse.values.data()};
+        u32(nbins), sparse.pair_offset.data(), sparse.pair_jmin.data(), sparse.values.data()};
 
     std::vector<f64> flux(nbins);
     std::mdspan<f64, std::dextents<u32, 1>> flux_span(flux.data(), nbins);
