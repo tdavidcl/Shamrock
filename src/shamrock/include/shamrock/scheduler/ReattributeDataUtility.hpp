@@ -50,7 +50,12 @@ namespace shamrock {
         struct NewPidResult {
             /// new patch id of each object, for each patch
             shambase::DistributedData<sycl::buffer<u64>> new_pid;
-            /// for each patch, number of objects that are no longer in the patch box
+            /**
+             * @brief for each patch, number of objects that are no longer in the patch box
+             *
+             * Exact when 0 (no object leaves the patch), an upper bound of the number of objects
+             * changing patch otherwise (see SerialPatchTree::PatchOwnerResult::moved_count).
+             */
             shambase::DistributedData<u32> moved_count;
         };
 

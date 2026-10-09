@@ -277,7 +277,13 @@ class SerialPatchTree {
     struct PatchOwnerResult {
         /// new owner patch id of each object (`u64_max` if it could not be computed)
         sycl::buffer<u64> new_owner;
-        /// number of objects outside of the current patch box (searched in the tree)
+        /**
+         * @brief number of objects outside of the current patch box (searched in the tree)
+         *
+         * Exact when 0 (every object keeps the current patch). Otherwise it is an upper bound of
+         * the number of objects whose owner changed: an object outside of every patch is
+         * attributed to the current patch if it is a root leaf (single patch case).
+         */
         u32 moved_count;
     };
 
