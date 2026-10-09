@@ -76,7 +76,7 @@ namespace sham::gui {
         };
         if (lay == 0) { // stack: one pane in front of the others
             dl->AddRect(V(x0 + 4, y0), V(x1, y1 - 4), col, 1.5f, 0, 1.1f);
-            dl->AddRectFilled(V(x0, y0 + 4), V(x1 - 4, y1), C::BUTTON, 1.5f);
+            dl->AddRectFilled(V(x0, y0 + 4), V(x1 - 4, y1), theme::BUTTON, 1.5f);
             dl->AddRect(V(x0, y0 + 4), V(x1 - 4, y1), col, 1.5f, 0, 1.3f);
             return;
         }

@@ -50,8 +50,8 @@ g.run(until=0.05)
     }
 
     void ScriptPane::draw(SDL *dl, double x, double y, double w, double h) {
-        dl->AddRectFilled(V(x, y), V(x + w, y + 36), C::PANEL);
-        dl->AddLine(V(x, y + 35.5), V(x + w, y + 35.5), C::DIVIDER);
+        dl->AddRectFilled(V(x, y), V(x + w, y + 36), theme::PANEL);
+        dl->AddLine(V(x, y + 35.5), V(x + w, y + 35.5), theme::DIVIDER);
         double tx = x;
         struct Tab {
             const char *label;
@@ -63,36 +63,37 @@ g.run(until=0.05)
             bool problems = !std::strcmp(t.label, "Problems");
             double tw = 28 + text_w(font, 12, t.label) + (t.active ? 14 : 0) + (problems ? 22 : 0);
             if (t.active)
-                dl->AddRectFilled(V(tx, y), V(tx + tw, y + 36), C::CANVAS);
+                dl->AddRectFilled(V(tx, y), V(tx + tw, y + 36), theme::CANVAS);
             std::string id = std::string("##tab_") + t.label;
             hit(id.c_str(), tx, y, tw, 36);
-            draw_text_vc(dl, font, 12, tx + 14, y + 18, t.active ? C::TEXT : C::MUTED, t.label);
+            draw_text_vc(
+                dl, font, 12, tx + 14, y + 18, t.active ? theme::TEXT : theme::MUTED, t.label);
             double lw = text_w(font, 12, t.label);
             if (t.active)
                 draw_live_dot(dl, tx + 14 + lw + 10, y + 18);
             if (problems) {
                 double bx = tx + 14 + lw + 6;
-                dl->AddRectFilled(V(bx, y + 10), V(bx + 16, y + 26), C::ROW_HL, 8);
-                draw_text_vc(dl, g_fonts.sans, 11, bx + 5, y + 18, C::TEXT_2, "0");
+                dl->AddRectFilled(V(bx, y + 10), V(bx + 16, y + 26), theme::ROW_HL, 8);
+                draw_text_vc(dl, g_fonts.sans, 11, bx + 5, y + 18, theme::TEXT_2, "0");
             }
-            dl->AddLine(V(tx + tw - 0.5, y), V(tx + tw - 0.5, y + 36), C::DIVIDER);
+            dl->AddLine(V(tx + tw - 0.5, y), V(tx + tw - 0.5, y + 36), theme::DIVIDER);
             tx += tw;
         }
         double ay = y + 36;
-        dl->AddRectFilled(V(x, ay), V(x + w, ay + 38), C::CANVAS);
+        dl->AddRectFilled(V(x, ay), V(x + w, ay + 38), theme::CANVAS);
         dl->AddLine(V(x, ay + 37.5), V(x + w, ay + 37.5), rgba("#25272b"));
         double acy     = ay + 19;
         double apply_w = 20 + text_w(g_fonts.sans, 12, "Apply at next step"),
                dry_w   = 20 + text_w(g_fonts.sans, 12, "Dry run");
         double bx      = x + w - 12 - apply_w - 6 - dry_w;
-        dl->AddCircleFilled(V(x + 15, acy), 3, C::TEAL);
+        dl->AddCircleFilled(V(x + 15, acy), 3, theme::TEAL);
         std::string sync;
         for (const char *s : {"in sync with graph", "in sync", ""}) {
             sync = s;
             if (x + 24 + text_w(g_fonts.sans, 12, sync) + 12 <= bx)
                 break;
         }
-        draw_text_vc(dl, g_fonts.sans, 12, x + 24, acy, C::TEAL_TEXT, sync);
+        draw_text_vc(dl, g_fonts.sans, 12, x + 24, acy, theme::TEAL_TEXT, sync);
         text_button(dl, "##dry", bx, acy, "Dry run");
         text_button(dl, "##apply", bx + dry_w + 6, acy, "Apply at next step", true);
         double ey = ay + 38;

@@ -22,7 +22,7 @@
 namespace sham::gui {
 
     std::pair<std::vector<Node>, std::vector<Link>> build_demo_graph() {
-        const ImU32 A = C::ACCENT, G = C::GRAY, B = C::BLUE, T = C::TEAL;
+        const ImU32 A = theme::ACCENT, G = theme::GRAY, B = theme::BLUE, T = theme::TEAL;
         auto param = [](const char *l, const char *v, bool hl = false) {
             return Row{RowKind::Param, l, v, 0, hl};
         };
@@ -38,7 +38,7 @@ namespace sham::gui {
              20,
              150,
              160,
-             C::INPUT,
+             theme::INPUT,
              false,
              {param("E₀", "1.0"),
               param("n_tracers", "1.2M"),
@@ -53,7 +53,7 @@ namespace sham::gui {
              460,
              40,
              160,
-             C::SOLVER,
+             theme::SOLVER,
              true,
              {port(RowKind::In, "mesh", G),
               port(RowKind::RW, "state", A),
@@ -67,7 +67,7 @@ namespace sham::gui {
              460,
              300,
              160,
-             C::SOLVER,
+             theme::SOLVER,
              true,
              {port(RowKind::In, "state", A),
               port(RowKind::RW, "tracers", B),
@@ -155,7 +155,7 @@ namespace sham::gui {
         const double ox = pymod(grid_offset[0], step), oy = pymod(grid_offset[1], step);
         for (double gx = x + ox; gx < x + w; gx += step)
             for (double gy = y + oy; gy < y + h; gy += step)
-                dl->AddRectFilled(V(gx, gy), V(gx + 1.2, gy + 1.2), C::GRID_DOT);
+                dl->AddRectFilled(V(gx, gy), V(gx + 1.2, gy + 1.2), theme::GRID_DOT);
     }
 
     void GraphView::interact(double x, double y, double w, double h, const double *origin) {
@@ -230,10 +230,10 @@ namespace sham::gui {
             double a = r_out * 1.25, b = r_in * 1.3;
             ImVec2 o[4] = {V(cx, cy - a), V(cx + a, cy), V(cx, cy + a), V(cx - a, cy)};
             ImVec2 i[4] = {V(cx, cy - b), V(cx + b, cy), V(cx, cy + b), V(cx - b, cy)};
-            dl->AddConvexPolyFilled(o, 4, C::CANVAS);
+            dl->AddConvexPolyFilled(o, 4, theme::CANVAS);
             dl->AddConvexPolyFilled(i, 4, color);
         } else {
-            dl->AddCircleFilled(V(cx, cy), float(r_out), C::CANVAS);
+            dl->AddCircleFilled(V(cx, cy), float(r_out), theme::CANVAS);
             dl->AddCircleFilled(V(cx, cy), float(r_in), color);
         }
     }
@@ -242,13 +242,13 @@ namespace sham::gui {
         const double z = zoom;
         auto p0        = to_screen(origin, n.x, n.y);
         double x0 = p0[0], y0 = p0[1], x1 = x0 + n.w * z, y1 = y0 + n.h() * z;
-        dl->AddRectFilled(V(x0, y0), V(x1, y1), C::NODE, float(8 * z));
+        dl->AddRectFilled(V(x0, y0), V(x1, y1), theme::NODE, float(8 * z));
         dl->AddRectFilled(
             V(x0, y0), V(x1, y0 + 30 * z), n.style.bg, float(8 * z), ImDrawFlags_RoundCornersTop);
         dl->AddRect(
             V(x0, y0),
             V(x1, y1),
-            selected == n.id ? C::ACCENT : C::NODE_BORDER,
+            selected == n.id ? theme::ACCENT : theme::NODE_BORDER,
             float(8 * z),
             0,
             1.0f);
@@ -263,23 +263,23 @@ namespace sham::gui {
             const Row &r = n.rows[i];
             double ry = y0 + (34 + 26.0 * i) * z, cy = ry + 13 * z;
             if (r.highlight)
-                dl->AddRectFilled(V(x0 + 1, ry), V(x1 - 1, ry + 26 * z), C::ROW_HL);
+                dl->AddRectFilled(V(x0 + 1, ry), V(x1 - 1, ry + 26 * z), theme::ROW_HL);
             if (r.kind == RowKind::Param) {
-                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, theme::ROW, r.label);
                 double vw = text_w(g_fonts.mono, 12 * z, r.value);
-                draw_text_vc(dl, g_fonts.mono, 12 * z, x1 - 12 * z - vw, cy, C::TEXT, r.value);
+                draw_text_vc(dl, g_fonts.mono, 12 * z, x1 - 12 * z - vw, cy, theme::TEXT, r.value);
             } else if (r.kind == RowKind::Out) {
                 double lw = text_w(g_fonts.sans, 12 * z, r.label);
-                draw_text_vc(dl, g_fonts.sans, 12 * z, x1 - 12 * z - lw, cy, C::ROW, r.label);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x1 - 12 * z - lw, cy, theme::ROW, r.label);
                 port(dl, x1, cy, r.color);
             } else {
-                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, C::ROW, r.label);
+                draw_text_vc(dl, g_fonts.sans, 12 * z, x0 + 12 * z, cy, theme::ROW, r.label);
                 port(dl, x0, cy, r.color, r.kind == RowKind::RW);
                 if (r.kind == RowKind::RW) {
                     double tw = text_w(g_fonts.mono, 11 * z, "rw") + 10 * z, tx = x1 - 12 * z - tw;
                     dl->AddRectFilled(
                         V(tx, cy - 8 * z), V(tx + tw, cy + 8 * z), rgba("#2e3035"), float(3 * z));
-                    draw_text_vc(dl, g_fonts.mono, 11 * z, tx + 5 * z, cy, C::TEXT_2, "rw");
+                    draw_text_vc(dl, g_fonts.mono, 11 * z, tx + 5 * z, cy, theme::TEXT_2, "rw");
                 }
             }
         }
@@ -296,20 +296,20 @@ namespace sham::gui {
             sum += widths[i];
         }
         double lw = sum + 16 * 2 + 20, lx = x + w - 12 - lw, ly = y + h - 10 - 26;
-        dl->AddRectFilled(V(lx, ly), V(lx + lw, ly + 26), C::CANVAS, 6);
+        dl->AddRectFilled(V(lx, ly), V(lx + lw, ly + 26), theme::CANVAS, 6);
         dl->AddRect(V(lx, ly), V(lx + lw, ly + 26), rgba("#2a2c31"), 6);
         double cx = lx + 10, cy = ly + 13;
         for (int i = 0; i < 3; ++i) {
             if (!std::strcmp(kinds[i], "edge")) {
-                dl->AddRectFilled(V(cx, cy - 5), V(cx + 14, cy + 5), C::CARD, 3);
+                dl->AddRectFilled(V(cx, cy - 5), V(cx + 14, cy + 5), theme::CARD, 3);
                 dl->AddRect(V(cx, cy - 5), V(cx + 14, cy + 5), rgba("#5a5c62"), 3);
             } else if (!std::strcmp(kinds[i], "dot")) {
-                dl->AddCircleFilled(V(cx + 4, cy), 4, C::TEXT_3);
+                dl->AddCircleFilled(V(cx + 4, cy), 4, theme::TEXT_3);
             } else {
                 ImVec2 d[4] = {V(cx + 4, cy - 5), V(cx + 9, cy), V(cx + 4, cy + 5), V(cx - 1, cy)};
-                dl->AddConvexPolyFilled(d, 4, C::TEXT_3);
+                dl->AddConvexPolyFilled(d, 4, theme::TEXT_3);
             }
-            draw_text_vc(dl, f, s, cx + 20, cy, C::MUTED, labels[i]);
+            draw_text_vc(dl, f, s, cx + 20, cy, theme::MUTED, labels[i]);
             cx += widths[i] + 16;
         }
     }
@@ -321,7 +321,7 @@ namespace sham::gui {
             fit(w, h);
         last_size[0] = w;
         last_size[1] = h;
-        dl->AddRectFilled(V(x, y), V(x + w, y + h), C::CANVAS);
+        dl->AddRectFilled(V(x, y), V(x + w, y + h), theme::CANVAS);
         draw_grid(dl, x, y, w, h);
         interact(x, y, w, h, origin);
         dl->PushClipRect(V(x, y), V(x + w, y + h), true);
@@ -342,11 +342,11 @@ namespace sham::gui {
         const double z = zoom;
         auto p0        = to_screen(origin, n.x, n.y);
         double x0 = p0[0], y0 = p0[1], x1 = x0 + n.w * z, y1 = y0 + n.h() * z;
-        dl->AddRectFilled(V(x0, y0), V(x1, y1), C::CARD, float(10 * z));
+        dl->AddRectFilled(V(x0, y0), V(x1, y1), theme::CARD, float(10 * z));
         dl->AddRect(
             V(x0, y0),
             V(x1, y1),
-            selected == n.id ? C::ACCENT : C::NODE_BORDER,
+            selected == n.id ? theme::ACCENT : theme::NODE_BORDER,
             float(10 * z),
             0,
             1.0f);
@@ -354,9 +354,9 @@ namespace sham::gui {
         double hc = y0 + 15 * z;
         dl->AddRectFilled(
             V(x0 + 12 * z, hc - 4 * z), V(x0 + 20 * z, hc + 4 * z), n.color, float(2 * z));
-        draw_text_vc(dl, g_fonts.medium, 13 * z, x0 + 27 * z, hc, C::TEXT, n.title);
+        draw_text_vc(dl, g_fonts.medium, 13 * z, x0 + 27 * z, hc, theme::TEXT, n.title);
         double mw = text_w(g_fonts.mono, 11 * z, n.meta);
-        draw_text_vc(dl, g_fonts.mono, 11 * z, x1 - 10 * z - mw, hc, C::MUTED, n.meta);
+        draw_text_vc(dl, g_fonts.mono, 11 * z, x1 - 10 * z - mw, hc, theme::MUTED, n.meta);
         port(dl, x0, y0 + 16 * z, n.color);
         port(dl, x1, y0 + 16 * z, n.color);
 
@@ -364,17 +364,29 @@ namespace sham::gui {
         if (n.preview == Preview::None) {
             // start allow utf-8
             draw_text(
-                dl, g_fonts.mono, 11 * z, x0 + 12 * z, y0 + 38 * z, C::TEXT_3, "256³ · 8 patches");
+                dl,
+                g_fonts.mono,
+                11 * z,
+                x0 + 12 * z,
+                y0 + 38 * z,
+                theme::TEXT_3,
+                "256³ · 8 patches");
             // end allow utf-8
-            draw_text(dl, g_fonts.mono, 11 * z, x0 + 12 * z, y0 + 54 * z, C::DIM, "no preview");
+            draw_text(dl, g_fonts.mono, 11 * z, x0 + 12 * z, y0 + 54 * z, theme::DIM, "no preview");
             return;
         }
         double img_h = n.preview == Preview::Series ? 56 : 88;
         double bx1 = bx0 + 136 * z, by1 = by0 + img_h * z;
         if (!previews_on) {
-            dl->AddRectFilled(V(bx0, by0), V(bx1, by1), C::DARK, float(4 * z));
+            dl->AddRectFilled(V(bx0, by0), V(bx1, by1), theme::DARK, float(4 * z));
             draw_text_vc(
-                dl, g_fonts.mono, 11 * z, bx0 + 8 * z, (by0 + by1) / 2, C::DIM, "preview paused");
+                dl,
+                g_fonts.mono,
+                11 * z,
+                bx0 + 8 * z,
+                (by0 + by1) / 2,
+                theme::DIM,
+                "preview paused");
         } else if (n.preview == Preview::Slice) {
             dl->AddImageRounded(
                 cards.state,
@@ -394,12 +406,12 @@ namespace sham::gui {
                 rgba("#ffffff"),
                 float(4 * z));
         } else {
-            dl->AddRectFilled(V(bx0, by0), V(bx1, by1), C::DARK, float(4 * z));
-            sparkline(dl, bx0, by0 + 3 * z, bx1, by1 - 3 * z, cards.dt, C::ACCENT, 1.5);
-            sparkline(dl, bx0, by0 + 3 * z, bx1, by1 - 3 * z, cards.e_tot, C::TEAL, 1.2, 0.35);
+            dl->AddRectFilled(V(bx0, by0), V(bx1, by1), theme::DARK, float(4 * z));
+            sparkline(dl, bx0, by0 + 3 * z, bx1, by1 - 3 * z, cards.dt, theme::ACCENT, 1.5);
+            sparkline(dl, bx0, by0 + 3 * z, bx1, by1 - 3 * z, cards.e_tot, theme::TEAL, 1.2, 0.35);
         }
         double fy = by1 + 11 * z;
-        draw_text_vc(dl, g_fonts.mono, 11 * z, bx0, fy, C::TEXT_3, n.footer);
+        draw_text_vc(dl, g_fonts.mono, 11 * z, bx0, fy, theme::TEXT_3, n.footer);
         if (previews_on)
             draw_live_dot(dl, bx1 - 3 * z, fy - 1 * z, 3 * z);
     }
@@ -442,9 +454,9 @@ namespace sham::gui {
         double bx        = x + w - 12 - (widths[0] + widths[1] + widths[2]) - 6 * 2;
         std::string zoom = std::to_string(int(std::nearbyint(view.zoom * 100))) + "%";
         double zx        = bx - 8 - text_w(g_fonts.mono, 11, zoom);
-        draw_text_vc(dl, g_fonts.mono, 11, zx, cy, C::MUTED, zoom);
+        draw_text_vc(dl, g_fonts.mono, 11, zx, cy, theme::MUTED, zoom);
         if (counts_x + text_w(g_fonts.mono, 12, counts) + 12 <= zx)
-            draw_text_vc(dl, g_fonts.mono, 12, counts_x, cy, C::MUTED, counts);
+            draw_text_vc(dl, g_fonts.mono, 12, counts_x, cy, theme::MUTED, counts);
         Btn b = text_button(dl, "##fit", bx, cy, "Fit");
         if (b.clicked) {
             view.user_view = false;

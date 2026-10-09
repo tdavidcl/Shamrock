@@ -37,14 +37,15 @@ namespace sham::gui {
             double h = 26.0) {
             double w = 20 + text_w(g_fonts.mono, 12, label);
             Hit r    = hit(id, x, cy - h / 2, w, h);
-            ImU32 bg = on ? C::ACCENT_BG : (r.hovered ? lighten(C::BUTTON) : C::BUTTON);
+            ImU32 bg = on ? theme::ACCENT_BG : (r.hovered ? lighten(theme::BUTTON) : theme::BUTTON);
             dl->AddRectFilled(V(x, cy - h / 2), V(x + w, cy + h / 2), bg, 5);
             dl->AddRect(
                 V(x + 0.5, cy - h / 2 + 0.5),
                 V(x + w - 0.5, cy + h / 2 - 0.5),
-                on ? C::ACCENT : C::BORDER,
+                on ? theme::ACCENT : theme::BORDER,
                 5);
-            draw_text_vc(dl, g_fonts.mono, 12, x + 10, cy, on ? C::ACCENT_TEXT : C::TEXT_3, label);
+            draw_text_vc(
+                dl, g_fonts.mono, 12, x + 10, cy, on ? theme::ACCENT_TEXT : theme::TEXT_3, label);
             return {r.clicked, w};
         }
     } // namespace
@@ -88,7 +89,7 @@ namespace sham::gui {
             }
             cx += widths[k] + 6;
         }
-        dl->AddLine(V(cx, cy - 9), V(cx, cy + 9), C::BORDER);
+        dl->AddLine(V(cx, cy - 9), V(cx, cy + 9), theme::BORDER);
         cx += 7;
         if (chip(dl, "##tracers", cx, cy, "tracers", show_tracers).clicked)
             show_tracers = !show_tracers;
@@ -148,21 +149,22 @@ namespace sham::gui {
         if (8 + 20 + text_w(g_fonts.mono, 11, label) + 8 + 12 + tw + 8 > s)
             label = std::string("state.") + FIELDS[field].label;
         double bw_ = 8 + 6 + 6 + text_w(g_fonts.mono, 11, label) + 8;
-        dl->AddRectFilled(V(x + 8, y + 8), V(x + 8 + bw_, y + 28), C::CARD, 4);
+        dl->AddRectFilled(V(x + 8, y + 8), V(x + 8 + bw_, y + 28), theme::CARD, 4);
         draw_live_dot(dl, x + 8 + 11, y + 18);
-        draw_text_vc(dl, g_fonts.mono, 11, x + 8 + 20, y + 18, C::TEXT, label);
+        draw_text_vc(dl, g_fonts.mono, 11, x + 8 + 20, y + 18, theme::TEXT, label);
 
         double sx0 = x + s - 8 - tw;
-        dl->AddRectFilled(V(sx0, y + 8), V(sx0 + tw, y + 36), C::CARD, 6);
-        dl->AddRect(V(sx0 + 0.5, y + 8.5), V(sx0 + tw - 0.5, y + 35.5), C::BORDER, 6);
+        dl->AddRectFilled(V(sx0, y + 8), V(sx0 + tw, y + 36), theme::CARD, 6);
+        dl->AddRect(V(sx0 + 0.5, y + 8.5), V(sx0 + tw - 0.5, y + 35.5), theme::BORDER, 6);
         double bx = sx0 + 2;
         for (int i = 0; i < 2; ++i) {
             bool is3d = i == 0, on = view3d == is3d;
             std::string id = std::string("##seg_") + seg[i];
             Hit h          = hit(id.c_str(), bx, y + 10, seg_w[i], 24);
             if (on)
-                dl->AddRectFilled(V(bx, y + 10), V(bx + seg_w[i], y + 34), C::ACCENT_BG, 4);
-            draw_text_vc(dl, g_fonts.mono, 11, bx + 10, y + 22, on ? C::ACCENT : C::MUTED, seg[i]);
+                dl->AddRectFilled(V(bx, y + 10), V(bx + seg_w[i], y + 34), theme::ACCENT_BG, 4);
+            draw_text_vc(
+                dl, g_fonts.mono, 11, bx + 10, y + 22, on ? theme::ACCENT : theme::MUTED, seg[i]);
             if (h.clicked)
                 view3d = is3d;
             bx += seg_w[i] + 2;
@@ -172,9 +174,9 @@ namespace sham::gui {
         std::string probe
             = std::string(FIELDS[field].label) + " = " + fmt("%.3g", val) + "  (0.65, 0.41)";
         double pw = 16 + text_w(g_fonts.mono, 11, probe);
-        dl->AddRectFilled(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), C::CARD, 4);
-        dl->AddRect(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), C::NODE_BORDER, 4);
-        draw_text_vc(dl, g_fonts.mono, 11, x + s - pw, y + s - 19, C::TEXT, probe);
+        dl->AddRectFilled(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), theme::CARD, 4);
+        dl->AddRect(V(x + s - 8 - pw, y + s - 30), V(x + s - 8, y + s - 8), theme::NODE_BORDER, 4);
+        draw_text_vc(dl, g_fonts.mono, 11, x + s - pw, y + s - 19, theme::TEXT, probe);
 
         // orbit with left drag (3D), double-click resets the camera. Submitted after the
         // overlay buttons: with overlapping items the first one submitted takes the hover, so
@@ -288,7 +290,7 @@ namespace sham::gui {
         };
         std::string lo_s = f(main_lo), hi_s = f(main_hi), name = FIELDS[field].cb_label;
         double cy = y + 7;
-        draw_text_vc(dl, g_fonts.mono, 11, x, cy, C::TEXT_3, lo_s);
+        draw_text_vc(dl, g_fonts.mono, 11, x, cy, theme::TEXT_3, lo_s);
         double bx0 = x + text_w(g_fonts.mono, 11, lo_s) + 10;
         double bx1
             = x + w - text_w(g_fonts.mono, 11, hi_s) - 10 - text_w(g_fonts.mono, 11, name) - 10;
@@ -298,14 +300,14 @@ namespace sham::gui {
             ImU32 ca = viridis_u32(double(i) / n), cb = viridis_u32(double(i + 1) / n);
             dl->AddRectFilledMultiColor(V(a, cy - 4), V(b + 0.5, cy + 4), ca, cb, cb, ca);
         }
-        draw_text_vc(dl, g_fonts.mono, 11, bx1 + 10, cy, C::TEXT_3, hi_s);
+        draw_text_vc(dl, g_fonts.mono, 11, bx1 + 10, cy, theme::TEXT_3, hi_s);
         draw_text_vc(
             dl,
             g_fonts.mono,
             11,
             bx1 + 10 + text_w(g_fonts.mono, 11, hi_s) + 10,
             cy,
-            C::TEXT,
+            theme::TEXT,
             name);
     }
 
@@ -323,23 +325,27 @@ namespace sham::gui {
             {"Total energy",
              fmt("%.7f", hist.at("E_tot").back()),
              &hist.at("E_tot"),
-             C::TEAL,
+             theme::TEAL,
              true},
-            {"Timestep dt", fmt("%.2e", hist.at("dt").back()), &hist.at("dt"), C::ACCENT, false},
+            {"Timestep dt",
+             fmt("%.2e", hist.at("dt").back()),
+             &hist.at("dt"),
+             theme::ACCENT,
+             false},
             {"Speed",
              fmt("%.1f", hist.at("speed").back() / 1e9) + " Gcell/s",
              &hist.at("speed"),
-             C::BLUE,
+             theme::BLUE,
              false},
         };
         const double gap = 10.0, cw = (w - gap * 2) / 3;
         for (int i = 0; i < 3; ++i) {
             const Item &it = items[i];
             double cx      = x + i * (cw + gap);
-            draw_text(dl, g_fonts.sans, 12, cx, y, C::TEXT_2, it.title);
-            draw_text(dl, g_fonts.mono, 12, cx, y + 18, C::TEXT, it.value);
+            draw_text(dl, g_fonts.sans, 12, cx, y, theme::TEXT_2, it.title);
+            draw_text(dl, g_fonts.mono, 12, cx, y + 18, theme::TEXT, it.value);
             double by0 = y + 38, by1 = y + 38 + 44;
-            dl->AddRectFilled(V(cx, by0), V(cx + cw, by1), C::CANVAS, 4);
+            dl->AddRectFilled(V(cx, by0), V(cx + cw, by1), theme::CANVAS, 4);
             for (double f : {0.25, 0.5, 0.75}) {
                 double gy = by0 + (by1 - by0) * f;
                 dl->AddLine(V(cx, gy), V(cx + cw, gy), rgba("#26282d"));
@@ -358,10 +364,16 @@ namespace sham::gui {
 
     void ViewerPane::subscriptions(
         SDL *dl, double x, double y, double w, const SubscriptionSummary &subs) const {
-        draw_text(dl, g_fonts.sans, 12, x, y, C::TEXT_2, "Preview subscriptions");
+        draw_text(dl, g_fonts.sans, 12, x, y, theme::TEXT_2, "Preview subscriptions");
         std::string rate = fmt("%.1f", subs.bytes_per_s / 1e6) + " MB/s";
         draw_text(
-            dl, g_fonts.mono, 11, x + w - text_w(g_fonts.mono, 11, rate), y + 1, C::MUTED, rate);
+            dl,
+            g_fonts.mono,
+            11,
+            x + w - text_w(g_fonts.mono, 11, rate),
+            y + 1,
+            theme::MUTED,
+            rate);
         bool on = subs.cards_on;
         struct R {
             std::string c[4];
@@ -382,7 +394,7 @@ namespace sham::gui {
         double ry             = y + 22;
         for (const R &r : rows) {
             for (int i = 0; i < 4; ++i) {
-                ImU32 col = r.active ? (i == 0 ? C::TEXT : C::TEXT_3) : C::DIM;
+                ImU32 col = r.active ? (i == 0 ? theme::TEXT : theme::TEXT_3) : theme::DIM;
                 draw_text(dl, g_fonts.mono, 11, x + col_x[i] * w, ry, col, r.c[i]);
             }
             ry += 17;

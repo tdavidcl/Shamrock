@@ -195,36 +195,36 @@ namespace sham::gui {
             style.ScrollbarRounding                 = 4;
             style.ItemSpacing                       = ImVec2(0, 0);
             const std::pair<ImGuiCol, ImU32> cols[] = {
-                {ImGuiCol_WindowBg, C::APP_BG},
-                {ImGuiCol_ChildBg, C::CANVAS},
-                {ImGuiCol_ScrollbarBg, C::CANVAS},
-                {ImGuiCol_ScrollbarGrab, C::BORDER},
-                {ImGuiCol_ScrollbarGrabHovered, C::NODE_BORDER},
-                {ImGuiCol_ScrollbarGrabActive, C::MUTED},
-                {ImGuiCol_Text, C::TEXT},
-                {ImGuiCol_PopupBg, C::PANEL},
-                {ImGuiCol_Border, C::BORDER},
+                {ImGuiCol_WindowBg, theme::APP_BG},
+                {ImGuiCol_ChildBg, theme::CANVAS},
+                {ImGuiCol_ScrollbarBg, theme::CANVAS},
+                {ImGuiCol_ScrollbarGrab, theme::BORDER},
+                {ImGuiCol_ScrollbarGrabHovered, theme::NODE_BORDER},
+                {ImGuiCol_ScrollbarGrabActive, theme::MUTED},
+                {ImGuiCol_Text, theme::TEXT},
+                {ImGuiCol_PopupBg, theme::PANEL},
+                {ImGuiCol_Border, theme::BORDER},
                 {ImGuiCol_TextSelectedBg, rgba("#e8a33d", 0.25)},
                 // docking: tab bars, drop preview, dividers
-                {ImGuiCol_TitleBg, C::PANEL},
-                {ImGuiCol_TitleBgActive, C::PANEL},
-                {ImGuiCol_TitleBgCollapsed, C::PANEL},
-                {ImGuiCol_Tab, C::PANEL},
-                {ImGuiCol_TabHovered, C::BUTTON},
-                {ImGuiCol_TabSelected, C::CANVAS},
-                {ImGuiCol_TabSelectedOverline, C::ACCENT},
-                {ImGuiCol_TabDimmed, C::PANEL},
-                {ImGuiCol_TabDimmedSelected, C::CANVAS},
+                {ImGuiCol_TitleBg, theme::PANEL},
+                {ImGuiCol_TitleBgActive, theme::PANEL},
+                {ImGuiCol_TitleBgCollapsed, theme::PANEL},
+                {ImGuiCol_Tab, theme::PANEL},
+                {ImGuiCol_TabHovered, theme::BUTTON},
+                {ImGuiCol_TabSelected, theme::CANVAS},
+                {ImGuiCol_TabSelectedOverline, theme::ACCENT},
+                {ImGuiCol_TabDimmed, theme::PANEL},
+                {ImGuiCol_TabDimmedSelected, theme::CANVAS},
                 {ImGuiCol_TabDimmedSelectedOverline, rgba("#e8a33d", 0.35)},
                 {ImGuiCol_DockingPreview, rgba("#e8a33d", 0.30)},
-                {ImGuiCol_DockingEmptyBg, C::CANVAS},
-                {ImGuiCol_Separator, C::DIVIDER},
+                {ImGuiCol_DockingEmptyBg, theme::CANVAS},
+                {ImGuiCol_Separator, theme::DIVIDER},
                 {ImGuiCol_SeparatorHovered, rgba("#e8a33d", 0.6)},
-                {ImGuiCol_SeparatorActive, C::ACCENT},
+                {ImGuiCol_SeparatorActive, theme::ACCENT},
                 {ImGuiCol_Button, 0},
-                {ImGuiCol_ButtonHovered, C::ROW_HL},
-                {ImGuiCol_ButtonActive, C::ACCENT_BG},
-                {ImGuiCol_FrameBg, C::BUTTON},
+                {ImGuiCol_ButtonHovered, theme::ROW_HL},
+                {ImGuiCol_ButtonActive, theme::ACCENT_BG},
+                {ImGuiCol_FrameBg, theme::BUTTON},
             };
             for (auto &[k, v] : cols)
                 style.Colors[k] = ImGui::ColorConvertU32ToFloat4(v);
@@ -309,10 +309,11 @@ namespace sham::gui {
             }
             bool any = visible['v'] || visible['g'] || visible['s'] || visible['f'];
             drop_central_node(dock_id);
-            dl->AddRectFilled(V(body.x, body.y), V(body.x + body.w, body.y + body.h), C::CANVAS);
+            dl->AddRectFilled(
+                V(body.x, body.y), V(body.x + body.w, body.y + body.h), theme::CANVAS);
             set_cursor(V(body.x, body.y));
             ImGui::PushStyleColor(
-                ImGuiCol_WindowBg, C::DIVIDER); // idle divider colour (docking uses WindowBg)
+                ImGuiCol_WindowBg, theme::DIVIDER); // idle divider colour (docking uses WindowBg)
             ImGui::DockSpace(
                 dock_id, body_px, any ? ImGuiDockNodeFlags_None : ImGuiDockNodeFlags_KeepAliveOnly);
             ImGui::PopStyleColor();
@@ -326,7 +327,7 @@ namespace sham::gui {
                     14,
                     body.x + (body.w - mw) / 2,
                     body.y + body.h / 2,
-                    C::MUTED,
+                    theme::MUTED,
                     msg);
             }
             status_bar(dl, X, Y + H - STATUS_H, W);
@@ -352,8 +353,8 @@ namespace sham::gui {
 
         // --- top bar -----------------------------------------------------------
         void top_bar(SDL *dl, double X, double Y, double W) {
-            dl->AddRectFilled(V(X, Y), V(X + W, Y + TOP_H), C::PANEL);
-            dl->AddLine(V(X, Y + TOP_H - 0.5), V(X + W, Y + TOP_H - 0.5), C::DIVIDER);
+            dl->AddRectFilled(V(X, Y), V(X + W, Y + TOP_H), theme::PANEL);
+            dl->AddLine(V(X, Y + TOP_H - 0.5), V(X + W, Y + TOP_H - 0.5), theme::DIVIDER);
             double cy = Y + TOP_H / 2;
 
             double lx = X + 16, logo_h = 34.0, logo_w = logo_h * logo.w / logo.h;
@@ -404,8 +405,8 @@ namespace sham::gui {
             }
             if (show_name) {
                 double nx = lx + logo_w + 12;
-                dl->AddLine(V(nx, cy - 10), V(nx, cy + 10), C::BORDER);
-                draw_text_vc(dl, g_fonts.mono, 12, nx + 13, cy, C::TEXT_3, script);
+                dl->AddLine(V(nx, cy - 10), V(nx, cy + 10), theme::BORDER);
+                draw_text_vc(dl, g_fonts.mono, 12, nx + 13, cy, theme::TEXT_3, script);
             }
 
             double cx = std::max(left_end + 24, left_end + (rx - left_end - centre_w) / 2);
@@ -414,13 +415,14 @@ namespace sham::gui {
             dl->AddRectFilled(
                 V(cx, cy - 18),
                 V(cx + run_w, cy + 18),
-                r.hovered ? lighten(C::ACCENT, 10) : C::ACCENT,
+                r.hovered ? lighten(theme::ACCENT, 10) : theme::ACCENT,
                 6);
             if (sim.running)
-                icon_play(dl, cx + 14 + 6, cy, C::ON_ACCENT, 6);
+                icon_play(dl, cx + 14 + 6, cy, theme::ON_ACCENT, 6);
             else
-                icon_pause(dl, cx + 14 + 7, cy, C::ON_ACCENT);
-            draw_text_vc(dl, g_fonts.semibold, 13, cx + 14 + 14 + 8, cy, C::ON_ACCENT, run_label);
+                icon_pause(dl, cx + 14 + 7, cy, theme::ON_ACCENT);
+            draw_text_vc(
+                dl, g_fonts.semibold, 13, cx + 14 + 14 + 8, cy, theme::ON_ACCENT, run_label);
             if (r.clicked)
                 sim.running = !sim.running;
             double bx = cx + run_w + 6;
@@ -432,7 +434,8 @@ namespace sham::gui {
                 = {{"Pause", icon_pause}, {"Step once", icon_step}, {"Stop", icon_stop}};
             for (const Ctl &c : ctls) {
                 std::string id = std::string("##") + c.name;
-                if (framed_button(dl, id.c_str(), bx, cy - 18, 36, 36, C::BUTTON, C::BORDER, 6)) {
+                if (framed_button(
+                        dl, id.c_str(), bx, cy - 18, 36, 36, theme::BUTTON, theme::BORDER, 6)) {
                     sim.running = false;
                     if (!std::strcmp(c.name, "Step once")) {
                         sim.step += 1;
@@ -441,23 +444,23 @@ namespace sham::gui {
                 }
                 if (ImGui::IsItemHovered())
                     tooltip(c.name);
-                c.icon(dl, bx + 18, cy, C::TEXT);
+                c.icon(dl, bx + 18, cy, theme::TEXT);
                 bx += 36 + 6;
             }
             double tx = bx + 10;
             for (auto &[k, v] : readouts) {
                 if (!show_ro)
                     break;
-                draw_text_vc(dl, g_fonts.mono, 12, tx, cy, C::TEXT_3, k + " ");
+                draw_text_vc(dl, g_fonts.mono, 12, tx, cy, theme::TEXT_3, k + " ");
                 double kw = text_w(g_fonts.mono, 12, k + " ");
-                draw_text_vc(dl, g_fonts.mono, 12, tx + kw, cy, C::TEXT, v);
+                draw_text_vc(dl, g_fonts.mono, 12, tx + kw, cy, theme::TEXT, v);
                 tx += text_w(g_fonts.mono, 12, k + " " + v) + 18;
             }
 
             scale_control(dl, rx, cy, scale_w);
             double gx = rx + scale_w + 10;
-            dl->AddRectFilled(V(gx, cy - 18), V(gx + group_w, cy + 18), C::CANVAS, 8);
-            dl->AddRect(V(gx + 0.5, cy - 17.5), V(gx + group_w - 0.5, cy + 17.5), C::BORDER, 8);
+            dl->AddRectFilled(V(gx, cy - 18), V(gx + group_w, cy + 18), theme::CANVAS, 8);
+            dl->AddRect(V(gx + 0.5, cy - 17.5), V(gx + group_w - 0.5, cy + 17.5), theme::BORDER, 8);
             double px = gx + 3;
             struct Tog {
                 char key;
@@ -474,10 +477,10 @@ namespace sham::gui {
                 std::string id = std::string("##toggle_") + tg.key;
                 Hit h          = hit(id.c_str(), px, cy - 16, 32, 32);
                 if (on)
-                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), C::ACCENT_BG, 6);
+                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), theme::ACCENT_BG, 6);
                 else if (h.hovered)
-                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), C::BUTTON, 6);
-                tg.icon(dl, px + 16, cy, on ? C::ACCENT : C::DIM);
+                    dl->AddRectFilled(V(px, cy - 16), V(px + 32, cy + 16), theme::BUTTON, 6);
+                tg.icon(dl, px + 16, cy, on ? theme::ACCENT : theme::DIM);
                 if (h.hovered)
                     tooltip((std::string(on ? "Hide " : "Show ") + tg.tip).c_str());
                 if (h.clicked)
@@ -485,23 +488,25 @@ namespace sham::gui {
                 px += 32 + 2;
             }
             double lx2 = gx + group_w + 10;
-            if (framed_button(dl, "##layout", lx2, cy - 18, lay_w, 36, C::BUTTON, C::BORDER, 6))
+            if (framed_button(
+                    dl, "##layout", lx2, cy - 18, lay_w, 36, theme::BUTTON, theme::BORDER, 6))
                 ImGui::OpenPopup("##layout_menu");
             // start allow utf-8
             if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##layout_menu"))
                 tooltip("Layout  ·  ctrl+shift+L cycles");
             // end allow utf-8
             layout_menu(lx2, cy + 22);
-            icon_layout(dl, lx2 + 12 + 9, cy, C::TEXT, int(lay));
+            icon_layout(dl, lx2 + 12 + 9, cy, theme::TEXT, int(lay));
             if (!compact)
-                draw_text_vc(dl, g_fonts.sans, 12, lx2 + 12 + 18 + 8, cy, C::TEXT, layout_label);
-            icon_chevron(dl, lx2 + lay_w - 12 - 6, cy, C::MUTED);
+                draw_text_vc(
+                    dl, g_fonts.sans, 12, lx2 + 12 + 18 + 8, cy, theme::TEXT, layout_label);
+            icon_chevron(dl, lx2 + lay_w - 12 - 6, cy, theme::MUTED);
             double ppx = lx2 + lay_w + 10;
-            dl->AddRectFilled(V(ppx, cy - 16), V(ppx + pill_w, cy + 16), C::PILL_BG, 16);
+            dl->AddRectFilled(V(ppx, cy - 16), V(ppx + pill_w, cy + 16), theme::PILL_BG, 16);
             dl->AddRect(
-                V(ppx + 0.5, cy - 15.5), V(ppx + pill_w - 0.5, cy + 15.5), C::PILL_BORDER, 16);
-            dl->AddCircleFilled(V(ppx + 16, cy), 4, C::TEAL);
-            draw_text_vc(dl, g_fonts.mono, 12, ppx + 28, cy, C::PILL_TEXT, pill_name);
+                V(ppx + 0.5, cy - 15.5), V(ppx + pill_w - 0.5, cy + 15.5), theme::PILL_BORDER, 16);
+            dl->AddCircleFilled(V(ppx + 16, cy), 4, theme::TEAL);
+            draw_text_vc(dl, g_fonts.mono, 12, ppx + 28, cy, theme::PILL_TEXT, pill_name);
             if (!compact)
                 draw_text_vc(
                     dl,
@@ -509,13 +514,13 @@ namespace sham::gui {
                     12,
                     ppx + 28 + text_w(g_fonts.mono, 12, pill_name) + 8,
                     cy,
-                    C::TEAL_TEXT,
+                    theme::TEAL_TEXT,
                     pill_via);
             double sx = ppx + pill_w + 10;
-            framed_button(dl, "##settings", sx, cy - 18, 36, 36, C::BUTTON, C::BORDER, 6);
+            framed_button(dl, "##settings", sx, cy - 18, 36, 36, theme::BUTTON, theme::BORDER, 6);
             if (ImGui::IsItemHovered())
                 tooltip("Connection settings");
-            icon_gear(dl, sx + 18, cy, C::TEXT_3);
+            icon_gear(dl, sx + 18, cy, theme::TEXT_3);
         }
 
         // Rounded percentage box: scroll over it to change the UI scale, click to reset to 100 %.
@@ -525,12 +530,12 @@ namespace sham::gui {
             dl->AddRectFilled(
                 V(x, cy - h / 2),
                 V(x + w, cy + h / 2),
-                r.hovered ? C::BUTTON : C::CANVAS,
+                r.hovered ? theme::BUTTON : theme::CANVAS,
                 float(h / 2));
             dl->AddRect(
                 V(x + 0.5, cy - h / 2 + 0.5),
                 V(x + w - 0.5, cy + h / 2 - 0.5),
-                r.hovered ? C::ACCENT : C::BORDER,
+                r.hovered ? theme::ACCENT : theme::BORDER,
                 float(h / 2));
             std::string label = std::to_string(int(std::nearbyint(UI::scale * 100))) + "%";
             draw_text_vc(
@@ -539,7 +544,7 @@ namespace sham::gui {
                 12,
                 x + (w - text_w(g_fonts.mono, 12, label)) / 2,
                 cy,
-                r.hovered ? C::TEXT : C::TEXT_3,
+                r.hovered ? theme::TEXT : theme::TEXT_3,
                 label);
             if (r.hovered) {
                 float wheel = ImGui::GetIO().MouseWheel;
@@ -988,22 +993,22 @@ namespace sham::gui {
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4 * s);
             ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3 * s);
             const std::pair<ImGuiCol, ImU32> cols[] = {
-                {ImGuiCol_Header, C::ACCENT_BG},
-                {ImGuiCol_HeaderHovered, C::ROW_HL},
-                {ImGuiCol_HeaderActive, C::ACCENT_BG},
-                {ImGuiCol_FrameBg, C::BUTTON},
-                {ImGuiCol_FrameBgHovered, C::ROW_HL},
-                {ImGuiCol_FrameBgActive, C::ACCENT_BG},
-                {ImGuiCol_SliderGrab, C::ACCENT},
-                {ImGuiCol_SliderGrabActive, C::ACCENT},
-                {ImGuiCol_CheckMark, C::ACCENT},
-                {ImGuiCol_Button, C::BUTTON},
-                {ImGuiCol_ButtonHovered, C::ROW_HL},
-                {ImGuiCol_ButtonActive, C::ACCENT_BG},
-                {ImGuiCol_TextDisabled, C::MUTED},
-                {ImGuiCol_Separator, C::DIVIDER},
-                {ImGuiCol_PopupBg, C::PANEL},
-                {ImGuiCol_Border, C::BORDER},
+                {ImGuiCol_Header, theme::ACCENT_BG},
+                {ImGuiCol_HeaderHovered, theme::ROW_HL},
+                {ImGuiCol_HeaderActive, theme::ACCENT_BG},
+                {ImGuiCol_FrameBg, theme::BUTTON},
+                {ImGuiCol_FrameBgHovered, theme::ROW_HL},
+                {ImGuiCol_FrameBgActive, theme::ACCENT_BG},
+                {ImGuiCol_SliderGrab, theme::ACCENT},
+                {ImGuiCol_SliderGrabActive, theme::ACCENT},
+                {ImGuiCol_CheckMark, theme::ACCENT},
+                {ImGuiCol_Button, theme::BUTTON},
+                {ImGuiCol_ButtonHovered, theme::ROW_HL},
+                {ImGuiCol_ButtonActive, theme::ACCENT_BG},
+                {ImGuiCol_TextDisabled, theme::MUTED},
+                {ImGuiCol_Separator, theme::DIVIDER},
+                {ImGuiCol_PopupBg, theme::PANEL},
+                {ImGuiCol_Border, theme::BORDER},
             };
             for (auto &[k, v] : cols)
                 ImGui::PushStyleColor(k, v);
@@ -1024,14 +1029,14 @@ namespace sham::gui {
                     if (ImGui::Selectable(id.c_str(), int(lay) == i, 0, ImVec2(250 * s, 24 * s)))
                         set_layout(Lay(i));
                     bool on = int(lay) == i;
-                    icon_layout(dl, p.x + 12, p.y + 12, on ? C::ACCENT : C::TEXT_2, i);
+                    icon_layout(dl, p.x + 12, p.y + 12, on ? theme::ACCENT : theme::TEXT_2, i);
                     draw_text_vc(
                         dl,
                         g_fonts.sans,
                         13,
                         p.x + 32,
                         p.y + 12,
-                        on ? C::ACCENT_TEXT : C::TEXT,
+                        on ? theme::ACCENT_TEXT : theme::TEXT,
                         LAY_NAME[i]);
                     const char *hint = i == 0 ? "ctrl+shift+Z" : "";
                     if (*hint)
@@ -1041,7 +1046,7 @@ namespace sham::gui {
                             11,
                             p.x + 250 - 8 - text_w(g_fonts.mono, 11, hint),
                             p.y + 12,
-                            C::MUTED,
+                            theme::MUTED,
                             hint);
                 }
                 ImGui::PushItemWidth(150 * s);
@@ -1123,7 +1128,7 @@ namespace sham::gui {
 
         void dock_pane(char key) {
             bool open = true;
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, key == 'v' ? C::PANEL : C::CANVAS);
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, key == 'v' ? theme::PANEL : theme::CANVAS);
             ImGui::SetNextWindowSize(
                 V(480 * UI::scale, 360 * UI::scale), ImGuiCond_FirstUseEver); // when floating
             if (pending_focus == key) {
@@ -1172,8 +1177,8 @@ namespace sham::gui {
 
         // --- status bar --------------------------------------------------------
         void status_bar(SDL *dl, double X, double Y, double W) {
-            dl->AddRectFilled(V(X, Y), V(X + W, Y + STATUS_H), C::PANEL);
-            dl->AddLine(V(X, Y + 0.5), V(X + W, Y + 0.5), C::DIVIDER);
+            dl->AddRectFilled(V(X, Y), V(X + W, Y + STATUS_H), theme::PANEL);
+            dl->AddLine(V(X, Y + 0.5), V(X + W, Y + 0.5), theme::DIVIDER);
             double cy = Y + STATUS_H / 2, wob = std::sin(clock.now() * 0.7);
             // start allow utf-8
             std::string left[3]
@@ -1187,13 +1192,13 @@ namespace sham::gui {
                    "link latency " + fmt("%.0f", 38 + 3 * wob) + " ms"};
             double tx = X + 16;
             for (auto &t : left) {
-                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, t);
+                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, theme::TEXT_3, t);
                 tx += text_w(g_fonts.mono, 11, t) + 20;
             }
             tx = X + W - 16;
             for (int i = 2; i >= 0; --i) {
                 tx -= text_w(g_fonts.mono, 11, right[i]);
-                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, C::TEXT_3, right[i]);
+                draw_text_vc(dl, g_fonts.mono, 11, tx, cy, theme::TEXT_3, right[i]);
                 tx -= 20;
             }
         }

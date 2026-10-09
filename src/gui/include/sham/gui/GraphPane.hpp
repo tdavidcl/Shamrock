@@ -47,8 +47,8 @@ namespace sham::gui {
         bool compute;
         std::string title;
         double x, y, w;
-        C::HeaderStyle style = C::SOLVER;
-        bool gpu             = false;
+        theme::HeaderStyle style = theme::SOLVER;
+        bool gpu                 = false;
         std::vector<Row> rows;
         ImU32 color = 0;
         std::string meta;

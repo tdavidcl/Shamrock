@@ -24,7 +24,7 @@ namespace sham::gui {
     // ============================================================================
     //  Design tokens (taken from the mockup)
     // ============================================================================
-    namespace C {
+    namespace theme {
         constexpr ImU32 APP_BG = rgba("#141517"), PANEL = rgba("#1b1c1f"), CANVAS = rgba("#17181b"),
                         DIVIDER = rgba("#2e3035"), BORDER = rgba("#34363c"),
                         BUTTON = rgba("#202125"), NODE = rgba("#232428"),
@@ -46,7 +46,7 @@ namespace sham::gui {
         };
         constexpr HeaderStyle INPUT{rgba("#22403c"), rgba("#cfe9e4"), rgba("#2d5550")};
         constexpr HeaderStyle SOLVER{rgba("#43301f"), rgba("#f3dcc2"), rgba("#5c4029")};
-    } // namespace C
+    } // namespace theme
 
     // Heights of the top bar, status bar and pane headers (logical pixels).
     inline constexpr double TOP_H = 52.0, STATUS_H = 28.0, PANE_HDR = 36.0;

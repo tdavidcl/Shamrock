@@ -252,14 +252,15 @@ namespace sham::gui {
         double h  = 26.0) {
         ImFont *font      = g_fonts.sans;
         const double size = 12.0, pad = 10.0, dot_w = dot ? 12.0 : 0.0;
-        double w = pad * 2 + dot_w + text_w(font, size, label);
-        double y = cy - h / 2;
-        ImU32 bg = warm ? C::WARM_BG : C::BUTTON, border = warm ? C::WARM_BORDER : C::BORDER,
-              fg     = warm ? C::WARM_TEXT : C::TEXT_2;
+        double w     = pad * 2 + dot_w + text_w(font, size, label);
+        double y     = cy - h / 2;
+        ImU32 bg     = warm ? theme::WARM_BG : theme::BUTTON,
+              border = warm ? theme::WARM_BORDER : theme::BORDER,
+              fg     = warm ? theme::WARM_TEXT : theme::TEXT_2;
         bool clicked = framed_button(dl, id, x, y, w, h, bg, border, 5.0);
         double tx    = x + pad;
         if (dot) {
-            dl->AddCircleFilled(V(tx + 3, cy), 3.0f, C::ACCENT);
+            dl->AddCircleFilled(V(tx + 3, cy), 3.0f, theme::ACCENT);
             tx += dot_w;
         }
         draw_text_vc(dl, font, size, tx, cy, fg, label);
@@ -288,7 +289,7 @@ namespace sham::gui {
         }
     }
     inline void draw_live_dot(SDL *dl, double cx, double cy, double r = 3.0) {
-        dl->AddCircleFilled(V(cx, cy), float(r), C::ACCENT);
+        dl->AddCircleFilled(V(cx, cy), float(r), theme::ACCENT);
     }
 
     inline void sparkline(
@@ -319,8 +320,8 @@ namespace sham::gui {
 
     // Background and bottom divider of a pane header; returns its vertical centre.
     inline double pane_header(SDL *dl, double x, double y, double w) {
-        dl->AddRectFilled(V(x, y), V(x + w, y + PANE_HDR), C::PANEL);
-        dl->AddLine(V(x, y + PANE_HDR - 0.5), V(x + w, y + PANE_HDR - 0.5), C::DIVIDER);
+        dl->AddRectFilled(V(x, y), V(x + w, y + PANE_HDR), theme::PANEL);
+        dl->AddLine(V(x, y + PANE_HDR - 0.5), V(x + w, y + PANE_HDR - 0.5), theme::DIVIDER);
         return y + PANE_HDR / 2;
     }
 

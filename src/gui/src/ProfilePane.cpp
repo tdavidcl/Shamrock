@@ -81,7 +81,7 @@ namespace sham::gui {
         double info_max
             = bx - 12 - (focus != 0 ? 20 + text_w(g_fonts.sans, 12, "Reset zoom") + 6 : 0);
         if (x + 12 + text_w(g_fonts.mono, 12, info) <= info_max)
-            draw_text_vc(dl, g_fonts.mono, 12, x + 12, cy, C::MUTED, info);
+            draw_text_vc(dl, g_fonts.mono, 12, x + 12, cy, theme::MUTED, info);
 
         // frames: ancestors of the focused scope (dimmed, full width), the focus, then its
         // subtree
@@ -121,9 +121,14 @@ namespace sham::gui {
                 2);
             if (hv.hovered)
                 dl->AddRect(
-                    V(bx0, by0), V(bx0 + std::max(bw - 1, 1.0), by0 + row_h), C::TEXT, 2, 0, 1.0f);
+                    V(bx0, by0),
+                    V(bx0 + std::max(bw - 1, 1.0), by0 + row_h),
+                    theme::TEXT,
+                    2,
+                    0,
+                    1.0f);
             bool dark_text    = !dim && prof[i].cat != DemoSimulation::Cat::Root;
-            ImU32 tc          = dark_text ? rgba("#16140f") : C::TEXT_2;
+            ImU32 tc          = dark_text ? rgba("#16140f") : theme::TEXT_2;
             std::string ms    = fmt("%.2f ms", snap[i]);
             std::string label = prof[i].name;
             double tw = text_w(g_fonts.mono, 11, label), mw = text_w(g_fonts.mono, 11, ms);
@@ -188,13 +193,13 @@ namespace sham::gui {
         double lx = x + 12, ly = y + h - 16;
         for (const L &l : legend) {
             dl->AddRectFilled(V(lx, ly - 5), V(lx + 10, ly + 5), cat_color(l.c, ""), 2);
-            draw_text_vc(dl, g_fonts.sans, 11, lx + 16, ly, C::MUTED, l.t);
+            draw_text_vc(dl, g_fonts.sans, 11, lx + 16, ly, theme::MUTED, l.t);
             lx += 16 + text_w(g_fonts.sans, 11, l.t) + 16;
         }
         std::string hint = "click a frame to zoom";
         double hw        = text_w(g_fonts.sans, 11, hint);
         if (lx + 20 + hw < x + w - 12)
-            draw_text_vc(dl, g_fonts.sans, 11, x + w - 12 - hw, ly, C::DIM, hint);
+            draw_text_vc(dl, g_fonts.sans, 11, x + w - 12 - hw, ly, theme::DIM, hint);
     }
 
 } // namespace sham::gui
