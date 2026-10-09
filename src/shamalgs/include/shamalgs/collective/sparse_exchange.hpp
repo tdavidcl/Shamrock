@@ -17,6 +17,7 @@
  */
 
 #include "shambackends/DeviceBuffer.hpp"
+#include "shambackends/typeAliasVec.hpp"
 #include <optional>
 #include <vector>
 
@@ -46,12 +47,19 @@ namespace shamalgs::collective {
             message_bytebuf_offset_recv; ///< Offset of the MPI message in the recv buffer
     };
 
+    /**
+     * @brief Communication table of the local rank
+     *
+     * Only the messages sent or received by the local rank are stored. The global message list
+     * (allgatherv of every rank's messages_send, in rank order) is never materialized; each local
+     * message is identified by its index in it, stored in send_message_global_ids and
+     * recv_message_global_ids (both sorted in increasing order).
+     */
     struct CommTable {
-        std::vector<CommMessageInfo> messages_send; ///< Messages to send
-        std::vector<CommMessageInfo> message_all; ///< All messages = (allgatherv of messages_send)
+        std::vector<CommMessageInfo> messages_send;  ///< Messages to send
         std::vector<CommMessageInfo> messages_recv;  ///< Messages to recv
-        std::vector<size_t> send_message_global_ids; ///< ids of messages_send in message_all
-        std::vector<size_t> recv_message_global_ids; ///< ids of messages_recv in message_all
+        std::vector<size_t> send_message_global_ids; ///< global ids of messages_send
+        std::vector<size_t> recv_message_global_ids; ///< global ids of messages_recv
 
         std::vector<size_t> send_total_sizes; ///< Total size of the send buffer
         std::vector<size_t> recv_total_sizes; ///< Total size of the recv buffer
@@ -59,6 +67,30 @@ namespace shamalgs::collective {
 
     CommTable build_sparse_exchange_table(
         const std::vector<CommMessageInfo> &messages_send, size_t max_alloc_size);
+
+    namespace details {
+
+        /**
+         * @brief Build the communication table of `world_rank` from the gathered message list
+         *
+         * Single pass over the packed global message list: only the messages sent or received by
+         * `world_rank` are decoded. The tag of a message is its index within its sender's block,
+         * which is `global_id - displs[sender]`.
+         *
+         * @param global_data packed messages `{pack32(sender, receiver), size}` of every rank,
+         *        concatenated in rank order (the output of vector_allgatherv), so that the block
+         *        of rank `r` starts at `displs[r]` and only holds messages sent by `r`
+         * @param displs start of the block of each rank in global_data
+         * @param world_rank the rank to build the table for
+         * @param max_alloc_size max size of a single send/recv buffer
+         */
+        CommTable build_sparse_exchange_table_from_global(
+            const std::vector<u64_2> &global_data,
+            const std::vector<int> &displs,
+            i32 world_rank,
+            size_t max_alloc_size);
+
+    } // namespace details
 
     template<sham::USMKindTarget target>
     void sparse_exchange(

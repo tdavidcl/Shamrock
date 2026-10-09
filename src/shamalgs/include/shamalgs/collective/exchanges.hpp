@@ -222,11 +222,12 @@ namespace shamalgs::collective {
      * @param send_vec Vector to send from this rank
      * @param recv_vec Vector to receive all gathered data
      * @param comm MPI communicator
+     * @return the node displacements data table (empty if nothing was gathered)
      */
     template<class T>
-    inline void vector_allgatherv(
+    inline std::vector<int> vector_allgatherv(
         const std::vector<T> &send_vec, std::vector<T> &recv_vec, const MPI_Comm comm) {
-        vector_allgatherv(send_vec, get_mpi_type<T>(), recv_vec, get_mpi_type<T>(), comm);
+        return vector_allgatherv(send_vec, get_mpi_type<T>(), recv_vec, get_mpi_type<T>(), comm);
     }
 
 } // namespace shamalgs::collective
