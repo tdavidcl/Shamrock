@@ -84,9 +84,12 @@ fi
 # picked up again by the next `shamconfigure`/`shammake` (ninja reruns
 # unfinished steps, ccache keeps finished ones).
 #
-# Only on a cold build dir (the cache-building run, or a session that starts
-# while the cache rebuilds): on a warm one, recompiling the commits made since
-# the snapshot would block every session start for minutes.
+# Only on a cold start, i.e. when the repo was cloned during this boot: the
+# cache-building run, or a session that starts while the cache rebuilds. A
+# session restored from the snapshot (repo cloned before this boot) skips it
+# even if the snapshot's pre-build is incomplete: only the cache-building run
+# is snapshotted, so redoing it there would just block that session's start
+# for minutes; whatever is missing gets built when it is first needed.
 run_until_deadline() {
   local left=$((HOOK_DEADLINE - SECONDS - 5)) # 5 s for timeout's -k grace
   if [ "$left" -le 0 ]; then
@@ -95,7 +98,9 @@ run_until_deadline() {
   timeout -s INT -k 5 "$left" "$@"
 }
 
-if [ ! -f build/build.ninja ]; then
+boot_time=$(awk '/^btime/ {print $2}' /proc/stat)
+clone_time=$(stat -c %W .git) # birth time; 0 if unknown, i.e. treated as warm
+if [ "$clone_time" -ge "$boot_time" ]; then
   # Sourcing the env builds AdaptiveCpp on first use (~2 min cold).
   acpp_rc=0
   run_until_deadline build/shamenv_do true || acpp_rc=$?
