@@ -12,7 +12,7 @@
 /**
  * @file style.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Design tokens of the GUI: colours from the mockup and fixed bar heights.
+ * @brief Design tokens of the GUI: colours and fixed bar heights.
  *
  */
 
@@ -22,7 +22,7 @@
 namespace sham::gui {
 
     // ============================================================================
-    //  Design tokens (taken from the mockup)
+    //  Design tokens
     // ============================================================================
     namespace theme {
         constexpr ImU32 APP_BG = rgba("#141517"), PANEL = rgba("#1b1c1f"), CANVAS = rgba("#17181b"),
@@ -50,5 +50,9 @@ namespace sham::gui {
 
     // Heights of the top bar, status bar and pane headers (logical pixels).
     inline constexpr double TOP_H = 52.0, STATUS_H = 28.0, PANE_HDR = 36.0;
+
+    /// Size settings and colour table of the dark theme (ImGui's own widgets: dock tabs,
+    /// dividers, drop overlay, scrollbars).
+    void setup_style();
 
 } // namespace sham::gui

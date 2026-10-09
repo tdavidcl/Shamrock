@@ -51,6 +51,7 @@ set(sources
     src/ProfilePane.cpp
     src/ScriptPane.cpp
     src/screenshot.cpp
+    src/style.cpp
     src/ViewerPane.cpp
 )
 add_executable(shamrock_gui ${sources})
