@@ -18,6 +18,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/overloaded.hpp"
 #include "shamalgs/collective/gather_str.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammodels/common/timestep_report.hpp"
@@ -33,7 +34,8 @@
 #include "shammodels/ramses/modules/ComputeMass.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
-#include "shammodels/ramses/modules/ConsToPrimGas.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGasAdiabatic.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGasBarotropic.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
 #include "shammodels/ramses/modules/EulerTimeDerivativeDust.hpp"
 #include "shammodels/ramses/modules/EulerTimeDerivativeGas.hpp"
@@ -390,7 +392,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     }
 
-    // will be filled by NodeConsToPrimGas
+    // will be filled by NodeConsToPrimGasAdiabatic or NodeConsToPrimGasBarotropic
     storage.vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "vel", "\\mathbf{v}");
     storage.press
@@ -1040,19 +1042,37 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     { // Build ConsToPrim node
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> const_to_prim_sequence;
 
-        {
-            modules::NodeConsToPrimGas<Tvec> node{
-                AMRBlock::block_size, solver_config.get_eos_gamma()};
-            node.set_edges(
-                storage.block_counts_with_ghost,
-                storage.refs_rho,
-                storage.refs_rhov,
-                storage.refs_rhoe,
-                storage.vel,
-                storage.press);
+        using EOS = EOSConfig<Tvec>;
+        std::visit(
+            shambase::overloaded{
+                [&](const typename EOS::Adiabatic &cfg) {
+                    modules::NodeConsToPrimGasAdiabatic<Tvec> node{AMRBlock::block_size, cfg.gamma};
+                    node.set_edges(
+                        storage.block_counts_with_ghost,
+                        storage.refs_rho,
+                        storage.refs_rhov,
+                        storage.refs_rhoe,
+                        storage.vel,
+                        storage.press);
 
-            const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        }
+                    const_to_prim_sequence.push_back(
+                        std::make_shared<decltype(node)>(std::move(node)));
+                },
+                [&](const typename EOS::Barotropic &cfg) {
+                    modules::NodeConsToPrimGasBarotropic<Tvec> node{
+                        AMRBlock::block_size, cfg.rho_crit, cfg.cs0, cfg.gamma};
+                    node.set_edges(
+                        storage.block_counts_with_ghost,
+                        storage.refs_rho,
+                        storage.refs_rhov,
+                        storage.vel,
+                        storage.press);
+
+                    const_to_prim_sequence.push_back(
+                        std::make_shared<decltype(node)>(std::move(node)));
+                },
+            },
+            solver_config.eos_config.config);
 
         if (solver_config.is_dust_on()) {
             u32 ndust = solver_config.dust_config.ndust;
