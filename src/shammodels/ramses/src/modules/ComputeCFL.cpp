@@ -95,16 +95,15 @@ auto shammodels::basegodunov::modules::ComputeCFL<Tvec, TgridVec>::compute_cfl()
                 shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
                 auto prim_state = adiab_fluid.cons_to_prim(conststate);
 
-                constexpr Tscal div = 1. / 3.;
-
-                Tscal cs    = adiab_fluid.sound_speed(prim_state);
-                Tscal vnorm = sycl::length(prim_state.vel);
+                Tscal cs = adiab_fluid.sound_speed(prim_state);
 
                 // Time step of RAMSES cmpdt (hydro/courant_fine.f90) without gravity :
                 // dt = dx/smax * (sqrt(1 + 2 C a) - 1)/a with a floored to 1e-4, i.e. an
-                // effective courant number slightly below C (0.2999955 for C = 0.3)
-                Tscal courant           = C_safe * div;
-                Tscal smax              = cs + vnorm;
+                // effective courant number slightly below C (0.89996 for C = 0.9), and the
+                // RAMSES signal speed smax = ndim * cs + sum_i |v_i| with ndim = 3
+                Tscal courant = C_safe;
+                Tscal smax = 3 * cs + sycl::fabs(prim_state.vel[0]) + sycl::fabs(prim_state.vel[1])
+                             + sycl::fabs(prim_state.vel[2]);
                 constexpr Tscal a_floor = 0.0001;
                 Tscal dt = dx / smax * (sycl::sqrt(1. + 2. * courant * a_floor) - 1.) / a_floor;
 
