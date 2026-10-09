@@ -126,6 +126,62 @@ NEW_TEST(Unittest, "shamalgs/memory/SerializeHelper", 1) {
     }
 }
 
+NEW_TEST(Unittest, "shamalgs/memory/SerializeHelper/strings", 1) {
+
+    // strings live in the host-side header: check empty and unaligned lengths, and that
+    // the header values written after them are still read back correctly
+    std::string str_empty  = "";
+    std::string str_odd    = "alpha_AV";
+    std::string str_long   = "the quick brown fox jumps over the lazy dog";
+    u32 val_after          = 0xdeadbeef;
+    u32 n                  = 37;
+    sycl::buffer<f64> bufc = shamalgs::random::mock_buffer<f64>(0x121, n);
+
+    shamalgs::SerializeHelper ser(shamsys::instance::get_compute_scheduler_ptr());
+
+    shamalgs::SerializeSize bytelen
+        = ser.serialize_byte_size(str_empty) + ser.serialize_byte_size(str_odd)
+          + ser.serialize_byte_size(str_long) + ser.serialize_byte_size<u32>()
+          + ser.serialize_byte_size<f64>(n);
+
+    // a string costs no device (content) bytes
+    REQUIRE_EQUAL(
+        (ser.serialize_byte_size(str_empty) + ser.serialize_byte_size(str_odd)
+         + ser.serialize_byte_size(str_long))
+            .content_size,
+        u64{0});
+    // u32 length (8 aligned) + characters (8 aligned)
+    REQUIRE_EQUAL(ser.serialize_byte_size(str_long).head_size, u64{8 + 48});
+
+    ser.allocate(bytelen);
+    ser.write(str_empty);
+    ser.write_buf(bufc, n);
+    ser.write(str_odd);
+    ser.write(str_long);
+    ser.write(val_after);
+
+    auto recov = ser.finalize();
+
+    shamalgs::SerializeHelper ser2(
+        shamsys::instance::get_compute_scheduler_ptr(), std::move(recov));
+
+    std::string r_empty = "not empty", r_odd, r_long;
+    u32 r_val;
+    sycl::buffer<f64> bufr(n);
+
+    ser2.load(r_empty);
+    ser2.load_buf(bufr, n);
+    ser2.load(r_odd);
+    ser2.load(r_long);
+    ser2.load(r_val);
+
+    REQUIRE_EQUAL(r_empty, str_empty);
+    REQUIRE_EQUAL(r_odd, str_odd);
+    REQUIRE_EQUAL(r_long, str_long);
+    REQUIRE_EQUAL(r_val, val_after);
+    check_buf("buf", bufc, bufr);
+}
+
 NEW_TEST(Unittest, "shamalgs/memory/SerializeHelper/large_buffer", 1) {
 
     // TODO: find a way to do 4GB but Github CI is too small

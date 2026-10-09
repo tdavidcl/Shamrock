@@ -8,11 +8,14 @@
 // -------------------------------------------------------//
 
 #include "shambase/StlContainerConversion.hpp"
+#include "shambase/Timer.hpp"
+#include "shambase/numeric_limits.hpp"
 #include "shamalgs/serialize.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamtest/details/TestResult.hpp"
 #include "shamtest/shamtest.hpp"
+#include <algorithm>
 #include <set>
 #include <vector>
 
@@ -62,6 +65,72 @@ NEW_TEST(Unittest, "shamrock/patch/PatchDataField::serialize_full", 1) {
 
         REQUIRE_NAMED("input match out", field.check_field_match(buf2));
     }
+}
+
+NEW_TEST(Benchmark, "shamrock/patch/PatchDataField::serialize_full:benchmark", 1) {
+
+    // mimics the alpha ghost exchange: many small scalar fields sent one message each
+    u32 msg_count = 200;
+    u32 repeat    = 5;
+
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    std::vector<PatchDataField<f64>> fields;
+    for (u32 i = 0; i < msg_count; i++) {
+        u32 len = 2000 + (i * 37) % 2000;
+        fields.push_back(PatchDataField<f64>::mock_field(0x111 + i, len, "alpha_AV", 1));
+    }
+    dev_sched->get_queue().wait();
+
+    f64 best_ser   = shambase::get_infty<f64>();
+    f64 best_deser = shambase::get_infty<f64>();
+
+    for (u32 r = 0; r < repeat; r++) {
+        std::vector<sham::DeviceBuffer<u8>> bufs;
+
+        shambase::Timer t_ser;
+        t_ser.start();
+        for (auto &f : fields) {
+            shamalgs::SerializeHelper ser(dev_sched);
+            ser.allocate(f.serialize_full_byte_size());
+            f.serialize_full(ser);
+            bufs.push_back(ser.finalize());
+        }
+        dev_sched->get_queue().wait();
+        t_ser.stop();
+
+        std::vector<PatchDataField<f64>> recv;
+
+        shambase::Timer t_deser;
+        t_deser.start();
+        for (auto &b : bufs) {
+            shamalgs::SerializeHelper ser(dev_sched, std::move(b));
+            recv.push_back(PatchDataField<f64>::deserialize_full(ser));
+        }
+        dev_sched->get_queue().wait();
+        t_deser.stop();
+
+        best_ser   = std::min(best_ser, t_ser.elapsed_sec());
+        best_deser = std::min(best_deser, t_deser.elapsed_sec());
+
+        bool all_match = true;
+        for (u32 i = 0; i < msg_count; i++) {
+            all_match = all_match && fields[i].check_field_match(recv[i]);
+        }
+        REQUIRE_NAMED("input match out", all_match);
+    }
+
+    logger::raw_ln(
+        sham::format(
+            "PatchDataField::serialize_full benchmark ({} msgs, best of {}):\n"
+            "    serialize   : {:.3f} ms total, {:.2f} us/msg\n"
+            "    deserialize : {:.3f} ms total, {:.2f} us/msg",
+            msg_count,
+            repeat,
+            best_ser * 1e3,
+            best_ser * 1e6 / msg_count,
+            best_deser * 1e3,
+            best_deser * 1e6 / msg_count));
 }
 
 inline void check_pdat_get_ids_where(u32 len, u32 nvar, std::string name, f64 vmin, f64 vmax) {

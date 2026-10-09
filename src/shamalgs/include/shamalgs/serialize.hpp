@@ -19,6 +19,7 @@
 #include "shambase/assert.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/narrowing.hpp"
 #include "shambase/stacktrace.hpp"
 #include "details/SerializeHelperMember.hpp"
 #include "shambackends/DeviceBuffer.hpp"
@@ -27,6 +28,7 @@
 #include "shambackends/sycl.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include <type_traits>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -119,10 +121,11 @@ namespace shamalgs {
             return SerializeSize::Content(align_repr<alignment>(len * Helper::szrepr));
         }
 
+        /// Strings are stored entirely in the host-side header (length then characters)
         template<u64 alignment>
-        inline SerializeSize serialize_byte_size(std::string s) {
+        inline SerializeSize serialize_byte_size(const std::string &s) {
             return serialize_byte_size<alignment, u32>()
-                   + serialize_byte_size<alignment, u32>(s.size());
+                   + SerializeSize::Header(align_repr<alignment>(s.size()));
         }
 
     } // namespace details
@@ -216,7 +219,7 @@ namespace shamalgs {
             return details::serialize_byte_size<alignment, T>(len);
         }
 
-        inline static SerializeSize serialize_byte_size(std::string s) {
+        inline static SerializeSize serialize_byte_size(const std::string &s) {
             return details::serialize_byte_size<alignment>(s);
         }
 
@@ -255,34 +258,41 @@ namespace shamalgs {
             head_host += offset;
         }
 
-        inline void write(std::string s) {
+        /// Write a string into the host-side header (no device operation involved)
+        inline void write(const std::string &s) {
             StackEntry stack_loc{false};
-            write(u32(s.size()));
 
-            sycl::buffer<char> buf(s.size());
-            {
-                sycl::host_accessor acc{buf, sycl::write_only, sycl::no_init};
-                for (u32 i = 0; i < s.size(); i++) {
-                    acc[i] = s[i];
-                }
+            u32 len = shambase::narrow_or_throw<u32>(s.size());
+            write(len);
+
+            u64 current_head = head_host;
+            u64 offset       = align_repr(len);
+            check_head_move_host<char>(offset, len);
+
+            if (len > 0) {
+                std::memcpy(&(storage_header)[current_head], s.data(), len);
             }
-            write_buf(buf, s.size());
+
+            head_host += offset;
         }
 
+        /// Load a string from the host-side header (no device operation involved)
         inline void load(std::string &s) {
             StackEntry stack_loc{false};
+
             u32 len;
             load(len);
-            s.resize(len);
 
-            sycl::buffer<char> buf(len);
-            load_buf(buf, len);
-            {
-                sycl::host_accessor acc{buf, sycl::read_only};
-                for (u32 i = 0; i < len; i++) {
-                    s[i] = acc[i];
-                }
+            u64 current_head = head_host;
+            u64 offset       = align_repr(len);
+            check_head_move_host<char>(offset, len);
+
+            s.resize(len);
+            if (len > 0) {
+                std::memcpy(s.data(), &(storage_header)[current_head], len);
             }
+
+            head_host += offset;
         }
 
         template<class T>
