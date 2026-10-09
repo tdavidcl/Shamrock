@@ -15,6 +15,7 @@
  */
 
 #include "sham/gui/ViewerPane.hpp"
+#include "sham/gui/colormap.hpp"
 #include "sham/gui/format.hpp"
 #include "sham/gui/style.hpp"
 #include <algorithm>

@@ -12,30 +12,18 @@
 /**
  * @file style.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Design tokens of the GUI: colours from the mockup, fixed bar heights and colormap lookups.
+ * @brief Design tokens of the GUI: colours from the mockup and fixed bar heights.
  *
  */
 
 #include "imgui.h"
-#include "sham/gui/colormap.hpp"
-#include <algorithm>
+#include "sham/gui/color_utils.hpp"
 
 namespace sham::gui {
 
     // ============================================================================
     //  Design tokens (taken from the mockup)
     // ============================================================================
-    constexpr ImU32 rgb_u32(int r, int g, int b, int a = 255) {
-        return (ImU32(a) << 24) | (ImU32(b) << 16) | (ImU32(g) << 8) | ImU32(r);
-    }
-    constexpr ImU32 rgba(const char *h, double a = 1.0) {
-        return rgb_u32(
-            hexv(h[1]) * 16 + hexv(h[2]),
-            hexv(h[3]) * 16 + hexv(h[4]),
-            hexv(h[5]) * 16 + hexv(h[6]),
-            int(a * 255 + 0.5));
-    }
-
     namespace C {
         constexpr ImU32 APP_BG = rgba("#141517"), PANEL = rgba("#1b1c1f"), CANVAS = rgba("#17181b"),
                         DIVIDER = rgba("#2e3035"), BORDER = rgba("#34363c"),
@@ -62,14 +50,5 @@ namespace sham::gui {
 
     // Heights of the top bar, status bar and pane headers (logical pixels).
     inline constexpr double TOP_H = 52.0, STATUS_H = 28.0, PANE_HDR = 36.0;
-
-    inline ImU32 lut_color(const Lut &lut, double v01, double shade = 1.0) {
-        const auto &c = lut[int(std::clamp(v01, 0.0, 1.0) * 255)];
-        return rgb_u32(
-            int(std::min(c[0] * shade, 255.0)),
-            int(std::min(c[1] * shade, 255.0)),
-            int(std::min(c[2] * shade, 255.0)));
-    }
-    inline ImU32 viridis_u32(double v01) { return lut_color(VIRIDIS, v01); }
 
 } // namespace sham::gui

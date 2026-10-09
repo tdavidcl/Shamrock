@@ -13,10 +13,11 @@
  * @file colormap.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief 256-entry RGBA colormap lookup tables (viridis and the tracer map), shared by the demo
- * data source and the UI.
+ * data source and the UI, and their lookup as ImU32 colours.
  *
  */
 
+#include "sham/gui/color_utils.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -26,8 +27,6 @@
 namespace sham::gui {
 
     using Lut = std::array<std::array<uint8_t, 4>, 256>;
-
-    constexpr int hexv(char c) { return c <= '9' ? c - '0' : (c | 32) - 'a' + 10; }
 
     inline Lut make_lut(const std::vector<const char *> &stops) {
         // same as numpy: np.interp on a 256-sample linspace, then truncation to uint8
@@ -71,5 +70,14 @@ namespace sham::gui {
         int idx = std::clamp(int(v01 * 255.0f), 0, 255);
         std::memcpy(out, lut[idx].data(), 4);
     }
+
+    inline ImU32 lut_color(const Lut &lut, double v01, double shade = 1.0) {
+        const auto &c = lut[int(std::clamp(v01, 0.0, 1.0) * 255)];
+        return rgb_u32(
+            int(std::min(c[0] * shade, 255.0)),
+            int(std::min(c[1] * shade, 255.0)),
+            int(std::min(c[2] * shade, 255.0)));
+    }
+    inline ImU32 viridis_u32(double v01) { return lut_color(VIRIDIS, v01); }
 
 } // namespace sham::gui
