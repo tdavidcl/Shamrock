@@ -90,10 +90,18 @@ auto shammodels::basegodunov::modules::ComputeCFL<Tvec, TgridVec>::compute_cfl()
                 Tvec block_cell_size = (upper_flt - lower_flt) * one_over_Nside;
                 Tscal dx             = block_cell_size.x();
 
-                auto conststate = shammath::ConsState<Tvec>{rho[gid], rhoe[gid], rhov[gid]};
+                // density and pressure floors of RAMSES cmpdt (smallr = smallc = 1e-10 as in
+                // hydro/hydro_parameters.f90, smallp = smallc^2 / gamma)
+                constexpr Tscal smallr = 1e-10;
+                constexpr Tscal smallc = 1e-10;
+                Tscal smallp           = smallc * smallc / gamma;
+
+                auto conststate
+                    = shammath::ConsState<Tvec>{sycl::fmax(rho[gid], smallr), rhoe[gid], rhov[gid]};
 
                 shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
-                auto prim_state = adiab_fluid.cons_to_prim(conststate);
+                auto prim_state  = adiab_fluid.cons_to_prim(conststate);
+                prim_state.press = sycl::fmax(prim_state.press, prim_state.rho * smallp);
 
                 Tscal cs = adiab_fluid.sound_speed(prim_state);
 
