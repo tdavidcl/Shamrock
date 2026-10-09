@@ -80,7 +80,7 @@ NEW_TEST(Benchmark, "shamrock/patch/PatchDataField::serialize_full:benchmark", 1
         u32 len = 2000 + (i * 37) % 2000;
         fields.push_back(PatchDataField<f64>::mock_field(0x111 + i, len, "alpha_AV", 1));
     }
-    dev_sched->get_queue().wait();
+    dev_sched->get_queue().q.wait();
 
     f64 best_ser   = shambase::get_infty<f64>();
     f64 best_deser = shambase::get_infty<f64>();
@@ -96,7 +96,7 @@ NEW_TEST(Benchmark, "shamrock/patch/PatchDataField::serialize_full:benchmark", 1
             f.serialize_full(ser);
             bufs.push_back(ser.finalize());
         }
-        dev_sched->get_queue().wait();
+        dev_sched->get_queue().q.wait();
         t_ser.stop();
 
         std::vector<PatchDataField<f64>> recv;
@@ -107,7 +107,7 @@ NEW_TEST(Benchmark, "shamrock/patch/PatchDataField::serialize_full:benchmark", 1
             shamalgs::SerializeHelper ser(dev_sched, std::move(b));
             recv.push_back(PatchDataField<f64>::deserialize_full(ser));
         }
-        dev_sched->get_queue().wait();
+        dev_sched->get_queue().q.wait();
         t_deser.stop();
 
         best_ser   = std::min(best_ser, t_ser.elapsed_sec());
