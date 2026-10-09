@@ -104,7 +104,13 @@ parse — the same database CI's clang-tidy job uses), then runs the newest
 `clang-tidy` found on `PATH` against it (not hardcoded to 20, so this also
 works on a host with a different LLVM install).
 
-The hook deliberately stops there: `./shamenv_do shamconfigure` builds
-AdaptiveCpp from source on its first invocation (a few minutes), so that
-cost is paid inline the first time a build/test is actually needed rather
-than blocking every session start.
+On a cold `build/` (no `build.ninja` yet) the hook then pre-builds, all
+within a hard deadline of 4m30 from hook start (`HOOK_DEADLINE`):
+AdaptiveCpp (~2 min cold on 4 vCPUs), `shamconfigure` (~1 min), then as
+much of `shammake` as fits. The environment cache snapshots the disk right
+after the SessionStart hook (observed, not documented) but only when setup
+stays under roughly five minutes, so that partial build carries over to
+every session started from the snapshot; finish it with
+`./shamenv_do shamconfigure && ./shamenv_do shammake`. On a warm `build/`
+the hook skips the pre-build, so sessions don't block on recompiling
+commits made since the snapshot.
