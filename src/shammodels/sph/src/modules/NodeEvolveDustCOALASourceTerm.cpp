@@ -39,14 +39,12 @@ namespace shammodels::sph::modules {
 
         using mdspan_rank_1         = std::mdspan<Tscal, std::dextents<u32, 1>>;
         using mdspan_rank_1_strided = std::mdspan<Tscal, std::dextents<u32, 1>, std::layout_stride>;
-        using mdspan_rank_3         = std::mdspan<Tscal, std::dextents<u32, 3>>;
 
         using const_mdspan_rank_1 = std::mdspan<const Tscal, std::dextents<u32, 1>>;
-        using const_mdspan_rank_3 = std::mdspan<const Tscal, std::dextents<u32, 3>>;
 
         u32 nbins;
         Tscal rho_eps;
-        Tscal dv_max;
+        Tscal vfrag_threshold;
         u32 corrected_len;
         u32 group_size;
         u32 true_size;
@@ -55,7 +53,9 @@ namespace shammodels::sph::modules {
             u32 /**/,
             // common to all kernel calls
             const Tscal *__restrict massgrid_ptr,
-            const Tscal *__restrict tensor_tabflux_coag,
+            const u32 *__restrict tabflux_pair_offset,
+            const u32 *__restrict tabflux_pair_jmin,
+            const Tscal *__restrict tabflux_values,
             // field specific data
             const Tscal *__restrict s_j,
             const Tvec *__restrict delta_v_j,
@@ -67,10 +67,10 @@ namespace shammodels::sph::modules {
 
             auto local_acc_sz_nbins = sycl::range<1>{group_size * nbins};
 
-            auto true_size  = this->true_size;
-            auto rho_eps    = this->rho_eps;
-            auto dv_max     = this->dv_max;
-            auto group_size = this->group_size;
+            auto true_size       = this->true_size;
+            auto rho_eps         = this->rho_eps;
+            auto vfrag_threshold = this->vfrag_threshold;
+            auto group_size      = this->group_size;
 
             return [=, nbins = this->nbins](sycl::handler &cgh) {
                 auto flux_acc = sycl::local_accessor<Tscal>{local_acc_sz_nbins, cgh};
@@ -86,7 +86,8 @@ namespace shammodels::sph::modules {
                     u32 id_a_d = id_a * nbins;
 
                     /* inputs */
-                    const_mdspan_rank_3 tabflux_coag(tensor_tabflux_coag, nbins, nbins, nbins);
+                    shamphys::TabfluxCoagK0SparseView<Tscal> tabflux_coag{
+                        nbins, tabflux_pair_offset, tabflux_pair_jmin, tabflux_values};
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
 
                     /* internal */
@@ -118,7 +119,9 @@ namespace shammodels::sph::modules {
                     auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
                         // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
                         auto tmp = sycl::length(delta_v[j] - delta_v[i]);
-                        return (tmp > dv_max) ? 0 : tmp;
+                        // Coag-only kernel: "poor man" fragmentation, pairs faster than
+                        // vfrag_threshold do not coagulate (dv_ij = 0).
+                        return (tmp > vfrag_threshold) ? 0 : tmp;
                     };
 
                     // should implement the same content as
@@ -155,7 +158,7 @@ namespace shammodels::sph::modules {
         auto S_coag_spans = edges.S_coag.get_spans();
 
         Tscal rho_eps                                 = edges.rhodust_eps.data;
-        Tscal dv_max                                  = edges.dv_max.data;
+        Tscal vfrag_threshold                         = edges.vfrag_threshold.data;
         const std::vector<Tscal> &massgrid            = edges.massgrid.data;
         const std::vector<Tscal> &tensor_tabflux_coag = edges.tensor_tabflux_coag.data;
 
@@ -165,8 +168,21 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> massgrid_buf(nbins + 1, dev_sched);
         massgrid_buf.copy_from_stdvec(massgrid);
 
-        sham::DeviceBuffer<Tscal> tensor_tabflux_coag_buf(nbins * nbins * nbins, dev_sched);
-        tensor_tabflux_coag_buf.copy_from_stdvec(tensor_tabflux_coag);
+        // only the non-zero part of the tensor is used on device
+        auto tabflux_sparse = shamphys::make_tabflux_coag_k0_sparse<Tscal>(
+            nbins,
+            std::mdspan<const Tscal, std::dextents<u32, 3>>(
+                tensor_tabflux_coag.data(), nbins, nbins, nbins));
+
+        sham::DeviceBuffer<u32> tabflux_pair_offset_buf(
+            tabflux_sparse.pair_offset.size(), dev_sched);
+        tabflux_pair_offset_buf.copy_from_stdvec(tabflux_sparse.pair_offset);
+
+        sham::DeviceBuffer<u32> tabflux_pair_jmin_buf(tabflux_sparse.pair_jmin.size(), dev_sched);
+        tabflux_pair_jmin_buf.copy_from_stdvec(tabflux_sparse.pair_jmin);
+
+        sham::DeviceBuffer<Tscal> tabflux_values_buf(tabflux_sparse.values.size(), dev_sched);
+        tabflux_values_buf.copy_from_stdvec(tabflux_sparse.values);
 
         // per thread local memory: flux, one per bin
         usize local_mem_per_thread = nbins * sizeof(Tscal);
@@ -195,18 +211,20 @@ namespace shammodels::sph::modules {
                 q,
                 sham::MultiRef{
                     massgrid_buf,
-                    tensor_tabflux_coag_buf,
+                    tabflux_pair_offset_buf,
+                    tabflux_pair_jmin_buf,
+                    tabflux_values_buf,
                     s_j_spans.get(id_patch),
                     delta_v_j_spans.get(id_patch)},
                 sham::MultiRef{S_coag_spans.get(id_patch), gij_scratch},
                 count,
                 KernelGenCoala_k0<Tvec>{
-                    .nbins         = nbins,
-                    .rho_eps       = rho_eps,
-                    .dv_max        = dv_max,
-                    .corrected_len = corrected_len,
-                    .group_size    = group_size,
-                    .true_size     = u32(count)});
+                    .nbins           = nbins,
+                    .rho_eps         = rho_eps,
+                    .vfrag_threshold = vfrag_threshold,
+                    .corrected_len   = corrected_len,
+                    .group_size      = group_size,
+                    .true_size       = u32(count)});
         });
     }
 
