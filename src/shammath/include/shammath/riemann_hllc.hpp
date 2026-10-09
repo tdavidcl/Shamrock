@@ -44,9 +44,6 @@ namespace shammath {
         using Tvec  = typename FSpec::Tvec;
         using Tcons = typename FSpec::Tcons;
 
-        // fspec.gamma() directly if defined, else gamma_l/gamma_r each from fspec.gamma(prim)
-        const auto [gamma_l, gamma_r] = get_adiabatic_index_lr(fspec, prim_l, prim_r);
-
         // Conservative form is only needed for the star-state algebra below.
         const Tcons c_l = fspec.prim_to_cons(prim_l);
         const Tcons c_r = fspec.prim_to_cons(prim_r);
@@ -69,45 +66,10 @@ namespace shammath {
         const auto f_l = fspec.flux(prim_l, n, velx_l);
         const auto f_r = fspec.flux(prim_r, n, velx_r);
 
-        /////////////////// Pressure based wave speed estimation //////////////
-        // First compute the pressure estimation in the star region using the primitive variable
-        // solver
-        //
-        // Toro from section 9.3 or Equation (10.67).
-        //
-        // TODO: It will be interresting to implement and test various pressure estimate algorithms
-        // such as : / Two-Rarefaction Riemann Solver (TRRS), Two-Shock Riemann Solver (TSRS) and
-        // Adaptive / Riemann Solvers(AIRS or ANRS)
-        ////////////////////////////////////////////////////////////////////////
-        Tscal rho_bar = 0.5 * (rho_l + rho_r);
-        Tscal cs_bar  = 0.5 * (cs_l + cs_r);
-        Tscal p_pvrs  = 0.5 * (press_l + press_r) - 0.5 * (velx_r - velx_l) * rho_bar * cs_bar;
-        // Pressure in the star region estimate
-        Tscal press_star = sham::max(0., p_pvrs);
-
-        // Once the pressure in the star region is known, we then estimates the wave speeds
-        // following https://ui.adsabs.harvard.edu/abs/1994ShWav...4...25T/abstract or Equations
-        // (10.59 - 10.60) from Toro
-        Tscal q_l = 0, q_r = 0;
-        if (press_star <= press_l) {
-            q_l = 1.;
-        } else {
-            q_l = sycl::sqrt(
-                1.
-                + (0.5 * (1. + gamma_l) / (Tscal) gamma_l) * (press_star / (Tscal) press_l - 1.));
-        }
-
-        if (press_star <= press_r) {
-            q_r = 1.;
-        } else {
-            q_r = sycl::sqrt(
-                1.
-                + (0.5 * (1. + gamma_r) / (Tscal) gamma_r) * (press_star / (Tscal) press_r - 1.));
-        }
-
-        // wave speed Toro from Equation (10.59)
-        Tscal s_l = velx_l - cs_l * q_l;
-        Tscal s_r = velx_r + cs_r * q_r;
+        // Wave speed estimate of the RAMSES code (riemann_hllc in hydro/godunov_utils.f90), used
+        // instead of the pressure based (PVRS) estimate so that the flux matches RAMSES hllc.
+        Tscal s_l = sham::min(velx_l, velx_r) - sham::max(cs_l, cs_r);
+        Tscal s_r = sham::max(velx_l, velx_r) + sham::max(cs_l, cs_r);
 
         // lagrangian sound speed
         const Tscal var_l = rho_l * (s_l - velx_l);
