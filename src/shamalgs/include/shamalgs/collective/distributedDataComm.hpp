@@ -18,14 +18,17 @@
 
 #include "shambase/DistributedData.hpp"
 #include "shambase/DistributedDataShared.hpp"
+#include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/sparseXchg.hpp"
 #include "shambackends/SyclMpiTypes.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamcomm/logs.hpp"
+#include <algorithm>
 #include <functional>
 #include <mpi.h>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <vector>
@@ -215,6 +218,51 @@ namespace shamalgs::collective {
             recv_distrib_data);
     }
 
+    namespace details {
+
+        /**
+         * @brief Build a DistributedData holding `get_obj(i)` under the id `id_getter(ids[i])`
+         *
+         * The objects are inserted in increasing id order, each one hinted at the end of the
+         * underlying `std::map`, so that every insertion is amortized O(1) instead of a full
+         * O(log N) tree descent (`ids` usually comes in owner rank order, not id order).
+         *
+         * @throws std::runtime_error if `ids` contains the same id twice
+         */
+        template<class T, class P, class Fget>
+        shambase::DistributedData<T> build_ddata_id_sorted(
+            const std::vector<P> &ids, std::function<u64(P)> &id_getter, Fget &&get_obj) {
+
+            u32 count = ids.size();
+
+            std::vector<u64> keys(count);
+            for (u32 i = 0; i < count; i++) {
+                keys[i] = id_getter(ids[i]);
+            }
+
+            std::vector<u32> order(count);
+            std::iota(order.begin(), order.end(), 0);
+            if (!std::is_sorted(keys.begin(), keys.end())) {
+                std::sort(order.begin(), order.end(), [&](u32 a, u32 b) {
+                    return keys[a] < keys[b];
+                });
+            }
+
+            shambase::DistributedData<T> ret;
+            auto &map = ret.get_native();
+            for (u32 k = 0; k < count; k++) {
+                u32 i = order[k];
+                if (k > 0 && keys[order[k - 1]] == keys[i]) {
+                    throw shambase::make_except_with_loc<std::runtime_error>(
+                        "the key already exist");
+                }
+                map.emplace_hint(map.end(), keys[i], get_obj(i));
+            }
+            return ret;
+        }
+
+    } // namespace details
+
     /**
      * @brief global ids = allgatherv(local_ids)
      *
@@ -239,11 +287,9 @@ namespace shamalgs::collective {
         vector_allgatherv(
             vec_local, get_mpi_type<T>(), vec_global, get_mpi_type<T>(), MPI_COMM_WORLD);
 
-        shambase::DistributedData<T> ret;
-        for (u32 i = 0; i < global_ids.size(); i++) {
-            ret.add_obj(id_getter(global_ids[i]), T(vec_global[i]));
-        }
-        return ret;
+        return details::build_ddata_id_sorted<T, P>(global_ids, id_getter, [&](u32 i) {
+            return T(vec_global[i]);
+        });
     }
 
     /**
@@ -274,12 +320,9 @@ namespace shamalgs::collective {
         vector_allgatherv(
             vec_local, get_mpi_type<T>(), vec_global, get_mpi_type<T>(), MPI_COMM_WORLD);
 
-        shambase::DistributedData<T> ret;
-        for (u32 i = 0; i < global_ids.size(); i++) {
-            T tmp = T::load(i * reprsz, vec_global);
-            ret.add_obj(id_getter(global_ids[i]), std::move(tmp));
-        }
-        return ret;
+        return details::build_ddata_id_sorted<T, P>(global_ids, id_getter, [&](u32 i) {
+            return T::load(i * reprsz, vec_global);
+        });
     }
 
 } // namespace shamalgs::collective
