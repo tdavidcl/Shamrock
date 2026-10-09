@@ -34,6 +34,7 @@ namespace {
 
             shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tvec>> &spans_vel,
             shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_P,
+            shambase::DistributedData<shamrock::PatchDataFieldSpanPointer<Tscal>> &spans_rho_prim,
             const shambase::DistributedData<u32> &sizes,
             u32 block_size,
             Tscal gamma) {
@@ -47,7 +48,7 @@ namespace {
             sham::distributed_data_kernel_call(
                 shamsys::instance::get_compute_scheduler_ptr(),
                 sham::DDMultiRef{spans_rho, spans_rhov, spans_rhoe},
-                sham::DDMultiRef{spans_vel, spans_P},
+                sham::DDMultiRef{spans_vel, spans_P, spans_rho_prim},
                 cell_counts,
                 [gamma](
                     u32 i,
@@ -55,16 +56,26 @@ namespace {
                     const Tvec *__restrict rhov,
                     const Tscal *__restrict rhoe,
                     Tvec *__restrict vel,
-                    Tscal *__restrict P) {
-                    auto conststate = shammath::ConsState<Tvec>{rho[i], rhoe[i], rhov[i]};
+                    Tscal *__restrict P,
+                    Tscal *__restrict rho_prim) {
+                    // density and internal energy floors of RAMSES ctoprim (hydro/umuscl.f90),
+                    // smallr = smallc = 1e-10, smalle = smallc^2 / gamma / (gamma - 1)
+                    constexpr Tscal smallr = 1e-10;
+                    constexpr Tscal smallc = 1e-10;
+                    Tscal smalle           = smallc * smallc / gamma / (gamma - 1);
+
+                    Tscal rho_f     = sycl::fmax(rho[i], smallr);
+                    auto conststate = shammath::ConsState<Tvec>{rho_f, rhoe[i], rhov[i]};
 
                     shammath::FluidStateAdiabatic<Tvec> adiab_fluid{.m_gamma = gamma};
-                    auto prim_state = adiab_fluid.cons_to_prim(conststate);
+                    auto prim_state  = adiab_fluid.cons_to_prim(conststate);
+                    prim_state.press = sycl::fmax(prim_state.press, (gamma - 1) * rho_f * smalle);
 
                     SHAM_ASSERT(prim_state.press >= 0.0);
 
-                    vel[i] = prim_state.vel;
-                    P[i]   = prim_state.press;
+                    vel[i]      = prim_state.vel;
+                    P[i]        = prim_state.press;
+                    rho_prim[i] = rho_f;
                 });
         }
     };
@@ -84,6 +95,7 @@ namespace shammodels::basegodunov::modules {
 
         edges.spans_vel.ensure_sizes(edges.sizes.indexes);
         edges.spans_P.ensure_sizes(edges.sizes.indexes);
+        edges.spans_rho_prim.ensure_sizes(edges.sizes.indexes);
 
         KernelConsToPrimGas<Tvec>::kernel(
             edges.spans_rho.get_spans(),
@@ -91,6 +103,7 @@ namespace shammodels::basegodunov::modules {
             edges.spans_rhoe.get_spans(),
             edges.spans_vel.get_spans(),
             edges.spans_P.get_spans(),
+            edges.spans_rho_prim.get_spans(),
             edges.sizes.indexes,
             block_size,
             gamma);

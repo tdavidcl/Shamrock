@@ -97,6 +97,8 @@ namespace shammodels::basegodunov {
 
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> press;
+        /// primitive density with the RAMSES floor max(rho, smallr)
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_prim;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> vel_dust;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_primitive;
 

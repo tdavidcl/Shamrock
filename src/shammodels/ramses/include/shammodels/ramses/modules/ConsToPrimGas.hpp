@@ -30,7 +30,8 @@
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, spans_vel)                                       \
-    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_P)
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_P)                                        \
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho_prim)
 
 namespace shammodels::basegodunov::modules {
     template<class Tvec>

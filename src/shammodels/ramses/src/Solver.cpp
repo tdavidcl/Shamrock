@@ -395,6 +395,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         AMRBlock::block_size, "vel", "\\mathbf{v}");
     storage.press
         = std::make_shared<shamrock::solvergraph::Field<Tscal>>(AMRBlock::block_size, "P", "P");
+    storage.rho_prim = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+        AMRBlock::block_size, "rho_prim", "\\rho_{\\rm prim}");
 
     if (!solver_config.amr_mode.old_amr) { // TODO disable also if amr is none
         storage.rho_primitive = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
@@ -1049,7 +1051,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.refs_rhov,
                 storage.refs_rhoe,
                 storage.vel,
-                storage.press);
+                storage.press,
+                storage.rho_prim);
 
             const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
@@ -1082,7 +1085,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.block_counts_with_ghost,
                 storage.cell_graph_edge,
                 storage.block_cell_sizes,
-                storage.refs_rho,
+                storage.rho_prim,
                 storage.grad_rho);
             grad_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
@@ -1153,7 +1156,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 AMRBlock::block_size, solver_config.get_eos_gamma()};
             node.set_edges(
                 storage.block_counts_with_ghost,
-                storage.refs_rho,
+                storage.rho_prim,
                 storage.vel,
                 storage.press,
                 storage.grad_rho,
@@ -1197,7 +1200,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.cell_graph_edge,
                 storage.block_cell_sizes,
                 storage.cell0block_aabb_lower,
-                storage.refs_rho,
+                storage.rho_prim,
                 storage.grad_rho,
                 storage.euler_dt_rho,
                 storage.rho_face_xp,
