@@ -76,9 +76,11 @@ ccache needs no extra wiring: the `debian-generic.acpp` env script passes
 `ccache -s`. A `build/` configured before ccache was installed picks it up
 on the next `./shamenv_do shamconfigure`.
 
-pre-commit hook venvs also need `SETUPTOOLS_USE_DISTUTILS=stdlib` exported —
-Debian's patched sysconfig scheme otherwise breaks setuptools' vendored
-distutils with `AttributeError: install_layout`.
+pre-commit hook venvs need `SETUPTOOLS_USE_DISTUTILS=local` (setuptools'
+vendored distutils). The container's `python3` is 3.13, which has no
+stdlib `distutils`, so a leftover `SETUPTOOLS_USE_DISTUTILS=stdlib` makes
+building hook environments fail with `No module named 'distutils'`; the
+hook exports `local` to override any such value.
 
 A single LLVM 20 toolchain backs both the AdaptiveCpp build and dev tooling
 (clangd/clang-tidy) — AdaptiveCpp's `CMakeLists.txt` supports up to LLVM 20

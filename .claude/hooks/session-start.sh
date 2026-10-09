@@ -58,14 +58,15 @@ if ! command -v clangd >/dev/null 2>&1 && [ -x /usr/bin/clangd-20 ]; then
   ln -sf /usr/bin/clangd-20 /usr/local/bin/clangd
 fi
 
-# pre-commit's isolated venvs pick up Debian's patched sysconfig scheme,
-# which expects a distutils "install_layout" attribute that setuptools'
-# vendored (local) distutils no longer provides. Forcing stdlib distutils
-# avoids the AttributeError when hook environments are built.
+# pre-commit builds hook environments with the container's python3 (3.13),
+# which has no stdlib distutils, so setuptools must use its vendored (local)
+# copy. Export it explicitly to override a leftover
+# SETUPTOOLS_USE_DISTUTILS=stdlib, which fails with
+# "No module named 'distutils'".
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  echo 'export SETUPTOOLS_USE_DISTUTILS=stdlib' >> "$CLAUDE_ENV_FILE"
+  echo 'export SETUPTOOLS_USE_DISTUTILS=local' >> "$CLAUDE_ENV_FILE"
 fi
-export SETUPTOOLS_USE_DISTUTILS=stdlib
+export SETUPTOOLS_USE_DISTUTILS=local
 
 # --- Submodules ----------------------------------------------------------
 git submodule update --init --recursive --jobs "$(nproc)"
