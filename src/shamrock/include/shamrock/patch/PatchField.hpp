@@ -18,6 +18,7 @@
 #include "shambase/DistributedData.hpp"
 #include "shambackends/sycl.hpp"
 #include <memory>
+#include <utility>
 namespace shamrock::patch {
 
     template<class T>
@@ -25,7 +26,7 @@ namespace shamrock::patch {
         public:
         shambase::DistributedData<T> field_all;
 
-        PatchField(shambase::DistributedData<T> &&field_all) : field_all(field_all) {}
+        PatchField(shambase::DistributedData<T> &&field_all) : field_all(std::move(field_all)) {}
 
         T &get(u64 id) { return field_all.get(id); }
     };
