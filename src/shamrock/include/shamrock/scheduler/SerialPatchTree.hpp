@@ -21,6 +21,9 @@
 
 #include "shambase/memory.hpp"
 #include "shambase/stacktrace.hpp"
+#include "shamalgs/details/numeric/numeric.hpp"
+#include "shamalgs/primitives/reduction.hpp"
+#include "shambackends/DeviceBuffer.hpp"
 #include "shamrock/legacy/patch/utility/patch_field.hpp"
 #include "shamrock/patch/PatchField.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
@@ -72,6 +75,9 @@ class SerialPatchTree {
     private:
     u32 level_count = 0;
 
+    /// Patch coordinates to object coordinates transform used to build the tree boxes
+    shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform;
+
     std::vector<PtNode> serial_tree;
     std::vector<u64> linked_patch_ids;
     std::vector<u64> roots_ids;
@@ -101,9 +107,23 @@ class SerialPatchTree {
     }
 
     inline SerialPatchTree(
-        PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform) {
+        PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform)
+        : box_transform(box_transform) {
         StackEntry stack_loc{};
         build_from_patch_tree(ptree, box_transform);
+    }
+
+    /**
+     * @brief Box of a patch in object coordinates
+     *
+     * Uses the same transform as the one used to build the tree, hence the result is bit-identical
+     * to the box of the leaf linked to that patch.
+     *
+     * @param p the patch
+     * @return the patch box {min, max}
+     */
+    inline shammath::CoordRange<fp_prec_vec> get_patch_box(shamrock::patch::Patch p) const {
+        return box_transform.to_obj_coord(p.get_patch_range());
     }
 
     template<class Acc1, class Acc2>
@@ -252,7 +272,136 @@ class SerialPatchTree {
         sham::DeviceScheduler_ptr dev_sched,
         sham::DeviceBuffer<fp_prec_vec> &position_buffer,
         u32 len);
+
+    /// Result of SerialPatchTree::compute_patch_owner when the current patch is known
+    struct PatchOwnerResult {
+        /// new owner patch id of each object (`u64_max` if it could not be computed)
+        sycl::buffer<u64> new_owner;
+        /// number of objects outside of the current patch box (searched in the tree)
+        u32 moved_count;
+    };
+
+    /**
+     * @brief Compute the patch owning each object, knowing the patch currently holding them
+     *
+     * Objects still inside the current patch box are assigned to it directly. Only the ones
+     * outside of it (usually very few) search the tree, and when there are none the tree buffers
+     * are not accessed at all (hence never uploaded to the device). The result is identical to the
+     * other overload since patches boxes are disjoint and nested exactly in the tree.
+     *
+     * @param dev_sched the device scheduler to run on
+     * @param position_buffer the objects positions
+     * @param len the number of objects
+     * @param current_patch the patch currently holding the objects
+     */
+    PatchOwnerResult compute_patch_owner(
+        sham::DeviceScheduler_ptr dev_sched,
+        sham::DeviceBuffer<fp_prec_vec> &position_buffer,
+        u32 len,
+        shamrock::patch::Patch current_patch);
+
+    private:
+    /// Search the tree from the roots for the leaf containing `xyz`, return its patch id
+    template<class AccNode, class AccLinked, class AccRoots>
+    static u64 find_owner(
+        fp_prec_vec xyz,
+        const AccNode &tnode,
+        const AccLinked &linked_node_id,
+        const AccRoots &roots_id,
+        u32 root_cnt,
+        u32 max_lev);
 };
+
+template<class vec>
+template<class AccNode, class AccLinked, class AccRoots>
+inline u64 SerialPatchTree<vec>::find_owner(
+    vec xyz,
+    const AccNode &tnode,
+    const AccLinked &linked_node_id,
+    const AccRoots &roots_id,
+    u32 root_cnt,
+    u32 max_lev) {
+
+    using namespace shamrock::patch;
+
+    u64 current_node = 0;
+
+    // find the correct root to start the search
+    for (u32 iroot = 0; iroot < root_cnt; iroot++) {
+        u32 root_id      = roots_id[iroot];
+        PtNode root_node = tnode[root_id];
+
+        if (Patch::is_in_patch_converted(xyz, root_node.box_min, root_node.box_max)) {
+            current_node = root_id;
+            break;
+        }
+    }
+
+    u64 result_node = u64_max;
+
+    for (u32 step = 0; step < max_lev + 1; step++) {
+        PtNode cur_node = tnode[current_node];
+
+        if (cur_node.childs_id[0] != u64_max) {
+
+            if (Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[0]].box_min,
+                    tnode[cur_node.childs_id[0]].box_max)) {
+                current_node = cur_node.childs_id[0];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[1]].box_min,
+                    tnode[cur_node.childs_id[1]].box_max)) {
+                current_node = cur_node.childs_id[1];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[2]].box_min,
+                    tnode[cur_node.childs_id[2]].box_max)) {
+                current_node = cur_node.childs_id[2];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[3]].box_min,
+                    tnode[cur_node.childs_id[3]].box_max)) {
+                current_node = cur_node.childs_id[3];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[4]].box_min,
+                    tnode[cur_node.childs_id[4]].box_max)) {
+                current_node = cur_node.childs_id[4];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[5]].box_min,
+                    tnode[cur_node.childs_id[5]].box_max)) {
+                current_node = cur_node.childs_id[5];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[6]].box_min,
+                    tnode[cur_node.childs_id[6]].box_max)) {
+                current_node = cur_node.childs_id[6];
+            } else if (
+                Patch::is_in_patch_converted(
+                    xyz,
+                    tnode[cur_node.childs_id[7]].box_min,
+                    tnode[cur_node.childs_id[7]].box_max)) {
+                current_node = cur_node.childs_id[7];
+            }
+
+        } else {
+
+            result_node = linked_node_id[current_node];
+            break;
+        }
+    }
+
+    return result_node;
+}
 
 template<class vec>
 sycl::buffer<u64> SerialPatchTree<vec>::compute_patch_owner(
@@ -276,96 +425,100 @@ sycl::buffer<u64> SerialPatchTree<vec>::compute_patch_owner(
         sycl::accessor new_id{new_owned_id, cgh, sycl::write_only, sycl::no_init};
 
         u32 root_cnt = roots_id.size();
-        auto max_lev = get_level_count();
-
-        using PtNode = shamrock::scheduler::SerialPatchNode<vec>;
+        u32 max_lev  = get_level_count();
 
         cgh.parallel_for(sycl::range(len), [=](sycl::item<1> item) {
             u32 i = (u32) item.get_id(0);
 
-            auto xyz = pos[i];
-
-            u64 current_node = 0;
-
-            // find the correct root to start the search
-            for (u32 iroot = 0; iroot < root_cnt; iroot++) {
-                u32 root_id      = roots_id[iroot];
-                PtNode root_node = tnode[root_id];
-
-                if (Patch::is_in_patch_converted(xyz, root_node.box_min, root_node.box_max)) {
-                    current_node = root_id;
-                    break;
-                }
-            }
-
-            u64 result_node = u64_max;
-
-            for (u32 step = 0; step < max_lev + 1; step++) {
-                PtNode cur_node = tnode[current_node];
-
-                if (cur_node.childs_id[0] != u64_max) {
-
-                    if (Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[0]].box_min,
-                            tnode[cur_node.childs_id[0]].box_max)) {
-                        current_node = cur_node.childs_id[0];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[1]].box_min,
-                            tnode[cur_node.childs_id[1]].box_max)) {
-                        current_node = cur_node.childs_id[1];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[2]].box_min,
-                            tnode[cur_node.childs_id[2]].box_max)) {
-                        current_node = cur_node.childs_id[2];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[3]].box_min,
-                            tnode[cur_node.childs_id[3]].box_max)) {
-                        current_node = cur_node.childs_id[3];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[4]].box_min,
-                            tnode[cur_node.childs_id[4]].box_max)) {
-                        current_node = cur_node.childs_id[4];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[5]].box_min,
-                            tnode[cur_node.childs_id[5]].box_max)) {
-                        current_node = cur_node.childs_id[5];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[6]].box_min,
-                            tnode[cur_node.childs_id[6]].box_max)) {
-                        current_node = cur_node.childs_id[6];
-                    } else if (
-                        Patch::is_in_patch_converted(
-                            xyz,
-                            tnode[cur_node.childs_id[7]].box_min,
-                            tnode[cur_node.childs_id[7]].box_max)) {
-                        current_node = cur_node.childs_id[7];
-                    }
-
-                } else {
-
-                    result_node = linked_node_id[current_node];
-                    break;
-                }
-            }
-
-            new_id[i] = result_node;
+            new_id[i] = find_owner(pos[i], tnode, linked_node_id, roots_id, root_cnt, max_lev);
         });
     });
 
     position_buffer.complete_event_state(e);
 
     return new_owned_id;
+}
+
+template<class vec>
+auto SerialPatchTree<vec>::compute_patch_owner(
+    sham::DeviceScheduler_ptr dev_sched,
+    sham::DeviceBuffer<vec> &position_buffer,
+    u32 len,
+    shamrock::patch::Patch current_patch) -> PatchOwnerResult {
+
+    using namespace shamrock::patch;
+
+    sycl::buffer<u64> new_owned_id(len);
+
+    if (len == 0) {
+        return {std::move(new_owned_id), 0};
+    }
+
+    auto &q = dev_sched->get_queue();
+
+    u64 current_pid                   = current_patch.id_patch;
+    shammath::CoordRange<vec> cur_box = get_patch_box(current_patch);
+    vec box_min                       = cur_box.lower;
+    vec box_max                       = cur_box.upper;
+
+    sham::DeviceBuffer<u32> is_out(len, dev_sched);
+
+    // pass 1: objects still in the current patch keep it, flag the other ones
+    {
+        sham::EventList depends_list;
+        auto pos     = position_buffer.get_read_access(depends_list);
+        auto acc_out = is_out.get_write_access(depends_list);
+
+        auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+            sycl::accessor new_id{new_owned_id, cgh, sycl::write_only, sycl::no_init};
+
+            cgh.parallel_for(sycl::range(len), [=](sycl::item<1> item) {
+                u32 i = (u32) item.get_id(0);
+
+                bool in    = Patch::is_in_patch_converted(pos[i], box_min, box_max);
+                new_id[i]  = (in) ? current_pid : u64_max;
+                acc_out[i] = (in) ? 0 : 1;
+            });
+        });
+
+        position_buffer.complete_event_state(e);
+        is_out.complete_event_state(e);
+    }
+
+    u32 moved_count = shamalgs::primitives::sum(dev_sched, is_out, 0, len);
+
+    if (moved_count == 0) {
+        return {std::move(new_owned_id), 0};
+    }
+
+    // pass 2: search the tree only for the objects that left the current patch
+    sham::DeviceBuffer<u32> moved_idx = shamalgs::numeric::stream_compact(dev_sched, is_out, len);
+
+    sycl::buffer<u64> roots = shamalgs::vec_to_buf(roots_ids);
+
+    sham::EventList depends_list;
+    auto pos     = position_buffer.get_read_access(depends_list);
+    auto acc_idx = moved_idx.get_read_access(depends_list);
+
+    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
+        sycl::accessor tnode{shambase::get_check_ref(serial_tree_buf), cgh, sycl::read_only};
+        sycl::accessor linked_node_id{
+            shambase::get_check_ref(linked_patch_ids_buf), cgh, sycl::read_only};
+        sycl::accessor roots_id{roots, cgh, sycl::read_only};
+        sycl::accessor new_id{new_owned_id, cgh, sycl::write_only};
+
+        u32 root_cnt = roots_id.size();
+        u32 max_lev  = get_level_count();
+
+        cgh.parallel_for(sycl::range(moved_count), [=](sycl::item<1> item) {
+            u32 i = acc_idx[item.get_id(0)];
+
+            new_id[i] = find_owner(pos[i], tnode, linked_node_id, roots_id, root_cnt, max_lev);
+        });
+    });
+
+    position_buffer.complete_event_state(e);
+    moved_idx.complete_event_state(e);
+
+    return {std::move(new_owned_id), moved_count};
 }
