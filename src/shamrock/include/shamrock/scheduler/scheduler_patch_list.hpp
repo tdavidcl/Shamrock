@@ -126,6 +126,14 @@ class SchedulerPatchList {
     void build_global_idx_map();
 
     /**
+     * @brief check that id_patch_to_global_idx maps exactly the patches of the global list to
+     * their index in it
+     *
+     * This is a O(N) check intended for debug assertions.
+     */
+    [[nodiscard]] bool is_global_idx_map_valid() const;
+
+    /**
      * @brief recompute id_patch_to_local_idx
      */
     void build_local_idx_map();

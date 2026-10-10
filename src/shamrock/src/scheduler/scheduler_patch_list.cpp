@@ -88,6 +88,21 @@ void SchedulerPatchList::build_global_idx_map() {
     }
 }
 
+bool SchedulerPatchList::is_global_idx_map_valid() const {
+    if (id_patch_to_global_idx.size() != global.size()) {
+        return false;
+    }
+
+    for (u64 idx = 0; idx < global.size(); idx++) {
+        auto it = id_patch_to_global_idx.find(global[idx].id_patch);
+        if (it == id_patch_to_global_idx.end() || it->second != idx) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void SchedulerPatchList::build_local_idx_map() {
     StackEntry stack_loc{};
     id_patch_to_local_idx.clear();

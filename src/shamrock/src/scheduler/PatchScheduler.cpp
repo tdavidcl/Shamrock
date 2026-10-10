@@ -14,6 +14,7 @@
  * @brief
  */
 
+#include "shambase/assert.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
@@ -447,8 +448,10 @@ void PatchScheduler::scheduler_step(bool do_split_merge, bool do_load_balancing)
 
         // std::cout << dump_status() << std::endl;
 
-        // check not necessary if no splits
-        patch_list.build_global_idx_map();
+        // splits append new patches to the global list, otherwise the map is still valid
+        if (!split_rq.empty()) {
+            patch_list.build_global_idx_map();
+        }
 
         set_patch_pack_values(merge_rq);
     }
@@ -482,8 +485,16 @@ void PatchScheduler::scheduler_step(bool do_split_merge, bool do_load_balancing)
     owned_patch_id = patch_list.build_local();
     patch_list.reset_local_pack_index();
     patch_list.build_local_idx_map();
-    patch_list.build_global_idx_map(); // TODO check if required : added because possible bug
-                                       // because of for each patch & serial patch tree
+
+    // The global list is only reordered by build_global and appended to by split_patches. When
+    // do_split_merge is set, the map was already rebuilt after both, and since then load balancing
+    // and merges only modified patches in place (owner, coordinates, error flag) without changing
+    // their ids or indices, so the map is still valid.
+    if (!do_split_merge) {
+        patch_list.build_global_idx_map();
+    }
+
+    SHAM_ASSERT(patch_list.is_global_idx_map_valid());
     // update_local_dtcnt_value();
     // update_local_load_value(); disable the load value compute it should be done only in the
     // models
