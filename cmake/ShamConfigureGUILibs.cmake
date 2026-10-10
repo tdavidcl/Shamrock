@@ -71,7 +71,8 @@ if(SHAMROCK_BUILD_GUI)
     ### stb
     ###############################################################################
 
-    # stb_image_write, used to save --screenshot PNGs.
+    # stb_image_write saves the --screenshot PNGs; stb_image and stb_image_resize2 load and
+    # downscale the logo.
     FetchContent_Declare(
         stb
         GIT_REPOSITORY https://github.com/nothings/stb.git
@@ -79,6 +80,19 @@ if(SHAMROCK_BUILD_GUI)
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(stb)
+
+    ###############################################################################
+    ### ImGuiColorTextEdit
+    ###############################################################################
+
+    # Syntax-highlighting editor of the script pane.
+    FetchContent_Declare(
+        imgui_color_text_edit
+        GIT_REPOSITORY https://github.com/goossens/ImGuiColorTextEdit.git
+        GIT_TAG master
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(imgui_color_text_edit)
 
     ###############################################################################
     ### FreeType (optional)
