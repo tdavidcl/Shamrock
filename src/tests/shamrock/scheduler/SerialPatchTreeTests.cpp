@@ -16,6 +16,7 @@
 #include "shamtest/shamtest.hpp"
 #include <unordered_map>
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -219,6 +220,34 @@ namespace {
         u32 not_kept       = 0;
         u32 total_moved    = 0;
         u32 total_invalid  = 0;
+        u32 not_in_owner   = 0;
+        u32 overlap        = 0;
+        u32 outside_leaf   = 0;
+
+        // is the position in the box of the leaf linked to patch `id`
+        auto in_patch = [&](Tvec p, u64 id) {
+            PtNode &n = leaf_nodes.at(id);
+            return Patch::is_in_patch_converted(p, n.box_min, n.box_max);
+        };
+
+        // same but with the box of the leaf extended by the rounding error of the patch to object
+        // coordinates transform (coord * fact + domain.lower), with or without a fma
+        auto in_patch_rounding = [&](Tvec p, u64 id) {
+            using Tscal  = shambase::VecComponent<Tvec>;
+            PtNode &n    = leaf_nodes.at(id);
+            Tscal eps    = std::numeric_limits<Tscal>::epsilon();
+            Tvec box_min = n.box_min;
+            Tvec box_max = n.box_max;
+            for (u32 a = 0; a < 3; a++) {
+                Tscal tol
+                    = eps
+                      * (domain.upper[a] - domain.lower[a]
+                         + sycl::fmax(sycl::fabs(domain.lower[a]), sycl::fabs(domain.upper[a])));
+                box_min[a] -= tol;
+                box_max[a] += tol;
+            }
+            return Patch::is_in_patch_converted(p, box_min, box_max);
+        };
 
         for (u32 ip = 0; ip < n_test_patches; ip++) {
             Patch cur_p = leaves[ip];
@@ -245,8 +274,39 @@ namespace {
                 if (in && res[i] != cur_p.id_patch) {
                     not_kept++;
                 }
+                // AdaptiveCpp compiles with -ffp-contract=fast, and whether a fma is used is
+                // decided per call site. Hence the current patch box computed here (as in
+                // ReattributeDataUtility::compute_new_pid) can differ in f32 from the box of its
+                // leaf in the tree by the rounding error of the transform (a fma rounds once
+                // instead of twice), and the boxes of neighbouring leaves can themselves overlap by
+                // that much. An object kept by the early return can then be up to that rounding
+                // error outside of the tree box of its patch, and in an overlap the tree search
+                // returns the first leaf containing the object instead of the current patch.
+
+                // an owner from the tree search must always contain the object
+                if (ref[i] != u64_max && !in_patch(pos[i], ref[i])) {
+                    not_in_owner++;
+                }
+                if (in) {
+                    // early return : in the given box, and outside of the tree box at most by the
+                    // rounding error of the transform
+                    if (res[i] == u64_max || !in_patch_rounding(pos[i], res[i])) {
+                        not_in_owner++;
+                    } else if (!in_patch(pos[i], res[i])) {
+                        outside_leaf++;
+                    }
+                } else if (res[i] != u64_max && !in_patch(pos[i], res[i])) {
+                    not_in_owner++;
+                }
+
+                // a mismatch is tolerated only in the overlap of the given box and the tree box
+                // of the owner found by the tree search
                 if (ref[i] != res[i]) {
-                    mismatch++;
+                    if (in && ref[i] != u64_max && in_patch(pos[i], ref[i])) {
+                        overlap++;
+                    } else {
+                        mismatch++;
+                    }
                 }
                 if (res[i] == u64_max) {
                     total_invalid++;
@@ -254,8 +314,18 @@ namespace {
             }
         }
 
+        if (overlap > 0 || outside_leaf > 0) {
+            shamlog_debug_ln(
+                "SerialPatchTreeTests",
+                "objects kept by the early return outside of the tree box of their patch :",
+                outside_leaf,
+                ", in an overlap of boxes (owner differs from the tree search) :",
+                overlap);
+        }
+
         REQUIRE_EQUAL(mismatch, 0);
         REQUIRE_EQUAL(not_kept, 0);
+        REQUIRE_EQUAL(not_in_owner, 0);
 
         // make sure the test covers both objects changing patch and objects outside the domain
         REQUIRE(total_moved > 0);
