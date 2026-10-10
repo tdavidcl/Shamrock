@@ -139,9 +139,8 @@ namespace {
      * @brief Copy of the load balancing implementation before the tiles were sorted only once
      * in load_balance (debug logs removed), kept as a reference for the current one.
      *
-     * With stable_ordering = true, ties on the ordering value keep the original index order,
-     * which is how the current implementation breaks them. Otherwise the plain std::sort of the
-     * original code is used, so the result is only defined for distinct ordering values.
+     * Both use the same std::sort on the same input, so the results must be identical, ties on
+     * the ordering value included.
      */
     namespace reference_lb {
 
@@ -159,20 +158,15 @@ namespace {
                 : ordering_val(in.ordering_val), load_value(in.load_value), index(inindex) {}
         };
 
-        template<bool stable_ordering, class Torder, class Tweight>
+        template<class Torder, class Tweight>
         inline void apply_ordering(std::vector<LoadBalancedTile<Torder, Tweight>> &lb_vec) {
             using LBTileResult = LoadBalancedTile<Torder, Tweight>;
-            auto comp          = [](const LBTileResult &left, const LBTileResult &right) {
+            std::sort(lb_vec.begin(), lb_vec.end(), [](LBTileResult &left, LBTileResult &right) {
                 return left.ordering_val < right.ordering_val;
-            };
-            if constexpr (stable_ordering) {
-                std::stable_sort(lb_vec.begin(), lb_vec.end(), comp);
-            } else {
-                std::sort(lb_vec.begin(), lb_vec.end(), comp);
-            }
+            });
         }
 
-        template<bool stable_ordering, class Torder, class Tweight>
+        template<class Torder, class Tweight>
         inline std::vector<i32> lb_startegy_parallel_sweep(
             const std::vector<TileWithLoad<Torder, Tweight>> &lb_vector, i32 wsize) {
 
@@ -185,7 +179,7 @@ namespace {
             }
 
             // apply the ordering
-            apply_ordering<stable_ordering>(res);
+            apply_ordering(res);
 
             // compute increments for load
             u64 accum = 0;
@@ -215,7 +209,7 @@ namespace {
             return new_owners;
         }
 
-        template<bool stable_ordering, class Torder, class Tweight>
+        template<class Torder, class Tweight>
         inline std::vector<i32> lb_startegy_roundrobin(
             const std::vector<TileWithLoad<Torder, Tweight>> &lb_vector, i32 wsize) {
 
@@ -228,7 +222,7 @@ namespace {
             }
 
             // apply the ordering
-            apply_ordering<stable_ordering>(res);
+            apply_ordering(res);
 
             // compute increments for load
             u64 accum = 0;
@@ -257,19 +251,19 @@ namespace {
             return new_owners;
         }
 
-        template<bool stable_ordering, class Torder, class Tweight>
+        template<class Torder, class Tweight>
         inline std::vector<i32> load_balance(
             std::vector<TileWithLoad<Torder, Tweight>> &&lb_vector, i32 world_size) {
 
             using namespace details;
 
             f64 factor_boost_psweep = 1;
-            auto tmpres = lb_startegy_parallel_sweep<stable_ordering>(lb_vector, world_size);
+            auto tmpres             = lb_startegy_parallel_sweep(lb_vector, world_size);
             auto metric_psweep
                 = compute_LB_metric(lb_vector, tmpres, world_size, factor_boost_psweep);
 
             f64 factor_boost_rrobin = 0.95;
-            auto tmpres_2 = lb_startegy_roundrobin<stable_ordering>(lb_vector, world_size);
+            auto tmpres_2           = lb_startegy_roundrobin(lb_vector, world_size);
             auto metric_rrobin
                 = compute_LB_metric(lb_vector, tmpres_2, world_size, factor_boost_rrobin);
 
@@ -341,38 +335,32 @@ namespace {
                     std::vector<Tile> tiles
                         = make_random_tiles<Torder>(count, seed, key_kind, load_kind);
 
-                    auto check = [&](auto stable_ordering) {
-                        constexpr bool stable = decltype(stable_ordering)::value;
+                    std::string case_name = sham::format(
+                        "count={} wsize={} load_kind={}", count, wsize, i32(load_kind));
 
-                        std::string case_name = sham::format(
-                            "count={} wsize={} load_kind={} stable_ref={}",
-                            count,
-                            wsize,
-                            i32(load_kind),
-                            stable);
+                    std::vector<i32> psweep = details::lb_startegy_parallel_sweep(tiles, wsize);
+                    std::vector<i32> psweep_ref
+                        = reference_lb::lb_startegy_parallel_sweep(tiles, wsize);
+                    REQUIRE_NAMED("psweep " + case_name, psweep == psweep_ref);
 
-                        std::vector<i32> psweep = details::lb_startegy_parallel_sweep(tiles, wsize);
-                        std::vector<i32> psweep_ref
-                            = reference_lb::lb_startegy_parallel_sweep<stable>(tiles, wsize);
-                        REQUIRE_NAMED("psweep " + case_name, psweep == psweep_ref);
+                    std::vector<i32> rrobin = details::lb_startegy_roundrobin(tiles, wsize);
+                    std::vector<i32> rrobin_ref
+                        = reference_lb::lb_startegy_roundrobin(tiles, wsize);
+                    REQUIRE_NAMED("rrobin " + case_name, rrobin == rrobin_ref);
 
-                        std::vector<i32> rrobin = details::lb_startegy_roundrobin(tiles, wsize);
-                        std::vector<i32> rrobin_ref
-                            = reference_lb::lb_startegy_roundrobin<stable>(tiles, wsize);
-                        REQUIRE_NAMED("rrobin " + case_name, rrobin == rrobin_ref);
+                    // second strategy reusing the sort cached by the first one
+                    details::SortedTilesCache<Torder, u64> cache;
+                    std::vector<i32> psweep_cached
+                        = details::lb_startegy_parallel_sweep(tiles, wsize, &cache);
+                    std::vector<i32> rrobin_cached
+                        = details::lb_startegy_roundrobin(tiles, wsize, &cache);
+                    REQUIRE_NAMED("psweep cached " + case_name, psweep_cached == psweep_ref);
+                    REQUIRE_NAMED("rrobin cached " + case_name, rrobin_cached == rrobin_ref);
 
-                        std::vector<i32> best = load_balance(std::vector(tiles), wsize);
-                        std::vector<i32> best_ref
-                            = reference_lb::load_balance<stable>(std::vector(tiles), wsize);
-                        REQUIRE_NAMED("load_balance " + case_name, best == best_ref);
-                    };
-
-                    if (key_kind == KeyKind::Distinct) {
-                        // distinct keys: the original std::sort based code is well defined
-                        check(std::false_type{});
-                    }
-                    // ties are broken by the original index
-                    check(std::true_type{});
+                    std::vector<i32> best = load_balance(std::vector(tiles), wsize);
+                    std::vector<i32> best_ref
+                        = reference_lb::load_balance(std::vector(tiles), wsize);
+                    REQUIRE_NAMED("load_balance " + case_name, best == best_ref);
                 }
             }
         }
@@ -413,7 +401,7 @@ NEW_TEST(TestType::Benchmark, "shamrock/scheduler/loadbalance:benchmark", 1) {
     };
 
     auto [t_ref, res_ref] = bench([&](std::vector<TileWithLoad<u64, u64>> &&in) {
-        return reference_lb::load_balance<false>(std::move(in), wsize);
+        return reference_lb::load_balance(std::move(in), wsize);
     });
     auto [t_new, res_new] = bench([&](std::vector<TileWithLoad<u64, u64>> &&in) {
         return load_balance(std::move(in), wsize);
