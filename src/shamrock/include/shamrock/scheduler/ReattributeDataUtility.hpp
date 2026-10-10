@@ -17,13 +17,19 @@
 
 #include "shambase/string.hpp"
 #include "shamalgs/collective/distributedDataComm.hpp"
-#include "shamalgs/memory.hpp"
+#include "shamalgs/numeric.hpp"
+#include "shamalgs/primitives/reduction.hpp"
+#include "shamalgs/primitives/scan_exclusive_sum_in_place.hpp"
+#include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/comm/details/CommunicationBufferImpl.hpp"
+#include "shambackends/kernel_call.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
+#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace shamrock {
@@ -102,12 +108,60 @@ namespace shamrock {
         }
 
         /**
+         * @brief Flag the objects of a patch whose new patch id differs from the current one.
+         *
+         * @param current_pid The id of the patch holding the objects.
+         * @param new_pid The new patch id of each object.
+         * @param cnt The number of objects in the patch.
+         *
+         * @return A device buffer of size cnt, 1 if the object leaves the patch, 0 otherwise.
+         */
+        static sham::DeviceBuffer<u32> flag_moved_objects(
+            u64 current_pid, sycl::buffer<u64> &new_pid, u32 cnt) {
+            StackEntry stack_loc{};
+
+            auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
+            sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
+
+            sham::DeviceBuffer<u32> flag_moved(cnt, dev_sched);
+
+            sham::EventList depends_list;
+            u32 *flag = flag_moved.get_write_access(depends_list);
+
+            auto e = q.submit(depends_list, [&, current_pid](sycl::handler &cgh) {
+                sycl::accessor nid{new_pid, cgh, sycl::read_only};
+                shambase::parallel_for(cgh, cnt, "flag moved objects", [=](u32 i) {
+                    flag[i] = (nid[i] != current_pid) ? 1 : 0;
+                });
+            });
+
+            flag_moved.complete_event_state(e);
+
+            return flag_moved;
+        }
+
+        /**
+         * @brief Count the objects of a patch whose new patch id differs from the current one.
+         *
+         * @param flag_moved The flags returned by flag_moved_objects.
+         * @param cnt The number of objects in the patch.
+         *
+         * @return The number of objects leaving the patch.
+         */
+        static u32 count_moved_objects(const sham::DeviceBuffer<u32> &flag_moved, u32 cnt) {
+            return shamalgs::primitives::sum(
+                shamsys::instance::get_compute_scheduler_ptr(), flag_moved, 0, cnt);
+        }
+
+        /**
          * @brief Extracts elements that do not belong to a patch from the patch data based on the
          * new patch IDs.
          *
-         * This function iterates over the patch data and extracts elements that need to be moved to
-         * a different patch. It uses the new patch IDs to determine which elements to extract and
-         * where to move them.
+         * For each patch, the objects whose new patch id differs from the current one are counted
+         * on the device. If none is leaving, the patch is left untouched. Otherwise the index
+         * lists of the objects to keep and to move are built on the device from a single exclusive
+         * scan of the flags, the moved objects are appended to one PatchDataLayer per destination
+         * patch and the remaining ones are kept in place.
          *
          * @param new_pid A distributed data object containing the new patch IDs.
          *
@@ -121,79 +175,118 @@ namespace shamrock {
 
             using namespace shamrock::patch;
 
+            auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
+            sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
+
             std::unordered_map<u64, u64> histogram_extract;
 
-            sched.patch_data.for_each_patchdata(
-                [&](u64 current_pid, shamrock::patch::PatchDataLayer &pdat) {
-                    histogram_extract[current_pid] = 0;
-                    if (!pdat.is_empty()) {
+            sched.patch_data.for_each_patchdata([&](u64 current_pid, PatchDataLayer &pdat) {
+                histogram_extract[current_pid] = 0;
 
-                        sycl::host_accessor nid{new_pid.get(current_pid), sycl::read_only};
+                if (pdat.is_empty()) {
+                    return;
+                }
 
-                        if (false) {
+                const u32 cnt              = pdat.get_obj_cnt();
+                sycl::buffer<u64> &nid_buf = new_pid.get(current_pid);
 
-                            const u32 cnt = pdat.get_obj_cnt();
+                // flag = 1 if the object leaves the patch
+                sham::DeviceBuffer<u32> flag_moved = flag_moved_objects(current_pid, nid_buf, cnt);
 
-                            for (u32 i = cnt - 1; i < cnt; i--) {
-                                u64 new_pid = nid[i];
-                                if (current_pid != new_pid) {
+                const u32 moved_cnt = count_moved_objects(flag_moved, cnt);
 
-                                    if (!part_exchange.has_key(current_pid, new_pid)) {
-                                        part_exchange.add_obj(
-                                            current_pid,
-                                            new_pid,
-                                            PatchDataLayer(sched.get_layout_ptr_old()));
-                                    }
+                histogram_extract[current_pid] = moved_cnt;
 
-                                    part_exchange.for_each(
-                                        [&](u64 _old_id, u64 _new_id, PatchDataLayer &pdat_int) {
-                                            if (_old_id == current_pid && _new_id == new_pid) {
-                                                pdat.extract_element(i, pdat_int);
-                                                histogram_extract[current_pid]++;
-                                            }
-                                        });
-                                }
+                // fast path: no object leaves the patch, nothing to extract or to reallocate
+                if (moved_cnt == 0) {
+                    return;
+                }
+
+                const u32 keep_cnt = cnt - moved_cnt;
+
+                // exclusive scan of the flags: rank of each object among the moved ones, and
+                // i - rank its rank among the kept ones
+                shamalgs::primitives::scan_exclusive_sum_in_place(flag_moved, cnt);
+
+                sham::DeviceBuffer<u32> moved_ids(moved_cnt, dev_sched);
+                sham::DeviceBuffer<u64> moved_new_pid(moved_cnt, dev_sched);
+                sham::DeviceBuffer<u32> keep_ids(keep_cnt, dev_sched);
+                {
+                    sham::EventList depends_list;
+                    const u32 *rank = flag_moved.get_read_access(depends_list);
+                    u32 *moved      = moved_ids.get_write_access(depends_list);
+                    u64 *moved_pid  = moved_new_pid.get_write_access(depends_list);
+                    u32 *keep       = keep_ids.get_write_access(depends_list);
+
+                    auto e = q.submit(depends_list, [&, current_pid](sycl::handler &cgh) {
+                        sycl::accessor nid{nid_buf, cgh, sycl::read_only};
+                        shambase::parallel_for(cgh, cnt, "split moved / kept objects", [=](u32 i) {
+                            u64 pid = nid[i];
+                            u32 r   = rank[i];
+                            if (pid != current_pid) {
+                                moved[r]     = i;
+                                moved_pid[r] = pid;
+                            } else {
+                                keep[i - r] = i;
                             }
-                        } else {
-                            std::vector<u32> keep_ids;
-                            std::unordered_map<u64, std::vector<u32>> extract_indexes;
+                        });
+                    });
 
-                            const u32 cnt = pdat.get_obj_cnt();
-                            for (u32 i = 0; i < cnt; i++) {
-                                u64 new_pid = nid[i];
-                                if (current_pid != new_pid) {
-                                    extract_indexes[new_pid].push_back(i);
-                                    histogram_extract[current_pid]++;
-                                } else {
-                                    keep_ids.push_back(i);
-                                }
-                            }
+                    flag_moved.complete_event_state(e);
+                    moved_ids.complete_event_state(e);
+                    moved_new_pid.complete_event_state(e);
+                    keep_ids.complete_event_state(e);
+                }
 
-                            for (auto &[new_id, vec] : extract_indexes) {
+                // the destinations are neighbouring patches so there are only a few of them
+                std::map<u64, u32> dest_counts;
+                for (u64 dest : moved_new_pid.copy_to_stdvec()) {
+                    dest_counts[dest]++;
+                }
 
-                                u64 new_pid                   = new_id;
-                                std::vector<u32> &idx_extract = vec;
+                for (auto &[dest, dest_cnt] : dest_counts) {
 
-                                if (!part_exchange.has_key(current_pid, new_pid)) {
-                                    part_exchange.add_obj(
-                                        current_pid,
-                                        new_pid,
-                                        PatchDataLayer(sched.get_layout_ptr_old()));
-                                }
+                    auto it = part_exchange.add_obj(
+                        current_pid, dest, PatchDataLayer(sched.get_layout_ptr_old()));
+                    PatchDataLayer &pdat_send = it->second;
 
-                                part_exchange.for_each(
-                                    [&](u64 _old_id, u64 _new_id, PatchDataLayer &pdat_int) {
-                                        if (_old_id == current_pid && _new_id == new_pid) {
-                                            pdat.append_subset_to(idx_extract, pdat_int);
-                                        }
-                                    });
-                            }
-
-                            sycl::buffer<u32> keep_idx = shamalgs::memory::vec_to_buf(keep_ids);
-                            pdat.keep_ids(keep_idx, keep_ids.size());
-                        }
+                    if (dest_counts.size() == 1) {
+                        pdat.append_subset_to(moved_ids, dest_cnt, pdat_send);
+                        continue;
                     }
-                });
+
+                    // select the moved objects going to dest
+                    sham::DeviceBuffer<u32> flag_dest(moved_cnt, dev_sched);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{moved_new_pid},
+                        sham::MultiRef{flag_dest},
+                        moved_cnt,
+                        [dest](u32 i, const u64 *__restrict pid, u32 *__restrict flag) {
+                            flag[i] = (pid[i] == dest) ? 1 : 0;
+                        });
+
+                    sham::DeviceBuffer<u32> sel
+                        = shamalgs::numeric::stream_compact(dev_sched, flag_dest, moved_cnt);
+
+                    sham::DeviceBuffer<u32> dest_ids(dest_cnt, dev_sched);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{sel, moved_ids},
+                        sham::MultiRef{dest_ids},
+                        dest_cnt,
+                        [](u32 i,
+                           const u32 *__restrict sel_idx,
+                           const u32 *__restrict ids,
+                           u32 *__restrict out_ids) {
+                            out_ids[i] = ids[sel_idx[i]];
+                        });
+
+                    pdat.append_subset_to(dest_ids, dest_cnt, pdat_send);
+                }
+
+                pdat.keep_ids(keep_ids, keep_cnt);
+            });
 
             for (auto &[k, v] : histogram_extract) {
                 shamlog_debug_ln("ReattributeDataUtility", "patch", k, "extract=", v);
