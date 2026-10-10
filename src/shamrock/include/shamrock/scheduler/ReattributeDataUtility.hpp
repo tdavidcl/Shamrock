@@ -75,23 +75,40 @@ namespace shamrock {
                         shambase::throw_unimplemented();
                     }
 
+                    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
                     newid_buf_map.add_obj(
                         id,
                         sptree.compute_patch_owner(
-                            shamsys::instance::get_compute_scheduler_ptr(),
-                            pos_field.get_buf(),
-                            pos_field.get_obj_cnt()));
+                            dev_sched, pos_field.get_buf(), pos_field.get_obj_cnt()));
 
-                    bool err_id_in_newid = false;
-                    {
-                        sycl::host_accessor nid{newid_buf_map.get(id), sycl::read_only};
-                        for (u32 i = 0; i < pdat.get_obj_cnt(); i++) {
-                            bool err        = nid[i] == u64_max;
-                            err_id_in_newid = err_id_in_newid || (err);
-                        }
-                    }
+                    // Flag on the device whether any object got no owner (u64_max), so that only
+                    // a single scalar is read back instead of the whole id buffer.
+                    sham::DeviceBuffer<u32> err_flag(1, dev_sched);
+                    err_flag.fill(0);
 
-                    if (err_id_in_newid) {
+                    sham::EventList depends_list;
+                    u32 *err = err_flag.get_write_access(depends_list);
+
+                    auto e = dev_sched->get_queue().submit(depends_list, [&](sycl::handler &cgh) {
+                        sycl::accessor nid{newid_buf_map.get(id), cgh, sycl::read_only};
+
+                        cgh.parallel_for(
+                            sycl::range<1>{pdat.get_obj_cnt()}, [=](sycl::item<1> item) {
+                                if (nid[item.get_id(0)] == u64_max) {
+                                    sycl::atomic_ref<
+                                        u32,
+                                        sycl::memory_order_relaxed,
+                                        sycl::memory_scope_device,
+                                        sycl::access::address_space::global_space>(*err)
+                                        .store(1);
+                                }
+                            });
+                    });
+
+                    err_flag.complete_event_state(e);
+
+                    if (err_flag.get_val_at_idx(0) != 0) {
                         throw shambase::make_except_with_loc<std::runtime_error>(
                             "a new id could not be computed");
                     }
