@@ -21,7 +21,23 @@
 #include "shambackends/vec.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include <algorithm>
 #include <vector>
+
+// libstdc++ parallel mode sort (OpenMP multiway mergesort), used for the tiles sort when OpenMP
+// is enabled
+#if defined(_OPENMP) && defined(__GLIBCXX__)
+    #define SHAMROCK_LB_USE_GNU_PARALLEL_SORT
+    #if defined(__clang__)
+        #pragma clang diagnostic push
+        // libstdc++ parallel mode still uses std::binary_function
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    #endif
+    #include <parallel/algorithm>
+    #if defined(__clang__)
+        #pragma clang diagnostic pop
+    #endif
+#endif
 
 namespace shamrock::scheduler {
     template<class Torder, class Tweight>
@@ -37,9 +53,7 @@ namespace shamrock::scheduler::details {
     struct LoadBalancedTile {
         Torder ordering_val;
         Tweight load_value;
-        Tweight accumulated_load_value;
         u64 index;
-        i32 new_owner;
 
         LoadBalancedTile() = default;
 
@@ -50,6 +64,11 @@ namespace shamrock::scheduler::details {
     /**
      * @brief Sort tiles by their ordering value
      *
+     * Ties on the ordering value are broken by the original tile index, so the comparison is a
+     * strict total order and the sorted order is unique. Every rank computes the load balancing
+     * redundantly, so this keeps the result independent of the sort algorithm and of the
+     * number of threads used to sort.
+     *
      * @tparam Torder Ordering value type
      * @tparam Tweight Load weight type
      * @param lb_vec Vector of load-balanced tiles to sort
@@ -57,8 +76,146 @@ namespace shamrock::scheduler::details {
     template<class Torder, class Tweight>
     inline void apply_ordering(std::vector<LoadBalancedTile<Torder, Tweight>> &lb_vec) {
         using LBTileResult = LoadBalancedTile<Torder, Tweight>;
-        std::sort(lb_vec.begin(), lb_vec.end(), [](LBTileResult &left, LBTileResult &right) {
-            return left.ordering_val < right.ordering_val;
+        auto comp          = [](const LBTileResult &left, const LBTileResult &right) {
+            if (left.ordering_val < right.ordering_val) {
+                return true;
+            }
+            if (right.ordering_val < left.ordering_val) {
+                return false;
+            }
+            return left.index < right.index;
+        };
+#ifdef SHAMROCK_LB_USE_GNU_PARALLEL_SORT
+        __gnu_parallel::sort(lb_vec.begin(), lb_vec.end(), comp);
+#else
+        std::sort(lb_vec.begin(), lb_vec.end(), comp);
+#endif
+    }
+
+    /**
+     * @brief Build the tiles list sorted by ordering value
+     *
+     * The result can be shared by all strategies, which all walk the tiles in this order.
+     *
+     * @tparam Torder Ordering value type
+     * @tparam Tweight Load weight type
+     * @param lb_vector Tiles with load information
+     * @return std::vector<LoadBalancedTile<Torder, Tweight>> Tiles sorted by ordering value
+     */
+    template<class Torder, class Tweight>
+    inline std::vector<LoadBalancedTile<Torder, Tweight>> make_sorted_tiles(
+        const std::vector<TileWithLoad<Torder, Tweight>> &lb_vector) {
+
+        using LBTileResult = LoadBalancedTile<Torder, Tweight>;
+
+        std::vector<LBTileResult> res(lb_vector.size());
+#pragma omp parallel for
+        for (u64 i = 0; i < lb_vector.size(); i++) {
+            res[i] = LBTileResult{lb_vector[i], i};
+        }
+
+        apply_ordering(res);
+
+        return res;
+    }
+
+    /**
+     * @brief Assign owners by cutting the sorted tiles into world size equal accumulated loads
+     *
+     * @param sorted_tiles Tiles sorted by ordering value
+     * @param wsize Number of workers
+     * @param get_accumulated Returns the accumulated load of the i-th sorted tile (exclusive
+     * prefix sum of the load used by the strategy)
+     * @return std::vector<i32> New owner assignments for each tile (in the original order)
+     */
+    template<class Torder, class Tweight, class Fget>
+    inline std::vector<i32> assign_owners_sorted(
+        const std::vector<LoadBalancedTile<Torder, Tweight>> &sorted_tiles,
+        i32 wsize,
+        Fget &&get_accumulated) {
+
+        std::vector<i32> new_owners(sorted_tiles.size());
+
+        if (sorted_tiles.empty()) {
+            return new_owners;
+        }
+
+        double target_datacnt = double(get_accumulated(sorted_tiles.size() - 1)) / wsize;
+
+#pragma omp parallel for
+        for (u64 i = 0; i < sorted_tiles.size(); i++) {
+            Tweight accumulated_load_value = get_accumulated(i);
+            new_owners[sorted_tiles[i].index]
+                = (target_datacnt == 0)
+                      ? 0
+                      : sycl::clamp(i32(accumulated_load_value / target_datacnt), 0, wsize - 1);
+        }
+
+        if (shamcomm::world_rank() == 0
+            && shamcomm::logs::get_loglevel() >= shamcomm::logs::log_debug) {
+            for (u64 i = 0; i < sorted_tiles.size(); i++) {
+                const auto &t                  = sorted_tiles[i];
+                Tweight accumulated_load_value = get_accumulated(i);
+                shamlog_debug_ln(
+                    "HilbertLoadBalance",
+                    t.ordering_val,
+                    accumulated_load_value,
+                    t.index,
+                    (target_datacnt == 0)
+                        ? 0
+                        : sycl::clamp(
+                              i32(accumulated_load_value / target_datacnt), 0, i32(wsize) - 1),
+                    (target_datacnt == 0) ? 0 : (accumulated_load_value / target_datacnt));
+            }
+        }
+
+        return new_owners;
+    }
+
+    /**
+     * @brief Parallel sweep strategy on already sorted tiles
+     *
+     * @tparam Torder Ordering value type
+     * @tparam Tweight Load weight type
+     * @param sorted_tiles Tiles sorted by ordering value (see make_sorted_tiles)
+     * @param wsize Number of workers
+     * @return std::vector<i32> New owner assignments for each tile
+     */
+    template<class Torder, class Tweight>
+    inline std::vector<i32> lb_startegy_parallel_sweep_sorted(
+        const std::vector<LoadBalancedTile<Torder, Tweight>> &sorted_tiles, i32 wsize) {
+
+        // compute increments for load
+        std::vector<Tweight> accumulated_load(sorted_tiles.size());
+        u64 accum = 0;
+        for (u64 i = 0; i < sorted_tiles.size(); i++) {
+            u64 cur_val         = sorted_tiles[i].load_value;
+            accumulated_load[i] = accum;
+            accum += cur_val;
+        }
+
+        return assign_owners_sorted(sorted_tiles, wsize, [&](u64 i) -> Tweight {
+            return accumulated_load[i];
+        });
+    }
+
+    /**
+     * @brief Round-robin strategy on already sorted tiles
+     *
+     * @tparam Torder Ordering value type
+     * @tparam Tweight Load weight type
+     * @param sorted_tiles Tiles sorted by ordering value (see make_sorted_tiles)
+     * @param wsize Number of workers
+     * @return std::vector<i32> New owner assignments for each tile
+     */
+    template<class Torder, class Tweight>
+    inline std::vector<i32> lb_startegy_roundrobin_sorted(
+        const std::vector<LoadBalancedTile<Torder, Tweight>> &sorted_tiles, i32 wsize) {
+
+        // assume that each patch has the same load, which effectivelly does a round robin
+        // balancing, the accumulated load of the i-th tile is then i
+        return assign_owners_sorted(sorted_tiles, wsize, [](u64 i) -> Tweight {
+            return i;
         });
     }
 
@@ -74,61 +231,7 @@ namespace shamrock::scheduler::details {
     template<class Torder, class Tweight>
     inline std::vector<i32> lb_startegy_parallel_sweep(
         const std::vector<TileWithLoad<Torder, Tweight>> &lb_vector, i32 wsize) {
-
-        using LBTile       = TileWithLoad<Torder, Tweight>;
-        using LBTileResult = details::LoadBalancedTile<Torder, Tweight>;
-
-        std::vector<LBTileResult> res(lb_vector.size());
-#pragma omp parallel for
-        for (u64 i = 0; i < lb_vector.size(); i++) {
-            res[i] = LBTileResult{lb_vector[i], i};
-        }
-
-        // apply the ordering
-        apply_ordering(res);
-
-        // compute increments for load
-        u64 accum = 0;
-        for (LBTileResult &tile : res) {
-            u64 cur_val                 = tile.load_value;
-            tile.accumulated_load_value = accum;
-            accum += cur_val;
-        }
-
-        double target_datacnt = double(res[res.size() - 1].accumulated_load_value) / wsize;
-
-#pragma omp parallel for
-        for (u64 i = 0; i < res.size(); i++) {
-            LBTileResult &tile = res[i];
-            tile.new_owner
-                = (target_datacnt == 0)
-                      ? 0
-                      : sycl::clamp(
-                            i32(tile.accumulated_load_value / target_datacnt), 0, wsize - 1);
-        }
-
-        if (shamcomm::world_rank() == 0
-            && shamcomm::logs::get_loglevel() >= shamcomm::logs::log_debug) {
-            for (LBTileResult t : res) {
-                shamlog_debug_ln(
-                    "HilbertLoadBalance",
-                    t.ordering_val,
-                    t.accumulated_load_value,
-                    t.index,
-                    (target_datacnt == 0)
-                        ? 0
-                        : sycl::clamp(
-                              i32(t.accumulated_load_value / target_datacnt), 0, i32(wsize) - 1),
-                    (target_datacnt == 0) ? 0 : (t.accumulated_load_value / target_datacnt));
-            }
-        }
-
-        std::vector<i32> new_owners(res.size());
-        for (LBTileResult &tile : res) {
-            new_owners[tile.index] = tile.new_owner;
-        }
-
-        return new_owners;
+        return lb_startegy_parallel_sweep_sorted(make_sorted_tiles(lb_vector), wsize);
     }
 
     /**
@@ -143,62 +246,7 @@ namespace shamrock::scheduler::details {
     template<class Torder, class Tweight>
     inline std::vector<i32> lb_startegy_roundrobin(
         const std::vector<TileWithLoad<Torder, Tweight>> &lb_vector, i32 wsize) {
-
-        using LBTile       = TileWithLoad<Torder, Tweight>;
-        using LBTileResult = details::LoadBalancedTile<Torder, Tweight>;
-
-        std::vector<LBTileResult> res(lb_vector.size());
-#pragma omp parallel for
-        for (u64 i = 0; i < lb_vector.size(); i++) {
-            res[i] = LBTileResult{lb_vector[i], i};
-        }
-
-        // apply the ordering
-        apply_ordering(res);
-
-        // compute increments for load
-        u64 accum = 0;
-        for (LBTileResult &tile : res) {
-            tile.accumulated_load_value = accum;
-            // modify the lB above by assuming that each patch has the same load
-            // which effectivelly does a round robin balancing
-            accum += 1;
-        }
-
-        double target_datacnt = double(res[res.size() - 1].accumulated_load_value) / wsize;
-
-#pragma omp parallel for
-        for (u64 i = 0; i < res.size(); i++) {
-            LBTileResult &tile = res[i];
-            tile.new_owner
-                = (target_datacnt == 0)
-                      ? 0
-                      : sycl::clamp(
-                            i32(tile.accumulated_load_value / target_datacnt), 0, wsize - 1);
-        }
-
-        if (shamcomm::world_rank() == 0
-            && shamcomm::logs::get_loglevel() >= shamcomm::logs::log_debug) {
-            for (LBTileResult t : res) {
-                shamlog_debug_ln(
-                    "HilbertLoadBalance",
-                    t.ordering_val,
-                    t.accumulated_load_value,
-                    t.index,
-                    (target_datacnt == 0)
-                        ? 0
-                        : sycl::clamp(
-                              i32(t.accumulated_load_value / target_datacnt), 0, i32(wsize) - 1),
-                    (target_datacnt == 0) ? 0 : (t.accumulated_load_value / target_datacnt));
-            }
-        }
-
-        std::vector<i32> new_owners(res.size());
-        for (LBTileResult &tile : res) {
-            new_owners[tile.index] = tile.new_owner;
-        }
-
-        return new_owners;
+        return lb_startegy_roundrobin_sorted(make_sorted_tiles(lb_vector), wsize);
     }
 
     struct LBMetric {
@@ -277,20 +325,23 @@ namespace shamrock::scheduler {
 
         using namespace details;
 
+        // both strategies walk the tiles in the same order, sort them only once
+        auto sorted_tiles = make_sorted_tiles(lb_vector);
+
         f64 factor_boost_psweep = 1;
-        auto tmpres             = lb_startegy_parallel_sweep(lb_vector, world_size);
+        auto tmpres             = lb_startegy_parallel_sweep_sorted(sorted_tiles, world_size);
         auto metric_psweep = compute_LB_metric(lb_vector, tmpres, world_size, factor_boost_psweep);
 
         // We boost the round robin strategy to favor it if the difference is around 5% since the
         // increased uniformity will probably offset the cost anyway
         f64 factor_boost_rrobin = 0.95;
-        auto tmpres_2           = lb_startegy_roundrobin(lb_vector, world_size);
+        auto tmpres_2           = lb_startegy_roundrobin_sorted(sorted_tiles, world_size);
         auto metric_rrobin
             = compute_LB_metric(lb_vector, tmpres_2, world_size, factor_boost_rrobin);
 
         std::string strategy_name = "parallel sweep";
         if (metric_rrobin.max < metric_psweep.max) {
-            tmpres        = tmpres_2;
+            tmpres        = std::move(tmpres_2);
             strategy_name = "round robin";
         }
 
