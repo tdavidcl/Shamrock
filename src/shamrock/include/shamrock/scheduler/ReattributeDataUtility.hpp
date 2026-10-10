@@ -46,40 +46,25 @@ namespace shamrock {
          */
         ReattributeDataUtility(PatchScheduler &sched) : sched(sched) {}
 
-        /// Result of ReattributeDataUtility::compute_new_pid
-        struct NewPidResult {
-            /// new patch id of each object, for each patch
-            shambase::DistributedData<sycl::buffer<u64>> new_pid;
-            /**
-             * @brief for each patch, number of objects that are no longer in the patch box
-             *
-             * Exact when 0 (no object leaves the patch), an upper bound of the number of objects
-             * changing patch otherwise (see SerialPatchTree::PatchOwnerResult::moved_count).
-             */
-            shambase::DistributedData<u32> moved_count;
-        };
-
         /**
          * @brief Computes the new patch owner IDs for the objects in the patches based on their
          * position in space.
          *
-         * Objects that are still in their current patch keep it, only the ones that left it are
-         * searched in the SerialPatchTree (which is not accessed if no object moved).
-         *
          * @param sptree The SerialPatchTree used to compute the patch owners.
          * @param ipos The index of the position field in the PatchData.
          *
-         * @return the new patch IDs for each patch, and the number of objects that left each patch
+         * @return A DistributedData containing the new patch IDs for each patch.
          *
          * @throws std::runtime_error If a new ID could not be computed for an object (out of
          * bound).
          */
         template<class T>
-        NewPidResult compute_new_pid(SerialPatchTree<T> &sptree, u32 ipos) {
+        shambase::DistributedData<sycl::buffer<u64>> compute_new_pid(
+            SerialPatchTree<T> &sptree, u32 ipos) {
 
             StackEntry stack_loc{};
 
-            NewPidResult ret;
+            shambase::DistributedData<sycl::buffer<u64>> newid_buf_map;
 
             sched.patch_data.for_each_patchdata([&](u64 id, shamrock::patch::PatchDataLayer &pdat) {
                 if (!pdat.is_empty()) {
@@ -93,19 +78,17 @@ namespace shamrock {
                     const shamrock::patch::Patch &cur_p
                         = sched.patch_list.global[sched.patch_list.id_patch_to_global_idx.at(id)];
 
-                    auto [new_owner, moved_count] = sptree.compute_patch_owner(
-                        shamsys::instance::get_compute_scheduler_ptr(),
-                        pos_field.get_buf(),
-                        pos_field.get_obj_cnt(),
-                        cur_p);
+                    newid_buf_map.add_obj(
+                        id,
+                        sptree.compute_patch_owner(
+                            shamsys::instance::get_compute_scheduler_ptr(),
+                            pos_field.get_buf(),
+                            pos_field.get_obj_cnt(),
+                            cur_p));
 
-                    ret.new_pid.add_obj(id, std::move(new_owner));
-                    ret.moved_count.add_obj(id, u32{moved_count});
-
-                    // objects that stayed in the patch can not be in error
                     bool err_id_in_newid = false;
-                    if (moved_count > 0) {
-                        sycl::host_accessor nid{ret.new_pid.get(id), sycl::read_only};
+                    {
+                        sycl::host_accessor nid{newid_buf_map.get(id), sycl::read_only};
                         for (u32 i = 0; i < pdat.get_obj_cnt(); i++) {
                             bool err        = nid[i] == u64_max;
                             err_id_in_newid = err_id_in_newid || (err);
@@ -119,7 +102,7 @@ namespace shamrock {
                 }
             });
 
-            return ret;
+            return newid_buf_map;
         }
 
         /**
@@ -243,10 +226,9 @@ namespace shamrock {
 
             u32 ipos = sched.pdl_old().get_field_idx<T>(position_field);
 
-            NewPidResult new_pid = compute_new_pid(sptree, ipos);
+            DistributedData<sycl::buffer<u64>> new_pid = compute_new_pid(sptree, ipos);
 
-            DistributedDataShared<patch::PatchDataLayer> part_exchange
-                = extract_elements(std::move(new_pid.new_pid));
+            DistributedDataShared<patch::PatchDataLayer> part_exchange = extract_elements(new_pid);
 
             part_exchange.for_each([](u64 sender, u64 receiver, PatchDataLayer &pdat) {
                 shamlog_debug_ln("ReattributeDataUtility", sender, receiver, pdat.get_obj_cnt());

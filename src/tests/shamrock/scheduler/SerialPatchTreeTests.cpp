@@ -213,10 +213,9 @@ namespace {
         }
         REQUIRE_EQUAL(box_mismatch, 0);
 
-        // the two passes version must give exactly the result of the full tree search
+        // giving the current patch must not change the result of the full tree search
         u32 n_test_patches = std::min<u32>(leaves.size(), 48);
         u32 mismatch       = 0;
-        u32 bad_count      = 0;
         u32 not_kept       = 0;
         u32 total_moved    = 0;
         u32 total_invalid  = 0;
@@ -232,17 +231,15 @@ namespace {
             pos_buf.copy_from_stdvec(pos);
 
             sycl::buffer<u64> ref_buf = sptree.compute_patch_owner(dev_sched, pos_buf, len);
-            auto [new_buf, moved_count]
-                = sptree.compute_patch_owner(dev_sched, pos_buf, len, cur_p);
+            sycl::buffer<u64> new_buf = sptree.compute_patch_owner(dev_sched, pos_buf, len, cur_p);
 
             std::vector<u64> ref = buf_to_vec(ref_buf, len);
             std::vector<u64> res = buf_to_vec(new_buf, len);
 
-            u32 expected_moved = 0;
             for (u32 i = 0; i < len; i++) {
                 bool in = Patch::is_in_patch_converted(pos[i], box.lower, box.upper);
-                if (!in) {
-                    expected_moved++;
+                if (!in && ref[i] != cur_p.id_patch) {
+                    total_moved++;
                 }
                 if (in && res[i] != cur_p.id_patch) {
                     not_kept++;
@@ -254,14 +251,9 @@ namespace {
                     total_invalid++;
                 }
             }
-            if (expected_moved != moved_count) {
-                bad_count++;
-            }
-            total_moved += moved_count;
         }
 
         REQUIRE_EQUAL(mismatch, 0);
-        REQUIRE_EQUAL(bad_count, 0);
         REQUIRE_EQUAL(not_kept, 0);
 
         // make sure the test covers both objects changing patch and objects outside the domain
@@ -280,56 +272,13 @@ NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree::compute_patch_owner(curr
     test_compute_patch_owner<f32_3>({2, 1, 3}, 1, 40, 0x444);
 }
 
-NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree::compute_patch_owner(no move, no tree)", 1) {
-
-    // when no object leaves its patch the tree buffers must not be accessed: here they are not
-    // even allocated, so accessing them would throw
-
-    using Tvec     = f64_3;
-    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
-    std::mt19937 eng(0x555);
-
-    shammath::CoordRange<Tvec> domain{Tvec{-1, -1, -1}, Tvec{1, 1, 1}};
-    auto [ptree, leaves, transform, dom] = make_test_tree<Tvec>(eng, {1, 1, 1}, 2, 10, domain);
-
-    SerialPatchTree<Tvec> sptree(ptree, transform);
-
-    Patch cur_p = leaves[0];
-    auto box    = sptree.get_patch_box(cur_p);
-
-    u32 len = 10000;
-    std::vector<Tvec> pos;
-    for (u32 i = 0; i < len; i++) {
-        Tvec r = rand_in_box(eng, box.lower, box.upper);
-        // uniform_real_distribution may return the upper bound due to rounding
-        pos.push_back(Patch::is_in_patch_converted(r, box.lower, box.upper) ? r : box.lower);
-    }
-    pos[0] = box.lower; // the lower corner is in the box
-
-    sham::DeviceBuffer<Tvec> pos_buf(len, dev_sched);
-    pos_buf.copy_from_stdvec(pos);
-
-    auto [new_buf, moved_count] = sptree.compute_patch_owner(dev_sched, pos_buf, len, cur_p);
-
-    REQUIRE_EQUAL(moved_count, 0);
-
-    std::vector<u64> res = buf_to_vec(new_buf, len);
-    u32 not_kept         = 0;
-    for (u32 i = 0; i < len; i++) {
-        if (res[i] != cur_p.id_patch) {
-            not_kept++;
-        }
-    }
-    REQUIRE_EQUAL(not_kept, 0);
-}
-
 namespace {
 
     /**
-     * @brief Time the old (full tree search) and new (current patch first) compute_patch_owner
+     * @brief Time compute_patch_owner without (full tree search, as before) and with (current
+     * patch first) the current patch
      *
-     * The serial tree buffers are recreated before each call as the solver does every step, so
-     * that the cost of moving the tree to the device is included when the tree is accessed.
+     * The serial tree buffers are recreated before each call as the solver does every step.
      */
     void bench_compute_patch_owner(
         std::string name,
@@ -364,8 +313,10 @@ namespace {
 
         std::vector<Tvec> pos(npart);
         std::uniform_real_distribution<f64> u(0, 1);
+        u32 nmoved = 0;
         for (u32 i = 0; i < npart; i++) {
             if (u(eng) < moved_frac) {
+                nmoved++;
                 // just outside of the lower x face, still in the domain
                 Tvec r = rand_in_box(eng, box.lower, box.upper);
                 r.x()  = box.lower.x() - ext.x() * u(eng) - 1e-9;
@@ -381,23 +332,18 @@ namespace {
         sham::DeviceBuffer<Tvec> pos_buf(npart, dev_sched);
         pos_buf.copy_from_stdvec(pos);
 
-        auto run = [&](bool new_version) -> std::pair<f64, u32> {
-            f64 tot   = 0;
-            u32 moved = 0;
+        auto run = [&](bool new_version) -> f64 {
+            f64 tot = 0;
             for (u32 r = 0; r < nrepeat + 1; r++) {
                 sptree.attach_buf();
 
                 q.q.wait();
                 shambase::Timer t;
                 t.start();
-                if (new_version) {
-                    auto [buf, cnt] = sptree.compute_patch_owner(dev_sched, pos_buf, npart, cur_p);
-                    moved           = cnt;
-                    q.q.wait();
-                } else {
-                    sycl::buffer<u64> buf = sptree.compute_patch_owner(dev_sched, pos_buf, npart);
-                    q.q.wait();
-                }
+                sycl::buffer<u64> buf
+                    = (new_version) ? sptree.compute_patch_owner(dev_sched, pos_buf, npart, cur_p)
+                                    : sptree.compute_patch_owner(dev_sched, pos_buf, npart);
+                q.q.wait();
                 t.stop();
 
                 sptree.detach_buf();
@@ -406,11 +352,11 @@ namespace {
                     tot += t.elapsed_sec();
                 }
             }
-            return {tot / nrepeat, moved};
+            return tot / nrepeat;
         };
 
-        auto [t_old, m_old] = run(false);
-        auto [t_new, moved] = run(true);
+        f64 t_old = run(false);
+        f64 t_new = run(true);
 
         logger::raw_ln(
             shambase::format(
@@ -421,7 +367,7 @@ namespace {
                 sptree.get_element_count(),
                 f64(tree_bytes) / 1e6,
                 npart,
-                moved,
+                nmoved,
                 t_old * 1e3,
                 t_new * 1e3,
                 t_old / t_new));
@@ -429,7 +375,7 @@ namespace {
         auto &dat = shamtest::test_data().new_dataset(name);
         dat.add_data("t_old", std::vector<f64>{t_old});
         dat.add_data("t_new", std::vector<f64>{t_new});
-        dat.add_data("moved", std::vector<f64>{f64(moved)});
+        dat.add_data("moved", std::vector<f64>{f64(nmoved)});
         dat.add_data("patches", std::vector<f64>{f64(leaves.size())});
     }
 
