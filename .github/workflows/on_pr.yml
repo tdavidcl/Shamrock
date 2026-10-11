@@ -14,6 +14,7 @@ jobs:
   # If the PR head commit message contains `[skip-ci]`, skip main_workflow
   # (and the metrics/wait jobs that depend on it). The gates `all` and
   # `all_light` still run and report success in that case.
+  # Ignored on merge-queue branches: full CI is always mandatory there.
   check_skip_ci:
     name: Check [skip-ci]
     runs-on: ubuntu-latest
@@ -28,8 +29,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          # Same expression as main_workflow's is_merge_queue input
+          IS_MERGE_QUEUE: ${{ startsWith(github.head_ref, 'mergify/merge-queue/') || contains(github.head_ref, 'merge-queue') }}
         run: |
           set -euo pipefail
+          if [ "$IS_MERGE_QUEUE" == "true" ]; then
+            echo "Merge-queue branch $HEAD_REF; [skip-ci] is ignored."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           msg="$(gh api "repos/$GH_REPO/commits/$HEAD_SHA" --jq .commit.message)"
           if grep -qF '[skip-ci]' <<<"$msg"; then
             echo "Head commit $HEAD_SHA contains [skip-ci]; skipping CI."
