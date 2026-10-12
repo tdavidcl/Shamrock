@@ -204,13 +204,41 @@ namespace {
 
         REQUIRE_EQUAL(leaf_nodes.size(), leaves.size());
 
+        // AdaptiveCpp compiles with -ffp-contract=fast, and whether a fma is used is decided per
+        // call site (and depends on the target cpu). Hence a patch box computed with the patch to
+        // object coordinates transform (coord * fact + domain.lower) can differ in f32 from the box
+        // of its leaf in the tree by the rounding error of the transform (a fma rounds once
+        // instead of twice), and the boxes of neighbouring leaves can overlap by that much.
+        using Tscal = shambase::VecComponent<Tvec>;
+        Tvec tol;
+        for (u32 a = 0; a < 3; a++) {
+            tol[a] = std::numeric_limits<Tscal>::epsilon()
+                     * (domain.upper[a] - domain.lower[a]
+                        + sycl::fmax(sycl::fabs(domain.lower[a]), sycl::fabs(domain.upper[a])));
+        }
+        auto vec_near = [&](Tvec a, Tvec b) {
+            return sycl::fabs(a.x() - b.x()) <= tol.x() && sycl::fabs(a.y() - b.y()) <= tol.y()
+                   && sycl::fabs(a.z() - b.z()) <= tol.z();
+        };
+
+        // the box of each patch must match the box of its leaf in the serial tree
         u32 box_mismatch = 0;
+        u32 box_inexact  = 0;
         for (Patch &p : leaves) {
             auto box  = transform.to_obj_coord(p);
             PtNode &n = leaf_nodes.at(p.id_patch);
-            if (!vec_bit_equal(box.lower, n.box_min) || !vec_bit_equal(box.upper, n.box_max)) {
+            if (!vec_near(box.lower, n.box_min) || !vec_near(box.upper, n.box_max)) {
                 box_mismatch++;
+            } else if (
+                !vec_bit_equal(box.lower, n.box_min) || !vec_bit_equal(box.upper, n.box_max)) {
+                box_inexact++;
             }
+        }
+        if (box_inexact > 0) {
+            shamlog_debug_ln(
+                "SerialPatchTreeTests",
+                "patch boxes not bit-identical to their leaf box (rounding of the transform) :",
+                box_inexact);
         }
         REQUIRE_EQUAL(box_mismatch, 0);
 
@@ -230,23 +258,10 @@ namespace {
             return Patch::is_in_patch_converted(p, n.box_min, n.box_max);
         };
 
-        // same but with the box of the leaf extended by the rounding error of the patch to object
-        // coordinates transform (coord * fact + domain.lower), with or without a fma
+        // same but with the box of the leaf extended by the rounding error of the transform
         auto in_patch_rounding = [&](Tvec p, u64 id) {
-            using Tscal  = shambase::VecComponent<Tvec>;
-            PtNode &n    = leaf_nodes.at(id);
-            Tscal eps    = std::numeric_limits<Tscal>::epsilon();
-            Tvec box_min = n.box_min;
-            Tvec box_max = n.box_max;
-            for (u32 a = 0; a < 3; a++) {
-                Tscal tol
-                    = eps
-                      * (domain.upper[a] - domain.lower[a]
-                         + sycl::fmax(sycl::fabs(domain.lower[a]), sycl::fabs(domain.upper[a])));
-                box_min[a] -= tol;
-                box_max[a] += tol;
-            }
-            return Patch::is_in_patch_converted(p, box_min, box_max);
+            PtNode &n = leaf_nodes.at(id);
+            return Patch::is_in_patch_converted(p, n.box_min - tol, n.box_max + tol);
         };
 
         for (u32 ip = 0; ip < n_test_patches; ip++) {
@@ -274,14 +289,12 @@ namespace {
                 if (in && res[i] != cur_p.id_patch) {
                     not_kept++;
                 }
-                // AdaptiveCpp compiles with -ffp-contract=fast, and whether a fma is used is
-                // decided per call site. Hence the current patch box computed here (as in
-                // ReattributeDataUtility::compute_new_pid) can differ in f32 from the box of its
-                // leaf in the tree by the rounding error of the transform (a fma rounds once
-                // instead of twice), and the boxes of neighbouring leaves can themselves overlap by
-                // that much. An object kept by the early return can then be up to that rounding
-                // error outside of the tree box of its patch, and in an overlap the tree search
-                // returns the first leaf containing the object instead of the current patch.
+                // As the current patch box computed here (as in
+                // ReattributeDataUtility::compute_new_pid) can differ from its tree box by the
+                // rounding error of the transform, an object kept by the early return can be up to
+                // that rounding error outside of the tree box of its patch, and in an overlap of
+                // boxes the tree search returns the first leaf containing the object instead of the
+                // current patch.
 
                 // an owner from the tree search must always contain the object
                 if (ref[i] != u64_max && !in_patch(pos[i], ref[i])) {
