@@ -286,6 +286,10 @@ sycl::buffer<u64> SerialPatchTree<vec>::compute_patch_owner(
         u32 root_cnt = roots_id.size();
         auto max_lev = get_level_count();
 
+        u64 cur_pid     = current_patch_id;
+        vec cur_box_min = current_patch_min;
+        vec cur_box_max = current_patch_max;
+
         using PtNode = shamrock::scheduler::SerialPatchNode<vec>;
 
         cgh.parallel_for(sycl::range(len), [=](sycl::item<1> item) {
@@ -294,9 +298,8 @@ sycl::buffer<u64> SerialPatchTree<vec>::compute_patch_owner(
             auto xyz = pos[i];
 
             // the object is still in its current patch, skip the tree traversal
-            if (current_patch_id != u64_max
-                && Patch::is_in_patch_converted(xyz, current_patch_min, current_patch_max)) {
-                new_id[i] = current_patch_id;
+            if (cur_pid != u64_max && Patch::is_in_patch_converted(xyz, cur_box_min, cur_box_max)) {
+                new_id[i] = cur_pid;
                 return;
             }
 
