@@ -16,197 +16,68 @@
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamsys/legacy/log.hpp"
 
-using PatchTree = shamrock::scheduler::PatchTree;
-
 template<class vec>
-void get_serial_tree(
-    u64 root_key,
-    PatchTree &ptree,
-    std::vector<shamrock::scheduler::SerialPatchNode<vec>> &result_tree,
-    std::vector<u64> &result_tree_linked_patch_id,
-    u64 &counter,
-    u32 &max_level,
-    const shamrock::patch::PatchCoordTransform<vec> box_transform) {
+void SerialPatchTree<vec>::build_from_patch_tree(
+    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<vec> box_transform) {
 
-    PatchTree::Node ptn = ptree.tree[root_key];
+    using Node = PatchTree::Node;
 
-    using PtNode = shamrock::scheduler::SerialPatchNode<vec>;
-    PtNode n     = ptn.convert(box_transform);
+    // A node still to be visited, and the slot of its parent's childs_id that will receive its
+    // serial index (no parent for a root)
+    struct PendingNode {
+        Node *node;
+        u64 parent_idx;
+        u32 child_slot;
+    };
 
-    max_level = sycl::max((u32) ptn.tree_node.level, max_level);
+    serial_tree.reserve(ptree.tree.size());
+    linked_patch_ids.reserve(ptree.tree.size());
 
-    u64 id_nvec = counter;
-    result_tree.push_back(n);
-    result_tree_linked_patch_id.push_back(ptn.linked_patchid);
-    counter++;
+    std::vector<PendingNode> stack;
 
-    // std::cout << "id : " << counter-1 << " leaf : " << ptn.is_leaf << std::endl;
-
-    if (!ptn.is_leaf()) {
-
-        u64 old_id0 = ptn.get_child_nid(0);
-        u64 old_id1 = ptn.get_child_nid(1);
-        u64 old_id2 = ptn.get_child_nid(2);
-        u64 old_id3 = ptn.get_child_nid(3);
-        u64 old_id4 = ptn.get_child_nid(4);
-        u64 old_id5 = ptn.get_child_nid(5);
-        u64 old_id6 = ptn.get_child_nid(6);
-        u64 old_id7 = ptn.get_child_nid(7);
-
-        result_tree.at(id_nvec).childs_id[0] = counter;
-        get_serial_tree<vec>(
-            old_id0,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[1] = counter;
-        get_serial_tree<vec>(
-            old_id1,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[2] = counter;
-        get_serial_tree<vec>(
-            old_id2,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[3] = counter;
-        get_serial_tree<vec>(
-            old_id3,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[4] = counter;
-        get_serial_tree<vec>(
-            old_id4,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[5] = counter;
-        get_serial_tree<vec>(
-            old_id5,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[6] = counter;
-        get_serial_tree<vec>(
-            old_id6,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[7] = counter;
-        get_serial_tree<vec>(
-            old_id7,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-    }
-}
-
-template void get_serial_tree(
-    u64 root_key,
-    PatchTree &ptree,
-    std::vector<shamrock::scheduler::SerialPatchNode<f32_3>> &result_tree,
-    std::vector<u64> &result_tree_linked_patch_id,
-    u64 &counter,
-    u32 &max_level,
-    const shamrock::patch::PatchCoordTransform<f32_3> box_transform);
-template void get_serial_tree(
-    u64 root_key,
-    PatchTree &ptree,
-    std::vector<shamrock::scheduler::SerialPatchNode<f64_3>> &result_tree,
-    std::vector<u64> &result_tree_linked_patch_id,
-    u64 &counter,
-    u32 &max_level,
-    const shamrock::patch::PatchCoordTransform<f64_3> box_transform);
-
-template void get_serial_tree(
-    u64 root_key,
-    PatchTree &ptree,
-    std::vector<shamrock::scheduler::SerialPatchNode<i64_3>> &result_tree,
-    std::vector<u64> &result_tree_linked_patch_id,
-    u64 &counter,
-    u32 &max_level,
-    const shamrock::patch::PatchCoordTransform<i64_3> box_transform);
-
-template<>
-void SerialPatchTree<f32_3>::build_from_patch_tree(
-    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<f32_3> box_transform) {
-
-    u64 cnt     = 0;
     level_count = 0;
+
+    // Iterative depth first traversal, children visited in order: the serial index of a node is
+    // its rank in the pre-order traversal of the tree
     for (u64 root_id : ptree.roots_id) {
         root_count++;
-        roots_ids.push_back(cnt);
-        shamlog_debug_ln("Serial Patch Tree", "get serial tree fp32 root id :", root_id);
-        get_serial_tree<f32_3>(
-            root_id, ptree, serial_tree, linked_patch_ids, cnt, level_count, box_transform);
+        roots_ids.push_back(serial_tree.size());
+
+        stack.push_back({&ptree.tree.at(root_id), u64_max, 0});
+
+        while (!stack.empty()) {
+            PendingNode cur = stack.back();
+            stack.pop_back();
+
+            u64 idx = serial_tree.size();
+            if (cur.parent_idx != u64_max) {
+                serial_tree[cur.parent_idx].childs_id[cur.child_slot] = idx;
+            }
+
+            Node &ptn = *cur.node;
+
+            level_count = sycl::max((u32) ptn.tree_node.level, level_count);
+
+            serial_tree.push_back(ptn.convert(box_transform));
+            linked_patch_ids.push_back(ptn.linked_patchid);
+
+            if (!ptn.is_leaf()) {
+                // the 8 lookups are independent, resolving them together lets their memory
+                // accesses overlap. Pushed in reverse so that child 0 is visited first.
+                for (u32 i = Node::split_count; i-- > 0;) {
+                    stack.push_back({&ptree.tree.at(ptn.get_child_nid(i)), idx, i});
+                }
+            }
+        }
     }
 
     shamlog_debug_ln("Serial Patch Tree", "tree cell count = ", serial_tree.size());
     shamlog_debug_ln("Serial Patch Tree", "level_count =", level_count);
 }
 
-template<>
-void SerialPatchTree<f64_3>::build_from_patch_tree(
-    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<f64_3> box_transform) {
-
-    u64 cnt     = 0;
-    level_count = 0;
-    for (u64 root_id : ptree.roots_id) {
-        root_count++;
-        roots_ids.push_back(cnt);
-        get_serial_tree<f64_3>(
-            root_id, ptree, serial_tree, linked_patch_ids, cnt, level_count, box_transform);
-    }
-    shamlog_debug_ln("Serial Patch Tree", "tree cell count = ", serial_tree.size());
-    shamlog_debug_ln("Serial Patch Tree", "level_count =", level_count);
-}
-
-template<>
-void SerialPatchTree<i64_3>::build_from_patch_tree(
-    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<i64_3> box_transform) {
-
-    u64 cnt     = 0;
-    level_count = 0;
-    for (u64 root_id : ptree.roots_id) {
-        root_count++;
-        roots_ids.push_back(cnt);
-        get_serial_tree<i64_3>(
-            root_id, ptree, serial_tree, linked_patch_ids, cnt, level_count, box_transform);
-    }
-    shamlog_debug_ln("Serial Patch Tree", "tree cell count = ", serial_tree.size());
-    shamlog_debug_ln("Serial Patch Tree", "level_count =", level_count);
-}
+template void SerialPatchTree<f32_3>::build_from_patch_tree(
+    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<f32_3> box_transform);
+template void SerialPatchTree<f64_3>::build_from_patch_tree(
+    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<f64_3> box_transform);
+template void SerialPatchTree<i64_3>::build_from_patch_tree(
+    PatchTree &ptree, const shamrock::patch::PatchCoordTransform<i64_3> box_transform);
