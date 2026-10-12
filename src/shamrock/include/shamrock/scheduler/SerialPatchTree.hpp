@@ -28,8 +28,40 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include <array>
+#include <memory>
 #include <tuple>
+#include <utility>
 #include <vector>
+
+namespace shamrock::scheduler::details {
+
+    /**
+     * @brief std::allocator whose value-initialization is a no-op, so that resize() leaves the
+     * elements unconstructed. They must then be constructed with placement new, which lets a
+     * vector be first touched, and so filled, in parallel.
+     */
+    template<class T>
+    struct NoInitAllocator : std::allocator<T> {
+        template<class U>
+        struct rebind {
+            using other = NoInitAllocator<U>;
+        };
+
+        NoInitAllocator() = default;
+
+        template<class U>
+        NoInitAllocator(const NoInitAllocator<U> &) noexcept {}
+
+        template<class U>
+        void construct(U *) noexcept {}
+
+        template<class U, class... Args>
+        void construct(U *p, Args &&...args) {
+            ::new (static_cast<void *>(p)) U(std::forward<Args>(args)...);
+        }
+    };
+
+} // namespace shamrock::scheduler::details
 
 template<class fp_prec_vec>
 class SerialPatchTree {
@@ -37,6 +69,9 @@ class SerialPatchTree {
     using PtNode = shamrock::scheduler::SerialPatchNode<fp_prec_vec>;
 
     using PatchTree = shamrock::scheduler::PatchTree;
+
+    template<class T>
+    using NoInitVector = std::vector<T, shamrock::scheduler::details::NoInitAllocator<T>>;
 
     // TODO use unique pointer instead
     u32 root_count = 0;
@@ -72,12 +107,18 @@ class SerialPatchTree {
     private:
     u32 level_count = 0;
 
-    std::vector<PtNode> serial_tree;
-    std::vector<u64> linked_patch_ids;
+    NoInitVector<PtNode> serial_tree;
+    NoInitVector<u64> linked_patch_ids;
     std::vector<u64> roots_ids;
 
     void build_from_patch_tree(
         PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform);
+    void build_from_patch_tree_serial(
+        PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform);
+    void build_from_patch_tree_parallel(
+        PatchTree &ptree,
+        const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform,
+        u32 thread_count);
 
     public:
     inline void print_status() {
@@ -170,10 +211,10 @@ class SerialPatchTree {
     inline u32 get_element_count() { return serial_tree.size(); }
 
     /// Nodes of the tree, in depth first pre-order
-    inline const std::vector<PtNode> &get_nodes() const { return serial_tree; }
+    inline const NoInitVector<PtNode> &get_nodes() const { return serial_tree; }
 
     /// Patch id linked to each node (u64_max for internal nodes)
-    inline const std::vector<u64> &get_linked_patch_ids() const { return linked_patch_ids; }
+    inline const NoInitVector<u64> &get_linked_patch_ids() const { return linked_patch_ids; }
 
     /// Index of each root node in the tree
     inline const std::vector<u64> &get_roots_ids() const { return roots_ids; }

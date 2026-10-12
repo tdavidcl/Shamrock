@@ -11,9 +11,14 @@
 #include "shamrock/scheduler/PatchTree.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamtest/shamtest.hpp"
+#include <algorithm>
 #include <cstring>
 #include <random>
 #include <vector>
+
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 using namespace shamrock::scheduler;
 using namespace shamrock::patch;
@@ -84,9 +89,8 @@ namespace {
         return true;
     }
 
-    template<class Tvec>
-    bool same_nodes(
-        const std::vector<SerialPatchNode<Tvec>> &a, const std::vector<SerialPatchNode<Tvec>> &b) {
+    template<class Ta, class Tb>
+    bool same_nodes(const Ta &a, const Tb &b) {
         if (a.size() != b.size()) {
             return false;
         }
@@ -107,13 +111,19 @@ namespace {
         REQUIRE_EQUAL(sptree.get_element_count(), ref.nodes.size());
         REQUIRE_EQUAL(ref.nodes.size(), ptree.tree.size());
         REQUIRE_NAMED("serial tree nodes", same_nodes(sptree.get_nodes(), ref.nodes));
-        REQUIRE_NAMED("linked patch ids", sptree.get_linked_patch_ids() == ref.linked_patch_ids);
+        REQUIRE_NAMED(
+            "linked patch ids",
+            std::equal(
+                sptree.get_linked_patch_ids().begin(),
+                sptree.get_linked_patch_ids().end(),
+                ref.linked_patch_ids.begin(),
+                ref.linked_patch_ids.end()));
         REQUIRE_NAMED("roots ids", sptree.get_roots_ids() == ref.roots_ids);
         REQUIRE_EQUAL(sptree.root_count, ref.roots_ids.size());
         REQUIRE_EQUAL(sptree.get_level_count(), ref.level_count);
     }
 
-    void check_all_types(PatchTree &ptree) {
+    void check_all_types_impl(PatchTree &ptree) {
         check_against_ref<f64_3>(
             ptree,
             PatchCoordTransform<f64_3>(
@@ -133,6 +143,20 @@ namespace {
                 {{-half, -half, -half}, {half, half, half}}));
     }
 
+    /// Check with one thread (serial build) and with several (parallel build for large trees)
+    void check_all_types(PatchTree &ptree) {
+#ifdef _OPENMP
+        int old_thread_count = omp_get_max_threads();
+        for (int thread_count : {1, 4}) {
+            omp_set_num_threads(thread_count);
+            check_all_types_impl(ptree);
+        }
+        omp_set_num_threads(old_thread_count);
+#else
+        check_all_types_impl(ptree);
+#endif
+    }
+
     /// Give every leaf a patch id and every internal node u64_max
     void link_leafs(PatchTree &ptree) {
         u64 pid = 0;
@@ -144,7 +168,7 @@ namespace {
 } // namespace
 
 NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:uniform", 1) {
-    for (u32 level = 1; level <= 4; level++) {
+    for (u32 level = 1; level <= 6; level++) {
         PatchTree ptree;
         ptree.insert_root_node(0, PatchCoord<3>({0, 0, 0}, {max_coord, max_coord, max_coord}));
         for (u32 l = 0; l < level; l++) {
@@ -179,7 +203,7 @@ NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:irregular", 1) {
     }
 
     std::mt19937 eng(0x5e7a1);
-    for (u32 round = 0; round < 4; round++) {
+    for (u32 round = 0; round < 7; round++) {
         std::vector<u64> leafs(ptree.leaf_key.begin(), ptree.leaf_key.end());
         std::sort(leafs.begin(), leafs.end());
         for (u64 id : leafs) {
@@ -199,5 +223,7 @@ NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:irregular", 1) {
     link_leafs(ptree);
 
     REQUIRE(ptree.roots_id.size() == 24);
+    // large enough for the parallel build
+    REQUIRE(ptree.tree.size() > (1 << 17));
     check_all_types(ptree);
 }
