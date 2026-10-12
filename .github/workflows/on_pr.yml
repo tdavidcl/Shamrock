@@ -11,37 +11,46 @@ concurrency:
 
 jobs:
 
-  # If the PR head commit message contains `[skip-ci]`, skip main_workflow
-  # (and the metrics/wait jobs that depend on it). The gates `all` and
-  # `all_light` still run and report success in that case.
-  # Ignored on merge-queue branches: full CI is always mandatory there.
+  # If every commit of the PR has `[skip-ci]` in its message, skip
+  # main_workflow (and the metrics/wait jobs that depend on it). The gates
+  # `all` and `all_light` still run and report success in that case.
+  # A single commit without `[skip-ci]` is enough to run CI, so a regular PR
+  # cannot skip it by only tagging its last commit. This also applies to
+  # merge-queue branches: a queue flush made only of an empty `[skip-ci]`
+  # commit skips CI, while a queued PR with real commits still runs it.
   check_skip_ci:
     name: Check [skip-ci]
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - name: Read head commit message
+      - name: Read PR commit messages
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_REF: ${{ github.head_ref }}
-          # Same expression as main_workflow's is_merge_queue input
-          IS_MERGE_QUEUE: ${{ startsWith(github.head_ref, 'mergify/merge-queue/') || contains(github.head_ref, 'merge-queue') }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_COUNT: ${{ github.event.pull_request.commits }}
         run: |
           set -euo pipefail
-          if [ "$IS_MERGE_QUEUE" == "true" ]; then
-            echo "Merge-queue branch $HEAD_REF; [skip-ci] is ignored."
+          # The PR commits endpoint returns at most 250 commits; past that we
+          # cannot see them all, so never skip.
+          if [ "$COMMIT_COUNT" -eq 0 ] || [ "$COMMIT_COUNT" -ge 250 ]; then
+            echo "PR has $COMMIT_COUNT commits; not skipping CI."
             echo "skip=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          msg="$(gh api "repos/$GH_REPO/commits/$HEAD_SHA" --jq .commit.message)"
-          if grep -qF '[skip-ci]' <<<"$msg"; then
-            echo "Head commit $HEAD_SHA contains [skip-ci]; skipping CI."
+          # One line per commit: "true" if its message contains [skip-ci]
+          flags="$(gh api --paginate "repos/$GH_REPO/pulls/$PR_NUMBER/commits?per_page=100" \
+            --jq '.[] | .commit.message | contains("[skip-ci]")')"
+          total="$(grep -c . <<<"$flags" || true)"
+          tagged="$(grep -cx true <<<"$flags" || true)"
+          echo "$tagged/$total commits contain [skip-ci]."
+          if [ "$total" -eq "$COMMIT_COUNT" ] && [ "$tagged" -eq "$total" ]; then
+            echo "All PR commits contain [skip-ci]; skipping CI."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -163,7 +172,7 @@ jobs:
   # Mergify merge gate (merge_conditions: check-success = all). Runs only when
   # full CI ran (`full-ci` label or Mergify merge-queue branch). Other PRs use
   # all_light for queue entry instead.
-  # If check_skip_ci found `[skip-ci]` in the head commit, both gates report
+  # If check_skip_ci found `[skip-ci]` in every PR commit, both gates report
   # success without checking the (skipped) CI jobs.
   #
   # needs.main_workflow.result / needs.upload_metrics_history.result can be:
@@ -188,7 +197,7 @@ jobs:
           exit 1
         fi
         if [ "${{ needs.check_skip_ci.outputs.skip }}" == "true" ]; then
-          echo "CI skipped: head commit contains [skip-ci]."
+          echo "CI skipped: all PR commits contain [skip-ci]."
           exit 0
         fi
         if [ "${{ needs.main_workflow.result }}" != "success" ]; then
@@ -216,7 +225,7 @@ jobs:
           exit 1
         fi
         if [ "${{ needs.check_skip_ci.outputs.skip }}" == "true" ]; then
-          echo "CI skipped: head commit contains [skip-ci]."
+          echo "CI skipped: all PR commits contain [skip-ci]."
           exit 0
         fi
         if [ "${{ needs.main_workflow.result }}" != "success" ]; then
