@@ -16,6 +16,49 @@
 #include "shamrock/scheduler/SerialPatchTree.hpp"
 #include "shamsys/legacy/log.hpp"
 
+/*
+ * This file implements a faster version of the following algorithm (commit 3ff163a25), which
+ * builds the serial tree with a serial iterative pre-order traversal, run once per root, where each
+ * node is converted as soon as it is visited and its id written back in the childs_id of its
+ * parent.
+ *
+ *     struct TraversalItem {
+ *         u64 key;        // key of the node in ptree.tree
+ *         u64 parent_id;  // id of its parent in the serial tree (u64_max for a root)
+ *         u32 child_slot; // which child of the parent it is
+ *     };
+ *
+ *     std::vector<TraversalItem> stack{{root_key, u64_max, 0}};
+ *     while (!stack.empty()) {
+ *         TraversalItem cur = stack.back();
+ *         stack.pop_back();
+ *
+ *         const PatchTree::Node &ptn = ptree.tree.at(cur.key);
+ *
+ *         u64 id = counter++;
+ *         if (cur.parent_id != u64_max) {
+ *             serial_tree[cur.parent_id].childs_id[cur.child_slot] = id;
+ *         }
+ *
+ *         max_level = sycl::max(ptn.tree_node.level, max_level);
+ *         serial_tree.push_back(ptn.convert(box_transform));
+ *         linked_patch_ids.push_back(ptn.linked_patchid);
+ *
+ *         if (!ptn.tree_node.is_leaf) {
+ *             for (u32 i = 8; i-- > 0;) { // reversed so that child 0 is visited first
+ *                 stack.push_back({ptn.tree_node.childs_nid[i], id, i});
+ *             }
+ *         }
+ *     }
+ *
+ * The two pass version implemented here is equivalent up to the numbering of the nodes : it
+ * produces the same nodes (boxes, linked patch ids, leafs), the same childs in the same order, the
+ * same roots in the same order and the same level count, but numbers the nodes in breadth-first
+ * order instead of pre-order. Every user of the serial tree goes through roots_ids and childs_id,
+ * so the numbering does not matter. The test "shamrock/scheduler/SerialPatchTree:build" checks this
+ * equivalence on random patch trees.
+ */
+
 namespace {
 
     using PatchTree = shamrock::scheduler::PatchTree;
