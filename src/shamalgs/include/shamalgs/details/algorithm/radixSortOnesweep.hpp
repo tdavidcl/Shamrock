@@ -94,15 +94,10 @@ namespace shamalgs::algorithm::details {
         // group_cnt = group_cnt + (group_cnt % 4);
         u32 corrected_len = group_cnt * group_size;
 
-        // memory::print_buf(buf_key, len, 16, "{:4} ");
-
         using Binner = DigitBinner<Tkey, digit_len>;
 
         sycl::buffer<u32> digit_histogram
             = Binner::template make_digit_histogram<group_size>(q, buf_key, len);
-
-        // logger::raw_ln("digit histogram");
-        // memory::print_buf(digit_histogram, Binner::value_count, Binner::digit_count, "{:4} ");
 
         {
 
@@ -116,9 +111,6 @@ namespace shamalgs::algorithm::details {
                     ptr + offset_ptr, ptr + offset_ptr + Binner::digit_count, ptr + offset_ptr, 0);
             }
         }
-
-        // logger::raw_ln("digit histogram");
-        // memory::print_buf(digit_histogram, Binner::value_count, Binner::digit_count, "{:4} ");
 
         using namespace shamalgs::numeric::details;
 
@@ -257,9 +249,6 @@ namespace shamalgs::algorithm::details {
             });
 
             // q.wait();
-
-            // logger::raw_ln("digit histogram place : ", cur_digit_place);
-            // memory::print_buf(get_out_keys(step), len, 16, "{:4} ");
 
             // return;
 

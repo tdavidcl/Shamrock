@@ -21,7 +21,6 @@
 #include "shambase/numeric_limits.hpp"
 #include "shamalgs/details/algorithm/algorithm.hpp"
 #include "shamalgs/details/numeric/exclusiveScanAtomic.hpp"
-#include "shamalgs/details/numeric/exclusiveScanGPUGems39.hpp"
 #include "shamalgs/details/numeric/numericFallback.hpp"
 #include "shamalgs/details/numeric/scanDecoupledLookback.hpp"
 #include "shamalgs/details/numeric/streamCompactExclScan.hpp"

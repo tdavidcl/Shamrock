@@ -77,9 +77,6 @@ namespace shamalgs::algorithm::details {
 
             shamalgs::memory::buf_fill_discard(q, digit_histogram, 0U);
 
-            // logger::raw_ln("digit binning");
-            // memory::print_buf(digit_histogram, value_count, digit_count, "{:4} ");
-
             q.submit([&, len](sycl::handler &cgh) {
                 sycl::accessor keys{buf_key, cgh, sycl::read_only};
                 sycl::accessor histogram{digit_histogram, cgh, sycl::read_write};

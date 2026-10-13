@@ -278,9 +278,6 @@ namespace shamalgs::numeric::details {
         // prepare the return buffer by shifting values for the exclusive sum
         sycl::buffer<T> ret_buf(corrected_len);
 
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
-
         // group aggregates
         sycl::buffer<typename ScanTile<T>::PackStorage> tile_state(group_cnt);
 
@@ -533,7 +530,6 @@ namespace shamalgs::numeric::details {
 
         // group aggregates
         sham::DeviceBuffer<typename ScanTile<T>::PackStorage> tile_state(group_cnt, dev_sched);
-        // sycl::buffer<typename ScanTile<T>::PackStorage> tile_state(group_cnt);
 
         constexpr T STATE_X = 0;
         constexpr T STATE_A = 1;
@@ -655,9 +651,6 @@ namespace shamalgs::numeric::details {
 
         // prepare the return buffer by shifting values for the exclusive sum
         sycl::buffer<T> ret_buf(corrected_len);
-
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
 
         // group aggregates
         sycl::buffer<typename ScanTile<T>::PackStorage> tile_state(group_cnt);
