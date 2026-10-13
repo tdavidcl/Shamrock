@@ -193,6 +193,7 @@ namespace {
     std::string ref_id(const TemplateRef &r) { return std::string("template:") + r.name; }
 
     // clang-format off
+    // NOLINTBEGIN(modernize-use-designated-initializers): positional rows keep the tables readable
 
     /// Every unit of XMAC_UNITS at powers -2, 1, 2, plus a few prefixed ones
     const Ref unit_refs[] = {
@@ -554,6 +555,7 @@ namespace {
         {"constant:kb 2", RefSystem::Astro, 0.0}, // f64: 9.5464675169188722e-98
     };
 
+    // NOLINTEND(modernize-use-designated-initializers)
     // clang-format on
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
