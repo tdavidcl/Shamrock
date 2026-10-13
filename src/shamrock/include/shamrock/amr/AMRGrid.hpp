@@ -560,32 +560,4 @@ namespace shamrock::amr {
         }
     };
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    // out of line implementation
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // template<class Tcoord, u32 dim>
-    // inline auto
-    // AMRGrid<Tcoord, dim>::gen_splitlists(std::function<sycl::buffer<u32>(u64 , patch::Patch ,
-    // patch::PatchData &)> fct) -> shambase::DistributedData<SplitList> {
-    //
-    //    shambase::DistributedData<SplitList> ret;
-    //
-    //    using namespace patch;
-    //
-    //    sched.for_each_patch_data([&](u64 id_patch, Patch cur_p, PatchData &pdat) {
-    //        sycl::queue &q = shamsys::instance::get_compute_queue();
-    //
-    //        u32 obj_cnt = pdat.get_obj_cnt();
-    //
-    //        sycl::buffer<u32> split_flags = fct(id_patch, cur_p, pdat);
-    //
-    //        auto [buf, len] = shamalgs::numeric::stream_compact(q, split_flags, obj_cnt);
-    //
-    //        ret.add_obj(id_patch, SplitList{std::move(buf), len});
-    //    });
-    //
-    //    return std::move(ret);
-    //}
-
 } // namespace shamrock::amr
