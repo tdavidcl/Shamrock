@@ -103,6 +103,12 @@ class SerialPatchTree {
     inline SerialPatchTree(
         PatchTree &ptree, const shamrock::patch::PatchCoordTransform<fp_prec_vec> box_transform) {
         StackEntry stack_loc{};
+
+        // every node of the patch tree is visited exactly once by get_serial_tree
+        serial_tree.reserve(ptree.tree.size());
+        linked_patch_ids.reserve(ptree.tree.size());
+        roots_ids.reserve(ptree.roots_id.size());
+
         build_from_patch_tree(ptree, box_transform);
     }
 
