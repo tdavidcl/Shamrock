@@ -551,17 +551,21 @@ NEW_TEST(Benchmark, "shamrock/scheduler/SerialPatchTree:benchmark", 1) {
         node_counts.push_back(ptree.tree.size());
         t_build.push_back(median(rep_build));
         t_attach_buf.push_back(median(rep_attach_buf));
-
-        logger::info_ln(
-            "ShamrockTest",
-            sham::format(
-                "SerialPatchTree build : patches = {:8} nodes = {:8} build = {:9.3f} ms "
-                "attach_buf = {:.3f} ms",
-                ptree.leaf_key.size(),
-                ptree.tree.size(),
-                t_build.back() * 1e3,
-                t_attach_buf.back() * 1e3));
     }
+
+    std::string out = "SerialPatchTree build :\n";
+
+    for (u32 i = 0; i < patch_counts.size(); i++) {
+        out += sham::format(
+            "patches = {:8} nodes = {:8} build = {:9.3f} ms "
+            "attach_buf = {:.3f} ms\n",
+            patch_counts[i],
+            node_counts[i],
+            t_build[i] * 1e3,
+            t_attach_buf[i] * 1e3);
+    }
+
+    logger::info_ln("ShamrockTest", out);
 
     auto &dataset = shamtest::test_data().new_dataset("SerialPatchTree build");
     dataset.add_data("Npatch", patch_counts);
