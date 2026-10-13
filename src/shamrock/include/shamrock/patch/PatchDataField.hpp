@@ -133,13 +133,6 @@ class PatchDataField {
         check_nvar();
     }
 
-    inline PatchDataField(sycl::buffer<T> &&moved_buf, u32 obj_cnt, std::string name, u32 nvar)
-        : field_name(name), nvar(nvar), buf(std::forward<sycl::buffer<T>>(moved_buf),
-                                            obj_cnt * nvar,
-                                            shamsys::instance::get_compute_scheduler_ptr()) {
-        check_nvar();
-    }
-
     PatchDataField &operator=(const PatchDataField &other) = delete;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
