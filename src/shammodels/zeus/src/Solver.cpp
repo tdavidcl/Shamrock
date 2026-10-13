@@ -332,60 +332,6 @@ auto shammodels::zeus::Solver<Tvec, TgridVec>::evolve_once(Tscal t_current, Tsca
         });
     }
 
-    /*
-    using namespace shamrock::patch;
-    using namespace shamrock;
-    using Block = typename Config::AMRBlock;
-    scheduler().for_each_patchdata_nonempty([&](Patch p, PatchData &pdat) {
-
-        using MergedPDat = shamrock::MergedPatchData;
-        MergedPDat &mpdat = storage.merged_patchdata_ghost.get().get(p.id_patch);
-
-        sycl::buffer<Tscal> &rho_merged = mpdat.pdat.get_field_buf_ref<Tscal>(irho_interf);
-        sycl::buffer<Tscal> &eint_merged = mpdat.pdat.get_field_buf_ref<Tscal>(ieint_interf);
-        sycl::buffer<Tvec> &vel_merged = mpdat.pdat.get_field_buf_ref<Tvec>(ivel_interf);
-
-        PatchData &patch_dest = scheduler().patch_data.get_pdat(p.id_patch);
-        sycl::buffer<Tscal> &rho_dest = patch_dest.get_field_buf_ref<Tscal>(irho_interf);
-        sycl::buffer<Tscal> &eint_dest = patch_dest.get_field_buf_ref<Tscal>(ieint_interf);
-        sycl::buffer<Tvec> &vel_dest = patch_dest.get_field_buf_ref<Tvec>(ivel_interf);
-
-
-        sycl::buffer<Tvec> &forces_buf = storage.vel_n_xp.get().get_buf_check(p.id_patch);
-        //sycl::buffer<Tscal> & tmp = storage.pres_n_xm.get().get_buf_check(p.id_patch);
-        //sycl::buffer<sycl::vec<Tscal, 8>> & Q_tmp = storage.Q.get().get_buf_check(p.id_patch);
-        sycl::buffer<Tscal> &buf_p   = pressure_field.get_buf_check(p.id_patch);
-
-        shamsys::instance::get_compute_queue().submit([&](sycl::handler & cgh){
-
-            sycl::accessor acc_rho_src{buf_p, cgh, sycl::read_only};
-            sycl::accessor acc_eint_src{eint_merged, cgh, sycl::read_only};
-            sycl::accessor acc_vel_src{vel_merged, cgh, sycl::read_only};
-            sycl::accessor acc_vel_src_xp{forces_buf, cgh, sycl::read_only};
-            //sycl::accessor Q{Q_tmp, cgh, sycl::read_only};
-
-            sycl::accessor acc_rho_dest{rho_dest, cgh, sycl::write_only};
-            sycl::accessor acc_eint_dest{eint_dest, cgh, sycl::write_only};
-            sycl::accessor acc_vel_dest{vel_dest, cgh, sycl::write_only};
-
-            shambase::parallel_for(cgh, mpdat.original_elements*Block::block_size, "tmp copy_ack",
-    [=](u32 id){
-                //acc_rho_dest[id] = acc_rho_src[id];
-                acc_eint_dest[id] = acc_vel_src_xp[id].x();
-                acc_vel_dest[id] = acc_vel_src[id];
-            });
-        });
-
-        if (mpdat.pdat.has_nan()) {
-            logger::err_ln("[Zeus]", "nan detected in write back");
-            throw shambase::make_except_with_loc<std::runtime_error>("detected nan");
-        }
-
-    });
-
-    return 0;
-    */
-
     modules::TransportStep transport(context, solver_config, storage);
     transport.compute_cell_centered_momentas();
 

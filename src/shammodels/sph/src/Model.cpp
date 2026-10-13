@@ -541,7 +541,6 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_hcp_3d(
                     u32 len = vec_acc.size();
                     PatchDataField<Tvec> &f
                         = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
-                    // sycl::buffer<Tvec> buf(vec_acc.data(), len);
                     f.override(vec_acc, len);
                 }
 
@@ -624,7 +623,6 @@ void shammodels::sph::Model<Tvec, SPHKernel>::add_cube_hcp_3d_v2(
             u32 len = pos_data.size();
             PatchDataField<Tvec> &f
                 = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
-            // sycl::buffer<Tvec> buf(pos_data.data(), len);
             f.override(pos_data, len);
         }
 
