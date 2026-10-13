@@ -10,7 +10,7 @@
 #pragma once
 
 /**
- * @file ConsToPrimGas.hpp
+ * @file ConsToPrimGasAdiabatic.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief Field variant object to instanciate a variant on the patch types
  * @date 2023-07-31
@@ -34,19 +34,20 @@
 
 namespace shammodels::basegodunov::modules {
     template<class Tvec>
-    class NodeConsToPrimGas : public shamrock::solvergraph::INode {
+    class NodeConsToPrimGasAdiabatic : public shamrock::solvergraph::INode {
         using Tscal = shambase::VecComponent<Tvec>;
         u32 block_size;
         Tscal gamma;
 
         public:
-        NodeConsToPrimGas(u32 block_size, Tscal gamma) : block_size(block_size), gamma(gamma) {}
+        NodeConsToPrimGasAdiabatic(u32 block_size, Tscal gamma)
+            : block_size(block_size), gamma(gamma) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
         void _impl_evaluate_internal();
 
-        inline virtual std::string _impl_get_label() const { return "ConsToPrimGas"; };
+        inline virtual std::string _impl_get_label() const { return "ConsToPrimGasAdiabatic"; };
 
         virtual std::string _impl_get_tex() const;
     };

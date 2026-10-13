@@ -42,6 +42,18 @@ namespace shammodels::sph {
             f64 cs0, q, r0;
             phdump::eos3_load(phdump, cs0, q, r0);
             cfg.set_locally_isothermalLP07(cs0, q, r0);
+        } else if (ieos == 6) {
+            f64 cs0, q, r0;
+            i32 isink;
+            phdump::eos6_load(phdump, cs0, q, r0, isink);
+            // TODO: implement a locally isothermal eos centred on a sink in shamrock
+            logger::warn_ln(
+                "SPH",
+                "phantom ieos=6 (locally isothermal centred on sink",
+                isink,
+                ") is not implemented in shamrock, falling back to ieos=3 (locally isothermal "
+                "centred on the origin). This is only correct if the sink stays at the origin.");
+            cfg.set_locally_isothermalLP07(cs0, q, r0);
         } else if (ieos == 13) {
             f64 cs0, q, r0;
             phdump::eos13_load(phdump, cs0, q, r0);
