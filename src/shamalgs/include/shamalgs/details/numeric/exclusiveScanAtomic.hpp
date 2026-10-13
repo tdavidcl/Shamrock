@@ -46,9 +46,6 @@ namespace shamalgs::numeric::details {
             });
         });
 
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
-
         atomic::DynamicIdGenerator<i32, group_size> id_gen(q);
 
         atomic::DeviceCounter<i32> device_count(q);
@@ -154,9 +151,6 @@ namespace shamalgs::numeric::details {
                 acc_out[id] = (thid > 0) ? acc_in[thid - 1] : 0;
             });
         });
-
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
 
         // group aggregates
         sycl::buffer<T> aggregates(group_cnt);
@@ -276,9 +270,6 @@ namespace shamalgs::numeric::details {
                 acc_out[id] = (thid > 0) ? acc_in[thid - 1] : 0;
             });
         });
-
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
 
         // group aggregates
         sycl::buffer<i32> tile_state(group_cnt);
@@ -423,9 +414,6 @@ namespace shamalgs::numeric::details {
             });
         });
 
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
-
         // group aggregates
         sycl::buffer<u64> tile_state(group_cnt);
 
@@ -560,9 +548,6 @@ namespace shamalgs::numeric::details {
                 acc_out[id] = (thid > 0) ? acc_in[thid - 1] : 0;
             });
         });
-
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
 
         // group aggregates
         sycl::buffer<u64> tile_state(group_cnt);
@@ -701,9 +686,6 @@ namespace shamalgs::numeric::details {
             });
         });
 
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
-
         // group aggregates
         sycl::buffer<u64> tile_state(group_cnt);
 
@@ -826,9 +808,6 @@ namespace shamalgs::numeric::details {
                 acc_out[id] = (thid > 0 && thid < len) ? acc_in[thid - 1] : 0;
             });
         });
-
-        // logger::raw_ln("shifted : ");
-        // shamalgs::memory::print_buf(ret_buf, len, 16,"{:4} ");
 
         // group aggregates
         sycl::buffer<u64> tile_state(group_cnt);
