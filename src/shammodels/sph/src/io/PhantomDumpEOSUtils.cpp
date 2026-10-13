@@ -234,6 +234,31 @@ namespace shammodels::sph::phdump {
         r0  = 1; // phantom's polyk is cs^2 at r = 1, so cs0 = sqrt(polyk) with r0 = 1
     }
 
+    /*
+    case(6)
+    !
+    !--Locally isothermal disc centred on sink particle
+    !
+    !  As in ieos=3 but in this version radius is taken with respect to a designated
+    !  sink particle (by default the first sink particle in the simulation)
+    !
+    ponrhoi  = polyk*((xi-xyzmh_ptmass(1,isink))**2 + (yi-xyzmh_ptmass(2,isink))**2 + &
+                      (zi-xyzmh_ptmass(3,isink))**2)**(-qfacdisc)
+    ponrhoi = max(ponrhoi, cs_min*cs_min)
+    spsoundi = sqrt(ponrhoi)
+    tempi = temperature_coef*mui*ponrhoi
+    */
+
+    void eos6_load(const PhantomDump &dump, f64 &cs0, f64 &q, f64 &r0, i32 &isink) {
+        assert_ieos_val(dump, 6);
+        EOSPhConfig eos = read_headeropts_eos(dump, 6);
+
+        cs0   = sycl::sqrt(eos.polyk);
+        q     = eos.qfacdisc;
+        r0    = 1; // phantom's polyk is cs^2 at r = 1, so cs0 = sqrt(polyk) with r0 = 1
+        isink = eos.isink;
+    }
+
     void eos3_write(PhantomDump &dump, const f64 &cs0, const f64 &q, const f64 &r0) {
         EOSPhConfig eos;
 
