@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------//
 
+#include "shambase/time.hpp"
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
 #include "shamrock/scheduler/PatchTree.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cstring>
 #include <random>
+#include <string>
 #include <vector>
 
 #ifdef _OPENMP
@@ -165,10 +167,8 @@ namespace {
         }
     }
 
-} // namespace
-
-NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:uniform", 1) {
-    for (u32 level = 1; level <= 6; level++) {
+    /// Uniform octree: a single root split `level` times
+    PatchTree make_uniform_tree(u32 level) {
         PatchTree ptree;
         ptree.insert_root_node(0, PatchCoord<3>({0, 0, 0}, {max_coord, max_coord, max_coord}));
         for (u32 l = 0; l < level; l++) {
@@ -178,6 +178,72 @@ NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:uniform", 1) {
             }
         }
         link_leafs(ptree);
+        return ptree;
+    }
+
+    f64 median(std::vector<f64> v) {
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+    }
+
+    /// Median time of the SerialPatchTree<f64_3> build and of attach_buf, as done every step by
+    /// the solvers, on uniform octrees up to 2M patches
+    void bench_sptree_build(const std::string &dataset_name) {
+        constexpr u32 rep_count = 7;
+
+        PatchCoordTransform<f64_3> transform(
+            {{0, 0, 0}, {max_coord + 1, max_coord + 1, max_coord + 1}},
+            {{-0.6, -0.6, -0.6}, {0.6, 0.6, 0.6}});
+
+        std::vector<f64> patch_counts, node_counts, t_build, t_attach_buf;
+
+        for (u32 level = 1; level <= 7; level++) {
+            PatchTree ptree = make_uniform_tree(level);
+
+            std::vector<f64> rep_build, rep_attach_buf;
+            for (u32 rep = 0; rep < rep_count; rep++) {
+                shambase::Timer timer_build;
+                timer_build.start();
+                SerialPatchTree<f64_3> sptree(ptree, transform);
+                timer_build.stop();
+
+                shambase::Timer timer_attach_buf;
+                timer_attach_buf.start();
+                sptree.attach_buf();
+                timer_attach_buf.stop();
+
+                rep_build.push_back(timer_build.elapsed_sec());
+                rep_attach_buf.push_back(timer_attach_buf.elapsed_sec());
+            }
+
+            patch_counts.push_back(ptree.leaf_key.size());
+            node_counts.push_back(ptree.tree.size());
+            t_build.push_back(median(rep_build));
+            t_attach_buf.push_back(median(rep_attach_buf));
+
+            logger::info_ln(
+                "ShamrockTest",
+                sham::format(
+                    "{} : patches = {:8} nodes = {:8} build = {:9.3f} ms attach_buf = {:.3f} ms",
+                    dataset_name,
+                    ptree.leaf_key.size(),
+                    ptree.tree.size(),
+                    t_build.back() * 1e3,
+                    t_attach_buf.back() * 1e3));
+        }
+
+        auto &dataset = shamtest::test_data().new_dataset(dataset_name);
+        dataset.add_data("Npatch", patch_counts);
+        dataset.add_data("Nnode", node_counts);
+        dataset.add_data("t_build", t_build);
+        dataset.add_data("t_attach_buf", t_attach_buf);
+    }
+
+} // namespace
+
+NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:uniform", 1) {
+    for (u32 level = 1; level <= 6; level++) {
+        PatchTree ptree = make_uniform_tree(level);
         check_all_types(ptree);
     }
 }
@@ -226,4 +292,20 @@ NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:irregular", 1) {
     // large enough for the parallel build
     REQUIRE(ptree.tree.size() > (1 << 17));
     check_all_types(ptree);
+}
+
+NEW_TEST(Benchmark, "shamrock/scheduler/SerialPatchTree:benchmark", 1) {
+#ifdef _OPENMP
+    // with the default thread count (parallel build above 2^17 nodes), and with 1 thread (serial
+    // build)
+    int thread_count = omp_get_max_threads();
+    bench_sptree_build("SerialPatchTree build " + std::to_string(thread_count) + " threads");
+    if (thread_count > 1) {
+        omp_set_num_threads(1);
+        bench_sptree_build("SerialPatchTree build 1 thread");
+        omp_set_num_threads(thread_count);
+    }
+#else
+    bench_sptree_build("SerialPatchTree build");
+#endif
 }
