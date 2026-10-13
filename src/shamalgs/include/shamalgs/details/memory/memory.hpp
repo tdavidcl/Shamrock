@@ -38,27 +38,6 @@ namespace shamalgs::memory {
     template<class T>
     T extract_element(sycl::queue &q, sycl::buffer<T> &buf, u32 idx);
 
-    template<class T>
-    void set_element(
-        sycl::queue &q, sycl::buffer<T> &buf, u32 idx, T val, bool discard_write = false) {
-
-        if (discard_write) {
-            q.submit([&, idx, val](sycl::handler &cgh) {
-                sycl::accessor acc{buf, cgh, sycl::write_only, sycl::no_init};
-                cgh.single_task([=]() {
-                    acc[idx] = val;
-                });
-            });
-        } else {
-            q.submit([&, idx, val](sycl::handler &cgh) {
-                sycl::accessor acc{buf, cgh, sycl::write_only};
-                cgh.single_task([=]() {
-                    acc[idx] = val;
-                });
-            });
-        }
-    }
-
     /**
      * @brief Convert a `std::vector` to a `sycl::buffer`
      *
