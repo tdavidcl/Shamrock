@@ -48,12 +48,20 @@ namespace {
         auto &nodes           = layout.nodes;
         auto &first_child_ids = layout.first_child_ids;
 
+        // is_leaf[i] mirrors nodes[i]->tree_node.is_leaf, filled when the node is looked up, so
+        // that the serial loop below reads a compact array instead of following the pointers.
+        // (u8 rather than bool since std::vector<bool> can not be written concurrently)
+        std::vector<u8> is_leaf;
+
         nodes.reserve(ptree.tree.size());
         first_child_ids.reserve(ptree.tree.size());
+        is_leaf.reserve(ptree.tree.size());
 
         for (u64 root_key : ptree.roots_id) {
+            const Node &root = ptree.tree.at(root_key);
             layout.roots_ids.push_back(nodes.size());
-            nodes.push_back(&ptree.tree.at(root_key));
+            nodes.push_back(&root);
+            is_leaf.push_back(root.tree_node.is_leaf);
         }
 
         // nodes[level_begin, level_end) is the current level
@@ -64,7 +72,7 @@ namespace {
             // give their ids to the childs of the current level
             u64 next_level_end = level_end;
             for (u64 i = level_begin; i < level_end; i++) {
-                if (nodes[i]->tree_node.is_leaf) {
+                if (is_leaf[i]) {
                     first_child_ids.push_back(u64_max);
                 } else {
                     first_child_ids.push_back(next_level_end);
@@ -72,6 +80,7 @@ namespace {
                 }
             }
             nodes.resize(next_level_end);
+            is_leaf.resize(next_level_end);
 
             // look the childs up in the patch tree
             bool missing_child = false;
@@ -82,10 +91,13 @@ namespace {
                     continue;
                 }
                 for (u32 c = 0; c < 8; c++) {
-                    auto it       = ptree.tree.find(nodes[i]->tree_node.childs_nid[c]);
-                    missing_child = missing_child || (it == ptree.tree.end());
-                    nodes[first_child_ids[i] + c]
-                        = (it == ptree.tree.end()) ? nullptr : &it->second;
+                    auto it = ptree.tree.find(nodes[i]->tree_node.childs_nid[c]);
+                    if (it == ptree.tree.end()) {
+                        missing_child = true;
+                        continue;
+                    }
+                    nodes[first_child_ids[i] + c]   = &it->second;
+                    is_leaf[first_child_ids[i] + c] = it->second.tree_node.is_leaf;
                 }
             }
             if (missing_child) {
