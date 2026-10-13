@@ -95,7 +95,7 @@ namespace shamrock::scheduler {
          */
         template<class vec>
         inline SerialPatchNode<vec> convert(
-            const shamrock::patch::PatchCoordTransform<vec> box_transform) {
+            const shamrock::patch::PatchCoordTransform<vec> box_transform) const {
             SerialPatchNode<vec> n;
 
             // Convert patch range to object coordinates using given coordinate transform

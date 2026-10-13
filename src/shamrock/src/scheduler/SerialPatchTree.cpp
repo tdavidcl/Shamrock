@@ -28,110 +28,42 @@ void get_serial_tree(
     u32 &max_level,
     const shamrock::patch::PatchCoordTransform<vec> box_transform) {
 
-    PatchTree::Node ptn = ptree.tree[root_key];
+    // Iterative pre-order traversal (same node ordering as the recursive version):
+    // each entry is a node to visit along with the slot of its parent to write its new id into
+    struct TraversalItem {
+        u64 key;
+        u64 parent_id;
+        u32 child_slot;
+    };
 
-    using PtNode = shamrock::scheduler::SerialPatchNode<vec>;
-    PtNode n     = ptn.convert(box_transform);
+    std::vector<TraversalItem> stack;
+    stack.reserve(8 * 64);
+    stack.push_back({root_key, u64_max, 0});
 
-    max_level = sycl::max((u32) ptn.tree_node.level, max_level);
+    while (!stack.empty()) {
+        TraversalItem cur = stack.back();
+        stack.pop_back();
 
-    u64 id_nvec = counter;
-    result_tree.push_back(n);
-    result_tree_linked_patch_id.push_back(ptn.linked_patchid);
-    counter++;
+        const PatchTree::Node &ptn = ptree.tree.at(cur.key);
 
-    // std::cout << "id : " << counter-1 << " leaf : " << ptn.is_leaf << std::endl;
+        u64 id_nvec = counter;
+        counter++;
 
-    if (!ptn.is_leaf()) {
+        if (cur.parent_id != u64_max) {
+            result_tree[cur.parent_id].childs_id[cur.child_slot] = id_nvec;
+        }
 
-        u64 old_id0 = ptn.get_child_nid(0);
-        u64 old_id1 = ptn.get_child_nid(1);
-        u64 old_id2 = ptn.get_child_nid(2);
-        u64 old_id3 = ptn.get_child_nid(3);
-        u64 old_id4 = ptn.get_child_nid(4);
-        u64 old_id5 = ptn.get_child_nid(5);
-        u64 old_id6 = ptn.get_child_nid(6);
-        u64 old_id7 = ptn.get_child_nid(7);
+        max_level = sycl::max((u32) ptn.tree_node.level, max_level);
 
-        result_tree.at(id_nvec).childs_id[0] = counter;
-        get_serial_tree<vec>(
-            old_id0,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
+        result_tree.push_back(ptn.convert(box_transform));
+        result_tree_linked_patch_id.push_back(ptn.linked_patchid);
 
-        result_tree.at(id_nvec).childs_id[1] = counter;
-        get_serial_tree<vec>(
-            old_id1,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[2] = counter;
-        get_serial_tree<vec>(
-            old_id2,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[3] = counter;
-        get_serial_tree<vec>(
-            old_id3,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[4] = counter;
-        get_serial_tree<vec>(
-            old_id4,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[5] = counter;
-        get_serial_tree<vec>(
-            old_id5,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[6] = counter;
-        get_serial_tree<vec>(
-            old_id6,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
-
-        result_tree.at(id_nvec).childs_id[7] = counter;
-        get_serial_tree<vec>(
-            old_id7,
-            ptree,
-            result_tree,
-            result_tree_linked_patch_id,
-            counter,
-            max_level,
-            box_transform);
+        if (!ptn.tree_node.is_leaf) {
+            // pushed in reverse so that child 0 is visited first
+            for (u32 i = 8; i-- > 0;) {
+                stack.push_back({ptn.tree_node.childs_nid[i], id_nvec, i});
+            }
+        }
     }
 }
 
