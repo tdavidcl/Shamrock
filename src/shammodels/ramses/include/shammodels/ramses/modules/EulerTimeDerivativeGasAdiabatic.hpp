@@ -10,9 +10,10 @@
 #pragma once
 
 /**
- * @file EulerTimeDerivativeGas.hpp
+ * @file EulerTimeDerivativeGasAdiabatic.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Per cell Euler time derivatives of the gas primitive state
+ * @brief Per cell Euler time derivatives of the gas primitive state for an adiabatic equation
+ *        of state
  *
  */
 
@@ -49,21 +50,23 @@ namespace shammodels::basegodunov::modules {
      * gradients for every link.
      */
     template<class Tvec>
-    class NodeEulerTimeDerivativeGas : public shamrock::solvergraph::INode {
+    class NodeEulerTimeDerivativeGasAdiabatic : public shamrock::solvergraph::INode {
         using Tscal = shambase::VecComponent<Tvec>;
 
         u32 block_size;
         Tscal gamma;
 
         public:
-        NodeEulerTimeDerivativeGas(u32 block_size, Tscal gamma)
+        NodeEulerTimeDerivativeGasAdiabatic(u32 block_size, Tscal gamma)
             : block_size(block_size), gamma(gamma) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
         void _impl_evaluate_internal();
 
-        inline virtual std::string _impl_get_label() const { return "EulerTimeDerivativeGas"; };
+        inline virtual std::string _impl_get_label() const {
+            return "EulerTimeDerivativeGasAdiabatic";
+        };
 
         virtual std::string _impl_get_tex() const;
     };
