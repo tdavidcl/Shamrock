@@ -33,10 +33,6 @@ namespace shammodels::basegodunov {
         void insert_data(u32 map_id, dd_cell_stencil_el_buf &&stencil_element) {
             storage.emplace(map_id, std::forward<dd_cell_stencil_el_buf>(stencil_element));
         }
-
-        sycl::buffer<amr::cell::StencilElement> &get_stencil_element(u64 patch_id, u32 map_id) {
-            return shambase::get_check_ref(storage.at(map_id).get(patch_id));
-        }
     };
 
 } // namespace shammodels::basegodunov

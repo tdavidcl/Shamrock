@@ -152,7 +152,6 @@ namespace shammodels::sph::modules {
                     u32 len = pos_data.size();
                     PatchDataField<Tvec> &f
                         = tmp.get_field<Tvec>(sched.pdl_old().get_field_idx<Tvec>("xyz"));
-                    // sycl::buffer<Tvec> buf(pos_data.data(), len);
                     f.override(pos_data, len);
                 }
 
