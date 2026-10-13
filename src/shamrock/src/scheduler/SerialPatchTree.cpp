@@ -28,7 +28,7 @@ void get_serial_tree(
     u32 &max_level,
     const shamrock::patch::PatchCoordTransform<vec> box_transform) {
 
-    PatchTree::Node ptn = ptree.tree[root_key];
+    const PatchTree::Node &ptn = ptree.tree[root_key];
 
     using PtNode = shamrock::scheduler::SerialPatchNode<vec>;
     PtNode n     = ptn.convert(box_transform);
