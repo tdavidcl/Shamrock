@@ -21,7 +21,8 @@ set(Sources
     src/modules/AMRSetup.cpp
     src/modules/AMRSortBlocks.cpp
     src/modules/ComputeCFL.cpp
-    src/modules/ConsToPrimGas.cpp
+    src/modules/ConsToPrimGasAdiabatic.cpp
+    src/modules/ConsToPrimGasBarotropic.cpp
     src/modules/ConsToPrimDust.cpp
     src/modules/EulerTimeDerivativeGas.cpp
     src/modules/EulerTimeDerivativeDust.cpp
