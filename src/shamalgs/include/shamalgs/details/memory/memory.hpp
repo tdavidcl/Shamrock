@@ -80,25 +80,6 @@ namespace shamalgs::memory {
     }
 
     /**
-     * @brief Fill a buffer with a given value
-     *
-     * @tparam T
-     * @param q
-     * @param buf
-     * @param value
-     */
-    template<class T>
-    inline void buf_fill(sycl::queue &q, sycl::buffer<T> &buf, T value) {
-        StackEntry stack_loc{};
-        q.submit([&, value](sycl::handler &cgh) {
-            sycl::accessor acc{buf, cgh, sycl::write_only};
-            shambase::parallel_for(cgh, buf.size(), "buf_fill", [=](u64 id_a) {
-                acc[id_a] = value;
-            });
-        });
-    }
-
-    /**
      * @brief Fill a buffer with a given value (sycl::no_init mode)
      *
      * @tparam T
@@ -159,33 +140,6 @@ namespace shamalgs::memory {
 
             shambase::parallel_for(cgh, cnt, "copybuf_discard", [=](u64 i) {
                 dst[i] = src[i];
-            });
-        });
-    }
-
-    template<class T>
-    void copybuf(sycl::queue &q, sycl::buffer<T> &source, sycl::buffer<T> &dest, u32 cnt) {
-        q.submit([&](sycl::handler &cgh) {
-            sycl::accessor src{source, cgh, sycl::read_only};
-            sycl::accessor dst{dest, cgh, sycl::write_only};
-
-            shambase::parallel_for(cgh, cnt, "copybuf", [=](u64 i) {
-                dst[i] = src[i];
-            });
-        });
-    }
-
-    template<class T>
-    void add_with_factor_to(
-        sycl::queue &q, sycl::buffer<T> &buf, T factor, sycl::buffer<T> &op, u32 cnt) {
-        q.submit([&](sycl::handler &cgh) {
-            sycl::accessor acc{buf, cgh, sycl::read_write};
-            sycl::accessor dd{op, cgh, sycl::read_only};
-
-            T fac = factor;
-
-            shambase::parallel_for(cgh, cnt, "add_with_factor_to", [=](u64 i) {
-                acc[i] += fac * dd[i];
             });
         });
     }
