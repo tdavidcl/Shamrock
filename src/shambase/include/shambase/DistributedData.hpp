@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -48,13 +49,37 @@ namespace shambase {
 
         using iterator = typename std::unordered_map<u64, T>::iterator; ///< Iterator type.
 
+        /// Cache of the ids sorted in increasing order, null when it must be rebuilt.
+        /// Held through a shared_ptr so that an iteration in progress keeps its own copy alive
+        /// if the collection is modified (and the cache invalidated) during the iteration.
+        mutable std::shared_ptr<const std::vector<u64>> sorted_ids_cache;
+
+        /// Invalidate the sorted ids cache, to be called on any potential change of the key set.
+        inline void invalidate_sorted_ids() { sorted_ids_cache.reset(); }
+
+        /// Returns the ids sorted in increasing order, rebuilding the cache if needed.
+        inline std::shared_ptr<const std::vector<u64>> get_sorted_ids() const {
+            if (!sorted_ids_cache) {
+                std::vector<u64> ids = get_ids();
+                std::sort(ids.begin(), ids.end());
+                sorted_ids_cache = std::make_shared<const std::vector<u64>>(std::move(ids));
+            }
+            return sorted_ids_cache;
+        }
+
         public:
         /**
          * @brief Returns the underlying collection.
          *
          * @return The underlying collection.
+         *
+         * @remark The sorted ids cache is invalidated by this call, but not by later
+         * modifications made through the returned reference while it is held.
          */
-        inline std::unordered_map<u64, T> &get_native() { return data; }
+        inline std::unordered_map<u64, T> &get_native() {
+            invalidate_sorted_ids();
+            return data;
+        }
 
         /**
          * @brief Adds a new object to the collection.
@@ -68,6 +93,7 @@ namespace shambase {
          */
         inline iterator add_obj(u64 id, T &&obj) {
 
+            invalidate_sorted_ids();
             std::pair<iterator, bool> ret = data.emplace(id, std::forward<T>(obj));
 
             if (!ret.second) {
@@ -82,7 +108,10 @@ namespace shambase {
          *
          * @param id The id of the patch the object belongs to.
          */
-        inline void erase(u64 id) { data.erase(id); }
+        inline void erase(u64 id) {
+            invalidate_sorted_ids();
+            data.erase(id);
+        }
 
         /**
          * @brief Applies a function to each object in the collection.
@@ -112,22 +141,24 @@ namespace shambase {
          * standard library implementation. Use it when the order matters (e.g. concatenation of
          * per-patch data or floating-point reductions that must be reproducible).
          *
+         * The sorted ids are cached and only recomputed after the key set may have changed
+         * (add_obj, erase, reset, get_native). The cache is not thread safe: do not call this
+         * concurrently on the same object, even through a const reference.
+         *
          * @param f A function taking two arguments: the id of the patch the object belongs to,
          * and a non-const reference to the object itself.
          */
         inline void for_each_ordered(std::function<void(u64, T &)> &&f) {
-            std::vector<u64> ids = get_ids();
-            std::sort(ids.begin(), ids.end());
-            for (u64 id : ids) {
+            std::shared_ptr<const std::vector<u64>> ids = get_sorted_ids();
+            for (u64 id : *ids) {
                 f(id, data.at(id));
             }
         }
 
         /// Same as for_each_ordered but for const objects
         inline void for_each_ordered(std::function<void(u64, const T &)> &&f) const {
-            std::vector<u64> ids = get_ids();
-            std::sort(ids.begin(), ids.end());
-            for (u64 id : ids) {
+            std::shared_ptr<const std::vector<u64>> ids = get_sorted_ids();
+            for (u64 id : *ids) {
                 f(id, data.at(id));
             }
         }
@@ -303,7 +334,10 @@ namespace shambase {
          *
          * All objects in the collection are removed.
          */
-        inline void reset() { data.clear(); }
+        inline void reset() {
+            invalidate_sorted_ids();
+            data.clear();
+        }
     };
 
     /**
