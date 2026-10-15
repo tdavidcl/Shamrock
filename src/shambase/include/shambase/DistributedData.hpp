@@ -54,7 +54,7 @@ namespace shambase {
          *
          * @return The underlying collection.
          */
-        inline std::map<u64, T> &get_native() { return data; }
+        inline std::unordered_map<u64, T> &get_native() { return data; }
 
         /**
          * @brief Adds a new object to the collection.
