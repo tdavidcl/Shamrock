@@ -4,6 +4,7 @@ module use /soft/modulefiles
 module load cmake
 module load python
 module load ninja
+module load mpich/prd/5.0.0.aurora_test.51a9474
 
 function shamconfigure {
     # note that the -g flag is set. In principle there is no impact on the perf, but if you run on
