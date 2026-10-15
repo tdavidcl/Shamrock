@@ -169,6 +169,12 @@ class SerialPatchTree {
      */
     inline u32 get_element_count() { return serial_tree.size(); }
 
+    /**
+     * @brief accessor to the ids of the roots in the serial tree, in the order of
+     * PatchTree::roots_id
+     */
+    inline const std::vector<u64> &get_roots_ids() const { return roots_ids; }
+
     inline static SerialPatchTree<fp_prec_vec> build(PatchScheduler &sched) {
         return SerialPatchTree<fp_prec_vec>(
             sched.patch_tree, sched.get_patch_transform<fp_prec_vec>());
