@@ -21,6 +21,7 @@
 #include "shambase/print.hpp"
 #include "shambase/sets.hpp"
 #include "shambase/string.hpp"
+#include <unordered_map>
 #include <unordered_set>
 #include <functional>
 #include <map>
@@ -38,14 +39,24 @@ namespace shambase {
      * including adding, removing, finding, and iterating over elements.
      * It also supports mapping the collection to a new type using a user-defined mapping function.
      *
+     * The objects are stored in a hash map, lookups by id are O(1). The iteration order
+     * (for_each, get_ids, map, print_data) is unspecified: it is not sorted by id and depends on
+     * the exact sequence of add_obj/erase/reserve calls made on the object. It is therefore
+     * reproducible from run to run only if that sequence is. Do not add or erase objects in an
+     * order that may change between two identical runs (e.g. from an OpenMP parallel region, in
+     * MPI request completion order, or while iterating a container keyed by pointers).
+     *
+     * References to stored objects stay valid until the object is erased, even when other
+     * objects are added. Iterators can be invalidated by add_obj (rehash).
+     *
      * @tparam T The type of the object in the collection.
      */
     template<class T>
     class DistributedData {
 
-        std::map<u64, T> data; ///< The underlying collection.
+        std::unordered_map<u64, T> data; ///< The underlying collection.
 
-        using iterator = typename std::map<u64, T>::iterator; ///< Iterator type.
+        using iterator = typename std::unordered_map<u64, T>::iterator; ///< Iterator type.
 
         public:
         /**
@@ -53,7 +64,7 @@ namespace shambase {
          *
          * @return The underlying collection.
          */
-        inline std::map<u64, T> &get_native() { return data; }
+        inline std::unordered_map<u64, T> &get_native() { return data; }
 
         /**
          * @brief Adds a new object to the collection.
@@ -79,11 +90,12 @@ namespace shambase {
         /**
          * @brief Reserve storage for at least `count` objects.
          *
-         * This is a hint only, it never changes the content of the collection.
+         * This is a hint only, it never changes the content of the collection, but like any
+         * rehash it changes the iteration order.
          *
          * @param count The number of objects the collection is expected to hold.
          */
-        inline void reserve(u64 count) { (void) count; }
+        inline void reserve(u64 count) { data.reserve(count); }
 
         /**
          * @brief Removes an object from the collection.
@@ -285,9 +297,10 @@ namespace shambase {
         /**
          * @brief Reset the collection to its initial state
          *
-         * All objects in the collection are removed.
+         * All objects in the collection are removed and the storage is released, so that the
+         * iteration order after a reset does not depend on the previous content.
          */
-        inline void reset() { data.clear(); }
+        inline void reset() { std::unordered_map<u64, T>{}.swap(data); }
     };
 
     /**
