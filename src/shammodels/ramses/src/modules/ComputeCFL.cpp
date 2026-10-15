@@ -75,6 +75,9 @@ void shammodels::basegodunov::modules::ComputeCFL<Tvec, TgridVec>::compute_cfl_g
             Tscal one_over_Nside = 1. / AMRBlock::Nside;
 
             Tscal dxfact = solver_config.grid_coord_to_pos_fact;
+
+            auto fspec = fluid;
+
             shambase::parallel_for(cgh, cell_count, "compute_cfl", [=](u64 gid) {
                 const u32 cell_global_id = (u32) gid;
 
@@ -91,11 +94,11 @@ void shammodels::basegodunov::modules::ComputeCFL<Tvec, TgridVec>::compute_cfl_g
                 // rhoe is ignored by the barotropic cons_to_prim
                 auto conststate = shammath::ConsState<Tvec>{rho[gid], rhoe[gid], rhov[gid]};
 
-                auto prim_state = fluid.cons_to_prim(conststate);
+                auto prim_state = fspec.cons_to_prim(conststate);
 
                 constexpr Tscal div = 1. / 3.;
 
-                Tscal cs    = fluid.sound_speed(prim_state);
+                Tscal cs    = fspec.sound_speed(prim_state);
                 Tscal vnorm = sycl::length(prim_state.vel);
                 Tscal dt    = C_safe * dx * div / (cs + vnorm);
 
