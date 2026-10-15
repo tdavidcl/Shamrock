@@ -213,3 +213,116 @@ NEW_TEST(Unittest, "shambase/DistributedData::reserve", 1) {
     std::sort(dd_ids.begin(), dd_ids.end());
     REQUIRE(mapped_ids == dd_ids);
 }
+
+namespace {
+
+    /// ids of dd in the order visited by the non-const for_each_ordered
+    template<class T>
+    std::vector<u64> ordered_ids(shambase::DistributedData<T> &dd) {
+        std::vector<u64> ret;
+        dd.for_each_ordered([&](u64 id, T &) {
+            ret.push_back(id);
+        });
+        return ret;
+    }
+
+    /// ids of dd in the order visited by the const for_each_ordered
+    template<class T>
+    std::vector<u64> ordered_ids_const(const shambase::DistributedData<T> &dd) {
+        std::vector<u64> ret;
+        dd.for_each_ordered([&](u64 id, const T &) {
+            ret.push_back(id);
+        });
+        return ret;
+    }
+
+} // namespace
+
+NEW_TEST(Unittest, "shambase/DistributedData::for_each_ordered", 1) {
+    using namespace shambase;
+
+    DistributedData<int> dd{};
+    for (u64 id : {u64(5), u64(1), u64(9), u64(3), u64(1) << 40}) {
+        dd.add_obj(id, int(id % 1000));
+    }
+
+    std::vector<u64> expected = {1, 3, 5, 9, u64(1) << 40};
+    REQUIRE(ordered_ids(dd) == expected);
+    REQUIRE(ordered_ids_const(dd) == expected);
+
+    // the visited object is the one stored under that id
+    dd.for_each_ordered([&](u64 id, int &v) {
+        REQUIRE_EQUAL(v, int(id % 1000));
+    });
+
+    // a copy built through map() may iterate in a different order with for_each, but not with
+    // for_each_ordered
+    auto mapped = dd.map<int>([](u64, int &v) {
+        return v * 2;
+    });
+    REQUIRE(ordered_ids(mapped) == expected);
+
+    DistributedData<int> empty{};
+    REQUIRE(ordered_ids(empty).empty());
+}
+
+NEW_TEST(Unittest, "shambase/DistributedData::for_each_ordered(cache invalidation)", 1) {
+    using namespace shambase;
+
+    DistributedData<int> dd{};
+    for (u64 id : {5, 1, 9}) {
+        dd.add_obj(id, 0);
+    }
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{1, 5, 9})); // fills the cache
+
+    dd.add_obj(2, 0);
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{1, 2, 5, 9}));
+
+    dd.erase(5);
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{1, 2, 9}));
+
+    dd.get_native().emplace(0, 0);
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{0, 1, 2, 9}));
+
+    // reserve does not change the key set, the order stays the same
+    dd.reserve(1000);
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{0, 1, 2, 9}));
+
+    // a copy carries a valid cache, and modifying it does not affect the original
+    DistributedData<int> copy = dd;
+    copy.erase(0);
+    REQUIRE(ordered_ids(copy) == (std::vector<u64>{1, 2, 9}));
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{0, 1, 2, 9}));
+
+    dd.reset();
+    REQUIRE(ordered_ids(dd).empty());
+    dd.add_obj(4, 0);
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{4}));
+}
+
+NEW_TEST(Unittest, "shambase/DistributedData::for_each_ordered(modified during iteration)", 1) {
+    using namespace shambase;
+
+    DistributedData<int> dd{};
+    for (u64 id : {3, 1, 2}) {
+        dd.add_obj(id, 0);
+    }
+    REQUIRE(ordered_ids(dd) == (std::vector<u64>{1, 2, 3})); // fills the cache
+
+    // inserting while iterating invalidates the cache, the running loop keeps visiting the ids
+    // it started with, and the next call sees the new key
+    std::vector<u64> visited;
+    dd.for_each_ordered([&](u64 id, int &) {
+        visited.push_back(id);
+        if (id == 1) {
+            for (u64 new_id = 100; new_id < 200; new_id++) { // enough to force a rehash
+                dd.add_obj(new_id, 0);
+            }
+        }
+    });
+    REQUIRE(visited == (std::vector<u64>{1, 2, 3}));
+
+    std::vector<u64> after = ordered_ids(dd);
+    REQUIRE_EQUAL(after.size(), size_t(103));
+    REQUIRE(std::is_sorted(after.begin(), after.end()));
+}
