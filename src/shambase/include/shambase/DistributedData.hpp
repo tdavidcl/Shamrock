@@ -21,6 +21,7 @@
 #include "shambase/print.hpp"
 #include "shambase/sets.hpp"
 #include "shambase/string.hpp"
+#include <unordered_set>
 #include <functional>
 #include <map>
 #include <stdexcept>
@@ -76,6 +77,15 @@ namespace shambase {
         }
 
         /**
+         * @brief Reserve storage for at least `count` objects.
+         *
+         * This is a hint only, it never changes the content of the collection.
+         *
+         * @param count The number of objects the collection is expected to hold.
+         */
+        inline void reserve(u64 count) { (void) count; }
+
+        /**
          * @brief Removes an object from the collection.
          *
          * @param id The id of the patch the object belongs to.
@@ -88,7 +98,8 @@ namespace shambase {
          * @param f A function taking two arguments: the id of the patch the object belongs to,
          * and a non-const reference to the object itself.
          *
-         * @remark The function is applied to each object in the order of insertion.
+         * @remark The iteration order is deterministic but unspecified: do not rely on the
+         * objects being visited in ascending id order, nor in insertion order.
          */
         inline void for_each(std::function<void(u64, T &)> &&f) {
             for (auto &[id, obj] : data) {
@@ -182,21 +193,21 @@ namespace shambase {
          *
          * @return True if the object is found, false otherwise.
          */
-        inline bool has_key(u64 id) { return (data.find(id) != data.end()); }
+        inline bool has_key(u64 id) const { return (data.find(id) != data.end()); }
 
         /**
          * @brief Returns the number of elements in the collection.
          *
          * @return The number of elements in the collection.
          */
-        inline u64 get_element_count() { return data.size(); }
+        inline u64 get_element_count() const { return data.size(); }
 
         /**
          * @brief Returns true if the collection is empty.
          *
          * @return True if the collection is empty, false otherwise.
          */
-        inline bool is_empty() { return data.empty(); }
+        inline bool is_empty() const { return data.empty(); }
 
         /**
          * @brief Prints all the objects in the collection to the logger.
@@ -249,6 +260,7 @@ namespace shambase {
         template<class Tmap>
         inline DistributedData<Tmap> map(std::function<Tmap(u64, T &)> map_func) {
             DistributedData<Tmap> ret;
+            ret.reserve(data.size());
 
             for_each([&](u64 id, T &ref) {
                 ret.add_obj(id, map_func(id, ref));
@@ -261,6 +273,7 @@ namespace shambase {
         template<class Tmap>
         inline DistributedData<Tmap> map(std::function<Tmap(u64, const T &)> map_func) const {
             DistributedData<Tmap> ret;
+            ret.reserve(data.size());
 
             for_each([&](u64 id, const T &ref) {
                 ret.add_obj(id, map_func(id, ref));
@@ -297,25 +310,39 @@ namespace shambase {
      * @param func_match the callback for matching ids
      * @param func_extra the callback for extra ids
      */
-    template<class T1, class FuncMatch, class FuncMissing, class FuncExtra>
+    template<class T1, class FuncMissing, class FuncMatch, class FuncExtra>
     inline void on_distributeddata_ids_diff(
         const shambase::DistributedData<T1> &dd,
         const std::vector<u64> &ref_ids,
-        FuncMatch &&func_missing,
-        FuncMissing &&func_match,
+        FuncMissing &&func_missing,
+        FuncMatch &&func_match,
         FuncExtra &&func_extra) {
-
-        std::vector<u64> dd_ids;
-
-        dd.for_each([&](u32 id, const T1 &data) {
-            dd_ids.push_back(id);
-        });
 
         std::vector<u64> missing;
         std::vector<u64> matching;
         std::vector<u64> extra;
 
-        shambase::set_diff(dd_ids, ref_ids, missing, matching, extra);
+        // Only used for membership tests, its iteration order is never observed.
+        std::unordered_set<u64> ref_seen;
+        ref_seen.reserve(ref_ids.size());
+
+        // missing and matching follow the order of ref_ids, a repeated reference id is
+        // matched at most once and reported as missing afterwards
+        for (u64 id : ref_ids) {
+            bool first_occurrence = ref_seen.insert(id).second;
+            if (first_occurrence && dd.has_key(id)) {
+                matching.push_back(id);
+            } else {
+                missing.push_back(id);
+            }
+        }
+
+        // extra follows the iteration order of dd
+        dd.for_each([&](u64 id, const T1 &) {
+            if (ref_seen.find(id) == ref_seen.end()) {
+                extra.push_back(id);
+            }
+        });
 
         for (auto id : missing) {
             func_missing(id);
@@ -347,21 +374,45 @@ namespace shambase {
      * @param func_match the callback for matching ids
      * @param func_extra the callback for extra ids
      */
-    template<class T1, class T2, class FuncMatch, class FuncMissing, class FuncExtra>
+    template<class T1, class T2, class FuncMissing, class FuncMatch, class FuncExtra>
     inline void on_distributeddata_diff(
         const shambase::DistributedData<T1> &dd,
         const shambase::DistributedData<T2> &reference,
-        FuncMatch &&func_missing,
-        FuncMissing &&func_match,
+        FuncMissing &&func_missing,
+        FuncMatch &&func_match,
         FuncExtra &&func_extra) {
 
-        std::vector<u64> ref_ids;
+        std::vector<u64> missing;
+        std::vector<u64> matching;
+        std::vector<u64> extra;
 
-        reference.for_each([&](u32 id, const T2 &data) {
-            ref_ids.push_back(id);
+        // missing and matching follow the iteration order of reference
+        reference.for_each([&](u64 id, const T2 &) {
+            if (dd.has_key(id)) {
+                matching.push_back(id);
+            } else {
+                missing.push_back(id);
+            }
         });
 
-        shambase::on_distributeddata_ids_diff(dd, ref_ids, func_missing, func_match, func_extra);
+        // extra follows the iteration order of dd
+        dd.for_each([&](u64 id, const T1 &) {
+            if (!reference.has_key(id)) {
+                extra.push_back(id);
+            }
+        });
+
+        for (auto id : missing) {
+            func_missing(id);
+        }
+
+        for (auto id : matching) {
+            func_match(id);
+        }
+
+        for (auto id : extra) {
+            func_extra(id);
+        }
     }
 
 } // namespace shambase
