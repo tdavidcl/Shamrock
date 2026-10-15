@@ -240,6 +240,7 @@ namespace shamalgs::collective {
             vec_local, get_mpi_type<T>(), vec_global, get_mpi_type<T>(), MPI_COMM_WORLD);
 
         shambase::DistributedData<T> ret;
+        ret.reserve(global_ids.size());
         for (u32 i = 0; i < global_ids.size(); i++) {
             ret.add_obj(id_getter(global_ids[i]), T(vec_global[i]));
         }
@@ -275,6 +276,7 @@ namespace shamalgs::collective {
             vec_local, get_mpi_type<T>(), vec_global, get_mpi_type<T>(), MPI_COMM_WORLD);
 
         shambase::DistributedData<T> ret;
+        ret.reserve(global_ids.size());
         for (u32 i = 0; i < global_ids.size(); i++) {
             T tmp = T::load(i * reprsz, vec_global);
             ret.add_obj(id_getter(global_ids[i]), std::move(tmp));
