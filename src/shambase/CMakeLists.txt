@@ -71,3 +71,4 @@ endif()
 
 target_link_libraries(shambase PUBLIC shamformat)
 target_link_libraries(shambase PUBLIC shamterm)
+target_link_libraries(shambase PUBLIC unordered_dense::unordered_dense)

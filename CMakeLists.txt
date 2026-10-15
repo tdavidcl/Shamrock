@@ -81,6 +81,7 @@ include(ShamConfigureFmtlib)
 include(ShamConfigureNlohmannJson)
 include(ShamConfigurePlfNanotimer)
 include(ShamConfigureMDSpan)
+include(ShamConfigureUnorderedDense)
 include(ShamConfigureCppTrace)
 include(ShamConfigureGUILibs)
 

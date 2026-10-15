@@ -26,3 +26,6 @@
 [submodule "external/cpptrace"]
 	path = external/cpptrace
 	url = https://github.com/jeremy-rifkin/cpptrace.git
+[submodule "external/unordered_dense"]
+	path = external/unordered_dense
+	url = https://github.com/martinus/unordered_dense.git
