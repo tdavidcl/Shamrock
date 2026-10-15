@@ -149,7 +149,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
         sham::DeviceBuffer<TgridVec> pos_min_block(0, dev_sched);
         sham::DeviceBuffer<TgridVec> pos_max_block(0, dev_sched);
 
-        patch_data_layers.get_const_refs().for_each(
+        patch_data_layers.get_const_refs().for_each_ordered(
             [&](u64 id_patch, const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                 auto &pdat_ref    = pdat.get();
                 auto &buf_pos_min = pdat_ref.get_field_buf_ref<TgridVec>(0);
@@ -223,7 +223,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             } else {
                 sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-                patch_data_layers.get_const_refs().for_each(
+                patch_data_layers.get_const_refs().for_each_ordered(
                     [&](u64 id_patch,
                         const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                         auto &pdat_ref  = pdat.get();
@@ -240,7 +240,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             using f_t = u32;
             sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-            patch_data_layers.get_const_refs().for_each(
+            patch_data_layers.get_const_refs().for_each_ordered(
                 [&](u64 id_patch,
                     const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                     auto buf_field
@@ -256,7 +256,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             using f_t = u32;
             sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-            patch_data_layers.get_const_refs().for_each(
+            patch_data_layers.get_const_refs().for_each_ordered(
                 [&](u64 id_patch,
                     const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                     auto buf_field

@@ -21,6 +21,8 @@
 #include "shambase/print.hpp"
 #include "shambase/sets.hpp"
 #include "shambase/string.hpp"
+#include <unordered_map>
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <stdexcept>
@@ -42,9 +44,9 @@ namespace shambase {
     template<class T>
     class DistributedData {
 
-        std::map<u64, T> data; ///< The underlying collection.
+        std::unordered_map<u64, T> data; ///< The underlying collection.
 
-        using iterator = typename std::map<u64, T>::iterator; ///< Iterator type.
+        using iterator = typename std::unordered_map<u64, T>::iterator; ///< Iterator type.
 
         public:
         /**
@@ -100,6 +102,33 @@ namespace shambase {
         inline void for_each(std::function<void(u64, const T &)> &&f) const {
             for (auto &[id, obj] : data) {
                 f(id, obj);
+            }
+        }
+
+        /**
+         * @brief Applies a function to each object in the collection, in increasing id order.
+         *
+         * Unlike for_each, the iteration order does not depend on the insertion history or on the
+         * standard library implementation. Use it when the order matters (e.g. concatenation of
+         * per-patch data or floating-point reductions that must be reproducible).
+         *
+         * @param f A function taking two arguments: the id of the patch the object belongs to,
+         * and a non-const reference to the object itself.
+         */
+        inline void for_each_ordered(std::function<void(u64, T &)> &&f) {
+            std::vector<u64> ids = get_ids();
+            std::sort(ids.begin(), ids.end());
+            for (u64 id : ids) {
+                f(id, data.at(id));
+            }
+        }
+
+        /// Same as for_each_ordered but for const objects
+        inline void for_each_ordered(std::function<void(u64, const T &)> &&f) const {
+            std::vector<u64> ids = get_ids();
+            std::sort(ids.begin(), ids.end());
+            for (u64 id : ids) {
+                f(id, data.at(id));
             }
         }
 
