@@ -1,6 +1,6 @@
 """
-Unit system API checks
-======================
+CI test: unit system API checks
+===============================
 
 This example checks how ``shamrock.UnitSystem`` and ``shamrock.Constants``
 behave when used from Python: the unit and prefix names, the meaning of
