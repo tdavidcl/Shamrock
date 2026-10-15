@@ -272,15 +272,11 @@ for long_name, short_name in unit_names:
     check(astro.to(long_name), astro.to(short_name), f'astro.to("{long_name}")')
 
 # %%
-# The prefixed year is wrong today: the prefix is applied again on the
-# seconds that a year is built from, so ``Myr`` is treated as ``1e12 yr``
-# instead of ``1e6 yr``. The lines below pin the current behaviour.
-# BUG 4: prefix applied per nesting level; becomes 1e-6 / 31557600.0 in A5
-check(si.to("yr", pref="M"), 1e-12 / 31557600.0, 'si.to("yr", pref="M")')
-# BUG 4: prefix applied per nesting level; becomes 1.0 in A5
-check(astro.to("yr", pref="M"), 1e-6, 'astro.to("yr", pref="M")')
-# BUG 4: prefix applied per nesting level; becomes 1e-3 in A5
-check(astro.to("yr", pref="G"), 1e-12, 'astro.to("yr", pref="G")')
+# A prefix applies once to the whole unit, even for a unit built from other
+# units: ``Myr`` is ``1e6 yr`` and ``Gyr`` is ``1e9 yr``.
+check(si.to("yr", pref="M"), 1e-6 / 31557600.0, 'si.to("yr", pref="M")')
+check(astro.to("yr", pref="M"), 1.0, 'astro.to("yr", pref="M")')
+check(astro.to("yr", pref="G"), 1e-3, 'astro.to("yr", pref="G")')
 
 # %%
 # Constants in the astrophysical system
