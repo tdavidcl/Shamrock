@@ -13,9 +13,6 @@
 // below unchanged, and a bug fix changes exactly the lines tagged with its BUG number. Each tagged
 // line gives the value the code returns now (which the test checks) and the correct value.
 //
-//   BUG 1: h and hbar are registered as J.s-1 instead of J.s (right in SI, and in cgs only
-//          because the cgs second is 1 s).
-//   BUG 2: guiness_density is registered as kg.m-1 instead of kg.m-3.
 //   BUG 3: to<pref, u, power>() drops the prefix.
 //   BUG 4: the prefix is applied once per nesting level of a derived or relative unit.
 //   BUG 6: f32 loses precision or turns non-finite when an intermediate under/overflows although
@@ -333,12 +330,8 @@ namespace {
         {"delta_nu_cs", 2, 8.4504478858813325e+19, 8.415649936612016e+46, 8.4504478858813325e+19},
         {"c", 1, 299792458.0, 63241077084.266273, 29979245800.0},
         {"c", 2, 89875517873681760.0, 3.9994338307781086e+21, 8.9875517873681767e+20},
-        // BUG 1: registered as J.s-1 instead of J.s; correct value is
-        // astro 4.6988342885489403e-73
-        {"h", 1, 6.6260701499999998e-34, 4.6794850422834216e-46, 6.6260701499999999e-27},
-        // BUG 1: registered as J.s-1 instead of J.s; correct value is
-        // astro 2.2079043671243226e-145
-        {"h", 2, 4.3904805632721018e-67, 2.1897580260954277e-91, 4.3904805632721022e-53},
+        {"h", 1, 6.6260701499999998e-34, 4.6988342885489403e-73, 6.6260701499999999e-27},
+        {"h", 2, 4.3904805632721018e-67, 2.2079043671243226e-145, 4.3904805632721022e-53},
         {"e", 1, 1.6021766339999999e-19, 5.0769913871777317e-33, 1.6021766339999999e-19},
         {"e", 2, 2.5669699665355694e-38, 2.5775841545476869e-65, 2.5669699665355694e-38},
         {"k", 1, 1.3806490000000001e-23, 3.0897358328696762e-49, 1.380649e-16},
@@ -385,20 +378,12 @@ namespace {
         {"planck_mass", 2, 4.7368660010443772e-16, 1.1979895037890763e-76, 4.7368660010443775e-10},
         {"dalton", 1, 1.6605390689199999e-27, 8.3508379252390028e-58, 1.6605390689200001e-24},
         {"dalton", 2, 2.7573899994097e-54, 6.9736494053610049e-115, 2.7573899994097006e-48},
-        // BUG 2: registered as kg.m-1 instead of kg.m-3; correct value is
-        // astro 1712293.2548137673, cgs 1.0170000000000001
-        {"guiness_density", 1, 1016.9999999999999, 7.6511606663364289e-17, 10169.999999999998},
-        // BUG 2: registered as kg.m-1 instead of kg.m-3; correct value is
-        // astro 2931948190480.7251, cgs 1.0342890000000002
-        {"guiness_density", 2, 1034288.9999999998, 5.854025954209371e-33, 103428899.99999997},
+        {"guiness_density", 1, 1016.9999999999999, 1712293.2548137673, 1.0170000000000001},
+        {"guiness_density", 2, 1034288.9999999998, 2931948190480.7251, 1.0342890000000002},
         {"G", 1, 6.6743014999999996e-11, 39478129059350.664, 6.6743015000000006e-08},
         {"G", 2, 4.4546300512902244e-21, 1.5585226740267474e+27, 4.4546300512902258e-15},
-        // BUG 1: registered as J.s-1 instead of J.s; correct value is
-        // astro 7.4784270379225313e-74
-        {"hbar", 1, 1.0545718176461565e-34, 7.447631756039935e-47, 1.0545718176461565e-27},
-        // BUG 1: registered as J.s-1 instead of J.s; correct value is
-        // astro 5.592687096153077e-147
-        {"hbar", 2, 1.1121217185735183e-68, 5.5467218773574489e-93, 1.1121217185735184e-54},
+        {"hbar", 1, 1.0545718176461565e-34, 7.4784270379225313e-74, 1.0545718176461565e-27},
+        {"hbar", 2, 1.1121217185735183e-68, 5.592687096153077e-147, 1.1121217185735184e-54},
         {"mu_0", 1, 1.2566370621219e-06, 4.207008051687417e-21, 0.12566370621219},
         {"mu_0", 2, 1.5791367058983602e-12, 1.7698916746962756e-41, 0.0157913670589836},
         {"Z_0", 1, 376.7303136674231, 2.6605572049089278e-10, 3767303136.6742311},
@@ -509,9 +494,9 @@ namespace {
         {"unit:british_pint None -2", RefSystem::Astro, inf_v}, // f64: 3.4742078788537784e+73
         {"unit:british_pint None 2", RefSystem::Astro, 0.0}, // f64: 2.878353958283933e-74
         {"constant:delta_nu_cs 2", RefSystem::Astro, inf_v}, // f64: 8.415649936612016e+46
-        {"constant:h 1", RefSystem::Astro, 0.0}, // f64: 4.6794850422834216e-46
+        {"constant:h 1", RefSystem::Astro, 0.0}, // f64: 4.6988342885489403e-73
         {"constant:h 2", RefSystem::SI, 0.0}, // f64: 4.3904805632721018e-67
-        {"constant:h 2", RefSystem::Astro, 0.0}, // f64: 2.1897580260954277e-91
+        {"constant:h 2", RefSystem::Astro, 0.0}, // f64: 2.2079043671243226e-145
         {"constant:h 2", RefSystem::CGS, 0.0}, // f64: 4.3904805632721022e-53
         {"constant:e 2", RefSystem::Astro, 0.0}, // f64: 2.5775841545476869e-65
         {"constant:k 1", RefSystem::Astro, 0.0}, // f64: 3.0897358328696762e-49
@@ -544,9 +529,9 @@ namespace {
         {"constant:dalton 2", RefSystem::SI, 0.0}, // f64: 2.7573899994097e-54
         {"constant:dalton 2", RefSystem::Astro, 0.0}, // f64: 6.9736494053610049e-115
         {"constant:dalton 2", RefSystem::CGS, 0.0}, // f64: 2.7573899994097006e-48
-        {"constant:hbar 1", RefSystem::Astro, 0.0}, // f64: 7.447631756039935e-47
+        {"constant:hbar 1", RefSystem::Astro, 0.0}, // f64: 7.4784270379225313e-74
         {"constant:hbar 2", RefSystem::SI, 0.0}, // f64: 1.1121217185735183e-68
-        {"constant:hbar 2", RefSystem::Astro, 0.0}, // f64: 5.5467218773574489e-93
+        {"constant:hbar 2", RefSystem::Astro, 0.0}, // f64: 5.592687096153077e-147
         {"constant:hbar 2", RefSystem::CGS, 0.0}, // f64: 1.1121217185735184e-54
         {"constant:mu_0 2", RefSystem::Astro, 1.7699800902886764e-41}, // f64: 1.7698916746962756e-41
         {"constant:epsilon_0 2", RefSystem::CGS, 7.8397043885116216e-41}, // f64: 7.8396641824105785e-41
@@ -661,4 +646,19 @@ NEW_TEST(Unittest, "shamunits/reference_values", 1) {
                 used_f32_refs.count(&r) == 1);
         }
     }
+}
+
+NEW_TEST(Unittest, "shamunits/constant_dimensions", 1) {
+    using Si = Constants<f64>::Si;
+
+    UnitSystem<f64> astro = make_system<f64>(RefSystem::Astro);
+    Constants<f64> cte{astro};
+
+    // value of one J.s and one kg.m-3 in the astro system, computed by hand
+    f64 joule_second = astro.get<units::Joule>() * astro.get<units::second>();
+    f64 kg_per_m3    = astro.get<units::kilogram>() * astro.get<units::metre, -3>();
+
+    REQUIRE_FLOAT_EQUAL(cte.h() / Si::h / joule_second, 1., 1e-12);
+    REQUIRE_FLOAT_EQUAL(cte.hbar() / Si::hbar / joule_second, 1., 1e-12);
+    REQUIRE_FLOAT_EQUAL(cte.guiness_density() / Si::guiness_density / kg_per_m3, 1., 1e-12);
 }
