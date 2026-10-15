@@ -17,6 +17,7 @@
 #include "shamsys/NodeInstance.hpp"
 #include "shamtest/shamtest.hpp"
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -551,21 +552,189 @@ NEW_TEST(Benchmark, "shamrock/scheduler/SerialPatchTree:benchmark", 1) {
         node_counts.push_back(ptree.tree.size());
         t_build.push_back(median(rep_build));
         t_attach_buf.push_back(median(rep_attach_buf));
-
-        logger::info_ln(
-            "ShamrockTest",
-            sham::format(
-                "SerialPatchTree build : patches = {:8} nodes = {:8} build = {:9.3f} ms "
-                "attach_buf = {:.3f} ms",
-                ptree.leaf_key.size(),
-                ptree.tree.size(),
-                t_build.back() * 1e3,
-                t_attach_buf.back() * 1e3));
     }
+
+    std::string out = "SerialPatchTree build :\n";
+
+    for (u32 i = 0; i < patch_counts.size(); i++) {
+        out += sham::format(
+            "patches = {:8} nodes = {:8} build = {:9.3f} ms "
+            "attach_buf = {:.3f} ms\n",
+            patch_counts[i],
+            node_counts[i],
+            t_build[i] * 1e3,
+            t_attach_buf[i] * 1e3);
+    }
+
+    logger::info_ln("ShamrockTest", out);
 
     auto &dataset = shamtest::test_data().new_dataset("SerialPatchTree build");
     dataset.add_data("Npatch", patch_counts);
     dataset.add_data("Nnode", node_counts);
     dataset.add_data("t_build", t_build);
     dataset.add_data("t_attach_buf", t_attach_buf);
+}
+
+namespace {
+
+    /**
+     * @brief Random patch tree : `nroots` roots side by side along x, all split `base_level`
+     * times, then `nops` random splits of a leaf or merges of a parent of only leafs (merges leave
+     * holes in the node keys)
+     */
+    PatchTree make_random_tree(std::mt19937 &eng, u32 nroots, u32 base_level, u32 nops) {
+        PatchTree ptree;
+
+        u64 root_width = (max_coord + 1) / nroots;
+        for (u32 i = 0; i < nroots; i++) {
+            ptree.insert_root_node(
+                i,
+                shamrock::patch::PatchCoord<3>(
+                    {root_width * i, 0, 0}, {root_width * (i + 1) - 1, max_coord, max_coord}));
+        }
+
+        for (u32 l = 0; l < base_level; l++) {
+            std::vector<u64> leafs(ptree.leaf_key.begin(), ptree.leaf_key.end());
+            for (u64 id : leafs) {
+                ptree.split_node(id);
+            }
+        }
+
+        auto pick = [&](const std::unordered_set<u64> &set) {
+            std::vector<u64> keys(set.begin(), set.end());
+            std::sort(keys.begin(), keys.end());
+            return keys[std::uniform_int_distribution<u64>(0, keys.size() - 1)(eng)];
+        };
+
+        std::uniform_int_distribution<u32> op(0, 9);
+        for (u32 i = 0; i < nops; i++) {
+            if (op(eng) < 3 && !ptree.parent_of_only_leaf_key.empty()) {
+                ptree.merge_node_dm1(pick(ptree.parent_of_only_leaf_key));
+            } else {
+                ptree.split_node(pick(ptree.leaf_key));
+            }
+        }
+
+        link_leafs(ptree);
+        return ptree;
+    }
+
+    /**
+     * @brief Check that a SerialPatchTree is an exact image of the PatchTree it was built from,
+     * whatever the ordering of its nodes : walk both trees from matching roots and compare the
+     * boxes, linked patch ids and childs (in order)
+     */
+    template<class Tvec>
+    void check_serial_tree(PatchTree &ptree) {
+        using Tscal  = shambase::VecComponent<Tvec>;
+        using PtNode = typename SerialPatchTree<Tvec>::PtNode;
+
+        shammath::CoordRange<Tvec> domain{Tvec{-0.6, -0.3, 0.1}, Tvec{0.7, 0.4, 1.2}};
+        shamrock::patch::PatchCoordTransform<Tvec> transform(
+            {{0, 0, 0}, {max_coord + 1, max_coord + 1, max_coord + 1}}, domain);
+
+        SerialPatchTree<Tvec> sptree(ptree, transform);
+        sptree.attach_buf();
+
+        REQUIRE_EQUAL(sptree.get_element_count(), ptree.tree.size());
+        REQUIRE_EQUAL(sptree.root_count, ptree.roots_id.size());
+        REQUIRE_EQUAL(sptree.get_roots_ids().size(), ptree.roots_id.size());
+
+        // the boxes may differ by the rounding error of the transform (fma contraction can
+        // differ between call sites, see the compute_patch_owner test)
+        Tvec tol;
+        for (u32 a = 0; a < 3; a++) {
+            tol[a] = 4 * std::numeric_limits<Tscal>::epsilon()
+                     * (domain.upper[a] - domain.lower[a]
+                        + sycl::fmax(sycl::fabs(domain.lower[a]), sycl::fabs(domain.upper[a])));
+        }
+        auto vec_near = [&](Tvec a, Tvec b) {
+            return sycl::fabs(a.x() - b.x()) <= tol.x() && sycl::fabs(a.y() - b.y()) <= tol.y()
+                   && sycl::fabs(a.z() - b.z()) <= tol.z();
+        };
+
+        sycl::host_accessor tree{shambase::get_check_ref(sptree.serial_tree_buf), sycl::read_only};
+        sycl::host_accessor lpid{
+            shambase::get_check_ref(sptree.linked_patch_ids_buf), sycl::read_only};
+
+        // (key in the patch tree, id in the serial tree)
+        std::vector<std::pair<u64, u64>> stack;
+        u32 iroot = 0;
+        for (u64 root_key : ptree.roots_id) {
+            stack.push_back({root_key, sptree.get_roots_ids()[iroot++]});
+        }
+
+        std::vector<bool> visited(sptree.get_element_count(), false);
+        u32 max_level        = 0;
+        u64 bad_id           = 0;
+        u64 visited_twice    = 0;
+        u64 box_mismatch     = 0;
+        u64 lpid_mismatch    = 0;
+        u64 is_leaf_mismatch = 0;
+
+        while (!stack.empty()) {
+            auto [key, id] = stack.back();
+            stack.pop_back();
+
+            if (id >= visited.size()) {
+                bad_id++;
+                continue;
+            }
+            if (visited[id]) {
+                visited_twice++;
+                continue;
+            }
+            visited[id] = true;
+
+            const PatchTree::Node &node = ptree.tree.at(key);
+            PtNode snode                = tree[id];
+            max_level                   = std::max(max_level, node.tree_node.level);
+
+            auto box = transform.to_obj_coord(node.patch_coord.get_patch_range());
+            if (!vec_near(box.lower, snode.box_min) || !vec_near(box.upper, snode.box_max)) {
+                box_mismatch++;
+            }
+            if (lpid[id] != node.linked_patchid) {
+                lpid_mismatch++;
+            }
+            if (node.tree_node.is_leaf != (snode.childs_id[0] == u64_max)) {
+                is_leaf_mismatch++;
+                continue;
+            }
+            if (!node.tree_node.is_leaf) {
+                for (u32 c = 0; c < 8; c++) {
+                    stack.push_back({node.tree_node.childs_nid[c], snode.childs_id[c]});
+                }
+            }
+        }
+
+        REQUIRE_EQUAL(bad_id, 0);
+        REQUIRE_EQUAL(visited_twice, 0);
+        REQUIRE_EQUAL(box_mismatch, 0);
+        REQUIRE_EQUAL(lpid_mismatch, 0);
+        REQUIRE_EQUAL(is_leaf_mismatch, 0);
+        REQUIRE_EQUAL(std::count(visited.begin(), visited.end(), true), visited.size());
+        REQUIRE_EQUAL(sptree.get_level_count(), max_level);
+    }
+
+} // namespace
+
+NEW_TEST(Unittest, "shamrock/scheduler/SerialPatchTree:build", 1) {
+    std::mt19937 eng(0x5e71a1);
+
+    // nroots, base_level, nops
+    std::vector<std::array<u32, 3>> cases = {
+        {1, 0, 0},
+        {1, 2, 200},
+        {2, 1, 400},
+        {4, 2, 300},
+        // large enough to go through the OpenMP paths of the build
+        {4, 5, 64},
+    };
+
+    for (auto [nroots, base_level, nops] : cases) {
+        PatchTree ptree = make_random_tree(eng, nroots, base_level, nops);
+        check_serial_tree<f64_3>(ptree);
+        check_serial_tree<f32_3>(ptree);
+    }
 }
