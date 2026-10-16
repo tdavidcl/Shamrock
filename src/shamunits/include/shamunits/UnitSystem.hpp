@@ -145,7 +145,7 @@ namespace shamunits {
          * @param unit_qte
          * @param unit_lumint
          */
-        explicit UnitSystem(
+        constexpr explicit UnitSystem(
             T unit_time        = 1,
             T unit_length      = 1,
             T unit_mass        = 1,

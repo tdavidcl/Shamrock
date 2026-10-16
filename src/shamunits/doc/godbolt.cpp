@@ -499,7 +499,7 @@ namespace shamunits {
          * @param unit_qte
          * @param unit_lumint
          */
-        explicit UnitSystem(
+        constexpr explicit UnitSystem(
             T unit_time        = 1,
             T unit_length      = 1,
             T unit_mass        = 1,
@@ -834,7 +834,7 @@ namespace shamunits {
         const UnitSystem<T> units;
 
         /// Construct the \ref shamunits::Constants class with a unit system
-        explicit Constants(const UnitSystem<T> units) : units(units) {}
+        constexpr explicit Constants(const UnitSystem<T> units) : units(units) {}
 
 /// Define the constant conversions functions
 #define X(name, conv)                                                                              \
