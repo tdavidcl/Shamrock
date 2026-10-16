@@ -225,11 +225,13 @@ Check `git log -1 --format='Author: %an <%ae>%n%B'` before push.
 
 ### Opening pull requests
 
-Target upstream `Shamrock-code/Shamrock` and base branch `main`.
+Open PRs **only** against upstream `Shamrock-code/Shamrock`, base branch
+`main`. **Never open a PR on a fork** (e.g. `<user>/Shamrock`).
 
-If the agent environment can only open a PR on a fork, put an upstream compare
-link at the top of the PR description so the user can open the PR against
-upstream directly:
+If the agent environment cannot open a PR on upstream (e.g. a cloud session
+whose GitHub access only covers a fork), do not fall back to the fork. Push
+the branch and give the user this upstream compare link in chat, so they
+can open the PR against upstream themselves:
 
 ```text
 https://github.com/Shamrock-code/Shamrock/compare/main...<fork-owner>:Shamrock:<branch>?expand=1

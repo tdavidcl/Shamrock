@@ -30,7 +30,7 @@
     inline constexpr T get() const noexcept
 
 /// Shorthand for unit getter
-#define Uget(unitname, mult_pow) get<pref, units::unitname, (mult_pow) * power>()
+#define Uget(unitname, mult_pow) get<None, units::unitname, (mult_pow) * power>()
 /// Shorthand for constant getter
 #define Cget(constant_name, mult_pow)                                                              \
     details::pow_constexpr_fast_inv<(mult_pow) * power>(constant_name, T(1) / constant_name)
@@ -68,7 +68,7 @@ namespace shamunits {
     ///
     ///    Constants<double> astro_cte {astro_units};
     ///
-    ///    // in those units G is 3.94781e+25
+    ///    // in those units G is 3.94781e+13
     ///    std::cout << astro_cte.G() << std::endl;
     /// @endcode
     ///
