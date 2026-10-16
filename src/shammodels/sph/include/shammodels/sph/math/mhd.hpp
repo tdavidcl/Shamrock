@@ -25,7 +25,6 @@
 #include "shammodels/sph/math/forces.hpp"
 #include "shammodels/sph/math/q_ab.hpp"
 #include "shamphys/mhd.hpp"
-#include "shamunits/Constants.hpp"
 #include <tuple>
 
 namespace shamrock::sph::mhd {

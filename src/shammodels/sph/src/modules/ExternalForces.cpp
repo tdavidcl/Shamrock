@@ -34,7 +34,6 @@
 #include "shamsolvergraph/node/INode.hpp"
 #include "shamsolvergraph/node/NodeSetEdge.hpp"
 #include "shamsolvergraph/node/OperationSequence.hpp"
-#include "shamunits/Constants.hpp"
 
 namespace shambase {
 
