@@ -8,7 +8,7 @@
 // -------------------------------------------------------//
 
 /**
- * @file ConsToPrimGas.cpp
+ * @file ConsToPrimGasAdiabatic.cpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @brief
  *
@@ -17,14 +17,14 @@
 #include "shambase/assert.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shammath/riemann.hpp"
-#include "shammodels/ramses/modules/ConsToPrimGas.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGasAdiabatic.hpp"
 #include "shamrock/patch/PatchDataField.hpp"
 #include "shamsys/NodeInstance.hpp"
 
 namespace {
 
     template<class Tvec>
-    struct KernelConsToPrimGas {
+    struct KernelConsToPrimGasAdiabatic {
         using Tscal = shambase::VecComponent<Tvec>;
 
         inline static void kernel(
@@ -74,7 +74,7 @@ namespace {
 namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
-    void NodeConsToPrimGas<Tvec>::_impl_evaluate_internal() {
+    void NodeConsToPrimGasAdiabatic<Tvec>::_impl_evaluate_internal() {
         __shamrock_stack_entry();
         auto edges = get_edges();
 
@@ -85,7 +85,7 @@ namespace shammodels::basegodunov::modules {
         edges.spans_vel.ensure_sizes(edges.sizes.indexes);
         edges.spans_P.ensure_sizes(edges.sizes.indexes);
 
-        KernelConsToPrimGas<Tvec>::kernel(
+        KernelConsToPrimGasAdiabatic<Tvec>::kernel(
             edges.spans_rho.get_spans(),
             edges.spans_rhov.get_spans(),
             edges.spans_rhoe.get_spans(),
@@ -97,9 +97,9 @@ namespace shammodels::basegodunov::modules {
     }
 
     template<class Tvec>
-    std::string NodeConsToPrimGas<Tvec>::_impl_get_tex() const {
+    std::string NodeConsToPrimGasAdiabatic<Tvec>::_impl_get_tex() const {
         std::string tex = R"tex(
-            Conservative to primitive variable (gas)
+            Conservative to primitive variable (gas, adiabatic)
 
             \begin{align}
             {spans_vel}_i &= \frac{ {spans_rhov}_i }{ {spans_rho}_i } \\
@@ -120,4 +120,4 @@ namespace shammodels::basegodunov::modules {
 
 } // namespace shammodels::basegodunov::modules
 
-template class shammodels::basegodunov::modules::NodeConsToPrimGas<f64_3>;
+template class shammodels::basegodunov::modules::NodeConsToPrimGasAdiabatic<f64_3>;
