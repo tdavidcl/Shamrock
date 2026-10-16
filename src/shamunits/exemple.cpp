@@ -40,6 +40,6 @@ int main(void) {
 
     Constants<double> astro_cte{astro_units};
 
-    // in those units G is 3.94781e+25
+    // in those units G is 3.94781e+13
     std::cout << astro_cte.G() << std::endl;
 }

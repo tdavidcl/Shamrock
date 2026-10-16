@@ -14,7 +14,6 @@
 // line gives the value the code returns now (which the test checks) and the correct value.
 //
 //   BUG 3: to<pref, u, power>() drops the prefix.
-//   BUG 4: the prefix is applied once per nesting level of a derived or relative unit.
 //   BUG 6: f32 loses precision or turns non-finite when an intermediate under/overflows although
 //          the final value fits in f32.
 //
@@ -34,6 +33,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -58,7 +58,8 @@ namespace {
         return "?";
     }
 
-    // Built from literal base units, never from get<mega, years>() (BUG 4).
+    // Built from literal base units, never from get<>(), so the systems don't depend on the code
+    // under test.
     template<class T>
     UnitSystem<T> make_system(RefSystem s) {
         switch (s) {
@@ -311,15 +312,9 @@ namespace {
         {"british_pint", "None", -2, 3099583.4159888919, 3.4742078788537784e+73, 3.0995834159888923e-06},
         {"british_pint", "None", 1, 0.00056799999999999993, 1.6965712358412578e-37, 567.99999999999989},
         {"british_pint", "None", 2, 3.2262399999999991e-07, 2.878353958283933e-74, 322623.99999999988},
-        // BUG 4: prefix applied per nesting level; correct value is
-        // si 31557600000000.0, astro 1.0, cgs 31557600000000.0
-        {"years", "M", 1, 3.15576e+19, 999999.99999999988, 3.15576e+19},
-        // BUG 4: prefix applied per nesting level; correct value is
-        // si 31557600000000000.0, astro 1000.0, cgs 31557600000000000.0
-        {"years", "G", 1, 3.1557599999999999e+25, 1000000000000.0, 3.1557599999999999e+25},
-        // BUG 4: prefix applied per nesting level; correct value is
-        // si 1000.0, astro 2.2378865539827109e-23, cgs 10000000000.0
-        {"Joule", "k", 1, 1000000000.0, 2.2378865539827104e-17, 10000000000000000.0},
+        {"years", "M", 1, 31557600000000, 0.99999999999999989, 31557600000000},
+        {"years", "G", 1, 31557600000000000, 1000, 31557600000000000},
+        {"Joule", "k", 1, 1000, 2.2378865539827109e-23, 10000000000},
         {"m", "c", 1, 0.010000000000000002, 6.6845871222684458e-14, 1.0000000000000002},
         {"kg", "m", 1, 0.0010000000000000002, 5.0289921396852868e-34, 1.0000000000000002},
     };
@@ -407,15 +402,11 @@ namespace {
         {"Constants::c", 299792458.0, 63241077084.266273, 29979245800.0},
         {"Constants::mu_0", 1.2566370621219e-06, 4.207008051687417e-21, 0.12566370621219},
         {"get<astronomical_unit, 2>", 2.2379522917973921e+22, 1.0, 2.237952291797392e+26},
-        // BUG 4: prefix applied per nesting level; correct value is
-        // si 31557600000000.0, astro 1.0, cgs 31557600000000.0
-        {"get<mega, years>", 3.15576e+19, 999999.99999999988, 3.15576e+19},
+        {"get<mega, years>", 31557600000000, 0.99999999999999989, 31557600000000},
         // BUG 3: to<pref, u, power>() drops the prefix; correct value is
         // si 3.168808781402895e-14, astro 1.0, cgs 3.168808781402895e-14
         {"to<mega, years>", 3.1688087814028947e-08, 999999.99999999988, 3.1688087814028947e-08},
-        // BUG 4: prefix applied per nesting level; correct value is
-        // si 1000.0, astro 2.2378865539827109e-23, cgs 10000000000.0
-        {"get<kilo, Joule>", 1000000000.0, 2.2378865539827104e-17, 10000000000000000.0},
+        {"get<kilo, Joule>", 1000, 2.2378865539827109e-23, 10000000000},
     };
 
     /// f32 result that differs from the f64 reference above by more than the f32 tolerance
@@ -467,6 +458,8 @@ namespace {
         {"constant:sigma 2", RefSystem::Astro, 803192.75}, // BUG 6: correct value is 803173.16438226961
         {"template:Constants::G", RefSystem::Astro, nan_v}, // BUG 6: correct value is 39478129059350.664
         {"template:Constants::mu_0", RefSystem::Astro, 4.207059578593522e-21}, // BUG 6: correct value is 4.207008051687417e-21
+        {"unit:Joule k 1", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
+        {"template:get<kilo, Joule>", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
     };
 
     /// Not a bug: the f64 value lies outside the normal f32 range, so f32 overflows to inf or
@@ -661,4 +654,73 @@ NEW_TEST(Unittest, "shamunits/constant_dimensions", 1) {
     REQUIRE_FLOAT_EQUAL(cte.h() / Si::h / joule_second, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(cte.hbar() / Si::hbar / joule_second, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(cte.guiness_density() / Si::guiness_density / kg_per_m3, 1., 1e-12);
+}
+
+namespace {
+
+    /// Prefix exponents, written out rather than read from the UnitPrefix enum
+    const std::pair<const char *, int> prefix_exponents[] = {
+        {"T", 12},
+        {"G", 9},
+        {"M", 6},
+        {"k", 3},
+        {"hect", 2},
+        {"dec", 1},
+        {"c", -2},
+        {"m", -3},
+        {"mu", -6},
+        {"n", -9},
+        {"p", -12},
+        {"f", -15},
+    };
+
+    const char *const all_unit_names[] = {
+#define X1(longname, shortname) #longname,
+        XMAC_UNITS
+#undef X1
+    };
+
+    /// Finite, non-zero and not subnormal in T
+    template<class T>
+    bool in_normal_range(double v) {
+        return std::isfinite(v) && std::abs(v) >= std::numeric_limits<T>::min()
+               && std::abs(v) <= std::numeric_limits<T>::max();
+    }
+
+    /// A prefix scales a unit by 10^(exponent*power), however the unit is built
+    template<class T>
+    void check_prefix_scaling(RefSystem s, double tol) {
+        UnitSystem<T> u = make_system<T>(s);
+
+        for (const char *name : all_unit_names) {
+            for (auto [prefix, exponent] : prefix_exponents) {
+                for (int power : {-2, 1, 2}) {
+                    double got      = unit_value(u, name, prefix, power);
+                    double expected = double(unit_value(u, name, "None", power))
+                                      * std::pow(10., exponent * power);
+
+                    if (!in_normal_range<T>(got) || !in_normal_range<T>(expected)) {
+                        continue;
+                    }
+
+                    std::string label = std::string(std::is_same_v<T, f32> ? "f32 " : "f64 ")
+                                        + ref_system_name(s) + " " + name + " " + prefix + " "
+                                        + std::to_string(power);
+                    REQUIRE_FLOAT_EQUAL_NAMED(label, got / expected, 1.0, tol);
+                }
+            }
+        }
+    }
+
+} // namespace
+
+NEW_TEST(Unittest, "shamunits/prefix_scaling", 1) {
+    for (RefSystem s : ref_systems) {
+        check_prefix_scaling<f64>(s, tol_f64);
+    }
+
+    // Not in astro: there prefixed and unprefixed f32 values of Newton, Pascal, Tesla, lux, Watt,
+    // electron_volt and solar_mass round through different intermediates (BUG 6)
+    check_prefix_scaling<f32>(RefSystem::SI, tol_f32);
+    check_prefix_scaling<f32>(RefSystem::CGS, tol_f32);
 }

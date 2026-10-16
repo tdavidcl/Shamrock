@@ -144,6 +144,10 @@ jobs:
             testfile: run_mhd_orszag_tang.py
           - worldsize: 1
             testfile: run_mhd_rotor.py
+          - worldsize: 1
+            testfile: run_field_collect_data_alignment.py
+          - worldsize: 2
+            testfile: run_field_collect_data_alignment.py
       fail-fast: ${{ inputs.fail_fast }}
 
     timeout-minutes: 60

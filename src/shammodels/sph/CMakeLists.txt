@@ -51,6 +51,7 @@ set(Sources
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/ComputeNeighStats.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAV.cpp
+    src/modules/NodeUpdateDerivsVaryingAlphaAVMHD.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAVDustTVA.cpp
     src/modules/NodeUpdateDerivsMonofluidTVA.cpp
     src/modules/NodeComputePressureGrad.cpp

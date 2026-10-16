@@ -167,7 +167,7 @@ namespace shamunits {
         const UnitSystem<T> units;
 
         /// Construct the \ref shamunits::Constants class with a unit system
-        explicit Constants(const UnitSystem<T> units) : units(units) {}
+        constexpr explicit Constants(const UnitSystem<T> units) : units(units) {}
 
 /// Define the constant conversions functions
 #define X(name, conv)                                                                              \
