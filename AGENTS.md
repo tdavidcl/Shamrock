@@ -212,8 +212,7 @@ Check `git log -1 --format='Author: %an <%ae>%n%B'` before push.
 ### Opening pull requests
 
 Open PRs **only** against upstream `Shamrock-code/Shamrock`, base branch
-`main`. **Never open a PR on a fork** (e.g. `<user>/Shamrock`): nobody looks
-at PRs there.
+`main`. **Never open a PR on a fork** (e.g. `<user>/Shamrock`).
 
 If the agent environment cannot open a PR on upstream (e.g. a cloud session
 whose GitHub access only covers a fork), do not fall back to the fork. Push
