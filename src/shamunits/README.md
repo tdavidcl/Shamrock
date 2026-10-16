@@ -37,14 +37,14 @@ int main(void){
 
     Constants<double> astro_cte {astro_units};
 
-    // in those units G is 3.94781e+25
+    // in those units G is 3.94781e+13
     std::cout << astro_cte.G() << std::endl;
 
     //now if the code return a value in astro_units
     //we can convert it to any units like so
     double value = 12; //here 12 Myr
 
-    // print : value = 3.15576e+19 s
+    // print : value = 3.15576e+13 s
     std::cout << "value = "<< astro_units.to<units::second>() << " s"<< std::endl;
 
 }
