@@ -24,7 +24,8 @@ set(Sources
     src/modules/ConsToPrimGasAdiabatic.cpp
     src/modules/ConsToPrimGasBarotropic.cpp
     src/modules/ConsToPrimDust.cpp
-    src/modules/EulerTimeDerivativeGas.cpp
+    src/modules/EulerTimeDerivativeGasAdiabatic.cpp
+    src/modules/EulerTimeDerivativeGasBarotropic.cpp
     src/modules/EulerTimeDerivativeDust.cpp
     src/modules/ComputeCellAABB.cpp
     src/modules/NodeBuildTrees.cpp
