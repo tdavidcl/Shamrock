@@ -25,8 +25,8 @@ using DustRiemannSolverMode = shammodels::basegodunov::DustRiemannSolverMode;
 using Direction             = shammodels::basegodunov::modules::Direction;
 
 template<class Tvec, class TgridVec, RiemannSolverMode mode, Direction dir>
-void shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec, mode, dir>::
-    _impl_evaluate_internal() {
+void shammodels::basegodunov::modules::
+    NodeComputeFluxGasAdiabaticDirMode<Tvec, TgridVec, mode, dir>::_impl_evaluate_internal() {
     __shamrock_stack_entry();
 
     auto edges = get_edges();
@@ -84,8 +84,71 @@ void shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec,
 }
 
 template<class Tvec, class TgridVec, RiemannSolverMode mode, Direction dir>
-std::string shammodels::basegodunov::modules::NodeComputeFluxGasDirMode<Tvec, TgridVec, mode, dir>::
-    _impl_get_tex() const {
+std::string shammodels::basegodunov::modules::
+    NodeComputeFluxGasAdiabaticDirMode<Tvec, TgridVec, mode, dir>::_impl_get_tex() const {
+    return "TODO";
+}
+
+template<class Tvec, class TgridVec, RiemannSolverMode mode, Direction dir>
+void shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<Tvec, TgridVec, mode, dir>::_impl_evaluate_internal() {
+    __shamrock_stack_entry();
+
+    auto edges = get_edges();
+
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    auto graphs_dir = edges.cell_neigh_graph.get_refs_dir(dir);
+
+    edges.rho_face.check_size(graphs_dir);
+    edges.vel_face.check_size(graphs_dir);
+
+    edges.flux_rho_face.resize_according_to(graphs_dir);
+    edges.flux_rhov_face.resize_according_to(graphs_dir);
+    edges.flux_rhoe_face.resize_according_to(graphs_dir);
+
+    shambase::DistributedData<u32> counts_dir
+        = graphs_dir.template map<u32>([&](u64 id, auto &graph) {
+              return graph.get().link_count;
+          });
+
+    sham::distributed_data_kernel_call(
+        dev_sched,
+        sham::DDMultiRef{edges.rho_face.link_fields, edges.vel_face.link_fields},
+        sham::DDMultiRef{
+            edges.flux_rho_face.link_fields,
+            edges.flux_rhov_face.link_fields,
+            edges.flux_rhoe_face.link_fields},
+        counts_dir,
+        [rho_crit = this->rho_crit, cs0 = this->cs0, gamma = this->gamma](
+            u32 link_id,
+            const std::array<Tscal, 2> *__restrict rho_face,
+            const std::array<Tvec, 2> *__restrict vel_face,
+            Tscal *__restrict flux_rho_face,
+            Tvec *__restrict flux_rhov_face,
+            Tscal *__restrict flux_rhoe_face) {
+            auto rho_ij = rho_face[link_id];
+            auto vel_ij = vel_face[link_id];
+
+            using Tprim = shammath::PrimState<Tvec>;
+            shammath::FluidStateBarotropic<Tvec> baro_fluid{rho_crit, cs0, gamma};
+
+            // P = P(rho): the face pressure is rebuilt from the face density, never
+            // interpolated, which satisfies press == pressure(rho) by construction
+            auto flux_dir = riemann_flux<decltype(baro_fluid), mode, dir>(
+                baro_fluid,
+                Tprim{rho_ij[0], baro_fluid.pressure(rho_ij[0]), vel_ij[0]},
+                Tprim{rho_ij[1], baro_fluid.pressure(rho_ij[1]), vel_ij[1]});
+
+            flux_rho_face[link_id]  = flux_dir.rho;
+            flux_rhov_face[link_id] = flux_dir.rhovel;
+            flux_rhoe_face[link_id] = flux_dir.rhoe;
+        });
+}
+
+template<class Tvec, class TgridVec, RiemannSolverMode mode, Direction dir>
+std::string shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<Tvec, TgridVec, mode, dir>::_impl_get_tex() const {
     return "TODO";
 }
 
@@ -142,43 +205,82 @@ std::string shammodels::basegodunov::modules::
 }
 
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::ym>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::ym>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::yp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::yp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zp>;
 
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::ym>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::ym>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::yp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::yp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zp>;
 
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::ym>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::ym>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::yp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::yp>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zm>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zm>;
 template class shammodels::basegodunov::modules::
-    NodeComputeFluxGasDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zp>;
+    NodeComputeFluxGasAdiabaticDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zp>;
+
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::xp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::ym>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::yp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::Rusanov, Direction::zp>;
+
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::xp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::ym>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::yp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLL, Direction::zp>;
+
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::xp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::ym>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::yp>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zm>;
+template class shammodels::basegodunov::modules::
+    NodeComputeFluxGasBarotropicDirMode<f64_3, i64_3, RiemannSolverMode::HLLC, Direction::zp>;
 
 template class shammodels::basegodunov::modules::
     NodeComputeFluxDustDirMode<f64_3, i64_3, DustRiemannSolverMode::HB, Direction::xm>;

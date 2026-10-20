@@ -182,6 +182,8 @@ namespace shammodels::basegodunov {
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tvec, 2>>> vel_face_zp;
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tvec, 2>>> vel_face_zm;
 
+        /// Face pressures (left/right), adiabatic EOS only (null with a barotropic EOS, where the
+        /// face pressure is rebuilt from the face density)
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>> press_face_xp;
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>> press_face_xm;
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>> press_face_yp;
