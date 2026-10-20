@@ -233,7 +233,7 @@ namespace shamunits {
          */
         template<UnitPrefix pref = None, units::UnitName u, int power = 1>
         inline constexpr T to() {
-            return get<u, -power>();
+            return get<pref, u, -power>();
         }
 
         /// Simplified signature for \ref get without prefix

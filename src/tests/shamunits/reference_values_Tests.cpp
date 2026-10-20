@@ -13,7 +13,6 @@
 // below unchanged, and a bug fix changes exactly the lines tagged with its BUG number. Each tagged
 // line gives the value the code returns now (which the test checks) and the correct value.
 //
-//   BUG 3: to<pref, u, power>() drops the prefix.
 //   BUG 6: f32 loses precision or turns non-finite when an intermediate under/overflows although
 //          the final value fits in f32.
 //
@@ -142,6 +141,10 @@ namespace {
         {"get<kilo, Joule>",
          [](UnitSystem<T> &u) -> T {
              return u.template get<shamunits::kilo, units::Joule>();
+         }},
+        {"to<kilo, Joule>",
+         [](UnitSystem<T> &u) -> T {
+             return u.template to<shamunits::kilo, units::Joule>();
          }},
     };
 
@@ -403,10 +406,9 @@ namespace {
         {"Constants::mu_0", 1.2566370621219e-06, 4.207008051687417e-21, 0.12566370621219},
         {"get<astronomical_unit, 2>", 2.2379522917973921e+22, 1.0, 2.237952291797392e+26},
         {"get<mega, years>", 31557600000000, 0.99999999999999989, 31557600000000},
-        // BUG 3: to<pref, u, power>() drops the prefix; correct value is
-        // si 3.168808781402895e-14, astro 1.0, cgs 3.168808781402895e-14
-        {"to<mega, years>", 3.1688087814028947e-08, 999999.99999999988, 3.1688087814028947e-08},
+        {"to<mega, years>", 3.1688087814028944e-14, 0.99999999999999989, 3.1688087814028944e-14},
         {"get<kilo, Joule>", 1000, 2.2378865539827109e-23, 10000000000},
+        {"to<kilo, Joule>", 0.001, 4.4685017576977925e+22, 1e-10},
     };
 
     /// f32 result that differs from the f64 reference above by more than the f32 tolerance
@@ -460,6 +462,7 @@ namespace {
         {"template:Constants::mu_0", RefSystem::Astro, 4.207059578593522e-21}, // BUG 6: correct value is 4.207008051687417e-21
         {"unit:Joule k 1", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
         {"template:get<kilo, Joule>", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
+        {"template:to<kilo, Joule>", RefSystem::Astro, inf_v}, // BUG 6: correct value is 4.4685017576977925e+22
     };
 
     /// Not a bug: the f64 value lies outside the normal f32 range, so f32 overflows to inf or
