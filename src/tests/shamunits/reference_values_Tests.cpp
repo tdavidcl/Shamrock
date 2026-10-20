@@ -13,7 +13,6 @@
 // below unchanged, and a bug fix changes exactly the lines tagged with its BUG number. Each tagged
 // line gives the value the code returns now (which the test checks) and the correct value.
 //
-//   BUG 3: to<pref, u, power>() drops the prefix.
 //   BUG 6: f32 loses precision or turns non-finite when an intermediate under/overflows although
 //          the final value fits in f32.
 //
@@ -39,7 +38,7 @@ namespace {
 
     using shamunits::Constants;
     using shamunits::UnitSystem;
-    namespace units = shamunits::units;
+    namespace legacy_units = shamunits::legacy_units;
 
     constexpr double nan_v = std::numeric_limits<double>::quiet_NaN();
     constexpr double inf_v = std::numeric_limits<double>::infinity();
@@ -80,7 +79,7 @@ namespace {
     template<class T>
     T unit_value(UnitSystem<T> &u, const std::string &name, const std::string &pref, int power) {
         return u.runtime_get(
-            shamunits::unit_prefix_from_name(pref), units::unit_from_name(name), power);
+            shamunits::unit_prefix_from_name(pref), legacy_units::unit_from_name(name), power);
     }
 
     /// Constants, as exposed by the Python bindings
@@ -105,15 +104,15 @@ namespace {
     const std::unordered_map<std::string, T (*)(UnitSystem<T> &)> template_getters = {
         {"to<kilogram>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<units::kilogram>();
+             return u.template to<legacy_units::kilogram>();
          }},
         {"to<metre>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<units::metre>();
+             return u.template to<legacy_units::metre>();
          }},
         {"to<second>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<units::second>();
+             return u.template to<legacy_units::second>();
          }},
         {"Constants::G",
          [](UnitSystem<T> &u) -> T {
@@ -129,19 +128,23 @@ namespace {
          }},
         {"get<astronomical_unit, 2>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<units::astronomical_unit, 2>();
+             return u.template get<legacy_units::astronomical_unit, 2>();
          }},
         {"get<mega, years>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<shamunits::mega, units::years>();
+             return u.template get<shamunits::mega, legacy_units::years>();
          }},
         {"to<mega, years>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<shamunits::mega, units::years>();
+             return u.template to<shamunits::mega, legacy_units::years>();
          }},
         {"get<kilo, Joule>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<shamunits::kilo, units::Joule>();
+             return u.template get<shamunits::kilo, legacy_units::Joule>();
+         }},
+        {"to<kilo, Joule>",
+         [](UnitSystem<T> &u) -> T {
+             return u.template to<shamunits::kilo, legacy_units::Joule>();
          }},
     };
 
@@ -403,10 +406,9 @@ namespace {
         {"Constants::mu_0", 1.2566370621219e-06, 4.207008051687417e-21, 0.12566370621219},
         {"get<astronomical_unit, 2>", 2.2379522917973921e+22, 1.0, 2.237952291797392e+26},
         {"get<mega, years>", 31557600000000, 0.99999999999999989, 31557600000000},
-        // BUG 3: to<pref, u, power>() drops the prefix; correct value is
-        // si 3.168808781402895e-14, astro 1.0, cgs 3.168808781402895e-14
-        {"to<mega, years>", 3.1688087814028947e-08, 999999.99999999988, 3.1688087814028947e-08},
+        {"to<mega, years>", 3.1688087814028944e-14, 0.99999999999999989, 3.1688087814028944e-14},
         {"get<kilo, Joule>", 1000, 2.2378865539827109e-23, 10000000000},
+        {"to<kilo, Joule>", 0.001, 4.4685017576977925e+22, 1e-10},
     };
 
     /// f32 result that differs from the f64 reference above by more than the f32 tolerance
@@ -460,6 +462,7 @@ namespace {
         {"template:Constants::mu_0", RefSystem::Astro, 4.207059578593522e-21}, // BUG 6: correct value is 4.207008051687417e-21
         {"unit:Joule k 1", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
         {"template:get<kilo, Joule>", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
+        {"template:to<kilo, Joule>", RefSystem::Astro, inf_v}, // BUG 6: correct value is 4.4685017576977925e+22
     };
 
     /// Not a bug: the f64 value lies outside the normal f32 range, so f32 overflows to inf or
@@ -648,8 +651,8 @@ NEW_TEST(Unittest, "shamunits/constant_dimensions", 1) {
     Constants<f64> cte{astro};
 
     // value of one J.s and one kg.m-3 in the astro system, computed by hand
-    f64 joule_second = astro.get<units::Joule>() * astro.get<units::second>();
-    f64 kg_per_m3    = astro.get<units::kilogram>() * astro.get<units::metre, -3>();
+    f64 joule_second = astro.get<legacy_units::Joule>() * astro.get<legacy_units::second>();
+    f64 kg_per_m3    = astro.get<legacy_units::kilogram>() * astro.get<legacy_units::metre, -3>();
 
     REQUIRE_FLOAT_EQUAL(cte.h() / Si::h / joule_second, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(cte.hbar() / Si::hbar / joule_second, 1., 1e-12);
