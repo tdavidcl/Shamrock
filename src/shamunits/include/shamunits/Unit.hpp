@@ -17,13 +17,28 @@
  * Units, prefixes and physical constants are all the same thing: a dimension plus a factor.
  * Everything here is constexpr and STL-free so it can be used in device code.
  *
- * Unit is a structural type: it can be passed by value as a template argument
- * (`template<Unit u>`), which is what lets UnitSystem::get<u>() keep every exponent a constant
- * expression. Only a raw `template<double>` parameter is unsupported on clang < 18, so do not
- * add one.
+ * Unit<Tscal> is a structural type for any floating-point Tscal: it can be passed by value as a
+ * template argument (`template<Unit u>`, or `template<Unit<double> u>`), which is what lets
+ * UnitSystem::get<u>() keep every exponent a constant expression. Only a raw
+ * `template<double>` parameter is unsupported on clang < 18, so do not add one.
+ *
+ * The algebra never mixes precisions implicitly: convert with unit_cast<T>() first.
+ * Spell the precision when brace-initialising (`Unit<float>{.dim = ..., .si_factor = ...}`):
+ * class template argument deduction from an aggregate initializer needs clang >= 17.
  */
 
 namespace shamunits {
+
+    namespace details {
+        /// Non-deduced context, so a scalar operand converts to the unit's precision
+        template<class T>
+        struct TypeIdentity {
+            using type = T; ///< the type itself
+        };
+        /// Shorthand for TypeIdentity<T>::type
+        template<class T>
+        using type_identity_t = typename TypeIdentity<T>::type;
+    } // namespace details
 
     /// Exponents of the seven SI base dimensions
     struct Dimension {
@@ -78,42 +93,55 @@ namespace shamunits {
         };
     }
 
-    /// A unit: its dimension and its magnitude expressed in SI base units
+    /// A unit: its dimension and its magnitude expressed in SI base units, in precision Tscal
+    template<class Tscal = double>
     struct Unit {
-        Dimension dim{};       ///< SI dimension
-        double si_factor = 1.; ///< value of one of this unit in SI base units
+        Dimension dim{};     ///< SI dimension
+        Tscal si_factor = 1; ///< value of one of this unit in SI base units
 
         /// Exact equality of dimension and factor
         constexpr bool operator==(const Unit &) const = default;
     };
 
+    /// Explicit precision conversion, e.g. `unit_cast<float>(units::metre)`
+    template<class Tdst, class Tsrc>
+    constexpr Unit<Tdst> unit_cast(Unit<Tsrc> u) noexcept {
+        return {.dim = u.dim, .si_factor = static_cast<Tdst>(u.si_factor)};
+    }
+
     /// Product of two units: exponents add, factors multiply
-    constexpr Unit operator*(Unit a, Unit b) noexcept {
+    template<class T>
+    constexpr Unit<T> operator*(Unit<T> a, Unit<T> b) noexcept {
         return {.dim = a.dim * b.dim, .si_factor = a.si_factor * b.si_factor};
     }
 
     /// Quotient of two units: exponents subtract, factors divide
-    constexpr Unit operator/(Unit a, Unit b) noexcept {
+    template<class T>
+    constexpr Unit<T> operator/(Unit<T> a, Unit<T> b) noexcept {
         return {.dim = a.dim / b.dim, .si_factor = a.si_factor / b.si_factor};
     }
 
     /// Scale a unit, e.g. `149597870700. * metre`
-    constexpr Unit operator*(double s, Unit u) noexcept {
+    template<class T>
+    constexpr Unit<T> operator*(details::type_identity_t<T> s, Unit<T> u) noexcept {
         return {.dim = u.dim, .si_factor = s * u.si_factor};
     }
 
     /// Scale a unit, e.g. `metre * 1e3`
-    constexpr Unit operator*(Unit u, double s) noexcept {
+    template<class T>
+    constexpr Unit<T> operator*(Unit<T> u, details::type_identity_t<T> s) noexcept {
         return {.dim = u.dim, .si_factor = u.si_factor * s};
     }
 
     /// Divide a unit by a scalar, e.g. `joule / 1e7`
-    constexpr Unit operator/(Unit u, double s) noexcept {
+    template<class T>
+    constexpr Unit<T> operator/(Unit<T> u, details::type_identity_t<T> s) noexcept {
         return {.dim = u.dim, .si_factor = u.si_factor / s};
     }
 
     /// Scalar over a unit, e.g. `1. / second`: the dimension is inverted
-    constexpr Unit operator/(double s, Unit u) noexcept {
+    template<class T>
+    constexpr Unit<T> operator/(details::type_identity_t<T> s, Unit<T> u) noexcept {
         return {.dim = Dimension{} / u.dim, .si_factor = s / u.si_factor};
     }
 
@@ -124,24 +152,33 @@ namespace shamunits {
      * sycl::pow. This is the only place in the unit algebra that can divide (for n < 0), and it
      * folds at compile time whenever its argument is a constant expression.
      */
-    constexpr Unit upow(Unit u, int n) noexcept {
-        double f = 1.;
-        double b = u.si_factor;
-        int k    = (n < 0) ? -n : n;
+    template<class T>
+    constexpr Unit<T> upow(Unit<T> u, int n) noexcept {
+        T f   = 1;
+        T b   = u.si_factor;
+        int k = (n < 0) ? -n : n;
         while (k != 0) {
             if ((k & 1) != 0) {
                 f *= b;
             }
-            b *= b;
             k >>= 1;
+            if (k != 0) { // squaring past the last bit could overflow when the result fits
+                b *= b;
+            }
         }
-        return {.dim = dim_pow(u.dim, n), .si_factor = (n < 0) ? 1. / f : f};
+        return {.dim = dim_pow(u.dim, n), .si_factor = (n < 0) ? T(1) / f : f};
     }
 
     /// A base unit of the given dimension with factor 1, e.g. `base_unit({.metre = 1})`
-    constexpr Unit base_unit(Dimension d) noexcept { return {.dim = d, .si_factor = 1.}; }
+    template<class T = double>
+    constexpr Unit<T> base_unit(Dimension d) noexcept {
+        return {.dim = d, .si_factor = T(1)};
+    }
 
-    /// A dimensionless scale factor, e.g. a prefix: `scale(1e6)`
-    constexpr Unit scale(double s) noexcept { return {.dim = Dimension{}, .si_factor = s}; }
+    /// A dimensionless scale factor, e.g. a prefix: `scale(1e6)` (precision of the argument)
+    template<class T>
+    constexpr Unit<T> scale(T s) noexcept {
+        return {.dim = Dimension{}, .si_factor = s};
+    }
 
 } // namespace shamunits

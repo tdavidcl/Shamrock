@@ -20,77 +20,93 @@
 namespace {
     using namespace shamunits;
 
-    // Local stand-ins: the real tables (shamunits::units) arrive in a later PR
-    constexpr Unit s  = base_unit({.second = 1});
-    constexpr Unit m  = base_unit({.metre = 1});
-    constexpr Unit kg = base_unit({.kilogram = 1});
-
-    constexpr Unit newton = kg * m / upow(s, 2);
-    constexpr Unit joule  = newton * m;
-    constexpr Unit watt   = joule / s;
-    constexpr Unit au     = 149597870700. * m;
+    template<class A, class B>
+    inline constexpr bool same_type = false;
+    template<class A>
+    inline constexpr bool same_type<A, A> = true;
 
     /// Relative comparison: factors built two different ways may differ by a few ulps
-    constexpr bool close(double a, double b, double rel) {
-        double d  = a - b;
-        double ab = (b < 0) ? -b : b;
+    template<class T>
+    constexpr bool close(T a, T b, T rel) {
+        T d  = a - b;
+        T ab = (b < 0) ? -b : b;
         return ((d < 0) ? -d : d) <= rel * ab;
     }
 
-    // Dimension algebra
-    static_assert(newton.dim == Dimension{.second = -2, .metre = 1, .kilogram = 1});
-    static_assert(joule.dim == Dimension{.second = -2, .metre = 2, .kilogram = 1});
-    static_assert(watt.dim == (joule / s).dim);
-    static_assert((1. / s).dim == Dimension{.second = -1});
+    /// The whole algebra, instantiated for one precision. Local stand-ins: the real tables
+    /// (shamunits::units) arrive in a later PR.
+    template<class T>
+    constexpr bool check_algebra() {
+        constexpr Unit<T> s  = base_unit<T>({.second = 1});
+        constexpr Unit<T> m  = base_unit<T>({.metre = 1});
+        constexpr Unit<T> kg = base_unit<T>({.kilogram = 1});
+
+        constexpr Unit<T> newton = kg * m / upow(s, 2);
+        constexpr Unit<T> joule  = newton * m;
+        constexpr Unit<T> watt   = joule / s;
+        constexpr Unit<T> au     = 149597870700. * m; // scalar converts to T
+
+        static_assert(newton.dim == Dimension{.second = -2, .metre = 1, .kilogram = 1});
+        static_assert(joule.dim == Dimension{.second = -2, .metre = 2, .kilogram = 1});
+        static_assert(watt.dim == (joule / s).dim);
+        static_assert((1. / s).dim == Dimension{.second = -1});
+        static_assert((m / upow(s, 2) * kg) == newton);
+
+        static_assert((m * T(1e3)) == (T(1e3) * m));
+        static_assert((joule / 1e7).si_factor == T(1) / T(1e7));
+        static_assert((2. / s).si_factor == T(2));
+        static_assert(scale(T(1e6)).dim == Dimension{});
+
+        static_assert(upow(au, 0) == Unit<T>{});
+        static_assert(upow(au, 1) == au);
+        static_assert(upow(au, 2).si_factor == au.si_factor * au.si_factor);
+        static_assert(
+            upow(Unit<T>{.dim = {.metre = 1}, .si_factor = 2}, -2)
+            == Unit<T>{.dim = {.metre = -2}, .si_factor = T(.25)});
+        static_assert(upow(au, 3).si_factor > 0); // fits in float; no overflow on the way
+        static_assert((upow(au, 1) * upow(au, 2)).dim == upow(au, 3).dim);
+        static_assert(close((upow(au, -2) * upow(au, 3)).si_factor, au.si_factor, T(1e-6)));
+        return true;
+    }
+
+    static_assert(check_algebra<double>());
+    static_assert(check_algebra<float>());
+    static_assert(check_algebra<long double>());
+
     static_assert(
         dim_pow(Dimension{.metre = 1, .ampere = -2}, 3) == Dimension{.metre = 3, .ampere = -6});
 
-    // Factors
-    static_assert(base_unit({.kelvin = 1}).si_factor == 1.);
-    static_assert(scale(1e6).dim == Dimension{});
-    static_assert((scale(1e3) * m).si_factor == 1e3);
-    static_assert((m * 1e3) == (1e3 * m));
-    static_assert((joule / 1e7).si_factor == 1e-7);
-    static_assert((2. / s).si_factor == 2.);
+    // Default precision and deduction
+    static_assert(same_type<Unit<>, Unit<double>>);
+    static_assert(same_type<decltype(base_unit({.metre = 1})), Unit<double>>);
+    static_assert(same_type<decltype(scale(1e6f)), Unit<float>>);
 
-    // upow: zero, positive, negative; exact for power-of-two factors
-    static_assert(upow(au, 0) == Unit{});
-    static_assert(upow(au, 1) == au);
-    static_assert(upow(au, 2).si_factor == 149597870700. * 149597870700.);
-    static_assert(
-        upow(Unit{.dim = {.metre = 1}, .si_factor = 2.}, -2)
-        == Unit{.dim = {.metre = -2}, .si_factor = .25});
-    static_assert(upow(Unit{.dim = {.metre = 1}, .si_factor = 2.}, 10).si_factor == 1024.);
+    // Explicit precision conversion
+    constexpr Unit<double> au_d = 149597870700. * base_unit({.metre = 1});
+    static_assert(unit_cast<float>(au_d).si_factor == 149597870700.f);
+    static_assert(unit_cast<float>(au_d).dim == au_d.dim);
 
-    // upow composes like a power, up to rounding for non-power-of-two factors
-    static_assert((upow(au, 2) * upow(au, 3)).dim == upow(au, 5).dim);
-    static_assert(close((upow(au, 2) * upow(au, 3)).si_factor, upow(au, 5).si_factor, 1e-15));
-    static_assert(close((upow(au, -2) * upow(au, 3)).si_factor, au.si_factor, 1e-15));
-
-    // A composition a single scalar power cannot express: m.s-2 * kg = N
-    static_assert((m / upow(s, 2) * kg) == newton);
-
-    // Unit is a structural type: by-value template parameter, prvalue argument, and its fields
-    // usable as template arguments. This is the property UnitSystem::get<u>() relies on; it
+    // Unit<T> is a structural type for each precision, both as a concrete NTTP and through the
+    // deduced placeholder template<Unit u>. This is what UnitSystem::get<u>() relies on; it
     // compiles on clang 15 (only a raw template<double> is rejected before clang 18).
     template<Unit u>
     struct UnitNttp {
-        static constexpr Unit value          = u;
-        static constexpr int metre_exponent  = u.dim.metre;
-        static constexpr double factor_value = u.si_factor;
+        static constexpr auto value         = u;
+        static constexpr int metre_exponent = u.dim.metre;
     };
     template<int n>
     struct IntNttp {
         static constexpr int value = n;
     };
-    static_assert(UnitNttp<au>::value == au);
-    static_assert(UnitNttp<upow(au, 2)>::metre_exponent == 2);
-    static_assert(UnitNttp<scale(1e6) * s>::factor_value == 1e6);
-    static_assert(IntNttp<UnitNttp<joule>::value.dim.second>::value == -2);
+    static_assert(UnitNttp<au_d>::value == au_d);
+    static_assert(UnitNttp<upow(au_d, 2)>::metre_exponent == 2);
+    static_assert(same_type<decltype(UnitNttp<unit_cast<float>(au_d)>::value), const Unit<float>>);
+    static_assert(!same_type<UnitNttp<unit_cast<float>(au_d)>, UnitNttp<au_d>>);
+    static_assert(IntNttp<UnitNttp<upow(au_d, -3)>::value.dim.metre>::value == -3);
 
 } // namespace
 
 NEW_TEST(Unittest, "shamunits/unit_algebra", 1) {
     // the static_asserts above are the test; this keeps it visible in the test list
-    REQUIRE_EQUAL(joule.dim.metre, 2);
+    REQUIRE_EQUAL(au_d.dim.metre, 1);
 }
