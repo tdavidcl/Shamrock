@@ -44,17 +44,17 @@ namespace {
         constexpr Unit<T> newton = kg * m / upow(s, 2);
         constexpr Unit<T> joule  = newton * m;
         constexpr Unit<T> watt   = joule / s;
-        constexpr Unit<T> au     = 149597870700. * m; // scalar converts to T
+        constexpr Unit<T> au     = T(149597870700.) * m;
 
         static_assert(newton.dim == Dimension{.second = -2, .metre = 1, .kilogram = 1});
         static_assert(joule.dim == Dimension{.second = -2, .metre = 2, .kilogram = 1});
         static_assert(watt.dim == (joule / s).dim);
-        static_assert((1. / s).dim == Dimension{.second = -1});
+        static_assert((T(1) / s).dim == Dimension{.second = -1});
         static_assert((m / upow(s, 2) * kg) == newton);
 
         static_assert((m * T(1e3)) == (T(1e3) * m));
-        static_assert((joule / 1e7).si_factor == T(1) / T(1e7));
-        static_assert((2. / s).si_factor == T(2));
+        static_assert((joule / T(1e7)).si_factor == T(1) / T(1e7));
+        static_assert((T(2) / s).si_factor == T(2));
         static_assert(scale(T(1e6)).dim == Dimension{});
 
         static_assert(upow(au, 0) == Unit<T>{});
@@ -80,6 +80,19 @@ namespace {
     static_assert(same_type<Unit<>, Unit<double>>);
     static_assert(same_type<decltype(base_unit({.metre = 1})), Unit<double>>);
     static_assert(same_type<decltype(scale(1e6f)), Unit<float>>);
+
+    // No implicit conversion: a scalar must have exactly the unit's type, and precisions never mix
+    template<class A, class B>
+    concept can_multiply = requires(A a, B b) { a * b; };
+    template<class A, class B>
+    concept can_divide = requires(A a, B b) { a / b; };
+    static_assert(can_multiply<float, Unit<float>> && can_multiply<Unit<float>, float>);
+    static_assert(can_divide<float, Unit<float>> && can_divide<Unit<float>, float>);
+    static_assert(!can_multiply<double, Unit<float>> && !can_multiply<Unit<float>, double>);
+    static_assert(!can_divide<double, Unit<float>> && !can_divide<Unit<float>, double>);
+    static_assert(!can_multiply<int, Unit<double>> && !can_divide<Unit<double>, int>);
+    static_assert(
+        !can_multiply<Unit<float>, Unit<double>> && !can_divide<Unit<float>, Unit<double>>);
 
     // Explicit precision conversion
     constexpr Unit<double> au_d = 149597870700. * base_unit({.metre = 1});

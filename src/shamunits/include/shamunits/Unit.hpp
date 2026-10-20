@@ -22,23 +22,14 @@
  * UnitSystem::get<u>() keep every exponent a constant expression. Only a raw
  * `template<double>` parameter is unsupported on clang < 18, so do not add one.
  *
- * The algebra never mixes precisions implicitly: convert with unit_cast<T>() first.
+ * The algebra never converts precisions implicitly, not even for a scalar operand: a scalar must
+ * have exactly the unit's type (`149597870700. * Unit<float>{}` does not compile, write
+ * `149597870700.f`), and units of different precisions are converted with unit_cast<T>() first.
  * Spell the precision when brace-initialising (`Unit<float>{.dim = ..., .si_factor = ...}`):
  * class template argument deduction from an aggregate initializer needs clang >= 17.
  */
 
 namespace shamunits {
-
-    namespace details {
-        /// Non-deduced context, so a scalar operand converts to the unit's precision
-        template<class T>
-        struct TypeIdentity {
-            using type = T; ///< the type itself
-        };
-        /// Shorthand for TypeIdentity<T>::type
-        template<class T>
-        using type_identity_t = typename TypeIdentity<T>::type;
-    } // namespace details
 
     /// Exponents of the seven SI base dimensions
     struct Dimension {
@@ -123,25 +114,25 @@ namespace shamunits {
 
     /// Scale a unit, e.g. `149597870700. * metre`
     template<class T>
-    constexpr Unit<T> operator*(details::type_identity_t<T> s, Unit<T> u) noexcept {
+    constexpr Unit<T> operator*(T s, Unit<T> u) noexcept {
         return {.dim = u.dim, .si_factor = s * u.si_factor};
     }
 
     /// Scale a unit, e.g. `metre * 1e3`
     template<class T>
-    constexpr Unit<T> operator*(Unit<T> u, details::type_identity_t<T> s) noexcept {
+    constexpr Unit<T> operator*(Unit<T> u, T s) noexcept {
         return {.dim = u.dim, .si_factor = u.si_factor * s};
     }
 
     /// Divide a unit by a scalar, e.g. `joule / 1e7`
     template<class T>
-    constexpr Unit<T> operator/(Unit<T> u, details::type_identity_t<T> s) noexcept {
+    constexpr Unit<T> operator/(Unit<T> u, T s) noexcept {
         return {.dim = u.dim, .si_factor = u.si_factor / s};
     }
 
     /// Scalar over a unit, e.g. `1. / second`: the dimension is inverted
     template<class T>
-    constexpr Unit<T> operator/(details::type_identity_t<T> s, Unit<T> u) noexcept {
+    constexpr Unit<T> operator/(T s, Unit<T> u) noexcept {
         return {.dim = Dimension{} / u.dim, .si_factor = s / u.si_factor};
     }
 
