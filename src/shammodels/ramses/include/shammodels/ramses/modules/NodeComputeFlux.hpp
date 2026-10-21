@@ -91,6 +91,9 @@ namespace shammodels::basegodunov::modules {
      * There is no face pressure input: the left and right pressures are rebuilt from the face
      * densities with shammath::FluidStateBarotropic::pressure. The energy flux is still
      * produced, as the internal energy is carried as a passive \f$ P/(\gamma-1) \f$ term.
+     *
+     * HLLC uses the Davis wave speed estimate (shammath::hllc_davis_flux) rather than the
+     * pressure based one, which relies on the adiabatic shock relations.
      */
     template<class Tvec, class TgridVec, RiemannSolverMode mode, Direction dir>
     class NodeComputeFluxGasBarotropicDirMode : public shamrock::solvergraph::INode {

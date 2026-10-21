@@ -135,10 +135,20 @@ void shammodels::basegodunov::modules::
 
             // P = P(rho): the face pressure is rebuilt from the face density, never
             // interpolated, which satisfies press == pressure(rho) by construction
-            auto flux_dir = riemann_flux<decltype(baro_fluid), mode, dir>(
-                baro_fluid,
-                Tprim{rho_ij[0], baro_fluid.pressure(rho_ij[0]), vel_ij[0]},
-                Tprim{rho_ij[1], baro_fluid.pressure(rho_ij[1]), vel_ij[1]});
+            const Tprim prim_l{rho_ij[0], baro_fluid.pressure(rho_ij[0]), vel_ij[0]};
+            const Tprim prim_r{rho_ij[1], baro_fluid.pressure(rho_ij[1]), vel_ij[1]};
+
+            auto flux_dir = [&]() {
+                if constexpr (mode == RiemannSolverMode::HLLC) {
+                    // the pressure based wave speed estimate of hllc_adiab_toro_flux relies on
+                    // the adiabatic shock relations, so use the Davis estimate instead
+                    return shammath::hllc_davis_flux(
+                        baro_fluid, prim_l, prim_r, dir_normal<Tvec, dir>());
+                } else {
+                    return riemann_flux<decltype(baro_fluid), mode, dir>(
+                        baro_fluid, prim_l, prim_r);
+                }
+            }();
 
             flux_rho_face[link_id]  = flux_dir.rho;
             flux_rhov_face[link_id] = flux_dir.rhovel;
