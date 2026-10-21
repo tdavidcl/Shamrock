@@ -3863,6 +3863,16 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     u64 npatch = scheduler().patch_list.local.size();
 
+    // number of ghost particles on this rank (sum over patches of with_ghost - without)
+    u64 nobj_ghost = 0;
+    shambase::get_check_ref(storage.part_counts_with_ghost)
+        .indexes.for_each([&](u64 id, u32 cnt_with_ghost) {
+            nobj_ghost += cnt_with_ghost;
+        });
+    shambase::get_check_ref(storage.part_counts).indexes.for_each([&](u64 id, u32 cnt) {
+        nobj_ghost -= cnt;
+    });
+
     // logger::info_ln("SPHSolver", "process rate : ", rate, "particle.s-1");
 
     std::string log_step = report_perf_timestep(
@@ -3876,7 +3886,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         mem_perf_infos_end.max_allocated_byte_device,
         mem_perf_infos_end.max_allocated_byte_host,
         system_metrics_delta,
-        shamsys::has_reporter());
+        shamsys::has_reporter(),
+        nobj_ghost);
 
     if (shamcomm::world_rank() == 0) {
         logger::info_ln("sph::Model", log_step);
