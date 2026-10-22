@@ -14,8 +14,6 @@ from shamrock.utils.numba_helper import maybe_njit
 
 import shamrock
 
-rng = np.random.default_rng()
-
 
 def W(r, h):
     return shamrock.math.sphkernel.M4_W3d(r, h)
@@ -55,6 +53,28 @@ def count_neighbors(id_a, h_a, W, positions: np.ndarray):
 
 
 count_neighbors = maybe_njit(count_neighbors)
+
+Rkern = shamrock.math.sphkernel.M4_Rkern()
+
+
+def next_neighbor_distance(id_a, h_a, positions: np.ndarray):
+    """Distance to the closest particle outside of the kernel support (Rkern * h_a), i.e.
+    the next one to become a neighbor when h_a grows. In a real kernel it is a min
+    reduction in the same neighbor loop as the neighbor count."""
+    dr = positions[id_a, :] - positions
+    rab = np.sqrt(np.sum(dr * dr, axis=1))
+
+    outside = rab[rab >= Rkern * h_a]
+    return outside.min() if outside.size > 0 else np.inf
+
+
+def get_nth_neigh_dist(id_a, n, positions: np.ndarray):
+    """Distance of the n-th closest particle to id_a (1-indexed, id_a itself included at
+    distance 0, as in count_neighbors), np.inf if there are less than n particles."""
+    dr = positions[id_a, :] - positions
+    rab = np.sort(np.sqrt(np.sum(dr * dr, axis=1)))
+
+    return rab[n - 1] if n <= len(rab) else np.inf
 
 
 def rho_h(m, h, hfact):
@@ -460,7 +480,17 @@ def bisect_NR_iterate_new_h_neigh_lim(
     rho_ha = rho_h(pmass, h_a, hfact)
     rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, positions)
     count_within = count_neighbors(id_a, h_a, W, positions)
+    count_within_tol = count_neighbors(id_a, min(h_a * (1 + 10 * epsilon_h), hi), W, positions)
     f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+
+    print(h_a, count_within, count_within_tol)
+
+    # f wants a larger h, but h_a already sits at the neighbor limit up to the convergence
+    # tolerance (within the limit at h_a, above it at h_a * (1 + epsilon_h)): h_a is the
+    # neighbor limited solution, stop there
+    if f_iter < 0 and count_within <= 500 < count_within_tol:
+        return h_a, 0.0
+
     new_h_nr = h_a - f_iter / df_iter
 
     accept_nr = max(lo, h_a_next_min) < new_h_nr < min(hi, h_a_next_max) and count_within < 500
@@ -496,6 +526,69 @@ def bisect_NR_iterate_new_h_neigh_lim(
     return new_h, eps
 
 
+def bisect_NR_iterate_new_h_neigh_lim_direct(
+    h_a, positions, cycle_state_vars: dict, outer_state_vars: dict
+):
+    """Bisection + NR with the neighbor limit applied as a ceiling on h instead of counting
+    neighbors: the largest h with <= 500 neighbors is h_lim = r_501 / Rkern (r_501 the
+    distance of the 501st closest particle, see get_nth_neigh_dist), and no new h may exceed
+    it. If the limit is active (f < 0 at h_lim), the next iteration caps at h_lim again and
+    stops there; otherwise f > 0 at h_lim and the root below it is searched as usual."""
+
+    # Normally the allocation are done before but this simlulator only prepares ha_0
+    if "lo" not in outer_state_vars:
+        outer_state_vars["lo"] = 0
+        outer_state_vars["hi"] = np.inf
+
+    h_max_evol_m = 0.5
+    h_max_evol_p = h_evol_iter_max
+    ha_0 = cycle_state_vars["ha_0"]
+    lo = outer_state_vars["lo"]
+    hi = outer_state_vars["hi"]
+
+    h_a_next_min = h_a * h_max_evol_m
+    h_a_next_max = h_a * h_max_evol_p
+
+    # ceiling from the neighbor limit
+    h_lim = get_nth_neigh_dist(id_a, 501, positions) / Rkern
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, positions)
+    f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+    new_h_nr = h_a - f_iter / df_iter
+
+    accept_nr = max(lo, h_a_next_min) < new_h_nr < min(hi, h_a_next_max)
+
+    if f_iter < 0:
+        lo = max(h_a, lo)
+    else:
+        hi = min(h_a, hi)
+
+    if accept_nr:
+        new_h = new_h_nr
+    else:
+        new_h = (lo + hi) / 2
+
+    # never exceed the neighbor limit
+    new_h = min(new_h, h_lim)
+
+    # per-iteration clamp (htol_up_fine_cycle), relative to the previous iterate h_a
+    new_h = max(new_h, h_a_next_min)
+    new_h = min(new_h, h_a_next_max)
+
+    outer_state_vars["lo"] = lo
+    outer_state_vars["hi"] = hi
+
+    # per-subcycle clamp (htol_up_coarse_cycle), relative to ha_0 (h at subcycle start)
+    if new_h < ha_0 * h_evol_max:
+        eps = abs(new_h - h_a) / ha_0
+    else:
+        new_h = ha_0 * h_evol_max
+        eps = -1.0
+
+    return new_h, eps
+
+
 algs = {
     "Newton": newton_iterate_new_h,
     "Newton (neigh lim)": newton_iterate_new_h_neigh_lim,
@@ -506,6 +599,7 @@ algs = {
     # "Bisection (neigh_lim)": bisect_iterate_new_h_neigh_lim,
     "Bisection + NR": bisect_NR_iterate_new_h,
     "Bisection + NR (neigh lim)": bisect_NR_iterate_new_h_neigh_lim,
+    "Bisection + NR (neigh lim, direct)": bisect_NR_iterate_new_h_neigh_lim_direct,
 }
 
 
@@ -871,7 +965,8 @@ def generate_cubic_distrib(Nside):
     return positions, id_a
 
 
-def generate_random_distrib(Nside):
+def generate_random_distrib(Nside, seed=42):
+    rng = np.random.default_rng(seed)
     positions = []
 
     id_a = 0
@@ -888,7 +983,8 @@ def generate_random_distrib(Nside):
     return positions, id_a
 
 
-def generate_random_distrib_giantpart(Nside):
+def generate_random_distrib_giantpart(Nside, seed=42):
+    rng = np.random.default_rng(seed)
     positions = []
 
     id_a = 0
@@ -905,8 +1001,9 @@ def generate_random_distrib_giantpart(Nside):
     return positions, id_a
 
 
-def generate_isolated_part_small_cluster(Ncluster):
+def generate_isolated_part_small_cluster(Ncluster, seed=42):
     # particle a at the origin, with only a tight cluster of Ncluster particles at distance 1
+    rng = np.random.default_rng(seed)
     positions = [(0, 0, 0)]
     id_a = 0
 
@@ -1050,9 +1147,11 @@ plt.show()
 #   (count > 500 is the trigger of the neighbor limiters), with a 5% tolerance since the
 #   returned h is not checked against the limit and can land just above it.
 #
-# A second table gives the average cost (iterations and MPI cycles, i.e. ghost-zone
+# Two more tables give the average cost (iterations and MPI cycles, i.e. ghost-zone
 # rebuild subcycles) of the runs that found the correct h (as in the "correct h" column),
 # split by initial h: above the root, close to it (h_ref * close_factors) and below it.
+# The first one covers the setups where the root has at most 500 neighbors (the neighbor
+# limit is not active), the second one the setups where it has more (giant particle).
 # "(k/n)" means that only k of the n runs of that group found the correct h.
 
 neigh_limit = 500
@@ -1066,6 +1165,7 @@ neigh_limited_algs = {
     newton_iterate_new_h_neigh_lim_poslim,
     bisect_iterate_new_h_neigh_lim,
     bisect_NR_iterate_new_h_neigh_lim,
+    bisect_NR_iterate_new_h_neigh_lim_direct,
 }
 
 criteria = [
@@ -1078,7 +1178,14 @@ summary = {name: [0, 0, 0, 0] for name in algs}
 totals = [0, 0, 0, 0]
 
 # (iterations, MPI cycles) of each run, None if it did not find the correct h
-costs = {name: {group: [] for group in groups} for name in algs}
+# per setup category: is the neighbor limit active at the root of f
+categories = {
+    False: f"setups without neighbor limiting (<= {neigh_limit} neighbors at the root)",
+    True: f"setups with neighbor limiting (> {neigh_limit} neighbors at the root)",
+}
+costs = {
+    limited: {name: {group: [] for group in groups} for name in algs} for limited in categories
+}
 
 for setup_name, (positions, id_a, pmass, test_h_values, histories_by_alg) in setups.items():
     h_ref = find_root_h(np.logspace(-3, 2, 200))
@@ -1087,6 +1194,7 @@ for setup_name, (positions, id_a, pmass, test_h_values, histories_by_alg) in set
         f"{setup_name}: reference root h = {h_ref:.6g}, "
         f"largest h with <= {neigh_limit} neighbors = {h_neigh:.6g}"
     )
+    setup_costs = costs[h_neigh < h_ref]
 
     # drop the extra run that analyse_h_convergence seeds at the found root
     is_test_run = lambda entry: np.any(entry[0] == test_h_values)
@@ -1109,7 +1217,7 @@ for setup_name, (positions, id_a, pmass, test_h_values, histories_by_alg) in set
                 subcycle_end_indices,
             ) = entry
             group = "h0 > h*" if init_h_a > h_ref else "h0 < h*"
-            costs[name][group].append(
+            setup_costs[name][group].append(
                 (len(history_h_a) - 1, len(subcycle_end_indices))
                 if converged and abs(history_h_a[-1] / h_target - 1) < 1e-4
                 else None
@@ -1125,7 +1233,7 @@ for setup_name, (positions, id_a, pmass, test_h_values, histories_by_alg) in set
             history_h_a, _, _, _, converged, subcycle_end_indices = simulate_h_iter(
                 h_ref * factor, positions, id_a, pmass, alg
             )
-            costs[name]["h0 ~ h*"].append(
+            setup_costs[name]["h0 ~ h*"].append(
                 (len(history_h_a) - 1, len(subcycle_end_indices))
                 if converged and abs(history_h_a[-1] / h_target - 1) < 1e-4
                 else None
@@ -1236,12 +1344,18 @@ def mean_score(runs, i):
 
 # lower mean is better, among the strategies where all the runs found the correct h
 cost_columns = [(g, 0) for g in groups] + [(g, 1) for g in groups]
-print()
-print_table(
-    ["strategy"] + [f"steps {g}" for g in groups] + [f"MPI cycles {g}" for g in groups],
-    [[name] + [format_mean(costs[name][g], i) for g, i in cost_columns] for name in algs],
-    rank_styles(
-        [[mean_score(costs[name][g], i) for g, i in cost_columns] for name in algs],
-        higher_is_better=False,
-    ),
-)
+for limited, title in categories.items():
+    category_costs = costs[limited]
+    print()
+    print(f"Average cost, {title}:")
+    print_table(
+        ["strategy"] + [f"steps {g}" for g in groups] + [f"MPI cycles {g}" for g in groups],
+        [
+            [name] + [format_mean(category_costs[name][g], i) for g, i in cost_columns]
+            for name in algs
+        ],
+        rank_styles(
+            [[mean_score(category_costs[name][g], i) for g, i in cost_columns] for name in algs],
+            higher_is_better=False,
+        ),
+    )
