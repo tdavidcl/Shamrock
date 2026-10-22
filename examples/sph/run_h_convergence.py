@@ -136,6 +136,43 @@ def newton_iterate_new_h(h_a, positions, cycle_state_vars: dict, outer_state_var
     return new_h, eps
 
 
+def newton_iterate_new_h_fixedp_fallback(
+    h_a, positions, cycle_state_vars: dict, outer_state_vars: dict
+):
+    """newton_iterate_new_h with the fixed point fallback of
+    newton_iterate_new_h_fallback (src/shammodels/sph/include/shammodels/sph/math/density.hpp).
+
+    With df <= 0 the Newton step goes away from the root and h diverges. Fall
+    back to the fixed point update h = hfact (m / rho_sum)^(1/3), i.e.
+    h_a * (rho_ha / rho_sum)^(1/3), which moves towards it.
+    """
+    ha_0 = cycle_state_vars["ha_0"]
+
+    rho_ha = rho_h(pmass, h_a, hfact)
+    rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, positions)
+    f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
+
+    if not (df_iter > 0):
+        new_h = h_a * np.cbrt(rho_ha / rho_sum)
+    else:
+        new_h = h_a - f_iter / df_iter
+
+    # per-iteration clamp (htol_up_fine_cycle), relative to the previous iterate h_a
+    h_max_evol_m = 1.0 / h_evol_iter_max
+    h_max_evol_p = h_evol_iter_max
+    new_h = max(new_h, h_a * h_max_evol_m)
+    new_h = min(new_h, h_a * h_max_evol_p)
+
+    # per-subcycle clamp (htol_up_coarse_cycle), relative to ha_0 (h at subcycle start)
+    if new_h < ha_0 * h_evol_max:
+        eps = abs(new_h - h_a) / ha_0
+    else:
+        new_h = ha_0 * h_evol_max
+        eps = -1.0
+
+    return new_h, eps
+
+
 def newton_iterate_new_h_neigh_lim(
     h_a, positions, cycle_state_vars: dict, outer_state_vars: dict, trigger_threshold=500
 ):
@@ -195,17 +232,20 @@ def newton_iterate_new_h_poslim(h_a, positions, cycle_state_vars: dict, outer_st
     rho_ha = rho_h(pmass, h_a, hfact)
     rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, positions)
     f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
-    new_h = h_a - f_iter / df_iter
 
-    # per-iteration clamp (htol_up_fine_cycle), relative to the previous iterate h_a
     h_max_evol_m = 1.0 / h_evol_iter_max
     h_max_evol_p = h_evol_iter_max
-    new_h = max(new_h, h_a * h_max_evol_m)
-    new_h = min(new_h, h_a * h_max_evol_p)
 
     # Check if the state is potentially diverging, if yes go down until it converges again
-    if f_iter > 0 and f_iter / df_iter < 0:
+    # (f > 0 and df <= 0, i.e. f / df < 0 without dividing by df)
+    if f_iter > 0 and df_iter <= 0:
         new_h = h_a * h_max_evol_m
+    else:
+        new_h = h_a - f_iter / df_iter
+
+    # per-iteration clamp (htol_up_fine_cycle), relative to the previous iterate h_a
+    new_h = max(new_h, h_a * h_max_evol_m)
+    new_h = min(new_h, h_a * h_max_evol_p)
 
     # per-subcycle clamp (htol_up_coarse_cycle), relative to ha_0 (h at subcycle start)
     if new_h < ha_0 * h_evol_max:
@@ -234,15 +274,17 @@ def newton_iterate_new_h_neigh_lim_poslim(
     rho_ha = rho_h(pmass, h_a, hfact)
     rho_sum, sumdWdh = compute_sums(pmass, id_a, h_a, positions)
     f_iter, df_iter = f_df(rho_ha, rho_sum, sumdWdh, h_a)
-    new_h = h_a - f_iter / df_iter
+
+    # Check if the state is potentially diverging, if yes go down until it converges again
+    # (f > 0 and df <= 0, i.e. f / df < 0 without dividing by df)
+    if f_iter > 0 and df_iter <= 0:
+        new_h = h_a * h_max_evol_m
+    else:
+        new_h = h_a - f_iter / df_iter
 
     # per-iteration clamp (htol_up_fine_cycle), relative to the previous iterate h_a
     new_h = max(new_h, h_a * h_max_evol_m)
     new_h = min(new_h, h_a * h_max_evol_p)
-
-    # Check if the state is potentially diverging, if yes go down until it converges again
-    if f_iter > 0 and f_iter / df_iter < 0:
-        new_h = h_a * h_max_evol_m
 
     if count_within > trigger_threshold:
         new_h = h_max_evol_m * h_a
@@ -455,7 +497,8 @@ def bisect_NR_iterate_new_h_neigh_lim(
 algs = {
     "Newton": newton_iterate_new_h,
     "Newton (neigh lim)": newton_iterate_new_h_neigh_lim,
-    # "Newton (ceil)": newton_iterate_new_h_poslim,
+    "Newton (fixed point fallback)": newton_iterate_new_h_fixedp_fallback,
+    "Newton (ceil)": newton_iterate_new_h_poslim,
     # "Newton (neigh lim + ceil)": newton_iterate_new_h_neigh_lim_poslim,
     "Bisection": bisect_iterate_new_h,
     # "Bisection (neigh_lim)": bisect_iterate_new_h_neigh_lim,
@@ -808,6 +851,19 @@ def generate_random_distrib_giantpart(Nside):
     return positions, id_a
 
 
+def generate_isolated_part_small_cluster(Ncluster):
+    # particle a at the origin, with only a tight cluster of Ncluster particles at distance 1
+    positions = [(0, 0, 0)]
+    id_a = 0
+
+    for i in range(Ncluster):
+        positions.append(0.01 * rng.random(3) + np.array([1, 0, 0]))
+
+    positions = np.array(positions)
+
+    return positions, id_a
+
+
 # %%
 
 plot_f_df_kernel()
@@ -862,6 +918,35 @@ plt.show()
 # --------------------------------
 
 positions, id_a = generate_random_distrib_giantpart(Nside=20)
+pmass = 1.0 / 1000.0
+
+# %%
+
+h_a_test = np.logspace(-3, 2, 1000)
+
+plot_rho_f_df(h_a_test)
+
+# %%
+
+# sample 10 equally spaced values in h_a_test indexes
+test_h_values = np.logspace(-3, 2, 10)
+
+compare_algs_h_convergence(test_h_values, algs)
+
+plt.show()
+
+
+# %%
+# Isolated particle with a small cluster
+# --------------------------------------
+# With h well above the cluster distance, all neighbours sit near q = 0, so
+# f = rho_sum - rho_ha > 0 and df = -3 f / h < 0: the Newton step goes the wrong way.
+# Both "Newton (ceil)" and "Newton (fixed point fallback)" then shrink h, but with
+# rho_sum / rho_ha ~ (N + 1) / (pi hfact^3) the fixed point step cbrt(rho_ha / rho_sum)
+# is only smaller than 1 / h_evol_iter_max when there are very few neighbours
+# (N + 1 < ~7). This is the regime where the two strategies differ.
+
+positions, id_a = generate_isolated_part_small_cluster(Ncluster=5)
 pmass = 1.0 / 1000.0
 
 # %%
