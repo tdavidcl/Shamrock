@@ -6,6 +6,8 @@ Showcase smoothing length iteration algorithlm
 # sphinx_gallery_thumbnail_number = 2
 # sphinx_gallery_multi_image = "single"
 
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 from shamrock.utils.numba_helper import maybe_njit
@@ -717,7 +719,10 @@ def plot_rho_f_df(h_a_test):
 
 
 def compare_algs_h_convergence(test_h_values, algs):
+    """Plot the convergence of each strategy and their comparison, and return
+    the histories of each strategy (see analyse_h_convergence)."""
     results = {}
+    histories_by_alg = {}
     for name, alg in algs.items():
         fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
         fig.suptitle(name)
@@ -732,6 +737,7 @@ def compare_algs_h_convergence(test_h_values, algs):
         ) = analyse_h_convergence(positions, id_a, pmass, alg, test_h_values)
 
         plot_h_convergence(histories, found_h_a, axs)
+        histories_by_alg[name] = histories
 
         # histories may hold one more entry than test_h_values (the extra run
         # seeded at found_h_a), so derive the x-axis from histories itself
@@ -797,6 +803,54 @@ def compare_algs_h_convergence(test_h_values, algs):
     axs[3].legend()
 
     plt.tight_layout()
+
+    return histories_by_alg
+
+
+def find_root_h(h_a_test):
+    """Reference root of f, independent of the strategies: first sign change of f
+    from negative to positive on h_a_test, refined by bisection."""
+
+    def f_of(h):
+        rho_sum, sumdWdh = compute_sums(pmass, id_a, h, positions)
+        return rho_sum - rho_h(pmass, h, hfact)
+
+    f_values = [f_of(h) for h in h_a_test]
+    i = next(i for i in range(len(h_a_test) - 1) if f_values[i] < 0 <= f_values[i + 1])
+
+    lo, hi = h_a_test[i], h_a_test[i + 1]
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if f_of(mid) < 0:
+            lo = mid
+        else:
+            hi = mid
+
+    return 0.5 * (lo + hi)
+
+
+def find_neigh_limit_h(h_a_test, limit):
+    """Largest h whose neighbor count stays <= limit: first h of h_a_test exceeding
+    the limit, refined by bisection on the neighbor count."""
+
+    counts = [count_neighbors(id_a, h, W, positions) for h in h_a_test]
+    i = next((i for i in range(len(h_a_test)) if counts[i] > limit), None)
+    if i is None:
+        return np.inf
+
+    lo, hi = (h_a_test[i - 1] if i > 0 else 0.0), h_a_test[i]
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if count_neighbors(id_a, mid, W, positions) <= limit:
+            lo = mid
+        else:
+            hi = mid
+
+    return lo
+
+
+# state and results of each setup, summarised in the last section
+setups = {}
 
 
 def generate_cubic_distrib(Nside):
@@ -886,7 +940,8 @@ plot_rho_f_df(h_a_test)
 # sample 10 equally spaced values in h_a_test indexes
 test_h_values = np.logspace(-3, 2, 10)
 
-compare_algs_h_convergence(test_h_values, algs)
+histories_by_alg = compare_algs_h_convergence(test_h_values, algs)
+setups["Cubic distrib"] = (positions, id_a, pmass, test_h_values, histories_by_alg)
 
 plt.show()
 
@@ -908,7 +963,8 @@ plot_rho_f_df(h_a_test)
 # sample 10 equally spaced values in h_a_test indexes
 test_h_values = np.logspace(-3, 2, 10)
 
-compare_algs_h_convergence(test_h_values, algs)
+histories_by_alg = compare_algs_h_convergence(test_h_values, algs)
+setups["Random distrib"] = (positions, id_a, pmass, test_h_values, histories_by_alg)
 
 plt.show()
 
@@ -931,7 +987,14 @@ plot_rho_f_df(h_a_test)
 # sample 10 equally spaced values in h_a_test indexes
 test_h_values = np.logspace(-3, 2, 10)
 
-compare_algs_h_convergence(test_h_values, algs)
+histories_by_alg = compare_algs_h_convergence(test_h_values, algs)
+setups["Random distrib (giant particle)"] = (
+    positions,
+    id_a,
+    pmass,
+    test_h_values,
+    histories_by_alg,
+)
 
 plt.show()
 
@@ -960,6 +1023,225 @@ plot_rho_f_df(h_a_test)
 # sample 10 equally spaced values in h_a_test indexes
 test_h_values = np.logspace(-3, 2, 10)
 
-compare_algs_h_convergence(test_h_values, algs)
+histories_by_alg = compare_algs_h_convergence(test_h_values, algs)
+setups["Isolated particle with a small cluster"] = (
+    positions,
+    id_a,
+    pmass,
+    test_h_values,
+    histories_by_alg,
+)
 
 plt.show()
+
+
+# %%
+# Summary
+# -------
+# For each strategy, number of (setup, initial h) runs satisfying each property:
+#
+# - converges: the run reports convergence before reaching the subcycle limit;
+# - correct h: the run converges and ends at the expected h (relative error < 1e-4):
+#   the root of f (found by bisection) or, for the neighbor limiting strategies, the
+#   largest h whose neighbor count stays <= 500 if it is smaller than the root;
+# - single step if converged: started exactly at the expected h, the run converges after
+#   a single iteration and stays there (one run per setup);
+# - neigh <= 500 (+5%): the final neighbor count stays below the 500 neighbors limit
+#   (count > 500 is the trigger of the neighbor limiters), with a 5% tolerance since the
+#   returned h is not checked against the limit and can land just above it.
+#
+# A second table gives the average cost (iterations and MPI cycles, i.e. ghost-zone
+# rebuild subcycles) of the runs that found the correct h (as in the "correct h" column),
+# split by initial h: above the root, close to it (h_ref * close_factors) and below it.
+# "(k/n)" means that only k of the n runs of that group found the correct h.
+
+neigh_limit = 500
+neigh_tol = 0.05
+close_factors = (0.95, 1.0, 1.05)
+groups = ["h0 > h*", "h0 ~ h*", "h0 < h*"]
+
+# strategies whose expected h is capped by the neighbor limit
+neigh_limited_algs = {
+    newton_iterate_new_h_neigh_lim,
+    newton_iterate_new_h_neigh_lim_poslim,
+    bisect_iterate_new_h_neigh_lim,
+    bisect_NR_iterate_new_h_neigh_lim,
+}
+
+criteria = [
+    "converges",
+    "correct h",
+    "single step if converged",
+    f"neigh <= {neigh_limit} (+{neigh_tol:.0%})",
+]
+summary = {name: [0, 0, 0, 0] for name in algs}
+totals = [0, 0, 0, 0]
+
+# (iterations, MPI cycles) of each run, None if it did not find the correct h
+costs = {name: {group: [] for group in groups} for name in algs}
+
+for setup_name, (positions, id_a, pmass, test_h_values, histories_by_alg) in setups.items():
+    h_ref = find_root_h(np.logspace(-3, 2, 200))
+    h_neigh = find_neigh_limit_h(np.logspace(-3, 2, 200), neigh_limit)
+    print(
+        f"{setup_name}: reference root h = {h_ref:.6g}, "
+        f"largest h with <= {neigh_limit} neighbors = {h_neigh:.6g}"
+    )
+
+    # drop the extra run that analyse_h_convergence seeds at the found root
+    is_test_run = lambda entry: np.any(entry[0] == test_h_values)
+    n_runs = sum(is_test_run(entry) for entry in next(iter(histories_by_alg.values())))
+    totals[0] += n_runs
+    totals[1] += n_runs
+    totals[2] += 1
+    totals[3] += n_runs
+
+    for name, alg in algs.items():
+        h_target = min(h_ref, h_neigh) if alg in neigh_limited_algs else h_ref
+
+        for entry in filter(is_test_run, histories_by_alg[name]):
+            (
+                init_h_a,
+                history_h_a,
+                history_f,
+                history_neigh_count,
+                converged,
+                subcycle_end_indices,
+            ) = entry
+            group = "h0 > h*" if init_h_a > h_ref else "h0 < h*"
+            costs[name][group].append(
+                (len(history_h_a) - 1, len(subcycle_end_indices))
+                if converged and abs(history_h_a[-1] / h_target - 1) < 1e-4
+                else None
+            )
+            if converged:
+                summary[name][0] += 1
+            if converged and abs(history_h_a[-1] / h_target - 1) < 1e-4:
+                summary[name][1] += 1
+            if history_neigh_count[-1] <= neigh_limit * (1 + neigh_tol):
+                summary[name][3] += 1
+
+        for factor in close_factors:
+            history_h_a, _, _, _, converged, subcycle_end_indices = simulate_h_iter(
+                h_ref * factor, positions, id_a, pmass, alg
+            )
+            costs[name]["h0 ~ h*"].append(
+                (len(history_h_a) - 1, len(subcycle_end_indices))
+                if converged and abs(history_h_a[-1] / h_target - 1) < 1e-4
+                else None
+            )
+
+        history_h_a, _, _, _, converged, _ = simulate_h_iter(h_target, positions, id_a, pmass, alg)
+        if converged and len(history_h_a) - 1 == 1 and abs(history_h_a[-1] / h_target - 1) < 1e-4:
+            summary[name][2] += 1
+
+
+# ANSI colors only in a terminal (sphinx-gallery strips them from the captured output anyway)
+use_colors = sys.stdout.isatty()
+
+
+ansi_green_bold = "\033[1;32m"
+ansi_bold = "\033[1m"
+ansi_orange = "\033[38;5;208m"
+ansi_red = "\033[31m"
+ansi_reset = "\033[0m"
+
+
+def rank_styles(scores, higher_is_better):
+    """ANSI style of each cell (row, col), ranked per column against the best value
+    with r = value / best (best / value if lower is better):
+    best (ties included) = green bold, r >= 0.9 = bold, worst (if r < 0.9) = red,
+    r < 0.5 = orange. scores[row][col] is None when the cell is not ranked."""
+    styles = {}
+    for col in range(len(scores[0])):
+        ranked = {i: row[col] for i, row in enumerate(scores) if row[col] is not None}
+        if not ranked:
+            continue
+        best = max(ranked.values()) if higher_is_better else min(ranked.values())
+        worst = min(ranked.values()) if higher_is_better else max(ranked.values())
+
+        for i, value in ranked.items():
+            if value == best:
+                styles[(i, col)] = ansi_green_bold
+                continue
+
+            if higher_is_better:
+                r = value / best
+            else:
+                r = best / value
+
+            if r >= 0.9:
+                styles[(i, col)] = ansi_bold
+            elif value == worst:
+                styles[(i, col)] = ansi_red
+            elif r < 0.5:
+                styles[(i, col)] = ansi_orange
+    return styles
+
+
+def print_table(header, rows, styles):
+    """Print a table with box-drawing borders, each column sized to its content.
+    The first column is left aligned, the others are centered. styles maps a cell
+    (row, col), col counted without the first column, to its ANSI style, applied when
+    colors are enabled."""
+    widths = [max(len(str(r[i])) for r in [header] + rows) for i in range(len(header))]
+
+    def line(left, mid, right):
+        return left + mid.join("\u2500" * (w + 2) for w in widths) + right
+
+    def row(cells, i_row=None):
+        first = f" {cells[0]:<{widths[0]}} "
+        others = []
+        for col, (c, w) in enumerate(zip(cells[1:], widths[1:])):
+            cell = f" {c!s:^{w}} "
+            if use_colors and (i_row, col) in styles:
+                cell = f"{styles[(i_row, col)]}{cell}{ansi_reset}"
+            others.append(cell)
+        return "\u2502" + "\u2502".join([first] + others) + "\u2502"
+
+    print(line("\u250c", "\u252c", "\u2510"))
+    print(row(header))
+    print(line("\u251c", "\u253c", "\u2524"))
+    for i_row, r in enumerate(rows):
+        print(row(r, i_row))
+    print(line("\u2514", "\u2534", "\u2518"))
+
+
+# higher count is better
+print()
+print_table(
+    ["strategy"] + criteria,
+    [[name] + [f"{n}/{t}" for n, t in zip(counts, totals)] for name, counts in summary.items()],
+    rank_styles([counts for counts in summary.values()], higher_is_better=True),
+)
+
+
+def format_mean(runs, i):
+    """Mean of the i-th cost over the runs that found the correct h, with (k/n) if some
+    did not"""
+    values = [run[i] for run in runs if run is not None]
+    cell = f"{np.mean(values):.1f}" if values else "-"
+    if len(values) < len(runs):
+        cell += f" ({len(values)}/{len(runs)})"
+    return cell
+
+
+def mean_score(runs, i):
+    """Score of the i-th cost for rank_styles: the mean as displayed, only if every run
+    found the correct h (a mean over the few successful runs would be misleading)"""
+    if any(run is None for run in runs):
+        return None
+    return round(np.mean([run[i] for run in runs]), 1)
+
+
+# lower mean is better, among the strategies where all the runs found the correct h
+cost_columns = [(g, 0) for g in groups] + [(g, 1) for g in groups]
+print()
+print_table(
+    ["strategy"] + [f"steps {g}" for g in groups] + [f"MPI cycles {g}" for g in groups],
+    [[name] + [format_mean(costs[name][g], i) for g, i in cost_columns] for name in algs],
+    rank_styles(
+        [[mean_score(costs[name][g], i) for g, i in cost_columns] for name in algs],
+        higher_is_better=False,
+    ),
+)
