@@ -229,7 +229,9 @@ def L2projDL(eps, nbins, kpol, massgrid, massbins, Q, vecnodes, vecweights):
     return gij
 
 
-def init_power_law_rho_dust(nbins, massgrid, massbins, bin_scut, coeff_pl, dtg, rho_gas, eps_rhodust):
+def init_power_law_rho_dust(
+    nbins, massgrid, massbins, bin_scut, coeff_pl, dtg, rho_gas, eps_rhodust
+):
     """
     Function to compute the initial rhodust distribution following a power-law and cut at the bin containing scut
 
@@ -259,19 +261,23 @@ def init_power_law_rho_dust(nbins, massgrid, massbins, bin_scut, coeff_pl, dtg, 
 
     """
 
-    mcut = massgrid[bin_scut+1]
+    mcut = massgrid[bin_scut + 1]
     m_min = massgrid[0]
 
-    coeff_norm = dtg*rho_gas *  ((4.+coeff_pl)/3.)/(mcut**((4.+coeff_pl)/3.) - m_min**((4.+coeff_pl)/3.))
+    coeff_norm = (
+        dtg
+        * rho_gas
+        * ((4.0 + coeff_pl) / 3.0)
+        / (mcut ** ((4.0 + coeff_pl) / 3.0) - m_min ** ((4.0 + coeff_pl) / 3.0))
+    )
 
     rho_dust = eps_rhodust * np.ones(nbins)
-
 
     for j in range(nbins):
         if j <= bin_scut:
             xj = massbins[j]
-            hj = massgrid[j+1]-massgrid[j]
+            hj = massgrid[j + 1] - massgrid[j]
 
-            rho_dust[j]= max(eps_rhodust, coeff_norm * hj * xj**((1. + coeff_pl)/3.))
+            rho_dust[j] = max(eps_rhodust, coeff_norm * hj * xj ** ((1.0 + coeff_pl) / 3.0))
 
     return rho_dust

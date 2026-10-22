@@ -1,8 +1,9 @@
 import numpy as np
 
-#-------------------------------
+# -------------------------------
 # functions for coagulation
-#-------------------------------
+# -------------------------------
+
 
 def compute_flux_coag_k0(gij, tensor_tabflux_coag):
     """
@@ -205,9 +206,9 @@ def compute_intflux_coag_kdv(gij, tensor_tabintflux_coag, dv):
     return intflux
 
 
-#-------------------------------
+# -------------------------------
 # functions for fragmentation
-#-------------------------------
+# -------------------------------
 
 
 def compute_flux_frag_k0(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2):
@@ -239,14 +240,18 @@ def compute_flux_frag_k0(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tenso
 
     # use Einstein summation over all the pair interaction (l,m) for each j.
     # compared to the definition of tensor_tabflux l <-> lp and m <-> l
-    flux = np.einsum("jlm,l,m->j", tensor_tabflux_coag, gij, gij) \
-            - np.einsum("jlm,l,m->j", tensor_tabflux_frag_T1, gij, gij) \
-            - np.einsum("jlm,l,m->j", tensor_tabflux_frag_T2, gij, gij)
+    flux = (
+        np.einsum("jlm,l,m->j", tensor_tabflux_coag, gij, gij)
+        - np.einsum("jlm,l,m->j", tensor_tabflux_frag_T1, gij, gij)
+        - np.einsum("jlm,l,m->j", tensor_tabflux_frag_T2, gij, gij)
+    )
 
     return flux
 
 
-def compute_flux_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv):
+def compute_flux_frag_k0_kdv(
+    gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv
+):
     """
     Function to compute the approximation of the coagulation flux with DG scheme k=0, for physical collision kernel
 
@@ -279,18 +284,27 @@ def compute_flux_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, t
 
     # use Einstein summation over all the pair interaction (l,m) for each j.
     # compared to the definition of tensor_tabflux l <-> lp and m <-> l
-    flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij) \
-            - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv, gij, gij) \
-            - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv, gij, gij)
-
+    flux = (
+        np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv, gij, gij)
+        - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv, gij, gij)
+        - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv, gij, gij)
+    )
 
     return flux
 
 
-#-------------------------------
+# -------------------------------
 # functions for coagulation + fragmentation
-#-------------------------------
-def compute_flux_coag_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag):
+# -------------------------------
+def compute_flux_coag_frag_k0_kdv(
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    proba_coag,
+    proba_frag,
+):
     """
     Function to compute the approximation of the coagulation flux with DG scheme k=0, for physical collision kernel
 
@@ -330,11 +344,10 @@ def compute_flux_coag_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_
     dv_coag = proba_coag * dv
     dv_frag = proba_frag * dv
 
-    flux = np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv_coag + dv_frag, gij, gij) \
-            - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv_frag, gij, gij) \
-            - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv_frag, gij, gij)
-
+    flux = (
+        np.einsum("jlm,lm,l,m->j", tensor_tabflux_coag, dv_coag + dv_frag, gij, gij)
+        - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T1, dv_frag, gij, gij)
+        - np.einsum("jlm,lm,l,m->j", tensor_tabflux_frag_T2, dv_frag, gij, gij)
+    )
 
     return flux
-
-

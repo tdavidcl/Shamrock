@@ -120,7 +120,6 @@ def coagfluxfunction(
         b_vl = np.min([xmax - ulp_alpha + xmin, xlgridr])
 
         if xmax - ulp_alpha + xmin > xlgridl and xlgridr > xjgridr - ulp_alpha + xmin:
-
             # gauss-legendre quadrature on integral on v
             for alpha_v in range(Q):
                 vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -136,6 +135,7 @@ def coagfluxfunction(
                 )
 
     return res
+
 
 @njit
 def func_coag_flux_numba(kernel, K0, ai, aip, u, v, xilp, xil):
@@ -347,23 +347,22 @@ def coagfluxfunction_fixed_numba(
     # liste les points de rupture avant d'appliquer GQ
     vec_u = np.empty(6)
     vec_u[0] = xlpgridl
-    vec_u[1] = min(max(xjgridr  - xlgridr, xlpgridl), xlpgridr)                       # u~1
-    vec_u[2] = min(max(xjgridr  - xlgridl, xlpgridl), xlpgridr)  # min(u~2,u~3)
-    vec_u[3] = min(max( xmax  - xlgridr, xlpgridl), xlpgridr)  # max(u~2,u~3)
-    vec_u[4] = min(max(xmax  - xlgridl, xlpgridl), xlpgridr)                          # u~4
+    vec_u[1] = min(max(xjgridr - xlgridr, xlpgridl), xlpgridr)  # u~1
+    vec_u[2] = min(max(xjgridr - xlgridl, xlpgridl), xlpgridr)  # min(u~2,u~3)
+    vec_u[3] = min(max(xmax - xlgridr, xlpgridl), xlpgridr)  # max(u~2,u~3)
+    vec_u[4] = min(max(xmax - xlgridl, xlpgridl), xlpgridr)  # u~4
     vec_u[5] = xlpgridr
     for s in range(5):
         a_ulp, b_ulp = vec_u[s], vec_u[s + 1]
         if b_ulp > a_ulp:
-
             for alpha_u in range(Q):
                 ulp_alpha = 0.5 * (b_ulp + a_ulp) + 0.5 * (b_ulp - a_ulp) * vecnodes[alpha_u]
                 xilp = 2.0 * (ulp_alpha - xlp) / hlp
 
-                a_vl = max(xjgridr - ulp_alpha , xlgridl)
-                b_vl = min(xmax - ulp_alpha , xlgridr)
+                a_vl = max(xjgridr - ulp_alpha, xlgridl)
+                b_vl = min(xmax - ulp_alpha, xlgridr)
 
-                if xmax - ulp_alpha  > xlgridl and xlgridr > xjgridr - ulp_alpha :
+                if xmax - ulp_alpha > xlgridl and xlgridr > xjgridr - ulp_alpha:
                     # gauss-legendre quadrature on integral on v
                     for alpha_v in range(Q):
                         vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -375,7 +374,9 @@ def coagfluxfunction_fixed_numba(
                             * (b_vl - a_vl)
                             * vecweights[alpha_u]
                             * vecweights[alpha_v]
-                            * func_coag_flux_numba(kernel, K0, ai, aip, ulp_alpha, vl_alpha, xilp, xil)
+                            * func_coag_flux_numba(
+                                kernel, K0, ai, aip, ulp_alpha, vl_alpha, xilp, xil
+                            )
                         )
 
     return res

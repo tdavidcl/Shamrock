@@ -4,14 +4,14 @@ import numpy as np
 
 # from progressbar import  Bar,Percentage,ProgressBar
 from numba import jit, njit, prange
+
 from .coag_term.coag_functions_GQ import *
 from .frag_term.frag_functions_GQ import *
 from .utils_polynomials import *
 
-
-#-------------------------------
+# -------------------------------
 # functions for coagulation
-#-------------------------------
+# -------------------------------
 
 
 def compute_coagtabflux_k0(
@@ -436,13 +436,24 @@ def compute_coagtabintflux_numba(
                                 tensor_tabintflux_coag[j, k, lp, l, ip, i] = res
 
 
-
-#-------------------------------
+# -------------------------------
 # functions for fragmentation
-#-------------------------------
+# -------------------------------
+
 
 def compute_fragtabflux_k0(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, frac_mass_fragments, beta, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    frac_mass_fragments,
+    beta,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
 ):
     """
     Function to precompute array depending only on massgrid to evaluate the fragmentation flux
@@ -488,50 +499,48 @@ def compute_fragtabflux_k0(
     for j in range(nbins):
         for lp in range(nbins):
             for l in range(nbins):
-
                 # term 1
-                if (lp <= j):
-                    
+                if lp <= j:
                     res_T1 = fragfluxfunction_T1(
-                                kernel,
-                                K0,
-                                Q,
-                                vecnodes,
-                                vecweights,
-                                nbins,
-                                massgrid,
-                                mat_coeffs_leg,
-                                j,
-                                lp,
-                                l,
-                                0,
-                                0,
-                                frac_mass_fragments,
-                                beta
-                            )
+                        kernel,
+                        K0,
+                        Q,
+                        vecnodes,
+                        vecweights,
+                        nbins,
+                        massgrid,
+                        mat_coeffs_leg,
+                        j,
+                        lp,
+                        l,
+                        0,
+                        0,
+                        frac_mass_fragments,
+                        beta,
+                    )
 
                     if res_T1 != 0.0:
                         tensor_tabflux_frag_T1[j, lp, l] = res_T1
 
                 # term 2
-                if (lp > j):
+                if lp > j:
                     res_T2 = fragfluxfunction_T2(
-                                kernel,
-                                K0,
-                                Q,
-                                vecnodes,
-                                vecweights,
-                                nbins,
-                                massgrid,
-                                mat_coeffs_leg,
-                                j,
-                                lp,
-                                l,
-                                0,
-                                0,
-                                frac_mass_fragments,
-                                beta
-                            )
+                        kernel,
+                        K0,
+                        Q,
+                        vecnodes,
+                        vecweights,
+                        nbins,
+                        massgrid,
+                        mat_coeffs_leg,
+                        j,
+                        lp,
+                        l,
+                        0,
+                        0,
+                        frac_mass_fragments,
+                        beta,
+                    )
 
                     if res_T2 != 0.0:
                         tensor_tabflux_frag_T2[j, lp, l] = res_T2
@@ -543,7 +552,18 @@ def compute_fragtabflux_k0(
 
 @njit
 def compute_fragtabflux_k0_numba(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, frac_mass_fragments, beta, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    frac_mass_fragments,
+    beta,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
 ):  # ,progress):
     """
     Function to precompute array depending only on massgrid to evaluate the coagulation flux
@@ -588,51 +608,48 @@ def compute_fragtabflux_k0_numba(
         # progress.update(1) # update on each outer loop iteration
         for lp in range(nbins):
             for l in range(nbins):
-
                 # term 1
-                if (lp <= j):
-                    
+                if lp <= j:
                     res_T1 = fragfluxfunction_T1_numba(
-                                kernel,
-                                K0,
-                                Q,
-                                vecnodes,
-                                vecweights,
-                                nbins,
-                                massgrid,
-                                mat_coeffs_leg,
-                                j,
-                                lp,
-                                l,
-                                0,
-                                0,
-                                frac_mass_fragments,
-                                beta
-                            )
+                        kernel,
+                        K0,
+                        Q,
+                        vecnodes,
+                        vecweights,
+                        nbins,
+                        massgrid,
+                        mat_coeffs_leg,
+                        j,
+                        lp,
+                        l,
+                        0,
+                        0,
+                        frac_mass_fragments,
+                        beta,
+                    )
 
                     if res_T1 != 0.0:
                         tensor_tabflux_frag_T1[j, lp, l] = res_T1
 
                 # term 2
-                if (lp > j):
+                if lp > j:
                     res_T2 = fragfluxfunction_T2_numba(
-                                kernel,
-                                K0,
-                                Q,
-                                vecnodes,
-                                vecweights,
-                                nbins,
-                                massgrid,
-                                mat_coeffs_leg,
-                                j,
-                                lp,
-                                l,
-                                0,
-                                0,
-                                frac_mass_fragments,
-                                beta
-                            )
+                        kernel,
+                        K0,
+                        Q,
+                        vecnodes,
+                        vecweights,
+                        nbins,
+                        massgrid,
+                        mat_coeffs_leg,
+                        j,
+                        lp,
+                        l,
+                        0,
+                        0,
+                        frac_mass_fragments,
+                        beta,
+                    )
 
                     if res_T2 != 0.0:
                         tensor_tabflux_frag_T2[j, lp, l] = res_T2
-

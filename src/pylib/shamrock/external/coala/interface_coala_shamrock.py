@@ -1,6 +1,10 @@
 import numpy as np
 
-from .generate_flux_intflux import compute_flux_coag_k0_kdv, compute_flux_frag_k0_kdv, compute_flux_coag_frag_k0_kdv
+from .generate_flux_intflux import (
+    compute_flux_coag_frag_k0_kdv,
+    compute_flux_coag_k0_kdv,
+    compute_flux_frag_k0_kdv,
+)
 
 
 def coala_coag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabflux_coag, v_dust):
@@ -57,8 +61,17 @@ def coala_coag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabf
     return S_coag
 
 
-def coala_frag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, v_dust):
-    """
+def coala_frag_source_term_k0(
+    nbins,
+    massgrid,
+    rhodust,
+    rhodust_eps,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    v_dust,
+):
+    r"""
     Function to compute the source for fragmentation in continuity equation for piecewise constant approximation (see Lombart et al., 2024)
     Function for ballistic kernel with differential velocities dv
     Used to evaluate the source term, then hydro code applies time solver
@@ -102,7 +115,9 @@ def coala_frag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabf
     dv = v_dust[None, :] - v_dust[:, None]
 
     # compute flux for all dust bins
-    flux = compute_flux_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    flux = compute_flux_frag_k0_kdv(
+        gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv
+    )
 
     S_frag = np.zeros(nbins)
     S_frag[0] = -flux[0]
@@ -111,9 +126,18 @@ def coala_frag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabf
     return S_frag
 
 
-
-def coala_coag_frag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, v_dust, threshold_vfrag):
-    """
+def coala_coag_frag_source_term_k0(
+    nbins,
+    massgrid,
+    rhodust,
+    rhodust_eps,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    v_dust,
+    threshold_vfrag,
+):
+    r"""
     Function to compute the source for coagulation and fragmentation in continuity equation for piecewise constant approximation (see Lombart et al., 2021)
     Function for ballistic kernel with differential velocities dv
     Used to evaluate the source term, then hydro code applies time solver
@@ -159,10 +183,21 @@ def coala_coag_frag_source_term_k0(nbins, massgrid, rhodust, rhodust_eps, tensor
     dv = v_dust[None, :] - v_dust[:, None]
 
     # probability
-    proba_frag = (1.5 * (threshold_vfrag/dv)**2 + 1.0) * exp(-1.5 * (threshold_vfrag/dv)**2)
+    proba_frag = (1.5 * (threshold_vfrag / dv) ** 2 + 1.0) * np.exp(
+        -1.5 * (threshold_vfrag / dv) ** 2
+    )
+    proba_coag = 1.0 - proba_frag
 
     # compute flux for all dust bins
-    flux = compute_flux_coag_frag_k0_kdv(gij, tensor_tabflux_coag, dv, proba_coag, proba_frag)
+    flux = compute_flux_coag_frag_k0_kdv(
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     S_coag_frag = np.zeros(nbins)
     S_coag_frag[0] = -flux[0]
@@ -175,7 +210,10 @@ import time
 
 from scipy.special import legendre
 
-from .generate_tabflux_tabintflux import compute_coagtabflux_k0_numba, compute_fragtabflux_k0_numba
+from .generate_tabflux_tabintflux import (
+    compute_coagtabflux_k0_numba,
+    compute_fragtabflux_k0_numba,
+)
 from .utils_polynomials import legendre_coeffs
 
 
@@ -286,20 +324,20 @@ def coala_precalc_tabflux_frag(K0, nbins, Q, massgrid, frac_mass_fragments, beta
 
     start = time.time()
     tensor_tabflux_frag_T1 = np.zeros((nbins, nbins, nbins))
-    tensor_tabflux_frag_T1 = np.zeros((nbins, nbins, nbins))
+    tensor_tabflux_frag_T2 = np.zeros((nbins, nbins, nbins))
 
     compute_fragtabflux_k0_numba(
-        kernel, 
-        K0, 
-        Q, 
-        vecnodes, 
-        vecweights, 
-        nbins, 
-        massgrid, 
-        mat_coeffs_leg, 
-        frac_mass_fragments, 
-        beta, 
-        tensor_tabflux_frag_T1, 
+        kernel,
+        K0,
+        Q,
+        vecnodes,
+        vecweights,
+        nbins,
+        massgrid,
+        mat_coeffs_leg,
+        frac_mass_fragments,
+        beta,
+        tensor_tabflux_frag_T1,
         tensor_tabflux_frag_T2,
     )
 

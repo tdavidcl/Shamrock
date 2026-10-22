@@ -2,7 +2,7 @@ import sys
 import time
 
 import numpy as np
-from scipy.special import legendre,roots_legendre
+from scipy.special import legendre, roots_legendre
 
 from .compute_coag_frag import *
 from .generate_flux_intflux import *
@@ -16,7 +16,28 @@ from .utils_polynomials import *
 
 
 def iterate_coag_frag_kdv(
-    kernel, K0, nbins, kpol, dthydro, ndthydro, coeff_CFL, Q_intGQ, Q_L2_proj, eps_gij, eps_rhodust, massgrid, massbins, coeff_pl, bin_scut, dv, proba_coag, proba_frag, frac_mass_fragments, beta, dtg, rho_gas
+    kernel,
+    K0,
+    nbins,
+    kpol,
+    dthydro,
+    ndthydro,
+    coeff_CFL,
+    Q_intGQ,
+    Q_L2_proj,
+    eps_gij,
+    eps_rhodust,
+    massgrid,
+    massbins,
+    coeff_pl,
+    bin_scut,
+    dv,
+    proba_coag,
+    proba_frag,
+    frac_mass_fragments,
+    beta,
+    dtg,
+    rho_gas,
 ):
     """
     Function to iterate coagulation + fragmentation solver to reach the time ndthydro x dthydro
@@ -89,7 +110,6 @@ def iterate_coag_frag_kdv(
 
     # print("vecnodes_intGQ = ",vecnodes_intGQ)
     # print("vecweights_intGQ = ",vecweights_intGQ)
-    
 
     vecnodes_intGQ = vecnodes_intGQ.tolist()
     vecweights_intGQ = vecweights_intGQ.tolist()
@@ -124,27 +144,25 @@ def iterate_coag_frag_kdv(
                 tensor_tabflux_coag,
             )  # ,progress)
 
-
             tensor_tabflux_frag_T1 = np.zeros((nbins, nbins, nbins))
             tensor_tabflux_frag_T2 = np.zeros((nbins, nbins, nbins))
 
             compute_fragtabflux_k0_numba(
-                kernel, 
-                K0, 
-                Q_intGQ, 
-                vecnodes_intGQ, 
-                vecweights_intGQ, 
-                nbins, 
-                massgrid, 
-                mat_coeffs_leg, 
-                frac_mass_fragments, 
-                beta, 
-                tensor_tabflux_frag_T1, 
+                kernel,
+                K0,
+                Q_intGQ,
+                vecnodes_intGQ,
+                vecweights_intGQ,
+                nbins,
+                massgrid,
+                mat_coeffs_leg,
+                frac_mass_fragments,
+                beta,
+                tensor_tabflux_frag_T1,
                 tensor_tabflux_frag_T2,
             )
 
         else:
-
             print("Functions for kpol > 0 are missing for fragmentation")
             sys.exit()
             tensor_tabflux_coag = np.zeros((nbins, nbins, nbins, kpol + 1, kpol + 1))
@@ -215,14 +233,15 @@ def iterate_coag_frag_kdv(
     start = time.time()
 
     if kpol == 0:
-        rhodust = init_power_law_rho_dust(nbins, massgrid, massbins, bin_scut, coeff_pl, dtg, rho_gas, eps_rhodust)
+        rhodust = init_power_law_rho_dust(
+            nbins, massgrid, massbins, bin_scut, coeff_pl, dtg, rho_gas, eps_rhodust
+        )
 
         gij = eps_gij * np.ones(nbins)
         for j in range(nbins):
             if rhodust[j] > eps_rhodust:
-                gij[j] = rhodust[j]/(massgrid[j+1]-massgrid[j])
+                gij[j] = rhodust[j] / (massgrid[j + 1] - massgrid[j])
 
-    
     else:
         raise ValueError("need to add fonction for initial condition kpol > 0")
         # gij = L2projDL(eps, nbins, kpol, massgrid, massbins, Q, vecnodes, vecweights)
@@ -244,14 +263,11 @@ def iterate_coag_frag_kdv(
         #     gij[:, 0][gij[:, 0] < eps] = eps
         #     gij[:, 1:][gij[:, 0] < eps] = 0.0
 
-
-
     finish = time.time()
     gij_init = np.copy(gij)
     print("rhodust =", rhodust)
     print("gij =", gij)
     print("gij generated in %.5f s" % (finish - start))
-
 
     # test flux kdv
     # flux_test = compute_flux_coag_kdv(gij,tensor_tabflux_coag,dv)
@@ -283,9 +299,19 @@ def iterate_coag_frag_kdv(
         # bar = ProgressBar(widgets=[Percentage(), Bar()], maxval=ndthydro).start()
         if kpol == 0:
             for i in range(ndthydro):
-                
                 gij, nsub, ndt = compute_coag_frag_k0_kdv(
-                    eps_gij, coeff_CFL, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dthydro
+                    eps_gij,
+                    coeff_CFL,
+                    nbins,
+                    massgrid,
+                    gij,
+                    tensor_tabflux_coag,
+                    tensor_tabflux_frag_T1,
+                    tensor_tabflux_frag_T2,
+                    dv,
+                    proba_coag,
+                    proba_frag,
+                    dthydro,
                 )
 
                 tot_nsub += nsub
@@ -323,14 +349,13 @@ def iterate_coag_frag_kdv(
 
     finish = time.time()
 
-    print("")
+    print()
     print("total nsub =", tot_nsub)
     print("total ndt =", tot_ndt)
     print("total number time-steps =", tot_ndt + tot_nsub)
 
-    print("")
+    print()
     print("gij tend =", gij)
-
 
     if kpol == 0:
         M1_tend = np.sum((massgrid[1:] - massgrid[0:nbins]) * gij)

@@ -33,6 +33,7 @@ def init_grid_log(nbins, massmax, massmin):
 
     return massgrid, massbins
 
+
 def init_sizegrid_log(nbins, smax, smin):
     """
     Generate sizegrid, sizebins and sizemeanlog in logscale
@@ -64,8 +65,6 @@ def init_sizegrid_log(nbins, smax, smin):
     for j in range(nbins):
         sizegrid[j + 1] = r * sizegrid[j]
         sizebins[j] = 0.5 * (sizegrid[j] + sizegrid[j + 1])
-        sizemeanlog[j] =  np.sqrt(sizegrid[j] * sizegrid[j + 1])
+        sizemeanlog[j] = np.sqrt(sizegrid[j] * sizegrid[j + 1])
 
     return sizegrid, sizebins, sizemeanlog
-
-

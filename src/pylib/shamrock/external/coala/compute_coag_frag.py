@@ -3,10 +3,20 @@ import sys
 from .solver_DG import *
 
 
-
-
-
-def compute_coag_frag_k0_kdv(eps, coeff_CFL, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dthydro):
+def compute_coag_frag_k0_kdv(
+    eps,
+    coeff_CFL,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    proba_coag,
+    proba_frag,
+    dthydro,
+):
     """
     Function to compute coagulation solver for 1 hydro time-step
 
@@ -53,11 +63,22 @@ def compute_coag_frag_k0_kdv(eps, coeff_CFL, nbins, massgrid, gij, tensor_tabflu
     ndt = 0
 
     # evaluate coagulation CFL
-    dtCFLsub = compute_CFL_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    dtCFLsub = compute_CFL_coag_frag_k0_kdv(
+        eps,
+        nbins,
+        massgrid,
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
     dtCFLsub *= coeff_CFL
 
-    print("dtCFLsub=",dtCFLsub)
-   #  sys.exit()
+    print("dtCFLsub=", dtCFLsub)
+    #  sys.exit()
 
     # compare hydro timestep and coagulation CFL
     dt = min(dtCFLsub, dthydro)
@@ -70,26 +91,70 @@ def compute_coag_frag_k0_kdv(eps, coeff_CFL, nbins, massgrid, gij, tensor_tabflu
 
             nsub += 1
 
-            gij = solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dtCFLsub)
+            gij = solver_coag_frag_k0_kdv(
+                eps,
+                nbins,
+                massgrid,
+                gij,
+                tensor_tabflux_coag,
+                tensor_tabflux_frag_T1,
+                tensor_tabflux_frag_T2,
+                dv,
+                proba_coag,
+                proba_frag,
+                dtCFLsub,
+            )
 
-            dtCFLsub = compute_CFL_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+            dtCFLsub = compute_CFL_coag_frag_k0_kdv(
+                eps,
+                nbins,
+                massgrid,
+                gij,
+                tensor_tabflux_coag,
+                tensor_tabflux_frag_T1,
+                tensor_tabflux_frag_T2,
+                dv,
+                proba_coag,
+                proba_frag,
+            )
             dtCFLsub = coeff_CFL * dtCFLsub
 
-            print("dtCFLsub=",dtCFLsub)
+            print("dtCFLsub=", dtCFLsub)
 
         # last timestep to reach dthydro
         dtlast = dthydro - dtsub
         nsub += 1
 
-        gij = solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dtlast)
+        gij = solver_coag_frag_k0_kdv(
+            eps,
+            nbins,
+            massgrid,
+            gij,
+            tensor_tabflux_coag,
+            tensor_tabflux_frag_T1,
+            tensor_tabflux_frag_T2,
+            dv,
+            proba_coag,
+            proba_frag,
+            dtlast,
+        )
 
     # when coagulation CFL > hydro timstep
     else:
         ndt += 1
 
-        gij = solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dt)
+        gij = solver_coag_frag_k0_kdv(
+            eps,
+            nbins,
+            massgrid,
+            gij,
+            tensor_tabflux_coag,
+            tensor_tabflux_frag_T1,
+            tensor_tabflux_frag_T2,
+            dv,
+            proba_coag,
+            proba_frag,
+            dt,
+        )
 
     return gij, nsub, ndt
-
-
-

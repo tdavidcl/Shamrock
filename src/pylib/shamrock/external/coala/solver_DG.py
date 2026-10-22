@@ -8,10 +8,9 @@ from .generate_flux_intflux import *
 from .limiter import *
 from .utils_polynomials import *
 
-
-#---------------------------
+# ---------------------------
 # functions for coagulation
-#---------------------------
+# ---------------------------
 
 
 # for analytical collision kernel
@@ -46,19 +45,17 @@ def compute_CFL_coag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag):
 
     flux = compute_flux_coag_k0(gij, tensor_tabflux_coag)
 
-    
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
         if gij[j] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j]*hj/flux[j])
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j] * hj / (flux[j] - flux[j - 1]))
 
     CFL_k0 = np.min(tabdtCFL[tabdtCFL > 0.0])
-
 
     if CFL_k0 == 0.0:
         print("gij=", gij)
@@ -215,17 +212,16 @@ def compute_CFL_coag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, dv):
     flux = compute_flux_coag_k0_kdv(gij, tensor_tabflux_coag, dv)
 
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
         if gij[j] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j]*hj/flux[j])
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j] * hj / (flux[j] - flux[j - 1]))
 
     CFL_k0 = np.min(tabdtCFL[tabdtCFL > 0.0])
-
 
     if CFL_k0 == 0.0:
         print("gij=", gij)
@@ -387,14 +383,14 @@ def compute_CFL_coag(eps, nbins, kpol, massgrid, gij, tensor_tabflux_coag):
     flux = compute_flux_coag(gij, tensor_tabflux_coag)
 
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
-        if gij[j,0] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j,0]*hj/flux[j])
+        if gij[j, 0] > eps:
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j, 0] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j,0]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j, 0] * hj / (flux[j] - flux[j - 1]))
 
     CFL = np.min(tabdtCFL[tabdtCFL > 0.0])
 
@@ -593,14 +589,14 @@ def compute_CFL_coag_kdv(eps, nbins, kpol, massgrid, gij, tensor_tabflux_coag, d
     flux = compute_flux_coag_kdv(gij, tensor_tabflux_coag, dv)
 
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
-        if gij[j,0] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j,0]*hj/flux[j])
+        if gij[j, 0] > eps:
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j, 0] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j,0]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j, 0] * hj / (flux[j] - flux[j - 1]))
 
     CFL = np.min(tabdtCFL[tabdtCFL > 0.0])
 
@@ -779,12 +775,15 @@ def solver_coag_kdv(
     return gijnew
 
 
-#---------------------------
+# ---------------------------
 # functions for fragmentation
-#---------------------------
+# ---------------------------
 
-#for analytical kernel
-def compute_CFL_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2):
+
+# for analytical kernel
+def compute_CFL_frag_k0(
+    eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+):
     """
     Function to compute fragmentation CFL for DG scheme k=0 piecewise constant approximation
 
@@ -818,21 +817,21 @@ def compute_CFL_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_t
 
     tabdtCFL = np.zeros(nbins)
 
-    flux = compute_flux_frag_k0(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2)
+    flux = compute_flux_frag_k0(
+        gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    )
 
-    
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
         if gij[j] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j]*hj/flux[j])
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j] * hj / (flux[j] - flux[j - 1]))
 
     CFL_k0 = np.min(tabdtCFL[tabdtCFL > 0.0])
-
 
     if CFL_k0 == 0.0:
         print("gij=", gij)
@@ -845,7 +844,9 @@ def compute_CFL_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_t
     return CFL_k0
 
 
-def L_func_frag_k0(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2):
+def L_func_frag_k0(
+    nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+):
     """
     Function to compute the DG operator L for fragmentation with piecewise constant approximation (see Lombart et al., 2021)
     It is used for the time solver
@@ -873,7 +874,9 @@ def L_func_frag_k0(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_fra
 
     """
 
-    flux = compute_flux_frag_k0(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2)
+    flux = compute_flux_frag_k0(
+        gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    )
 
     Lk0 = np.zeros(nbins)
     Lk0[0] = -flux[0] / (massgrid[1] - massgrid[0])
@@ -882,7 +885,16 @@ def L_func_frag_k0(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_fra
     return Lk0
 
 
-def solver_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dt):
+def solver_frag_k0(
+    eps,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dt,
+):
     """
     Function to compute SSPRK order 3 time solver for fragmentation with piecewise constant approximation
     See Zhang & Shu 2010 and Lombart et al., 2021
@@ -917,7 +929,9 @@ def solver_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflu
 
     # SSPRK3 algo (Zhang & Shu 2010)
     # step 1
-    Lk0 = L_func_frag_k0(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2)
+    Lk0 = L_func_frag_k0(
+        nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    )
 
     gij1 = gij + dt * Lk0
 
@@ -930,7 +944,9 @@ def solver_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflu
     else:
         gij1[gij1 < eps] = eps
 
-    Lk0_1 = L_func_frag_k0(nbins, massgrid, gij1, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2)
+    Lk0_1 = L_func_frag_k0(
+        nbins, massgrid, gij1, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    )
 
     gij2 = 3.0 * gij / 4.0 + (gij1 + dt * Lk0_1) / 4.0
 
@@ -944,7 +960,9 @@ def solver_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflu
         gij2[gij2 < eps] = eps
 
     # step 3
-    Lk0_2 = L_func_frag_k0(nbins, massgrid, gij2, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2)
+    Lk0_2 = L_func_frag_k0(
+        nbins, massgrid, gij2, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2
+    )
 
     gijnew = gij / 3.0 + 2.0 * (gij2 + dt * Lk0_2) / 3.0
 
@@ -960,9 +978,17 @@ def solver_frag_k0(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflu
     return gijnew
 
 
-
-#for physical kernel with cross-section x dv
-def compute_CFL_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv):
+# for physical kernel with cross-section x dv
+def compute_CFL_frag_k0_kdv(
+    eps,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+):
     """
     Function to compute fragmentation CFL for DG scheme k=0 piecewise constant approximation.
 
@@ -999,20 +1025,21 @@ def compute_CFL_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tens
 
     tabdtCFL = np.zeros(nbins)
 
-    flux = compute_flux_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    flux = compute_flux_frag_k0_kdv(
+        gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv
+    )
 
     for j in range(1, nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
         if gij[j] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j]*hj/flux[j])
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j] * hj / (flux[j] - flux[j - 1]))
 
     CFL_k0 = np.min(tabdtCFL[tabdtCFL > 0.0])
-
 
     if CFL_k0 == 0.0:
         print("gij=", gij)
@@ -1025,8 +1052,9 @@ def compute_CFL_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tens
     return CFL_k0
 
 
-
-def L_func_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv):
+def L_func_frag_k0_kdv(
+    nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv
+):
     """
     Function to compute the DG operator L for piecewise constant approximation (see Lombart et al., 2021)
     Function for ballistic kernel with differential velocities dv
@@ -1057,7 +1085,9 @@ def L_func_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux
 
     """
 
-    flux = compute_flux_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    flux = compute_flux_frag_k0_kdv(
+        gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv
+    )
 
     Lk0 = np.zeros(nbins)
     Lk0[0] = -flux[0] / (massgrid[1] - massgrid[0])
@@ -1066,7 +1096,17 @@ def L_func_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux
     return Lk0
 
 
-def solver_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, dt):
+def solver_frag_k0_kdv(
+    eps,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    dt,
+):
     """
     Function to compute SSPRK order 3 time solver with piecewise constant approximation
     Function for ballistic kernel with differential velocities dv
@@ -1100,7 +1140,15 @@ def solver_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
 
     # SSPRK3 algo (Zhang & Shu 2010)
     # step 1
-    Lk0 = L_func_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    Lk0 = L_func_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+    )
 
     gij1 = gij + dt * Lk0
 
@@ -1113,7 +1161,15 @@ def solver_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
     else:
         gij1[gij1 < eps] = eps
 
-    Lk0_1 = L_func_frag_k0_kdv(nbins, massgrid, gij1, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    Lk0_1 = L_func_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij1,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+    )
 
     gij2 = 3.0 * gij / 4.0 + (gij1 + dt * Lk0_1) / 4.0
 
@@ -1127,7 +1183,15 @@ def solver_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
         gij2[gij2 < eps] = eps
 
     # step 3
-    Lk0_2 = L_func_frag_k0_kdv(nbins, massgrid, gij2, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv)
+    Lk0_2 = L_func_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij2,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+    )
 
     gijnew = gij / 3.0 + 2.0 * (gij2 + dt * Lk0_2) / 3.0
 
@@ -1143,13 +1207,24 @@ def solver_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
     return gijnew
 
 
-
-#---------------------------
+# ---------------------------
 # functions for coagulation + fragmentation
-#---------------------------
+# ---------------------------
 
-#for physical kernel with cross-section x dv
-def compute_CFL_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag):
+
+# for physical kernel with cross-section x dv
+def compute_CFL_coag_frag_k0_kdv(
+    eps,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    proba_coag,
+    proba_frag,
+):
     """
     Function to compute coagulation + fragmentation CFL for DG scheme k=0 piecewise constant approximation.
 
@@ -1191,22 +1266,29 @@ def compute_CFL_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag,
 
     tabdtCFL = np.zeros(nbins)
 
-    flux = compute_flux_coag_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    flux = compute_flux_coag_frag_k0_kdv(
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     for j in range(nbins):
-        hj = massgrid[j+1] - massgrid[j]
+        hj = massgrid[j + 1] - massgrid[j]
 
         if gij[j] > eps:
-            if j==0:
-                #bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
-                tabdtCFL[j] = np.abs(gij[j]*hj/flux[j])
+            if j == 0:
+                # bin 1, where flux(0) = 0, no mass entering the mass domain [massmin,massmax]
+                tabdtCFL[j] = np.abs(gij[j] * hj / flux[j])
             else:
-                tabdtCFL[j] = np.abs(gij[j]*hj/(flux[j]-flux[j-1]))
+                tabdtCFL[j] = np.abs(gij[j] * hj / (flux[j] - flux[j - 1]))
 
     CFL_k0 = np.min(tabdtCFL[tabdtCFL > 0.0])
 
-   #  print("tabdtCFL = ",tabdtCFL)
-
+    #  print("tabdtCFL = ",tabdtCFL)
 
     if CFL_k0 == 0.0:
         print("gij=", gij)
@@ -1219,7 +1301,17 @@ def compute_CFL_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag,
     return CFL_k0
 
 
-def L_func_coag_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag):
+def L_func_coag_frag_k0_kdv(
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    proba_coag,
+    proba_frag,
+):
     """
     Function to compute the DG operator L for piecewise constant approximation (see Lombart et al., 2021)
     Function for ballistic kernel with differential velocities dv
@@ -1255,7 +1347,15 @@ def L_func_coag_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
 
     """
 
-    flux = compute_flux_coag_frag_k0_kdv(gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    flux = compute_flux_coag_frag_k0_kdv(
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     Lk0 = np.zeros(nbins)
     Lk0[0] = -flux[0] / (massgrid[1] - massgrid[0])
@@ -1264,8 +1364,19 @@ def L_func_coag_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_ta
     return Lk0
 
 
-
-def solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag, dt):
+def solver_coag_frag_k0_kdv(
+    eps,
+    nbins,
+    massgrid,
+    gij,
+    tensor_tabflux_coag,
+    tensor_tabflux_frag_T1,
+    tensor_tabflux_frag_T2,
+    dv,
+    proba_coag,
+    proba_frag,
+    dt,
+):
     """
     Function to compute SSPRK order 3 time solver with piecewise constant approximation
     Function for ballistic kernel with differential velocities dv
@@ -1303,15 +1414,25 @@ def solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tens
 
     # SSPRK3 algo (Zhang & Shu 2010)
     # step 1
-    Lk0 = L_func_coag_frag_k0_kdv(nbins, massgrid, gij, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    Lk0 = L_func_coag_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     gij1 = gij + dt * Lk0
 
-   #  print("gij", gij)
-   #  print("dt = ",dt)
-   #  print("Lk0 = ", Lk0)
-   #  print("gij1 = ", gij1)
-   #  sys.exit()
+    #  print("gij", gij)
+    #  print("dt = ",dt)
+    #  print("Lk0 = ", Lk0)
+    #  print("gij1 = ", gij1)
+    #  sys.exit()
 
     # limit gij1 to eps value
     if len(gij1[gij1 < 0.0]) > 0:
@@ -1323,7 +1444,17 @@ def solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tens
     else:
         gij1[gij1 < eps] = eps
 
-    Lk0_1 = L_func_coag_frag_k0_kdv(nbins, massgrid, gij1, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    Lk0_1 = L_func_coag_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij1,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     gij2 = 3.0 * gij / 4.0 + (gij1 + dt * Lk0_1) / 4.0
 
@@ -1338,7 +1469,17 @@ def solver_coag_frag_k0_kdv(eps, nbins, massgrid, gij, tensor_tabflux_coag, tens
         gij2[gij2 < eps] = eps
 
     # step 3
-    Lk0_2 = L_func_coag_frag_k0_kdv(nbins, massgrid, gij2, tensor_tabflux_coag, tensor_tabflux_frag_T1, tensor_tabflux_frag_T2, dv, proba_coag, proba_frag)
+    Lk0_2 = L_func_coag_frag_k0_kdv(
+        nbins,
+        massgrid,
+        gij2,
+        tensor_tabflux_coag,
+        tensor_tabflux_frag_T1,
+        tensor_tabflux_frag_T2,
+        dv,
+        proba_coag,
+        proba_frag,
+    )
 
     gijnew = gij / 3.0 + 2.0 * (gij2 + dt * Lk0_2) / 3.0
 

@@ -7,10 +7,11 @@ from scipy.special import legendre
 from ..kernel_collision import *
 from ..utils_polynomials import *
 
+
 @njit
 def int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v):
     """
-    Function to evaluate the analytic integral on mass fragment of the distribution of fragment 
+    Function to evaluate the analytic integral on mass fragment of the distribution of fragment
     in the form b(w;u,v) = A.w^beta + delta(w - m_left)
 
     Parameters
@@ -35,17 +36,25 @@ def int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v):
 
     """
 
-    m_frag = frac_mass_fragments * (u+v)
-    m_left = u+v - m_frag
+    m_frag = frac_mass_fragments * (u + v)
+    m_left = u + v - m_frag
 
-    #condition if m_left in [xmin,x] for delta function
-    if (xmin < m_left and m_left < x):
-        res = m_frag*(x**(2.0 + beta) - xmin**(2.0 + beta))/(m_frag**(2.0 + beta) - xmin**(2.0 + beta)) + m_left 
+    # condition if m_left in [xmin,x] for delta function
+    if xmin < m_left < x:
+        res = (
+            m_frag
+            * (x ** (2.0 + beta) - xmin ** (2.0 + beta))
+            / (m_frag ** (2.0 + beta) - xmin ** (2.0 + beta))
+            + m_left
+        )
     else:
-        res = m_frag*(x**(2.0 + beta) - xmin**(2.0 + beta))/(m_frag**(2.0 + beta) - xmin**(2.0 + beta))
+        res = (
+            m_frag
+            * (x ** (2.0 + beta) - xmin ** (2.0 + beta))
+            / (m_frag ** (2.0 + beta) - xmin ** (2.0 + beta))
+        )
 
     return res
-
 
 
 def func_frag_flux(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, x, u, v, xilp, xil):
@@ -86,11 +95,31 @@ def func_frag_flux(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, x, u, v
 
     """
 
-    return int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v)* func_kernel(kernel, K0, u, v) * phi_pol(aip, xilp) * phi_pol(ai, xil) / (v * u)
+    return (
+        int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v)
+        * func_kernel(kernel, K0, u, v)
+        * phi_pol(aip, xilp)
+        * phi_pol(ai, xil)
+        / (v * u)
+    )
 
 
 def fragfluxfunction_T1(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, j, lp, l, ip, i, frac_mass_fragments, beta
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    j,
+    lp,
+    l,
+    ip,
+    i,
+    frac_mass_fragments,
+    beta,
 ):
     """
     Function to evaluate the integral of the term 1 for fragmentation flux with Gauss-Legendre quadrature method.
@@ -176,7 +205,6 @@ def fragfluxfunction_T1(
         b_vl = np.min([xmax - ulp_alpha + xmin, xlgridr])
 
         if xmax - ulp_alpha + xmin > xlgridl and xlgridr > xjgridr - ulp_alpha + xmin:
-
             # gauss-legendre quadrature on integral on v
             for alpha_v in range(Q):
                 vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -188,7 +216,20 @@ def fragfluxfunction_T1(
                     * (b_vl - a_vl)
                     * vecweights[alpha_u]
                     * vecweights[alpha_v]
-                    * func_frag_flux(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, xjgridr, ulp_alpha, vl_alpha, xilp, xil)
+                    * func_frag_flux(
+                        kernel,
+                        K0,
+                        ai,
+                        aip,
+                        frac_mass_fragments,
+                        beta,
+                        xmin,
+                        xjgridr,
+                        ulp_alpha,
+                        vl_alpha,
+                        xilp,
+                        xil,
+                    )
                 )
 
                 res = 0.5 * res
@@ -196,10 +237,22 @@ def fragfluxfunction_T1(
     return res
 
 
-
-
 def fragfluxfunction_T2(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, j, lp, l, ip, i, frac_mass_fragments, beta
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    j,
+    lp,
+    l,
+    ip,
+    i,
+    frac_mass_fragments,
+    beta,
 ):
     """
     Function to evaluate the integral of the term 2 for fragmentation flux with Gauss-Legendre quadrature method.
@@ -285,7 +338,6 @@ def fragfluxfunction_T2(
         b_vl = np.min([xmax - ulp_alpha + xmin, xlgridr])
 
         if xmax - ulp_alpha + xmin > xlgridl and xlgridr > xmin:
-
             # gauss-legendre quadrature on integral on v
             for alpha_v in range(Q):
                 vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -297,7 +349,20 @@ def fragfluxfunction_T2(
                     * (b_vl - a_vl)
                     * vecweights[alpha_u]
                     * vecweights[alpha_v]
-                    * func_frag_flux(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, xjgridr, ulp_alpha, vl_alpha, xilp, xil)
+                    * func_frag_flux(
+                        kernel,
+                        K0,
+                        ai,
+                        aip,
+                        frac_mass_fragments,
+                        beta,
+                        xmin,
+                        xjgridr,
+                        ulp_alpha,
+                        vl_alpha,
+                        xilp,
+                        xil,
+                    )
                 )
 
                 res = 0.5 * res
@@ -344,11 +409,32 @@ def func_frag_flux_numba(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, x
 
     """
 
-    return int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v)* func_kernel_numba(kernel, K0, u, v) * phi_pol(aip, xilp) * phi_pol(ai, xil) / (v * u)
+    return (
+        int_distrib_frag_generic(frac_mass_fragments, beta, xmin, x, u, v)
+        * func_kernel_numba(kernel, K0, u, v)
+        * phi_pol(aip, xilp)
+        * phi_pol(ai, xil)
+        / (v * u)
+    )
+
 
 @njit
 def fragfluxfunction_T1_numba(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, j, lp, l, ip, i, frac_mass_fragments, beta
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    j,
+    lp,
+    l,
+    ip,
+    i,
+    frac_mass_fragments,
+    beta,
 ):
     """
     Function to evaluate the integral of the term 1 for fragmentation flux with Gauss-Legendre quadrature method.
@@ -434,7 +520,6 @@ def fragfluxfunction_T1_numba(
         b_vl = min(xmax - ulp_alpha + xmin, xlgridr)
 
         if xmax - ulp_alpha + xmin > xlgridl and xlgridr > xjgridr - ulp_alpha + xmin:
-
             # gauss-legendre quadrature on integral on v
             for alpha_v in range(Q):
                 vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -447,17 +532,42 @@ def fragfluxfunction_T1_numba(
                     * (b_vl - a_vl)
                     * vecweights[alpha_u]
                     * vecweights[alpha_v]
-                    * func_frag_flux_numba(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, xjgridr, ulp_alpha, vl_alpha, xilp, xil)
+                    * func_frag_flux_numba(
+                        kernel,
+                        K0,
+                        ai,
+                        aip,
+                        frac_mass_fragments,
+                        beta,
+                        xmin,
+                        xjgridr,
+                        ulp_alpha,
+                        vl_alpha,
+                        xilp,
+                        xil,
+                    )
                 )
-
 
     return res
 
 
-
 @njit
 def fragfluxfunction_T2_numba(
-    kernel, K0, Q, vecnodes, vecweights, nbins, massgrid, mat_coeffs_leg, j, lp, l, ip, i, frac_mass_fragments, beta
+    kernel,
+    K0,
+    Q,
+    vecnodes,
+    vecweights,
+    nbins,
+    massgrid,
+    mat_coeffs_leg,
+    j,
+    lp,
+    l,
+    ip,
+    i,
+    frac_mass_fragments,
+    beta,
 ):
     """
     Function to evaluate the integral of the term 2 for fragmentation flux with Gauss-Legendre quadrature method.
@@ -543,7 +653,6 @@ def fragfluxfunction_T2_numba(
         b_vl = min(xmax - ulp_alpha + xmin, xlgridr)
 
         if xmax - ulp_alpha + xmin > xlgridl and xlgridr > xmin:
-
             # gauss-legendre quadrature on integral on v
             for alpha_v in range(Q):
                 vl_alpha = 0.5 * (b_vl + a_vl) + 0.5 * (b_vl - a_vl) * vecnodes[alpha_v]
@@ -556,8 +665,20 @@ def fragfluxfunction_T2_numba(
                     * (b_vl - a_vl)
                     * vecweights[alpha_u]
                     * vecweights[alpha_v]
-                    * func_frag_flux_numba(kernel, K0, ai, aip, frac_mass_fragments, beta, xmin, xjgridr, ulp_alpha, vl_alpha, xilp, xil)
+                    * func_frag_flux_numba(
+                        kernel,
+                        K0,
+                        ai,
+                        aip,
+                        frac_mass_fragments,
+                        beta,
+                        xmin,
+                        xjgridr,
+                        ulp_alpha,
+                        vl_alpha,
+                        xilp,
+                        xil,
+                    )
                 )
-
 
     return res
