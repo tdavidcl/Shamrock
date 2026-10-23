@@ -68,11 +68,7 @@ namespace {
     bool entry_power_ok(const UnitSystem<T> &s, T tol) {
         constexpr Unit<> u  = units::registry[i].unit;
         constexpr Unit<> up = upow(u, p);
-        if (!std::isnormal(T(up.si_factor))
-            || !std::isnormal(s.get(Unit<T>{.dim = up.dim, .si_factor = T(1)}))) {
-            return true; // outside the range contract documented in UnitSystem::get
-        }
-        T ct = s.template get<up>();
+        T ct                = s.template get<up>();
         if (!std::isnormal(ct)) {
             return true; // the result itself does not fit in T
         }
