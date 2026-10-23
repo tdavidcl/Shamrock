@@ -216,7 +216,9 @@ every `git commit`, amend with `--no-verify` before pushing (a plain amend
 re-runs the hook):
 
 - **Author** = the human who initiated the work. Use `--author`; do not
-  change gitconfig.
+  change gitconfig. If that identity appears in `.mailmap`, use the
+  canonical name and email it maps to (`git check-mailmap "<name> <email>"`
+  prints it).
 - Trailer = `Assisted-by: <agent>` only. No `Co-authored-by`
   (`Co-authored-by` is for extra human authors only). Also no session url.
 
