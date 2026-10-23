@@ -155,7 +155,6 @@ jobs:
               "imagename": "Anaconda3",
               "runtest": true,
               "runtest_rscript": true,
-              "runtestpy": true,
               "mpiargs": "--allow-run-as-root --bind-to socket:overload-allowed --oversubscribe",
               "ccache-key-extra": "omp",
               "shell": "bash -el {0}",
