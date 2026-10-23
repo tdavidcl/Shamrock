@@ -18,6 +18,8 @@
 
 #include "ConversionConstants.hpp"
 #include "Names.hpp"
+#include "Unit.hpp"
+#include "details/utils.hpp"
 #include <cmath>
 
 /// Macro to add a unit getter
@@ -246,6 +248,89 @@ namespace shamunits {
         template<legacy_units::UnitName u, int power = 1>
         inline constexpr T to() {
             return to<None, u, power>();
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // Unit-value interface (shamunits redesign). Units come from shamunits::units, prefixes
+        // from shamunits::prefix, and compose freely: get<prefix::mega * units::year>(),
+        // get<upow(units::metre, 2)>(). The factor is converted to Tret once; all arithmetic runs
+        // in Tret. get<u>(), to<u>() and get(u) never divide.
+        //
+        // The factor is applied last, after the base-unit powers: factors span 1e-45 .. 1e90
+        // while the base-unit product stays near the system's scale, so this order avoids
+        // intermediate under/overflow in f32 (measured: 0 misses in f32 over every unit x prefix x
+        // power -3..3 in SI, astro, cgs and a primes system, against 48 with the factor first).
+        // Contract: both the SI factor and the base-unit product (the value of one unit of that
+        // dimension) must lie in Tret's normal range; outside it the result loses precision, e.g.
+        // upow(prefix::femto * units::kilogram, 3) has a factor of 1e-45, subnormal in f32.
+        // ---------------------------------------------------------------------------------------
+
+        /**
+         * @brief Value of the compile-time unit `u` in this system
+         *
+         * `u` is a by-value template parameter, so every exponent is a constant expression:
+         * dimensions with exponent 0 expand to nothing, as with the legacy getters. The
+         * parameter is `Unit u` (deduced) on purpose; it compiles on clang 15. Never replace it
+         * with a raw `double` template parameter, which clang < 18 rejects.
+         *
+         * @code{.cpp}
+         * astro.get<units::astronomical_unit>();              // in this system's lengths
+         * si.get<prefix::mega * units::year>();               // 3.15576e13
+         * usys.get<constants::G, f32>();                      // result as f32 (C3)
+         * @endcode
+         */
+        template<Unit u, class Tret = T>
+        constexpr Tret get() const noexcept {
+            using details::pow_constexpr_fast_inv;
+            return pow_constexpr_fast_inv<u.dim.second>(Tret(s), Tret(s_inv))
+                   * pow_constexpr_fast_inv<u.dim.metre>(Tret(m), Tret(m_inv))
+                   * pow_constexpr_fast_inv<u.dim.kilogram>(Tret(kg), Tret(kg_inv))
+                   * pow_constexpr_fast_inv<u.dim.ampere>(Tret(A), Tret(A_inv))
+                   * pow_constexpr_fast_inv<u.dim.kelvin>(Tret(K), Tret(K_inv))
+                   * pow_constexpr_fast_inv<u.dim.mole>(Tret(mol), Tret(mol_inv))
+                   * pow_constexpr_fast_inv<u.dim.candela>(Tret(cd), Tret(cd_inv))
+                   * Tret(u.si_factor);
+        }
+
+        /// Inverse of get<u>(): one unit of this system expressed in `u`, e.g.
+        /// to<units::kilogram>() is the code mass unit in kg. The reciprocal of the factor is a
+        /// constant expression, so this does not divide either.
+        template<Unit u, class Tret = T>
+        constexpr Tret to() const noexcept {
+            return get<upow(u, -1), Tret>();
+        }
+
+        /// Value of a unit only known at run time (e.g. looked up by name). Exponents are runtime
+        /// values; the stored *_inv members serve negative exponents, so there is no division.
+        template<class Tret = T, class Tu>
+        constexpr Tret get(Unit<Tu> u) const noexcept {
+            using details::ipow;
+            return ipow(Tret(s), u.dim.second, Tret(s_inv))
+                   * ipow(Tret(m), u.dim.metre, Tret(m_inv))
+                   * ipow(Tret(kg), u.dim.kilogram, Tret(kg_inv))
+                   * ipow(Tret(A), u.dim.ampere, Tret(A_inv))
+                   * ipow(Tret(K), u.dim.kelvin, Tret(K_inv))
+                   * ipow(Tret(mol), u.dim.mole, Tret(mol_inv))
+                   * ipow(Tret(cd), u.dim.candela, Tret(cd_inv)) * Tret(u.si_factor);
+        }
+
+        /// get(u) for `u` raised to a runtime power: exactly get(upow(u, power)). The only entry
+        /// point that can divide (in upow, for power < 0); this is the Python path.
+        template<class Tret = T, class Tu>
+        constexpr Tret get(Unit<Tu> u, int power) const noexcept {
+            return get<Tret>(upow(u, power));
+        }
+
+        /// Inverse of get(u)
+        template<class Tret = T, class Tu>
+        constexpr Tret to(Unit<Tu> u) const noexcept {
+            return get<Tret>(upow(u, -1));
+        }
+
+        /// Inverse of get(u, power)
+        template<class Tret = T, class Tu>
+        constexpr Tret to(Unit<Tu> u, int power) const noexcept {
+            return get<Tret>(upow(u, -power));
         }
 
         private:

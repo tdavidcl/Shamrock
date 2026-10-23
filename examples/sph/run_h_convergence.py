@@ -1315,6 +1315,8 @@ def print_table(header, rows, styles):
     print(line("\u2514", "\u2534", "\u2518"))
 
 
+# %%
+
 # higher count is better
 print()
 print_table(
