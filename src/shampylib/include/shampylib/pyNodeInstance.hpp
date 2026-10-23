@@ -33,23 +33,10 @@ namespace shamsys::instance {
             [](std::string sycl_cfg) {
                 init_sycl_mpi(
                     sycl_cfg, MPIInitInfo{.argc = opts::get_argc(), .argv = opts::get_argv()});
-
-                // Python initialized the instance, so Python owns its teardown. Python's atexit
-                // runs before C++ static destructors; without it the schedulers' sycl::queue
-                // would be destroyed after AdaptiveCpp's runtime statics (mutex lock failed on
-                // macOS).
-                py::module_::import("atexit").attr("register")(py::cpp_function([]() {
-                    if (is_initialized()) {
-                        close();
-                    }
-                }));
             },
             R"pbdoc(
 
             The init function for shamrock node instance
-
-            Also registers an ``atexit`` handler closing the instance if it is still
-            initialized when the interpreter exits.
 
             )pbdoc");
 
