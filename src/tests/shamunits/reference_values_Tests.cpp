@@ -41,6 +41,9 @@ namespace {
     using shamunits::Constants;
     using shamunits::UnitSystem;
     namespace legacy_units = shamunits::legacy_units;
+    namespace units        = shamunits::units;
+    namespace prefix       = shamunits::prefix;
+    using shamunits::upow;
 
     constexpr double nan_v = std::numeric_limits<double>::quiet_NaN();
     constexpr double inf_v = std::numeric_limits<double>::infinity();
@@ -100,20 +103,21 @@ namespace {
         return constant_getters<T>.at(name)(cte, power);
     }
 
-    /// Template path, as used by the C++ call sites
+    /// Template path, as used by the C++ call sites (the map keys keep their original
+    /// spelling: they are the ids of the reference rows)
     template<class T>
     const std::unordered_map<std::string, T (*)(UnitSystem<T> &)> template_getters = {
         {"to<kilogram>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<legacy_units::kilogram>();
+             return u.template to<units::kilogram>();
          }},
         {"to<metre>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<legacy_units::metre>();
+             return u.template to<units::metre>();
          }},
         {"to<second>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<legacy_units::second>();
+             return u.template to<units::second>();
          }},
         {"Constants::G",
          [](UnitSystem<T> &u) -> T {
@@ -129,23 +133,23 @@ namespace {
          }},
         {"get<astronomical_unit, 2>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<legacy_units::astronomical_unit, 2>();
+             return u.template get<upow(units::astronomical_unit, 2)>();
          }},
         {"get<mega, years>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<shamunits::mega, legacy_units::years>();
+             return u.template get<prefix::mega * units::year>();
          }},
         {"to<mega, years>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<shamunits::mega, legacy_units::years>();
+             return u.template to<prefix::mega * units::year>();
          }},
         {"get<kilo, Joule>",
          [](UnitSystem<T> &u) -> T {
-             return u.template get<shamunits::kilo, legacy_units::Joule>();
+             return u.template get<prefix::kilo * units::joule>();
          }},
         {"to<kilo, Joule>",
          [](UnitSystem<T> &u) -> T {
-             return u.template to<shamunits::kilo, legacy_units::Joule>();
+             return u.template to<prefix::kilo * units::joule>();
          }},
     };
 
@@ -436,8 +440,6 @@ namespace {
         {"constant:sigma 2", RefSystem::Astro, 803192.75}, // BUG 6: correct value is 803173.16438226961
         {"template:Constants::G", RefSystem::Astro, nan_v}, // BUG 6: correct value is 39478129059350.664
         {"template:Constants::mu_0", RefSystem::Astro, 4.207059578593522e-21}, // BUG 6: correct value is 4.207008051687417e-21
-        {"template:get<kilo, Joule>", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
-        {"template:to<kilo, Joule>", RefSystem::Astro, inf_v}, // BUG 6: correct value is 4.4685017576977925e+22
     };
 
     /// Not a bug: the f64 value lies outside the normal f32 range, so f32 overflows to inf or
