@@ -24,6 +24,8 @@
 #include "shamtest/shamtest.hpp"
 #include "shamunits/Constants.hpp"
 #include "shamunits/UnitSystem.hpp"
+#include "shamunits/prefix_table.hpp"
+#include "shamunits/unit_table.hpp"
 #include <type_traits>
 #include <unordered_map>
 #include <array>
@@ -78,8 +80,7 @@ namespace {
     /// Runtime path, as used by the Python bindings (UnitSystem.get)
     template<class T>
     T unit_value(UnitSystem<T> &u, const std::string &name, const std::string &pref, int power) {
-        return u.runtime_get(
-            shamunits::unit_prefix_from_name(pref), legacy_units::unit_from_name(name), power);
+        return u.get(shamunits::prefix::from_name(pref) * shamunits::units::from_name(name), power);
     }
 
     /// Constants, as exposed by the Python bindings
@@ -420,31 +421,6 @@ namespace {
 
     /// BUG 6: the value fits in f32, but an intermediate under/overflows. Fixed by the redesign.
     const F32Ref f32_bug6_refs[] = {
-        {"unit:Newton None -2", RefSystem::Astro, 8.9220038305441871e+28}, // BUG 6: correct value is 8.9222223510902158e+28
-        {"unit:Newton None 1", RefSystem::Astro, 3.347871677759494e-15}, // BUG 6: correct value is 3.3478306334397417e-15
-        {"unit:Newton None 2", RefSystem::Astro, 1.1208244971700638e-29}, // BUG 6: correct value is 1.1207969950197542e-29
-        {"unit:Joule None 1", RefSystem::Astro, 2.2379141094176441e-26}, // BUG 6: correct value is 2.2378865539827109e-26
-        {"unit:Watt None -2", RefSystem::Astro, 2.0049580225122294e+24}, // BUG 6: correct value is 2.0050071793095777e+24
-        {"unit:Watt None 1", RefSystem::Astro, 7.0623194792229782e-13}, // BUG 6: correct value is 7.0622328715964797e-13
-        {"unit:Watt None 2", RefSystem::Astro, 4.9876356890941991e-25}, // BUG 6: correct value is 4.9875133132657862e-25
-        {"unit:Volt None -2", RefSystem::Astro, 2.0049580225122294e+24}, // BUG 6: correct value is 2.0050071793095777e+24
-        {"unit:Volt None 1", RefSystem::Astro, 7.0623194792229782e-13}, // BUG 6: correct value is 7.0622328715964797e-13
-        {"unit:Volt None 2", RefSystem::Astro, 4.9876356890941991e-25}, // BUG 6: correct value is 4.9875133132657862e-25
-        {"unit:Farad None -2", RefSystem::Astro, 0.0}, // BUG 6: correct value is 496.69753207713256
-        {"unit:Farad None 1", RefSystem::Astro, inf_v}, // BUG 6: correct value is 0.04486978607215706
-        {"unit:Farad None 2", RefSystem::Astro, inf_v}, // BUG 6: correct value is 0.0020132977021611398
-        {"unit:Ohm None -2", RefSystem::Astro, 2.0049580225122294e+24}, // BUG 6: correct value is 2.0050071793095777e+24
-        {"unit:Ohm None 1", RefSystem::Astro, 7.0623194792229782e-13}, // BUG 6: correct value is 7.0622328715964797e-13
-        {"unit:Ohm None 2", RefSystem::Astro, 4.9876356890941991e-25}, // BUG 6: correct value is 4.9875133132657862e-25
-        {"unit:Siemens None -2", RefSystem::Astro, 0.0}, // BUG 6: correct value is 4.9875133132657871e-25
-        {"unit:Siemens None 1", RefSystem::Astro, inf_v}, // BUG 6: correct value is 1415982760950.7036
-        {"unit:Siemens None 2", RefSystem::Astro, inf_v}, // BUG 6: correct value is 2.0050071793095774e+24
-        {"unit:Weber None 1", RefSystem::Astro, 2.2379141094176441e-26}, // BUG 6: correct value is 2.2378865539827109e-26
-        {"unit:Tesla None -2", RefSystem::Astro, 3986681.5}, // BUG 6: correct value is 3986779.5143766939
-        {"unit:Tesla None 1", RefSystem::Astro, 0.00050083448877558112}, // BUG 6: correct value is 0.00050082833422681759
-        {"unit:Tesla None 2", RefSystem::Astro, 2.508351713004231e-07}, // BUG 6: correct value is 2.508290203644089e-07
-        {"unit:Henry None 1", RefSystem::Astro, 2.2379141094176441e-26}, // BUG 6: correct value is 2.2378865539827109e-26
-        {"unit:ergs None 1", RefSystem::Astro, 2.2379142266191329e-33}, // BUG 6: correct value is 2.2378865539827109e-33
         {"constant:Kcd 1", RefSystem::Astro, inf_v}, // BUG 6: correct value is 967116225729330.62
         {"constant:Kcd 2", RefSystem::Astro, inf_v}, // BUG 6: correct value is 9.3531379406894564e+29
         {"constant:G 1", RefSystem::Astro, nan_v}, // BUG 6: correct value is 39478129059350.664
@@ -460,7 +436,6 @@ namespace {
         {"constant:sigma 2", RefSystem::Astro, 803192.75}, // BUG 6: correct value is 803173.16438226961
         {"template:Constants::G", RefSystem::Astro, nan_v}, // BUG 6: correct value is 39478129059350.664
         {"template:Constants::mu_0", RefSystem::Astro, 4.207059578593522e-21}, // BUG 6: correct value is 4.207008051687417e-21
-        {"unit:Joule k 1", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
         {"template:get<kilo, Joule>", RefSystem::Astro, 2.2379141377673329e-23}, // BUG 6: correct value is 2.2378865539827109e-23
         {"template:to<kilo, Joule>", RefSystem::Astro, inf_v}, // BUG 6: correct value is 4.4685017576977925e+22
     };
