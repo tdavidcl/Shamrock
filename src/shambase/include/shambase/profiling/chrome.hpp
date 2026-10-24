@@ -44,6 +44,24 @@ namespace shambase::profiling::chrome {
     void set_time_offset(f64 offset);
 
     /**
+     * @brief Get the Chrome tracing process id (the MPI world rank)
+     *
+     * @return The process id, or u32_max if it was not set yet (e.g. before MPI init)
+     */
+    u32 get_chrome_pid();
+
+    /**
+     * @brief Get the time offset used for Chrome tracing
+     *
+     * This is the wall clock time (as returned by shambase::details::get_wtime()) captured at the
+     * MPI barrier performed during world info fetching, so it can be used as a common clock
+     * origin across MPI ranks.
+     *
+     * @return The time offset, 0.0 if it was not set yet
+     */
+    f64 get_time_offset();
+
+    /**
      * @brief Register the start of an event in Chrome tracing
      *
      * This registers the start of an event in Chrome tracing.
