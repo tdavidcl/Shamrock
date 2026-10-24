@@ -218,7 +218,7 @@ namespace shammodels::sph {
          * @param s The tag of the array, padded to 16 characters.
          * @return The index of the array in `blocks_fort_real`.
          */
-        u64 get_ref_fort_real(std::string s);
+        u64 get_ref_fort_real(const std::string &s);
 
         /**
          * @brief Gets the index in `blocks_f32` of the array with the given tag, creating an
@@ -230,7 +230,7 @@ namespace shammodels::sph {
          * @param s The tag of the array, padded to 16 characters.
          * @return The index of the array in `blocks_f32`.
          */
-        u64 get_ref_f32(std::string s);
+        u64 get_ref_f32(const std::string &s);
 
         /**
          * @brief Appends a new empty array to `blocks_fort_real`, even if an array with the same
@@ -242,7 +242,7 @@ namespace shammodels::sph {
          * @param s The tag of the array, padded to 16 characters.
          * @return The index of the new array in `blocks_fort_real`.
          */
-        u64 add_new_fort_real(std::string s);
+        u64 add_new_fort_real(const std::string &s);
 
         /**
          * @brief Appends a new empty array to `blocks_f32`, even if an array with the same tag
@@ -251,7 +251,7 @@ namespace shammodels::sph {
          * @param s The tag of the array, padded to 16 characters.
          * @return The index of the new array in `blocks_f32`.
          */
-        u64 add_new_f32(std::string s);
+        u64 add_new_f32(const std::string &s);
 
         /**
          * @brief Prints the state of the block.

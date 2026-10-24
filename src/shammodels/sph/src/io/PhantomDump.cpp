@@ -242,19 +242,19 @@ namespace {
 
 } // namespace
 
-u64 shammodels::sph::PhantomDumpBlock::get_ref_fort_real(std::string s) {
+u64 shammodels::sph::PhantomDumpBlock::get_ref_fort_real(const std::string &s) {
     return get_or_add_array(blocks_fort_real, s);
 }
 
-u64 shammodels::sph::PhantomDumpBlock::get_ref_f32(std::string s) {
+u64 shammodels::sph::PhantomDumpBlock::get_ref_f32(const std::string &s) {
     return get_or_add_array(blocks_f32, s);
 }
 
-u64 shammodels::sph::PhantomDumpBlock::add_new_fort_real(std::string s) {
+u64 shammodels::sph::PhantomDumpBlock::add_new_fort_real(const std::string &s) {
     return add_new_array(blocks_fort_real, s);
 }
 
-u64 shammodels::sph::PhantomDumpBlock::add_new_f32(std::string s) {
+u64 shammodels::sph::PhantomDumpBlock::add_new_f32(const std::string &s) {
     return add_new_array(blocks_f32, s);
 }
 
