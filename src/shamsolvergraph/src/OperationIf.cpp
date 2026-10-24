@@ -29,50 +29,58 @@ namespace shamrock::solvergraph {
         }
     }
 
-    std::string OperationIf::_impl_get_dot_graph_partial() const {
+    NodeSubgraph OperationIf::_impl_get_subgraph() const {
+        NodeSubgraph sg;
+        sg.uuid             = get_uuid();
+        sg.label            = _impl_get_label();
+        sg.metadata         = _impl_get_metadata();
+        sg.is_meta          = true;
+        sg.dot_shape        = "diamond";
+        sg.dot_start_id     = sham::format("n_{}", get_uuid());
+        sg.dot_end_id       = sham::format("n_{}_end", get_uuid());
+        sg.draws_own_anchor = true;
+        sg.ro_edges         = get_ro_edges();
+        sg.rw_edges         = get_rw_edges();
 
-        std::stringstream ss;
-
-        ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
-        ss << sham::format("n_{} [label=\"{}\", shape=diamond];\n", get_uuid(), _impl_get_label());
+        auto mi = std::make_shared<SubgraphMetaInfo>();
 
         if (then_node) {
-            ss << then_node->get_dot_graph_partial();
-            ss << sham::format(
-                "n_{} -> {} [label=\"true\"];\n",
-                get_uuid(),
-                then_node->get_dot_graph_node_start());
-            ss << then_node->get_dot_graph_node_end() << " -> "
-               << sham::format("n_{}_end", get_uuid()) << ";\n";
+            NodeSubgraph then_sg = then_node->get_subgraph();
+            mi->connections.push_back(
+                SubgraphConnection{
+                    .from_id = sg.dot_start_id, .to_id = then_sg.dot_start_id, .label = "true"});
+            mi->connections.push_back(
+                SubgraphConnection{.from_id = then_sg.dot_end_id, .to_id = sg.dot_end_id});
+            mi->children.push_back(std::move(then_sg));
         } else {
-            ss << sham::format(
-                "n_{} -> n_{}_end [label=\"true\", style=dashed];\n", get_uuid(), get_uuid());
+            mi->connections.push_back(
+                SubgraphConnection{
+                    .from_id = sg.dot_start_id,
+                    .to_id   = sg.dot_end_id,
+                    .label   = "true",
+                    .dashed  = true});
         }
 
         if (else_node) {
-            ss << else_node->get_dot_graph_partial();
-            ss << sham::format(
-                "n_{} -> {} [label=\"false\"];\n",
-                get_uuid(),
-                else_node->get_dot_graph_node_start());
-            ss << else_node->get_dot_graph_node_end() << " -> "
-               << sham::format("n_{}_end", get_uuid()) << ";\n";
+            NodeSubgraph else_sg = else_node->get_subgraph();
+            mi->connections.push_back(
+                SubgraphConnection{
+                    .from_id = sg.dot_start_id, .to_id = else_sg.dot_start_id, .label = "false"});
+            mi->connections.push_back(
+                SubgraphConnection{.from_id = else_sg.dot_end_id, .to_id = sg.dot_end_id});
+            mi->children.push_back(std::move(else_sg));
         } else {
-            ss << sham::format(
-                "n_{} -> n_{}_end [label=\"false\", style=dashed];\n", get_uuid(), get_uuid());
+            mi->connections.push_back(
+                SubgraphConnection{
+                    .from_id = sg.dot_start_id,
+                    .to_id   = sg.dot_end_id,
+                    .label   = "false",
+                    .dashed  = true});
         }
 
-        ss << sham::format("n_{}_end [label=\"\", shape=point, width=0.15];\n", get_uuid());
-        ss << sham::format("label = \"{}\";\n", _impl_get_label());
-        ss << "}\n";
+        sg.meta_info = mi;
 
-        auto &cond = get_ro_edge_base(0);
-        ss << sham::format(
-            "e_{} -> n_{} [style=\"dashed\", color=green];\n", cond.get_uuid(), get_uuid());
-        ss << sham::format(
-            "e_{} [label=\"{}\",shape=rect, style=filled];\n", cond.get_uuid(), cond.get_label());
-
-        return ss.str();
+        return sg;
     }
 
     std::string OperationIf::_impl_get_tex() const {

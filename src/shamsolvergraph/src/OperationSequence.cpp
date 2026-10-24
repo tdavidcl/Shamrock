@@ -25,24 +25,33 @@ namespace shamrock::solvergraph {
         }
     }
 
-    std::string OperationSequence::_impl_get_dot_graph_partial() const {
+    NodeSubgraph OperationSequence::_impl_get_subgraph() const {
+        NodeSubgraph sg;
+        sg.uuid             = get_uuid();
+        sg.label            = _impl_get_label();
+        sg.metadata         = _impl_get_metadata();
+        sg.is_meta          = true;
+        sg.draws_own_anchor = false;
 
-        std::stringstream ss;
-
-        ss << "subgraph cluster_" + std::to_string(get_uuid()) + " {\n";
+        auto mi = std::make_shared<SubgraphMetaInfo>();
         for (auto &node : nodes) {
-            ss << node->get_dot_graph_partial();
+            mi->children.push_back(node->get_subgraph());
         }
 
-        for (int i = 0; i < nodes.size() - 1; i++) {
-            ss << nodes[i]->get_dot_graph_node_end() << " -> "
-               << nodes[i + 1]->get_dot_graph_node_start() << " [weight=3];\n";
+        for (size_t i = 0; i + 1 < mi->children.size(); i++) {
+            mi->connections.push_back(
+                SubgraphConnection{
+                    .from_id = mi->children[i].dot_end_id,
+                    .to_id   = mi->children[i + 1].dot_start_id,
+                    .label   = "",
+                    .dashed  = false});
         }
 
-        ss << sham::format("label = \"{}\";\n", _impl_get_label());
-        ss << "}\n";
+        sg.dot_start_id = mi->children.front().dot_start_id;
+        sg.dot_end_id   = mi->children.back().dot_end_id;
+        sg.meta_info    = mi;
 
-        return ss.str();
+        return sg;
     }
 
     std::string OperationSequence::_impl_get_tex() const {
