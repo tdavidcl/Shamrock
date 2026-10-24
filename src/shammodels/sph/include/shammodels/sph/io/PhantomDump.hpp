@@ -209,68 +209,49 @@ namespace shammodels::sph {
         std::vector<PhantomDumpBlockArray<f64>> blocks_f64;
 
         /**
-         * @brief Gets the index of a block of type `fort_int` with the given name.
+         * @brief Gets the index in `blocks_fort_real` of the array with the given tag, creating
+         * an empty one if none exists.
          *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
-         */
-        u64 get_ref_fort_int(std::string s);
-
-        /**
-         * @brief Gets the index of a block of type `i8` with the given name.
+         * If several arrays share the tag, the index of the first one is returned. Use
+         * `add_new_fort_real` to create the additional arrays.
          *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
-         */
-        u64 get_ref_i8(std::string s);
-
-        /**
-         * @brief Gets the index of a block of type `i16` with the given name.
-         *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
-         */
-        u64 get_ref_i16(std::string s);
-
-        /**
-         * @brief Gets the index of a block of type `i32` with the given name.
-         *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
-         */
-        u64 get_ref_i32(std::string s);
-
-        /**
-         * @brief Gets the index of a block of type `i64` with the given name.
-         *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
-         */
-        u64 get_ref_i64(std::string s);
-
-        /**
-         * @brief Gets the index of a block of type `fort_real` with the given name.
-         *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
+         * @param s The tag of the array, padded to 16 characters.
+         * @return The index of the array in `blocks_fort_real`.
          */
         u64 get_ref_fort_real(std::string s);
 
         /**
-         * @brief Gets the index of a block of type `f32` with the given name.
+         * @brief Gets the index in `blocks_f32` of the array with the given tag, creating an
+         * empty one if none exists.
          *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
+         * If several arrays share the tag, the index of the first one is returned. Use
+         * `add_new_f32` to create the additional arrays.
+         *
+         * @param s The tag of the array, padded to 16 characters.
+         * @return The index of the array in `blocks_f32`.
          */
         u64 get_ref_f32(std::string s);
 
         /**
-         * @brief Gets the index of a block of type `f64` with the given name.
+         * @brief Appends a new empty array to `blocks_fort_real`, even if an array with the same
+         * tag already exists.
          *
-         * @param s The name of the block to search for.
-         * @return The index of the block in the vector, or `0` if no such block exists.
+         * Phantom stores some fields as several arrays with the same tag (e.g. one `dustfrac`
+         * array per dust bin).
+         *
+         * @param s The tag of the array, padded to 16 characters.
+         * @return The index of the new array in `blocks_fort_real`.
          */
-        u64 get_ref_f64(std::string s);
+        u64 add_new_fort_real(std::string s);
+
+        /**
+         * @brief Appends a new empty array to `blocks_f32`, even if an array with the same tag
+         * already exists.
+         *
+         * @param s The tag of the array, padded to 16 characters.
+         * @return The index of the new array in `blocks_f32`.
+         */
+        u64 add_new_f32(std::string s);
 
         /**
          * @brief Prints the state of the block.
@@ -332,6 +313,77 @@ namespace shammodels::sph {
             for (auto &tmp : blocks_f64) {
                 tmp.fill_vec(field_name, vec);
             }
+        }
+
+        /**
+         * @brief Calls `func` on every array whose tag matches `field_name`.
+         *
+         * Arrays are visited type by type, in the order of the dump format (`fort_int`, `i8`,
+         * `i16`, `i32`, `i64`, `fort_real`, `f32`, `f64`), and within a type in the order they
+         * are stored in the block (file order when read from a dump).
+         *
+         * @param field_name the tag to look for, padded to 16 characters
+         * @param func callable taking a `const PhantomDumpBlockArray<T> &` for any `T`
+         */
+        template<class Func>
+        void for_each_array(std::string field_name, Func &&func) const {
+
+            field_name = sham::format("{:16s}", field_name);
+
+            auto visit = [&](const auto &arrays) {
+                for (const auto &arr : arrays) {
+                    if (arr.tag == field_name) {
+                        func(arr);
+                    }
+                }
+            };
+
+            visit(blocks_fort_int);
+            visit(blocks_i8);
+            visit(blocks_i16);
+            visit(blocks_i32);
+            visit(blocks_i64);
+            visit(blocks_fort_real);
+            visit(blocks_f32);
+            visit(blocks_f64);
+        }
+
+        /**
+         * @brief Returns the values of every array whose tag matches `field_name`, one vector
+         * per array, converted to `T`.
+         *
+         * Unlike `fill_vec`, arrays sharing the same tag (e.g. one `dustfrac` array per dust
+         * bin) are kept separate. Arrays are returned in the order of `for_each_array`: type by
+         * type, then in storage order within each type.
+         *
+         * @param field_name the tag to look for
+         * @return one vector per matching array, empty if the tag is not present
+         */
+        template<class T>
+        std::vector<std::vector<T>> fetch_all_arrays(std::string field_name) const {
+            std::vector<std::vector<T>> ret;
+            for_each_array(field_name, [&](const auto &arr) {
+                std::vector<T> &vals = ret.emplace_back();
+                vals.reserve(arr.vals.size());
+                for (auto a : arr.vals) {
+                    vals.push_back(static_cast<T>(a));
+                }
+            });
+            return ret;
+        }
+
+        /**
+         * @brief Counts the arrays whose tag matches `field_name`, across all types.
+         *
+         * @param field_name the tag to look for
+         * @return the number of matching arrays
+         */
+        u64 count_arrays(std::string field_name) const {
+            u64 count = 0;
+            for_each_array(field_name, [&](const auto &) {
+                count++;
+            });
+            return count;
         }
     };
 

@@ -215,53 +215,47 @@ void shammodels::sph::PhantomDumpBlock::write(
     }
 }
 
+namespace {
+
+    /// Appends an empty array with the tag `s` (padded to 16 characters), returns its index
+    template<class T>
+    u64 add_new_array(
+        std::vector<shammodels::sph::PhantomDumpBlockArray<T>> &arrays, const std::string &s) {
+        shammodels::sph::PhantomDumpBlockArray<T> tmp;
+        tmp.tag = sham::format("{:16s}", s);
+        arrays.push_back(std::move(tmp));
+        return arrays.size() - 1;
+    }
+
+    /// Returns the index of the first array with the tag `s`, creating it if none exists
+    template<class T>
+    u64 get_or_add_array(
+        std::vector<shammodels::sph::PhantomDumpBlockArray<T>> &arrays, const std::string &s) {
+        std::string tag = sham::format("{:16s}", s);
+        for (u64 i = 0; i < arrays.size(); i++) {
+            if (arrays[i].tag == tag) {
+                return i;
+            }
+        }
+        return add_new_array(arrays, tag);
+    }
+
+} // namespace
+
 u64 shammodels::sph::PhantomDumpBlock::get_ref_fort_real(std::string s) {
-
-    s            = sham::format("{:16s}", s);
-    auto &blocks = blocks_fort_real;
-
-    for (u32 i = 0; i < blocks_fort_real.size(); i++) {
-        if (blocks_fort_real[i].tag == s) {
-            return i;
-        }
-    }
-
-    PhantomDumpBlockArray<fort_real> tmp;
-    tmp.tag = s;
-    blocks_fort_real.push_back(std::move(tmp));
-
-    for (u32 i = 0; i < blocks_fort_real.size(); i++) {
-        if (blocks_fort_real[i].tag == s) {
-            return i;
-        }
-    }
-
-    return 0;
+    return get_or_add_array(blocks_fort_real, s);
 }
 
 u64 shammodels::sph::PhantomDumpBlock::get_ref_f32(std::string s) {
+    return get_or_add_array(blocks_f32, s);
+}
 
-    s = sham::format("{:16s}", s);
+u64 shammodels::sph::PhantomDumpBlock::add_new_fort_real(std::string s) {
+    return add_new_array(blocks_fort_real, s);
+}
 
-    auto &blocks = blocks_f32;
-
-    for (u32 i = 0; i < blocks_f32.size(); i++) {
-        if (blocks_f32[i].tag == s) {
-            return i;
-        }
-    }
-
-    PhantomDumpBlockArray<f32> tmp;
-    tmp.tag = s;
-    blocks_f32.push_back(std::move(tmp));
-
-    for (u32 i = 0; i < blocks_f32.size(); i++) {
-        if (blocks_f32[i].tag == s) {
-            return i;
-        }
-    }
-
-    return 0;
+u64 shammodels::sph::PhantomDumpBlock::add_new_f32(std::string s) {
+    return add_new_array(blocks_f32, s);
 }
 
 shambase::FortranIOFile shammodels::sph::PhantomDump::gen_file() {
