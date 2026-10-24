@@ -190,6 +190,7 @@ int main(int argc, char **argv) {
     g_fonts = load_fonts(g_assets / "fonts");
     setup_style();
 
+    UI ui; // scale 1 for now
     GuiClock gui_clock(!cli.interactive_mode());
     FrameTimings timings; // only filled with --bench
 
@@ -216,7 +217,7 @@ int main(int argc, char **argv) {
         {
             const double t = gui_clock.now();
             const ImVec2 c(360 + 200 * float(std::cos(t)), 240 + 120 * float(std::sin(2 * t)));
-            ScaledDrawList dl{ImGui::GetForegroundDrawList()};
+            ScaledDrawList dl{.d = ImGui::GetForegroundDrawList(), .ui = ui};
             dl.AddRectFilled(
                 ImVec2(c.x - 20, c.y - 20),
                 ImVec2(c.x + 20, c.y + 20),
