@@ -46,11 +46,6 @@ namespace {
                 std::string pname(p.long_name);
                 auto legacy_p = unit_prefix_from_name(pname);
                 for (int pw = -3; pw <= 3; pw++) {
-                    Unit<> u = upow(p.unit * e.unit, pw);
-                    if (!std::isnormal(T(u.si_factor))
-                        || !std::isnormal(s.get(Unit<T>{.dim = u.dim, .si_factor = T(1)}))) {
-                        continue; // outside the range contract documented in UnitSystem::get
-                    }
                     std::string label = sys + " " + pname + " " + uname + "^" + std::to_string(pw);
                     require_rel(
                         label + " get",
@@ -89,10 +84,6 @@ NEW_TEST(Unittest, "shamunits/unit_system_get_vs_legacy", 1) {
         for (const NamedUnit &p : prefix::registry) {
             for (int pw = -3; pw <= 3; pw++) {
                 Unit<> u = upow(p.unit * e.unit, pw);
-                if (!std::isnormal(f32(u.si_factor))
-                    || !std::isnormal(astro32.get(Unit<f32>{.dim = u.dim, .si_factor = 1.f}))) {
-                    continue; // outside the range contract documented in UnitSystem::get
-                }
                 require_rel(
                     "f32 astro vs f64 " + std::string(p.long_name) + " " + std::string(e.long_name)
                         + "^" + std::to_string(pw),

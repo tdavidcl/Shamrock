@@ -22,6 +22,8 @@
 #include <shamunits/Constants.hpp>
 #include <shamunits/Names.hpp>
 #include <shamunits/UnitSystem.hpp>
+#include <shamunits/prefix_table.hpp>
+#include <shamunits/unit_table.hpp>
 #include <memory>
 
 ON_PYTHON_INIT {
@@ -58,10 +60,8 @@ ON_PYTHON_INIT {
         .def(
             "get",
             [](UnitSystem &self, std::string name, i32 power, std::string pref) {
-                shamunits::UnitPrefix pref_ = shamunits::unit_prefix_from_name(pref);
-
-                return self.runtime_get(
-                    pref_, shamunits::legacy_units::unit_from_name(name), power);
+                return self.get(
+                    shamunits::prefix::from_name(pref) * shamunits::units::from_name(name), power);
             },
             // py::arg("self"),
             py::arg("name"),
@@ -70,9 +70,8 @@ ON_PYTHON_INIT {
         .def(
             "to",
             [](UnitSystem &self, std::string name, i32 power, std::string pref) {
-                shamunits::UnitPrefix pref_ = shamunits::unit_prefix_from_name(pref);
-
-                return self.runtime_to(pref_, shamunits::legacy_units::unit_from_name(name), power);
+                return self.to(
+                    shamunits::prefix::from_name(pref) * shamunits::units::from_name(name), power);
             },
             // py::arg("self"),
             py::arg("name"),
