@@ -43,8 +43,8 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/CompressedLeafBVH.hpp"
 #include "shamtree/RadixTree.hpp"
-#include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
+#include <shamunits/constant_table.hpp>
 #include <stdexcept>
 #include <variant>
 #include <vector>
@@ -589,10 +589,9 @@ struct shammodels::sph::SolverConfig {
     inline Tscal get_constant_G() {
         if (!unit_sys) {
             ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            shamunits::Constants<Tscal> ctes{shamunits::UnitSystem<Tscal>{}};
-            return ctes.G();
+            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::G>();
         } else {
-            return shamunits::Constants<Tscal>{*unit_sys}.G();
+            return unit_sys->template get<shamunits::constants::G>();
         }
     }
 
@@ -600,10 +599,9 @@ struct shammodels::sph::SolverConfig {
     inline Tscal get_constant_c() {
         if (!unit_sys) {
             ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            shamunits::Constants<Tscal> ctes{shamunits::UnitSystem<Tscal>{}};
-            return ctes.c();
+            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::c>();
         } else {
-            return shamunits::Constants<Tscal>{*unit_sys}.c();
+            return unit_sys->template get<shamunits::constants::c>();
         }
     }
 
@@ -611,10 +609,9 @@ struct shammodels::sph::SolverConfig {
     inline Tscal get_constant_mu_0() {
         if (!unit_sys) {
             ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            shamunits::Constants<Tscal> ctes{shamunits::UnitSystem<Tscal>{}};
-            return ctes.mu_0();
+            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::mu_0>();
         } else {
-            return shamunits::Constants<Tscal>{*unit_sys}.mu_0();
+            return unit_sys->template get<shamunits::constants::mu_0>();
         }
     }
 
