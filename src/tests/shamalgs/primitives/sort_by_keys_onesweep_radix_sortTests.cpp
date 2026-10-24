@@ -25,7 +25,7 @@ namespace {
     /// Sort the first `len` elements of (key_data, value_data) with the radix sort and compare the
     /// whole buffers with a std::stable_sort reference : the radix sort is stable, so the result
     /// must match exactly, and elements past `len` must be left untouched
-    template<class Tkey>
+    template<class Tkey, bool packed64>
     void check_against_stable_sort(
         const std::vector<Tkey> &key_data, u32 len, const std::string &case_name) {
 
@@ -55,8 +55,13 @@ namespace {
             values.copy_from_stdvec(value_data);
         }
 
-        shamalgs::primitives::device::details::sort_by_keys_onesweep_radix_sort(
-            sched, keys, values, len);
+        if constexpr (packed64) {
+            shamalgs::primitives::device::details::sort_by_keys_onesweep_radix_sort_packed64(
+                sched, keys, values, len);
+        } else {
+            shamalgs::primitives::device::details::sort_by_keys_onesweep_radix_sort(
+                sched, keys, values, len);
+        }
 
         std::vector<Tkey> result_key  = keys.copy_to_stdvec();
         std::vector<u32> result_value = values.copy_to_stdvec();
@@ -75,7 +80,7 @@ namespace {
         REQUIRE_NAMED("radix sort == std::stable_sort (" + case_name + ")", ok);
     }
 
-    template<class Tkey>
+    template<class Tkey, bool packed64>
     void run_all_cases(const std::string &tname) {
         constexpr u32 key_bits = sizeof(Tkey) * 8;
         constexpr Tkey key_max = std::numeric_limits<Tkey>::max();
@@ -115,8 +120,9 @@ namespace {
 
         // every small length (single incomplete tile), with a few key distributions
         for (u32 len = 0; len <= 300; len++) {
-            check_against_stable_sort<Tkey>(random_full(len, len), len, tname + " full small");
-            check_against_stable_sort<Tkey>(
+            check_against_stable_sort<Tkey, packed64>(
+                random_full(len, len), len, tname + " full small");
+            check_against_stable_sort<Tkey, packed64>(
                 random_small_range(len, len), len, tname + " dup small");
         }
 
@@ -141,18 +147,21 @@ namespace {
 
         for (u32 len : lens) {
             u64 seed = len * 7 + 1;
-            check_against_stable_sort<Tkey>(random_full(len, seed), len, tname + " full");
-            check_against_stable_sort<Tkey>(random_small_range(len, seed), len, tname + " dup");
-            check_against_stable_sort<Tkey>(all_equal(len, seed), len, tname + " equal");
-            check_against_stable_sort<Tkey>(descending(len, seed), len, tname + " descending");
-            check_against_stable_sort<Tkey>(top_digit_only(len, seed), len, tname + " top digit");
-            check_against_stable_sort<Tkey>(
+            check_against_stable_sort<Tkey, packed64>(random_full(len, seed), len, tname + " full");
+            check_against_stable_sort<Tkey, packed64>(
+                random_small_range(len, seed), len, tname + " dup");
+            check_against_stable_sort<Tkey, packed64>(all_equal(len, seed), len, tname + " equal");
+            check_against_stable_sort<Tkey, packed64>(
+                descending(len, seed), len, tname + " descending");
+            check_against_stable_sort<Tkey, packed64>(
+                top_digit_only(len, seed), len, tname + " top digit");
+            check_against_stable_sort<Tkey, packed64>(
                 with_max_and_zero(len, seed), len, tname + " max & zero");
         }
 
         // sort only a prefix of a larger buffer : the tail must be untouched
         for (u32 len : {0u, 1u, 2u, 1000u, 2049u, 100003u}) {
-            check_against_stable_sort<Tkey>(
+            check_against_stable_sort<Tkey, packed64>(
                 random_full(len + 777, len + 3), len, tname + " prefix of larger buffer");
         }
     }
@@ -160,7 +169,13 @@ namespace {
 } // namespace
 
 NEW_TEST(Unittest, "shamalgs/primitives/device/details/sort_by_keys_onesweep_radix_sort", 1) {
-    run_all_cases<u32>("u32");
-    run_all_cases<u64>("u64");
+    run_all_cases<u32, false>("u32");
+    run_all_cases<u64, false>("u64");
+}
+
+NEW_TEST(
+    Unittest, "shamalgs/primitives/device/details/sort_by_keys_onesweep_radix_sort_packed64", 1) {
+    run_all_cases<u32, true>("u32 packed64");
+    run_all_cases<u64, true>("u64 packed64");
 }
 #endif

@@ -37,8 +37,13 @@
  * The sort is stable, reads and writes each key and value only once per digit place (the
  * per-pass histogram / scan / scatter of the basic LSD radix sort are fused in a single kernel).
  *
- * The tile states pack the look-back values on 30 bits, the length is therefore limited to
- * `2^30 - 1` elements (callers are expected to fall back to another implementation above).
+ * Two variants differ only by the look-back tile state word :
+ *  - sort_by_keys_onesweep_radix_sort : `ScanTile30bitint`, flag and value packed in one u32
+ *    (value on 30 bits), the length is therefore limited to `2^30 - 1` elements (callers are
+ *    expected to fall back to another implementation above). Half the state memory traffic.
+ *  - sort_by_keys_onesweep_radix_sort_packed64 : `ScanTile<u32>`, flag and value as two u32
+ *    packed in a u64 (as in the decoupled look-back scan), works for any u32 length but needs
+ *    64-bit atomics and twice the state memory.
  */
 
 #include "shambase/aliases_int.hpp"
@@ -65,15 +70,17 @@ namespace shamalgs::primitives::device::details {
 
     /**
      * @brief Stable Onesweep LSD radix sort of (keys, values) on the first `len` elements
-     * (unsigned keys only)
+     * (unsigned keys only), generic over the look-back tile state
      *
+     * @tparam Tile look-back tile state (`ScanTile30bitint` or `ScanTile<u32>`), its
+     * `PackStorage` is the type of the global state word
      * @tparam Tkey unsigned integer key type
      * @tparam Tval value type
      * @tparam items_per_thread number of keys handled by each work-item of a tile (the tile size
      * is `256 * items_per_thread`)
      */
-    template<class Tkey, class Tval, u32 items_per_thread = 8>
-    inline void sort_by_keys_onesweep_radix_sort(
+    template<class Tile, class Tkey, class Tval, u32 items_per_thread>
+    inline void sort_by_keys_onesweep_radix_sort_impl(
         const sham::DeviceScheduler_ptr &sched,
         sham::DeviceBuffer<Tkey> &buf_key,
         sham::DeviceBuffer<Tval> &buf_values,
@@ -96,8 +103,14 @@ namespace shamalgs::primitives::device::details {
         // end up after the valid ones in the (stable) local sort
         constexpr Tkey key_padding = std::numeric_limits<Tkey>::max();
 
-        using Tile = shamalgs::numeric::details::ScanTile30bitint;
+        // global look-back state word (u32 or u64)
+        using Tstate = typename Tile::PackStorage;
+        // pack(STATE_X, 0) == 0 for both tile types
         static_assert(Tile::STATE_X == 0, "the tile states are reset with a zero fill");
+
+        // values packed on 30 bits, see ScanTile30bitint
+        constexpr bool is_30bit_tile
+            = std::is_same_v<Tile, shamalgs::numeric::details::ScanTile30bitint>;
 
         using atomic_ref_local = sycl::atomic_ref<
             u32,
@@ -111,15 +124,24 @@ namespace shamalgs::primitives::device::details {
             sycl::memory_scope_device,
             sycl::access::address_space::global_space>;
 
+        using atomic_ref_state = sycl::atomic_ref<
+            Tstate,
+            sycl::memory_order_relaxed,
+            sycl::memory_scope_device,
+            sycl::access::address_space::global_space>;
+
         if (len <= 1) {
             return;
         }
 
-        if (len > onesweep_radix_sort_max_len) {
-            shambase::throw_with_loc<std::invalid_argument>(sham::format(
-                "the onesweep radix sort is limited to {} elements, len = {}",
-                onesweep_radix_sort_max_len,
-                len));
+        if constexpr (is_30bit_tile) {
+            if (len > onesweep_radix_sort_max_len) {
+                shambase::throw_with_loc<std::invalid_argument>(sham::format(
+                    "the onesweep radix sort is limited to {} elements, len = {} (use "
+                    "sort_by_keys_onesweep_radix_sort_packed64 above)",
+                    onesweep_radix_sort_max_len,
+                    len));
+            }
         }
 
         if (len > buf_key.get_size() || len > buf_values.get_size()) {
@@ -159,7 +181,7 @@ namespace shamalgs::primitives::device::details {
         // digit histograms of every digit place (pass major, see digit_histogram)
         sham::DeviceBuffer<u32> digit_hist(0, sched);
         // look-back tile states, index `tile * nbuckets + digit`
-        sham::DeviceBuffer<u32> tile_states(ntiles * nbuckets, sched);
+        sham::DeviceBuffer<Tstate> tile_states(ntiles * nbuckets, sched);
         // dynamic tile id counter
         sham::DeviceBuffer<u32> tile_counter(1, sched);
 
@@ -195,7 +217,7 @@ namespace shamalgs::primitives::device::details {
                     const u32 *__restrict hist,
                     Tkey *__restrict keys_out,
                     Tval *__restrict vals_out,
-                    u32 *__restrict states,
+                    Tstate *__restrict states,
                     u32 *__restrict counter) {
                     return [=](sycl::handler &cgh) {
                         sycl::local_accessor<Tkey, 1> l_keys{tile_size, cgh};
@@ -241,7 +263,7 @@ namespace shamalgs::primitives::device::details {
                                 // publish the tile aggregate of the look-back lane `lid` (digit)
                                 // as soon as possible so that the next tiles can progress
                                 u32 count = l_count[lid];
-                                atomic_ref_global tile_state(states[tile_id * nbuckets + lid]);
+                                atomic_ref_state tile_state(states[tile_id * nbuckets + lid]);
                                 if (tile_id == 0) {
                                     tile_state.store(Tile::pack(Tile::STATE_P, count));
                                 } else {
@@ -290,7 +312,7 @@ namespace shamalgs::primitives::device::details {
                                 if (tile_id > 0) {
                                     u32 tile_ptr = tile_id - 1;
                                     while (true) {
-                                        atomic_ref_global prev_state(
+                                        atomic_ref_state prev_state(
                                             states[tile_ptr * nbuckets + lid]);
 
                                         Tile s = Tile::invalid();
@@ -342,6 +364,56 @@ namespace shamalgs::primitives::device::details {
             std::swap(key_in, key_out);
             std::swap(val_in, val_out);
         }
+    }
+
+    /**
+     * @brief Stable Onesweep LSD radix sort of (keys, values) on the first `len` elements
+     * (unsigned keys only, `len <= onesweep_radix_sort_max_len`)
+     *
+     * Look-back tile states are a single u32 (`ScanTile30bitint`, values on 30 bits).
+     *
+     * @tparam Tkey unsigned integer key type
+     * @tparam Tval value type
+     * @tparam items_per_thread number of keys handled by each work-item of a tile (the tile size
+     * is `256 * items_per_thread`)
+     */
+    template<class Tkey, class Tval, u32 items_per_thread = 8>
+    inline void sort_by_keys_onesweep_radix_sort(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<Tkey> &buf_key,
+        sham::DeviceBuffer<Tval> &buf_values,
+        u32 len) {
+        sort_by_keys_onesweep_radix_sort_impl<
+            shamalgs::numeric::details::ScanTile30bitint,
+            Tkey,
+            Tval,
+            items_per_thread>(sched, buf_key, buf_values, len);
+    }
+
+    /**
+     * @brief Stable Onesweep LSD radix sort of (keys, values) on the first `len` elements
+     * (unsigned keys only, any u32 length)
+     *
+     * Look-back tile states are two u32 (flag, value) packed in a u64 (`ScanTile<u32>`, as in
+     * the decoupled look-back scan), so the look-back values cover the full u32 range. Requires
+     * 64-bit atomics, and twice the tile state memory of sort_by_keys_onesweep_radix_sort.
+     *
+     * @tparam Tkey unsigned integer key type
+     * @tparam Tval value type
+     * @tparam items_per_thread number of keys handled by each work-item of a tile (the tile size
+     * is `256 * items_per_thread`)
+     */
+    template<class Tkey, class Tval, u32 items_per_thread = 8>
+    inline void sort_by_keys_onesweep_radix_sort_packed64(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<Tkey> &buf_key,
+        sham::DeviceBuffer<Tval> &buf_values,
+        u32 len) {
+        sort_by_keys_onesweep_radix_sort_impl<
+            shamalgs::numeric::details::ScanTile<u32>,
+            Tkey,
+            Tval,
+            items_per_thread>(sched, buf_key, buf_values, len);
     }
 
 #endif
