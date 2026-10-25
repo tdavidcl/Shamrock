@@ -168,7 +168,14 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
                 std::visit(
                     shambase::overloaded{
                         [&](const ConstantGravity &cfg) {
-                            add_constant_gravity_source(q, buf_a_ext, cell_count, cfg.g);
+                            sham::kernel_call(
+                                q,
+                                sham::MultiRef{},
+                                sham::MultiRef{buf_a_ext},
+                                cell_count,
+                                [g = cfg.g](u32 id_a, Tvec *__restrict a_ext) {
+                                    a_ext[id_a] += g;
+                                });
                         },
                     },
                     var_force);
@@ -220,20 +227,6 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
                     rhov[id_a] += dt * rho_half * a;
                     rhoe[id_a] += dt * sycl::dot(a, rhov_half);
                 });
-        });
-}
-
-template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_constant_gravity_source(
-    sham::DeviceQueue &q, sham::DeviceBuffer<Tvec> &buf_a_ext, u32 cell_count, Tvec g) {
-
-    sham::kernel_call(
-        q,
-        sham::MultiRef{},
-        sham::MultiRef{buf_a_ext},
-        cell_count,
-        [g](u32 id_a, Tvec *__restrict a_ext) {
-            a_ext[id_a] += g;
         });
 }
 

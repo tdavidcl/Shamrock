@@ -59,10 +59,6 @@ namespace shammodels::basegodunov::modules {
          */
         void add_ext_forces_source(Tscal dt);
 
-        /// Add a constant gravitational acceleration g to the external acceleration buffer
-        void add_constant_gravity_source(
-            sham::DeviceQueue &q, sham::DeviceBuffer<Tvec> &buf_a_ext, u32 cell_count, Tvec g);
-
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 
