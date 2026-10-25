@@ -3280,20 +3280,17 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         = alpha_av_updated.get_field(cur_p.id_patch).get_buf();
 
                     auto &q = shamsys::instance::get_compute_scheduler().get_queue();
-                    sham::EventList depends_list;
 
-                    auto alpha_av         = buf_alpha_av.get_write_access(depends_list);
-                    auto alpha_av_updated = buf_alpha_av_updated.get_read_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, pdat.get_obj_cnt(), "write back alpha_av", [=](i32 id_a) {
-                                alpha_av[id_a] = alpha_av_updated[id_a];
-                            });
-                    });
-
-                    buf_alpha_av.complete_event_state(e);
-                    buf_alpha_av_updated.complete_event_state(e);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{buf_alpha_av_updated},
+                        sham::MultiRef{buf_alpha_av},
+                        pdat.get_obj_cnt(),
+                        [](u32 id_a,
+                           const Tscal *__restrict alpha_av_updated,
+                           Tscal *__restrict alpha_av) {
+                            alpha_av[id_a] = alpha_av_updated[id_a];
+                        });
                 });
             }
 
