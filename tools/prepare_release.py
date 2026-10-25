@@ -315,7 +315,7 @@ def single_file(directory):
 
 
 def tar_ext(path):
-    # documentation.tar.gz is produced with `tar -cvf` (not gzipped): name it after its content
+    # name the archive after its content: older doc builds made a plain tar named .tar.gz
     with open(path, "rb") as f:
         return ".tar.gz" if f.read(2) == b"\x1f\x8b" else ".tar"
 
