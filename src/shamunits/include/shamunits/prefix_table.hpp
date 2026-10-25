@@ -39,8 +39,7 @@ namespace shamunits::prefix {
     inline constexpr Unit<> pico  = scale(1e-12); ///< p
     inline constexpr Unit<> femto = scale(1e-15); ///< f
 
-    /// Name registry, byte-identical to the former XMAC_UNIT_PREFIX: Python passes
-    /// pref="None" by default, so "None" must stay
+    /// Name registry: Python passes pref="None" by default, so "None" must stay
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"tera", "T", tera},
         {"giga", "G", giga},

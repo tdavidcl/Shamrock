@@ -33,8 +33,8 @@ namespace {
         return ((d < 0) ? -d : d) <= rel * ab;
     }
 
-    /// The whole algebra, instantiated for one precision. Local stand-ins: the real tables
-    /// (shamunits::units) arrive in a later PR.
+    /// The whole algebra, instantiated for one precision, on local stand-ins independent of the
+    /// real tables (shamunits::units).
     template<class T>
     constexpr bool check_algebra() {
         constexpr Unit<T> s  = base_unit<T>({.second = 1});
