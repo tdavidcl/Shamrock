@@ -28,6 +28,7 @@
 #include "shamcomm/logs.hpp"
 #include "shammath/riemann_common.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
+#include "shammodels/ramses/config/ExtForceConfig.hpp"
 #include "shammodels/ramses/config/enum_AMRInterpMode.hpp"
 #include "shammodels/ramses/config/enum_DragSolverMode.hpp"
 #include "shammodels/ramses/config/enum_DustRiemannSolverMode.hpp"
@@ -86,8 +87,6 @@ namespace shammodels::basegodunov {
         using Tscal              = shambase::VecComponent<Tvec>;
         GravityMode gravity_mode = NoGravity;
         bool analytical_gravity  = false; // whether to use an external analytical gravity
-        bool constant_gravity    = false; // whether to add a constant gravitational acceleration
-        Tvec g_grav              = {};    // the constant gravitational acceleration
         Tscal tol                = 1e-6;
         inline Tscal get_tolerance() { return tol; }
         inline bool is_gravity_on() { return gravity_mode != NoGravity; }
@@ -326,11 +325,24 @@ struct shammodels::basegodunov::SolverConfig {
     inline Tscal get_grav_tol() { return gravity_config.get_tolerance(); }
     inline bool is_gravity_on() { return gravity_config.is_gravity_on(); }
     inline bool is_coordinate_field_required() { return gravity_config.analytical_gravity; }
-    inline bool is_gravity_acceleration_const() { return gravity_config.constant_gravity; }
-    inline Tvec get_constant_gravity_acceleration() { return gravity_config.g_grav; }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Gravity config (END)
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // External forces config
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+    using ExtForceConfig = shammodels::basegodunov::ExtForceConfig<Tvec>;
+
+    /// External forces applied to the gas
+    ExtForceConfig ext_force_config{};
+
+    inline bool has_ext_forces() { return ext_force_config.has_ext_forces(); }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // External forces config (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     /// AMR refinement mode

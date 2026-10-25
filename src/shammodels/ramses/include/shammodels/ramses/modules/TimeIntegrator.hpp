@@ -50,11 +50,18 @@ namespace shammodels::basegodunov::modules {
 
         private:
         /**
-         * @brief Add the constant gravitational acceleration source terms, using the time
-         * centered density & momentum at t^{n+1/2} built from the state at t^n and the flux
-         * derivatives. Must be called before the flux update.
+         * @brief Add the source terms of the external forces (ext_force_config) to the
+         * conservative state. Must be called before the flux update.
+         *
+         * The accelerations of all the forces are first summed into a per cell buffer, which is
+         * then applied once, using the time centered density & momentum at t^{n+1/2} built from
+         * the state at t^n and the flux derivatives.
          */
-        void add_constant_gravity_source(Tscal dt);
+        void add_ext_forces_source(Tscal dt);
+
+        /// Add a constant gravitational acceleration g to the external acceleration buffer
+        void add_constant_gravity_source(
+            sham::DeviceQueue &q, sham::DeviceBuffer<Tvec> &buf_a_ext, u32 cell_count, Tvec g);
 
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };

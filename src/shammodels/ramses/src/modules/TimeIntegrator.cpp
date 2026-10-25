@@ -13,8 +13,9 @@
  * @brief
  *
  */
-#include "shammodels/ramses/modules/TimeIntegrator.hpp"
+#include "shambase/overloaded.hpp"
 #include "shambackends/kernel_call.hpp"
+#include "shammodels/ramses/modules/TimeIntegrator.hpp"
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_euler(Tscal dt) {
@@ -38,8 +39,8 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
     const u32 irhoetot  = pdl.get_field_idx<Tscal>("rhoetot");
     const u32 irhovel   = pdl.get_field_idx<Tvec>("rhovel");
 
-    if (solver_config.is_gravity_acceleration_const()) {
-        add_constant_gravity_source(dt);
+    if (solver_config.has_ext_forces()) {
+        add_ext_forces_source(dt);
     }
 
     scheduler().for_each_patchdata_nonempty(
@@ -127,13 +128,16 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
 }
 
 template<class Tvec, class TgridVec>
-void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_constant_gravity_source(
+void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_forces_source(
     Tscal dt) {
 
     StackEntry stack_loc{};
 
     using namespace shamrock::patch;
     using namespace shamrock;
+
+    using ExtForceConfig  = typename Config::ExtForceConfig;
+    using ConstantGravity = typename ExtForceConfig::ConstantGravity;
 
     shamrock::solvergraph::Field<Tscal> &cfield_dtrho = shambase::get_check_ref(storage.dtrho);
     shamrock::solvergraph::Field<Tvec> &cfield_dtrhov = shambase::get_check_ref(storage.dtrhov);
@@ -144,19 +148,33 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_const
     const u32 irhoetot = pdl.get_field_idx<Tscal>("rhoetot");
     const u32 irhovel  = pdl.get_field_idx<Tvec>("rhovel");
 
-    Tvec g = solver_config.get_constant_gravity_acceleration();
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
 
     scheduler().for_each_patchdata_nonempty(
-        [&, dt, g](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-            shamlog_debug_ln("[AMR Flux]", "constant gravity source patch", p.id_patch);
+        [&, dt](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+            shamlog_debug_ln("[AMR Flux]", "external forces source patch", p.id_patch);
 
             sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
             u32 id               = p.id_patch;
 
+            u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
+
+            // sum of the accelerations of all the external forces
+            sham::DeviceBuffer<Tvec> buf_a_ext(cell_count, dev_sched);
+            buf_a_ext.fill(Tvec{});
+
+            for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
+                std::visit(
+                    shambase::overloaded{
+                        [&](const ConstantGravity &cfg) {
+                            add_constant_gravity_source(q, buf_a_ext, cell_count, cfg.g);
+                        },
+                    },
+                    var_force);
+            }
+
             sham::DeviceBuffer<Tscal> &dt_rho_patch = cfield_dtrho.get_buf(id);
             sham::DeviceBuffer<Tvec> &dt_rhov_patch = cfield_dtrhov.get_buf(id);
-
-            u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
 
             sham::DeviceBuffer<Tscal> &buf_rho  = pdat.get_field_buf_ref<Tscal>(irho);
             sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
@@ -164,28 +182,41 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_const
 
             sham::kernel_call(
                 q,
-                sham::MultiRef{buf_rho, dt_rho_patch, dt_rhov_patch},
+                sham::MultiRef{buf_rho, dt_rho_patch, dt_rhov_patch, buf_a_ext},
                 sham::MultiRef{buf_rhov, buf_rhoe},
                 cell_count,
-                [dt,
-                 g](u32 id_a,
+                [dt](
+                    u32 id_a,
                     const Tscal *__restrict rho,
                     const Tscal *__restrict dt_rho,
                     const Tvec *__restrict dt_rhov,
+                    const Tvec *__restrict a_ext,
                     Tvec *__restrict rhov,
                     Tscal *__restrict rhoe) {
                     // time centered density & momentum at t^{n+1/2}
                     Tscal rho_half = rho[id_a] + 0.5 * dt * dt_rho[id_a];
                     Tvec rhov_half = rhov[id_a] + 0.5 * dt * dt_rhov[id_a];
 
-                    // TODO: to be confirmed, rhov_half does not include the gravity kick, so
-                    // for a free fall the internal energy should drift by ~rho g^2 dt^2 / 2 per
-                    // step (first order). Check if the energy update should instead use the
-                    // momentum including the gravity kick (as in RAMSES, which recomputes the
-                    // kinetic energy after the kick).
-                    rhov[id_a] += dt * rho_half * g;
-                    rhoe[id_a] += dt * sycl::dot(g, rhov_half);
+                    Tvec a = a_ext[id_a];
+
+                    // TODO: to be confirmed, rhov_half does not include the kick of the external
+                    // forces, so for a free fall the internal energy should drift by
+                    // ~rho a^2 dt^2 / 2 per step (first order). Check if the energy update should
+                    // instead use the momentum including the kick (as in RAMSES, which recomputes
+                    // the kinetic energy after the kick).
+                    rhov[id_a] += dt * rho_half * a;
+                    rhoe[id_a] += dt * sycl::dot(a, rhov_half);
                 });
+        });
+}
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_constant_gravity_source(
+    sham::DeviceQueue &q, sham::DeviceBuffer<Tvec> &buf_a_ext, u32 cell_count, Tvec g) {
+
+    sham::kernel_call(
+        q, sham::MultiRef{}, sham::MultiRef{buf_a_ext}, cell_count, [g](u32 id_a, Tvec *a_ext) {
+            a_ext[id_a] += g;
         });
 }
 

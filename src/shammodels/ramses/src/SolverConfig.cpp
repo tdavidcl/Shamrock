@@ -20,7 +20,6 @@
  */
 
 #include "shammodels/ramses/SolverConfig.hpp"
-#include "shambackends/type_convert.hpp"
 #include "shamrock/io/json_print_diff.hpp"
 #include "shamrock/io/json_std_optional.hpp"
 #include "shamrock/io/json_utils.hpp"
@@ -66,8 +65,6 @@ namespace shammodels::basegodunov {
             {"face_half_time_interpolation", p.face_half_time_interpolation},
             {"gravity_solver", p.gravity_config.gravity_mode},
             {"analytical_gravity", p.gravity_config.analytical_gravity},
-            {"constant_gravity", p.gravity_config.constant_gravity},
-            {"constant_gravity_acc", p.gravity_config.g_grav},
             {"gravity_tol", p.gravity_config.tol},
             {"grid_coord_to_pos_fact", p.grid_coord_to_pos_fact},
             {"hydro_riemann_solver", p.riemann_config},
@@ -77,7 +74,8 @@ namespace shammodels::basegodunov {
             {"drag_config", p.drag_config},
             {"bc_config", p.bc_config},
             {"amr_mode", p.amr_mode},
-            {"amr_interp_mode", p.amr_interp_mode}};
+            {"amr_interp_mode", p.amr_interp_mode},
+            {"ext_force_config", p.ext_force_config}};
     }
 
     template<class Tvec, class TgridVec>
@@ -125,8 +123,6 @@ namespace shammodels::basegodunov {
         _get_to_if_contains("face_half_time_interpolation", p.face_half_time_interpolation);
         _get_to_if_contains("gravity_solver", p.gravity_config.gravity_mode);
         _get_to_if_contains("analytical_gravity", p.gravity_config.analytical_gravity);
-        _get_to_if_contains("constant_gravity", p.gravity_config.constant_gravity);
-        _get_to_if_contains("constant_gravity_acc", p.gravity_config.g_grav);
         _get_to_if_contains("gravity_tol", p.gravity_config.tol);
         _get_to_if_contains("grid_coord_to_pos_fact", p.grid_coord_to_pos_fact);
         _get_to_if_contains("hydro_riemann_solver", p.riemann_config);
@@ -137,6 +133,7 @@ namespace shammodels::basegodunov {
         _get_to_if_contains("bc_config", p.bc_config);
         _get_to_if_contains("amr_mode", p.amr_mode);
         _get_to_if_contains("amr_interp_mode", p.amr_interp_mode);
+        _get_to_if_contains("ext_force_config", p.ext_force_config);
 
         if (has_used_defaults || has_updated_config) {
             if (shamcomm::world_rank() == 0) {
