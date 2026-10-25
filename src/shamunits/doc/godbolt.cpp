@@ -577,8 +577,8 @@ namespace shamunits::units {
     inline constexpr Unit<> erg               = 1e-7 * joule;              ///< erg
     inline constexpr Unit<> british_pint      = 5.68e-4 * upow(metre, 3);  ///< pint (0.568 L)
 
-    /// Name registry: long and short names. Do not rename (the "Bequerel" spelling included):
-    /// Python and saved scripts resolve these strings.
+    /// Name registry: long and short names. Python and saved scripts resolve these strings, so
+    /// they must stay (the "Bequerel" spelling included)
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"second", "s", second},
         {"metre", "m", metre},
@@ -714,8 +714,8 @@ namespace shamunits::constants {
     inline constexpr Unit<> sigma
         = 5.670374419e-8 * units::watt / upow(units::metre, 2) / upow(units::kelvin, 4);
 
-    /// Name registry: one name per constant (long and short are the same). Do not rename: these
-    /// are the Python method names (Constants(usys).G()) that saved scripts call
+    /// Name registry: one name per constant (long and short are the same). These are the Python
+    /// method names (Constants(usys).G()) that saved scripts call, so they must stay
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"delta_nu_cs", "delta_nu_cs", delta_nu_cs},
         {"c", "c", c},
@@ -865,7 +865,7 @@ namespace shamunits::prefix {
     inline constexpr Unit<> pico  = scale(1e-12); ///< p
     inline constexpr Unit<> femto = scale(1e-15); ///< f
 
-    /// Name registry. Do not rename: Python passes pref="None" by default, so "None" must stay
+    /// Name registry: Python passes pref="None" by default, so "None" must stay
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"tera", "T", tera},
         {"giga", "G", giga},
