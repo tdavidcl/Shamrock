@@ -139,6 +139,8 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
     using ExtForceConfig  = typename Config::ExtForceConfig;
     using ConstantGravity = typename ExtForceConfig::ConstantGravity;
 
+    sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+
     shamrock::solvergraph::Field<Tscal> &cfield_dtrho = shambase::get_check_ref(storage.dtrho);
     shamrock::solvergraph::Field<Tvec> &cfield_dtrhov = shambase::get_check_ref(storage.dtrhov);
     shamrock::solvergraph::Field<Tvec> &cfield_a_ext  = shambase::get_check_ref(storage.a_ext);
@@ -152,35 +154,42 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
     // (only reallocated if the block counts have changed)
     cfield_a_ext.ensure_sizes(shambase::get_check_ref(storage.block_counts).indexes);
 
-    // sum the accelerations of all the external forces into a_ext
     scheduler().for_each_patchdata_nonempty(
         [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-            shamlog_debug_ln("[AMR Flux]", "external forces acceleration patch", p.id_patch);
-
-            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-
-            u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
-
             sham::DeviceBuffer<Tvec> &buf_a_ext = cfield_a_ext.get_buf(p.id_patch);
             buf_a_ext.fill(Tvec{});
-
-            for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
-                std::visit(
-                    shambase::overloaded{
-                        [&](const ConstantGravity &cfg) {
-                            sham::kernel_call(
-                                q,
-                                sham::MultiRef{},
-                                sham::MultiRef{buf_a_ext},
-                                cell_count,
-                                [g = cfg.g](u32 id_a, Tvec *__restrict a_ext) {
-                                    a_ext[id_a] += g;
-                                });
-                        },
-                    },
-                    var_force);
-            }
         });
+
+    // sum the accelerations of all the external forces into a_ext
+    auto add_constant_gravity = [&](const ConstantGravity &cfg) {
+        scheduler().for_each_patchdata_nonempty(
+            [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                shamlog_debug_ln("[AMR Flux]", "external forces acceleration patch", p.id_patch);
+
+                u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
+
+                sham::DeviceBuffer<Tvec> &buf_a_ext = cfield_a_ext.get_buf(p.id_patch);
+
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{},
+                    sham::MultiRef{buf_a_ext},
+                    cell_count,
+                    [g = cfg.g](u32 id_a, Tvec *__restrict a_ext) {
+                        a_ext[id_a] += g;
+                    });
+            });
+    };
+
+    for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
+        std::visit(
+            shambase::overloaded{
+                [&](const ConstantGravity &cfg) {
+                    add_constant_gravity(cfg);
+                },
+            },
+            var_force);
+    }
 
     // apply the summed acceleration to the conservative state
     scheduler().for_each_patchdata_nonempty(
@@ -228,6 +237,54 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
                     rhoe[id_a] += dt * sycl::dot(a, rhov_half);
                 });
         });
+
+    // apply the summed acceleration to all the dust species
+    if (solver_config.is_dust_on()) {
+
+        shamrock::solvergraph::Field<Tscal> &cfield_dtrho_dust
+            = shambase::get_check_ref(storage.dtrho_dust);
+
+        const u32 irho_dust    = pdl.get_field_idx<Tscal>("rho_dust");
+        const u32 irhovel_dust = pdl.get_field_idx<Tvec>("rhovel_dust");
+
+        u32 ndust = solver_config.dust_config.ndust;
+
+        scheduler().for_each_patchdata_nonempty(
+            [&, dt, ndust](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                shamlog_debug_ln("[AMR Flux]", "external forces dust source patch", p.id_patch);
+
+                u32 id = p.id_patch;
+
+                u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
+
+                sham::DeviceBuffer<Tvec> &buf_a_ext          = cfield_a_ext.get_buf(id);
+                sham::DeviceBuffer<Tscal> &dt_rho_dust_patch = cfield_dtrho_dust.get_buf(id);
+
+                sham::DeviceBuffer<Tscal> &buf_rho_dust = pdat.get_field_buf_ref<Tscal>(irho_dust);
+                sham::DeviceBuffer<Tvec> &buf_rhov_dust
+                    = pdat.get_field_buf_ref<Tvec>(irhovel_dust);
+
+                sham::kernel_call(
+                    q,
+                    sham::MultiRef{buf_rho_dust, dt_rho_dust_patch, buf_a_ext},
+                    sham::MultiRef{buf_rhov_dust},
+                    ndust * cell_count,
+                    [dt, ndust](
+                        u32 id_a,
+                        const Tscal *__restrict rho_dust,
+                        const Tscal *__restrict dt_rho_dust,
+                        const Tvec *__restrict a_ext,
+                        Tvec *__restrict rhov_dust) {
+                        // dust fields are laid out as [cell * ndust + idust]
+                        u32 cell_id = id_a / ndust;
+
+                        // time centered dust density at t^{n+1/2}
+                        Tscal rho_half = rho_dust[id_a] + 0.5 * dt * dt_rho_dust[id_a];
+
+                        rhov_dust[id_a] += dt * rho_half * a_ext[cell_id];
+                    });
+            });
+    }
 }
 
 template class shammodels::basegodunov::modules::TimeIntegrator<f64_3, i64_3>;
