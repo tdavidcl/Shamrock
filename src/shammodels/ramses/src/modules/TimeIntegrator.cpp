@@ -228,7 +228,11 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_const
     sham::DeviceQueue &q, sham::DeviceBuffer<Tvec> &buf_a_ext, u32 cell_count, Tvec g) {
 
     sham::kernel_call(
-        q, sham::MultiRef{}, sham::MultiRef{buf_a_ext}, cell_count, [g](u32 id_a, Tvec *a_ext) {
+        q,
+        sham::MultiRef{},
+        sham::MultiRef{buf_a_ext},
+        cell_count,
+        [g](u32 id_a, Tvec *__restrict a_ext) {
             a_ext[id_a] += g;
         });
 }
