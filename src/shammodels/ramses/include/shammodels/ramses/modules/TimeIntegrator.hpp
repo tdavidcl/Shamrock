@@ -53,8 +53,8 @@ namespace shammodels::basegodunov::modules {
          * @brief Add the source terms of the external forces (ext_force_config) to the
          * conservative state. Must be called before the flux update.
          *
-         * The accelerations of all the forces are first summed into a per cell buffer, which is
-         * then applied once, using the time centered density & momentum at t^{n+1/2} built from
+         * The accelerations of all the forces are first summed into the storage.a_ext field, which
+         * is then applied once, using the time centered density & momentum at t^{n+1/2} built from
          * the state at t^n and the flux derivatives.
          */
         void add_ext_forces_source(Tscal dt);

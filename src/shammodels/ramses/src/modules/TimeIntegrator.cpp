@@ -141,6 +141,7 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
 
     shamrock::solvergraph::Field<Tscal> &cfield_dtrho = shambase::get_check_ref(storage.dtrho);
     shamrock::solvergraph::Field<Tvec> &cfield_dtrhov = shambase::get_check_ref(storage.dtrhov);
+    shamrock::solvergraph::Field<Tvec> &cfield_a_ext  = shambase::get_check_ref(storage.a_ext);
 
     PatchDataLayerLayout &pdl = scheduler().pdl_old();
 
@@ -148,20 +149,19 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
     const u32 irhoetot = pdl.get_field_idx<Tscal>("rhoetot");
     const u32 irhovel  = pdl.get_field_idx<Tvec>("rhovel");
 
-    // sum of the accelerations of all the external forces, allocated once and resized per patch
-    // (the allocation is only expanded when a patch has more cells than the previous ones)
-    sham::DeviceBuffer<Tvec> buf_a_ext(0, shamsys::instance::get_compute_scheduler_ptr());
+    // (only reallocated if the block counts have changed)
+    cfield_a_ext.ensure_sizes(shambase::get_check_ref(storage.block_counts).indexes);
 
+    // sum the accelerations of all the external forces into a_ext
     scheduler().for_each_patchdata_nonempty(
-        [&, dt](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
-            shamlog_debug_ln("[AMR Flux]", "external forces source patch", p.id_patch);
+        [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+            shamlog_debug_ln("[AMR Flux]", "external forces acceleration patch", p.id_patch);
 
             sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
-            u32 id               = p.id_patch;
 
             u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
 
-            buf_a_ext.resize_discard_data(cell_count);
+            sham::DeviceBuffer<Tvec> &buf_a_ext = cfield_a_ext.get_buf(p.id_patch);
             buf_a_ext.fill(Tvec{});
 
             for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
@@ -173,7 +173,19 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
                     },
                     var_force);
             }
+        });
 
+    // apply the summed acceleration to the conservative state
+    scheduler().for_each_patchdata_nonempty(
+        [&, dt](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+            shamlog_debug_ln("[AMR Flux]", "external forces source patch", p.id_patch);
+
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            u32 id               = p.id_patch;
+
+            u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
+
+            sham::DeviceBuffer<Tvec> &buf_a_ext     = cfield_a_ext.get_buf(id);
             sham::DeviceBuffer<Tscal> &dt_rho_patch = cfield_dtrho.get_buf(id);
             sham::DeviceBuffer<Tvec> &dt_rhov_patch = cfield_dtrhov.get_buf(id);
 

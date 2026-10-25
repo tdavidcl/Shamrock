@@ -732,6 +732,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         AMRBlock::block_size, "dtrhov", "dtrhov");
     storage.dtrhoe = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
         AMRBlock::block_size, "dtrhoe", "dtrhoe");
+    storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+        AMRBlock::block_size, "a_ext", "a_ext");
 
     if (solver_config.is_dust_on()) {
         u32 ndust          = solver_config.dust_config.ndust;
