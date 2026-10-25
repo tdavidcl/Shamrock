@@ -27,3 +27,11 @@ Then generate the release note from the last tag.
 For the files, add the documentation, license, and coverage, named `Shamrock-<major>.<minor>.<patch>-<filename>`, except for the license file that will be named `LICENSE`.
 
 Finally, write the text and ... done!
+
+## Helper script
+
+Once the version is bumped and the release branch pushed upstream, `tools/prepare_release.py` automates the rest up to the GitHub release itself (requires an authenticated `gh` CLI):
+```bash
+python3 tools/prepare_release.py <major>.<minor>.<patch>
+```
+It checks that `release/<major>.<minor>.x` exists on `Shamrock-code/Shamrock`, checks every version site on that branch (`CMakeLists.txt`, `dox.conf`, `_pysetup.py`), triggers the `Prepare release` workflow on it, waits for completion and downloads its artifacts into `./shamrock-release-<version>/artifacts/`. It then assembles the release files in `./shamrock-release-<version>/assets/` and prints the draft release (tag, target, title, assets and generated notes) in the terminal without creating it. Use `--run-id <id>` to reuse an existing workflow run, and `--help` for the other options.
