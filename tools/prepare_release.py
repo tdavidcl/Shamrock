@@ -4,19 +4,19 @@
 Steps (see doc/sphinx/source/dev_doc/release_process.md):
   1. check that the release branch release/<major>.<minor>.x exists upstream
   2. check that every version site on that branch matches the requested version
-  3. trigger the "Prepare release" workflow on that branch, wait for it, and
-     download its artifacts into <outdir>/artifacts/
+  3. find the CI run ("On Push" workflow) on the head commit of that branch,
+     wait for it if still running, and download the release artifacts it
+     produced into <outdir>/artifacts/
   4. assemble the release assets into <outdir>/assets/ and print the draft
      GitHub release (tag, target, title, assets, notes) to the terminal
 
-Nothing is created on GitHub apart from the workflow run: the release itself
-is only printed, never created.
+Nothing is created or triggered on GitHub: the release is only printed.
 
 Requires the GitHub CLI (gh), authenticated with access to the repository.
 
 Usage:
   python3 tools/prepare_release.py 2025.10.0
-  python3 tools/prepare_release.py 2025.10.0 --run-id 123456789   # reuse a run
+  python3 tools/prepare_release.py 2025.10.0 --run-id 123456789   # use this CI run
 """
 
 import argparse
@@ -27,7 +27,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import time
 import zipfile
 
 try:
@@ -37,7 +36,8 @@ try:
 except ImportError:
     print("--- Release preparation tool ---")
 
-WORKFLOW_FILE = "prepare_release.yml"
+# CI run on every push to release/* (see .github/workflows/main_workflow.yml)
+CI_WORKFLOW_FILE = "on_push_main.yml"
 
 ARTIFACT_DOC = "shamrock_documentation"
 ARTIFACT_COVERAGE = "code-coverage-report-acpp_omp_debug"
@@ -186,93 +186,80 @@ def check_versions(repo, sha, version, major, minor, patch):
 
 
 ############################################################
-# 3. Workflow run
+# 3. CI run artifacts
 ############################################################
 
 
-def list_runs(repo, branch):
+def find_ci_run(repo, branch, sha):
+    step(f"Looking for the '{CI_WORKFLOW_FILE}' run on {branch} @ {sha[:12]}")
     out = run(
-        [
-            "gh", "run", "list",
-            "--repo", repo,
-            "--workflow", WORKFLOW_FILE,
-            "--branch", branch,
-            "--event", "workflow_dispatch",
-            "--limit", "20",
-            "--json", "databaseId,headSha,url,status,conclusion",
-        ]
+        ["gh", "run", "list", "--repo", repo, "--workflow", CI_WORKFLOW_FILE,
+         "--branch", branch, "--commit", sha, "--limit", "1",
+         "--json", "databaseId,url,status,conclusion"]
     )  # fmt: skip
-    return json.loads(out)
-
-
-def trigger_workflow(repo, branch, sha, timeout):
-    step(f"Triggering '{WORKFLOW_FILE}' on {repo}@{branch}")
-    known = {r["databaseId"] for r in list_runs(repo, branch)}
-    run(["gh", "workflow", "run", WORKFLOW_FILE, "--repo", repo, "--ref", branch])
-
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        time.sleep(5)
-        new = [r for r in list_runs(repo, branch) if r["databaseId"] not in known]
-        if new:
-            r = new[0]
-            if r["headSha"] != sha:
-                info(f"warning: run head {r['headSha']} != branch head {sha} (branch moved?)")
-            info(f"run {r['databaseId']}: {r['url']}")
-            return r["databaseId"]
-    raise ReleaseError(
-        f"triggered the workflow but no new run showed up within {timeout}s; "
-        f"find it on GitHub and rerun with --run-id"
-    )
+    runs = json.loads(out)
+    if not runs:
+        raise ReleaseError(
+            f"no '{CI_WORKFLOW_FILE}' run found for {branch} @ {sha}.\n"
+            f"CI runs on every push to release/*: wait for it to start, or run it manually with\n"
+            f"  gh workflow run {CI_WORKFLOW_FILE} --repo {repo} --ref {branch}"
+        )
+    r = runs[0]
+    info(f"run {r['databaseId']}: {r['url']}")
+    return r["databaseId"]
 
 
 def check_run(repo, run_id, sha):
     r = json.loads(
-        run(
-            [
-                "gh",
-                "run",
-                "view",
-                str(run_id),
-                "--repo",
-                repo,
-                "--json",
-                "headSha,headBranch,url,workflowName",
-            ]
-        )
-    )
+        run(["gh", "run", "view", str(run_id), "--repo", repo,
+             "--json", "headSha,headBranch,url,workflowName"])
+    )  # fmt: skip
     info(f"run {run_id} ({r['workflowName']} on {r['headBranch']}): {r['url']}")
     if r["headSha"] != sha:
         info(f"warning: run head {r['headSha']} != branch head {sha}")
 
 
 def wait_run(repo, run_id):
-    step(f"Waiting for run {run_id} to complete")
-    res = subprocess.run(
-        ["gh", "run", "watch", str(run_id), "--repo", repo, "--exit-status", "--interval", "30"]
+    r = json.loads(
+        run(["gh", "run", "view", str(run_id), "--repo", repo, "--json", "status,conclusion"])
     )
-    if res.returncode != 0:
-        raise ReleaseError(
-            f"run {run_id} did not succeed, see: gh run view {run_id} --repo {repo} --log-failed"
+    if r["status"] != "completed":
+        step(f"Waiting for run {run_id} to complete")
+        subprocess.run(["gh", "run", "watch", str(run_id), "--repo", repo, "--interval", "60"])
+        r = json.loads(
+            run(["gh", "run", "view", str(run_id), "--repo", repo, "--json", "status,conclusion"])
         )
+    if r["conclusion"] != "success":
+        raise ReleaseError(
+            f"run {run_id} ended with '{r['conclusion'] or r['status']}': the release must come "
+            f"from a green CI.\nSee: gh run view {run_id} --repo {repo} --log-failed"
+        )
+    info(f"run {run_id} succeeded")
 
 
-def download_artifacts(repo, run_id, artifacts_dir):
+def download_artifacts(repo, run_id, artifacts_dir, names):
     step(f"Downloading artifacts of run {run_id} into {artifacts_dir}")
     out = run(
         ["gh", "api", "--paginate", f"repos/{repo}/actions/runs/{run_id}/artifacts",
          "--jq", ".artifacts[] | {id, name, expired}"]
     )  # fmt: skip
-    artifacts = [json.loads(line) for line in out.splitlines() if line.strip()]
-    if not artifacts:
-        raise ReleaseError(f"run {run_id} has no artifacts")
+    artifacts = {}
+    for line in out.splitlines():
+        if line.strip():
+            a = json.loads(line)
+            artifacts[a["name"]] = a
+
+    missing = [n for n in names if n not in artifacts]
+    expired = [n for n in names if n in artifacts and artifacts[n]["expired"]]
+    if missing or expired:
+        raise ReleaseError(
+            f"run {run_id} lacks required artifacts (missing: {missing or 'none'}, "
+            f"expired: {expired or 'none'}).\nRe-run the CI on the release branch to regenerate them."
+        )
 
     os.makedirs(artifacts_dir, exist_ok=True)
-    for a in artifacts:
-        name = a["name"]
-        if a["expired"]:
-            info(f"skipping expired artifact {name}")
-            continue
+    for name in names:
+        a = artifacts[name]
         dest = os.path.join(artifacts_dir, name)
         if os.path.exists(dest):
             shutil.rmtree(dest)
@@ -412,7 +399,7 @@ def print_draft(repo, tag, branch, sha, title, assets, notes, notes_file, tag_ex
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Check, build and download a Shamrock release, then print the draft GitHub release."
+        description="Check a Shamrock release branch, fetch its CI artifacts, then print the draft GitHub release."
     )
     parser.add_argument(
         "version", help="release version, e.g. 2025.10.0 (a leading 'v' is accepted)"
@@ -420,19 +407,13 @@ def main():
     parser.add_argument("--repo", default="Shamrock-code/Shamrock", help="upstream repository")
     parser.add_argument("--outdir", help="output folder (default: ./shamrock-release-<version>)")
     parser.add_argument(
-        "--run-id", type=int, help="reuse this 'Prepare release' run instead of triggering one"
+        "--run-id", type=int, help="use this CI run instead of the latest one on the branch head"
     )
     parser.add_argument(
         "--previous-tag", help="tag to generate the notes from (default: latest older tag)"
     )
     parser.add_argument(
         "--no-coverage", action="store_true", help="do not add the coverage report to the assets"
-    )
-    parser.add_argument(
-        "--trigger-timeout",
-        type=int,
-        default=120,
-        help="seconds to wait for the triggered run to appear",
     )
     args = parser.parse_args()
 
@@ -457,17 +438,20 @@ def main():
             info(f"warning: tag {tag} already exists on {args.repo}")
 
         if args.run_id is not None:
-            step(f"Reusing run {args.run_id}")
+            step(f"Using run {args.run_id}")
             check_run(args.repo, args.run_id, sha)
             run_id = args.run_id
         else:
-            run_id = trigger_workflow(args.repo, branch, sha, args.trigger_timeout)
+            run_id = find_ci_run(args.repo, branch, sha)
         wait_run(args.repo, run_id)
-        download_artifacts(args.repo, run_id, artifacts_dir)
 
-        assets = assemble_assets(
-            args.repo, sha, version, artifacts_dir, assets_dir, not args.no_coverage
-        )
+        with_coverage = not args.no_coverage
+        needed = [artifact_code_archive(version), ARTIFACT_DOC]
+        if with_coverage:
+            needed.append(ARTIFACT_COVERAGE)
+        download_artifacts(args.repo, run_id, artifacts_dir, needed)
+
+        assets = assemble_assets(args.repo, sha, version, artifacts_dir, assets_dir, with_coverage)
 
         prev = args.previous_tag or previous_tag(args.repo, version)
         notes = generate_notes(args.repo, tag, branch, prev)
@@ -480,7 +464,7 @@ def main():
         print(f"\nerror: {e}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\ninterrupted (a triggered run keeps going: resume with --run-id)", file=sys.stderr)
+        print("\ninterrupted", file=sys.stderr)
         sys.exit(130)
 
 
