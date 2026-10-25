@@ -56,7 +56,7 @@ namespace shamunits::units {
     inline constexpr Unit<> sievert   = joule / kilogram;                   ///< Sv = J.kg-1
     inline constexpr Unit<> katal     = mole / second;                      ///< kat = mol.s-1
 
-    // Other units (values identical to the former ConversionConstants)
+    // Other units
     inline constexpr Unit<> minute            = 60. * second;              ///< mn
     inline constexpr Unit<> hour              = 3600. * second;            ///< hr
     inline constexpr Unit<> day               = 86400. * second;           ///< dy
@@ -71,8 +71,8 @@ namespace shamunits::units {
     inline constexpr Unit<> erg               = 1e-7 * joule;              ///< erg
     inline constexpr Unit<> british_pint      = 5.68e-4 * upow(metre, 3);  ///< pint (0.568 L)
 
-    /// Name registry: long and short names, byte-identical to the former XMAC_UNITS (the
-    /// "Bequerel" spelling included), since Python and saved scripts resolve these strings.
+    /// Name registry: long and short names. Do not rename (the "Bequerel" spelling included):
+    /// Python and saved scripts resolve these strings.
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"second", "s", second},
         {"metre", "m", metre},
