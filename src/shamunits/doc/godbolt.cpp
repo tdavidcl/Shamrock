@@ -715,7 +715,7 @@ namespace shamunits::constants {
         = 5.670374419e-8 * units::watt / upow(units::metre, 2) / upow(units::kelvin, 4);
 
     /// Name registry: one name per constant (long and short are the same). These are the Python
-    /// method names (Constants(usys).G()) that saved scripts call, so they must stay
+    /// method names (Constants(usys).G())
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"delta_nu_cs", "delta_nu_cs", delta_nu_cs},
         {"c", "c", c},
