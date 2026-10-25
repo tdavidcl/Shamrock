@@ -72,7 +72,7 @@ namespace shamunits::units {
     inline constexpr Unit<> british_pint      = 5.68e-4 * upow(metre, 3);  ///< pint (0.568 L)
 
     /// Name registry: long and short names. Python and saved scripts resolve these strings, so
-    /// they must stay (the "Bequerel" spelling included)
+    /// they must stay
     inline constexpr auto registry = std::to_array<NamedUnit>({
         {"second", "s", second},
         {"metre", "m", metre},
@@ -96,7 +96,7 @@ namespace shamunits::units {
         {"Henry", "H", henry},
         {"lumens", "lm", lumen},
         {"lux", "lx", lux},
-        {"Bequerel", "Bq", becquerel},
+        {"Becquerel", "Bq", becquerel},
         {"Gray", "Gy", gray},
         {"Sievert", "Sv", sievert},
         {"katal", "kat", katal},

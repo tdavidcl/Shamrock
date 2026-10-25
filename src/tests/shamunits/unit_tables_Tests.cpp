@@ -30,7 +30,7 @@ namespace {
     static_assert(find_named(units::registry, "metre")->unit == units::metre);
     static_assert(find_named(units::registry, "m") == find_named(units::registry, "metre"));
     static_assert(find_named(units::registry, "yr")->unit == units::year);
-    static_assert(find_named(units::registry, "Bequerel")->unit == units::becquerel);
+    static_assert(find_named(units::registry, "Becquerel")->unit == units::becquerel);
     static_assert(find_named(prefix::registry, "None")->unit == prefix::none);
     static_assert(find_named(prefix::registry, "_")->unit == prefix::none);
 
