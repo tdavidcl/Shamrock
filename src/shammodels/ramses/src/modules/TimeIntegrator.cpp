@@ -162,31 +162,30 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_const
             sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
             sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
 
-            sham::EventList depends_list;
-            auto acc_dt_rho_patch  = dt_rho_patch.get_read_access(depends_list);
-            auto acc_dt_rhov_patch = dt_rhov_patch.get_read_access(depends_list);
-
-            auto rho  = buf_rho.get_read_access(depends_list);
-            auto rhov = buf_rhov.get_write_access(depends_list);
-            auto rhoe = buf_rhoe.get_write_access(depends_list);
-
-            auto e = q.submit(depends_list, [&, dt, g](sycl::handler &cgh) {
-                shambase::parallel_for(cgh, cell_count, "constant gravity source", [=](u32 id_a) {
+            sham::kernel_call(
+                q,
+                sham::MultiRef{buf_rho, dt_rho_patch, dt_rhov_patch},
+                sham::MultiRef{buf_rhov, buf_rhoe},
+                cell_count,
+                [dt,
+                 g](u32 id_a,
+                    const Tscal *__restrict rho,
+                    const Tscal *__restrict dt_rho,
+                    const Tvec *__restrict dt_rhov,
+                    Tvec *__restrict rhov,
+                    Tscal *__restrict rhoe) {
                     // time centered density & momentum at t^{n+1/2}
-                    Tscal rho_half = rho[id_a] + 0.5 * dt * acc_dt_rho_patch[id_a];
-                    Tvec rhov_half = rhov[id_a] + 0.5 * dt * acc_dt_rhov_patch[id_a];
+                    Tscal rho_half = rho[id_a] + 0.5 * dt * dt_rho[id_a];
+                    Tvec rhov_half = rhov[id_a] + 0.5 * dt * dt_rhov[id_a];
 
+                    // TODO: to be confirmed, rhov_half does not include the gravity kick, so
+                    // for a free fall the internal energy should drift by ~rho g^2 dt^2 / 2 per
+                    // step (first order). Check if the energy update should instead use the
+                    // momentum including the gravity kick (as in RAMSES, which recomputes the
+                    // kinetic energy after the kick).
                     rhov[id_a] += dt * rho_half * g;
                     rhoe[id_a] += dt * sycl::dot(g, rhov_half);
                 });
-            });
-
-            dt_rho_patch.complete_event_state(e);
-            dt_rhov_patch.complete_event_state(e);
-
-            buf_rho.complete_event_state(e);
-            buf_rhov.complete_event_state(e);
-            buf_rhoe.complete_event_state(e);
         });
 }
 
