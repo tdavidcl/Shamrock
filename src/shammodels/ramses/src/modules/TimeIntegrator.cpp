@@ -55,12 +55,15 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
             sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
             sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
 
+            bool use_const_grav = solver_config.is_gravity_acceleration_const();
+            Tvec const_grav_acc = solver_config.get_constant_gravity_acceleration();
+
             sham::kernel_call(
                 q,
                 sham::MultiRef{dt_rho_patch, dt_rhov_patch, dt_rhoe_patch},
                 sham::MultiRef{buf_rho, buf_rhov, buf_rhoe},
                 cell_count,
-                [dt](
+                [dt, use_const_grav, const_grav_acc](
                     u32 id_a,
                     const Tscal *__restrict acc_dt_rho_patch,
                     const Tvec *__restrict acc_dt_rhov_patch,
@@ -70,9 +73,23 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
                     Tscal *__restrict rhoe) {
                     const u32 cell_global_id = (u32) id_a;
 
+                    Tscal old_rho = rho[id_a];
+                    Tvec old_rhov = rhov[id_a];
+
+                    // flux update
                     rho[id_a] += dt * acc_dt_rho_patch[id_a];
                     rhov[id_a] += dt * acc_dt_rhov_patch[id_a];
                     rhoe[id_a] += dt * acc_dt_rhoe_patch[id_a];
+
+                    if (use_const_grav) {
+                        // time centered density & momentum at t^{n+1/2}
+                        Tscal rho_half = 0.5 * (old_rho + rho[id_a]);
+                        Tvec rhov_half = 0.5 * (old_rhov + rhov[id_a]);
+
+                        // constant gravity source terms
+                        rhov[id_a] += dt * rho_half * const_grav_acc;
+                        rhoe[id_a] += dt * sycl::dot(const_grav_acc, rhov_half);
+                    }
                 });
         });
 
