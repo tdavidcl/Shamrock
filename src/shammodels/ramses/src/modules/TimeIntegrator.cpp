@@ -148,7 +148,9 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
     const u32 irhoetot = pdl.get_field_idx<Tscal>("rhoetot");
     const u32 irhovel  = pdl.get_field_idx<Tvec>("rhovel");
 
-    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+    // sum of the accelerations of all the external forces, allocated once and resized per patch
+    // (the allocation is only expanded when a patch has more cells than the previous ones)
+    sham::DeviceBuffer<Tvec> buf_a_ext(0, shamsys::instance::get_compute_scheduler_ptr());
 
     scheduler().for_each_patchdata_nonempty(
         [&, dt](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
@@ -159,8 +161,7 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
 
             u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
 
-            // sum of the accelerations of all the external forces
-            sham::DeviceBuffer<Tvec> buf_a_ext(cell_count, dev_sched);
+            buf_a_ext.resize_discard_data(cell_count);
             buf_a_ext.fill(Tvec{});
 
             for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
