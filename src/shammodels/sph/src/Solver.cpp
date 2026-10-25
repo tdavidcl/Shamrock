@@ -3310,20 +3310,15 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         = MagCurrentJ.get_field(cur_p.id_patch).get_buf();
 
                     auto &q = shamsys::instance::get_compute_scheduler().get_queue();
-                    sham::EventList depends_list;
 
-                    auto J           = buf_J.get_write_access(depends_list);
-                    auto MagCurrentJ = buf_MagCurrentJ.get_read_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, pdat.get_obj_cnt(), "write back J", [=](i32 id_a) {
-                                J[id_a] = MagCurrentJ[id_a];
-                            });
-                    });
-
-                    buf_J.complete_event_state(e);
-                    buf_MagCurrentJ.complete_event_state(e);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{buf_MagCurrentJ},
+                        sham::MultiRef{buf_J},
+                        pdat.get_obj_cnt(),
+                        [](u32 id_a, const Tvec *__restrict MagCurrentJ, Tvec *__restrict J) {
+                            J[id_a] = MagCurrentJ[id_a];
+                        });
                 });
             }
 
