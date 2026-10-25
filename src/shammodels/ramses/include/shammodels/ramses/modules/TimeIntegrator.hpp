@@ -49,6 +49,13 @@ namespace shammodels::basegodunov::modules {
         void forward_euler(Tscal dt);
 
         private:
+        /**
+         * @brief Add the constant gravitational acceleration source terms, using the time
+         * centered density & momentum at t^{n+1/2} built from the state at t^n and the flux
+         * derivatives. Must be called before the flux update.
+         */
+        void add_constant_gravity_source(Tscal dt);
+
         inline PatchScheduler &scheduler() { return shambase::get_check_ref(context.sched); }
     };
 

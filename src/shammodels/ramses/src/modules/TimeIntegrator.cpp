@@ -38,6 +38,10 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
     const u32 irhoetot  = pdl.get_field_idx<Tscal>("rhoetot");
     const u32 irhovel   = pdl.get_field_idx<Tvec>("rhovel");
 
+    if (solver_config.is_gravity_acceleration_const()) {
+        add_constant_gravity_source(dt);
+    }
+
     scheduler().for_each_patchdata_nonempty(
         [&, dt](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
             shamlog_debug_ln("[AMR Flux]", "forward euler integration patch", p.id_patch);
@@ -55,15 +59,12 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
             sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
             sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
 
-            bool use_const_grav = solver_config.is_gravity_acceleration_const();
-            Tvec const_grav_acc = solver_config.get_constant_gravity_acceleration();
-
             sham::kernel_call(
                 q,
                 sham::MultiRef{dt_rho_patch, dt_rhov_patch, dt_rhoe_patch},
                 sham::MultiRef{buf_rho, buf_rhov, buf_rhoe},
                 cell_count,
-                [dt, use_const_grav, const_grav_acc](
+                [dt](
                     u32 id_a,
                     const Tscal *__restrict acc_dt_rho_patch,
                     const Tvec *__restrict acc_dt_rhov_patch,
@@ -73,23 +74,9 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
                     Tscal *__restrict rhoe) {
                     const u32 cell_global_id = (u32) id_a;
 
-                    Tscal old_rho = rho[id_a];
-                    Tvec old_rhov = rhov[id_a];
-
-                    // flux update
                     rho[id_a] += dt * acc_dt_rho_patch[id_a];
                     rhov[id_a] += dt * acc_dt_rhov_patch[id_a];
                     rhoe[id_a] += dt * acc_dt_rhoe_patch[id_a];
-
-                    if (use_const_grav) {
-                        // time centered density & momentum at t^{n+1/2}
-                        Tscal rho_half = 0.5 * (old_rho + rho[id_a]);
-                        Tvec rhov_half = 0.5 * (old_rhov + rhov[id_a]);
-
-                        // constant gravity source terms
-                        rhov[id_a] += dt * rho_half * const_grav_acc;
-                        rhoe[id_a] += dt * sycl::dot(const_grav_acc, rhov_half);
-                    }
                 });
         });
 
@@ -137,6 +124,70 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
                     });
             });
     }
+}
+
+template<class Tvec, class TgridVec>
+void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_constant_gravity_source(
+    Tscal dt) {
+
+    StackEntry stack_loc{};
+
+    using namespace shamrock::patch;
+    using namespace shamrock;
+
+    shamrock::solvergraph::Field<Tscal> &cfield_dtrho = shambase::get_check_ref(storage.dtrho);
+    shamrock::solvergraph::Field<Tvec> &cfield_dtrhov = shambase::get_check_ref(storage.dtrhov);
+
+    PatchDataLayerLayout &pdl = scheduler().pdl_old();
+
+    const u32 irho     = pdl.get_field_idx<Tscal>("rho");
+    const u32 irhoetot = pdl.get_field_idx<Tscal>("rhoetot");
+    const u32 irhovel  = pdl.get_field_idx<Tvec>("rhovel");
+
+    Tvec g = solver_config.get_constant_gravity_acceleration();
+
+    scheduler().for_each_patchdata_nonempty(
+        [&, dt, g](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+            shamlog_debug_ln("[AMR Flux]", "constant gravity source patch", p.id_patch);
+
+            sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
+            u32 id               = p.id_patch;
+
+            sham::DeviceBuffer<Tscal> &dt_rho_patch = cfield_dtrho.get_buf(id);
+            sham::DeviceBuffer<Tvec> &dt_rhov_patch = cfield_dtrhov.get_buf(id);
+
+            u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
+
+            sham::DeviceBuffer<Tscal> &buf_rho  = pdat.get_field_buf_ref<Tscal>(irho);
+            sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
+            sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
+
+            sham::EventList depends_list;
+            auto acc_dt_rho_patch  = dt_rho_patch.get_read_access(depends_list);
+            auto acc_dt_rhov_patch = dt_rhov_patch.get_read_access(depends_list);
+
+            auto rho  = buf_rho.get_read_access(depends_list);
+            auto rhov = buf_rhov.get_write_access(depends_list);
+            auto rhoe = buf_rhoe.get_write_access(depends_list);
+
+            auto e = q.submit(depends_list, [&, dt, g](sycl::handler &cgh) {
+                shambase::parallel_for(cgh, cell_count, "constant gravity source", [=](u32 id_a) {
+                    // time centered density & momentum at t^{n+1/2}
+                    Tscal rho_half = rho[id_a] + 0.5 * dt * acc_dt_rho_patch[id_a];
+                    Tvec rhov_half = rhov[id_a] + 0.5 * dt * acc_dt_rhov_patch[id_a];
+
+                    rhov[id_a] += dt * rho_half * g;
+                    rhoe[id_a] += dt * sycl::dot(g, rhov_half);
+                });
+            });
+
+            dt_rho_patch.complete_event_state(e);
+            dt_rhov_patch.complete_event_state(e);
+
+            buf_rho.complete_event_state(e);
+            buf_rhov.complete_event_state(e);
+            buf_rhoe.complete_event_state(e);
+        });
 }
 
 template class shammodels::basegodunov::modules::TimeIntegrator<f64_3, i64_3>;
