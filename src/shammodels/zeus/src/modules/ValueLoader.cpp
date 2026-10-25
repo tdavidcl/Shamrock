@@ -158,12 +158,12 @@ void shammodels::zeus::modules::ValueLoader<Tvec, TgridVec, T>::load_patch_inter
 
     sham::DeviceQueue &q = shamsys::instance::get_compute_scheduler().get_queue();
 
-    sham::EventList depends_list;
-    auto val_out = buf_dest.get_write_access(depends_list);
-    auto src     = buf_src.get_read_access(depends_list);
-
-    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-        shambase::parallel_for(cgh, nobj * Block::block_size, "compute ym val (1)", [=](u64 id_a) {
+    sham::kernel_call(
+        q,
+        sham::MultiRef{buf_src},
+        sham::MultiRef{buf_dest},
+        nobj * Block::block_size,
+        [](u32 id_a, const T *__restrict src, T *__restrict val_out) {
             const u32 base_idx = id_a;
             const u32 lid      = id_a % Block::block_size;
 
@@ -175,10 +175,6 @@ void shammodels::zeus::modules::ValueLoader<Tvec, TgridVec, T>::load_patch_inter
                 val_out[base_idx] = src[base_idx - lid + Block::get_index(lid_coord)];
             }
         });
-    });
-
-    buf_dest.complete_event_state(e);
-    buf_src.complete_event_state(e);
 }
 
 template<class Tvec, class TgridVec, class T>
