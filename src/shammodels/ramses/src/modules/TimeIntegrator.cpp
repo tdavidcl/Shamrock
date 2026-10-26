@@ -55,32 +55,25 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::forward_e
             sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
             sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
 
-            sham::EventList depends_list;
-            auto acc_dt_rho_patch  = dt_rho_patch.get_read_access(depends_list);
-            auto acc_dt_rhov_patch = dt_rhov_patch.get_read_access(depends_list);
-            auto acc_dt_rhoe_patch = dt_rhoe_patch.get_read_access(depends_list);
-
-            auto rho  = buf_rho.get_write_access(depends_list);
-            auto rhov = buf_rhov.get_write_access(depends_list);
-            auto rhoe = buf_rhoe.get_write_access(depends_list);
-
-            auto e = q.submit(depends_list, [&, dt](sycl::handler &cgh) {
-                shambase::parallel_for(cgh, cell_count, "accumulate fluxes", [=](u32 id_a) {
+            sham::kernel_call(
+                q,
+                sham::MultiRef{dt_rho_patch, dt_rhov_patch, dt_rhoe_patch},
+                sham::MultiRef{buf_rho, buf_rhov, buf_rhoe},
+                cell_count,
+                [dt](
+                    u32 id_a,
+                    const Tscal *__restrict acc_dt_rho_patch,
+                    const Tvec *__restrict acc_dt_rhov_patch,
+                    const Tscal *__restrict acc_dt_rhoe_patch,
+                    Tscal *__restrict rho,
+                    Tvec *__restrict rhov,
+                    Tscal *__restrict rhoe) {
                     const u32 cell_global_id = (u32) id_a;
 
                     rho[id_a] += dt * acc_dt_rho_patch[id_a];
                     rhov[id_a] += dt * acc_dt_rhov_patch[id_a];
                     rhoe[id_a] += dt * acc_dt_rhoe_patch[id_a];
                 });
-            });
-
-            dt_rho_patch.complete_event_state(e);
-            dt_rhov_patch.complete_event_state(e);
-            dt_rhoe_patch.complete_event_state(e);
-
-            buf_rho.complete_event_state(e);
-            buf_rhov.complete_event_state(e);
-            buf_rhoe.complete_event_state(e);
         });
 
     if (solver_config.is_dust_on()) {
