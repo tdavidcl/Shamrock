@@ -39,21 +39,23 @@ gamma = 1.4
 rho_light = 1.0  # bottom fluid
 rho_heavy = 2.0  # top fluid
 
-Lx, Ly = 0.5, 1.5  # box size
+# resolution (the z direction has as many blocks as the x one, to keep the patches compact)
+sz = 1 << 1
+base = 16
+
+# dimension of the box in base units
+multx = 1
+multy = 1  # use 3 if you want well developed instability
+multz = 1
+
+Lx, Ly = 0.5 * multx, 0.5 * multy  # box size
 y_interface = Ly / 2
 P0 = 2.5  # pressure at the interface
 
 v_pert = 1e-2  # amplitude of the velocity perturbation
 
-t_end = 5.0
-n_frames = 26
-
-# resolution (the z direction has as many blocks as the x one, to keep the patches compact)
-sz = 1 << 1
-base = 32
-multx = 1
-multy = 3
-multz = 1
+t_end = 10.0
+n_frames = 51
 
 sim_folder = "_to_trash/ramses_rayleigh_taylor/"
 
@@ -164,7 +166,7 @@ positions = make_cartesian_coords(nx, ny, Lz / 2, 0, Lx - 1e-6, 0, Ly - 1e-6)
 def plot_rho(t, iplot, dpi=150):
     arr_rho = np.array(model.render_slice("rho", "f64", positions)).reshape(nx, ny)
 
-    plt.figure(figsize=(4, 9), dpi=dpi)
+    plt.figure(dpi=dpi)
     res = plt.imshow(
         arr_rho.T,
         cmap=matplotlib.colormaps["rainbow"],
