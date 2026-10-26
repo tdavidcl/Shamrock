@@ -6,6 +6,8 @@ A heavy fluid (:math:`\\rho = 2`) sits on top of a light one (:math:`\\rho = 1`)
 gravitational field :math:`\\mathbf{g} = -g \\, \\mathbf{e}_y`, applied as an external force
 (``cfg.add_ext_force_constant_gravity``). The initial state is in hydrostatic equilibrium, and a
 small velocity perturbation seeds the instability at the interface.
+
+Adapted from the Rayleigh-Taylor setup of the PhD work of Léodasce Sewanou.
 """
 
 # sphinx_gallery_multi_image = "single"

@@ -14,6 +14,8 @@
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
  * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @brief Node adding a constant gravitational acceleration to the external forces acceleration
+ *
+ * Adapted from the PhD work of Léodasce Sewanou.
  */
 
 #include "shambackends/vec.hpp"

@@ -13,6 +13,7 @@
  * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @brief
  *
+ * Adapted from the PhD work of Léodasce Sewanou.
  */
 
 #include "shambase/string.hpp"
