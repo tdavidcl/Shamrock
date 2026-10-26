@@ -290,7 +290,7 @@ plt.show()
 
 plt.figure()
 plt.plot(hist_t, hist_sym_max)
-plt.yscale("symlog", linthresh=1e-16)
+plt.ylim(bottom=0)
 plt.xlabel("t")
 plt.ylabel(
     r"$\max \, 2 |\rho_{\rm left} - \rho_{\rm right}| / (|\rho_{\rm left}| + |\rho_{\rm right}|)$"
@@ -309,15 +309,15 @@ hist_epot = np.array(hist_epot)
 hist_etot = hist_ekin + hist_eint + hist_epot
 
 energies = {
-    r"$E_{\rm kin}$": hist_ekin,
-    r"$E_{\rm int}$": hist_eint,
-    r"$E_{\rm pot}$": hist_epot,
-    r"$E_{\rm tot}$": hist_etot,
+    r"$E_{\rm kin}$": (hist_ekin, {}),
+    r"$E_{\rm int}$": (hist_eint, {}),
+    r"$E_{\rm pot}$": (hist_epot, {}),
+    r"$E_{\rm tot}$": (hist_etot, {"color": "red", "linestyle": "--"}),
 }
 
 plt.figure()
-for label, e in energies.items():
-    plt.plot(hist_t, e, label=label)
+for label, (e, style) in energies.items():
+    plt.plot(hist_t, e, label=label, **style)
 plt.yscale("log")
 plt.xlabel("t")
 plt.ylabel("E [code unit]")
@@ -330,8 +330,8 @@ plt.show()
 # Energy variation with respect to the initial state
 
 plt.figure()
-for label, e in energies.items():
-    plt.plot(hist_t, e - e[0], label=label)
+for label, (e, style) in energies.items():
+    plt.plot(hist_t, e - e[0], label=label, **style)
 plt.yscale("symlog", linthresh=1e-8)
 plt.xlabel("t")
 plt.ylabel(r"$E(t) - E(0)$ [code unit]")
