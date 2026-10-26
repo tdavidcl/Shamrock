@@ -166,12 +166,15 @@ def make_cartesian_coords(nx, ny, z_val, min_x, max_x, min_y, max_y):
     return [tuple(pos) for pos in positions]
 
 
-positions = make_cartesian_coords(nx, ny, Lz / 2, 0, Lx - 1e-6, 0, Ly - 1e-6)
+# the x sampling is symmetric with respect to x = Lx / 2 (used for the mirror symmetry diagnostic)
+positions = make_cartesian_coords(nx, ny, Lz / 2, 1e-6, Lx - 1e-6, 0, Ly - 1e-6)
 
 
-def plot_rho(t, iplot, dpi=150):
-    arr_rho = np.array(model.render_slice("rho", "f64", positions)).reshape(nx, ny)
+def render_rho():
+    return np.array(model.render_slice("rho", "f64", positions)).reshape(nx, ny)
 
+
+def plot_rho(arr_rho, t, iplot, dpi=150):
     plt.figure(dpi=dpi)
     res = plt.imshow(
         arr_rho.T,
@@ -200,7 +203,7 @@ def plot_rho(t, iplot, dpi=150):
 #
 # * the mirror symmetry with respect to :math:`x = L_x / 2` (the setup is symmetric), through the
 #   relative deviation :math:`2 |\rho_{\rm left} - \rho_{\rm right}| / (|\rho_{\rm left}| +
-#   |\rho_{\rm right}|)` between each cell and its mirror,
+#   |\rho_{\rm right}|)` between each point of the rendered density slice and its mirror,
 # * the energy budget: kinetic, internal and gravitational potential (:math:`\rho g y`) energies,
 #   whose sum should be conserved.
 
@@ -234,20 +237,14 @@ hist_eint = []
 hist_epot = []
 
 
-def analysis(t):
-    pos, vol, rho, rhovel, rhoetot = get_cell_data()
-
-    # mirror symmetry, on the regular grid of cells
-    dx = Lx / nx
-    ix = np.floor(pos[:, 0] / dx).astype(int)
-    iy = np.floor(pos[:, 1] / dx).astype(int)
-    iz = np.floor(pos[:, 2] / dx).astype(int)
-    rho_grid = np.zeros((nx, ny, sz * base * multz))
-    rho_grid[ix, iy, iz] = rho
-    rho_mirror = rho_grid[::-1, :, :]
-    rel_dev = 2 * np.abs(rho_grid - rho_mirror) / (np.abs(rho_grid) + np.abs(rho_mirror))
+def analysis(arr_rho, t):
+    # mirror symmetry, on the rendered density slice
+    rho_mirror = arr_rho[::-1, :]
+    rel_dev = 2 * np.abs(arr_rho - rho_mirror) / (np.abs(arr_rho) + np.abs(rho_mirror))
 
     # energy budget
+    pos, vol, rho, rhovel, rhoetot = get_cell_data()
+
     ekin = 0.5 * np.sum(rhovel**2, axis=1) / rho
     eint = rhoetot - ekin
     epot = rho * g * pos[:, 1]
@@ -265,8 +262,9 @@ def analysis(t):
 
 for i, t in enumerate(np.linspace(0, t_end, n_frames)):
     model.evolve_until(t)
-    plot_rho(t, i)
-    analysis(t)
+    arr_rho = render_rho()
+    plot_rho(arr_rho, t, i)
+    analysis(arr_rho, t)
 
 # %%
 # Density evolution
@@ -287,8 +285,8 @@ plt.show()
 # %%
 # Mirror symmetry
 # ^^^^^^^^^^^^^^^
-# Maximum over the cells of the relative deviation between each cell and its mirror with respect to
-# :math:`x = L_x / 2`.
+# Maximum over the rendered density slice of the relative deviation between each point and its
+# mirror with respect to :math:`x = L_x / 2`.
 
 plt.figure()
 plt.plot(hist_t, hist_sym_max)
