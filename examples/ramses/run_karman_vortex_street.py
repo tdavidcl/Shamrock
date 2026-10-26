@@ -40,9 +40,14 @@ P_inf = 1.0 / gamma
 mach = 0.3
 U_inf = mach * np.sqrt(gamma * P_inf / rho_inf)
 
-# box [0, Lx] x [0, Ly], thin and periodic in z
+# box [0, Lx] x [0, Ly] x [0, Lz], periodic in z
+#
+# The base grid is made of cubic patches whose side is the gcd of the block counts, so the block
+# counts are (2k, k, k) to get a 2 x 1 x 1 patch grid (a thin box in z would give one patch per
+# block in the xy plane and make the solver very slow)
 Lx = 4.0
 Ly = 2.0
+Lz = 2.0
 
 # cylinder (axis along z)
 D = 0.25
@@ -54,11 +59,12 @@ eta_cyl = 1e-3
 x_inflow = 0.125
 eta_inflow = 1e-2
 
-# resolution: blocks of 2^3 cells, a single block in z
+# resolution: blocks of 2^3 cells
 sz = 2
-nblock_x = 128
-nblock_y = 64
-nblock_z = 1
+k = 32
+nblock_x = 2 * k
+nblock_y = k
+nblock_z = k
 
 scale_fact = Lx / (sz * nblock_x)
 dx = scale_fact
@@ -67,7 +73,7 @@ tmax = 40.0
 n_frames = 80
 
 # vertical velocity probe in the wake
-probe = (x_cyl + 4 * D, y_cyl, 0.5 * sz * nblock_z * dx)
+probe = (x_cyl + 4 * D, y_cyl, Lz / 2)
 
 sim_folder = "_to_trash/ramses_karman/"
 
@@ -109,7 +115,7 @@ cfg.add_penalization_cylinder(
 # then copies this state in the ghost cells
 cfg.add_penalization_box(
     lower=(-1.0, -1.0, -1.0),
-    upper=(x_inflow, Ly + 1.0, 1.0),
+    upper=(x_inflow, Ly + 1.0, Lz + 1.0),
     eta=eta_inflow,
     target_vel=(U_inf, 0.0, 0.0),
     target_rho=rho_inf,
