@@ -59,9 +59,10 @@ eta_cyl = 1e-3
 x_inflow = 0.125
 eta_inflow = 1e-2
 
-# resolution: blocks of 2^3 cells
+# resolution: blocks of 2^3 cells, D / dx = k / 4
+# (k = 16 keeps the documentation build short, k = 32 resolves the wake much better)
 sz = 2
-k = 32
+k = 16
 nblock_x = 2 * k
 nblock_y = k
 nblock_z = k
@@ -230,33 +231,34 @@ for i, t in enumerate(np.linspace(0, tmax, n_frames + 1)):
     plot_vorticity(t, i)
 
 # %%
-# Shedding frequency: the Strouhal number St = f D / U_inf is close to 0.2 for a cylinder
+# Shedding frequency: the Strouhal number St = f D / U_inf is close to 0.2 for a cylinder.
+#
+# The period is the mean time between upward zero crossings of the probe velocity, which is much
+# more precise than the peak of a spectrum over a few periods.
 probe_t = np.array(probe_t)
 probe_vy = np.array(probe_vy)
 
-# only keep the established shedding regime and resample uniformly for the FFT
+# only keep the established shedding regime
 t_start = tmax / 2
-t_uniform = np.linspace(t_start, probe_t[-1], 4096)
-vy_uniform = np.interp(t_uniform, probe_t, probe_vy)
-vy_uniform -= vy_uniform.mean()
+mask = probe_t >= t_start
+t_fit = probe_t[mask]
+vy_fit = probe_vy[mask] - probe_vy[mask].mean()
 
-freqs = np.fft.rfftfreq(len(t_uniform), t_uniform[1] - t_uniform[0])
-spectrum = np.abs(np.fft.rfft(vy_uniform))
-f_shed = freqs[np.argmax(spectrum[1:]) + 1]
-strouhal = f_shed * D / U_inf
-print(f"shedding frequency = {f_shed:.4f}, Strouhal number = {strouhal:.3f}")
+# linear interpolation of the upward zero crossings
+up = np.where((vy_fit[:-1] < 0) & (vy_fit[1:] >= 0))[0]
+t_cross = t_fit[up] - vy_fit[up] * (t_fit[up + 1] - t_fit[up]) / (vy_fit[up + 1] - vy_fit[up])
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 6), dpi=125)
-ax1.plot(probe_t, probe_vy / U_inf)
-ax1.axvline(t_start, color="grey", ls="--")
-ax1.set_xlabel("t")
-ax1.set_ylabel(r"$v_y / U_\infty$ at probe")
-ax2.plot(freqs * D / U_inf, spectrum)
-ax2.axvline(strouhal, color="grey", ls="--", label=f"St = {strouhal:.3f}")
-ax2.set_xlim(0, 1)
-ax2.set_xlabel(r"$f D / U_\infty$")
-ax2.set_ylabel("spectrum")
-ax2.legend()
+period = np.mean(np.diff(t_cross))
+strouhal = D / (period * U_inf)
+print(f"shedding period = {period:.4f}, Strouhal number = {strouhal:.3f}")
+
+fig, ax = plt.subplots(figsize=(7, 3.5), dpi=125)
+ax.plot(probe_t, probe_vy / U_inf)
+ax.axvline(t_start, color="grey", ls="--")
+ax.plot(t_cross, np.zeros_like(t_cross), "o", color="black", label=f"St = {strouhal:.3f}")
+ax.set_xlabel("t")
+ax.set_ylabel(r"$v_y / U_\infty$ at probe")
+ax.legend()
 fig.tight_layout()
 plt.show()
 
