@@ -72,8 +72,11 @@ dx = scale_fact
 tmax = 40.0
 n_frames = 80
 
+# midplane slice (at cell centers, as Lz / 2 is on a cell face)
+z_slice = Lz / 2 + dx / 2
+
 # vertical velocity probe in the wake
-probe = (x_cyl + 4 * D, y_cyl, Lz / 2)
+probe = (x_cyl + 4 * D, y_cyl, z_slice)
 
 sim_folder = "_to_trash/ramses_karman/"
 
@@ -158,13 +161,16 @@ model.set_field_value_lambda_f64_3("rhovel", rhovel_map)
 model.set_field_value_lambda_f64("rhoetot", rhoetot_map)
 
 # %%
-# Plotting utilities: the vorticity is computed from a velocity slice in the midplane
-nx_render, ny_render = 512, 256
-eps = 1e-6
-x_render = np.linspace(eps, Lx - eps, nx_render)
-y_render = np.linspace(eps, Ly - eps, ny_render)
+# Plotting utilities: the vorticity is computed from a velocity slice in the midplane.
+#
+# The slice is sampled at the cell centers: render_slice returns the value of the cell containing
+# each position (piecewise constant), so finite differences between several samples of the same
+# cell would be zero inside cells and spike on the cell faces.
+nx_render, ny_render = sz * nblock_x, sz * nblock_y
+x_render = (np.arange(nx_render) + 0.5) * dx
+y_render = (np.arange(ny_render) + 0.5) * dx
 xx, yy = np.meshgrid(x_render, y_render)
-positions = [(x, y, probe[2]) for x, y in zip(xx.ravel(), yy.ravel())]
+positions = [(x, y, z_slice) for x, y in zip(xx.ravel(), yy.ravel())]
 
 
 def render_vorticity():
