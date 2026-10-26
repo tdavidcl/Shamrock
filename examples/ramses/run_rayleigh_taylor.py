@@ -332,7 +332,7 @@ plt.show()
 plt.figure()
 for label, (e, style) in energies.items():
     plt.plot(hist_t, e - e[0], label=label, **style)
-plt.yscale("symlog", linthresh=1e-8)
+plt.yscale("symlog", linthresh=1e-6)
 plt.xlabel("t")
 plt.ylabel(r"$E(t) - E(0)$ [code unit]")
 plt.title("Energy variation")
