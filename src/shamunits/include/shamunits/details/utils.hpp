@@ -12,7 +12,7 @@
 /**
  * @file utils.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief
+ * @brief Integer powers with a supplied reciprocal, so a negative exponent never divides
  */
 
 namespace shamunits::details {

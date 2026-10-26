@@ -32,7 +32,7 @@ namespace {
     using shamunits::details::pow_constexpr_fast_inv;
     using shamunits::details::unit_from_name;
 
-    // Local stand-in registry: the real ones arrive with the unit tables in a later PR
+    // Local stand-in registry, independent of the real unit tables
     constexpr Unit<> metre  = base_unit({.metre = 1});
     constexpr Unit<> second = base_unit({.second = 1});
     constexpr Unit<> au     = 149597870700. * metre;

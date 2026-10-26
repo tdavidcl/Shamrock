@@ -52,7 +52,7 @@ namespace {
         astro.to<units::astronomical_unit>() * astro.get<units::astronomical_unit>(), 1., 1e-15));
     static_assert(close(astro.to<units::metre>(), 149597870700., 1e-15));
     static_assert(close(astro.get(units::astronomical_unit, 2), 1., 1e-12));
-    // G in (Myr, au, Msol): 3.947813e13 (the legacy code used to print 3.94781e+25)
+    // G in (Myr, au, Msol): 3.947813e13
     static_assert(close(
         astro.get<
             6.6743015e-11 * units::newton * upow(units::metre, 2) / upow(units::kilogram, 2)>(),
@@ -115,14 +115,14 @@ NEW_TEST(Unittest, "shamunits/unit_system_get", 1) {
         REQUIRE_EQUAL(registry_failures<f32>(s, 1e-5f), 0);
     }
 
-    // Runtime lookup by name, with a prefix, as the Python bindings will do (C1)
+    // Runtime lookup by name, with a prefix, as the Python bindings do
     UnitSystem<f64> &astro_rt = systems64[1];
     f64 myr                   = astro_rt.get(prefix::from_name("M") * units::from_name("yr"));
     REQUIRE_FLOAT_EQUAL(myr, 1., 1e-12);
     REQUIRE_FLOAT_EQUAL(astro_rt.to(units::from_name("m")) / 149597870700., 1., 1e-15);
 
-    // f32 in (Myr, au, Msol): the legacy nested expansion gave NaN for G (BUG 6); the value
-    // interface multiplies each base unit once and stays finite
+    // f32 in (Myr, au, Msol): G stays finite, since each base unit is multiplied in once and
+    // in double precision (an f32 intermediate used to overflow to NaN)
     UnitSystem<f32> astro32{3.15576e13f, 1.495978707e11f, 1.98847e30f};
     constexpr Unit<> grav
         = 6.6743015e-11 * units::newton * upow(units::metre, 2) / upow(units::kilogram, 2);
