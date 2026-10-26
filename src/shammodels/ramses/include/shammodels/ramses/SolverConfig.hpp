@@ -28,6 +28,7 @@
 #include "shamcomm/logs.hpp"
 #include "shammath/riemann_common.hpp"
 #include "shammodels/common/amr/AMRBlock.hpp"
+#include "shammodels/ramses/config/PenalizationConfig.hpp"
 #include "shammodels/ramses/config/enum_AMRInterpMode.hpp"
 #include "shammodels/ramses/config/enum_DragSolverMode.hpp"
 #include "shammodels/ramses/config/enum_DustRiemannSolverMode.hpp"
@@ -293,6 +294,11 @@ struct shammodels::basegodunov::SolverConfig {
 
     BCConfig bc_config{};
 
+    /// Volume penalization zones (immersed obstacles, forcing bands)
+    PenalizationConfig<Tvec> penalization_config{};
+
+    inline bool is_penalization_on() const { return penalization_config.is_enabled(); }
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Gas passive scalars config
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -415,6 +421,12 @@ struct shammodels::basegodunov::SolverConfig {
 
         if (!amr_mode.old_amr) {
             shamrock::experimental_feature_check("new AMR is experimental");
+        }
+
+        penalization_config.check_config();
+        if (is_penalization_on() && is_dust_on()) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "volume penalization is not supported with dust yet");
         }
     }
 

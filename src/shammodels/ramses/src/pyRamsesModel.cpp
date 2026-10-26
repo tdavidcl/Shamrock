@@ -168,6 +168,70 @@ namespace shammodels::basegodunov {
                 py::arg("axis"),
                 py::arg("bc_type"))
             .def(
+                "add_penalization_cylinder",
+                [](TConfig &self,
+                   Tvec center,
+                   Tvec axis,
+                   Tscal radius,
+                   Tscal eta,
+                   Tvec target_vel,
+                   std::optional<Tscal> target_rho,
+                   std::optional<Tscal> target_press) {
+                    self.penalization_config.add_cylinder(
+                        center, axis, radius, eta, target_vel, target_rho, target_press);
+                },
+                py::kw_only(),
+                py::arg("center"),
+                py::arg("axis"),
+                py::arg("radius"),
+                py::arg("eta"),
+                py::arg("target_vel")   = Tvec{0, 0, 0},
+                py::arg("target_rho")   = std::nullopt,
+                py::arg("target_press") = std::nullopt)
+            .def(
+                "add_penalization_sphere",
+                [](TConfig &self,
+                   Tvec center,
+                   Tscal radius,
+                   Tscal eta,
+                   Tvec target_vel,
+                   std::optional<Tscal> target_rho,
+                   std::optional<Tscal> target_press) {
+                    self.penalization_config.add_sphere(
+                        center, radius, eta, target_vel, target_rho, target_press);
+                },
+                py::kw_only(),
+                py::arg("center"),
+                py::arg("radius"),
+                py::arg("eta"),
+                py::arg("target_vel")   = Tvec{0, 0, 0},
+                py::arg("target_rho")   = std::nullopt,
+                py::arg("target_press") = std::nullopt)
+            .def(
+                "add_penalization_box",
+                [](TConfig &self,
+                   Tvec lower,
+                   Tvec upper,
+                   Tscal eta,
+                   Tvec target_vel,
+                   std::optional<Tscal> target_rho,
+                   std::optional<Tscal> target_press) {
+                    self.penalization_config.add_box(
+                        lower, upper, eta, target_vel, target_rho, target_press);
+                },
+                py::kw_only(),
+                py::arg("lower"),
+                py::arg("upper"),
+                py::arg("eta"),
+                py::arg("target_vel")   = Tvec{0, 0, 0},
+                py::arg("target_rho")   = std::nullopt,
+                py::arg("target_press") = std::nullopt)
+            .def(
+                "clear_penalization",
+                [](TConfig &self) {
+                    self.penalization_config.zones.clear();
+                })
+            .def(
                 "set_dust_mode_dhll",
                 [](TConfig &self, u32 ndust) {
                     self.dust_config = {DHLL, ndust};

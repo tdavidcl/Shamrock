@@ -69,6 +69,7 @@ please wait for the corresponding feature to be published before publishing anyt
 | Ramses solver | ![Ok](https://img.shields.io/badge/Ok-yellowgreen)  |  [Timothée David--Cléris](https://github.com/tdavidcl) & [Thomas Guillet](https://github.com/thomasguillet) | ![Wait for the paper !](https://img.shields.io/badge/Wait_for_the_paper_!-critical) | Needs some polishing to be considered production ready |
 | Refinement handling | ![Ok](https://img.shields.io/badge/Ok-yellowgreen)  |  [Timothée David--Cléris](https://github.com/tdavidcl) | ![Wait for the paper !](https://img.shields.io/badge/Wait_for_the_paper_!-critical) |  |
 | Multifluid dust | ![WIP](https://img.shields.io/badge/WIP-yellow)  |  [Léodasce Sewanou](https://github.com/Akos299) | ![Wait for the paper !](https://img.shields.io/badge/Wait_for_the_paper_!-critical) | [![PR - #916](https://img.shields.io/badge/PR-%23916-brightgreen?logo=github)](https://github.com/Shamrock-code/Shamrock/pull/916) |
+| Volume penalization | ![WIP](https://img.shields.io/badge/WIP-yellow)  |  [Timothée David--Cléris](https://github.com/tdavidcl) | ![Wait for the paper !](https://img.shields.io/badge/Wait_for_the_paper_!-critical) | Immersed obstacles (cylinder, sphere, box) and forcing bands, gas only |
 
 #### Refinement criterions
 

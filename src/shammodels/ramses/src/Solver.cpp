@@ -47,6 +47,7 @@
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
+#include "shammodels/ramses/modules/Penalization.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
@@ -1767,6 +1768,12 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         drag_integ.enable_expo_drag_integrator(dt_input);
     } else {
         shambase::throw_unimplemented();
+    }
+
+    // volume penalization (immersed obstacles, forcing bands), operator split after the hydro step
+    if (solver_config.is_penalization_on()) {
+        modules::Penalization penalization(context, solver_config, storage);
+        penalization.apply(dt_input);
     }
 
     if (!solver_config.amr_mode.old_amr) {
