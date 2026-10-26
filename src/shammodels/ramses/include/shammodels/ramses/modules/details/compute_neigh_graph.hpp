@@ -49,8 +49,6 @@ namespace shammodels::basegodunov::modules::details {
         // [i] is the number of link for block i in mpdat (last value is 0)
         sham::DeviceBuffer<u32> link_counts(graph_nodes + 1, dev_sched);
 
-        using KerAccess = decltype(kergen.get_read_access(std::declval<sham::EventList &>()));
-
         // sham::kernel_call throws on an empty range, whereas the former
         // shambase::parallel_for was a no-op, hence the guards
         if (graph_nodes > 0) {
@@ -60,7 +58,7 @@ namespace shammodels::basegodunov::modules::details {
                 sham::MultiRef{kergen},
                 sham::MultiRef{link_counts},
                 graph_nodes,
-                [](u32 id_a, const KerAccess ker, u32 *__restrict ptr_link_cnt) {
+                [](u32 id_a, const auto ker, u32 *__restrict ptr_link_cnt) {
                     u32 block_found_count = 0;
 
                     ker.for_each_other_index(id_a, [&](u32 id_b) {
@@ -90,7 +88,7 @@ namespace shammodels::basegodunov::modules::details {
                 graph_nodes,
                 [](u32 id_a,
                    const u32 *__restrict cnt_offsets,
-                   const KerAccess ker2,
+                   const auto ker2,
                    u32 *__restrict links) {
                     u32 next_link_idx = cnt_offsets[id_a];
 
