@@ -99,38 +99,26 @@ void shammodels::basegodunov::modules::DragIntegrator<Tvec, TgridVec>::involve_w
 
         u32 cell_count = pdat.get_obj_cnt() * AMRBlock::block_size;
 
-        sham::EventList depend_list;
-        auto acc_dt_rho_patch  = dt_rho_patch.get_read_access(depend_list);
-        auto acc_dt_rhov_patch = dt_rhov_patch.get_read_access(depend_list);
-        auto acc_dt_rhoe_patch = dt_rhoe_patch.get_read_access(depend_list);
-
-        auto rho  = buf_rho.get_read_access(depend_list);
-        auto rhov = buf_rhov.get_read_access(depend_list);
-        auto rhoe = buf_rhoe.get_read_access(depend_list);
-
-        auto acc_rho  = rho_patch.get_write_access(depend_list);
-        auto acc_rhov = rhov_patch.get_write_access(depend_list);
-        auto acc_rhoe = rhoe_patch.get_write_access(depend_list);
-
-        auto e1 = q.submit(depend_list, [&, dt](sycl::handler &cgh) {
-            shambase::parallel_for(cgh, cell_count, "evolve field with no drag", [=](u32 id_a) {
+        sham::kernel_call(
+            q,
+            sham::MultiRef{dt_rho_patch, dt_rhov_patch, dt_rhoe_patch, buf_rho, buf_rhov, buf_rhoe},
+            sham::MultiRef{rho_patch, rhov_patch, rhoe_patch},
+            cell_count,
+            [dt](
+                u32 id_a,
+                const Tscal *__restrict acc_dt_rho_patch,
+                const Tvec *__restrict acc_dt_rhov_patch,
+                const Tscal *__restrict acc_dt_rhoe_patch,
+                const Tscal *__restrict rho,
+                const Tvec *__restrict rhov,
+                const Tscal *__restrict rhoe,
+                Tscal *__restrict acc_rho,
+                Tvec *__restrict acc_rhov,
+                Tscal *__restrict acc_rhoe) {
                 acc_rho[id_a]  = rho[id_a] + dt * acc_dt_rho_patch[id_a];
                 acc_rhov[id_a] = rhov[id_a] + dt * acc_dt_rhov_patch[id_a];
                 acc_rhoe[id_a] = rhoe[id_a] + dt * acc_dt_rhoe_patch[id_a];
             });
-        });
-
-        dt_rho_patch.complete_event_state(e1);
-        dt_rhov_patch.complete_event_state(e1);
-        dt_rhoe_patch.complete_event_state(e1);
-
-        buf_rho.complete_event_state(e1);
-        buf_rhov.complete_event_state(e1);
-        buf_rhoe.complete_event_state(e1);
-
-        rho_patch.complete_event_state(e1);
-        rhov_patch.complete_event_state(e1);
-        rhoe_patch.complete_event_state(e1);
 
         sham::kernel_call(
             q,
