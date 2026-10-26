@@ -290,7 +290,6 @@ plt.show()
 
 plt.figure()
 plt.plot(hist_t, hist_sym_max)
-plt.ylim(bottom=0)
 plt.xlabel("t")
 plt.ylabel(
     r"$\max \, 2 |\rho_{\rm left} - \rho_{\rm right}| / (|\rho_{\rm left}| + |\rho_{\rm right}|)$"
