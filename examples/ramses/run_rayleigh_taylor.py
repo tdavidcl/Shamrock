@@ -48,11 +48,12 @@ v_pert = 1e-2  # amplitude of the velocity perturbation
 t_end = 5.0
 n_frames = 26
 
-# resolution (the run is quasi 2D: a single block of cells along z)
+# resolution (the z direction has as many blocks as the x one, to keep the patches compact)
 sz = 1 << 1
 base = 32
 multx = 1
 multy = 3
+multz = 1
 
 sim_folder = "_to_trash/ramses_rayleigh_taylor/"
 
@@ -64,7 +65,7 @@ scale_fact = Lx / (sz * base * multx)
 
 nx = sz * base * multx
 ny = sz * base * multy
-Lz = sz * scale_fact
+Lz = sz * base * multz * scale_fact
 
 # %%
 # Create the dump directory if it does not exist
@@ -94,7 +95,7 @@ cfg.set_boundary_condition("z", "reflective")
 model.set_solver_config(cfg)
 
 model.init_scheduler(int(1e7), 1)
-model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, 1))
+model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base * multz))
 
 # %%
 # Initial conditions
