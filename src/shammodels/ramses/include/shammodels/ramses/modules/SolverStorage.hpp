@@ -228,6 +228,9 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> dtrhov;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> dtrhoe;
 
+        /// Sum of the accelerations of the external forces
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> a_ext;
+
         Component<shamrock::ComputeField<Tscal>> rho_next_no_drag;
         Component<shamrock::ComputeField<Tvec>> rhov_next_no_drag;
         Component<shamrock::ComputeField<Tscal>> rhoe_next_no_drag;
