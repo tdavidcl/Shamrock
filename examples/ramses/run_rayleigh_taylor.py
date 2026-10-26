@@ -104,10 +104,16 @@ model.make_base_grid((0, 0, 0), (sz, sz, sz), (base * multx, base * multy, base 
 # ^^^^^^^^^^^^^^^^^^
 # Hydrostatic equilibrium :math:`P = P_0 - \rho g (y - y_{\rm interface})` (continuous at the
 # interface), with a velocity perturbation along y localized around the interface.
+# The initial conditions are evaluated at the cell centers so that they are mirror symmetric with
+# respect to :math:`x = L_x / 2`.
+
+
+def cell_center(rmin, rmax):
+    return (np.array(rmin) + np.array(rmax)) / 2
 
 
 def rho_map(rmin, rmax):
-    x, y, z = rmin
+    x, y, z = cell_center(rmin, rmax)
     if y <= y_interface:
         return rho_light
     else:
@@ -115,7 +121,7 @@ def rho_map(rmin, rmax):
 
 
 def vy_map(rmin, rmax):
-    x, y, z = rmin
+    x, y, z = cell_center(rmin, rmax)
     xloc = x - Lx / 2
     yloc = y - y_interface
     return (
@@ -133,7 +139,7 @@ def rhovel_map(rmin, rmax):
 
 def rhoetot_map(rmin, rmax):
     rho = rho_map(rmin, rmax)
-    x, y, z = rmin
+    x, y, z = cell_center(rmin, rmax)
     P = P0 - g * rho * (y - y_interface)
     vy = vy_map(rmin, rmax)
     return 0.5 * rho * vy**2 + P / (gamma - 1.0)
@@ -188,12 +194,79 @@ def plot_rho(t, iplot, dpi=150):
 
 
 # %%
+# Diagnostics
+# ^^^^^^^^^^^
+# At each output we track:
+#
+# * the mirror symmetry with respect to :math:`x = L_x / 2` (the setup is symmetric), through the
+#   relative deviation :math:`2 |\rho_{\rm left} - \rho_{\rm right}| / (|\rho_{\rm left}| +
+#   |\rho_{\rm right}|)` between each cell and its mirror,
+# * the energy budget: kinetic, internal and gravitational potential (:math:`\rho g y`) energies,
+#   whose sum should be conserved.
+
+
+def get_cell_data():
+    dic = ctx.collect_data()
+
+    # cell centers, from the block bounds (cells are ordered block by block, x fastest)
+    block_min = np.array(dic["cell_min"], dtype=float)
+    block_max = np.array(dic["cell_max"], dtype=float)
+    lid = np.arange(sz**3)
+    local_coord = np.stack([lid % sz, (lid // sz) % sz, lid // (sz * sz)], axis=1)
+    cell_size = (block_max - block_min) / sz
+    pos = block_min[:, None, :] + (local_coord[None, :, :] + 0.5) * cell_size[:, None, :]
+    pos = pos.reshape(-1, 3) * scale_fact
+    vol = np.repeat(np.prod(cell_size * scale_fact, axis=1), sz**3)
+
+    return (
+        pos,
+        vol,
+        np.array(dic["rho"]),
+        np.array(dic["rhovel"]).reshape(-1, 3),
+        np.array(dic["rhoetot"]),
+    )
+
+
+hist_t = []
+hist_sym_max = []
+hist_ekin = []
+hist_eint = []
+hist_epot = []
+
+
+def analysis(t):
+    pos, vol, rho, rhovel, rhoetot = get_cell_data()
+
+    # mirror symmetry, on the regular grid of cells
+    dx = Lx / nx
+    ix = np.floor(pos[:, 0] / dx).astype(int)
+    iy = np.floor(pos[:, 1] / dx).astype(int)
+    iz = np.floor(pos[:, 2] / dx).astype(int)
+    rho_grid = np.zeros((nx, ny, sz * base * multz))
+    rho_grid[ix, iy, iz] = rho
+    rho_mirror = rho_grid[::-1, :, :]
+    rel_dev = 2 * np.abs(rho_grid - rho_mirror) / (np.abs(rho_grid) + np.abs(rho_mirror))
+
+    # energy budget
+    ekin = 0.5 * np.sum(rhovel**2, axis=1) / rho
+    eint = rhoetot - ekin
+    epot = rho * g * pos[:, 1]
+
+    hist_t.append(t)
+    hist_sym_max.append(np.max(rel_dev))
+    hist_ekin.append(np.sum(ekin * vol))
+    hist_eint.append(np.sum(eint * vol))
+    hist_epot.append(np.sum(epot * vol))
+
+
+# %%
 # Run the simulation
 # ^^^^^^^^^^^^^^^^^^
 
 for i, t in enumerate(np.linspace(0, t_end, n_frames)):
     model.evolve_until(t)
     plot_rho(t, i)
+    analysis(t)
 
 # %%
 # Density evolution
@@ -209,4 +282,62 @@ if shamrock.sys.world_rank() == 0:
     writer = animation.PillowWriter(fps=5, metadata=dict(artist="Me"), bitrate=1800)
     ani.save(os.path.join(sim_folder, "rho_rayleigh_taylor.gif"), writer=writer)
 
+plt.show()
+
+# %%
+# Mirror symmetry
+# ^^^^^^^^^^^^^^^
+# Maximum over the cells of the relative deviation between each cell and its mirror with respect to
+# :math:`x = L_x / 2`.
+
+plt.figure()
+plt.plot(hist_t, hist_sym_max)
+plt.yscale("symlog", linthresh=1e-16)
+plt.xlabel("t")
+plt.ylabel(
+    r"$\max \, 2 |\rho_{\rm left} - \rho_{\rm right}| / (|\rho_{\rm left}| + |\rho_{\rm right}|)$"
+)
+plt.title("Mirror symmetry")
+plt.tight_layout()
+plt.show()
+
+# %%
+# Energy budget
+# ^^^^^^^^^^^^^
+
+hist_ekin = np.array(hist_ekin)
+hist_eint = np.array(hist_eint)
+hist_epot = np.array(hist_epot)
+hist_etot = hist_ekin + hist_eint + hist_epot
+
+energies = {
+    r"$E_{\rm kin}$": hist_ekin,
+    r"$E_{\rm int}$": hist_eint,
+    r"$E_{\rm pot}$": hist_epot,
+    r"$E_{\rm tot}$": hist_etot,
+}
+
+plt.figure()
+for label, e in energies.items():
+    plt.plot(hist_t, e, label=label)
+plt.yscale("log")
+plt.xlabel("t")
+plt.ylabel("E [code unit]")
+plt.title("Energy budget")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# %%
+# Energy variation with respect to the initial state
+
+plt.figure()
+for label, e in energies.items():
+    plt.plot(hist_t, e - e[0], label=label)
+plt.yscale("symlog", linthresh=1e-8)
+plt.xlabel("t")
+plt.ylabel(r"$E(t) - E(0)$ [code unit]")
+plt.title("Energy variation")
+plt.legend()
+plt.tight_layout()
 plt.show()
