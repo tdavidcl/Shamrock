@@ -181,6 +181,10 @@ void shammodels::basegodunov::modules::TimeIntegrator<Tvec, TgridVec>::add_ext_f
             });
     };
 
+    // In general the forces should be evaluated at the half step t^{n+1/2} (midpoint rule) to keep
+    // the scheme second order in time. This does not matter for a constant acceleration, but
+    // velocity dependent forces would need the half step velocity, including the half kick of the
+    // force itself (e.g. predictor-corrector, or implicit midpoint for stiff or no-work forces).
     for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
         std::visit(
             shambase::overloaded{
