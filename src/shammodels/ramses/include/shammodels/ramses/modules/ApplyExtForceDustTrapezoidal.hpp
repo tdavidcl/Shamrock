@@ -25,7 +25,7 @@
 
 #define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* ------------------- inputs ------------------- */                                           \
-    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, dt_over2)                                       \
+    X_RO(shamrock::solvergraph::ScalarEdge<Tscal>, dt)                                             \
     X_RO(shamrock::solvergraph::Indexes<u32>, sizes)                                               \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho_dust)                                 \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_dt_rho_dust)                              \

@@ -620,6 +620,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             "simulation_volume", "V_{\\rm sim}");
     }
 
+    storage.dt = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt", "\\Delta t");
     storage.dt_over2
         = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_half", "dt_{half}");
 
@@ -1730,7 +1731,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             if (trapezoidal) {
                 modules::ApplyExtForceGasTrapezoidal<Tvec> node{AMRBlock::block_size};
                 node.set_edges(
-                    storage.dt_over2,
+                    storage.dt,
                     storage.block_counts,
                     refs_rho,
                     storage.dtrho,
@@ -1743,7 +1744,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             } else {
                 modules::ApplyExtForceGas<Tvec> node{AMRBlock::block_size};
                 node.set_edges(
-                    storage.dt_over2,
+                    storage.dt,
                     storage.block_counts,
                     refs_rho,
                     storage.dtrho,
@@ -1768,7 +1769,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 modules::ApplyExtForceDustTrapezoidal<Tvec> node{
                     AMRBlock::block_size, solver_config.dust_config.ndust};
                 node.set_edges(
-                    storage.dt_over2,
+                    storage.dt,
                     storage.block_counts,
                     refs_rho_dust,
                     storage.dtrho_dust,
@@ -1780,7 +1781,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 modules::ApplyExtForceDust<Tvec> node{
                     AMRBlock::block_size, solver_config.dust_config.ndust};
                 node.set_edges(
-                    storage.dt_over2,
+                    storage.dt,
                     storage.block_counts,
                     refs_rho_dust,
                     storage.dtrho_dust,
@@ -1828,6 +1829,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (shamcomm::world_rank() == 0) {
         logger::normal_ln("amr::Godunov", sham::format("t = {}, dt = {}", t_current, dt_input));
     }
+
+    shambase::get_check_ref(storage.dt).value = dt_input;
 
     if (solver_config.face_half_time_interpolation) {
         shambase::get_check_ref(storage.dt_over2).value = dt_input / 2.0;

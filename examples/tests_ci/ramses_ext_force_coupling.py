@@ -9,6 +9,7 @@ CI test for the two time quadratures of the external forces source term
   :math:`\\rho \\mathbf{g} t` exactly in both modes. The trapezoidal rule must conserve the
   internal energy, while the midpoint rule has the known
   :math:`-\\rho g^2 \\Delta t^2 / 2` drift per step (see the TODO in ``ApplyExtForceGas.cpp``).
+  This is checked with and without the time interpolation of the face states.
 * one step on a non uniform moving state: for a constant acceleration both modes give the same momentum
   update, and their energy differs by :math:`\\Delta t^2 \\rho^{n+1/2} g^2 / 2`.
 """
@@ -37,7 +38,16 @@ def zero_vel(rmin, rmax):
     return (0.0, 0.0, 0.0)
 
 
-def run(mode, rho_map, rho_dust_map, dt, nsteps, vel_map=zero_vel, vel_dust_map=zero_vel):
+def run(
+    mode,
+    rho_map,
+    rho_dust_map,
+    dt,
+    nsteps,
+    vel_map=zero_vel,
+    vel_dust_map=zero_vel,
+    face_time_interpolation=True,
+):
     ctx = shamrock.Context()
     ctx.pdata_layout_new()
 
@@ -47,7 +57,7 @@ def run(mode, rho_map, rho_dust_map, dt, nsteps, vel_map=zero_vel, vel_dust_map=
     cfg.set_scale_factor(1 / (sz * base))
     cfg.set_eos_gamma(gamma)
     cfg.set_dust_mode_dhll(1)
-    cfg.set_face_time_interpolation(True)
+    cfg.set_face_time_interpolation(face_time_interpolation)
     cfg.add_ext_force_constant_gravity(g=tuple(g))
     cfg.set_ext_force_coupling(mode)
     model.set_solver_config(cfg)
@@ -95,8 +105,20 @@ def test_free_fall():
     dt, nsteps = 0.01, 20
     t = dt * nsteps
 
-    for mode in [ExtForceCoupling.Midpoint, ExtForceCoupling.Trapezoidal]:
-        data_init, data = run(mode, lambda rmin, rmax: rho0, lambda rmin, rmax: rho_d0, dt, nsteps)
+    cases = [
+        (mode, face_interp)
+        for mode in [ExtForceCoupling.Midpoint, ExtForceCoupling.Trapezoidal]
+        for face_interp in [True, False]
+    ]
+    for mode, face_interp in cases:
+        data_init, data = run(
+            mode,
+            lambda rmin, rmax: rho0,
+            lambda rmin, rmax: rho_d0,
+            dt,
+            nsteps,
+            face_time_interpolation=face_interp,
+        )
 
         # the collected data is only complete on rank 0
         if shamrock.sys.world_rank() != 0:
@@ -114,13 +136,19 @@ def test_free_fall():
         err_e_int = float(np.max(np.abs(de_int - de_int_expected))) / (1.0 / (gamma - 1.0))
 
         print(
-            f"free fall {mode}: err rhovel = {err_rhov:.3e}, err rhovel_dust = {err_rhov_d:.3e}, "
+            f"free fall {mode}, face interp {face_interp}: err rhovel = {err_rhov:.3e}, err rhovel_dust = {err_rhov_d:.3e}, "
             f"err e_int = {err_e_int:.3e}"
         )
 
-        assert err_rhov < 1e-13, f"{mode}: gas momentum is not rho g t ({err_rhov})"
-        assert err_rhov_d < 1e-13, f"{mode}: dust momentum is not rho_d g t ({err_rhov_d})"
-        assert err_e_int < 1e-12, f"{mode}: unexpected internal energy change ({err_e_int})"
+        assert err_rhov < 1e-13, (
+            f"{mode}, face interp {face_interp}: gas momentum is not rho g t ({err_rhov})"
+        )
+        assert err_rhov_d < 1e-13, (
+            f"{mode}, face interp {face_interp}: dust momentum is not rho_d g t ({err_rhov_d})"
+        )
+        assert err_e_int < 1e-12, (
+            f"{mode}, face interp {face_interp}: unexpected internal energy change ({err_e_int})"
+        )
 
 
 def test_modes_one_step():

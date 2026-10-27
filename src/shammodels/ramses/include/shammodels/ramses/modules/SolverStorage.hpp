@@ -73,6 +73,12 @@ namespace shammodels::basegodunov {
 
         std::shared_ptr<shamrock::solvergraph::RankGetter> patch_rank_owner;
 
+        /// Time step of the current iteration
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt;
+
+        /// Half time step used for the time interpolation of the face states
+        /// TODO: only set when `face_half_time_interpolation` is enabled (it stays 0 otherwise),
+        /// so it must not be used as a time step elsewhere, use `dt` instead
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt_over2;
 
         std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> refs_block_min;
