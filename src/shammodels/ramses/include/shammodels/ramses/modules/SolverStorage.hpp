@@ -77,11 +77,7 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt;
 
         /// Half time step used for the time interpolation of the face states
-        /// TODO: this is bug prone and should be changed: despite its name it only holds dt/2 when
-        /// `face_half_time_interpolation` is enabled and stays 0 otherwise, so any node using it as
-        /// a time step silently does nothing in that case (the external forces did). It should
-        /// always hold dt/2, the face interpolation getting its own (possibly zero) interpolation
-        /// time instead. Until then, use `dt` for anything that needs the time step.
+        /// TODO: bug prone, it stays 0 if `face_half_time_interpolation` is off; use `dt` instead
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt_over2;
 
         std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> refs_block_min;
