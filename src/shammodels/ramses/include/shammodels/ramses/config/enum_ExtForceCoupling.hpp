@@ -27,8 +27,8 @@ namespace shammodels::basegodunov {
      * Both are second order in time.
      */
     enum ExtForceCoupling {
-        /// Explicit midpoint rule: a single acceleration evaluated at t^{n+1/2}, applied with the
-        /// time centered density \f$\rho^{n+1/2}\f$
+        /// Explicit midpoint rule: the forces are evaluated once, at t^{n+1/2}, from the time
+        /// centered state (density, momentum, ...), and applied over the whole time step
         Midpoint = 0,
         /// Trapezoidal rule (time centred source term, as in RAMSES): accelerations evaluated at
         /// t^n and t^{n+1}, each applied over half of the time step

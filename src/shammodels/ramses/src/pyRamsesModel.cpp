@@ -505,8 +505,9 @@ ON_PYTHON_INIT {
             R"==(
     Explicit midpoint rule. This is the default.
 
-    A single acceleration :math:`\mathbf{a}^{n+1/2}` is applied over the whole time step with
-    the time centered density :math:`\rho^{n+1/2} = \rho^n + \frac{\Delta t}{2} \partial_t \rho`.
+    The forces are evaluated once, at :math:`t^{n+1/2}`, from the time centered state (e.g.
+    :math:`\rho^{n+1/2} = \rho^n + \frac{\Delta t}{2} \partial_t \rho`, and the momentum for a
+    velocity dependent force), and applied over the whole time step.
 )==")
         .value(
             "Trapezoidal",
