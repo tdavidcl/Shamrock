@@ -1679,13 +1679,14 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
 
-        // With the midpoint rule the forces should be evaluated at the half step t^{n+1/2} to
-        // keep the scheme second order in time. This does not matter for a constant acceleration,
-        // but velocity dependent forces would need the half step velocity, including the half
-        // kick of the force itself (e.g. predictor-corrector, or implicit midpoint for stiff or
-        // no-work forces). With the trapezoidal rule each force is evaluated at t^n and t^{n+1};
-        // a force depending on the state at t^{n+1} must only depend on the density there, which
-        // is known before the kick (this is the case of self-gravity).
+        // Time at which the forces must be evaluated to keep the scheme second order in time:
+        //  - midpoint rule: at the half step t^{n+1/2}. This does not matter for a constant
+        //    acceleration, but velocity dependent forces would need the half step velocity,
+        //    including the half kick of the force itself (e.g. predictor-corrector, or implicit
+        //    midpoint for stiff or no-work forces).
+        //  - trapezoidal rule: at t^n and t^{n+1}. A force depending on the state at t^{n+1} must
+        //    only depend on the density there, which is known before the kick (this is the case
+        //    of self-gravity).
         for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
             std::visit(
                 shambase::overloaded{
