@@ -20,6 +20,7 @@
 #include "shambase/overloaded.hpp"
 #include "shambackends/type_convert.hpp"
 #include "shambackends/vec.hpp"
+#include "shammodels/ramses/config/enum_ExtForceCoupling.hpp"
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -32,7 +33,7 @@ namespace shammodels::basegodunov {
      * @brief List of the external forces applied to the gas
      *
      * The accelerations of all the forces are summed (in the order of the list) before being
-     * applied to the conservative state.
+     * applied to the conservative state, with the time quadrature selected by `coupling`.
      */
     template<class Tvec>
     struct ExtForceConfig {
@@ -46,6 +47,11 @@ namespace shammodels::basegodunov {
         using Variant = std::variant<ConstantGravity>;
 
         std::vector<Variant> ext_forces;
+
+        /// Time quadrature of the external forces source term
+        ExtForceCoupling coupling = ExtForceCoupling::Midpoint;
+
+        inline void set_coupling(ExtForceCoupling mode) { coupling = mode; }
 
         inline void add_constant_gravity(Tvec g) { ext_forces.push_back(ConstantGravity{g}); }
 
@@ -68,12 +74,18 @@ namespace shammodels::basegodunov {
                 var_force);
         }
 
-        j = nlohmann::json{{"force_list", force_list}};
+        j = nlohmann::json{{"force_list", force_list}, {"coupling", p.coupling}};
     }
 
     template<class Tvec>
     inline void from_json(const nlohmann::json &j, ExtForceConfig<Tvec> &p) {
         p.ext_forces.clear();
+
+        // configs dumped before the coupling was configurable used the midpoint rule
+        p.coupling = ExtForceCoupling::Midpoint;
+        if (j.contains("coupling")) {
+            j.at("coupling").get_to(p.coupling);
+        }
 
         for (const auto &jforce : j.at("force_list")) {
             const std::string force_type = jforce.at("force_type").get<std::string>();
