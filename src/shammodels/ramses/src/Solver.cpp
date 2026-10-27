@@ -1660,15 +1660,20 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}");
         }
 
-        // accelerations at the time levels required by the coupling: t^{n+1/2} for the midpoint
-        // rule, t^n and t^{n+1} for the trapezoidal rule
-        std::vector<std::shared_ptr<shamrock::solvergraph::Field<Tvec>>> a_ext_levels{
-            storage.a_ext};
+        // accelerations at the time levels required by the coupling, paired with the time of the
+        // level after t^n in units of dt (the state there is U^n + dt_level * dt * dU/dt):
+        // t^{n+1/2} for the midpoint rule, t^n and t^{n+1} for the trapezoidal rule
+        std::vector<std::pair<std::shared_ptr<shamrock::solvergraph::Field<Tvec>>, Tscal>>
+            a_ext_levels;
         if (trapezoidal) {
-            a_ext_levels.push_back(storage.a_ext_next);
+            a_ext_levels.push_back({storage.a_ext, Tscal{0}});
+            a_ext_levels.push_back({storage.a_ext_next, Tscal{1}});
+        } else {
+            a_ext_levels.push_back({storage.a_ext, Tscal{0.5}});
         }
 
-        for (auto &a_ext_level : a_ext_levels) { // sum of the accelerations of all the forces
+        // sum of the accelerations of all the forces, at each level
+        for (auto &[a_ext_level, dt_level] : a_ext_levels) {
             modules::ResetExtForceAcc<Tvec> node{AMRBlock::block_size};
             node.set_edges(storage.block_counts, a_ext_level);
             ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
@@ -1685,7 +1690,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             std::visit(
                 shambase::overloaded{
                     [&](const ConstantGravity &cfg) {
-                        for (auto &a_ext_level : a_ext_levels) {
+                        // time independent, the same g is added at every level
+                        for (auto &[a_ext_level, dt_level] : a_ext_levels) {
                             modules::AddExtForceConstantGravity<Tvec> node{
                                 AMRBlock::block_size, cfg.g};
                             node.set_edges(storage.block_counts, a_ext_level);
