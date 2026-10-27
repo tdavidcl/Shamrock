@@ -9,7 +9,7 @@ CI test for the two time quadratures of the external forces source term
   :math:`\\rho \\mathbf{g} t` exactly in both modes. The trapezoidal rule must conserve the
   internal energy, while the midpoint rule has the known
   :math:`-\\rho g^2 \\Delta t^2 / 2` drift per step (see the TODO in ``ApplyExtForceGas.cpp``).
-* one step on a non uniform state: for a constant acceleration both modes give the same momentum
+* one step on a non uniform moving state: for a constant acceleration both modes give the same momentum
   update, and their energy differs by :math:`\\Delta t^2 \\rho^{n+1/2} g^2 / 2`.
 """
 
@@ -33,7 +33,11 @@ sz = 1 << 1
 base = 4
 
 
-def run(mode, rho_map, rho_dust_map, dt, nsteps):
+def zero_vel(rmin, rmax):
+    return (0.0, 0.0, 0.0)
+
+
+def run(mode, rho_map, rho_dust_map, dt, nsteps, vel_map=zero_vel, vel_dust_map=zero_vel):
     ctx = shamrock.Context()
     ctx.pdata_layout_new()
 
@@ -52,10 +56,21 @@ def run(mode, rho_map, rho_dust_map, dt, nsteps):
     model.make_base_grid((0, 0, 0), (sz, sz, sz), (base, base, base))
 
     model.set_field_value_lambda_f64("rho", rho_map)
-    model.set_field_value_lambda_f64_3("rhovel", lambda rmin, rmax: (0.0, 0.0, 0.0))
-    model.set_field_value_lambda_f64("rhoetot", lambda rmin, rmax: 1.0 / (gamma - 1.0))
+
+    def rhovel_map(rmin, rmax):
+        return tuple(rho_map(rmin, rmax) * np.array(vel_map(rmin, rmax)))
+
+    def rhoetot_map(rmin, rmax):
+        v = np.array(vel_map(rmin, rmax))
+        return 0.5 * rho_map(rmin, rmax) * float(np.dot(v, v)) + 1.0 / (gamma - 1.0)
+
+    def rhovel_dust_map(rmin, rmax):
+        return tuple(rho_dust_map(rmin, rmax) * np.array(vel_dust_map(rmin, rmax)))
+
+    model.set_field_value_lambda_f64_3("rhovel", rhovel_map)
+    model.set_field_value_lambda_f64("rhoetot", rhoetot_map)
     model.set_field_value_lambda_f64("rho_dust", rho_dust_map, 0)
-    model.set_field_value_lambda_f64_3("rhovel_dust", lambda rmin, rmax: (0.0, 0.0, 0.0), 0)
+    model.set_field_value_lambda_f64_3("rhovel_dust", rhovel_dust_map, 0)
 
     data_init = ctx.collect_data()
 
@@ -113,10 +128,24 @@ def test_modes_one_step():
         x, y, z = (np.array(rmin) + np.array(rmax)) / 2
         return 0.5 + 0.2 * np.cos(2 * np.pi * z)
 
+    # a non uniform velocity, so that the flux derivatives (dt rho, dt rhov) are not zero
+    def vel_map(rmin, rmax):
+        x, y, z = (np.array(rmin) + np.array(rmax)) / 2
+        return (0.3 * np.sin(2 * np.pi * y), 0.2 * np.cos(2 * np.pi * x), 0.1)
+
+    def vel_dust_map(rmin, rmax):
+        x, y, z = (np.array(rmin) + np.array(rmax)) / 2
+        return (0.1, 0.2 * np.sin(2 * np.pi * z), 0.3 * np.cos(2 * np.pi * x))
+
     dt = 0.01
 
-    data_init, data_mid = run(ExtForceCoupling.Midpoint, rho_map, rho_dust_map, dt, 1)
-    _, data_trap = run(ExtForceCoupling.Trapezoidal, rho_map, rho_dust_map, dt, 1)
+    args = (rho_map, rho_dust_map, dt, 1, vel_map, vel_dust_map)
+    data_init, data_mid = run(ExtForceCoupling.Midpoint, *args)
+    _, data_trap = run(ExtForceCoupling.Trapezoidal, *args)
+
+    # check that the setup does exercise the flux derivatives
+    assert not np.array_equal(np.array(data_init["rho"]), np.array(data_mid["rho"]))
+    assert not np.array_equal(np.array(data_init["rho_dust"]), np.array(data_mid["rho_dust"]))
 
     # the density update does not depend on the external forces
     assert np.array_equal(np.array(data_mid["rho"]), np.array(data_trap["rho"]))
