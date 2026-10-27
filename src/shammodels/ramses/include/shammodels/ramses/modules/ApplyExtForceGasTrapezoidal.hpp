@@ -32,8 +32,8 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho)                                      \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_dt_rho)                                   \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_dt_rhov)                                   \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext)                                     \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_next)                                \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_n)                                   \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_np1)                                 \
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, spans_rhov)                                      \
@@ -43,8 +43,8 @@ namespace shammodels::basegodunov::modules {
 
     /**
      * @brief Apply the external forces accelerations to the gas momentum and total energy with
-     * the trapezoidal rule, half of the time step with a_ext at t^n and the state at t^n, half
-     * with a_ext_next at t^{n+1} and the state at t^{n+1}.
+     * the trapezoidal rule, half of the time step with a_ext_n at t^n and the state at t^n, half
+     * with a_ext_np1 at t^{n+1} and the state at t^{n+1}.
      *
      * The density and momentum at t^{n+1} are built from the state at t^n and the flux
      * derivatives, the momentum at t^{n+1} including the kick of the forces (as in RAMSES).

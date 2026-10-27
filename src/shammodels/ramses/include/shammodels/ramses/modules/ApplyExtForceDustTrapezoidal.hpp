@@ -29,8 +29,8 @@
     X_RO(shamrock::solvergraph::Indexes<u32>, sizes)                                               \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho_dust)                                 \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_dt_rho_dust)                              \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext)                                     \
-    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_next)                                \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_n)                                   \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_a_ext_np1)                                 \
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tvec>, spans_rhov_dust)
@@ -39,8 +39,8 @@ namespace shammodels::basegodunov::modules {
 
     /**
      * @brief Apply the external forces accelerations to the momentum of every dust species with
-     * the trapezoidal rule, half of the time step with a_ext at t^n and the dust density at t^n,
-     * half with a_ext_next at t^{n+1} and the dust density at t^{n+1}.
+     * the trapezoidal rule, half of the time step with a_ext_n at t^n and the dust density at t^n,
+     * half with a_ext_np1 at t^{n+1} and the dust density at t^{n+1}.
      *
      * It updates the state at t^n in place, before the time integration (which then adds the
      * fluxes, and the drag if enabled).

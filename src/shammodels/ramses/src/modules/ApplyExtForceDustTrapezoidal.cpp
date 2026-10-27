@@ -29,8 +29,8 @@ namespace shammodels::basegodunov::modules {
 
         edges.spans_rho_dust.check_sizes(edges.sizes.indexes);
         edges.spans_dt_rho_dust.check_sizes(edges.sizes.indexes);
-        edges.spans_a_ext.check_sizes(edges.sizes.indexes);
-        edges.spans_a_ext_next.check_sizes(edges.sizes.indexes);
+        edges.spans_a_ext_n.check_sizes(edges.sizes.indexes);
+        edges.spans_a_ext_np1.check_sizes(edges.sizes.indexes);
         edges.spans_rhov_dust.check_sizes(edges.sizes.indexes);
 
         Tscal dt_over2 = edges.dt_over2.value;
@@ -46,27 +46,27 @@ namespace shammodels::basegodunov::modules {
             sham::DDMultiRef{
                 edges.spans_rho_dust.get_spans(),
                 edges.spans_dt_rho_dust.get_spans(),
-                edges.spans_a_ext.get_spans(),
-                edges.spans_a_ext_next.get_spans()},
+                edges.spans_a_ext_n.get_spans(),
+                edges.spans_a_ext_np1.get_spans()},
             sham::DDMultiRef{edges.spans_rhov_dust.get_spans()},
             dust_cell_counts,
             [dt, dt_over2, ndust = ndust](
                 u32 i,
                 const Tscal *__restrict rho_dust,
                 const Tscal *__restrict dt_rho_dust,
-                const Tvec *__restrict a_ext,
-                const Tvec *__restrict a_ext_next,
+                const Tvec *__restrict a_ext_n,
+                const Tvec *__restrict a_ext_np1,
                 Tvec *__restrict rhov_dust) {
                 // dust fields are laid out as [cell * ndust + idust]
                 u32 cell_id = i / ndust;
 
-                Tscal rho_old = rho_dust[i];
+                Tscal rho_n = rho_dust[i];
 
                 // dust density at t^{n+1}
-                Tscal rho_next = rho_old + dt * dt_rho_dust[i];
+                Tscal rho_np1 = rho_n + dt * dt_rho_dust[i];
 
                 rhov_dust[i]
-                    += dt_over2 * (rho_old * a_ext[cell_id] + rho_next * a_ext_next[cell_id]);
+                    += dt_over2 * (rho_n * a_ext_n[cell_id] + rho_np1 * a_ext_np1[cell_id]);
             });
     }
 
@@ -75,8 +75,8 @@ namespace shammodels::basegodunov::modules {
         auto dt_over2    = get_ro_edge_base(0).get_tex_symbol();
         auto rho_dust    = get_ro_edge_base(2).get_tex_symbol();
         auto dt_rho_dust = get_ro_edge_base(3).get_tex_symbol();
-        auto a_ext       = get_ro_edge_base(4).get_tex_symbol();
-        auto a_ext_next  = get_ro_edge_base(5).get_tex_symbol();
+        auto a_ext_n     = get_ro_edge_base(4).get_tex_symbol();
+        auto a_ext_np1   = get_ro_edge_base(5).get_tex_symbol();
         auto rhov_dust   = get_rw_edge_base(0).get_tex_symbol();
 
         std::string tex = R"tex(
@@ -84,16 +84,16 @@ namespace shammodels::basegodunov::modules {
 
             \begin{align}
             \rho^{n+1}_{d,i} &= {rho_dust}_i + 2 {dt_over2} \, {dt_rho_dust}_i \
-            {rhov_dust}_i &= {rhov_dust}_i + {dt_over2} \left( {rho_dust}_i {a_ext}_i
-                + \rho^{n+1}_{d,i} {a_ext_next}_i \right)
+            {rhov_dust}_i &= {rhov_dust}_i + {dt_over2} \left( {rho_dust}_i {a_ext_n}_i
+                + \rho^{n+1}_{d,i} {a_ext_np1}_i \right)
             \end{align}
         )tex";
 
         shambase::replace_all(tex, "{dt_over2}", dt_over2);
         shambase::replace_all(tex, "{rho_dust}", rho_dust);
         shambase::replace_all(tex, "{dt_rho_dust}", dt_rho_dust);
-        shambase::replace_all(tex, "{a_ext_next}", a_ext_next);
-        shambase::replace_all(tex, "{a_ext}", a_ext);
+        shambase::replace_all(tex, "{a_ext_np1}", a_ext_np1);
+        shambase::replace_all(tex, "{a_ext_n}", a_ext_n);
         shambase::replace_all(tex, "{rhov_dust}", rhov_dust);
 
         return tex;

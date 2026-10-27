@@ -32,8 +32,8 @@ namespace shammodels::basegodunov::modules {
         edges.spans_rho.check_sizes(edges.sizes.indexes);
         edges.spans_dt_rho.check_sizes(edges.sizes.indexes);
         edges.spans_dt_rhov.check_sizes(edges.sizes.indexes);
-        edges.spans_a_ext.check_sizes(edges.sizes.indexes);
-        edges.spans_a_ext_next.check_sizes(edges.sizes.indexes);
+        edges.spans_a_ext_n.check_sizes(edges.sizes.indexes);
+        edges.spans_a_ext_np1.check_sizes(edges.sizes.indexes);
         edges.spans_rhov.check_sizes(edges.sizes.indexes);
         edges.spans_rhoe.check_sizes(edges.sizes.indexes);
 
@@ -51,8 +51,8 @@ namespace shammodels::basegodunov::modules {
                 edges.spans_rho.get_spans(),
                 edges.spans_dt_rho.get_spans(),
                 edges.spans_dt_rhov.get_spans(),
-                edges.spans_a_ext.get_spans(),
-                edges.spans_a_ext_next.get_spans()},
+                edges.spans_a_ext_n.get_spans(),
+                edges.spans_a_ext_np1.get_spans()},
             sham::DDMultiRef{edges.spans_rhov.get_spans(), edges.spans_rhoe.get_spans()},
             cell_counts,
             [dt, dt_over2](
@@ -60,49 +60,49 @@ namespace shammodels::basegodunov::modules {
                 const Tscal *__restrict rho,
                 const Tscal *__restrict dt_rho,
                 const Tvec *__restrict dt_rhov,
-                const Tvec *__restrict a_ext,
-                const Tvec *__restrict a_ext_next,
+                const Tvec *__restrict a_ext_n,
+                const Tvec *__restrict a_ext_np1,
                 Tvec *__restrict rhov,
                 Tscal *__restrict rhoe) {
-                Tscal rho_old = rho[i];
-                Tvec rhov_old = rhov[i];
+                Tscal rho_n = rho[i];
+                Tvec rhov_n = rhov[i];
 
                 // density at t^{n+1}
-                Tscal rho_next = rho_old + dt * dt_rho[i];
+                Tscal rho_np1 = rho_n + dt * dt_rho[i];
 
-                Tvec kick = dt_over2 * (rho_old * a_ext[i] + rho_next * a_ext_next[i]);
+                Tvec kick = dt_over2 * (rho_n * a_ext_n[i] + rho_np1 * a_ext_np1[i]);
 
                 // momentum at t^{n+1}, including the kick of the external forces
-                Tvec rhov_next = rhov_old + dt * dt_rhov[i] + kick;
+                Tvec rhov_np1 = rhov_n + dt * dt_rhov[i] + kick;
 
                 rhov[i] += kick;
                 rhoe[i] += dt_over2
-                           * (sycl::dot(a_ext[i], rhov_old) + sycl::dot(a_ext_next[i], rhov_next));
+                           * (sycl::dot(a_ext_n[i], rhov_n) + sycl::dot(a_ext_np1[i], rhov_np1));
             });
     }
 
     template<class Tvec>
     std::string ApplyExtForceGasTrapezoidal<Tvec>::_impl_get_tex() const {
-        auto dt_over2   = get_ro_edge_base(0).get_tex_symbol();
-        auto rho        = get_ro_edge_base(2).get_tex_symbol();
-        auto dt_rho     = get_ro_edge_base(3).get_tex_symbol();
-        auto dt_rhov    = get_ro_edge_base(4).get_tex_symbol();
-        auto a_ext      = get_ro_edge_base(5).get_tex_symbol();
-        auto a_ext_next = get_ro_edge_base(6).get_tex_symbol();
-        auto rhov       = get_rw_edge_base(0).get_tex_symbol();
-        auto rhoe       = get_rw_edge_base(1).get_tex_symbol();
+        auto dt_over2  = get_ro_edge_base(0).get_tex_symbol();
+        auto rho       = get_ro_edge_base(2).get_tex_symbol();
+        auto dt_rho    = get_ro_edge_base(3).get_tex_symbol();
+        auto dt_rhov   = get_ro_edge_base(4).get_tex_symbol();
+        auto a_ext_n   = get_ro_edge_base(5).get_tex_symbol();
+        auto a_ext_np1 = get_ro_edge_base(6).get_tex_symbol();
+        auto rhov      = get_rw_edge_base(0).get_tex_symbol();
+        auto rhoe      = get_rw_edge_base(1).get_tex_symbol();
 
         std::string tex = R"tex(
             Apply external forces to the gas (trapezoidal rule)
 
             \begin{align}
             \rho^{n+1}_i &= {rho}_i + 2 {dt_over2} \, {dt_rho}_i \
-            \Delta (\rho \mathbf{v})_i &= {dt_over2} \left( {rho}_i {a_ext}_i
-                + \rho^{n+1}_i {a_ext_next}_i \right) \
+            \Delta (\rho \mathbf{v})_i &= {dt_over2} \left( {rho}_i {a_ext_n}_i
+                + \rho^{n+1}_i {a_ext_np1}_i \right) \
             (\rho \mathbf{v})^{n+1}_i &= {rhov}_i + 2 {dt_over2} \, {dt_rhov}_i
                 + \Delta (\rho \mathbf{v})_i \
-            {rhoe}_i &= {rhoe}_i + {dt_over2} \left( {a_ext}_i \cdot {rhov}_i
-                + {a_ext_next}_i \cdot (\rho \mathbf{v})^{n+1}_i \right) \
+            {rhoe}_i &= {rhoe}_i + {dt_over2} \left( {a_ext_n}_i \cdot {rhov}_i
+                + {a_ext_np1}_i \cdot (\rho \mathbf{v})^{n+1}_i \right) \
             {rhov}_i &= {rhov}_i + \Delta (\rho \mathbf{v})_i
             \end{align}
         )tex";
@@ -111,8 +111,8 @@ namespace shammodels::basegodunov::modules {
         shambase::replace_all(tex, "{rho}", rho);
         shambase::replace_all(tex, "{dt_rho}", dt_rho);
         shambase::replace_all(tex, "{dt_rhov}", dt_rhov);
-        shambase::replace_all(tex, "{a_ext_next}", a_ext_next);
-        shambase::replace_all(tex, "{a_ext}", a_ext);
+        shambase::replace_all(tex, "{a_ext_np1}", a_ext_np1);
+        shambase::replace_all(tex, "{a_ext_n}", a_ext_n);
         shambase::replace_all(tex, "{rhov}", rhov);
         shambase::replace_all(tex, "{rhoe}", rhoe);
 
