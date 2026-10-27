@@ -25,6 +25,9 @@
 #include "shammodels/ramses/Solver.hpp"
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
+#include "shammodels/ramses/modules/AddExtForceConstantGravity.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceDust.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceGas.hpp"
 #include "shammodels/ramses/modules/BarotropicEnergyReset.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
@@ -47,6 +50,7 @@
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
+#include "shammodels/ramses/modules/ResetExtForceAcc.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
@@ -1628,6 +1632,106 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             storage.dtrho_dust,
             storage.dtrhov_dust);
         solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+    }
+
+    if (solver_config.has_ext_forces()) { // external forces
+
+        // The external forces are applied to the state at t^n (patch data without ghosts) before
+        // the time integration, so that they are taken into account by every integrator (with or
+        // without drag).
+
+        using ExtForceConfig  = typename Config::ExtForceConfig;
+        using ConstantGravity = typename ExtForceConfig::ConstantGravity;
+
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> ext_force_sequence;
+
+        storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+            AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}");
+
+        { // sum of the accelerations of all the external forces
+            modules::ResetExtForceAcc<Tvec> node{AMRBlock::block_size};
+            node.set_edges(storage.block_counts, storage.a_ext);
+            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        // In general the forces should be evaluated at the half step t^{n+1/2} (midpoint rule) to
+        // keep the scheme second order in time. This does not matter for a constant acceleration,
+        // but velocity dependent forces would need the half step velocity, including the half
+        // kick of the force itself (e.g. predictor-corrector, or implicit midpoint for stiff or
+        // no-work forces).
+        for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
+            std::visit(
+                shambase::overloaded{
+                    [&](const ConstantGravity &cfg) {
+                        modules::AddExtForceConstantGravity<Tvec> node{AMRBlock::block_size, cfg.g};
+                        node.set_edges(storage.block_counts, storage.a_ext);
+                        ext_force_sequence.push_back(
+                            std::make_shared<decltype(node)>(std::move(node)));
+                    },
+                },
+                var_force);
+        }
+
+        shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
+
+        // refs to the fields of the patch data without ghosts (the ones that are integrated)
+        auto attach_source_field = [&]<class T>(
+                                       std::shared_ptr<shamrock::solvergraph::FieldRefs<T>> &refs,
+                                       const std::string &field_name) {
+            shamrock::solvergraph::GetFieldRefFromLayer<T> attach{pdl, field_name};
+            attach.set_edges(storage.source_patches, refs);
+            ext_force_sequence.push_back(std::make_shared<decltype(attach)>(std::move(attach)));
+        };
+
+        { // apply to the gas
+            auto refs_rho
+                = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho_source", "\\rho");
+            auto refs_rhov = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_source", "(\\rho \\mathbf{v})");
+            auto refs_rhoe = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rhoetot_source", "(\\rho E)");
+
+            attach_source_field(refs_rho, "rho");
+            attach_source_field(refs_rhov, "rhovel");
+            attach_source_field(refs_rhoe, "rhoetot");
+
+            modules::ApplyExtForceGas<Tvec> node{AMRBlock::block_size};
+            node.set_edges(
+                storage.dt_over2,
+                storage.block_counts,
+                refs_rho,
+                storage.dtrho,
+                storage.dtrhov,
+                storage.a_ext,
+                refs_rhov,
+                refs_rhoe);
+            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        if (solver_config.is_dust_on()) { // apply to the dust
+            auto refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rho_dust_source", "\\rho_{\\rm dust}");
+            auto refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_dust_source", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
+
+            attach_source_field(refs_rho_dust, "rho_dust");
+            attach_source_field(refs_rhov_dust, "rhovel_dust");
+
+            modules::ApplyExtForceDust<Tvec> node{
+                AMRBlock::block_size, solver_config.dust_config.ndust};
+            node.set_edges(
+                storage.dt_over2,
+                storage.block_counts,
+                refs_rho_dust,
+                storage.dtrho_dust,
+                storage.a_ext,
+                refs_rhov_dust);
+            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        shamrock::solvergraph::OperationSequence seq(
+            "External forces", std::move(ext_force_sequence));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
 
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));

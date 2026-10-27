@@ -281,6 +281,12 @@ namespace shammodels::basegodunov {
                 [](TConfig &self) {
                     self.gravity_config.gravity_mode = BICGSTAB;
                 })
+            .def(
+                "add_ext_force_constant_gravity",
+                [](TConfig &self, Tvec g) {
+                    self.ext_force_config.add_constant_gravity(g);
+                },
+                py::arg("g"))
             .def("set_npscal_gas", [](TConfig &self, u32 npscal_gas) {
                 self.npscal_gas_config.npscal_gas = npscal_gas;
             });

@@ -16,6 +16,10 @@ set(Sources
     src/modules/NodeComputeFlux.cpp
     src/modules/DragIntegrator.cpp
     src/modules/TimeIntegrator.cpp
+    src/modules/ResetExtForceAcc.cpp
+    src/modules/AddExtForceConstantGravity.cpp
+    src/modules/ApplyExtForceGas.cpp
+    src/modules/ApplyExtForceDust.cpp
     src/modules/BarotropicEnergyReset.cpp
     src/modules/AMRGridRefinementHandler.cpp
     src/modules/AnalysisSodTube.cpp
