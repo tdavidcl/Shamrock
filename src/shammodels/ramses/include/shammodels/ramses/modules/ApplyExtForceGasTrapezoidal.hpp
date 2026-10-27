@@ -43,8 +43,8 @@ namespace shammodels::basegodunov::modules {
 
     /**
      * @brief Apply the external forces accelerations to the gas momentum and total energy with
-     * the trapezoidal rule, half of the time step with a_ext_n at t^n and the state at t^n, half
-     * with a_ext_np1 at t^{n+1} and the state at t^{n+1}.
+     * the trapezoidal rule: the average of the source terms at t^n (a_ext_n and the state at t^n)
+     * and at t^{n+1} (a_ext_np1 and the state at t^{n+1}) is applied over the whole time step.
      *
      * The density and momentum at t^{n+1} are built from the state at t^n and the flux
      * derivatives, the momentum at t^{n+1} including the kick of the forces (as in RAMSES).

@@ -39,8 +39,9 @@ namespace shammodels::basegodunov::modules {
 
     /**
      * @brief Apply the external forces accelerations to the momentum of every dust species with
-     * the trapezoidal rule, half of the time step with a_ext_n at t^n and the dust density at t^n,
-     * half with a_ext_np1 at t^{n+1} and the dust density at t^{n+1}.
+     * the trapezoidal rule: the average of the source terms at t^n (a_ext_n and the dust density
+     * at t^n) and at t^{n+1} (a_ext_np1 and the dust density at t^{n+1}) is applied over the whole
+     * time step.
      *
      * It updates the state at t^n in place, before the time integration (which then adds the
      * fluxes, and the drag if enabled).

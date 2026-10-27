@@ -515,9 +515,9 @@ ON_PYTHON_INIT {
             R"==(
     Trapezoidal rule (time centred source term, as in RAMSES).
 
-    The accelerations at :math:`t^n` and :math:`t^{n+1}` are each applied over half of the time
-    step, with the state at the same time:
-    :math:`\Delta (\rho \mathbf{v}) = \frac{\Delta t}{2}
+    The forces are evaluated at :math:`t^n` and :math:`t^{n+1}`, each with the state at the same
+    time, and the average of the two source terms is applied over the whole time step:
+    :math:`\Delta (\rho \mathbf{v}) = \Delta t \, \frac{1}{2}
     (\rho^n \mathbf{a}^n + \rho^{n+1} \mathbf{a}^{n+1})`.
     A force evaluated at :math:`t^{n+1}` may only depend on the density there (e.g.
     self-gravity), since it is known before the kick.

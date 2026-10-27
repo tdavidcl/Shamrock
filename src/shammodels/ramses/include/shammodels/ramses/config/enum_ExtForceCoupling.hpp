@@ -30,8 +30,9 @@ namespace shammodels::basegodunov {
         /// Explicit midpoint rule: the forces are evaluated once, at t^{n+1/2}, from the time
         /// centered state (density, momentum, ...), and applied over the whole time step
         Midpoint = 0,
-        /// Trapezoidal rule (time centred source term, as in RAMSES): accelerations evaluated at
-        /// t^n and t^{n+1}, each applied over half of the time step
+        /// Trapezoidal rule (time centred source term, as in RAMSES): the forces are evaluated at
+        /// t^n and t^{n+1}, and the average of the two source terms is applied over the whole
+        /// time step
         Trapezoidal = 1
     };
 
