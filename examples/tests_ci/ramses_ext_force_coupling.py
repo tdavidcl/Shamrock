@@ -98,6 +98,10 @@ def test_free_fall():
     for mode in [ExtForceCoupling.Midpoint, ExtForceCoupling.Trapezoidal]:
         data_init, data = run(mode, lambda rmin, rmax: rho0, lambda rmin, rmax: rho_d0, dt, nsteps)
 
+        # the collected data is only complete on rank 0
+        if shamrock.sys.world_rank() != 0:
+            continue
+
         # no pressure gradient: the gas and the dust are in free fall
         err_rhov = max_rel_err(data["rhovel"], [rho0 * g * t], rho0 * t)
         err_rhov_d = max_rel_err(data["rhovel_dust"], [rho_d0 * g * t], rho_d0 * t)
@@ -142,6 +146,10 @@ def test_modes_one_step():
     args = (rho_map, rho_dust_map, dt, 1, vel_map, vel_dust_map)
     data_init, data_mid = run(ExtForceCoupling.Midpoint, *args)
     _, data_trap = run(ExtForceCoupling.Trapezoidal, *args)
+
+    # the collected data is only complete on rank 0
+    if shamrock.sys.world_rank() != 0:
+        return
 
     # check that the setup does exercise the flux derivatives
     assert not np.array_equal(np.array(data_init["rho"]), np.array(data_mid["rho"]))
