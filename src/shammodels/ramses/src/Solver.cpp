@@ -27,7 +27,9 @@
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
 #include "shammodels/ramses/modules/AddExtForceConstantGravity.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceDust.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceDustTrapezoidal.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceGas.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceGasTrapezoidal.hpp"
 #include "shammodels/ramses/modules/BarotropicEnergyReset.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
@@ -1643,30 +1645,53 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         using ExtForceConfig  = typename Config::ExtForceConfig;
         using ConstantGravity = typename ExtForceConfig::ConstantGravity;
 
+        const bool trapezoidal
+            = solver_config.ext_force_config.coupling == ExtForceCoupling::Trapezoidal;
+
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> ext_force_sequence;
 
-        storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
-            AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}");
+        if (trapezoidal) {
+            storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}^{n}");
+            storage.a_ext_next = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext_next", "\\mathbf{a}_{\\rm ext}^{n+1}");
+        } else {
+            storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}");
+        }
 
-        { // sum of the accelerations of all the external forces
+        // accelerations at the time levels required by the coupling: t^{n+1/2} for the midpoint
+        // rule, t^n and t^{n+1} for the trapezoidal rule
+        std::vector<std::shared_ptr<shamrock::solvergraph::Field<Tvec>>> a_ext_levels{
+            storage.a_ext};
+        if (trapezoidal) {
+            a_ext_levels.push_back(storage.a_ext_next);
+        }
+
+        for (auto &a_ext_level : a_ext_levels) { // sum of the accelerations of all the forces
             modules::ResetExtForceAcc<Tvec> node{AMRBlock::block_size};
-            node.set_edges(storage.block_counts, storage.a_ext);
+            node.set_edges(storage.block_counts, a_ext_level);
             ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
 
-        // In general the forces should be evaluated at the half step t^{n+1/2} (midpoint rule) to
+        // With the midpoint rule the forces should be evaluated at the half step t^{n+1/2} to
         // keep the scheme second order in time. This does not matter for a constant acceleration,
         // but velocity dependent forces would need the half step velocity, including the half
         // kick of the force itself (e.g. predictor-corrector, or implicit midpoint for stiff or
-        // no-work forces).
+        // no-work forces). With the trapezoidal rule each force is evaluated at t^n and t^{n+1};
+        // a force depending on the state at t^{n+1} must only depend on the density there, which
+        // is known before the kick (this is the case of self-gravity).
         for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
             std::visit(
                 shambase::overloaded{
                     [&](const ConstantGravity &cfg) {
-                        modules::AddExtForceConstantGravity<Tvec> node{AMRBlock::block_size, cfg.g};
-                        node.set_edges(storage.block_counts, storage.a_ext);
-                        ext_force_sequence.push_back(
-                            std::make_shared<decltype(node)>(std::move(node)));
+                        for (auto &a_ext_level : a_ext_levels) {
+                            modules::AddExtForceConstantGravity<Tvec> node{
+                                AMRBlock::block_size, cfg.g};
+                            node.set_edges(storage.block_counts, a_ext_level);
+                            ext_force_sequence.push_back(
+                                std::make_shared<decltype(node)>(std::move(node)));
+                        }
                     },
                 },
                 var_force);
@@ -1695,17 +1720,32 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             attach_source_field(refs_rhov, "rhovel");
             attach_source_field(refs_rhoe, "rhoetot");
 
-            modules::ApplyExtForceGas<Tvec> node{AMRBlock::block_size};
-            node.set_edges(
-                storage.dt_over2,
-                storage.block_counts,
-                refs_rho,
-                storage.dtrho,
-                storage.dtrhov,
-                storage.a_ext,
-                refs_rhov,
-                refs_rhoe);
-            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            if (trapezoidal) {
+                modules::ApplyExtForceGasTrapezoidal<Tvec> node{AMRBlock::block_size};
+                node.set_edges(
+                    storage.dt_over2,
+                    storage.block_counts,
+                    refs_rho,
+                    storage.dtrho,
+                    storage.dtrhov,
+                    storage.a_ext,
+                    storage.a_ext_next,
+                    refs_rhov,
+                    refs_rhoe);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else {
+                modules::ApplyExtForceGas<Tvec> node{AMRBlock::block_size};
+                node.set_edges(
+                    storage.dt_over2,
+                    storage.block_counts,
+                    refs_rho,
+                    storage.dtrho,
+                    storage.dtrhov,
+                    storage.a_ext,
+                    refs_rhov,
+                    refs_rhoe);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
         }
 
         if (solver_config.is_dust_on()) { // apply to the dust
@@ -1717,16 +1757,30 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             attach_source_field(refs_rho_dust, "rho_dust");
             attach_source_field(refs_rhov_dust, "rhovel_dust");
 
-            modules::ApplyExtForceDust<Tvec> node{
-                AMRBlock::block_size, solver_config.dust_config.ndust};
-            node.set_edges(
-                storage.dt_over2,
-                storage.block_counts,
-                refs_rho_dust,
-                storage.dtrho_dust,
-                storage.a_ext,
-                refs_rhov_dust);
-            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            if (trapezoidal) {
+                modules::ApplyExtForceDustTrapezoidal<Tvec> node{
+                    AMRBlock::block_size, solver_config.dust_config.ndust};
+                node.set_edges(
+                    storage.dt_over2,
+                    storage.block_counts,
+                    refs_rho_dust,
+                    storage.dtrho_dust,
+                    storage.a_ext,
+                    storage.a_ext_next,
+                    refs_rhov_dust);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else {
+                modules::ApplyExtForceDust<Tvec> node{
+                    AMRBlock::block_size, solver_config.dust_config.ndust};
+                node.set_edges(
+                    storage.dt_over2,
+                    storage.block_counts,
+                    refs_rho_dust,
+                    storage.dtrho_dust,
+                    storage.a_ext,
+                    refs_rhov_dust);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
         }
 
         shamrock::solvergraph::OperationSequence seq(

@@ -20,6 +20,8 @@ set(Sources
     src/modules/AddExtForceConstantGravity.cpp
     src/modules/ApplyExtForceGas.cpp
     src/modules/ApplyExtForceDust.cpp
+    src/modules/ApplyExtForceGasTrapezoidal.cpp
+    src/modules/ApplyExtForceDustTrapezoidal.cpp
     src/modules/BarotropicEnergyReset.cpp
     src/modules/AMRGridRefinementHandler.cpp
     src/modules/AnalysisSodTube.cpp
