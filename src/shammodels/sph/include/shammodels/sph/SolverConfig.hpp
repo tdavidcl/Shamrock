@@ -790,6 +790,10 @@ struct shammodels::sph::SolverConfig {
     bool show_ghost_zone_graph = false;
     inline void set_show_ghost_zone_graph(bool enable) { show_ghost_zone_graph = enable; }
 
+    /// Show the ghost particle count (and ratio to the particle count) in the timestep perf report
+    bool show_ghost_stats = false;
+    inline void set_show_ghost_stats(bool enable) { show_ghost_stats = enable; }
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Solver behavior config (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1481,6 +1485,7 @@ namespace shammodels::sph {
 
             {"save_dt_to_fields", p.save_dt_to_fields},
             {"show_ghost_zone_graph", p.show_ghost_zone_graph},
+            {"show_ghost_stats", p.show_ghost_stats},
 
             {"eos_config", p.eos_config},
 
@@ -1573,6 +1578,7 @@ namespace shammodels::sph {
         _get_to_if_contains("particle_reordering_step_freq", p.particle_reordering_step_freq);
         _get_to_if_contains("save_dt_to_fields", p.save_dt_to_fields);
         _get_to_if_contains("show_ghost_zone_graph", p.show_ghost_zone_graph);
+        _get_to_if_contains("show_ghost_stats", p.show_ghost_stats);
         _get_to_if_contains("eos_config", p.eos_config);
         _get_to_if_contains("artif_viscosity", p.artif_viscosity);
         _get_to_if_contains("boundary_config", p.boundary_config);

@@ -117,6 +117,10 @@ jobs:
           - worldsize: 1
             testfile: dustywave_godunov.py
           - worldsize: 1
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 2
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 1
             testfile: regression_sph_disc.py
           - worldsize: 1
             testfile: regression_sph_kh.py

@@ -32,8 +32,8 @@ namespace shammodels::basegodunov::modules {
         edges.spans_a_ext.check_sizes(edges.sizes.indexes);
         edges.spans_rhov_dust.check_sizes(edges.sizes.indexes);
 
-        Tscal dt_over2 = edges.dt_over2.value;
-        Tscal dt       = 2 * dt_over2;
+        Tscal dt       = edges.dt.value;
+        Tscal dt_over2 = dt / 2;
 
         shambase::DistributedData<u32> dust_cell_counts
             = edges.sizes.indexes.template map<u32>([&](u64 id, u32 block_count) {
@@ -66,7 +66,7 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string ApplyExtForceDust<Tvec>::_impl_get_tex() const {
-        auto dt_over2    = get_ro_edge_base(0).get_tex_symbol();
+        auto dt          = get_ro_edge_base(0).get_tex_symbol();
         auto rho_dust    = get_ro_edge_base(2).get_tex_symbol();
         auto dt_rho_dust = get_ro_edge_base(3).get_tex_symbol();
         auto a_ext       = get_ro_edge_base(4).get_tex_symbol();
@@ -76,12 +76,12 @@ namespace shammodels::basegodunov::modules {
             Apply external forces to the dust species
 
             \begin{align}
-            \rho^{n+1/2}_{d,i} &= {rho_dust}_i + {dt_over2} \, {dt_rho_dust}_i \
-            {rhov_dust}_i &= {rhov_dust}_i + 2 {dt_over2} \, \rho^{n+1/2}_{d,i} {a_ext}_i
+            \rho^{n+1/2}_{d,i} &= {rho_dust}_i + \frac{{dt}}{2} \, {dt_rho_dust}_i \
+            {rhov_dust}_i &= {rhov_dust}_i + {dt} \, \rho^{n+1/2}_{d,i} {a_ext}_i
             \end{align}
         )tex";
 
-        shambase::replace_all(tex, "{dt_over2}", dt_over2);
+        shambase::replace_all(tex, "{dt}", dt);
         shambase::replace_all(tex, "{rho_dust}", rho_dust);
         shambase::replace_all(tex, "{dt_rho_dust}", dt_rho_dust);
         shambase::replace_all(tex, "{a_ext}", a_ext);

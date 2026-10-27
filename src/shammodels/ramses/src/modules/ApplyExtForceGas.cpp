@@ -35,8 +35,8 @@ namespace shammodels::basegodunov::modules {
         edges.spans_rhov.check_sizes(edges.sizes.indexes);
         edges.spans_rhoe.check_sizes(edges.sizes.indexes);
 
-        Tscal dt_over2 = edges.dt_over2.value;
-        Tscal dt       = 2 * dt_over2;
+        Tscal dt       = edges.dt.value;
+        Tscal dt_over2 = dt / 2;
 
         shambase::DistributedData<u32> cell_counts
             = edges.sizes.indexes.template map<u32>([&](u64 id, u32 block_count) {
@@ -78,26 +78,26 @@ namespace shammodels::basegodunov::modules {
 
     template<class Tvec>
     std::string ApplyExtForceGas<Tvec>::_impl_get_tex() const {
-        auto dt_over2 = get_ro_edge_base(0).get_tex_symbol();
-        auto rho      = get_ro_edge_base(2).get_tex_symbol();
-        auto dt_rho   = get_ro_edge_base(3).get_tex_symbol();
-        auto dt_rhov  = get_ro_edge_base(4).get_tex_symbol();
-        auto a_ext    = get_ro_edge_base(5).get_tex_symbol();
-        auto rhov     = get_rw_edge_base(0).get_tex_symbol();
-        auto rhoe     = get_rw_edge_base(1).get_tex_symbol();
+        auto dt      = get_ro_edge_base(0).get_tex_symbol();
+        auto rho     = get_ro_edge_base(2).get_tex_symbol();
+        auto dt_rho  = get_ro_edge_base(3).get_tex_symbol();
+        auto dt_rhov = get_ro_edge_base(4).get_tex_symbol();
+        auto a_ext   = get_ro_edge_base(5).get_tex_symbol();
+        auto rhov    = get_rw_edge_base(0).get_tex_symbol();
+        auto rhoe    = get_rw_edge_base(1).get_tex_symbol();
 
         std::string tex = R"tex(
             Apply external forces to the gas
 
             \begin{align}
-            \rho^{n+1/2}_i &= {rho}_i + {dt_over2} \, {dt_rho}_i \
-            (\rho \mathbf{v})^{n+1/2}_i &= {rhov}_i + {dt_over2} \, {dt_rhov}_i \
-            {rhov}_i &= {rhov}_i + 2 {dt_over2} \, \rho^{n+1/2}_i {a_ext}_i \
-            {rhoe}_i &= {rhoe}_i + 2 {dt_over2} \, {a_ext}_i \cdot (\rho \mathbf{v})^{n+1/2}_i
+            \rho^{n+1/2}_i &= {rho}_i + \frac{{dt}}{2} \, {dt_rho}_i \
+            (\rho \mathbf{v})^{n+1/2}_i &= {rhov}_i + \frac{{dt}}{2} \, {dt_rhov}_i \
+            {rhov}_i &= {rhov}_i + {dt} \, \rho^{n+1/2}_i {a_ext}_i \
+            {rhoe}_i &= {rhoe}_i + {dt} \, {a_ext}_i \cdot (\rho \mathbf{v})^{n+1/2}_i
             \end{align}
         )tex";
 
-        shambase::replace_all(tex, "{dt_over2}", dt_over2);
+        shambase::replace_all(tex, "{dt}", dt);
         shambase::replace_all(tex, "{rho}", rho);
         shambase::replace_all(tex, "{dt_rho}", dt_rho);
         shambase::replace_all(tex, "{dt_rhov}", dt_rhov);
