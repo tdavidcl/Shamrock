@@ -24,7 +24,7 @@
 #include "shamsolvergraph/node/INode.hpp"
 #include <vector>
 
-#define NODE_EDGES(X_RO, X_RW)                                                                     \
+#define NODE_EDGES(X_RO, X_RW, X_RO_OPTIONAL, X_RW_OPTIONAL)                                       \
     /* ------------------- (param) inputs ------------------- */                                   \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
     X_RO(shamrock::solvergraph::IDataEdge<Tscal>, dt)                                              \
@@ -35,6 +35,13 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, velocities)                                      \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, accelerations)                                   \
                                                                                                    \
+    /* ------------------- (field) dust inputs ------------------- */                              \
+    /* monofluid TVA: S_j = sqrt(rho epsilon_j), needs h to get rho */                             \
+    X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                 \
+    X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                   \
+    /* monofluid complete: epsilon_j */                                                            \
+    X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, epsilon)                               \
+                                                                                                   \
     /* ------------------- (sink) accretion table ------------------- */                           \
     X_RW(shamrock::solvergraph::Field<u32>, sink_accretion_table)                                  \
                                                                                                    \
@@ -43,7 +50,8 @@
     X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_velocities)                     \
     X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_accelerations)                  \
     X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tvec>>, sink_angmom)                         \
-    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, sink_mass)
+    X_RW(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, sink_mass)                          \
+    X_RW_OPTIONAL(shamrock::solvergraph::IDataEdge<std::vector<Tscal>>, sink_accreted_dust_mass)
 
 namespace shammodels::sph::modules {
 
@@ -52,10 +60,19 @@ namespace shammodels::sph::modules {
 
         using Tscal = shambase::VecComponent<Tvec>;
 
-        public:
-        SinkParticlesAccreteQuantities() = default;
+        u32 ndust;
+        Tscal hfactd;
 
-        EXPAND_NODE_EDGES(NODE_EDGES)
+        public:
+        /**
+         * @param ndust number of dust species whose accreted mass is tracked in
+         * sink_accreted_dust_mass (0 to disable the tracking)
+         * @param hfactd SPH kernel hfactd, used to recover rho from h with S_j
+         */
+        SinkParticlesAccreteQuantities(u32 ndust = 0, Tscal hfactd = 0)
+            : ndust(ndust), hfactd(hfactd) {}
+
+        EXPAND_NODE_EDGES_OPTIONAL(NODE_EDGES)
 
         void _impl_evaluate_internal();
 

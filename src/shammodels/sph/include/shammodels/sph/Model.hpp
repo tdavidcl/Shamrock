@@ -204,7 +204,14 @@ namespace shammodels::sph {
 
             shamlog_debug_ln("SPH", "add sink :", mass, pos, velocity, accretion_radius);
 
-            shammodels::sph::add_sink(edges, mass, pos, velocity, accretion_radius);
+            shammodels::sph::add_sink(
+                edges, mass, pos, velocity, accretion_radius, get_sink_tracked_ndust());
+        }
+
+        /// Number of dust species whose accreted mass is tracked on sinks (0 without dust)
+        inline u32 get_sink_tracked_ndust() {
+            auto &dust_config = solver.solver_config.dust_config;
+            return dust_config.is_none() ? 0 : dust_config.get_dust_nvar();
         }
 
         template<class T>
@@ -926,6 +933,13 @@ namespace shammodels::sph {
                 j.at("sinks").get_to(out);
                 auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
                 set_sink_particles(edges, out);
+            }
+
+            {
+                // dumps predating per species accreted dust mass tracking have no entry for it
+                auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
+                resize_sink_accreted_dust_mass(
+                    edges.accreted_dust_mass, edges.size(), get_sink_tracked_ndust());
             }
 
             // Migrate old dumps that stored time/dt/cfl in solver_config.time_state

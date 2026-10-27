@@ -1246,6 +1246,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     sink_dic["mass"]             = sink.mass;
                     sink_dic["angular_momentum"] = sink.angular_momentum;
                     sink_dic["accretion_radius"] = sink.accretion_radius;
+                    sink_dic["accreted_dust_mass"] = sink.accreted_dust_mass;
                     list_out.append(sink_dic);
                 }
 

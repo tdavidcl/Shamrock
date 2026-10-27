@@ -16,12 +16,15 @@
  *
  */
 
+#include "shambase/exception.hpp"
+#include "shambase/string.hpp"
 #include "shambase/type_name_info.hpp"
 #include "shambackends/type_traits.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/sph/SinkPartStruct.hpp"
 #include "shamsolvergraph/SolverGraphSerializable.hpp"
 #include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
+#include <algorithm>
 #include <vector>
 
 namespace shambase {
@@ -44,6 +47,9 @@ namespace shammodels::sph {
         std::vector<Tscal> &mass;
         std::vector<Tvec> &angular_momentum;
         std::vector<Tscal> &accretion_radius;
+
+        /// Accreted dust mass per species, flattened as [i_sink * ndust + j_dust]
+        std::vector<Tscal> &accreted_dust_mass;
 
         inline bool has_sinks() const { return !pos.empty(); }
         inline size_t size() const { return pos.size(); }
@@ -95,6 +101,8 @@ namespace shammodels::sph {
             sync, "sink_angular_momentum", "\\bf{L}_{\\mathrm{sink}}", {});
         details::ensure_sync_data_edge<std::vector<Tscal>>(
             sync, "sink_accretion_radius", "r_{\\mathrm{accretion}}", {});
+        details::ensure_sync_data_edge<std::vector<Tscal>>(
+            sync, "sink_accreted_dust_mass", "m_{\\mathrm{sink, acc}, j}", {});
     }
 
     /**
@@ -142,6 +150,56 @@ namespace shammodels::sph {
             sync, "sink_accretion_radius");
     }
 
+    template<class Tvec>
+    inline std::vector<shambase::VecComponent<Tvec>> &get_sink_accreted_dust_mass(
+        shamrock::solvergraph::SolverGraphSerializable &sync) {
+        return details::get_sync_data<std::vector<shambase::VecComponent<Tvec>>>(
+            sync, "sink_accreted_dust_mass");
+    }
+
+    /**
+     * @brief Resize the flattened per species accreted dust mass to sink_count * ndust.
+     *
+     * Only pads with zeros the sinks that have no entry yet (sinks added since the last call, or
+     * loaded from a dump that predates the tracking). Throws if the stored layout does not match
+     * ndust, e.g. if the number of dust species changed after dust has been tracked.
+     */
+    template<class Tscal>
+    inline void resize_sink_accreted_dust_mass(
+        std::vector<Tscal> &accreted_dust_mass, size_t sink_count, u32 ndust) {
+        size_t target_size = sink_count * ndust;
+        if (accreted_dust_mass.size() == target_size) {
+            return;
+        }
+        if (ndust == 0 || accreted_dust_mass.size() > target_size
+            || accreted_dust_mass.size() % ndust != 0) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                "sink accreted dust mass layout mismatch: size={}, sink_count={}, ndust={}",
+                accreted_dust_mass.size(),
+                sink_count,
+                ndust));
+        }
+        accreted_dust_mass.resize(target_size, Tscal{0});
+    }
+
+    /**
+     * @brief Number of dust species tracked per sink in the flattened accreted dust mass.
+     */
+    template<class Tscal>
+    inline size_t get_sink_accreted_dust_nvar(
+        const std::vector<Tscal> &accreted_dust_mass, size_t sink_count) {
+        if (sink_count == 0 || accreted_dust_mass.empty()) {
+            return 0;
+        }
+        if (accreted_dust_mass.size() % sink_count != 0) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                "sink accreted dust mass size ({}) is not a multiple of the sink count ({})",
+                accreted_dust_mass.size(),
+                sink_count));
+        }
+        return accreted_dust_mass.size() / sink_count;
+    }
+
     /**
      * @brief Check whether any sinks are present by inspecting sink_pos only.
      *
@@ -169,6 +227,7 @@ namespace shammodels::sph {
             get_sink_mass<Tvec>(sync),
             get_sink_angular_momentum<Tvec>(sync),
             get_sink_accretion_radius<Tvec>(sync),
+            get_sink_accreted_dust_mass<Tvec>(sync),
         };
     }
 
@@ -177,9 +236,12 @@ namespace shammodels::sph {
      */
     template<class Tvec>
     inline std::vector<SinkParticle<Tvec>> to_sink_particles(const SinkEdges<Tvec> &e) {
+        size_t ndust = get_sink_accreted_dust_nvar(e.accreted_dust_mass, e.size());
+
         std::vector<SinkParticle<Tvec>> out;
         out.reserve(e.size());
         for (size_t i = 0; i < e.size(); i++) {
+            auto dust_begin = e.accreted_dust_mass.begin() + i * ndust;
             out.push_back(
                 SinkParticle<Tvec>{
                     e.pos[i],
@@ -189,6 +251,7 @@ namespace shammodels::sph {
                     e.mass[i],
                     e.angular_momentum[i],
                     e.accretion_radius[i],
+                    {dust_begin, dust_begin + ndust},
                 });
         }
         return out;
@@ -207,6 +270,7 @@ namespace shammodels::sph {
         e.mass.clear();
         e.angular_momentum.clear();
         e.accretion_radius.clear();
+        e.accreted_dust_mass.clear();
 
         e.pos.reserve(sinks.size());
         e.vel.reserve(sinks.size());
@@ -225,10 +289,27 @@ namespace shammodels::sph {
             e.angular_momentum.push_back(s.angular_momentum);
             e.accretion_radius.push_back(s.accretion_radius);
         }
+
+        // sinks without dust tracking (e.g. legacy dumps) are zero padded to the widest one
+        size_t ndust = 0;
+        for (const auto &s : sinks) {
+            ndust = std::max(ndust, s.accreted_dust_mass.size());
+        }
+        e.accreted_dust_mass.assign(sinks.size() * ndust, 0);
+        for (size_t i = 0; i < sinks.size(); i++) {
+            const auto &dust = sinks[i].accreted_dust_mass;
+            if (!dust.empty() && dust.size() != ndust) {
+                throw shambase::make_except_with_loc<std::invalid_argument>(shambase::format(
+                    "sink {} tracks {} dust species, expected {}", i, dust.size(), ndust));
+            }
+            std::copy(dust.begin(), dust.end(), e.accreted_dust_mass.begin() + i * ndust);
+        }
     }
 
     /**
      * @brief Append one sink to the SoA edges.
+     *
+     * ndust is the number of dust species whose accreted mass is tracked (0 without dust).
      */
     template<class Tvec>
     inline void add_sink(
@@ -236,7 +317,8 @@ namespace shammodels::sph {
         typename SinkEdges<Tvec>::Tscal mass,
         Tvec pos,
         Tvec velocity,
-        typename SinkEdges<Tvec>::Tscal accretion_radius) {
+        typename SinkEdges<Tvec>::Tscal accretion_radius,
+        u32 ndust) {
 
         e.pos.push_back(pos);
         e.vel.push_back(velocity);
@@ -245,6 +327,7 @@ namespace shammodels::sph {
         e.mass.push_back(mass);
         e.angular_momentum.push_back({});
         e.accretion_radius.push_back(accretion_radius);
+        resize_sink_accreted_dust_mass(e.accreted_dust_mass, e.size(), ndust);
     }
 
 } // namespace shammodels::sph
