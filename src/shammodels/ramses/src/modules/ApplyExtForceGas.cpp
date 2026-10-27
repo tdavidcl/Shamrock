@@ -66,13 +66,16 @@ namespace shammodels::basegodunov::modules {
 
                 Tvec a = a_ext[i];
 
-                // TODO: to be confirmed, rhov_half does not include the kick of the external
-                // forces, so for a free fall the internal energy should drift by
-                // ~rho a^2 dt^2 / 2 per step (first order). Check if the energy update should
-                // instead use the momentum including the kick (as in RAMSES, which recomputes
-                // the kinetic energy after the kick).
+                // The work of the external forces uses the time centered momentum including the
+                // half kick of the forces, so that the energy update matches the kinetic energy
+                // change of the momentum update: dt a.(p + dt rho a / 2) = d(|p|^2 / 2 rho).
+                // Without it, the internal energy of a free falling gas would drift by
+                // -rho a^2 dt^2 / 2 per step (as in RAMSES, which recomputes the kinetic energy
+                // after the kick).
+                Tvec rhov_half_kicked = rhov_half + dt_over2 * rho_half * a;
+
                 rhov[i] += dt * rho_half * a;
-                rhoe[i] += dt * sycl::dot(a, rhov_half);
+                rhoe[i] += dt * sycl::dot(a, rhov_half_kicked);
             });
     }
 
@@ -90,10 +93,10 @@ namespace shammodels::basegodunov::modules {
             Apply external forces to the gas
 
             \begin{align}
-            \rho^{n+1/2}_i &= {rho}_i + {dt_over2} \, {dt_rho}_i \
-            (\rho \mathbf{v})^{n+1/2}_i &= {rhov}_i + {dt_over2} \, {dt_rhov}_i \
-            {rhov}_i &= {rhov}_i + 2 {dt_over2} \, \rho^{n+1/2}_i {a_ext}_i \
-            {rhoe}_i &= {rhoe}_i + 2 {dt_over2} \, {a_ext}_i \cdot (\rho \mathbf{v})^{n+1/2}_i
+            \rho^{n+1/2}_i &= {rho}_i + {dt_over2} \, {dt_rho}_i \\
+            (\rho \mathbf{v})^{n+1/2}_i &= {rhov}_i + {dt_over2} \, {dt_rhov}_i \\
+            {rhoe}_i &= {rhoe}_i + 2 {dt_over2} \, {a_ext}_i \cdot \left( (\rho \mathbf{v})^{n+1/2}_i + {dt_over2} \, \rho^{n+1/2}_i {a_ext}_i \right) \\
+            {rhov}_i &= {rhov}_i + 2 {dt_over2} \, \rho^{n+1/2}_i {a_ext}_i
             \end{align}
         )tex";
 

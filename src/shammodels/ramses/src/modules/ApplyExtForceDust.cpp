@@ -76,7 +76,7 @@ namespace shammodels::basegodunov::modules {
             Apply external forces to the dust species
 
             \begin{align}
-            \rho^{n+1/2}_{d,i} &= {rho_dust}_i + {dt_over2} \, {dt_rho_dust}_i \
+            \rho^{n+1/2}_{d,i} &= {rho_dust}_i + {dt_over2} \, {dt_rho_dust}_i \\
             {rhov_dust}_i &= {rhov_dust}_i + 2 {dt_over2} \, \rho^{n+1/2}_{d,i} {a_ext}_i
             \end{align}
         )tex";
