@@ -824,13 +824,11 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         shambase::get_check_ref(free_axyz).set_edges(
             solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"));
 
-        // dust fields needed to track the accreted dust mass per species
-        u32 sink_acc_ndust
-            = solver_config.dust_config.is_none() ? 0 : solver_config.dust_config.get_dust_nvar();
+        // dust fields needed to track the accreted dust mass per species (monofluid TVA only)
+        u32 sink_acc_ndust = has_s_j_field ? solver_config.dust_config.get_dust_nvar() : 0;
 
-        std::optional<std::shared_ptr<FieldRefs<Tscal>>> sink_acc_hpart   = std::nullopt;
-        std::optional<std::shared_ptr<FieldRefs<Tscal>>> sink_acc_s_j     = std::nullopt;
-        std::optional<std::shared_ptr<FieldRefs<Tscal>>> sink_acc_epsilon = std::nullopt;
+        std::optional<std::shared_ptr<FieldRefs<Tscal>>> sink_acc_hpart = std::nullopt;
+        std::optional<std::shared_ptr<FieldRefs<Tscal>>> sink_acc_s_j   = std::nullopt;
 
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> attach_sink_dust_fields{};
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> free_sink_dust_fields{};
@@ -848,10 +846,6 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
         if (has_s_j_field) {
             sink_acc_hpart = add_sink_dust_field("hpart");
             sink_acc_s_j   = add_sink_dust_field("s_j");
-        } else if (has_epsilon_field) {
-            sink_acc_epsilon = add_sink_dust_field("epsilon");
-        } else {
-            sink_acc_ndust = 0;
         }
 
         // sink synchronized edges, kept around as they are used by several nodes below
@@ -867,7 +861,7 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>("sink_mass");
         auto sink_accr_radii = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
             "sink_accretion_radius");
-        // only registered with dust (see Model::ensure_sink_accreted_dust_mass)
+        // only registered with monofluid TVA dust (see Model::ensure_sink_accreted_dust_mass)
         std::optional<std::shared_ptr<IDataEdgeSerializable<std::vector<Tscal>>>>
             sink_accreted_dust_mass = std::nullopt;
         if (sink_acc_ndust > 0) {
@@ -900,7 +894,6 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             solver_graph.get_edge_ptr<FieldRefs<Tvec>>("axyz"),
             sink_acc_hpart,
             sink_acc_s_j,
-            sink_acc_epsilon,
             solver_graph.get_edge_ptr<Field<u32>>("sink_accretion_table"),
             sink_positions,
             sink_velocities,

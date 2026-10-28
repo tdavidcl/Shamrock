@@ -209,15 +209,16 @@ namespace shammodels::sph {
             ensure_sink_accreted_dust_mass();
         }
 
-        /// Number of dust species whose accreted mass is tracked on sinks (0 without dust)
+        /// Number of dust species whose accreted mass is tracked on sinks (monofluid TVA only,
+        /// 0 otherwise)
         inline u32 get_sink_tracked_ndust() {
             auto &dust_config = solver.solver_config.dust_config;
-            return dust_config.is_none() ? 0 : dust_config.get_dust_nvar();
+            return dust_config.is_monofluid_tva() ? dust_config.get_dust_nvar() : 0;
         }
 
         /**
-         * @brief With dust, register the per species accreted dust mass sink edge if missing and
-         * zero pad it for sinks without an entry yet. No-op without dust.
+         * @brief With monofluid TVA dust, register the per species accreted dust mass sink edge if
+         * missing and zero pad it for sinks without an entry yet. No-op otherwise.
          */
         inline void ensure_sink_accreted_dust_mass() {
             u32 ndust = get_sink_tracked_ndust();

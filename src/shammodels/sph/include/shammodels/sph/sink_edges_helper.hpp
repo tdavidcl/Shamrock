@@ -147,7 +147,7 @@ namespace shammodels::sph {
     /**
      * @brief Register the per species accreted dust mass sink edge if missing (idempotent).
      *
-     * Only registered when dust is enabled. Flattened as [i_sink * ndust + j_dust].
+     * Only registered with monofluid TVA dust. Flattened as [i_sink * ndust + j_dust].
      */
     template<class Tvec>
     inline void ensure_sink_accreted_dust_mass_edge(

@@ -35,12 +35,10 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, velocities)                                      \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, accelerations)                                   \
                                                                                                    \
-    /* ------------------- (field) dust inputs ------------------- */                              \
-    /* monofluid TVA: S_j = sqrt(rho epsilon_j), needs h to get rho */                             \
+    /* ------------------- (field) dust inputs (monofluid TVA) ------------------- */              \
+    /* S_j = sqrt(rho epsilon_j), needs h to get rho */                                            \
     X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                 \
     X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                   \
-    /* monofluid complete: epsilon_j */                                                            \
-    X_RO_OPTIONAL(shamrock::solvergraph::IFieldSpan<Tscal>, epsilon)                               \
                                                                                                    \
     /* ------------------- (sink) accretion table ------------------- */                           \
     X_RW(shamrock::solvergraph::Field<u32>, sink_accretion_table)                                  \

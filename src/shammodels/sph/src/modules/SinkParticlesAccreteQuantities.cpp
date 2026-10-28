@@ -58,18 +58,12 @@ namespace shammodels::sph::modules {
 
         u32 sink_count = shambase::narrow_or_throw<u32>(sink_positions.size());
 
-        // per species dust accretion tracking, the dust mass of a particle is m * epsilon_j
-        // with epsilon_j = S_j^2 / rho in monofluid TVA
-        bool has_s_j     = edges.s_j.has_value();
-        bool has_epsilon = edges.epsilon.has_value();
-        bool track_dust  = ndust > 0 && edges.sink_accreted_dust_mass.has_value();
-        if (track_dust && has_s_j == has_epsilon) {
+        // per species dust accretion tracking (monofluid TVA), the dust mass of a particle is
+        // m * epsilon_j with epsilon_j = S_j^2 / rho
+        bool track_dust = ndust > 0 && edges.sink_accreted_dust_mass.has_value();
+        if (track_dust && !(edges.s_j.has_value() && edges.hpart.has_value())) {
             shambase::throw_with_loc<std::invalid_argument>(
-                "accreted dust mass tracking requires exactly one of s_j or epsilon");
-        }
-        if (track_dust && has_s_j && !edges.hpart.has_value()) {
-            shambase::throw_with_loc<std::invalid_argument>(
-                "accreted dust mass tracking with s_j requires hpart");
+                "accreted dust mass tracking requires s_j and hpart");
         }
 
         if (track_dust) {
@@ -167,50 +161,27 @@ namespace shammodels::sph::modules {
                         // species can be summed over a contiguous range
                         sham::DeviceBuffer<Tscal> dust_mass_acc(Naccrete * ndust, dev_sched);
 
-                        if (has_s_j) {
-                            auto &hpart_data = edges.hpart.value().get().get_spans().get(id_patch);
-                            auto &s_j_data   = edges.s_j.value().get().get_spans().get(id_patch);
+                        auto &hpart_data = edges.hpart.value().get().get_spans().get(id_patch);
+                        auto &s_j_data   = edges.s_j.value().get().get_spans().get(id_patch);
 
-                            sham::kernel_call(
-                                q,
-                                sham::MultiRef{hpart_data, s_j_data, id_list_accrete},
-                                sham::MultiRef{dust_mass_acc},
-                                Naccrete,
-                                [gpart_mass, hfactd = this->hfactd, ndust = this->ndust, Naccrete](
-                                    u32 id_a,
-                                    const Tscal *__restrict hpart,
-                                    const Tscal *__restrict s_j,
-                                    const u32 *__restrict id_acc,
-                                    Tscal *__restrict dust_mass) {
-                                    u32 i_a = id_acc[id_a];
-                                    Tscal rho_a
-                                        = shamrock::sph::rho_h(gpart_mass, hpart[i_a], hfactd);
-                                    for (u32 j = 0; j < ndust; j++) {
-                                        Tscal sj = s_j[i_a * ndust + j];
-                                        dust_mass[j * Naccrete + id_a]
-                                            = gpart_mass * sj * sj / rho_a;
-                                    }
-                                });
-                        } else {
-                            auto &eps_data = edges.epsilon.value().get().get_spans().get(id_patch);
-
-                            sham::kernel_call(
-                                q,
-                                sham::MultiRef{eps_data, id_list_accrete},
-                                sham::MultiRef{dust_mass_acc},
-                                Naccrete,
-                                [gpart_mass, ndust = this->ndust, Naccrete](
-                                    u32 id_a,
-                                    const Tscal *__restrict epsilon,
-                                    const u32 *__restrict id_acc,
-                                    Tscal *__restrict dust_mass) {
-                                    u32 i_a = id_acc[id_a];
-                                    for (u32 j = 0; j < ndust; j++) {
-                                        dust_mass[j * Naccrete + id_a]
-                                            = gpart_mass * epsilon[i_a * ndust + j];
-                                    }
-                                });
-                        }
+                        sham::kernel_call(
+                            q,
+                            sham::MultiRef{hpart_data, s_j_data, id_list_accrete},
+                            sham::MultiRef{dust_mass_acc},
+                            Naccrete,
+                            [gpart_mass, hfactd = this->hfactd, ndust = this->ndust, Naccrete](
+                                u32 id_a,
+                                const Tscal *__restrict hpart,
+                                const Tscal *__restrict s_j,
+                                const u32 *__restrict id_acc,
+                                Tscal *__restrict dust_mass) {
+                                u32 i_a     = id_acc[id_a];
+                                Tscal rho_a = shamrock::sph::rho_h(gpart_mass, hpart[i_a], hfactd);
+                                for (u32 j = 0; j < ndust; j++) {
+                                    Tscal sj                       = s_j[i_a * ndust + j];
+                                    dust_mass[j * Naccrete + id_a] = gpart_mass * sj * sj / rho_a;
+                                }
+                            });
 
                         for (u32 j = 0; j < ndust; j++) {
                             s_acc_dust_mass[j] += shamalgs::primitives::sum(
