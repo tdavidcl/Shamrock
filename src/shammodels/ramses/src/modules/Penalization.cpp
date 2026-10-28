@@ -15,6 +15,7 @@
  */
 
 #include "shammodels/ramses/modules/Penalization.hpp"
+#include "shambackends/kernel_call.hpp"
 
 template<class Tvec, class TgridVec>
 void shammodels::basegodunov::modules::Penalization<Tvec, TgridVec>::apply(Tscal dt) {
@@ -75,15 +76,17 @@ void shammodels::basegodunov::modules::Penalization<Tvec, TgridVec>::apply(Tscal
                     sham::DeviceBuffer<Tvec> &buf_rhov  = pdat.get_field_buf_ref<Tvec>(irhovel);
                     sham::DeviceBuffer<Tscal> &buf_rhoe = pdat.get_field_buf_ref<Tscal>(irhoetot);
 
-                    sham::EventList depends_list;
-                    auto cell_min = buf_cell_min.get_read_access(depends_list);
-                    auto cell_max = buf_cell_max.get_read_access(depends_list);
-                    auto rho      = buf_rho.get_write_access(depends_list);
-                    auto rhov     = buf_rhov.get_write_access(depends_list);
-                    auto rhoe     = buf_rhoe.get_write_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(cgh, cell_count, "penalization", [=](u32 id_a) {
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{buf_cell_min, buf_cell_max},
+                        sham::MultiRef{buf_rho, buf_rhov, buf_rhoe},
+                        cell_count,
+                        [=](u32 id_a,
+                            const TgridVec *__restrict cell_min,
+                            const TgridVec *__restrict cell_max,
+                            Tscal *__restrict rho,
+                            Tvec *__restrict rhov,
+                            Tscal *__restrict rhoe) {
                             const u32 block_id = id_a / AMRBlock::block_size;
                             const u32 lid      = id_a % AMRBlock::block_size;
 
@@ -117,13 +120,6 @@ void shammodels::basegodunov::modules::Penalization<Tvec, TgridVec>::apply(Tscal
                             rhov[id_a] = rho_new * vel_new;
                             rhoe[id_a] = eint_new + 0.5 * rho_new * sycl::dot(vel_new, vel_new);
                         });
-                    });
-
-                    buf_cell_min.complete_event_state(e);
-                    buf_cell_max.complete_event_state(e);
-                    buf_rho.complete_event_state(e);
-                    buf_rhov.complete_event_state(e);
-                    buf_rhoe.complete_event_state(e);
                 });
             },
             zone.shape);
