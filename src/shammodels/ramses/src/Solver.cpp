@@ -26,10 +26,12 @@
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
 #include "shammodels/ramses/modules/AddExtForceConstantGravity.hpp"
+#include "shammodels/ramses/modules/AddPenalizationSDF.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceDust.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceDustTrapezoidal.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceGas.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceGasTrapezoidal.hpp"
+#include "shammodels/ramses/modules/ApplyPenalizationGas.hpp"
 #include "shammodels/ramses/modules/BarotropicEnergyReset.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
@@ -52,8 +54,8 @@
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
-#include "shammodels/ramses/modules/Penalization.hpp"
 #include "shammodels/ramses/modules/ResetExtForceAcc.hpp"
+#include "shammodels/ramses/modules/ResetPenalizationSDF.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
@@ -1800,6 +1802,98 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
+    if (solver_config.is_penalization_on()) { // volume penalization
+
+        // Operator split after the time integration, so it is a separate sequence evaluated
+        // after the integrator, on the patch data without ghosts. The grid is only refined after
+        // it, so the signed distance fields are recomputed every step on the current grid.
+
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> penal_sequence;
+
+        shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
+
+        // refs to the fields of the patch data without ghosts (the ones that are integrated)
+        auto attach_source_field = [&]<class T>(
+                                       std::shared_ptr<shamrock::solvergraph::FieldRefs<T>> &refs,
+                                       const std::string &field_name) {
+            shamrock::solvergraph::GetFieldRefFromLayer<T> attach{pdl, field_name};
+            attach.set_edges(storage.source_patches, refs);
+            penal_sequence.push_back(std::make_shared<decltype(attach)>(std::move(attach)));
+        };
+
+        auto refs_block_min = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
+            "cell_min_source", "\\mathbf{x}_{\\rm min}");
+        auto refs_block_max = std::make_shared<shamrock::solvergraph::FieldRefs<TgridVec>>(
+            "cell_max_source", "\\mathbf{x}_{\\rm max}");
+        auto refs_rho
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho_source", "\\rho");
+        auto refs_rhov = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+            "rhovel_source", "(\\rho \\mathbf{v})");
+        auto refs_rhoe = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+            "rhoetot_source", "(\\rho E)");
+
+        attach_source_field(refs_block_min, "cell_min");
+        attach_source_field(refs_block_max, "cell_max");
+        attach_source_field(refs_rho, "rho");
+        attach_source_field(refs_rhov, "rhovel");
+        attach_source_field(refs_rhoe, "rhoetot");
+
+        const Tscal dxfact = solver_config.grid_coord_to_pos_fact;
+
+        // zones are applied one after the other in config order, so overlapping zones give the
+        // same result on every run
+        storage.penal_sdf.clear();
+        const auto &zones = solver_config.penalization_config.zones;
+        for (u32 izone = 0; izone < zones.size(); izone++) {
+            const auto &zone = zones[izone];
+
+            auto sdf = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+                AMRBlock::block_size,
+                sham::format("penal_sdf_{}", izone),
+                sham::format("\\phi_{{{}}}", izone));
+            storage.penal_sdf.push_back(sdf);
+
+            {
+                modules::ResetPenalizationSDF<Tvec> node{AMRBlock::block_size};
+                node.set_edges(storage.block_counts, sdf);
+                penal_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
+
+            std::visit(
+                [&](const auto &shape) {
+                    using Shape = std::decay_t<decltype(shape)>;
+                    modules::AddPenalizationSDF<Tvec, TgridVec, Shape> node{shape, dxfact};
+                    node.set_edges(storage.block_counts, refs_block_min, refs_block_max, sdf);
+                    penal_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+                },
+                zone.shape);
+
+            {
+                const bool has_rho  = zone.target_rho.has_value();
+                const bool has_eint = zone.target_press.has_value();
+                const Tscal target_eint
+                    = (has_eint) ? *zone.target_press / (solver_config.get_eos_gamma() - 1) : 0;
+
+                modules::ApplyPenalizationGas<Tvec> node{
+                    AMRBlock::block_size,
+                    zone.eta,
+                    zone.target_vel,
+                    has_rho,
+                    zone.target_rho.value_or(0),
+                    has_eint,
+                    target_eint};
+                node.set_edges(
+                    storage.dt, storage.block_counts, sdf, refs_rho, refs_rhov, refs_rhoe);
+                penal_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
+        }
+
+        shamrock::solvergraph::OperationSequence penal_seq(
+            "Volume penalization", std::move(penal_sequence));
+        storage.post_integration_sequence
+            = std::make_shared<decltype(penal_seq)>(std::move(penal_seq));
+    }
+
     if (false) {
         logger::raw_ln(" -- tex:\n" + shambase::get_check_ref(storage.solver_sequence).get_tex());
         logger::raw_ln(
@@ -1940,8 +2034,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
     // volume penalization (immersed obstacles, forcing bands), operator split after the hydro step
     if (solver_config.is_penalization_on()) {
-        modules::Penalization penalization(context, solver_config, storage);
-        penalization.apply(dt_input);
+        shambase::get_check_ref(storage.post_integration_sequence).evaluate();
     }
 
     if (!solver_config.amr_mode.old_amr) {

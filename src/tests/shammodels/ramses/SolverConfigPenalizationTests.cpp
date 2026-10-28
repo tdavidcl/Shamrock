@@ -47,18 +47,22 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::penalization", 1) {
             p.add_cylinder({1, 1, 0}, {0, 0, 0}, 0.5, 1e-3, {0, 0, 0}), std::invalid_argument);
     }
 
-    { // shape containment
+    { // shape signed distances (negative inside)
         Cylinder c{{1, 1, 0}, {0, 0, 1}, 0.5};
-        REQUIRE(c.contains({1.2, 1.2, 42}));
-        REQUIRE(!c.contains({1.6, 1, 0}));
+        f64_3 c_in(1.2, 1.2, 42), c_out(1.6, 1, 0);
+        REQUIRE_FLOAT_EQUAL(c.sdf(c_in), sycl::sqrt(0.08) - 0.5, 1e-14);
+        REQUIRE_FLOAT_EQUAL(c.sdf(c_out), 0.1, 1e-14);
 
         Sphere s{{0, 0, 0}, 1};
-        REQUIRE(s.contains({0.5, 0.5, 0.5}));
-        REQUIRE(!s.contains({0.6, 0.6, 0.6}));
+        f64_3 s_in(0.5, 0.5, 0.5), s_out(0.6, 0.6, 0.6);
+        REQUIRE_FLOAT_EQUAL(s.sdf(s_in), sycl::sqrt(0.75) - 1, 1e-14);
+        REQUIRE_FLOAT_EQUAL(s.sdf(s_out), sycl::sqrt(1.08) - 1, 1e-14);
 
         Box b{{0, 0, 0}, {1, 2, 3}};
-        REQUIRE(b.contains({0.5, 1.5, 2.5}));
-        REQUIRE(!b.contains({0.5, 2.5, 2.5}));
+        f64_3 b_in(0.5, 1.5, 2.5), b_face(0.5, 2.5, 2.5), b_corner(2, 3, 4);
+        REQUIRE_FLOAT_EQUAL(b.sdf(b_in), -0.5, 1e-14);
+        REQUIRE_FLOAT_EQUAL(b.sdf(b_face), 0.5, 1e-14);
+        REQUIRE_FLOAT_EQUAL(b.sdf(b_corner), sycl::sqrt(3.), 1e-14);
     }
 
     { // json roundtrip

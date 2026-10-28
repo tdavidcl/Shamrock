@@ -23,7 +23,9 @@ set(Sources
     src/modules/ApplyExtForceGasTrapezoidal.cpp
     src/modules/ApplyExtForceDustTrapezoidal.cpp
     src/modules/BarotropicEnergyReset.cpp
-    src/modules/Penalization.cpp
+    src/modules/ResetPenalizationSDF.cpp
+    src/modules/AddPenalizationSDF.cpp
+    src/modules/ApplyPenalizationGas.cpp
     src/modules/AMRGridRefinementHandler.cpp
     src/modules/AnalysisSodTube.cpp
     src/modules/AMRSetup.cpp

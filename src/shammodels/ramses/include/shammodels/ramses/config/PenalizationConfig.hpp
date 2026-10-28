@@ -40,7 +40,8 @@ namespace shammodels::basegodunov {
      * \f[
      *   \partial_t q = - \frac{\chi(\mathbf{x})}{\eta} (q - q_{\rm target})
      * \f]
-     * where \f$ \chi \f$ is 1 for cells whose center is inside the zone and 0 elsewhere. The
+     * where \f$ \chi \f$ is 1 for cells whose center is inside the zone (signed distance
+     * \f$ \phi \leq 0 \f$, see the shapes sdf functions) and 0 elsewhere. The
      * relaxed quantities are the velocity (always), the density and the pressure (if a target is
      * set). It is integrated implicitly, so any \f$ \eta \geq 0 \f$ is stable (\f$ \eta = 0 \f$
      * sets the target state in one step).
@@ -58,10 +59,11 @@ namespace shammodels::basegodunov {
             Tvec axis;
             Tscal radius;
 
-            inline bool contains(Tvec pos) const {
+            /// signed distance to the surface (negative inside)
+            inline Tscal sdf(Tvec pos) const {
                 Tvec d      = pos - center;
                 Tvec d_perp = d - sycl::dot(d, axis) * axis;
-                return sycl::dot(d_perp, d_perp) <= radius * radius;
+                return sycl::length(d_perp) - radius;
             }
         };
 
@@ -70,10 +72,8 @@ namespace shammodels::basegodunov {
             Tvec center;
             Tscal radius;
 
-            inline bool contains(Tvec pos) const {
-                Tvec d = pos - center;
-                return sycl::dot(d, d) <= radius * radius;
-            }
+            /// signed distance to the surface (negative inside)
+            inline Tscal sdf(Tvec pos) const { return sycl::length(pos - center) - radius; }
         };
 
         /// Axis aligned box [lower, upper]
@@ -81,13 +81,15 @@ namespace shammodels::basegodunov {
             Tvec lower;
             Tvec upper;
 
-            inline bool contains(Tvec pos) const {
-                for (u32 i = 0; i < shambase::VectorProperties<Tvec>::dimension; i++) {
-                    if (pos[i] < lower[i] || pos[i] > upper[i]) {
-                        return false;
-                    }
-                }
-                return true;
+            /// signed distance to the surface (negative inside)
+            inline Tscal sdf(Tvec pos) const {
+                // distance to the box faces along each axis, positive outside
+                Tvec q = sycl::fabs(pos - (lower + upper) / 2) - (upper - lower) / 2;
+
+                Tvec q_out    = sycl::fmax(q, Tvec{});
+                Tscal max_q   = sycl::fmax(sycl::fmax(q.x(), q.y()), q.z());
+                Tscal dist_in = sycl::fmin(max_q, Tscal{0});
+                return sycl::length(q_out) + dist_in;
             }
         };
 

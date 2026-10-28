@@ -239,6 +239,12 @@ namespace shammodels::basegodunov {
         /// Sum of the accelerations of the external forces at t^{n+1} (trapezoidal coupling only)
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> a_ext_next;
 
+        /// Signed distance field of each volume penalization zone (negative inside)
+        std::vector<std::shared_ptr<shamrock::solvergraph::Field<Tscal>>> penal_sdf;
+
+        /// Nodes evaluated after the time integration (volume penalization)
+        std::shared_ptr<shamrock::solvergraph::OperationSequence> post_integration_sequence;
+
         Component<shamrock::ComputeField<Tscal>> rho_next_no_drag;
         Component<shamrock::ComputeField<Tvec>> rhov_next_no_drag;
         Component<shamrock::ComputeField<Tscal>> rhoe_next_no_drag;
