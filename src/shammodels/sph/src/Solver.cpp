@@ -3280,20 +3280,17 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         = alpha_av_updated.get_field(cur_p.id_patch).get_buf();
 
                     auto &q = shamsys::instance::get_compute_scheduler().get_queue();
-                    sham::EventList depends_list;
 
-                    auto alpha_av         = buf_alpha_av.get_write_access(depends_list);
-                    auto alpha_av_updated = buf_alpha_av_updated.get_read_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, pdat.get_obj_cnt(), "write back alpha_av", [=](i32 id_a) {
-                                alpha_av[id_a] = alpha_av_updated[id_a];
-                            });
-                    });
-
-                    buf_alpha_av.complete_event_state(e);
-                    buf_alpha_av_updated.complete_event_state(e);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{buf_alpha_av_updated},
+                        sham::MultiRef{buf_alpha_av},
+                        pdat.get_obj_cnt(),
+                        [](u32 id_a,
+                           const Tscal *__restrict alpha_av_updated,
+                           Tscal *__restrict alpha_av) {
+                            alpha_av[id_a] = alpha_av_updated[id_a];
+                        });
                 });
             }
 
@@ -3310,20 +3307,15 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
                         = MagCurrentJ.get_field(cur_p.id_patch).get_buf();
 
                     auto &q = shamsys::instance::get_compute_scheduler().get_queue();
-                    sham::EventList depends_list;
 
-                    auto J           = buf_J.get_write_access(depends_list);
-                    auto MagCurrentJ = buf_MagCurrentJ.get_read_access(depends_list);
-
-                    auto e = q.submit(depends_list, [&](sycl::handler &cgh) {
-                        shambase::parallel_for(
-                            cgh, pdat.get_obj_cnt(), "write back J", [=](i32 id_a) {
-                                J[id_a] = MagCurrentJ[id_a];
-                            });
-                    });
-
-                    buf_J.complete_event_state(e);
-                    buf_MagCurrentJ.complete_event_state(e);
+                    sham::kernel_call(
+                        q,
+                        sham::MultiRef{buf_MagCurrentJ},
+                        sham::MultiRef{buf_J},
+                        pdat.get_obj_cnt(),
+                        [](u32 id_a, const Tvec *__restrict MagCurrentJ, Tvec *__restrict J) {
+                            J[id_a] = MagCurrentJ[id_a];
+                        });
                 });
             }
 
@@ -3909,6 +3901,20 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     u64 npatch = scheduler().patch_list.local.size();
 
+    // number of ghost particles on this rank (sum over patches of with_ghost - without)
+    std::optional<u64> nobj_ghost = std::nullopt;
+    if (solver_config.show_ghost_stats) {
+        u64 cnt_ghost = 0;
+        shambase::get_check_ref(storage.part_counts_with_ghost)
+            .indexes.for_each([&](u64 id, u32 cnt_with_ghost) {
+                cnt_ghost += cnt_with_ghost;
+            });
+        shambase::get_check_ref(storage.part_counts).indexes.for_each([&](u64 id, u32 cnt) {
+            cnt_ghost -= cnt;
+        });
+        nobj_ghost = cnt_ghost;
+    }
+
     // logger::info_ln("SPHSolver", "process rate : ", rate, "particle.s-1");
 
     std::string log_step = report_perf_timestep(
@@ -3922,7 +3928,8 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
         mem_perf_infos_end.max_allocated_byte_device,
         mem_perf_infos_end.max_allocated_byte_host,
         system_metrics_delta,
-        shamsys::has_reporter());
+        shamsys::has_reporter(),
+        nobj_ghost);
 
     if (shamcomm::world_rank() == 0) {
         logger::info_ln("sph::Model", log_step);

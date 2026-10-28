@@ -73,6 +73,11 @@ namespace shammodels::basegodunov {
 
         std::shared_ptr<shamrock::solvergraph::RankGetter> patch_rank_owner;
 
+        /// Time step of the current iteration
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt;
+
+        /// Half time step used for the time interpolation of the face states
+        /// TODO: bug prone, it stays 0 if `face_half_time_interpolation` is off; use `dt` instead
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<Tscal>> dt_over2;
 
         std::shared_ptr<shamrock::solvergraph::FieldRefs<TgridVec>> refs_block_min;
@@ -227,6 +232,12 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> dtrho;
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> dtrhov;
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> dtrhoe;
+
+        /// Sum of the accelerations of the external forces (at t^{n+1/2} with the midpoint
+        /// coupling, at t^n with the trapezoidal one)
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> a_ext;
+        /// Sum of the accelerations of the external forces at t^{n+1} (trapezoidal coupling only)
+        std::shared_ptr<shamrock::solvergraph::Field<Tvec>> a_ext_next;
 
         Component<shamrock::ComputeField<Tscal>> rho_next_no_drag;
         Component<shamrock::ComputeField<Tvec>> rhov_next_no_drag;

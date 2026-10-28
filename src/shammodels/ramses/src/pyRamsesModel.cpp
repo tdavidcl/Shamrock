@@ -345,6 +345,27 @@ namespace shammodels::basegodunov {
                 [](TConfig &self) {
                     self.gravity_config.gravity_mode = BICGSTAB;
                 })
+            .def(
+                "add_ext_force_constant_gravity",
+                [](TConfig &self, Tvec g) {
+                    self.ext_force_config.add_constant_gravity(g);
+                },
+                py::arg("g"))
+            .def(
+                "set_ext_force_coupling",
+                [](TConfig &self, ExtForceCoupling mode) {
+                    self.ext_force_config.set_coupling(mode);
+                },
+                py::arg("mode"),
+                R"==(
+    Set the time quadrature coupling the external forces to the solver.
+
+    Parameters
+    ----------
+    mode : ExtForceCoupling
+        Either ``ExtForceCoupling.Midpoint`` (the default) or ``ExtForceCoupling.Trapezoidal``,
+        as obtained from ``from shamrock.model_ramses import ExtForceCoupling``.
+)==")
             .def("set_npscal_gas", [](TConfig &self, u32 npscal_gas) {
                 self.npscal_gas_config.npscal_gas = npscal_gas;
             });
@@ -528,6 +549,43 @@ ON_PYTHON_INIT {
 
     std::string base_name = "RamsesModel";
     using namespace shammodels::basegodunov;
+
+    py::enum_<ExtForceCoupling>(
+        mramses,
+        "ExtForceCoupling",
+        R"==(
+    Time quadrature used to couple the external forces source term to the solver.
+    Both modes are second order in time, and give the same momentum update for a constant
+    acceleration.
+
+    Usage
+    -----
+    >>> from shamrock.model_ramses import ExtForceCoupling
+    >>> cfg.set_ext_force_coupling(ExtForceCoupling.Trapezoidal)
+)==")
+        .value(
+            "Midpoint",
+            ExtForceCoupling::Midpoint,
+            R"==(
+    Explicit midpoint rule. This is the default.
+
+    The forces are evaluated once, at :math:`t^{n+1/2}`, from the time centered state (e.g.
+    :math:`\rho^{n+1/2} = \rho^n + \frac{\Delta t}{2} \partial_t \rho`, and the momentum for a
+    velocity dependent force), and applied over the whole time step.
+)==")
+        .value(
+            "Trapezoidal",
+            ExtForceCoupling::Trapezoidal,
+            R"==(
+    Trapezoidal rule (time centred source term, as in RAMSES).
+
+    The forces are evaluated at :math:`t^n` and :math:`t^{n+1}`, each with the state at the same
+    time, and the average of the two source terms is applied over the whole time step:
+    :math:`\Delta (\rho \mathbf{v}) = \Delta t \, \frac{1}{2}
+    (\rho^n \mathbf{a}^n + \rho^{n+1} \mathbf{a}^{n+1})`.
+    A force evaluated at :math:`t^{n+1}` may only depend on the density there (e.g.
+    self-gravity), since it is known before the kick.
+)==");
 
     add_instance<f64_3, i64_3>(
         mramses, base_name + "_f64_3_i64_3_SolverConfig", base_name + "_f64_3_i64_3_Model");

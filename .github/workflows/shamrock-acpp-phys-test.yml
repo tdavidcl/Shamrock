@@ -117,6 +117,10 @@ jobs:
           - worldsize: 1
             testfile: dustywave_godunov.py
           - worldsize: 1
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 2
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 1
             testfile: regression_sph_disc.py
           - worldsize: 1
             testfile: regression_sph_kh.py
@@ -206,6 +210,8 @@ jobs:
             artifact_name: gallery_ramses_run_sod_amr_reflective
           - testfile: "examples/ramses/run_compare_amr_refine_sod.py"
             artifact_name: gallery_ramses_run_compare_amr_refine_sod
+          - testfile: "examples/ramses/run_rayleigh_taylor.py"
+            artifact_name: gallery_ramses_run_rayleigh_taylor
 
           # GSPH examples
           - testfile: "examples/gsph/run_sod.py"
