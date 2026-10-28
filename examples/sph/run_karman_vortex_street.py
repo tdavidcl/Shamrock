@@ -89,7 +89,8 @@ ctx.pdata_layout_new()
 
 model = shamrock.get_Model_SPH(context=ctx, vector_type="f64_3", sph_kernel=kernel)
 
-(Lx, Ly, Lz) = model.get_box_dim_fcc_3d(dr, nx, ny, nz)
+# the lattice functions take half the particle spacing
+(Lx, Ly, Lz) = model.get_box_dim_fcc_3d(dr / 2, nx, ny, nz)
 y_cyl = Ly / 2
 z_mid = Lz / 2
 x_fringe = Lx - fringe_width
@@ -134,7 +135,7 @@ model.set_solver_config(cfg)
 model.init_scheduler(int(1e9), 1)
 
 model.resize_simulation_box((0, 0, 0), (Lx, Ly, Lz))
-model.add_cube_fcc_3d(dr, (0, 0, 0), (Lx, Ly, Lz))
+model.add_cube_fcc_3d(dr / 2, (0, 0, 0), (Lx, Ly, Lz))
 
 model.set_value_in_a_box("uint", "f64", u_inf, (0, 0, 0), (Lx, Ly, Lz))
 
