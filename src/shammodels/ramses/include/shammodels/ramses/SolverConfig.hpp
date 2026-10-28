@@ -87,7 +87,16 @@ namespace shammodels::basegodunov {
         using Tscal              = shambase::VecComponent<Tvec>;
         GravityMode gravity_mode = NoGravity;
         bool analytical_gravity  = false; // whether to use an external analytical gravity
-        Tscal tol                = 1e-6;
+        /// Convergence tolerance of the Poisson solver
+        Tscal tol = 1e-6;
+        /// Tolerance of the BiCGSTAB lucky breakdown test (restarts the solver below it)
+        Tscal tol_hp_bk = 1e-6;
+        /// Value of G used when set_G is true, instead of the one of the unit system
+        Tscal G = 1.;
+        /// Use G instead of the gravitational constant of the unit system (e.g. for tests)
+        bool set_G = false;
+        /// Maximum number of iterations of the Poisson solver
+        u32 Niter_max = 100;
         inline Tscal get_tolerance() { return tol; }
         inline bool is_gravity_on() { return gravity_mode != NoGravity; }
     };
@@ -319,10 +328,14 @@ struct shammodels::basegodunov::SolverConfig {
     inline bool is_boundary_periodic() { return true; }
     GravityConfig<Tvec> gravity_config{};
     inline Tscal get_constant_4piG() {
+        if (gravity_config.set_G) {
+            return 4 * M_PI * gravity_config.G;
+        }
         auto scal_G = get_constant_G();
         return 4 * M_PI * scal_G;
     }
     inline Tscal get_grav_tol() { return gravity_config.get_tolerance(); }
+    inline Tscal get_happy_bk_grav_tol() { return gravity_config.tol_hp_bk; }
     inline bool is_gravity_on() { return gravity_config.is_gravity_on(); }
     inline bool is_coordinate_field_required() { return gravity_config.analytical_gravity; }
 

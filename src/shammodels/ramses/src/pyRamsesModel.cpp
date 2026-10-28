@@ -282,6 +282,57 @@ namespace shammodels::basegodunov {
                     self.gravity_config.gravity_mode = BICGSTAB;
                 })
             .def(
+                "set_self_gravity_G_values",
+                [](TConfig &self, bool set_G, Tscal G_values) {
+                    self.gravity_config.set_G = set_G;
+                    self.gravity_config.G     = G_values;
+                },
+                py::arg("set_G"),
+                py::arg("G_values"),
+                R"==(
+    Override the gravitational constant used by the self-gravity solver.
+
+    Parameters
+    ----------
+    set_G : bool
+        If True, use G_values instead of the gravitational constant of the unit system
+    G_values : float
+        Value of G in code units (only used if set_G is True)
+)==")
+            .def(
+                "set_self_gravity_Niter_max",
+                [](TConfig &self, u32 Niter) {
+                    self.gravity_config.Niter_max = Niter;
+                },
+                py::arg("Niter"),
+                R"==(
+    Set the maximum number of iterations of the self-gravity Poisson solver.
+)==")
+            .def(
+                "set_self_gravity_tol",
+                [](TConfig &self, Tscal tol) {
+                    self.gravity_config.tol = tol;
+                },
+                py::arg("tol"),
+                R"==(
+    Set the convergence tolerance of the self-gravity Poisson solver.
+
+    CG and PCG stop when the residual is below tol relative to the right-hand side,
+    BiCGSTAB when its L2 norm is below tol.
+)==")
+            .def(
+                "set_self_gravity_tol_happy_breakdown",
+                [](TConfig &self, Tscal tol) {
+                    self.gravity_config.tol_hp_bk = tol;
+                },
+                py::arg("tol"),
+                R"==(
+    Set the tolerance of the BiCGSTAB lucky breakdown test.
+
+    BiCGSTAB restarts (shadow residual and search direction reset to the residual)
+    when the absolute value of <r_k, r'_0> drops below tol.
+)==")
+            .def(
                 "add_ext_force_constant_gravity",
                 [](TConfig &self, Tvec g) {
                     self.ext_force_config.add_constant_gravity(g);
