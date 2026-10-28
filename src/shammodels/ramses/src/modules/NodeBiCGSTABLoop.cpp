@@ -41,8 +41,26 @@ namespace shammodels::basegodunov::modules {
         edges.spans_phi_As.ensure_sizes(edges.sizes.indexes);
         edges.spans_phi_hadamard_prod.ensure_sizes(edges.sizes.indexes);
 
+        edges.spans_rhs.ensure_sizes(edges.sizes.indexes);
+
         // r_0 = b - A phi_0, r'_0 = r_0 / 2, p_0 = r_0
         node_init.evaluate();
+
+        // <b, b>
+        node_ddot_rhs.evaluate();
+
+        // <r'_0, r'_0>
+        node_ddot_rstarj_rstarj.evaluate();
+
+        shamlog_debug_ln(
+            "Ramses::BiCGSTAB",
+            sham::format(
+                "k = 0, <b,b> = {}, |r'_0| / |b| = {}",
+                edges.rhs_norm_value.data,
+                std::sqrt(edges.shadow_res_norm.data / edges.rhs_norm_value.data)));
+
+        // a breakdown is detected when the denominator is exactly 0
+        const Tscal breakdown_tol = 0;
 
         u32 k                     = 0;
         bool converged            = false;
@@ -52,8 +70,6 @@ namespace shammodels::basegodunov::modules {
             // <r_k, r'_0>
             node_had_prod_rj_rp0.evaluate();
             node_ddot_rj_rp0.evaluate();
-
-            k = k + 1;
 
             // exchange the ghost blocks of p_k
             node_gz_p.evaluate();
@@ -68,9 +84,17 @@ namespace shammodels::basegodunov::modules {
             node_ddot_Apj_rp0.evaluate();
 
             // alpha_k = <r_k, r'_0> / <A p_k, r'_0>
-            edges.alpha.data = edges.old_values.data / edges.e_norm.data;
+            const Tscal sigma = edges.e_norm.data;
+            if (std::abs(sigma) <= breakdown_tol) {
+                // TODO: (kept from new_amr_plus_grav) restart instead of stopping
+                ON_RANK_0(
+                    logger::warn_ln(
+                        "Ramses::BiCGSTAB", sham::format("breakdown: <A p_k, r'_0> = {}", sigma)));
+                break;
+            }
+            edges.alpha.data = edges.old_values.data / sigma;
 
-            Tscal alp_saved = edges.alpha.data;
+            const Tscal alp_saved = edges.alpha.data;
 
             // s_k = r_k - alpha_k A p_k
             edges.e_norm.data = 0;
@@ -80,15 +104,16 @@ namespace shammodels::basegodunov::modules {
 
             // <s_k, s_k>
             node_ddot_sj_sj.evaluate();
-            last_residual_norm2 = edges.e_norm.data;
 
-            if (edges.e_norm.data < tol_cvg * tol_cvg) {
+            const Tscal rel_sj_sqr = edges.e_norm.data / edges.rhs_norm_value.data;
+            last_residual_norm2    = rel_sj_sqr;
+            if (rel_sj_sqr < tol_cvg * tol_cvg) {
                 // phi_{k+1} = phi_k + alpha_k p_k
                 edges.alpha.data = alp_saved;
                 node_new_phi_happy_break.evaluate();
                 shamlog_debug_ln(
                     "Ramses::BiCGSTAB",
-                    sham::format("k = {}, converged on <s,s> = {}", k, edges.e_norm.data));
+                    sham::format("k = {}, converged on <s,s> / <b,b> = {}", k, rel_sj_sqr));
                 converged = true;
                 break;
             }
@@ -109,16 +134,27 @@ namespace shammodels::basegodunov::modules {
             node_ddot_Asj_Asj.evaluate();
 
             // w_k = <A s_k, s_k> / <A s_k, A s_k>
+            if (edges.new_values.data <= breakdown_tol) {
+                // TODO: (kept from new_amr_plus_grav) restart instead of stopping
+                ON_RANK_0(
+                    logger::warn_ln(
+                        "Ramses::BiCGSTAB",
+                        sham::format("breakdown: <A s_k, A s_k> = {}", edges.new_values.data)));
+                break;
+            }
             edges.w_stab.data = edges.e_norm.data / edges.new_values.data;
 
-            Tscal w_saved = edges.w_stab.data;
+            const Tscal w_saved = edges.w_stab.data;
+            if (std::abs(w_saved) <= breakdown_tol) {
+                // TODO: (kept from new_amr_plus_grav) restart instead of stopping
+                ON_RANK_0(
+                    logger::warn_ln(
+                        "Ramses::BiCGSTAB", sham::format("breakdown: omega = {}", w_saved)));
+                break;
+            }
 
-            // phi_{k+1} = phi_k + alpha p_k + w_k s_k
-            // TODO: (kept from #1942) alpha holds -alpha_k here (set for s_k above), whereas
-            // BiCGSTAB uses phi_{k+1} = phi_k + alpha_k p_k + w_k s_k. As is, the recursively
-            // updated residual converges but phi does not solve the Poisson equation; setting
-            // alpha back to alp_saved before this update makes it converge at second order (see
-            // PoissonSolversTests.cpp).
+            // phi_{k+1} = phi_k + alpha_k p_k + w_k s_k
+            edges.alpha.data = alp_saved;
             node_new_phi.evaluate();
 
             // r_{k+1} = s_k - w_k A s_k
@@ -129,50 +165,67 @@ namespace shammodels::basegodunov::modules {
 
             // <r_{k+1}, r_{k+1}>
             node_ddot_rj_rj.evaluate();
-            last_residual_norm2 = edges.e_norm.data;
+
+            const Tscal rel_rj_sqr = edges.e_norm.data / edges.rhs_norm_value.data;
+            last_residual_norm2    = rel_rj_sqr;
 
             shamlog_debug_ln(
-                "Ramses::BiCGSTAB", sham::format("k = {}, <r,r> = {}", k, edges.e_norm.data));
+                "Ramses::BiCGSTAB",
+                sham::format("k = {}, |r| / |b| = {}", k + 1, std::sqrt(rel_rj_sqr)));
 
-            if (edges.e_norm.data < tol_cvg * tol_cvg) {
+            if (rel_rj_sqr < tol_cvg * tol_cvg) {
                 converged = true;
                 break;
             }
 
-            // <r_{k+1}, r'_0>
+            // rho_{k+1} = <r_{k+1}, r'_0>
             node_had_rjnew_rp0.evaluate();
             node_ddot_rjnew_rp0.evaluate();
 
-            // beta_k = (alpha_k / w_k) (<r_{k+1}, r'_0> / <r_k, r'_0>)
-            edges.beta.data
-                = (alp_saved / w_saved) * (edges.new_values.data / edges.old_values.data);
-
-            // p_{k+1} = r_{k+1} + beta_k (p_k - w_k A p_k)
-            edges.e_norm.data = 1;
-            edges.alpha.data  = (-w_saved) * (edges.beta.data);
-            node_new_p_vec.evaluate();
-
-            // lucky breakdown: restart with r'_0 = p_{k+1} = r_{k+1}
-            if ((edges.new_values.data * edges.new_values.data) < (tol_happy_bk * tol_happy_bk)) {
-                shamlog_debug_ln("Ramses::BiCGSTAB", sham::format("k = {}, lucky breakdown", k));
+            const Tscal rho_new = edges.new_values.data;
+            if ((rho_new * rho_new)
+                < (tol_happy_bk * tol_happy_bk) * edges.e_norm.data * edges.shadow_res_norm.data) {
+                // lucky breakdown: restart with r'_0 = p_{k+1} = r_{k+1}
+                shamlog_debug_ln("Ramses::BiCGSTAB", sham::format("k = {}, restart", k + 1));
                 node_overwrite_rp0.evaluate();
                 node_overwrite_p.evaluate();
+
+                // <r'_0, r'_0>
+                node_ddot_rstarj_rstarj.evaluate();
+            } else {
+                // beta_k = (alpha_k / w_k) (<r_{k+1}, r'_0> / <r_k, r'_0>)
+                edges.beta.data = (alp_saved / w_saved) * (rho_new / edges.old_values.data);
+
+                // p_{k+1} = r_{k+1} + beta_k (p_k - w_k A p_k)
+                edges.e_norm.data = 1;
+                edges.alpha.data  = -w_saved * edges.beta.data;
+                node_new_p_vec.evaluate();
             }
+
+            k = k + 1;
         }
+
+        // exchange the ghost blocks of phi, needed to compute the gravitational acceleration
+        node_gz_phi.evaluate();
+        node_exch_gz_phi.evaluate();
+        node_replace_gz_phi.evaluate();
 
         last_iteration_count = k;
 
         if (shamcomm::world_rank() == 0) {
-            Tscal res = std::sqrt(last_residual_norm2);
+            Tscal rel_res = std::sqrt(last_residual_norm2);
             if (converged) {
                 logger::info_ln(
                     "Ramses::BiCGSTAB",
-                    sham::format("converged after {} iterations, |r| = {}", k, res));
+                    sham::format("converged after {} iterations, |r|/|b| = {}", k, rel_res));
             } else {
                 logger::warn_ln(
                     "Ramses::BiCGSTAB",
                     sham::format(
-                        "not converged after {} iterations, |r| = {} (tol = {})", k, res, tol_cvg));
+                        "not converged after {} iterations, |r|/|b| = {} (tol = {})",
+                        k,
+                        rel_res,
+                        tol_cvg));
             }
         }
     }

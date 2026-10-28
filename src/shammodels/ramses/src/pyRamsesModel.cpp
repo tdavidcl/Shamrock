@@ -317,11 +317,11 @@ namespace shammodels::basegodunov {
                 R"==(
     Set the convergence tolerance of the self-gravity Poisson solver.
 
-    CG and PCG stop when the residual is below tol relative to the right-hand side,
-    BiCGSTAB when its L2 norm is below tol.
+    The solver stops when the L2 norm of the residual is below tol relative to the
+    one of the right-hand side.
 )==")
             .def(
-                "set_self_gravity_tol_happy_breakdown",
+                "set_self_gravity_happy_breakdown_tol",
                 [](TConfig &self, Tscal tol) {
                     self.gravity_config.tol_hp_bk = tol;
                 },
@@ -330,7 +330,7 @@ namespace shammodels::basegodunov {
     Set the tolerance of the BiCGSTAB lucky breakdown test.
 
     BiCGSTAB restarts (shadow residual and search direction reset to the residual)
-    when the absolute value of <r_k, r'_0> drops below tol.
+    when |<r_k, r'_0>| < tol |r_k| |r'_0|.
 )==")
             .def(
                 "add_ext_force_constant_gravity",

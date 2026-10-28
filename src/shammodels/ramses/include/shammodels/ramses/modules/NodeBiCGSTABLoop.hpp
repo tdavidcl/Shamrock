@@ -72,7 +72,10 @@
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, e_norm)                                          \
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, alpha)                                           \
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, beta)                                            \
-    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, w_stab)
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, w_stab)                                          \
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, shadow_res_norm)                                 \
+    X_RW(shamrock::solvergraph::Field<Tscal>, spans_rhs)                                           \
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, rhs_norm_value)
 
 namespace shammodels::basegodunov::modules {
 
@@ -80,18 +83,18 @@ namespace shammodels::basegodunov::modules {
      * @brief Solve \f$ \Delta \phi = 4 \pi G (\rho - \bar{\rho}) \f$ with the BiCGSTAB method,
      * starting from the current content of `spans_phi`.
      *
-     * The matrix, the right-hand side and the handling of the ghost blocks are the same as in
-     * NodeCGLoop. The ghost blocks of both \f$ p_k \f$ and \f$ s_k \f$ are exchanged before the
-     * matrix-vector products.
+     * Port of the BiCGSTAB of the `new_amr_plus_grav` branch of Léodasce Sewanou. The matrix, the
+     * right-hand side and the handling of the ghost blocks are the same as in NodeCGLoop. The ghost
+     * blocks of both \f$ p_k \f$ and \f$ s_k \f$ are exchanged before the matrix-vector products,
+     * and the ones of \f$ \phi \f$ at the end.
      *
-     * The loop stops when \f$ \langle s_k, s_k \rangle < {\rm tol}^2 \f$ (then
-     * \f$ \phi_{k+1} = \phi_k + \alpha_k p_k \f$) or \f$ \langle r_{k+1}, r_{k+1} \rangle <
-     * {\rm tol}^2 \f$, or after `Niter_max` iterations. It restarts (\f$ r'_0 = p_{k+1} = r_{k+1}
-     * \f$) when \f$ \langle r_{k+1}, r'_0 \rangle^2 < {\rm tol\_happy\_bk}^2 \f$.
-     *
-     * TODO: (kept from #1942) unlike CG/PCG, the stopping criterion is absolute, not relative to
-     * \f$ \langle b, b \rangle \f$, so `tol` has a different meaning for BiCGSTAB (and \f$ b \f$
-     * scales as \f$ \Delta x^3 \f$). The restart criterion is absolute as well.
+     * The loop stops when \f$ \langle s_k, s_k \rangle / \langle b, b \rangle < {\rm tol}^2 \f$
+     * (then \f$ \phi_{k+1} = \phi_k + \alpha_k p_k \f$) or \f$ \langle r_{k+1}, r_{k+1} \rangle /
+     * \langle b, b \rangle < {\rm tol}^2 \f$, on a breakdown (\f$ \langle A p_k, r'_0 \rangle \f$,
+     * \f$ \langle A s_k, A s_k \rangle \f$ or \f$ \omega_k \f$ equal to 0), or after `Niter_max`
+     * iterations. It restarts (\f$ r'_0 = p_{k+1} = r_{k+1} \f$) when
+     * \f$ \langle r_{k+1}, r'_0 \rangle^2 < {\rm tol\_happy\_bk}^2 \langle r_{k+1}, r_{k+1} \rangle
+     * \langle r'_0, r'_0 \rangle \f$.
      *
      * The work fields are resized to match `sizes` if needed.
      */
@@ -110,6 +113,10 @@ namespace shammodels::basegodunov::modules {
 
         /// r_0 = b - A phi_0, r'_0 = r_0 / 2, p_0 = r_0
         BiCGSTABInit<Tvec, TgridVec> node_init{block_size, fourPiG};
+        /// <b, b>
+        ResidualDot<Tscal> node_ddot_rhs{block_size};
+        /// <r'_0, r'_0>
+        ResidualDot<Tscal> node_ddot_rstarj_rstarj{block_size};
         /// <r_k, r'_0>
         shamrock::solvergraph::NodeHadamardProd<Tscal> node_had_prod_rj_rp0{block_size};
         shamrock::solvergraph::NodeSumReduction<Tscal> node_ddot_rj_rp0{block_size};
@@ -131,7 +138,7 @@ namespace shammodels::basegodunov::modules {
         shamrock::solvergraph::NodeSumReduction<Tscal> node_ddot_Asj_sj{block_size};
         /// <A s_k, A s_k>
         ResidualDot<Tscal> node_ddot_Asj_Asj{block_size};
-        /// phi_{k+1} = phi_k + alpha p_k + w_k s_k
+        /// phi_{k+1} = phi_k + alpha_k p_k + w_k s_k
         shamrock::solvergraph::NodeAXPYThreeVectors<Tscal> node_new_phi{block_size};
         /// r_{k+1} = s_k - w_k A s_k
         shamrock::solvergraph::NodeLinCombThreeVectors<Tscal> node_new_res{block_size};
@@ -147,7 +154,7 @@ namespace shammodels::basegodunov::modules {
         /// restart: p_{k+1} = r_{k+1}
         shamrock::solvergraph::NodeOverwrite<Tscal> node_overwrite_p{block_size};
 
-        // ghost exchange of p_k and s_k (they share the same temporary ghost edge)
+        // ghost exchange of p_k, s_k and phi (they share the same temporary ghost edge)
         std::shared_ptr<shamrock::solvergraph::PatchDataFieldDDShared<Tscal>> p_ghosts
             = std::make_shared<shamrock::solvergraph::PatchDataFieldDDShared<Tscal>>(
                 "p_ghosts", "p_{\\rm ghosts}");
@@ -157,6 +164,9 @@ namespace shammodels::basegodunov::modules {
         shamrock::solvergraph::ExtractGhostField<Tscal> node_gz_s{};
         shamrock::solvergraph::ExchangeGhostField<Tscal> node_exch_gz_s{};
         shamrock::solvergraph::ReplaceGhostField<Tscal> node_replace_gz_s{};
+        shamrock::solvergraph::ExtractGhostField<Tscal> node_gz_phi{};
+        shamrock::solvergraph::ExchangeGhostField<Tscal> node_exch_gz_phi{};
+        shamrock::solvergraph::ReplaceGhostField<Tscal> node_replace_gz_phi{};
 
         public:
         NodeBiCGSTABLoop(
@@ -185,7 +195,10 @@ namespace shammodels::basegodunov::modules {
                 mean_rho,
                 spans_phi_res,
                 spans_phi_res_bis,
-                spans_phi_p);
+                spans_phi_p,
+                spans_rhs);
+            node_ddot_rhs.set_edges(sizes_no_gz, spans_rhs, rhs_norm_value);
+            node_ddot_rstarj_rstarj.set_edges(sizes_no_gz, spans_phi_res_bis, shadow_res_norm);
             node_had_prod_rj_rp0.set_edges(
                 sizes, spans_phi_res, spans_phi_res_bis, spans_phi_hadamard_prod);
             node_ddot_rj_rp0.set_edges(sizes_no_gz, spans_phi_hadamard_prod, old_values);
@@ -225,6 +238,9 @@ namespace shammodels::basegodunov::modules {
             node_gz_s.set_edges(spans_phi_s, idx_in_ghost, p_ghosts);
             node_exch_gz_s.set_edges(rank_owner, p_ghosts);
             node_replace_gz_s.set_edges(p_ghosts, spans_phi_s);
+            node_gz_phi.set_edges(spans_phi, idx_in_ghost, p_ghosts);
+            node_exch_gz_phi.set_edges(rank_owner, p_ghosts);
+            node_replace_gz_phi.set_edges(p_ghosts, spans_phi);
         }
 
         inline Edges get_edges() {

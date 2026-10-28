@@ -46,7 +46,6 @@ set(Sources
     src/modules/NodeSpMVPoisson3D.cpp
     src/modules/NodeCGLoop.cpp
     src/modules/NodeJacobiPreconditioner.cpp
-    src/modules/NodePCGLoop.cpp
     src/modules/BiCGSTABInit.cpp
     src/modules/NodeBiCGSTABLoop.cpp
     src/modules/NodeSelfGravityAcceleration.cpp

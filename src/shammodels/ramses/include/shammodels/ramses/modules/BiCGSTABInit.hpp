@@ -38,13 +38,16 @@
     /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_phi_res)                                  \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_phi_res_bis)                              \
-    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_phi_p)
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_phi_p)                                    \
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rhs)
 
 namespace shammodels::basegodunov::modules {
 
     /**
-     * @brief Initialisation step of BiCGSTAB: compute the residual \f$ r_0 = b - A \phi_0 \f$, the
-     * shadow residual \f$ r'_0 = r_0 / 2 \f$ and the search direction \f$ p_0 = r_0 \f$.
+     * @brief Initialisation step of BiCGSTAB: compute the right-hand side \f$ b \f$, the residual
+     * \f$ r_0 = b - A \phi_0 \f$, the shadow residual \f$ r'_0 = r_0 / 2 \f$ and the search
+     * direction
+     * \f$ p_0 = r_0 \f$.
      *
      * The matrix and the right-hand side are the ones of CGInit:
      * \f$ b = -4 \pi G (\rho - \bar{\rho}) \Delta x^3 \f$. `sizes` holds the block counts per

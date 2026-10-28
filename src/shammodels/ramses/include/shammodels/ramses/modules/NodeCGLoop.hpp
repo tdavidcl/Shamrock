@@ -13,7 +13,8 @@
  * @file NodeCGLoop.hpp
  * @author Léodasce Sewanou (leodasce.sewanou@ens-lyon.fr)
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Conjugate gradient solver of the Poisson equation for the self-gravity.
+ * @brief Jacobi preconditioned conjugate gradient solver of the Poisson equation for the
+ * self-gravity.
  *
  * Adapted from the PhD work of Léodasce Sewanou.
  */
@@ -21,6 +22,7 @@
 #include "shambase/aliases_int.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/ramses/modules/CGInit.hpp"
+#include "shammodels/ramses/modules/NodeJacobiPreconditioner.hpp"
 #include "shammodels/ramses/modules/NodeSpMVPoisson3D.hpp"
 #include "shammodels/ramses/modules/ResidualDot.hpp"
 #include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
@@ -69,20 +71,31 @@
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, e_norm)                                          \
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, alpha)                                           \
     X_RW(shamrock::solvergraph::IDataEdge<Tscal>, beta)                                            \
-    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, rhs_norm_values)
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, rhs_norm_values)                                 \
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, rz_old_values)                                   \
+    X_RW(shamrock::solvergraph::IDataEdge<Tscal>, rz_new_values)                                   \
+    X_RW(shamrock::solvergraph::Field<Tscal>, spans_rz_hadamard_prod)
 
 namespace shammodels::basegodunov::modules {
 
     /**
-     * @brief Solve \f$ \Delta \phi = 4 \pi G (\rho - \bar{\rho}) \f$ with the conjugate gradient
-     * method, starting from the current content of `spans_phi`.
+     * @brief Solve \f$ \Delta \phi = 4 \pi G (\rho - \bar{\rho}) \f$ with the Jacobi
+     * preconditioned conjugate gradient method, starting from the current content of `spans_phi`.
+     *
+     * This is the `CG` gravity mode of the `new_amr_plus_grav` branch of Léodasce Sewanou, which
+     * is a preconditioned CG: \f$ z_0 = p_0 = r_0 / A_{ii} \f$ (CGInit), then
+     * \f$ z_{k+1} = M^{-1} r_{k+1} \f$ (NodeJacobiPreconditioner),
+     * \f$ \alpha_k = \langle r_k, z_k \rangle / \langle p_k, A p_k \rangle \f$,
+     * \f$ \beta_k = \langle r_{k+1}, z_{k+1} \rangle / \langle r_k, z_k \rangle \f$ and
+     * \f$ p_{k+1} = z_{k+1} + \beta_k p_k \f$. On a uniform grid \f$ M \f$ is a multiple of the
+     * identity, so the iterates are the ones of the plain CG.
      *
      * The matrix is the one of NodeSpMVPoisson3D (\f$ -\Delta x^3 \Delta \f$, see laplacian_7pt)
      * and the right-hand side the one of CGInit. `sizes` holds the block counts per patch including
      * the ghost blocks, stored after the patch blocks, `sizes_no_gz` the block counts without them:
      * the vectors are updated on the ghost blocks too, but the dot products only sum the patch
      * blocks. The ghost blocks of the search direction are exchanged at the start of every
-     * iteration (`idx_in_ghost`, `rank_owner`).
+     * iteration, and the ones of \f$ \phi \f$ at the end (`idx_in_ghost`, `rank_owner`).
      *
      * The loop stops when \f$ \langle r, r \rangle / \langle b, b \rangle < {\rm tol}^2 \f$ or
      * after `Niter_max` iterations. On exit `old_values` holds \f$ \langle r, r \rangle \f$ and
@@ -102,7 +115,7 @@ namespace shammodels::basegodunov::modules {
 
         u32 last_iteration_count = 0;
 
-        /// r0 = p0 = b - A phi0
+        /// r0 = b - A phi0, z0 = p0 = r0 / A_ii
         CGInit<Tvec, TgridVec> cg_init_node{block_size, fourPiG};
         /// <r0, r0>
         ResidualDot<Tscal> res_ddot_node{block_size};
@@ -118,9 +131,17 @@ namespace shammodels::basegodunov::modules {
         shamrock::solvergraph::NodeAXPY<Tscal> new_potential_node{block_size};
         /// r_{k+1} = r_k - alpha_k A p_k
         shamrock::solvergraph::NodeAXPY<Tscal> new_residual_node{block_size};
+        /// z_{k+1} = M^-1 r_{k+1}
+        NodeJacobiPreconditioner<Tvec, TgridVec> res_precond_node{block_size};
         /// <r_{k+1}, r_{k+1}>
         ResidualDot<Tscal> res_ddot_new_node{block_size};
-        /// p_{k+1} = r_{k+1} + beta_k p_k
+        /// r_k x z_k (elementwise)
+        shamrock::solvergraph::NodeHadamardProd<Tscal> rz_hadamard_prod_node{block_size};
+        /// <r_0, z_0>
+        shamrock::solvergraph::NodeSumReduction<Tscal> rz_reduction_node{block_size};
+        /// <r_{k+1}, z_{k+1}>
+        shamrock::solvergraph::NodeSumReduction<Tscal> rz_new_reduction_node{block_size};
+        /// p_{k+1} = z_{k+1} + beta_k p_k
         shamrock::solvergraph::NodeAYPX<Tscal> new_p_node{block_size};
 
         std::shared_ptr<shamrock::solvergraph::PatchDataFieldDDShared<Tscal>> p_ghosts
@@ -129,6 +150,10 @@ namespace shammodels::basegodunov::modules {
         shamrock::solvergraph::ExtractGhostField<Tscal> node_gz_p{};
         shamrock::solvergraph::ExchangeGhostField<Tscal> node_exch_gz_p{};
         shamrock::solvergraph::ReplaceGhostField<Tscal> node_replace_gz_p{};
+        // ghost exchange of phi at the end of the solve (shares the temporary ghost edge of p)
+        shamrock::solvergraph::ExtractGhostField<Tscal> node_gz_phi{};
+        shamrock::solvergraph::ExchangeGhostField<Tscal> node_exch_gz_phi{};
+        shamrock::solvergraph::ReplaceGhostField<Tscal> node_replace_gz_phi{};
 
         public:
         NodeCGLoop(u32 block_size, Tscal fourPiG, u32 Niter_max, Tscal tol)
@@ -165,12 +190,22 @@ namespace shammodels::basegodunov::modules {
             a_norm_node.set_edges(sizes_no_gz, spans_phi_hadamard_prod, e_norm);
             new_potential_node.set_edges(sizes, spans_phi_p, alpha, spans_phi);
             new_residual_node.set_edges(sizes, spans_phi_Ap, alpha, spans_phi_res);
+            res_precond_node.set_edges(
+                sizes, cell_neigh_graph, spans_block_cell_sizes, spans_phi_res, spans_phi_z);
             res_ddot_new_node.set_edges(sizes_no_gz, spans_phi_res, new_values);
-            new_p_node.set_edges(sizes, spans_phi_res, beta, spans_phi_p);
+            rz_hadamard_prod_node.set_edges(
+                sizes, spans_phi_res, spans_phi_z, spans_rz_hadamard_prod);
+            rz_reduction_node.set_edges(sizes_no_gz, spans_rz_hadamard_prod, rz_old_values);
+            rz_new_reduction_node.set_edges(sizes_no_gz, spans_rz_hadamard_prod, rz_new_values);
+            new_p_node.set_edges(sizes, spans_phi_z, beta, spans_phi_p);
 
             node_gz_p.set_edges(spans_phi_p, idx_in_ghost, p_ghosts);
             node_exch_gz_p.set_edges(rank_owner, p_ghosts);
             node_replace_gz_p.set_edges(p_ghosts, spans_phi_p);
+
+            node_gz_phi.set_edges(spans_phi, idx_in_ghost, p_ghosts);
+            node_exch_gz_phi.set_edges(rank_owner, p_ghosts);
+            node_replace_gz_phi.set_edges(p_ghosts, spans_phi);
         }
 
         inline Edges get_edges() {

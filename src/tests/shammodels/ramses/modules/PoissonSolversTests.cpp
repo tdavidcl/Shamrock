@@ -16,7 +16,6 @@
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shammodels/ramses/modules/NodeBiCGSTABLoop.hpp"
 #include "shammodels/ramses/modules/NodeCGLoop.hpp"
-#include "shammodels/ramses/modules/NodePCGLoop.hpp"
 #include "shamrock/solvergraph/DDSharedBuffers.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
@@ -36,7 +35,7 @@ using namespace shammodels::basegodunov::test_utils;
 
 namespace {
 
-    enum class SolverKind { CG, PCG, BiCGSTAB };
+    enum class SolverKind { CG, BiCGSTAB };
 
     const Tscal pi      = shambase::constants::pi<Tscal>;
     const Tscal G       = 1;
@@ -251,32 +250,6 @@ namespace {
                 scal(),
                 scal(),
                 scal(),
-                scal());
-            node.evaluate();
-            ret.iterations = node.get_last_iteration_count();
-        } else if (kind == SolverKind::PCG) {
-            NodePCGLoop<Tvec, TgridVec> node(block_size, fourPiG, Niter_max, tol);
-            node.set_edges(
-                pb.sizes,
-                pb.sizes_no_gz,
-                pb.graph,
-                pb.cell_sizes,
-                pb.rho,
-                pb.mean_rho,
-                pb.idx_in_ghost,
-                pb.rank_owner,
-                pb.phi,
-                field(),
-                field(),
-                field(),
-                field(),
-                field(),
-                field(),
-                scal(),
-                scal(),
-                scal(),
-                scal(),
-                scal(),
                 scal(),
                 scal(),
                 scal(),
@@ -310,6 +283,9 @@ namespace {
                 scal(),
                 scal(),
                 scal(),
+                scal(),
+                scal(),
+                field(),
                 scal());
             node.evaluate();
             ret.iterations = node.get_last_iteration_count();
@@ -348,36 +324,12 @@ namespace {
     }
 
     std::string solver_name(SolverKind kind) {
-        switch (kind) {
-        case SolverKind::CG : return "CG";
-        case SolverKind::PCG: return "PCG";
-        default             : return "BiCGSTAB";
-        }
+        return (kind == SolverKind::CG) ? "CG" : "BiCGSTAB";
     }
 
-    /// relative residual for CG/PCG, absolute residual for BiCGSTAB (their stopping criteria)
-    bool is_residual_absolute(SolverKind kind) { return kind == SolverKind::BiCGSTAB; }
-
-    /**
-     * @brief Whether the solver, as ported from #1942 with its numerics unchanged, solves the
-     * Poisson equation
-     *
-     * TODO: only CG does. With #1942's numerics:
-     *  - PCG (whose loop was not compiled in #1942) does not converge: the residual grows. With the
-     *    textbook PCG (p_0 = z_0 = M^-1 r_0 and p_{k+1} = z_{k+1} + beta_k p_k, see
-     *    NodePCGLoop.hpp) the same tests pass with the same iteration counts as CG.
-     *  - BiCGSTAB meets its stopping criterion (on the recursively updated residual), but phi is
-     *    wrong (relative error ~2, true residual ~0.4). Using +alpha_k instead of -alpha_k in the
-     *    update of phi (see the TODO in NodeBiCGSTABLoop.cpp) the same tests pass (second order,
-     *    true residual below the tolerance).
-     * For these solvers the tests only check determinism, and log the error to the analytic
-     * solution.
-     */
-    bool solves_poisson(SolverKind kind) { return kind == SolverKind::CG; }
-
     void test_solver_uniform(SolverKind kind) {
-        const Tscal tol     = (kind == SolverKind::BiCGSTAB) ? 1e-10 : 1e-8;
-        const u32 Niter_max = (kind == SolverKind::PCG) ? 200 : 1000;
+        const Tscal tol     = 1e-8;
+        const u32 Niter_max = 1000;
 
         std::vector<Tscal> errors;
         for (u32 n : {8, 16, 32}) {
@@ -401,21 +353,16 @@ namespace {
                 res.iterations,
                 res2.iterations);
 
-            // BiCGSTAB meets its own stopping criterion with #1942's numerics, PCG does not
-            if (kind != SolverKind::PCG) {
-                REQUIRE_NAMED(
-                    solver_name(kind) + " converged before Niter_max", res.iterations < Niter_max);
-            }
+            REQUIRE_NAMED(
+                solver_name(kind) + " converged before Niter_max", res.iterations < Niter_max);
 
             // the residual recomputed independently reaches the tolerance
             std::vector<Tscal> rho = pb.rho->get_buf(0).copy_to_stdvec();
             std::vector<Tscal> b;
             std::vector<Tscal> r
                 = true_residual(g.periodic_grid, rho, pb.mean_rho->value, res.phi, b);
-            Tscal res_norm = is_residual_absolute(kind) ? l2(r) : l2(r) / l2(b);
-            if (solves_poisson(kind)) {
-                REQUIRE_NAMED(solver_name(kind) + " residual below tolerance", res_norm < 10 * tol);
-            }
+            Tscal res_norm = l2(r) / l2(b);
+            REQUIRE_NAMED(solver_name(kind) + " residual below tolerance", res_norm < 10 * tol);
 
             // error vs the analytic solution, up to the additive constant
             u32 ncell        = g.periodic_grid.cell_count();
@@ -447,9 +394,7 @@ namespace {
         for (u32 i = 0; i + 1 < errors.size(); i++) {
             Tscal order = std::log2(errors[i] / errors[i + 1]);
             logger::raw_ln(sham::format("{} convergence order = {:.3f}", solver_name(kind), order));
-            if (solves_poisson(kind)) {
-                REQUIRE_NAMED(solver_name(kind) + " second order", order > 1.9 && order < 2.1);
-            }
+            REQUIRE_NAMED(solver_name(kind) + " second order", order > 1.9 && order < 2.1);
         }
     }
 
@@ -458,8 +403,8 @@ namespace {
      * recomputed residual does as well.
      */
     void test_solver_level_jump(SolverKind kind) {
-        const Tscal tol     = (kind == SolverKind::BiCGSTAB) ? 1e-10 : 1e-8;
-        const u32 Niter_max = (kind == SolverKind::PCG) ? 200 : 1000;
+        const Tscal tol     = 1e-8;
+        const u32 Niter_max = 1000;
 
         TestGrid grid = make_level_jump_grid(16);
         auto graph    = build_graph(grid);
@@ -474,15 +419,13 @@ namespace {
         PoissonProblem pb = make_problem(grid, graph, grid.block_count(), {}, rho, phi0);
         SolveResult res   = solve(kind, pb, Niter_max, tol);
 
-        if (kind != SolverKind::PCG) {
-            REQUIRE_NAMED(
-                solver_name(kind) + " level jump converged before Niter_max",
-                res.iterations < Niter_max);
-        }
+        REQUIRE_NAMED(
+            solver_name(kind) + " level jump converged before Niter_max",
+            res.iterations < Niter_max);
 
         std::vector<Tscal> b;
         std::vector<Tscal> r = true_residual(grid, rho, pb.mean_rho->value, res.phi, b);
-        Tscal res_norm       = is_residual_absolute(kind) ? l2(r) : l2(r) / l2(b);
+        Tscal res_norm       = l2(r) / l2(b);
 
         logger::raw_ln(
             sham::format(
@@ -491,9 +434,7 @@ namespace {
                 res.iterations,
                 res_norm));
 
-        if (solves_poisson(kind)) {
-            REQUIRE_NAMED(solver_name(kind) + " level jump residual", res_norm < 10 * tol);
-        }
+        REQUIRE_NAMED(solver_name(kind) + " level jump residual", res_norm < 10 * tol);
     }
 
 } // namespace
@@ -501,11 +442,6 @@ namespace {
 NEW_TEST(Unittest, "shammodels/ramses/modules/NodeCGLoop", 1) {
     test_solver_uniform(SolverKind::CG);
     test_solver_level_jump(SolverKind::CG);
-}
-
-NEW_TEST(Unittest, "shammodels/ramses/modules/NodePCGLoop", 1) {
-    test_solver_uniform(SolverKind::PCG);
-    test_solver_level_jump(SolverKind::PCG);
 }
 
 NEW_TEST(Unittest, "shammodels/ramses/modules/NodeBiCGSTABLoop", 1) {

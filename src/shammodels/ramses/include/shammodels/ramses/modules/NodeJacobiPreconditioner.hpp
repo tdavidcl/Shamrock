@@ -19,6 +19,8 @@
  */
 
 #include "shambase/aliases_int.hpp"
+#include "shambackends/vec.hpp"
+#include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/node/INode.hpp"
@@ -26,27 +28,26 @@
 #define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* ------------------- inputs ------------------- */                                           \
     X_RO(shamrock::solvergraph::Indexes<u32>, sizes)                                               \
-    X_RO(shamrock::solvergraph::IFieldSpan<T>, spans_block_cell_sizes)                             \
-    X_RO(shamrock::solvergraph::IFieldSpan<T>, spans_x)                                            \
+    X_RO(CellGraphEdge, cell_neigh_graph)                                                          \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_block_cell_sizes)                         \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_x)                                        \
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
-    X_RW(shamrock::solvergraph::IFieldSpan<T>, spans_y)
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_y)
 
 namespace shammodels::basegodunov::modules {
 
     /**
-     * @brief Compute `y <- M^-1 x` with \f$ M^{-1} = {\rm diag}(\Delta x^2 / 6) \f$.
+     * @brief Compute `y <- M^-1 x`, \f$ M \f$ being the diagonal of the matrix of
+     * NodeSpMVPoisson3D as given by jacobi_weight_7pt.
      *
      * `sizes` holds the block counts per patch, each block holding `block_size` cells.
      * `spans_y` is resized to match `sizes` if needed.
-     *
-     * TODO: (kept from #1942) \f$ \Delta x^2 / 6 \f$ is the inverse diagonal of the
-     * non-integrated Laplacian \f$ -\Delta \f$, whereas the matrix of NodeSpMVPoisson3D is the
-     * volume integrated one, whose diagonal is \f$ 6 \Delta x \f$ on a uniform grid (as used by
-     * CGInit for its `spans_phi_z` output).
      */
-    template<class T>
+    template<class Tvec, class TgridVec>
     class NodeJacobiPreconditioner : public shamrock::solvergraph::INode {
+        using Tscal         = shambase::VecComponent<Tvec>;
+        using CellGraphEdge = solvergraph::OrientedAMRGraphEdge<Tvec, TgridVec>;
 
         u32 block_size;
 

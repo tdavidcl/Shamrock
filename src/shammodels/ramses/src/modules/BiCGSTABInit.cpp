@@ -38,6 +38,7 @@ namespace shammodels::basegodunov::modules {
         edges.spans_phi_res.check_sizes(edges.sizes.indexes);
         edges.spans_phi_res_bis.check_sizes(edges.sizes.indexes);
         edges.spans_phi_p.check_sizes(edges.sizes.indexes);
+        edges.spans_rhs.check_sizes(edges.sizes.indexes);
 
         auto &q        = shamsys::instance::get_compute_scheduler().get_queue();
         Tscal mean_rho = edges.mean_rho.value;
@@ -50,6 +51,7 @@ namespace shammodels::basegodunov::modules {
                 auto &phi_res_span     = edges.spans_phi_res.get_spans().get(id);
                 auto &phi_res_bis_span = edges.spans_phi_res_bis.get_spans().get(id);
                 auto &phi_p_span       = edges.spans_phi_p.get_spans().get(id);
+                auto &rhs_span         = edges.spans_rhs.get_spans().get(id);
 
                 auto get_graph = [&](Direction dir) -> const AMRGraph & {
                     return shambase::get_check_ref(oriented_cell_graph.graph_links[dir]);
@@ -76,7 +78,7 @@ namespace shammodels::basegodunov::modules {
                         graph_neigh_ym,
                         graph_neigh_zp,
                         graph_neigh_zm},
-                    sham::MultiRef{phi_res_span, phi_res_bis_span, phi_p_span},
+                    sham::MultiRef{phi_res_span, phi_res_bis_span, phi_p_span, rhs_span},
                     cell_count,
                     [block_size = block_size, fourPiG = fourPiG, mean_rho](
                         u32 cell_global_id,
@@ -91,7 +93,8 @@ namespace shammodels::basegodunov::modules {
                         const AMRGraph::ro_access graph_iter_zm,
                         Tscal *__restrict phi_res,
                         Tscal *__restrict phi_res_bis,
-                        Tscal *__restrict phi_p) {
+                        Tscal *__restrict phi_p,
+                        Tscal *__restrict rhs) {
                         Tscal Aphi = laplacian_7pt<Tscal, Tvec>(
                             cell_sizes,
                             block_size,
@@ -114,6 +117,7 @@ namespace shammodels::basegodunov::modules {
                         phi_res[cell_global_id]     = b_rhs - Aphi;
                         phi_res_bis[cell_global_id] = 0.5 * (b_rhs - Aphi);
                         phi_p[cell_global_id]       = b_rhs - Aphi;
+                        rhs[cell_global_id]         = b_rhs;
                     });
             });
     }
@@ -125,7 +129,8 @@ namespace shammodels::basegodunov::modules {
             \begin{align}
             {spans_phi_res}_i &= -4 \pi G ({spans_rho}_i - {mean_rho}) \Delta x_i^3 - (A {spans_phi})_i \\
             {spans_phi_res_bis}_i &= {spans_phi_res}_i / 2 \\
-            {spans_phi_p}_i &= {spans_phi_res}_i
+            {spans_phi_p}_i &= {spans_phi_res}_i \\
+            {spans_rhs}_i &= -4 \pi G ({spans_rho}_i - {mean_rho}) \Delta x_i^3
             \end{align}
         )tex";
 
