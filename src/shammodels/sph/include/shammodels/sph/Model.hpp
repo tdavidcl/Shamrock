@@ -204,14 +204,30 @@ namespace shammodels::sph {
 
             shamlog_debug_ln("SPH", "add sink :", mass, pos, velocity, accretion_radius);
 
-            shammodels::sph::add_sink(
-                edges, mass, pos, velocity, accretion_radius, get_sink_tracked_ndust());
+            shammodels::sph::add_sink(edges, mass, pos, velocity, accretion_radius);
+
+            ensure_sink_accreted_dust_mass();
         }
 
         /// Number of dust species whose accreted mass is tracked on sinks (0 without dust)
         inline u32 get_sink_tracked_ndust() {
             auto &dust_config = solver.solver_config.dust_config;
             return dust_config.is_none() ? 0 : dust_config.get_dust_nvar();
+        }
+
+        /**
+         * @brief With dust, register the per species accreted dust mass sink edge if missing and
+         * zero pad it for sinks without an entry yet. No-op without dust.
+         */
+        inline void ensure_sink_accreted_dust_mass() {
+            u32 ndust = get_sink_tracked_ndust();
+            if (ndust == 0) {
+                return;
+            }
+            auto &sync = shambase::get_check_ref(ctx.sched).synchronized_data;
+            ensure_sink_accreted_dust_mass_edge<Tvec>(sync);
+            resize_sink_accreted_dust_mass(
+                get_sink_accreted_dust_mass<Tvec>(sync), get_sink_pos<Tvec>(sync).size(), ndust);
         }
 
         template<class T>
@@ -935,12 +951,8 @@ namespace shammodels::sph {
                 set_sink_particles(edges, out);
             }
 
-            {
-                // dumps predating per species accreted dust mass tracking have no entry for it
-                auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
-                resize_sink_accreted_dust_mass(
-                    edges.accreted_dust_mass, edges.size(), get_sink_tracked_ndust());
-            }
+            // dumps predating per species accreted dust mass tracking have no entry for it
+            ensure_sink_accreted_dust_mass();
 
             // Migrate old dumps that stored time/dt/cfl in solver_config.time_state
             auto sync_names = sched.synchronized_data.get_edge_names();

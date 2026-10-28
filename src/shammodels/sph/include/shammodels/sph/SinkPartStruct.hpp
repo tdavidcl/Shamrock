@@ -18,7 +18,6 @@
 
 #include "nlohmann/json.hpp"
 #include "shambackends/vec.hpp"
-#include <vector>
 namespace shammodels::sph {
 
     template<class Tvec>
@@ -35,9 +34,6 @@ namespace shammodels::sph {
         Tscal mass;
         Tvec angular_momentum;
         Tscal accretion_radius;
-
-        /// Accreted dust mass per dust species (empty if no dust is tracked)
-        std::vector<Tscal> accreted_dust_mass;
     };
 
     template<class Tvec>
@@ -54,7 +50,6 @@ namespace shammodels::sph {
             {"mass", p.mass},
             {"angular_momentum", p.angular_momentum},
             {"accretion_radius", p.accretion_radius},
-            {"accreted_dust_mass", p.accreted_dust_mass},
         };
     }
 
@@ -70,13 +65,6 @@ namespace shammodels::sph {
         j.at("mass").get_to(p.mass);
         j.at("angular_momentum").get_to(p.angular_momentum);
         j.at("accretion_radius").get_to(p.accretion_radius);
-
-        // absent from dumps written before per species dust accretion tracking
-        if (j.contains("accreted_dust_mass")) {
-            j.at("accreted_dust_mass").get_to(p.accreted_dust_mass);
-        } else {
-            p.accreted_dust_mass.clear();
-        }
     }
 
 } // namespace shammodels::sph

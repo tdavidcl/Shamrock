@@ -867,9 +867,14 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
             = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>("sink_mass");
         auto sink_accr_radii = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
             "sink_accretion_radius");
-        auto sink_accreted_dust_mass
-            = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
-                "sink_accreted_dust_mass");
+        // only registered with dust (see Model::ensure_sink_accreted_dust_mass)
+        std::optional<std::shared_ptr<IDataEdgeSerializable<std::vector<Tscal>>>>
+            sink_accreted_dust_mass = std::nullopt;
+        if (sink_acc_ndust > 0) {
+            sink_accreted_dust_mass
+                = sync_data.get_edge_ptr<IDataEdgeSerializable<std::vector<Tscal>>>(
+                    "sink_accreted_dust_mass");
+        }
 
         solver_graph.register_edge(
             "sink_accretion_table", Field<u32>(1, "sink_accretion_table", "\\mathrm{acc}"));
