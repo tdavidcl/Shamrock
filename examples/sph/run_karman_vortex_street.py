@@ -186,6 +186,9 @@ def render_vorticity():
     return dvy_dx - dvx_dy
 
 
+# note: render_cartesian_slice does not wrap around the periodic boundaries, so the velocity
+# within a smoothing length of y = 0 and y = Ly is underestimated, which shows up as thin
+# spurious vorticity bands along these edges
 def plot_vorticity(t, iplot):
     omega = render_vorticity()
     omega_max = 2 * U_inf / D
@@ -244,7 +247,7 @@ np.savez(
 
 # %%
 # Drag and lift coefficients, normalised by the dynamic pressure on the cylinder section of the
-# slab (the force is noisy step to step, it is shown averaged over windows of 0.2)
+# slab (the force is noisy step to step, it is shown averaged over windows of 0.5)
 q_dyn = 0.5 * rho_inf * U_inf**2 * D * Lz
 c_d = hist_force[:, 0] / q_dyn
 c_l = hist_force[:, 1] / q_dyn
@@ -258,15 +261,17 @@ def window_average(t, f, width):
     return tc, fc
 
 
-t_avg, c_d_avg = window_average(hist_t, c_d, 0.2)
-_, c_l_avg = window_average(hist_t, c_l, 0.2)
+t_avg, c_d_avg = window_average(hist_t, c_d, 0.5)
+_, c_l_avg = window_average(hist_t, c_l, 0.5)
 
 # %%
 # Shedding frequency: the Strouhal number St = f D / U_inf is close to 0.2 for a cylinder.
 #
 # The period is the mean time between upward zero crossings of a signal, which is much more
 # precise than the peak of a spectrum over a few periods. It is measured both on the probe
-# velocity and on the (window averaged) lift.
+# velocity and on the (window averaged) lift. The lift is noisy, so a crossing only counts once
+# the signal went below -0.3 standard deviation since the previous one (hysteresis), otherwise
+# the noise around zero gives spurious double crossings.
 t_start = tmax / 2
 
 
@@ -274,8 +279,19 @@ def strouhal_from_crossings(t, f):
     mask = t >= t_start
     t_fit = t[mask]
     f_fit = f[mask] - f[mask].mean()
-    up = np.where((f_fit[:-1] < 0) & (f_fit[1:] >= 0))[0]
-    t_cross = t_fit[up] - f_fit[up] * (t_fit[up + 1] - t_fit[up]) / (f_fit[up + 1] - f_fit[up])
+    threshold = 0.3 * f_fit.std()
+
+    t_cross = []
+    armed = False
+    for i in range(len(f_fit) - 1):
+        if f_fit[i] < -threshold:
+            armed = True
+        if armed and f_fit[i] < 0 <= f_fit[i + 1]:
+            dt = t_fit[i + 1] - t_fit[i]
+            t_cross.append(t_fit[i] - f_fit[i] * dt / (f_fit[i + 1] - f_fit[i]))
+            armed = False
+    t_cross = np.array(t_cross)
+
     if len(t_cross) < 2:
         return np.nan, t_cross
     period = np.mean(np.diff(t_cross))
