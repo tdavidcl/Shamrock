@@ -535,7 +535,73 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             },
             py::kw_only(),
             py::arg("center"),
-            py::arg("radius"));
+            py::arg("radius"))
+        .def(
+            "add_penalization_cylinder",
+            [](TConfig &self,
+               const Tvec &center,
+               const Tvec &axis,
+               Tscal radius,
+               Tscal eta,
+               const Tvec &target_vel,
+               std::optional<Tscal> target_uint) {
+                self.penalization_config.add_cylinder(
+                    center, axis, radius, eta, target_vel, target_uint);
+            },
+            py::kw_only(),
+            py::arg("center"),
+            py::arg("axis"),
+            py::arg("radius"),
+            py::arg("eta"),
+            py::arg("target_vel"),
+            py::arg("target_uint") = std::nullopt,
+            R"==(
+    Add a volume penalization zone (Brinkman relaxation) shaped as an infinite cylinder.
+
+    The particles inside the zone have their velocity relaxed toward ``target_vel`` (and their
+    specific internal energy toward ``target_uint`` if given) on the timescale ``eta``, integrated
+    exactly (``eta = 0`` sets the target directly). With ``target_vel = 0`` and a small ``eta``
+    the particles inside are frozen and act as a solid obstacle.
+)==")
+        .def(
+            "add_penalization_sphere",
+            [](TConfig &self,
+               const Tvec &center,
+               Tscal radius,
+               Tscal eta,
+               const Tvec &target_vel,
+               std::optional<Tscal> target_uint) {
+                self.penalization_config.add_sphere(center, radius, eta, target_vel, target_uint);
+            },
+            py::kw_only(),
+            py::arg("center"),
+            py::arg("radius"),
+            py::arg("eta"),
+            py::arg("target_vel"),
+            py::arg("target_uint") = std::nullopt,
+            R"==(
+    Add a spherical volume penalization zone, see ``add_penalization_cylinder``.
+)==")
+        .def(
+            "add_penalization_box",
+            [](TConfig &self,
+               const Tvec &lower,
+               const Tvec &upper,
+               Tscal eta,
+               const Tvec &target_vel,
+               std::optional<Tscal> target_uint) {
+                self.penalization_config.add_box(lower, upper, eta, target_vel, target_uint);
+            },
+            py::kw_only(),
+            py::arg("lower"),
+            py::arg("upper"),
+            py::arg("eta"),
+            py::arg("target_vel"),
+            py::arg("target_uint") = std::nullopt,
+            R"==(
+    Add an axis aligned box volume penalization zone, see ``add_penalization_cylinder``.
+    Typical use: a fringe region forcing the inflow state of a periodic box.
+)==");
 
     std::string sod_tube_analysis_name = name_model + "_AnalysisSodTube";
     py::class_<TAnalysisSodTube>(m, sod_tube_analysis_name.c_str())
@@ -1798,6 +1864,16 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](T &self) {
                 return self.get_dt_sph();
             })
+        .def(
+            "get_penalization_forces",
+            [](T &self) {
+                return self.solver.get_penalization_forces();
+            },
+            R"==(
+    Force exerted by the gas on each penalization zone during the last timestep (one 3-vector
+    per zone, in config order): the momentum the zone removed from the gas divided by the
+    timestep. For a solid obstacle this is the drag/lift force on the body.
+)==")
         .def(
             "set_time",
             [](T &self, Tscal t) {

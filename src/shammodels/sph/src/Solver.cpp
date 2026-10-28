@@ -75,6 +75,7 @@
 #include "shammodels/sph/modules/NeighbourCache.hpp"
 #include "shammodels/sph/modules/NodeComputePressureGrad.hpp"
 #include "shammodels/sph/modules/NodeMonofluidTVADustDensityClamp.hpp"
+#include "shammodels/sph/modules/NodePenalization.hpp"
 #include "shammodels/sph/modules/ParticleReordering.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeConstant.hpp"
 #include "shammodels/sph/modules/SetDustStoppingTimeEpstein.hpp"
@@ -672,16 +673,36 @@ void shammodels::sph::Solver<Tvec, Kern>::init_solver_graph() {
                     solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"));
         }
 
+        // Volume penalization, split as K P(dt/2) D K P(dt/2) (K: hydro half kick, D: drift, P:
+        // exact relaxation toward the zone targets). Putting the first P before the drift makes
+        // the drift use the penalized velocity, so that particles of a solid zone (target
+        // velocity 0, eta -> 0) do not move at all. The second P is applied after the corrector.
+        if (solver_config.penalization_config.is_enabled()) {
+            auto penalization = solver_graph.register_node(
+                "penalization",
+                modules::NodePenalization<Tvec>(
+                    solver_config.penalization_config, penalization_velocity_removed));
+            shambase::get_check_ref(penalization)
+                .set_edges(
+                    solver_graph.get_edge_ptr<IDataEdge<Tscal>>("dt_half"),
+                    solver_graph.get_edge_ptr<Indexes<u32>>("part_counts"),
+                    solver_graph.get_edge_ptr<FieldRefs<Tvec>>("xyz"),
+                    solver_graph.get_edge_ptr<FieldRefs<Tvec>>("vxyz"),
+                    solver_graph.get_edge_ptr<FieldRefs<Tscal>>("uint"));
+        }
+
         {
+            std::vector<std::shared_ptr<shamrock::solvergraph::INode>> predictor_seq{};
+            predictor_seq.push_back(solver_graph.get_node_ptr_base("half_step1"));
+            if (solver_config.penalization_config.is_enabled()) {
+                predictor_seq.push_back(solver_graph.get_node_ptr_base("penalization"));
+            }
+            predictor_seq.push_back(solver_graph.get_node_ptr_base("full_step_xyz"));
+            predictor_seq.push_back(solver_graph.get_node_ptr_base("half_step2"));
+
             auto leapfrog_predictor = solver_graph.register_node(
                 "leapfrog predictor",
-                OperationSequence(
-                    "leapfrog predictor",
-                    {
-                        solver_graph.get_node_ptr_base("half_step1"),
-                        solver_graph.get_node_ptr_base("full_step_xyz"),
-                        solver_graph.get_node_ptr_base("half_step2"),
-                    }));
+                OperationSequence("leapfrog predictor", std::move(predictor_seq)));
         }
     }
 
@@ -2594,6 +2615,9 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     StackEntry stack_loc{};
 
+    // reset the momentum removed by the penalization zones during this step
+    shambase::get_check_ref(penalization_velocity_removed).clear();
+
     if (shamcomm::world_rank() == 0) {
         shamcomm::logs::raw_ln(
             sham::format("---------------- t = {}, dt = {} ----------------", t_current, dt));
@@ -3872,6 +3896,18 @@ shammodels::sph::TimestepLog shammodels::sph::Solver<Tvec, Kern>::evolve_once() 
 
     reset_merge_ghosts_fields();
     reset_eos_fields();
+
+    if (solver_config.penalization_config.is_enabled()) {
+        // second half of the penalization step (see init_solver_graph)
+        storage.solver_graph.get_node_ref_base("penalization").evaluate();
+
+        std::vector<Tvec> &removed = shambase::get_check_ref(penalization_velocity_removed);
+        penalization_forces.resize(removed.size());
+        for (u32 i = 0; i < removed.size(); i++) {
+            penalization_forces[i]
+                = (dt > 0) ? removed[i] * (solver_config.gpart_mass / dt) : Tvec{0, 0, 0};
+        }
+    }
 
     // if delta too big jump to compute force
 

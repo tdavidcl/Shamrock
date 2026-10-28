@@ -173,6 +173,18 @@ namespace shammodels::sph {
         Config solver_config;
         SolverLog solve_logs;
 
+        /// Velocity removed by each penalization zone (sum over its particles) during the current
+        /// timestep, accumulated by the penalization nodes
+        std::shared_ptr<std::vector<Tvec>> penalization_velocity_removed
+            = std::make_shared<std::vector<Tvec>>();
+
+        /// Force exerted by the gas on each penalization zone during the last timestep
+        std::vector<Tvec> penalization_forces;
+
+        /// Force exerted by the gas on each penalization zone during the last timestep (momentum
+        /// removed from the gas / dt), one entry per zone in config order
+        inline std::vector<Tvec> get_penalization_forces() { return penalization_forces; }
+
         /// Access synchronized simulation time (scheduler edge "time")
         inline Tscal &time_edge_value() {
             return scheduler()

@@ -22,6 +22,7 @@
 #include "shambase/overloaded.hpp"
 #include "config/AVConfig.hpp"
 #include "config/BCConfig.hpp"
+#include "config/PenalizationConfig.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shambackends/type_traits.hpp"
@@ -630,6 +631,17 @@ struct shammodels::sph::SolverConfig {
     //////////////////////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    // Penalization config
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Volume penalization zones (see the `PenalizationConfig` struct)
+    PenalizationConfig<Tvec> penalization_config;
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Penalization config (END)
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
     // CFL Configuration (config)
     //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1198,6 +1210,7 @@ struct shammodels::sph::SolverConfig {
     inline void check_config() {
         dust_config.check_config();
         mhd_config.check_config();
+        penalization_config.check_config();
 
         if (track_particles_id && false /*particle injection when added*/) {
             shamrock::experimental_feature_check(
@@ -1497,6 +1510,7 @@ namespace shammodels::sph {
             {"debug_dump_filename", p.debug_dump_filename},
             // particle killing config
             {"particle_killing", p.particle_killing},
+            {"penalization_config", p.penalization_config},
         };
     }
 
@@ -1586,6 +1600,7 @@ namespace shammodels::sph {
         _get_to_if_contains("do_debug_dump", p.do_debug_dump);
         _get_to_if_contains("debug_dump_filename", p.debug_dump_filename);
         _get_to_if_contains("particle_killing", p.particle_killing);
+        _get_to_if_contains("penalization_config", p.penalization_config);
 
         if (has_used_defaults || has_updated_config) {
             if (shamcomm::world_rank() == 0) {
