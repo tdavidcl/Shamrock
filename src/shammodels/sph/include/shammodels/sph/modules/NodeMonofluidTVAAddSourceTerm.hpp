@@ -89,7 +89,7 @@ namespace shammodels::sph::modules {
 
                     if (sham::abs(dt_hydro * ds_j_dt_val) > 1e-2 * sham::abs(sj) || dt_hydro == 0) {
                         // here there is high likelihood of overshoot, so we go semi implicit
-                        Tscal s_next = sycl::sqrt(sj * sj + S[id] * dt_hydro);
+                        Tscal s_next = sycl::sqrt(sham::max(sj * sj + S[id] * dt_hydro, Tscal(0)));
                         ds_j_dt_val  = (dt_hydro > 0) ? (s_next - sj) / dt_hydro : 0;
                     }
 
