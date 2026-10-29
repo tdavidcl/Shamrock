@@ -18,6 +18,7 @@
 #include "shambase/assert.hpp"
 #include "shambase/overloaded.hpp"
 #include "shamalgs/ImplVariant.hpp"
+#include "shamalgs/impl_registry.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/kernel_call.hpp"
 
@@ -118,39 +119,16 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "multi_std_sort";
         };
 
+        /// Registry name, shared by its registration and the dispatch site(s)
+        constexpr std::string_view segmented_sort_in_place_impl_name = "segmented_sort_in_place";
+
         shamalgs::ImplVariantGlobal<LocalInsertionSort, MultiStdSort> segmented_sort_in_place_impl{
             [](const sham::DeviceScheduler_ptr &, auto &self) {
                 self.set(MultiStdSort{});
             }};
 
-        /// Get list of available segmented sort in place implementations
-        std::vector<std::string> get_default_impl_list_segmented_sort_in_place() {
-            return segmented_sort_in_place_impl.get_default_config_list();
-        }
-
-        /// Get the current implementation for segmented sort in place
-        std::string get_current_impl_segmented_sort_in_place() {
-            return segmented_sort_in_place_impl.get_current_config();
-        }
-
-        /// Check if an implementation has been selected for segmented sort in place
-        bool is_impl_set_segmented_sort_in_place() { return segmented_sort_in_place_impl.is_set(); }
-
-        /// Set the implementation for segmented sort in place
-        void set_impl_segmented_sort_in_place(const std::string &impl) {
-            shamlog_info_ln(
-                "algs", "setting segmented sort in place implementation to impl :", impl);
-            segmented_sort_in_place_impl.set(impl);
-        }
-
-        /// Select the default implementation for segmented sort in place
-        void autoselect_impl_segmented_sort_in_place(const sham::DeviceScheduler_ptr &dev_sched) {
-            segmented_sort_in_place_impl.autoselect(dev_sched);
-            shamlog_info_ln(
-                "algs",
-                "defaulting segmented sort in place implementation to impl :",
-                get_current_impl_segmented_sort_in_place());
-        }
+        // Must come after the global it registers: same TU, so it is initialized after it
+        SHAMALGS_REGISTER_IMPL(segmented_sort_in_place_impl_name, segmented_sort_in_place_impl);
 
     } // namespace impl
 
@@ -167,7 +145,8 @@ namespace shamalgs::primitives {
         }
 
         if (!impl::segmented_sort_in_place_impl.is_set()) {
-            impl::autoselect_impl_segmented_sort_in_place(buf.get_dev_scheduler_ptr());
+            shamalgs::impl_registry::autoselect_impl(
+                impl::segmented_sort_in_place_impl_name, buf.get_dev_scheduler_ptr());
         }
 
         std::visit(

@@ -117,6 +117,10 @@ jobs:
           - worldsize: 1
             testfile: dustywave_godunov.py
           - worldsize: 1
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 2
+            testfile: ramses_ext_force_coupling.py
+          - worldsize: 1
             testfile: regression_sph_disc.py
           - worldsize: 1
             testfile: regression_sph_kh.py
@@ -127,6 +131,8 @@ jobs:
           - worldsize: 1
             testfile: run_sg_compare_error_sph.py
           - worldsize: 1
+            testfile: run_mhd_wavedamping.py
+          - worldsize: 1
             testfile: run_compare_shamrock_ph_disc.py
           - worldsize: 1
             testfile: run_test_sink_synchro.py
@@ -136,6 +142,16 @@ jobs:
             testfile: run_test_ext_forces_accretion.py
           - worldsize: 2
             testfile: run_test_ext_forces_accretion.py
+          - worldsize: 1
+            testfile: run_mhd_alfven_wave.py
+          - worldsize: 1
+            testfile: run_mhd_orszag_tang.py
+          - worldsize: 1
+            testfile: run_mhd_rotor.py
+          - worldsize: 1
+            testfile: run_field_collect_data_alignment.py
+          - worldsize: 2
+            testfile: run_field_collect_data_alignment.py
       fail-fast: ${{ inputs.fail_fast }}
 
     timeout-minutes: 60
@@ -194,6 +210,8 @@ jobs:
             artifact_name: gallery_ramses_run_sod_amr_reflective
           - testfile: "examples/ramses/run_compare_amr_refine_sod.py"
             artifact_name: gallery_ramses_run_compare_amr_refine_sod
+          - testfile: "examples/ramses/run_rayleigh_taylor.py"
+            artifact_name: gallery_ramses_run_rayleigh_taylor
 
           # GSPH examples
           - testfile: "examples/gsph/run_sod.py"
@@ -226,6 +244,8 @@ jobs:
             artifact_name: gallery_sph_run_sphsetup_logs
           - testfile: "examples/sph/run_orzag_tang.py"
             artifact_name: gallery_sph_run_orzag_tang
+          - testfile: "examples/sph/run_mhd_wavedamping.py"
+            artifact_name: gallery_sph_run_mhd_wavedamping
           - testfile: "examples/sph/run_pairing_instab.py"
             artifact_name: gallery_sph_pairing_instab
           - testfile: "examples/sph/run_cubic_reorganisation.py"

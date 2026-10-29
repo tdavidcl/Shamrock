@@ -121,9 +121,13 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
         .def(
             "set_smoothing_length_density_based_neigh_lim",
             &TConfig::set_smoothing_length_density_based_neigh_lim)
+        .def(
+            "set_smoothing_length_density_based_bisecting_nr",
+            &TConfig::set_smoothing_length_density_based_bisecting_nr)
         .def("set_enable_particle_reordering", &TConfig::set_enable_particle_reordering)
         .def("set_particle_reordering_step_freq", &TConfig::set_particle_reordering_step_freq)
         .def("set_show_ghost_zone_graph", &TConfig::set_show_ghost_zone_graph)
+        .def("set_show_ghost_stats", &TConfig::set_show_ghost_stats)
         .def("use_luminosity", &TConfig::use_luminosity)
         .def("compute_GW", &TConfig::use_GW)
         .def("set_save_dt_to_fields", &TConfig::set_save_dt_to_fields)
@@ -220,12 +224,23 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("beta_AV"))
         .def(
             "set_IdealMHD",
-            [](TConfig &self, Tscal sigma_mhd, Tscal sigma_u) {
-                self.set_IdealMHD({sigma_mhd, sigma_u});
+            [](TConfig &self, Tscal sigma_mhd, Tscal alpha_B) {
+                self.set_ideal_mhd({sigma_mhd, alpha_B});
             },
             py::kw_only(),
             py::arg("sigma_mhd"),
-            py::arg("sigma_u"))
+            py::arg("alpha_B") = 1.0)
+        .def(
+            "set_NonIdealMHD",
+            [](TConfig &self, Tscal sigma_mhd, Tscal etaO, Tscal etaH, Tscal etaAD, Tscal alpha_B) {
+                self.set_non_ideal_mhd({sigma_mhd, alpha_B, etaO, etaH, etaAD});
+            },
+            py::kw_only(),
+            py::arg("sigma_mhd"),
+            py::arg("etaO"),
+            py::arg("etaH"),
+            py::arg("etaAD"),
+            py::arg("alpha_B") = 1.0)
         .def(
             "set_self_gravity_none",
             [](TConfig &self) {
@@ -354,7 +369,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             "set_dust_evol_coala_coag",
             [](TConfig &self,
                Tscal rhodust_eps,
-               Tscal dv_max,
+               Tscal vfrag_threshold,
                std::vector<Tscal> massgrid,
                py::array_t<Tscal> tabflux_coag) {
                 if (massgrid.size() == 0) {
@@ -399,15 +414,30 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 }
 
                 self.dust_config.set_dust_evol_coala(
-                    {.rhodust_eps  = rhodust_eps,
-                     .dv_max       = dv_max,
-                     .massgrid     = massgrid,
-                     .tabflux_coag = tabflux_coag_vec});
+                    {.rhodust_eps     = rhodust_eps,
+                     .vfrag_threshold = vfrag_threshold,
+                     .massgrid        = massgrid,
+                     .tabflux_coag    = tabflux_coag_vec});
             },
             py::arg("rhodust_eps"),
-            py::arg("dv_max"),
+            py::arg("vfrag_threshold"),
             py::arg("massgrid"),
-            py::arg("tabflux_coag"))
+            py::arg("tabflux_coag"),
+            R"pbdoc(
+        Enable the COALA dust coagulation source term.
+
+        Args:
+            rhodust_eps: Dust density floor.
+            vfrag_threshold: Fragmentation velocity threshold, must be positive.
+                In this coagulation-only mode, a pair of dust bins whose
+                differential velocity ``|dv_ij|`` exceeds this value gets
+                ``dv_ij = 0``. This is a crude stand-in for fragmentation
+                ("poor man" fragmentation), not a fragmentation model. Pass
+                ``math.inf`` to disable it.
+            massgrid: Dust mass grid bin edges, of size ``nbins + 1``.
+            tabflux_coag: Tabulated coagulation flux, of shape
+                ``(nbins, nbins, nbins)``.
+        )pbdoc")
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {
@@ -551,13 +581,53 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
     py::class_<TSPHSetup>(m, setup_name.c_str())
         .def(
             "make_generator_lattice_hcp",
-            [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max, bool discontinuous) {
-                return self.make_generator_lattice_hcp(dr, {box_min, box_max}, discontinuous);
+            [](TSPHSetup &self,
+               Tscal dr,
+               Tvec box_min,
+               Tvec box_max,
+               bool discontinuous,
+               Tscal init_h_factor) {
+                return self.make_generator_lattice_hcp(
+                    dr, {box_min, box_max}, discontinuous, init_h_factor);
             },
             py::arg("dr"),
             py::arg("box_min"),
             py::arg("box_max"),
-            py::arg("discontinuous") = true)
+            py::arg("discontinuous") = true,
+            py::arg("init_h_factor") = modules::GeneratorLatticeHCP<Tvec>::default_init_h_factor,
+            R"==(
+    Generate particles on a HCP lattice of parameter dr (neighbours are 2 dr apart)
+
+    The initial smoothing length is set to init_h_factor * dr. The default 2^(5/6)
+    is the equilibrium smoothing length for hfact = 1 (the smallest hfact of all
+    the SPH kernels), so the initial guess never exceeds the equilibrium value.
+)==")
+        .def(
+            "make_generator_lattice_fcc",
+            [](TSPHSetup &self,
+               Tscal dr,
+               Tvec box_min,
+               Tvec box_max,
+               bool discontinuous,
+               Tscal init_h_factor) {
+                return self.make_generator_lattice_fcc(
+                    dr, {box_min, box_max}, discontinuous, init_h_factor);
+            },
+            py::arg("dr"),
+            py::arg("box_min"),
+            py::arg("box_max"),
+            py::arg("discontinuous") = true,
+            py::arg("init_h_factor") = modules::GeneratorLatticeFCC<Tvec>::default_init_h_factor,
+            R"==(
+    Generate particles on a true FCC lattice (ABC stacking of close-packed layers along z)
+    of parameter dr (neighbours are 2 dr apart)
+
+    The number of layers along z must be a multiple of 3, the number of rows along y even
+
+    The initial smoothing length is set to init_h_factor * dr. The default 2^(5/6)
+    is the equilibrium smoothing length for hfact = 1 (the smallest hfact of all
+    the SPH kernels), so the initial guess never exceeds the equilibrium value.
+)==")
         .def(
             "make_generator_lattice_cubic",
             [](TSPHSetup &self, Tscal dr, Tvec box_min, Tvec box_max) {
@@ -904,6 +974,21 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](T &self, f64 dr, u32 xcnt, u32 ycnt, u32 zcnt) {
                 return self.get_box_dim_fcc_3d(dr, xcnt, ycnt, zcnt);
             })
+        .def(
+            "get_box_dim_true_fcc_3d",
+            [](T &self, f64 dr, u32 xcnt, u32 ycnt, u32 zcnt) {
+                return self.get_box_dim_true_fcc_3d(dr, xcnt, ycnt, zcnt);
+            },
+            py::arg("dr"),
+            py::arg("xcnt"),
+            py::arg("ycnt"),
+            py::arg("zcnt"),
+            R"==(
+    Get the dimensions of a periodic box holding a true FCC lattice of xcnt * ycnt * zcnt
+    (see setup.make_generator_lattice_fcc). Unlike get_box_dim_fcc_3d (which actually
+    describes a HCP lattice and is kept for backward compatibility), this throws if the box
+    cannot be periodic: xcnt must be >= 2, ycnt even and zcnt a multiple of 3.
+)==")
         .def(
             "get_ideal_fcc_box",
             [](T &self, f64 dr, f64_3 box_min, f64_3 box_max) {

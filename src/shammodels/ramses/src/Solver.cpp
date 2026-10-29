@@ -18,12 +18,19 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/overloaded.hpp"
 #include "shamalgs/collective/gather_str.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammodels/common/timestep_report.hpp"
 #include "shammodels/ramses/Solver.hpp"
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shammodels/ramses/modules/AMRGridRefinementHandler.hpp"
+#include "shammodels/ramses/modules/AddExtForceConstantGravity.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceDust.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceDustTrapezoidal.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceGas.hpp"
+#include "shammodels/ramses/modules/ApplyExtForceGasTrapezoidal.hpp"
+#include "shammodels/ramses/modules/BarotropicEnergyReset.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
 #include "shammodels/ramses/modules/ComputeCFL.hpp"
@@ -33,16 +40,19 @@
 #include "shammodels/ramses/modules/ComputeMass.hpp"
 #include "shammodels/ramses/modules/ComputeSumOverV.hpp"
 #include "shammodels/ramses/modules/ConsToPrimDust.hpp"
-#include "shammodels/ramses/modules/ConsToPrimGas.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGasAdiabatic.hpp"
+#include "shammodels/ramses/modules/ConsToPrimGasBarotropic.hpp"
 #include "shammodels/ramses/modules/DragIntegrator.hpp"
 #include "shammodels/ramses/modules/EulerTimeDerivativeDust.hpp"
-#include "shammodels/ramses/modules/EulerTimeDerivativeGas.hpp"
+#include "shammodels/ramses/modules/EulerTimeDerivativeGasAdiabatic.hpp"
+#include "shammodels/ramses/modules/EulerTimeDerivativeGasBarotropic.hpp"
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerIndices.hpp"
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
+#include "shammodels/ramses/modules/ResetExtForceAcc.hpp"
 #include "shammodels/ramses/modules/SlopeLimitedGradient.hpp"
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
@@ -147,7 +157,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
         sham::DeviceBuffer<TgridVec> pos_min_block(0, dev_sched);
         sham::DeviceBuffer<TgridVec> pos_max_block(0, dev_sched);
 
-        patch_data_layers.get_const_refs().for_each(
+        patch_data_layers.get_const_refs().for_each_ordered(
             [&](u64 id_patch, const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                 auto &pdat_ref    = pdat.get();
                 auto &buf_pos_min = pdat_ref.get_field_buf_ref<TgridVec>(0);
@@ -221,7 +231,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             } else {
                 sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-                patch_data_layers.get_const_refs().for_each(
+                patch_data_layers.get_const_refs().for_each_ordered(
                     [&](u64 id_patch,
                         const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                         auto &pdat_ref  = pdat.get();
@@ -238,7 +248,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             using f_t = u32;
             sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-            patch_data_layers.get_const_refs().for_each(
+            patch_data_layers.get_const_refs().for_each_ordered(
                 [&](u64 id_patch,
                     const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                     auto buf_field
@@ -254,7 +264,7 @@ class PatchDataLayerToVtk : public shamrock::solvergraph::INode {
             using f_t = u32;
             sham::DeviceBuffer<f_t> data(0, dev_sched);
 
-            patch_data_layers.get_const_refs().for_each(
+            patch_data_layers.get_const_refs().for_each_ordered(
                 [&](u64 id_patch,
                     const std::reference_wrapper<shamrock::patch::PatchDataLayer> &pdat) {
                     auto buf_field
@@ -390,7 +400,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             "rhovel_dust", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
     }
 
-    // will be filled by NodeConsToPrimGas
+    // will be filled by NodeConsToPrimGasAdiabatic or NodeConsToPrimGasBarotropic
     storage.vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "vel", "\\mathbf{v}");
     storage.press
@@ -466,13 +476,18 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.grad_P = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "grad_P", "\\nabla P");
 
-    // will be filled by NodeEulerTimeDerivativeGas
+    // will be filled by NodeEulerTimeDerivativeGasAdiabatic or NodeEulerTimeDerivativeGasBarotropic
+    // euler_dt_press exists only for an adiabatic hydro step (Adiabatic or ResetBarotropic EOS):
+    // with the Barotropic EOS the face pressure is recomputed from the face density, so no
+    // pressure time derivative is needed
     storage.euler_dt_rho = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
         AMRBlock::block_size, "euler_dt_rho", "\\partial_t \\rho");
     storage.euler_dt_vel = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
         AMRBlock::block_size, "euler_dt_vel", "\\partial_t \\mathbf{v}");
-    storage.euler_dt_press = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
-        AMRBlock::block_size, "euler_dt_press", "\\partial_t P");
+    if (solver_config.eos_config.is_hydro_adiabatic()) {
+        storage.euler_dt_press = std::make_shared<shamrock::solvergraph::Field<Tscal>>(
+            AMRBlock::block_size, "euler_dt_press", "\\partial_t P");
+    }
 
     if (solver_config.is_dust_on()) {
         u32 ndust             = solver_config.dust_config.ndust;
@@ -605,6 +620,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             "simulation_volume", "V_{\\rm sim}");
     }
 
+    storage.dt = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt", "\\Delta t");
     storage.dt_over2
         = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>("dt_half", "dt_{half}");
 
@@ -1040,8 +1056,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     { // Build ConsToPrim node
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> const_to_prim_sequence;
 
-        {
-            modules::NodeConsToPrimGas<Tvec> node{AMRBlock::block_size, solver_config.eos_gamma};
+        auto push_adiabatic_node = [&](Tscal gamma) {
+            modules::NodeConsToPrimGasAdiabatic<Tvec> node{AMRBlock::block_size, gamma};
             node.set_edges(
                 storage.block_counts_with_ghost,
                 storage.refs_rho,
@@ -1051,7 +1067,32 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                 storage.press);
 
             const_to_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
-        }
+        };
+
+        using EOS = EOSConfig<Tvec>;
+        std::visit(
+            shambase::overloaded{
+                [&](const typename EOS::Adiabatic &cfg) {
+                    push_adiabatic_node(cfg.gamma);
+                },
+                [&](const typename EOS::ResetBarotropic &cfg) {
+                    push_adiabatic_node(cfg.gamma);
+                },
+                [&](const typename EOS::Barotropic &cfg) {
+                    modules::NodeConsToPrimGasBarotropic<Tvec> node{
+                        AMRBlock::block_size, cfg.rho_crit, cfg.cs0, cfg.gamma};
+                    node.set_edges(
+                        storage.block_counts_with_ghost,
+                        storage.refs_rho,
+                        storage.refs_rhov,
+                        storage.vel,
+                        storage.press);
+
+                    const_to_prim_sequence.push_back(
+                        std::make_shared<decltype(node)>(std::move(node)));
+                },
+            },
+            solver_config.eos_config.config);
 
         if (solver_config.is_dust_on()) {
             u32 ndust = solver_config.dust_config.ndust;
@@ -1148,22 +1189,53 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         std::vector<std::shared_ptr<shamrock::solvergraph::INode>> dt_prim_sequence;
 
         {
-            modules::NodeEulerTimeDerivativeGas<Tvec> node{
-                AMRBlock::block_size, solver_config.eos_gamma};
-            node.set_edges(
-                storage.block_counts_with_ghost,
-                storage.refs_rho,
-                storage.vel,
-                storage.press,
-                storage.grad_rho,
-                storage.dx_v,
-                storage.dy_v,
-                storage.dz_v,
-                storage.grad_P,
-                storage.euler_dt_rho,
-                storage.euler_dt_vel,
-                storage.euler_dt_press);
-            dt_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            auto push_adiabatic_node = [&](Tscal gamma) {
+                modules::NodeEulerTimeDerivativeGasAdiabatic<Tvec> node{
+                    AMRBlock::block_size, gamma};
+                node.set_edges(
+                    storage.block_counts_with_ghost,
+                    storage.refs_rho,
+                    storage.vel,
+                    storage.press,
+                    storage.grad_rho,
+                    storage.dx_v,
+                    storage.dy_v,
+                    storage.dz_v,
+                    storage.grad_P,
+                    storage.euler_dt_rho,
+                    storage.euler_dt_vel,
+                    storage.euler_dt_press);
+                dt_prim_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            };
+
+            using EOS = EOSConfig<Tvec>;
+            std::visit(
+                shambase::overloaded{
+                    [&](const typename EOS::Adiabatic &cfg) {
+                        push_adiabatic_node(cfg.gamma);
+                    },
+                    [&](const typename EOS::ResetBarotropic &cfg) {
+                        push_adiabatic_node(cfg.gamma);
+                    },
+                    [&](const typename EOS::Barotropic &) {
+                        modules::NodeEulerTimeDerivativeGasBarotropic<Tvec> node{
+                            AMRBlock::block_size};
+                        node.set_edges(
+                            storage.block_counts_with_ghost,
+                            storage.refs_rho,
+                            storage.vel,
+                            storage.grad_rho,
+                            storage.dx_v,
+                            storage.dy_v,
+                            storage.dz_v,
+                            storage.grad_P,
+                            storage.euler_dt_rho,
+                            storage.euler_dt_vel);
+                        dt_prim_sequence.push_back(
+                            std::make_shared<decltype(node)>(std::move(node)));
+                    },
+                },
+                solver_config.eos_config.config);
         }
 
         if (solver_config.is_dust_on()) {
@@ -1229,7 +1301,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             interp_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
         }
 
-        {
+        // with the Barotropic EOS the face pressure is recomputed from the face density, so it is
+        // not interpolated (and euler_dt_press does not exist)
+        if (solver_config.eos_config.is_hydro_adiabatic()) {
             modules::InterpolateToFacePress<Tvec, TgridVec> node{AMRBlock::block_size};
             node.set_edges(
                 storage.dt_over2,
@@ -1303,7 +1377,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::Rusanov>
                 node(
                     "Gas flux compute",
-                    solver_config.eos_gamma,
+                    solver_config.get_eos_gamma(),
                     storage.cell_graph_edge,
                     storage.rho_face_xp,
                     storage.rho_face_xm,
@@ -1345,7 +1419,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         } else if (solver_config.riemann_config == HLL) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLL> node(
                 "Gas flux compute",
-                solver_config.eos_gamma,
+                solver_config.get_eos_gamma(),
                 storage.cell_graph_edge,
                 storage.rho_face_xp,
                 storage.rho_face_xm,
@@ -1387,7 +1461,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         } else if (solver_config.riemann_config == HLLC) {
             modules::NodeComputeFluxGasMode<Tvec, TgridVec, modules::RiemannSolverMode::HLLC> node(
                 "Gas flux compute",
-                solver_config.eos_gamma,
+                solver_config.get_eos_gamma(),
                 storage.cell_graph_edge,
                 storage.rho_face_xp,
                 storage.rho_face_xm,
@@ -1563,6 +1637,165 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         solver_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
     }
 
+    if (solver_config.has_ext_forces()) { // external forces
+
+        // The external forces are applied to the state at t^n (patch data without ghosts) before
+        // the time integration, so that they are taken into account by every integrator (with or
+        // without drag).
+
+        using ExtForceConfig  = typename Config::ExtForceConfig;
+        using ConstantGravity = typename ExtForceConfig::ConstantGravity;
+
+        const bool trapezoidal
+            = solver_config.ext_force_config.coupling == ExtForceCoupling::Trapezoidal;
+
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> ext_force_sequence;
+
+        if (trapezoidal) {
+            storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}^{n}");
+            storage.a_ext_next = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext_next", "\\mathbf{a}_{\\rm ext}^{n+1}");
+        } else {
+            storage.a_ext = std::make_shared<shamrock::solvergraph::Field<Tvec>>(
+                AMRBlock::block_size, "a_ext", "\\mathbf{a}_{\\rm ext}");
+        }
+
+        // accelerations at the time levels required by the coupling, paired with the time of the
+        // level after t^n in units of dt (the state there is U^n + dt_level * dt * dU/dt):
+        // t^{n+1/2} for the midpoint rule, t^n and t^{n+1} for the trapezoidal rule
+        std::vector<std::pair<std::shared_ptr<shamrock::solvergraph::Field<Tvec>>, Tscal>>
+            a_ext_levels;
+        if (trapezoidal) {
+            a_ext_levels.push_back({storage.a_ext, Tscal{0}});
+            a_ext_levels.push_back({storage.a_ext_next, Tscal{1}});
+        } else {
+            a_ext_levels.push_back({storage.a_ext, Tscal{0.5}});
+        }
+
+        // sum of the accelerations of all the forces, at each level
+        for (auto &[a_ext_level, dt_level] : a_ext_levels) {
+            modules::ResetExtForceAcc<Tvec> node{AMRBlock::block_size};
+            node.set_edges(storage.block_counts, a_ext_level);
+            ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        // Time at which the forces must be evaluated to keep the scheme second order in time:
+        //  - midpoint rule: at the half step t^{n+1/2}. This does not matter for a constant
+        //    acceleration, but velocity dependent forces would need the half step velocity,
+        //    including the half kick of the force itself (e.g. predictor-corrector, or implicit
+        //    midpoint for stiff or no-work forces).
+        //  - trapezoidal rule: at t^n and t^{n+1}. A force depending on the state at t^{n+1} must
+        //    only depend on the density there, which is known before the kick (this is the case
+        //    of self-gravity).
+        for (const auto &var_force : solver_config.ext_force_config.ext_forces) {
+            std::visit(
+                shambase::overloaded{
+                    [&](const ConstantGravity &cfg) {
+                        // time independent, the same g is added at every level
+                        for (auto &[a_ext_level, dt_level] : a_ext_levels) {
+                            modules::AddExtForceConstantGravity<Tvec> node{
+                                AMRBlock::block_size, cfg.g};
+                            node.set_edges(storage.block_counts, a_ext_level);
+                            ext_force_sequence.push_back(
+                                std::make_shared<decltype(node)>(std::move(node)));
+                        }
+                    },
+                },
+                var_force);
+        }
+
+        shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
+
+        // refs to the fields of the patch data without ghosts (the ones that are integrated)
+        auto attach_source_field = [&]<class T>(
+                                       std::shared_ptr<shamrock::solvergraph::FieldRefs<T>> &refs,
+                                       const std::string &field_name) {
+            shamrock::solvergraph::GetFieldRefFromLayer<T> attach{pdl, field_name};
+            attach.set_edges(storage.source_patches, refs);
+            ext_force_sequence.push_back(std::make_shared<decltype(attach)>(std::move(attach)));
+        };
+
+        { // apply to the gas
+            auto refs_rho
+                = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho_source", "\\rho");
+            auto refs_rhov = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_source", "(\\rho \\mathbf{v})");
+            auto refs_rhoe = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rhoetot_source", "(\\rho E)");
+
+            attach_source_field(refs_rho, "rho");
+            attach_source_field(refs_rhov, "rhovel");
+            attach_source_field(refs_rhoe, "rhoetot");
+
+            if (trapezoidal) {
+                modules::ApplyExtForceGasTrapezoidal<Tvec> node{AMRBlock::block_size};
+                node.set_edges(
+                    storage.dt,
+                    storage.block_counts,
+                    refs_rho,
+                    storage.dtrho,
+                    storage.dtrhov,
+                    storage.a_ext,
+                    storage.a_ext_next,
+                    refs_rhov,
+                    refs_rhoe);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else {
+                modules::ApplyExtForceGas<Tvec> node{AMRBlock::block_size};
+                node.set_edges(
+                    storage.dt,
+                    storage.block_counts,
+                    refs_rho,
+                    storage.dtrho,
+                    storage.dtrhov,
+                    storage.a_ext,
+                    refs_rhov,
+                    refs_rhoe);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
+        }
+
+        if (solver_config.is_dust_on()) { // apply to the dust
+            auto refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rho_dust_source", "\\rho_{\\rm dust}");
+            auto refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_dust_source", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
+
+            attach_source_field(refs_rho_dust, "rho_dust");
+            attach_source_field(refs_rhov_dust, "rhovel_dust");
+
+            if (trapezoidal) {
+                modules::ApplyExtForceDustTrapezoidal<Tvec> node{
+                    AMRBlock::block_size, solver_config.dust_config.ndust};
+                node.set_edges(
+                    storage.dt,
+                    storage.block_counts,
+                    refs_rho_dust,
+                    storage.dtrho_dust,
+                    storage.a_ext,
+                    storage.a_ext_next,
+                    refs_rhov_dust);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            } else {
+                modules::ApplyExtForceDust<Tvec> node{
+                    AMRBlock::block_size, solver_config.dust_config.ndust};
+                node.set_edges(
+                    storage.dt,
+                    storage.block_counts,
+                    refs_rho_dust,
+                    storage.dtrho_dust,
+                    storage.a_ext,
+                    refs_rhov_dust);
+                ext_force_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
+        }
+
+        shamrock::solvergraph::OperationSequence seq(
+            "External forces", std::move(ext_force_sequence));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
+    }
+
     shamrock::solvergraph::OperationSequence seq("Solver", std::move(solver_sequence));
     storage.solver_sequence = std::make_shared<decltype(seq)>(std::move(seq));
 
@@ -1596,6 +1829,8 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     if (shamcomm::world_rank() == 0) {
         logger::normal_ln("amr::Godunov", sham::format("t = {}, dt = {}", t_current, dt_input));
     }
+
+    shambase::get_check_ref(storage.dt).value = dt_input;
 
     if (solver_config.face_half_time_interpolation) {
         shambase::get_check_ref(storage.dt_over2).value = dt_input / 2.0;
@@ -1730,6 +1965,14 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
             // Then refinement pass
             refinement.update_refinement_new();
         }
+    }
+
+    // ResetBarotropic EOS: project the state onto the barotrope before the CFL. Done outside of
+    // the dt_input > 0 branch so that the first step (dt_input = 0) also resets the initial state
+    if (std::holds_alternative<typename EOSConfig<Tvec>::ResetBarotropic>(
+            solver_config.eos_config.config)) {
+        modules::BarotropicEnergyReset energy_reset(context, solver_config, storage);
+        energy_reset.reset_energy();
     }
 
     modules::ComputeCFL cfl_compute(context, solver_config, storage);

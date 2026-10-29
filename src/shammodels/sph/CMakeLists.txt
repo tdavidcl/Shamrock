@@ -38,6 +38,7 @@ set(Sources
     src/modules/UpdateDerivs.cpp
     src/modules/ComputeLoadBalanceValue.cpp
     src/modules/ComputeOmega.cpp
+    src/modules/ComputeJ.cpp
     src/modules/ComputeLuminosity.cpp
     src/modules/NeighbourCache.cpp
     src/modules/ParticleReordering.cpp
@@ -48,9 +49,11 @@ set(Sources
     src/modules/GetParticlesOutsideSphere.cpp
     src/modules/IterateSmoothingLengthDensity.cpp
     src/modules/IterateSmoothingLengthDensityNeighLim.cpp
+    src/modules/IterateSmoothingLengthDensityBisectingNR.cpp
     src/modules/LoopSmoothingLengthIter.cpp
     src/modules/ComputeNeighStats.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAV.cpp
+    src/modules/NodeUpdateDerivsVaryingAlphaAVMHD.cpp
     src/modules/NodeUpdateDerivsVaryingAlphaAVDustTVA.cpp
     src/modules/NodeUpdateDerivsMonofluidTVA.cpp
     src/modules/NodeComputePressureGrad.cpp
