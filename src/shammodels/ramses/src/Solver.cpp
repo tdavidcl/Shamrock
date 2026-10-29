@@ -314,6 +314,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         if (solver_config.is_gravity_on()) {
             ghost_layout.add_field<Tscal>("phi", AMRBlock::block_size);
+            ghost_layout.add_field<Tscal>("phi_old", AMRBlock::block_size);
         }
 
         if (solver_config.is_gas_passive_scalar_on()) {
