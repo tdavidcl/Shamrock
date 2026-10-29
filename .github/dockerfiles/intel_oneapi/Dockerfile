@@ -14,7 +14,11 @@ RUN ./env/new-env --machine docker.intel_oneapi --builddir build_intel_docker --
     cd build_intel_docker && \
     pip3 install -v --break-system-packages .
 
-RUN pip3 install -v --break-system-packages jupyter matplotlib numpy scipy
+# The base image ships some Python packages through apt (e.g. typing_extensions)
+# that pip cannot uninstall (no RECORD file) when a dependency needs a newer
+# version. --ignore-installed installs pip's copies in /usr/local instead,
+# which shadow the apt ones without touching them.
+RUN pip3 install -v --break-system-packages --ignore-installed jupyter matplotlib numpy scipy
 EXPOSE 8888
 
 WORKDIR /work
