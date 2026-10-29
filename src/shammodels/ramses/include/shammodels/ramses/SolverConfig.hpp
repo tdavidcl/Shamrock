@@ -324,11 +324,11 @@ struct shammodels::basegodunov::SolverConfig {
         }
     }
     inline Tscal get_constant_G() { return get_unit_sys().template get<shamunits::constants::G>(); }
-    inline bool is_boundary_periodic() { return true; }
-    GravityConfig<Tvec> gravity_config{};
     inline Tscal get_constant_4piG() {
         return get_unit_sys().template get<4 * shamunits::pi<double> * shamunits::constants::G>();
     }
+    inline bool is_boundary_periodic() { return true; }
+    GravityConfig<Tvec> gravity_config{};
     inline Tscal get_grav_tol() { return gravity_config.get_tolerance(); }
     inline Tscal get_happy_bk_grav_tol() { return gravity_config.tol_hp_bk; }
     inline bool is_gravity_on() { return gravity_config.is_gravity_on(); }
