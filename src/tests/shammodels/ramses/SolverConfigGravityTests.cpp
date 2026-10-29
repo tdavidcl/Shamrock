@@ -7,10 +7,12 @@
 //
 // -------------------------------------------------------//
 
-#include "shambase/constants.hpp"
 #include "shammodels/ramses/SolverConfig.hpp"
 #include "shamtest/shamtest.hpp"
 #include <nlohmann/json.hpp>
+#include <shamunits/Constants.hpp>
+#include <shamunits/UnitSystem.hpp>
+#include <shamunits/constant_table.hpp>
 
 namespace {
 
@@ -29,22 +31,16 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::gravity", 1) {
         Config cfg{};
         REQUIRE_EQUAL(cfg.get_grav_tol(), 1e-6);
         REQUIRE_EQUAL(cfg.get_happy_bk_grav_tol(), 1e-6);
-        REQUIRE_EQUAL(cfg.gravity_config.G, 1.);
-        REQUIRE_EQUAL(cfg.gravity_config.set_G, false);
         REQUIRE_EQUAL(cfg.gravity_config.Niter_max, 100u);
     }
 
-    { // set_G overrides the gravitational constant of the unit system
+    { // 4 pi G uses the gravitational constant of the unit system, G = 1 with a mass unit of
+      // 1 / G_SI kg
+        f64 G_SI = shamunits::UnitSystem<f64>{}.get<shamunits::constants::G>();
         Config cfg{};
-        cfg.gravity_config.G     = 2.5;
-        cfg.gravity_config.set_G = true;
-        REQUIRE_FLOAT_EQUAL(cfg.get_constant_4piG(), 4 * shambase::constants::pi<f64> * 2.5, 1e-15);
-
-        cfg.gravity_config.set_G = false;
-        REQUIRE_FLOAT_EQUAL(
-            cfg.get_constant_4piG(),
-            4 * shambase::constants::pi<f64> * cfg.get_constant_G(),
-            1e-15);
+        cfg.set_units(shamunits::UnitSystem<f64>(1, 1, 1 / G_SI));
+        REQUIRE_EQUAL(cfg.get_constant_G(), 1.);
+        REQUIRE_FLOAT_EQUAL(cfg.get_constant_4piG(), 4 * shamunits::pi<f64>, 1e-15);
     }
 
     { // json roundtrip
@@ -52,16 +48,12 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::gravity", 1) {
         in.gravity_config.gravity_mode = shammodels::basegodunov::PCG;
         in.gravity_config.tol          = 1e-9;
         in.gravity_config.tol_hp_bk    = 1e-12;
-        in.gravity_config.G            = 3.;
-        in.gravity_config.set_G        = true;
         in.gravity_config.Niter_max    = 1234;
 
         Config out = json_roundtrip(in);
         REQUIRE(out.gravity_config.gravity_mode == shammodels::basegodunov::PCG);
         REQUIRE_EQUAL(out.gravity_config.tol, 1e-9);
         REQUIRE_EQUAL(out.gravity_config.tol_hp_bk, 1e-12);
-        REQUIRE_EQUAL(out.gravity_config.G, 3.);
-        REQUIRE_EQUAL(out.gravity_config.set_G, true);
         REQUIRE_EQUAL(out.gravity_config.Niter_max, 1234u);
     }
 
@@ -71,15 +63,11 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::gravity", 1) {
 
         nlohmann::json j = in;
         j.erase("gravity_tol_happy_breakdown");
-        j.erase("gravity_G");
-        j.erase("gravity_set_G");
         j.erase("gravity_Niter_max");
 
         Config out = j.get<Config>();
         REQUIRE_EQUAL(out.gravity_config.tol, 1e-7);
         REQUIRE_EQUAL(out.gravity_config.tol_hp_bk, 1e-6);
-        REQUIRE_EQUAL(out.gravity_config.G, 1.);
-        REQUIRE_EQUAL(out.gravity_config.set_G, false);
         REQUIRE_EQUAL(out.gravity_config.Niter_max, 100u);
     }
 }

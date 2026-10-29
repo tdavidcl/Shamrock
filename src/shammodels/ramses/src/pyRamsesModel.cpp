@@ -282,24 +282,6 @@ namespace shammodels::basegodunov {
                     self.gravity_config.gravity_mode = BICGSTAB;
                 })
             .def(
-                "set_self_gravity_G_values",
-                [](TConfig &self, bool set_G, Tscal G_values) {
-                    self.gravity_config.set_G = set_G;
-                    self.gravity_config.G     = G_values;
-                },
-                py::arg("set_G"),
-                py::arg("G_values"),
-                R"==(
-    Override the gravitational constant used by the self-gravity solver.
-
-    Parameters
-    ----------
-    set_G : bool
-        If True, use G_values instead of the gravitational constant of the unit system
-    G_values : float
-        Value of G in code units (only used if set_G is True)
-)==")
-            .def(
                 "set_self_gravity_Niter_max",
                 [](TConfig &self, u32 Niter) {
                     self.gravity_config.Niter_max = Niter;

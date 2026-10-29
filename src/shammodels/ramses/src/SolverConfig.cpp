@@ -68,8 +68,6 @@ namespace shammodels::basegodunov {
             {"analytical_gravity", p.gravity_config.analytical_gravity},
             {"gravity_tol", p.gravity_config.tol},
             {"gravity_tol_happy_breakdown", p.gravity_config.tol_hp_bk},
-            {"gravity_G", p.gravity_config.G},
-            {"gravity_set_G", p.gravity_config.set_G},
             {"gravity_Niter_max", p.gravity_config.Niter_max},
             {"grid_coord_to_pos_fact", p.grid_coord_to_pos_fact},
             {"hydro_riemann_solver", p.riemann_config},
@@ -130,8 +128,6 @@ namespace shammodels::basegodunov {
         _get_to_if_contains("analytical_gravity", p.gravity_config.analytical_gravity);
         _get_to_if_contains("gravity_tol", p.gravity_config.tol);
         _get_to_if_contains("gravity_tol_happy_breakdown", p.gravity_config.tol_hp_bk);
-        _get_to_if_contains("gravity_G", p.gravity_config.G);
-        _get_to_if_contains("gravity_set_G", p.gravity_config.set_G);
         _get_to_if_contains("gravity_Niter_max", p.gravity_config.Niter_max);
         _get_to_if_contains("grid_coord_to_pos_fact", p.grid_coord_to_pos_fact);
         _get_to_if_contains("hydro_riemann_solver", p.riemann_config);
