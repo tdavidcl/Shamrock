@@ -282,6 +282,39 @@ namespace shammodels::basegodunov {
                     self.gravity_config.gravity_mode = BICGSTAB;
                 })
             .def(
+                "set_self_gravity_Niter_max",
+                [](TConfig &self, u32 Niter) {
+                    self.gravity_config.Niter_max = Niter;
+                },
+                py::arg("Niter"),
+                R"==(
+    Set the maximum number of iterations of the self-gravity Poisson solver.
+)==")
+            .def(
+                "set_self_gravity_tol",
+                [](TConfig &self, Tscal tol) {
+                    self.gravity_config.tol = tol;
+                },
+                py::arg("tol"),
+                R"==(
+    Set the convergence tolerance of the self-gravity Poisson solver.
+
+    The solver stops when the L2 norm of the residual is below tol relative to the
+    one of the right-hand side.
+)==")
+            .def(
+                "set_self_gravity_happy_breakdown_tol",
+                [](TConfig &self, Tscal tol) {
+                    self.gravity_config.tol_hp_bk = tol;
+                },
+                py::arg("tol"),
+                R"==(
+    Set the tolerance of the BiCGSTAB lucky breakdown test.
+
+    BiCGSTAB restarts (shadow residual and search direction reset to the residual)
+    when |<r_k, r'_0>| < tol |r_k| |r'_0|.
+)==")
+            .def(
                 "add_ext_force_constant_gravity",
                 [](TConfig &self, Tvec g) {
                     self.ext_force_config.add_constant_gravity(g);
