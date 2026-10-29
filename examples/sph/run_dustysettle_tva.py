@@ -4,6 +4,10 @@ Dusty settling SPH test
 
 Perform a dust settling test in a local stratified box.
 
+The SPH (TVA) results are compared to a reference solution where the dust settles on a gas at
+rest (dashed black) and to the full gas + dust multifluid equations solved with a simple 1D
+scheme (dashed light blue), which shows how far the TVA results are from the non-TVA solution.
+
 If you want to change the resolution, you can set the LZ environment variable.
 
 Example (from build directory):
@@ -122,6 +126,7 @@ max_v_inject_threshold = 1.0
 reference_tau = 0.025
 reference_Nz = 4000
 reference_zrange = 3.5  # in units of H
+multifluid_Nz = 1000  # cells of the multifluid (non-TVA) reference, must be even
 
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}/"
@@ -130,6 +135,7 @@ dump_folder = sim_folder + "dump/"
 # Plotting
 cmap = "plasma"
 dpi = 250
+multifluid_color = "lightskyblue"
 
 # %%
 # Derived physical scales and lattice geometry
@@ -491,6 +497,181 @@ class ReferenceDustySettleAll:
 reference_dusty_settle = None
 
 
+# %%
+# Multifluid (non-TVA) reference solution
+# ------------------------------------------
+#
+# The reference above evolves each dust species on a gas held at rest. To see how far the
+# TVA results are from the general dust-gas problem, we also solve the full 1D multifluid
+# equations: one continuity and one momentum equation for the gas and for each dust species,
+# isothermal gas pressure, vertical gravity, Epstein drag with back-reaction on the gas, and
+# the same velocity dissipation as the SPH run (acting on the barycentric velocity).
+#
+# The scheme is deliberately simple: staggered grid (densities at cell centres, velocities
+# at faces, closed walls), donor-cell upwind continuity, upwind velocity advection, explicit
+# pressure / gravity / dissipation and a backward-Euler drag step that conserves momentum.
+# The gas starts in discrete hydrostatic equilibrium, so it stays at rest without dust.
+
+
+def vertical_gravity(zbar):
+    """Vertical gravity in units of vK * OmegaK (same as in ``S_v``)."""
+    return -zbar / (1 + zbar**2) ** 1.5
+
+
+def upwind_continuity(rho, v, dt, hz):
+    """Donor-cell update of cell-centred densities, v at faces (zero at the walls)."""
+    v_in = v[..., 1:-1]
+    flux = np.zeros_like(v)
+    flux[..., 1:-1] = v_in * np.where(v_in > 0, rho[..., :-1], rho[..., 1:])
+    return rho - dt / hz * (flux[..., 1:] - flux[..., :-1])
+
+
+def upwind_advection(v, hz):
+    """Upwind v dv/dz on the faces, zero on the walls."""
+    adv = np.zeros_like(v)
+    v_in = v[..., 1:-1]
+    dv = np.where(v_in > 0, v_in - v[..., :-2], v[..., 2:] - v_in)
+    adv[..., 1:-1] = v_in * dv / hz
+    return adv
+
+
+def to_faces(rho):
+    """Cell-centred to face densities (walls take the adjacent cell)."""
+    rho_f = np.empty(rho.shape[:-1] + (rho.shape[-1] + 1,))
+    rho_f[..., 1:-1] = 0.5 * (rho[..., :-1] + rho[..., 1:])
+    rho_f[..., 0] = rho[..., 0]
+    rho_f[..., -1] = rho[..., -1]
+    return rho_f
+
+
+class MultifluidDustySettle:
+    def __init__(self, Nz, cs_bar, eta_bar, inv_ts_coef, dust_to_gas, cfl=0.4):
+        """
+        Dimensionless units: z / R0, v / vK, t * OmegaK, rho / rho_mid.
+
+        cs_bar      : isothermal sound speed
+        eta_bar     : velocity dissipation rate
+        inv_ts_coef : 1/t_j = inv_ts_coef[j] * rho_g (Epstein drag, gas density)
+        dust_to_gas : initial dust-to-gas ratio of each species (before the mask)
+        """
+        if Nz % 2 != 0:
+            raise ValueError("Nz must be even (the midplane is a face)")
+
+        self.cs2 = cs_bar**2
+        self.eta = eta_bar
+        self.inv_ts_coef = np.asarray(inv_ts_coef)
+        self.cfl = cfl
+
+        zout = reference_zrange * H / R0
+        self.hz = 2 * zout / Nz
+        self.zf = np.linspace(-zout, zout, Nz + 1)
+        self.zc = 0.5 * (self.zf[:-1] + self.zf[1:])
+        self.g_f = vertical_gravity(self.zf)
+        self.g_f[[0, -1]] = 0
+
+        # discrete hydrostatic equilibrium: cs^2 (ln rho_{i+1} - ln rho_i) / hz = g_{i+1/2}
+        ln_rho = np.zeros(Nz)
+        ln_rho[1:] = np.cumsum(self.hz * self.g_f[1:-1] / self.cs2)
+        ln_rho += -(self.zc[Nz // 2] ** 2) / (2 * self.cs2) - ln_rho[Nz // 2]
+        self.rho_g = np.exp(ln_rho)
+        self.v_g = np.zeros(Nz + 1)
+
+        mask = 1 / (1 + np.exp((np.abs(self.zc) - 1.75 * H / R0) / (H / R0 / 16)))
+        self.rho_d = np.array([dtg * mask * self.rho_g for dtg in dust_to_gas])
+        self.v_d = np.zeros((len(dust_to_gas), Nz + 1))
+
+        self.tbar = 0.0
+
+    def get_dt(self):
+        vmax = max(self.cs2**0.5 + np.abs(self.v_g).max(), np.abs(self.v_d).max())
+        return self.cfl * self.hz / vmax
+
+    def advance(self, dt):
+        hz = self.hz
+
+        adv_g = upwind_advection(self.v_g, hz)
+        adv_d = upwind_advection(self.v_d, hz)
+
+        self.rho_g = upwind_continuity(self.rho_g, self.v_g, dt, hz)
+        self.rho_d = upwind_continuity(self.rho_d, self.v_d, dt, hz)
+
+        rho_g_f = to_faces(self.rho_g)
+        rho_d_f = to_faces(self.rho_d)
+
+        mom = rho_g_f * self.v_g + np.sum(rho_d_f * self.v_d, axis=0)
+        v_bary = mom / (rho_g_f + np.sum(rho_d_f, axis=0))
+
+        grad_P_over_rho = np.zeros_like(self.v_g)
+        grad_P_over_rho[1:-1] = self.cs2 * np.diff(np.log(self.rho_g)) / hz
+
+        v_g = self.v_g + dt * (-adv_g - grad_P_over_rho + self.g_f - self.eta * v_bary)
+        v_d = self.v_d + dt * (-adv_d + self.g_f - self.eta * v_bary)
+
+        # backward-Euler drag, solved exactly per face (conserves the momentum)
+        a = dt * self.inv_ts_coef[:, None] * rho_g_f[None, :]  # dt / t_j
+        w = 1 / (1 + a)
+        mom = rho_g_f * v_g + np.sum(rho_d_f * v_d, axis=0)
+        v_g = (mom - np.sum(rho_d_f * v_d * w, axis=0)) / (
+            rho_g_f + np.sum(rho_d_f * a * w, axis=0)
+        )
+        v_d = (v_d + a * v_g[None, :]) * w
+
+        v_g[[0, -1]] = 0
+        v_d[:, [0, -1]] = 0
+
+        self.v_g = v_g
+        self.v_d = v_d
+        self.tbar += dt
+
+    def advance_until(self, tfinal):
+        while tfinal - self.tbar > 1e-12:
+            self.advance(min(self.get_dt(), tfinal - self.tbar))
+
+    def epsilon(self):
+        """Dust fraction of each species rho_j / rho, cell centred."""
+        return self.rho_d / (self.rho_g + np.sum(self.rho_d, axis=0))
+
+
+class MultifluidDustySettleAll:
+    def __init__(self):
+        self.rhomid = get_max_rho()
+
+        self.vK = kep_profile(R0) * codeu.to("m") / codeu.to("s")
+        self.OmegaK = omega_k(R0) * codeu.to("s") ** -1
+        self.tK = 1 / self.OmegaK
+
+        self.rscale = R0
+        self.rhoscale = self.rhomid
+        self.vscale = self.vK
+        self.tscale = self.tK
+
+        self.cs = cs * codeu.to("m") / codeu.to("s")
+
+        inv_ts_coef = []
+        dust_to_gas = []
+        for j in range(ndust):
+            eps_j = mrn_distribution.mrn_weight[j] * epsilon_base
+            dust_to_gas.append(eps_j / (1 - epsilon_base))
+
+            rhoeff = mrn_distribution.rho_grains_si_edges[j] * np.sqrt(np.pi * gamma / 8)
+            s_j = mrn_distribution.grain_size_si[j]
+            inv_ts_coef.append(self.cs * self.rhoscale / (rhoeff * s_j * self.OmegaK))
+
+        self.sol = MultifluidDustySettle(
+            multifluid_Nz,
+            cs_bar=self.cs / self.vK,
+            eta_bar=vel_dissipation_eta / omega_k(R0),
+            inv_ts_coef=inv_ts_coef,
+            dust_to_gas=dust_to_gas,
+        )
+
+    def evolve_until(self, t):
+        self.sol.advance_until(t * codeu.to("s") / self.tscale)
+
+
+multifluid_dusty_settle = None
+
+
 def compute_L2_error(z, field, z_ref, field_ref):
     """
     Compute the L2 error between two fields on a given grid.
@@ -657,6 +838,21 @@ def analyse_and_plot(j):
 
             l2_error_all[i] = L2_error
 
+        if multifluid_dusty_settle is not None:
+            mf = multifluid_dusty_settle.sol
+            ax_rho.plot(
+                mf.zc * multifluid_dusty_settle.rscale,
+                mf.rho_d[i] * multifluid_dusty_settle.rhoscale,
+                "--",
+                color=multifluid_color,
+            )
+            ax_epsilon.plot(
+                mf.zc * multifluid_dusty_settle.rscale,
+                mf.epsilon()[i],
+                "--",
+                color=multifluid_color,
+            )
+
     save_analysis_data("l2_error.json", "l2_error", l2_error_all, j)
 
     dust_mass = analysis_dust_mass.get_dust_mass()
@@ -705,6 +901,15 @@ def analyse_and_plot(j):
                 color="0.0",
             )
 
+        if multifluid_dusty_settle is not None:
+            mf = multifluid_dusty_settle.sol
+            ax_delta_v.plot(
+                mf.zf * multifluid_dusty_settle.rscale,
+                (mf.v_d[i] - mf.v_g) * multifluid_dusty_settle.vscale,
+                "--",
+                color=multifluid_color,
+            )
+
     gas_handle = Line2D(
         [0],
         [0],
@@ -735,12 +940,20 @@ def analyse_and_plot(j):
         label="reference",
     )
 
+    multifluid_handle = Line2D(
+        [0],
+        [0],
+        linestyle="--",
+        color=multifluid_color,
+        label="multifluid (non-TVA)",
+    )
+
     shamrock.matplotlib.add_cmap_legend_entry(
         ax_rho,
         dust_cmap,
         label="dust species",
-        extra_handles=[gas_handle, dust_handle, analytic_handle],
-        extra_labels=["gas", "dust sum", "reference"],
+        extra_handles=[gas_handle, dust_handle, analytic_handle, multifluid_handle],
+        extra_labels=["gas", "dust sum", "reference", "multifluid (non-TVA)"],
         loc="upper right",
         fontsize=8,
     )
@@ -908,15 +1121,17 @@ class Simulation(SimulationRunner):
 
     @callback(tsim_interval=0.1)  # Do the analysis every dt_stop
     def analysis_plots(self, j):
-        global reference_dusty_settle
+        global reference_dusty_settle, multifluid_dusty_settle
 
         model_time = self.model.get_time()
 
         if model_time > tinject and reference_dusty_settle is None:
             reference_dusty_settle = ReferenceDustySettleAll()
+            multifluid_dusty_settle = MultifluidDustySettleAll()
 
         if reference_dusty_settle is not None:
             reference_dusty_settle.evolve_until(model_time - tinject)
+            multifluid_dusty_settle.evolve_until(model_time - tinject)
 
         analyse_and_plot(j)
 
