@@ -249,9 +249,15 @@ def compute_sj_new_j(patchdata, j):
 # ------------------------------------------
 
 
-def S_rho(rho, v, vp, hz, tau, Nz):
+# The matrix assembly loops are jitted with numba when available, but
+# ``solve_banded`` is a scipy function that numba cannot compile, so the solve
+# itself is done in plain Python by ``S_rho`` and ``S_v``.
+
+
+@maybe_njit
+def _S_rho_system(rho, v, vp, hz, tau, Nz):
     """
-    Step rho forward using Crank-Nicolson on continuity equation.
+    Assemble the banded Crank-Nicolson system for the continuity equation.
     """
 
     npts = Nz + 2
@@ -296,6 +302,15 @@ def S_rho(rho, v, vp, hz, tau, Nz):
     r[1:] += bd_lower[1:] * rho[:-1]
     r[:-1] += bd_upper[:-1] * rho[1:]
 
+    return ab_A, r
+
+
+def S_rho(rho, v, vp, hz, tau, Nz):
+    """
+    Step rho forward using Crank-Nicolson on continuity equation.
+    """
+
+    ab_A, r = _S_rho_system(rho, v, vp, hz, tau, Nz)
     ret = solve_banded((1, 1), ab_A, r)
     ret = np.maximum(ret, 0)
 
@@ -320,9 +335,10 @@ def S_rho(rho, v, vp, hz, tau, Nz):
     return ret
 
 
-def S_v(v, vbar, vbarp, rho, rhop, hz, zbar, tau, Nz, Stj):
+@maybe_njit
+def _S_v_system(v, vbar, vbarp, hz, zbar, tau, Nz, Stj):
     """
-    Step velocity forward using Crank-Nicolson.
+    Assemble the banded Crank-Nicolson system for the velocity equation.
     """
 
     npts = Nz + 2
@@ -359,11 +375,16 @@ def S_v(v, vbar, vbarp, rho, rhop, hz, zbar, tau, Nz, Stj):
     r[:-1] += bd_upper[:-1] * v[1:]
     r += E0
 
+    return ab_A, r
+
+
+def S_v(v, vbar, vbarp, rho, rhop, hz, zbar, tau, Nz, Stj):
+    """
+    Step velocity forward using Crank-Nicolson.
+    """
+
+    ab_A, r = _S_v_system(v, vbar, vbarp, hz, zbar, tau, Nz, Stj)
     return solve_banded((1, 1), ab_A, r)
-
-
-S_rho = maybe_njit(S_rho)
-S_v = maybe_njit(S_v)
 
 
 class ReferenceDustySettle:
