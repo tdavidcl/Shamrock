@@ -138,8 +138,8 @@ lz = int(os.environ.get("LZ", "64"))
 # Time, in units of the orbital period at R0
 t_orb = 2 * np.pi * np.sqrt(R0**3 / (ucte.G() * central_mass))
 tinject = 2.0 * t_orb  # time at which the dust is injected
-t_end = tinject + 3.0 * t_orb
-dt_analysis = 0.1 * t_orb  # time between two analysis plots
+t_end = np.inf  # tinject + 3.0 * t_orb
+dt_analysis = 2 * t_orb  # time between two analysis plots
 
 # Scheduler
 scheduler_split_val = int(2e7)
@@ -581,6 +581,7 @@ def analyse_and_plot(j):
     ax_s_evol.set_xlabel(r"$z$")
     ax_s_evol.set_xlim(-range_plot, range_plot)
     ax_s_evol.set_yscale("symlog", linthresh=1e-5)
+    ax_s_evol.set_ylim(-1e-2, 1e-2)
 
     fig.align_ylabels()
 
