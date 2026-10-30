@@ -104,9 +104,11 @@ codeu = shamrock.UnitSystem(
 ucte = shamrock.Constants(codeu)
 
 # Disc / box
-rho_i = 1e-6  # Initial density
+rho_i_si = 4e-11  # Initial density [kg/m^3]
+rho_i = rho_i_si * codeu.get("kg") * codeu.get("m") ** -3
+rho_i *= 0.2  # the input density does not match exactly the stable one
 central_mass = 1  # Central mass
-R0 = 1  # Where are we in radius
+R0 = 20  # Where are we in radius
 H_r_0 = 0.05  # Disc aspect ratio
 gamma = 1.4  # Adiabatic index
 box_H_count = 8  # box size in number of H
@@ -167,6 +169,9 @@ dump_folder = sim_folder + "dump/"
 
 # Plotting
 cmap = "plasma"
+St_levels = [1e-3, 1e-2, 1e-1, 1.0]  # Stokes number contours on the rho_d(z, s) map
+# the density plot ranges were set for rho_i = 1e-6 (code units), scale them with rho_i
+rho_plot_scale = rho_i / 1e-6
 dpi = 250
 SINGLE_COLUMN_WIDTH = 88 / 25.4  # in, A&A single column
 
@@ -391,9 +396,8 @@ def analyse_and_plot(j):
     to_speed = codeu.to("m") / codeu.to("s")
 
     dust_cmap = plt.colormaps[cmap]
-    dust_norm = mcolors.LogNorm(
-        vmin=mrn_distribution.grain_size_si.min(), vmax=mrn_distribution.grain_size_si.max() * 10
-    )
+    # same range as the grain size axis of the rho_d(z, s) map
+    dust_norm = mcolors.LogNorm(vmin=grain_size_si_edges[0], vmax=grain_size_si_edges[-1])
     dust_colors = dust_cmap(dust_norm(mrn_distribution.grain_size_si))
 
     dust_mass = analysis_dust_mass.get_dust_mass()
@@ -406,7 +410,9 @@ def analyse_and_plot(j):
     save_analysis_data("dust_mass.json", "dust_mass", dust_mass, j)
 
     range_plot = 2.5 * H
-    rho_plot_min, rho_plot_max = 1e-20, 1e-8
+    # rounded outwards to powers of 10
+    rho_plot_min = 10 ** np.floor(np.log10(1e-20 * rho_plot_scale))
+    rho_plot_max = 10 ** np.ceil(np.log10(1e-8 * rho_plot_scale))
 
     time = model.get_time() - tinject
     os.makedirs(f"{dump_folder}/plots", exist_ok=True)
@@ -426,6 +432,24 @@ def analyse_and_plot(j):
         sum_z, _ = np.histogram(z, bins=z_edges, weights=rho_d_j[:, i] * to_dens)
         with np.errstate(invalid="ignore"):
             rho_d_j_z[i] = sum_z / count_z
+
+    # St(z, s) = t_s * Omega_K from the gas density and sound speed averaged in the same z slices
+    with np.errstate(invalid="ignore"):
+        rho_g_z = np.histogram(z, bins=z_edges, weights=rho - rho_d)[0] / count_z
+        cs_z = np.histogram(z, bins=z_edges, weights=cs)[0] / count_z
+    z_centers = 0.5 * (z_edges[1:] + z_edges[:-1])
+    s_St_si = np.logspace(np.log10(grain_size_si_edges[0]), np.log10(grain_size_si_edges[-1]), 200)
+    St_z_s = np.full((len(s_St_si), lz), np.nan)
+    for iz in np.flatnonzero(count_z > 0):
+        for i_s, s_si in enumerate(s_St_si):
+            ts = shamrock.phys.epstein_stopping_time(
+                rho_grain=mrn_distribution.rho_grains[0],  # same grain density in all bins
+                s_grain=s_si * codeu.get("m"),
+                rho=rho_g_z[iz],
+                cs=cs_z[iz],
+                gamma=gamma,
+            )
+            St_z_s[i_s, iz] = ts * omega_k(R0)
 
     # rho(z) of each particle over <rho_d>(z, s), stacked
     fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 5), layout="constrained", dpi=dpi)
@@ -469,6 +493,27 @@ def analyse_and_plot(j):
         shading="auto",
         rasterized=True,
     )
+    St_contours = ax_rho_s.contour(
+        z_centers, s_St_si, St_z_s, levels=St_levels, colors="white", linewidths=0.6
+    )
+    # labels all at the same z, slightly left of the midplane, on the closest slice
+    # (St is linear in s there)
+    z_label = -0.25 * range_plot
+    iz_label = np.flatnonzero(count_z > 0)[np.argmin(np.abs(z_centers[count_z > 0] - z_label))]
+    log_St_label = np.log10(St_z_s[:, iz_label])
+    St_label_pos = [
+        (z_centers[iz_label], 10 ** np.interp(np.log10(St), log_St_label, np.log10(s_St_si)))
+        for St in St_levels
+        if log_St_label[0] <= np.log10(St) <= log_St_label[-1]
+    ]
+    St_labels = ax_rho_s.clabel(
+        St_contours,
+        fmt=lambda St: "St$=1$" if St == 1 else f"St$=10^{{{np.log10(St):.0f}}}$",
+        fontsize=mpl.rcParams["legend.fontsize"] - 1,
+        manual=St_label_pos,
+    )
+    for label in St_labels:
+        label.set_rotation(0)
     ax_rho_s.grid(False, which="both")
     ax_rho_s.set_ylabel(r"grain size $s$ [m]")
     ax_rho_s.set_xlabel(r"$z$")
@@ -555,11 +600,11 @@ def analyse_and_plot(j):
     axs[0].set_ylabel(r"$s_j$")
     axs[0].set_xlim(-4 * H, 4 * H)
     axs[0].set_yscale("log")
-    axs[0].set_ylim(1e-20, 1e-1)
+    axs[0].set_ylim(1e-20 * rho_plot_scale**0.5, 1e-1 * rho_plot_scale**0.5)  # s_j = sqrt(rho_d)
 
     axs[1].set_ylabel(r"$\dot{s}_j$")
     axs[1].set_xlabel(r"$z$")
-    axs[1].set_yscale("symlog", linthresh=1e-10)
+    axs[1].set_yscale("symlog", linthresh=1e-10 * rho_plot_scale**0.5)
 
     fig.align_ylabels()
 
@@ -751,9 +796,8 @@ for k in range(ndust):
     print(f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}")
 
 dust_cmap = plt.colormaps[cmap]
-dust_norm = mcolors.LogNorm(
-    vmin=mrn_distribution.grain_size_si.min(), vmax=mrn_distribution.grain_size_si.max() * 10
-)
+# same range as the grain size axis of the rho_d(z, s) map
+dust_norm = mcolors.LogNorm(vmin=grain_size_si_edges[0], vmax=grain_size_si_edges[-1])
 
 fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 3), layout="constrained", dpi=dpi)
 fig.get_layout_engine().set(w_pad=0.02, h_pad=0.02)
