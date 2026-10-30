@@ -637,7 +637,7 @@ def analyse_and_plot(j):
 
         if reference_dusty_settle is not None:
             ax_rho.plot(
-                reference_dusty_settle.soluces[i].zbar,
+                reference_dusty_settle.soluces[i].z_arr(),
                 reference_dusty_settle.soluces[i].rho * reference_dusty_settle.rhoscale,
                 "--",
                 color="0.0",
@@ -649,10 +649,12 @@ def analyse_and_plot(j):
                 / reference_dusty_settle.soluces[i].rhog
             )
             print(ana_epsilon.max(), ana_epsilon.min())
-            ax_epsilon.plot(reference_dusty_settle.soluces[i].zbar, ana_epsilon, "--", color="0.0")
+            ax_epsilon.plot(
+                reference_dusty_settle.soluces[i].z_arr(), ana_epsilon, "--", color="0.0"
+            )
 
             L2_error = compute_L2_error(
-                z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon
+                z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].z_arr(), ana_epsilon
             )
 
             l2_error_all[i] = L2_error
@@ -699,7 +701,7 @@ def analyse_and_plot(j):
 
         if reference_dusty_settle is not None:
             ax_delta_v.plot(
-                reference_dusty_settle.soluces[i].zbar,
+                reference_dusty_settle.soluces[i].z_arr(),
                 reference_dusty_settle.soluces[i].v * reference_dusty_settle.vscale,
                 "--",
                 color="0.0",
@@ -819,7 +821,7 @@ def setup_model():
         nvar=ndust, C_1_fluid=0.1, C_drift=1.0, cfl_density_threshold=1e-50
     )
     cfg.set_dust_drag_epstein(gamma, mrn_distribution.grain_size, mrn_distribution.rho_grains)
-    cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
+    cfg.add_ext_force_vertical_disc_potential(central_mass=central_mass, R0=R0)
     cfg.add_ext_force_velocity_dissipation(eta=vel_dissipation_eta)
     cfg.set_neigh_cache_strategy(NeighCacheStrategy.SingleStage)
     cfg.set_show_cfl_detail(True)
