@@ -126,7 +126,8 @@ max_v_inject_threshold = 1.0
 reference_tau = 0.025
 reference_Nz = 4000
 reference_zrange = 3.5  # in units of H
-multifluid_Nz = 1000  # cells of the multifluid (non-TVA) reference, must be even
+multifluid_Nz = 4000  # cells of the multifluid (non-TVA) reference, must be even
+multifluid_order = 2  # order of the multifluid scheme (1 or 2)
 
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}/"
@@ -507,10 +508,13 @@ reference_dusty_settle = None
 # isothermal gas pressure, vertical gravity, Epstein drag with back-reaction on the gas, and
 # the same velocity dissipation as the SPH run (acting on the barycentric velocity).
 #
-# The scheme is deliberately simple: staggered grid (densities at cell centres, velocities
-# at faces, closed walls), donor-cell upwind continuity, upwind velocity advection, explicit
-# pressure / gravity / dissipation and a backward-Euler drag step that conserves momentum.
-# The gas starts in discrete hydrostatic equilibrium, so it stays at rest without dust.
+# The scheme is kept simple: staggered grid (densities at cell centres, velocities at faces,
+# closed walls), upwind continuity, upwind velocity advection (Godunov flux of v^2/2), explicit
+# pressure / gravity / dissipation and a drag step solved exactly per face (conserves the
+# momentum and keeps the terminal velocity exact). With ``order=1`` the reconstruction is
+# piecewise constant with semi-implicit Euler + backward-Euler drag; with ``order=2`` it is van Leer
+# limited (MUSCL) with a midpoint predictor-corrector and Crank-Nicolson drag. The gas starts
+# in discrete hydrostatic equilibrium, so it stays at rest without dust.
 
 
 def vertical_gravity(zbar):
@@ -518,20 +522,37 @@ def vertical_gravity(zbar):
     return -zbar / (1 + zbar**2) ** 1.5
 
 
-def upwind_continuity(rho, v, dt, hz):
-    """Donor-cell update of cell-centred densities, v at faces (zero at the walls)."""
+def van_leer_slope(q):
+    """van Leer limited slope (per cell) along the last axis, zero on the first and last cell."""
+    slope = np.zeros_like(q)
+    prod = (q[..., 1:-1] - q[..., :-2]) * (q[..., 2:] - q[..., 1:-1])
+    sum_ = q[..., 2:] - q[..., :-2]
+    slope[..., 1:-1] = np.where(prod > 0, 2 * prod / np.where(prod > 0, sum_, 1.0), 0.0)
+    return slope
+
+
+def continuity_rate(rho, v, hz, second_order):
+    """-d(rho v)/dz for cell-centred rho, v at faces (zero at the walls), upwind face rho."""
+    slope = van_leer_slope(rho) if second_order else 0 * rho
     v_in = v[..., 1:-1]
+    rho_l = rho[..., :-1] + 0.5 * slope[..., :-1]
+    rho_r = rho[..., 1:] - 0.5 * slope[..., 1:]
     flux = np.zeros_like(v)
-    flux[..., 1:-1] = v_in * np.where(v_in > 0, rho[..., :-1], rho[..., 1:])
-    return rho - dt / hz * (flux[..., 1:] - flux[..., :-1])
+    flux[..., 1:-1] = v_in * np.where(v_in > 0, rho_l, rho_r)
+    return -(flux[..., 1:] - flux[..., :-1]) / hz
 
 
-def upwind_advection(v, hz):
-    """Upwind v dv/dz on the faces, zero on the walls."""
+def advection_rate(v, hz, second_order):
+    """v dv/dz = d(v^2/2)/dz on the faces (zero on the walls), Godunov Burgers flux at the
+    cell centres from the velocities of the two neighbouring faces."""
+    slope = van_leer_slope(v) if second_order else 0 * v
+    u_l = v[..., :-1] + 0.5 * slope[..., :-1]
+    u_r = v[..., 1:] - 0.5 * slope[..., 1:]
+    f_shock = 0.5 * np.maximum(u_l**2, u_r**2)
+    f_rarefaction = np.where((u_l < 0) & (u_r > 0), 0.0, 0.5 * np.minimum(u_l**2, u_r**2))
+    f = np.where(u_l > u_r, f_shock, f_rarefaction)
     adv = np.zeros_like(v)
-    v_in = v[..., 1:-1]
-    dv = np.where(v_in > 0, v_in - v[..., :-2], v[..., 2:] - v_in)
-    adv[..., 1:-1] = v_in * dv / hz
+    adv[..., 1:-1] = (f[..., 1:] - f[..., :-1]) / hz
     return adv
 
 
@@ -544,8 +565,21 @@ def to_faces(rho):
     return rho_f
 
 
+def drag_solve(r_g, r_d, rho_g_f, rho_d_f, a):
+    """
+    Solve v_d = r_d - a (v_d - v_g) for each species, with the total momentum
+    rho_g v_g + sum rho_d v_d = rho_g r_g + sum rho_d r_d (a = dt / t_j for backward Euler,
+    dt / (2 t_j) for Crank-Nicolson).
+    """
+    w = 1 / (1 + a)
+    mom = rho_g_f * r_g + np.sum(rho_d_f * r_d, axis=0)
+    v_g = (mom - np.sum(rho_d_f * r_d * w, axis=0)) / (rho_g_f + np.sum(rho_d_f * a * w, axis=0))
+    v_d = (r_d + a * v_g[None, :]) * w
+    return v_g, v_d
+
+
 class MultifluidDustySettle:
-    def __init__(self, Nz, cs_bar, eta_bar, inv_ts_coef, dust_to_gas, cfl=0.4):
+    def __init__(self, Nz, cs_bar, eta_bar, inv_ts_coef, dust_to_gas, order=2, cfl=0.4):
         """
         Dimensionless units: z / R0, v / vK, t * OmegaK, rho / rho_mid.
 
@@ -553,13 +587,17 @@ class MultifluidDustySettle:
         eta_bar     : velocity dissipation rate
         inv_ts_coef : 1/t_j = inv_ts_coef[j] * rho_g (Epstein drag, gas density)
         dust_to_gas : initial dust-to-gas ratio of each species (before the mask)
+        order       : 1 or 2, order of the scheme in space and time
         """
         if Nz % 2 != 0:
             raise ValueError("Nz must be even (the midplane is a face)")
+        if order not in (1, 2):
+            raise ValueError("order must be 1 or 2")
 
         self.cs2 = cs_bar**2
         self.eta = eta_bar
         self.inv_ts_coef = np.asarray(inv_ts_coef)
+        self.order = order
         self.cfl = cfl
 
         zout = reference_zrange * H / R0
@@ -586,41 +624,82 @@ class MultifluidDustySettle:
         vmax = max(self.cs2**0.5 + np.abs(self.v_g).max(), np.abs(self.v_d).max())
         return self.cfl * self.hz / vmax
 
-    def advance(self, dt):
+    def density_rates(self, rho_g, v_g, rho_d, v_d):
+        second_order = self.order == 2
+        drho_g = continuity_rate(rho_g, v_g, self.hz, second_order)
+        drho_d = continuity_rate(rho_d, v_d, self.hz, second_order)
+        return drho_g, drho_d
+
+    def accelerations(self, rho_g, v_g, rho_d, v_d):
+        """Accelerations other than the drag."""
         hz = self.hz
+        second_order = self.order == 2
 
-        adv_g = upwind_advection(self.v_g, hz)
-        adv_d = upwind_advection(self.v_d, hz)
-
-        self.rho_g = upwind_continuity(self.rho_g, self.v_g, dt, hz)
-        self.rho_d = upwind_continuity(self.rho_d, self.v_d, dt, hz)
-
-        rho_g_f = to_faces(self.rho_g)
-        rho_d_f = to_faces(self.rho_d)
-
-        mom = rho_g_f * self.v_g + np.sum(rho_d_f * self.v_d, axis=0)
+        rho_g_f = to_faces(rho_g)
+        rho_d_f = to_faces(rho_d)
+        mom = rho_g_f * v_g + np.sum(rho_d_f * v_d, axis=0)
         v_bary = mom / (rho_g_f + np.sum(rho_d_f, axis=0))
 
-        grad_P_over_rho = np.zeros_like(self.v_g)
-        grad_P_over_rho[1:-1] = self.cs2 * np.diff(np.log(self.rho_g)) / hz
+        grad_P_over_rho = np.zeros_like(v_g)
+        grad_P_over_rho[1:-1] = self.cs2 * np.diff(np.log(rho_g)) / hz
 
-        v_g = self.v_g + dt * (-adv_g - grad_P_over_rho + self.g_f - self.eta * v_bary)
-        v_d = self.v_d + dt * (-adv_d + self.g_f - self.eta * v_bary)
+        acc_g = -advection_rate(v_g, hz, second_order) - grad_P_over_rho + self.g_f
+        acc_d = -advection_rate(v_d, hz, second_order) + self.g_f
+        return acc_g - self.eta * v_bary, acc_d - self.eta * v_bary
 
-        # backward-Euler drag, solved exactly per face (conserves the momentum)
-        a = dt * self.inv_ts_coef[:, None] * rho_g_f[None, :]  # dt / t_j
-        w = 1 / (1 + a)
-        mom = rho_g_f * v_g + np.sum(rho_d_f * v_d, axis=0)
-        v_g = (mom - np.sum(rho_d_f * v_d * w, axis=0)) / (
-            rho_g_f + np.sum(rho_d_f * a * w, axis=0)
+    def euler_step(self, dt):
+        """
+        Semi-implicit Euler step, returns the new state: densities first, then the velocities
+        with the forces of the new densities (stable for sound waves) and backward-Euler drag.
+        """
+        drho_g, drho_d = self.density_rates(self.rho_g, self.v_g, self.rho_d, self.v_d)
+        rho_g = self.rho_g + dt * drho_g
+        rho_d = self.rho_d + dt * drho_d
+        acc_g, acc_d = self.accelerations(rho_g, self.v_g, rho_d, self.v_d)
+        rho_g_f = to_faces(rho_g)
+        a = dt * self.inv_ts_coef[:, None] * rho_g_f[None, :]
+        v_g, v_d = drag_solve(
+            self.v_g + dt * acc_g, self.v_d + dt * acc_d, rho_g_f, to_faces(rho_d), a
         )
-        v_d = (v_d + a * v_g[None, :]) * w
+        return rho_g, v_g, rho_d, v_d
+
+    def midpoint_step(self, dt):
+        """
+        Predictor (half semi-implicit Euler step) - corrector (rates at mid step, Crank-Nicolson
+        drag). With this predictor the step conserves the energy of sound waves (no growth).
+        """
+        half = self.euler_step(0.5 * dt)
+        drho_g, drho_d = self.density_rates(*half)
+        acc_g, acc_d = self.accelerations(*half)
+        rho_g_h, rho_d_h = half[0], half[2]
+
+        rho_g_f = to_faces(rho_g_h)
+        rho_d_f = to_faces(rho_d_h)
+        a = 0.5 * dt * self.inv_ts_coef[:, None] * rho_g_f[None, :]
+
+        # explicit half of the drag at t^n
+        drag_d = -a * (self.v_d - self.v_g[None, :])
+        drag_g = -np.sum(rho_d_f * drag_d, axis=0) / rho_g_f
+
+        v_g, v_d = drag_solve(
+            self.v_g + dt * acc_g + drag_g,
+            self.v_d + dt * acc_d + drag_d,
+            rho_g_f,
+            rho_d_f,
+            a,
+        )
+        return self.rho_g + dt * drho_g, v_g, self.rho_d + dt * drho_d, v_d
+
+    def advance(self, dt):
+        if self.order == 1:
+            rho_g, v_g, rho_d, v_d = self.euler_step(dt)
+        else:
+            rho_g, v_g, rho_d, v_d = self.midpoint_step(dt)
 
         v_g[[0, -1]] = 0
         v_d[:, [0, -1]] = 0
 
-        self.v_g = v_g
-        self.v_d = v_d
+        self.rho_g, self.v_g, self.rho_d, self.v_d = rho_g, v_g, rho_d, v_d
         self.tbar += dt
 
     def advance_until(self, tfinal):
@@ -663,6 +742,7 @@ class MultifluidDustySettleAll:
             eta_bar=vel_dissipation_eta / omega_k(R0),
             inv_ts_coef=inv_ts_coef,
             dust_to_gas=dust_to_gas,
+            order=multifluid_order,
         )
 
     def evolve_until(self, t):
