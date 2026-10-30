@@ -99,10 +99,9 @@ ly = 12
 lz = int(os.environ.get("LZ", "64"))
 
 # Time
-tlist = [0.1 * i for i in range(1000)]
-iinject = 20
-tinject = tlist[iinject]
+tinject = 2.0  # time at which the dust is injected
 t_end = tinject + 3.0
+dt_analysis = 1.0  # time between two analysis plots
 
 # Scheduler
 scheduler_split_val = int(2e7)
@@ -602,7 +601,7 @@ class Simulation(SimulationRunner):
 
         self.model.set_dt(0.0)  # to help the corrector on next step after adding dust
 
-    @callback(tsim_interval=0.1)  # Do the analysis every dt_stop
+    @callback(tsim_interval=dt_analysis)
     def analysis_plots(self, j):
         analyse_and_plot(j)
 
@@ -648,9 +647,8 @@ if shamrock.sys.world_rank() == 0:
 t, dust_mass = load_data_from_json("dust_mass.json", "dust_mass")
 dust_mass = np.array(dust_mass)
 
-# tinject = first non nan
+# first analysis with dust (the dust mass is nan before the injection)
 iinject = np.argmax(~np.isnan(dust_mass)[:, 0])
-tinject = np.array(t)[iinject]
 
 t = np.array(t) - tinject
 
