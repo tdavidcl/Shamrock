@@ -55,6 +55,41 @@ if not shamrock.sys.is_initialized():
 
 shamrock.matplotlib.set_shamrock_mpl_style()
 
+# Same sizes as the other figures of the paper (A&A single column), from fontsize = 8:
+# labels fontsize + 1, ticks fontsize - 0.5, legends and small text fontsize - 1
+mpl.rcParams.update(
+    {
+        "font.size": 8,
+        "axes.labelsize": 9,
+        "axes.titlesize": 9,
+        "figure.titlesize": 9,
+        "xtick.labelsize": 7.5,
+        "ytick.labelsize": 7.5,
+        "legend.fontsize": 7,
+        "legend.title_fontsize": 7,
+        "axes.labelpad": 2,
+        "axes.titlepad": 4,
+        "axes.linewidth": 0.6,
+        "legend.linewidth": 0.6,
+        "legend.framealpha": 1.0,
+        "lines.linewidth": 1.0,
+        "lines.markersize": 3.0,
+        "xtick.major.size": 4,
+        "ytick.major.size": 4,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+        "xtick.minor.size": 2,
+        "ytick.minor.size": 2,
+        "xtick.minor.width": 0.5,
+        "ytick.minor.width": 0.5,
+        "axes.grid": True,
+        "axes.grid.which": "both",
+        "grid.linestyle": ":",
+        "grid.alpha": 0.5,
+        "grid.linewidth": 0.5,
+    }
+)
+
 # %%
 # Define simulation parameters and unit system
 # ------------------------------------------
@@ -132,6 +167,7 @@ dump_folder = sim_folder + "dump/"
 # Plotting
 cmap = "plasma"
 dpi = 250
+SINGLE_COLUMN_WIDTH = 88 / 25.4  # in, A&A single column
 
 # %%
 # Derived physical scales and lattice geometry
@@ -350,18 +386,6 @@ def analyse_and_plot(j):
 
     sz = 1
 
-    fig = plt.figure(figsize=(12, 7), dpi=dpi)
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.7, 1], wspace=0.2)
-
-    ax_rho = fig.add_subplot(gs[0, 0])  # Top left
-    ax_epsilon = fig.add_subplot(gs[0, 1])  # Top right
-    ax_delta_v = fig.add_subplot(gs[1, :])  # Bottom spans both columns
-
-    time = model.get_time() - tinject
-    fig.suptitle(f"t = {time:.2f} [yr]")
-
-    fig.subplots_adjust(left=0.08, right=1.05, wspace=0.35)
-
     to_dens = codeu.to("kg") * codeu.to("m") ** -3
     to_speed = codeu.to("m") / codeu.to("s")
 
@@ -370,17 +394,6 @@ def analyse_and_plot(j):
         vmin=mrn_distribution.grain_size_si.min(), vmax=mrn_distribution.grain_size_si.max() * 10
     )
     dust_colors = dust_cmap(dust_norm(mrn_distribution.grain_size_si))
-
-    rho_dust_all = np.zeros(len(z))
-    epsilon_dust_all = np.zeros(len(z))
-
-    for i in range(ndust):
-        c = dust_colors[i]
-        ax_rho.scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
-        ax_epsilon.scatter(z, s_j[:, i] ** 2 / rho, s=sz, color=c, edgecolors="none")
-
-        rho_dust_all += s_j[:, i] ** 2 * to_dens
-        epsilon_dust_all += s_j[:, i] ** 2 / rho
 
     dust_mass = analysis_dust_mass.get_dust_mass()
 
@@ -391,100 +404,147 @@ def analyse_and_plot(j):
 
     save_analysis_data("dust_mass.json", "dust_mass", dust_mass, j)
 
-    ax_rho.scatter(z, rho * to_dens, s=sz, color="0.0", edgecolors="none")
-    ax_rho.scatter(z, rho_dust_all, s=sz, color="0.5", edgecolors="none")
-    ax_epsilon.scatter(z, 1 - epsilon_dust_all, s=sz, color="0.0", edgecolors="none")
-    ax_epsilon.scatter(z, epsilon_dust_all, s=sz, color="0.5", edgecolors="none")
-
     range_plot = 2.5 * H
+    rho_plot_min, rho_plot_max = 1e-20, 1e-8
+
+    time = model.get_time() - tinject
+    os.makedirs(f"{dump_folder}/plots", exist_ok=True)
+
+    rho_d_j = s_j**2
+    rho_d = np.sum(rho_d_j, axis=1)
+
+    dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+    dust_sm.set_array([])
+
+    # <rho_d>(z, s): dust density of each bin averaged in z slices (as the vert_slices
+    # plots of run_dustydisc.py), nan in the empty slices
+    z_edges = np.linspace(-range_plot, range_plot, lz + 1)
+    count_z, _ = np.histogram(z, bins=z_edges)
+    rho_d_j_z = np.zeros((ndust, lz))
+    for i in range(ndust):
+        sum_z, _ = np.histogram(z, bins=z_edges, weights=rho_d_j[:, i] * to_dens)
+        with np.errstate(invalid="ignore"):
+            rho_d_j_z[i] = sum_z / count_z
+
+    # rho(z) of each particle over <rho_d>(z, s), stacked
+    fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 5), layout="constrained", dpi=dpi)
+    fig.get_layout_engine().set(w_pad=0.02, h_pad=0, hspace=0)
+    ax_rho, ax_rho_s = fig.subplots(2, 1, sharex=True)
+    fig.suptitle(f"t = {time:.2f} [yr]")
+
+    for i in range(ndust):
+        ax_rho.scatter(z, rho_d_j[:, i] * to_dens, s=sz, color=dust_colors[i], edgecolors="none")
+    ax_rho.scatter(z, (rho - rho_d) * to_dens, s=sz, color="0.0", edgecolors="none")
+    ax_rho.scatter(z, rho_d * to_dens, s=sz, color="0.5", edgecolors="none")
 
     ax_rho.set_ylabel(r"$\rho$ [kg/m$^3$]")
-    ax_rho.set_xlabel(r"$z$")
     ax_rho.set_yscale("log")
-    ax_rho.set_ylim(1e-20, 1e-8)
-    ax_rho.set_xlim(-range_plot, range_plot)
+    ax_rho.set_ylim(1.1 * rho_plot_min, rho_plot_max)  # 1.1 to avoid the tick at the junction
 
-    ax_epsilon.set_ylabel(r"$\epsilon_j$")
-    ax_epsilon.set_xlabel(r"$z$")
-    ax_epsilon.set_yscale("log")
-    ax_epsilon.set_ylim(1e-4, 1e-1)  # if you want to see the dust only
-    ax_epsilon.set_xlim(-range_plot, range_plot)
-
-    ax_delta_v.set_ylabel(
-        r"$\Delta v_{z,j} \, \mathbb{1}_{\rho_{{\rm d},j} > \rho_\epsilon}$ [m/s]"
+    handles = [
+        Line2D([0], [0], linestyle="none", marker="o", color=c, markeredgecolor="none")
+        for c in ["0.0", "0.5"]
+    ]
+    shamrock.matplotlib.add_cmap_legend_entry(
+        ax_rho,
+        dust_cmap,
+        label="dust species",
+        extra_handles=handles,
+        extra_labels=["gas", "dust sum"],
+        loc="upper right",
+        fontsize=mpl.rcParams["legend.fontsize"],
     )
-    ax_delta_v.set_xlabel(r"$z$")
-    ax_delta_v.set_xlim(-range_plot, range_plot)
-    ax_delta_v.set_yscale("symlog", linthresh=1e-1)
-    ax_delta_v.set_ylim(-1e2, 1e2)
+
+    cbar = fig.colorbar(dust_sm, ax=ax_rho)
+    cbar.set_label(r"grain size $s$ [m]")
+
+    rho_norm = mcolors.LogNorm(vmin=rho_plot_min, vmax=rho_plot_max)
+    im = ax_rho_s.pcolormesh(
+        z_edges,
+        grain_size_si_edges,
+        np.where(rho_d_j_z <= 0, 1e-30, rho_d_j_z),
+        cmap=dust_cmap,
+        norm=rho_norm,
+        shading="auto",
+        rasterized=True,
+    )
+    ax_rho_s.grid(False, which="both")
+    ax_rho_s.set_ylabel(r"grain size $s$ [m]")
+    ax_rho_s.set_xlabel(r"$z$")
+    ax_rho_s.set_xlim(-range_plot, range_plot)
+    ax_rho_s.set_yscale("log")
+    ax_rho_s.set_ylim(grain_size_si_edges[0], grain_size_si_edges[-1])
+
+    cbar = fig.colorbar(im, ax=ax_rho_s)
+    cbar.set_label(r"$\langle \rho_{\rm d}(z, s) \rangle$ [kg/m$^3$]")
+
+    fig.align_ylabels()
+
+    plt.savefig(f"{dump_folder}/plots/vert_slice_dens_{j:04d}.png")
+    plt.close()
+
+    # <s>(z) and its growth rate (as compute_s_mean_field and
+    # compute_dlog_s_mean_dt_field in run_dustydisc.py), nan without dust
+    grain_size_si = mrn_distribution.grain_size_si
+    drho_d_j_dt = 2 * s_j * ds_j_dt
+    with np.errstate(invalid="ignore", divide="ignore"):
+        s_mean = np.sum(rho_d_j * grain_size_si, axis=1) / rho_d
+        ds_mean_dt = (
+            np.sum(drho_d_j_dt * grain_size_si, axis=1) - s_mean * np.sum(drho_d_j_dt, axis=1)
+        ) / rho_d
+        dlog_s_mean_dt = ds_mean_dt / s_mean
+
+    # delta v(z), <s>(z) and its growth rate, stacked
+    fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 6.5), layout="constrained", dpi=dpi)
+    fig.get_layout_engine().set(w_pad=0.02, h_pad=0, hspace=0)
+    ax_dv, ax_s_mean, ax_s_evol = fig.subplots(3, 1, sharex=True)
+    fig.suptitle(f"t = {time:.2f} [yr]")
 
     for i in range(ndust):
         c = dust_colors[i]
         # null where the bin is below the dust density floor
-        resolved = s_j[:, i] ** 2 > rhodust_eps
-        ax_delta_v.scatter(
-            z, delta_v[:, i, 2] * resolved * to_speed, s=sz, color=c, edgecolors="none"
-        )
+        resolved = rho_d_j[:, i] > rhodust_eps
+        ax_dv.scatter(z, delta_v[:, i, 2] * resolved * to_speed, s=sz, color=c, edgecolors="none")
 
     delta_v_eff = compute_delta_v_eff(s_j, delta_v)
     isort = np.argsort(z)
-    ax_delta_v.plot(
+    ax_dv.plot(
         z[isort],
         delta_v_eff[isort] * to_speed,
         color="0.0",
         linewidth=1,
         label=r"$\Delta v_{\rm eff}$",
     )
-    ax_delta_v.legend(loc="upper right", fontsize=8)
+    ax_dv.legend(loc="upper right")
 
-    gas_handle = Line2D(
-        [0],
-        [0],
-        linestyle="none",
-        marker="o",
-        markersize=5,
-        markerfacecolor="0.",
-        markeredgecolor="none",
-        label="gas",
-    )
+    ax_dv.set_ylabel(r"$\Delta v_{z,j} \, \mathbb{1}_{\rho_{{\rm d},j} > \rho_\epsilon}$ [m/s]")
+    ax_dv.set_yscale("symlog", linthresh=1e-1)
+    ax_dv.set_ylim(-1e2, 1e2)
 
-    dust_handle = Line2D(
-        [0],
-        [0],
-        linestyle="none",
-        marker="o",
-        markersize=5,
-        markerfacecolor="0.5",
-        markeredgecolor="none",
-        label="dust",
-    )
-
-    shamrock.matplotlib.add_cmap_legend_entry(
-        ax_rho,
-        dust_cmap,
-        label="dust species",
-        extra_handles=[gas_handle, dust_handle],
-        extra_labels=["gas", "dust sum"],
-        loc="upper right",
-        fontsize=8,
-    )
-
-    dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
-    dust_sm.set_array([])
-    cbar = fig.colorbar(
-        dust_sm, ax=[ax_rho, ax_epsilon, ax_delta_v], pad=0.03, shrink=0.95, aspect=40
-    )
+    cbar = fig.colorbar(dust_sm, ax=ax_dv)
     cbar.set_label(r"grain size $s$ [m]")
 
-    os.makedirs(f"{dump_folder}/plots", exist_ok=True)
-    plt.savefig(f"{dump_folder}/plots/vert_slice_dens_{j:04d}.png")
+    ax_s_mean.scatter(z, s_mean, s=sz, color="0.0", edgecolors="none")
+    ax_s_mean.set_ylabel(r"$\langle s \rangle$ [m]")
+    ax_s_mean.set_yscale("log")
+    # 1.1 to avoid the ticks at the junctions
+    ax_s_mean.set_ylim(1.1 * grain_size_si_edges[0], grain_size_si_edges[-1] / 1.1)
+
+    ax_s_evol.scatter(z, dlog_s_mean_dt, s=sz, color="0.0", edgecolors="none")
+    ax_s_evol.set_ylabel(r"$\partial_t \langle s \rangle / \langle s \rangle$ [yr$^{-1}$]")
+    ax_s_evol.set_xlabel(r"$z$")
+    ax_s_evol.set_xlim(-range_plot, range_plot)
+    ax_s_evol.set_yscale("symlog", linthresh=1e-5)
+
+    fig.align_ylabels()
+
+    plt.savefig(f"{dump_folder}/plots/vert_slice_dv_{j:04d}.png")
     plt.close()
 
-    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(12, 5), dpi=dpi)
-    time = model.get_time() - tinject
+    fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 5), layout="constrained", dpi=dpi)
+    fig.get_layout_engine().set(w_pad=0.02, h_pad=0, hspace=0)
+    axs = fig.subplots(2, 1, sharex=True)
     fig.suptitle(f"t = {time:.2f} [yr]")
-
-    fig.subplots_adjust(left=0.07, right=1.05, wspace=0.35)
 
     for i in range(ndust):
         c = dust_colors[i]
@@ -492,19 +552,17 @@ def analyse_and_plot(j):
         axs[1].scatter(z, ds_j_dt[:, i], s=sz, color=c, edgecolors="none")
 
     axs[0].set_ylabel(r"$s_j$")
-    axs[0].set_xlabel(r"$z$")
     axs[0].set_xlim(-4 * H, 4 * H)
     axs[0].set_yscale("log")
     axs[0].set_ylim(1e-20, 1e-1)
 
     axs[1].set_ylabel(r"$\dot{s}_j$")
     axs[1].set_xlabel(r"$z$")
-    axs[1].set_xlim(-4 * H, 4 * H)
     axs[1].set_yscale("symlog", linthresh=1e-10)
 
-    dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
-    dust_sm.set_array([])
-    cbar = fig.colorbar(dust_sm, ax=axs, pad=0.02, shrink=0.85)
+    fig.align_ylabels()
+
+    cbar = fig.colorbar(dust_sm, ax=axs)
     cbar.set_label(r"grain size $s$ [m]")
 
     plt.savefig(f"{dump_folder}/plots/vert_slice_s_{j:04d}.png")
@@ -653,25 +711,15 @@ Simulation(model).run()
 # Build animations from plot sequences
 # ------------------------------------------
 
-glob_str = f"{dump_folder}/plots/vert_slice_dens_*.png"
-ani = show_image_sequence(glob_str)
+for plot_name in ["dens", "dv", "s"]:
+    glob_str = f"{dump_folder}/plots/vert_slice_{plot_name}_*.png"
+    ani = show_image_sequence(glob_str)
 
-writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-ani.save("_to_trash/dustysettle_vert_slice_coala.gif", writer=writer)
+    writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    ani.save(f"_to_trash/dustysettle_vert_slice_{plot_name}_coala.gif", writer=writer)
 
-if shamrock.sys.world_rank() == 0:
-    plt.show()
-
-# %%
-
-glob_str = f"{dump_folder}/plots/vert_slice_s_*.png"
-ani = show_image_sequence(glob_str)
-
-writer = PillowWriter(fps=15, metadata=dict(artist="Me"), bitrate=1800)
-ani.save("_to_trash/dustysettle_vert_slice_s_coala.gif", writer=writer)
-
-if shamrock.sys.world_rank() == 0:
-    plt.show()
+    if shamrock.sys.world_rank() == 0:
+        plt.show()
 
 # %%
 # Plot dust mass conservation history
@@ -698,19 +746,25 @@ for k in range(ndust):
     )
     St[k] = ts / t_dyn
 
-plt.figure()
+for k in range(ndust):
+    print(f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}")
+
+dust_cmap = plt.colormaps[cmap]
+dust_norm = mcolors.LogNorm(
+    vmin=mrn_distribution.grain_size_si.min(), vmax=mrn_distribution.grain_size_si.max() * 10
+)
+
+fig = plt.figure(figsize=(SINGLE_COLUMN_WIDTH, 3), layout="constrained", dpi=dpi)
+fig.get_layout_engine().set(w_pad=0.02, h_pad=0.02)
+ax = fig.subplots()
 for k in range(ndust):
     mh = dust_mass[:, k]
     deviation = (mh / mh[iinject]) - 1
 
-    plt.plot(
-        t,
-        deviation,
-        label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}",
-    )
+    ax.plot(t, deviation, color=dust_cmap(dust_norm(mrn_distribution.grain_size_si[k])))
 
 total_dust_mass = np.sum(dust_mass, axis=1)
-plt.plot(
+ax.plot(
     t,
     (total_dust_mass / total_dust_mass[iinject]) - 1,
     color="grey",
@@ -718,13 +772,18 @@ plt.plot(
     linestyle="--",
 )
 
-plt.xlabel("t")
-plt.ylabel("$\\delta M_{dust} / M_{dust,0}$")
-plt.yscale("symlog", linthresh=1e-8)
+ax.set_xlabel("t")
+ax.set_ylabel("$\\delta M_{dust} / M_{dust,0}$")
+ax.set_yscale("symlog", linthresh=1e-8)
 # coagulation moves mass between bins, so only the total dust mass is conserved
-plt.title("Dust mass evolution")
-plt.legend()
-plt.tight_layout()
+ax.set_title("Dust mass evolution")
+ax.legend()
+
+dust_sm = cm.ScalarMappable(cmap=dust_cmap, norm=dust_norm)
+dust_sm.set_array([])
+cbar = fig.colorbar(dust_sm, ax=ax)
+cbar.set_label(r"grain size $s$ [m]")
+
 plt.savefig(f"{dump_folder}/plots/dust_mass_history.png")
 plt.show()
 
