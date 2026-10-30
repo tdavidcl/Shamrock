@@ -12,7 +12,8 @@
 /**
  * @file AddForceVerticalDiscPotential.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Adds the acceleration from a vertical disc potential.
+ * @brief Adds the vertical acceleration of a central mass seen at cylindrical radius R0,
+ * a_z = -GMz / (R0^2 + z^2)^(3/2).
  *
  */
 
@@ -67,8 +68,10 @@ namespace shammodels::common::modules {
                 sham::DDMultiRef{edges.spans_accel_ext.get_spans()},
                 edges.sizes.indexes,
                 [mGM = -cmass * G, R02 = R0 * R0](u32 gid, const Tvec *xyz, Tvec *axyz_ext) {
+                    // Phi = -GM / sqrt(R0^2 + z^2) => a_z = -GM z / (R0^2 + z^2)^(3/2)
                     Tscal z_a = xyz[gid].z();
-                    axyz_ext[gid].z() += mGM * z_a / sycl::sqrt(R02 + z_a * z_a);
+                    Tscal r2  = R02 + z_a * z_a;
+                    axyz_ext[gid].z() += mGM * z_a / (r2 * sycl::sqrt(r2));
                 });
         }
 

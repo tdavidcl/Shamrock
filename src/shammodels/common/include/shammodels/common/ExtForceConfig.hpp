@@ -78,7 +78,7 @@ namespace shammodels {
                 : shear_base(shear_base), shear_dir(shear_dir), Omega_0(Omega_0), eta(eta), q(q) {};
         };
 
-        /// f = -GMy / sqrt(R0^2 + y^2)
+        /// a_z = -GMz / (R0^2 + z^2)^(3/2), from Phi = -GM / sqrt(R0^2 + z^2)
         struct VerticalDiscPotential {
             Tscal central_mass;
             Tscal R0;
