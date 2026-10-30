@@ -101,7 +101,7 @@ lz = int(os.environ.get("LZ", "64"))
 # Time
 tinject = 2.0  # time at which the dust is injected
 t_end = tinject + 3.0
-dt_analysis = 1.0  # time between two analysis plots
+dt_analysis = 0.1  # time between two analysis plots
 
 # Scheduler
 scheduler_split_val = int(2e7)
@@ -295,6 +295,28 @@ def get_max_v():
     return vnorms.max()
 
 
+def compute_delta_v_eff(s_j, delta_v):
+    """Effective collision speed between the dust bins (same as in run_dustydisc.py)
+
+    delta_v_eff = sum_i sum_j rho_i rho_j |dv_i - dv_j| / (sum_i rho_i)^2
+    """
+    rho_d = s_j**2
+
+    # sum_i sum_j rho_i * rho_j == (sum_i rho_i)**2
+    denom = np.sum(rho_d, axis=1) ** 2
+
+    # dv_ii == 0 and dv_ij == dv_ji, so only the i<j pairs are needed, each counted twice
+    numer = np.zeros(rho_d.shape[0])
+    for i in range(ndust):
+        for j in range(i + 1, ndust):
+            dv_ij = np.linalg.norm(delta_v[:, i, :] - delta_v[:, j, :], axis=-1)
+            numer += 2 * rho_d[:, i] * rho_d[:, j] * dv_ij
+
+    # nan before the dust injection (no dust at all)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return numer / denom
+
+
 # %%
 # Plotting
 # ------------------------------------------
@@ -403,6 +425,17 @@ def analyse_and_plot(j):
         ax_delta_v.scatter(
             z, delta_v[:, i, 2] * resolved * to_speed, s=sz, color=c, edgecolors="none"
         )
+
+    delta_v_eff = compute_delta_v_eff(s_j, delta_v)
+    isort = np.argsort(z)
+    ax_delta_v.plot(
+        z[isort],
+        delta_v_eff[isort] * to_speed,
+        color="0.0",
+        linewidth=1,
+        label=r"$\Delta v_{\rm eff}$",
+    )
+    ax_delta_v.legend(loc="upper right", fontsize=8)
 
     gas_handle = Line2D(
         [0],
