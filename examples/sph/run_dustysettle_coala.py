@@ -5,9 +5,6 @@ Dusty settling SPH test with COALA coagulation
 Perform a dust settling test in a local stratified box, with the dust size
 distribution evolved by the COALA coagulation source term.
 
-The reference solution is the pure settling one (no coagulation), it is
-shown to highlight the departure caused by the grain growth.
-
 If you want to change the resolution, you can set the LZ environment variable.
 
 Example (from build directory):
@@ -32,11 +29,9 @@ import numpy as np
 from matplotlib import cm
 from matplotlib.animation import PillowWriter
 from matplotlib.lines import Line2D
-from scipy.linalg import solve_banded
 from scipy.special import erfinv
 from shamrock.external import coala
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
-from shamrock.utils.numba_helper import maybe_njit
 from shamrock.utils.plot import show_image_sequence
 
 import shamrock
@@ -95,6 +90,7 @@ use_coala = True
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5  # number of points for the Gauss-Legendre quadrature
 rhodust_eps = 1e-17  # dust density floor
+tau_frac = 10.0  # the source term step moves at least tau_frac * rhodust_eps
 K0_multiplier = 1
 
 # Resolution (lattice size)
@@ -129,11 +125,6 @@ cfl_force_inject = 0.1
 
 # Injection check
 max_v_inject_threshold = 1.0
-
-# Analytical reference
-reference_tau = 0.025
-reference_Nz = 4000
-reference_zrange = 3.5  # in units of H
 
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}_coala_{use_coala}/"
@@ -269,283 +260,6 @@ def compute_sj_new_j(patchdata, j):
 
 
 # %%
-# Analytical reference solution
-# ------------------------------------------
-
-
-def S_rho(rho, v, vp, hz, tau, Nz):
-    """
-    Step rho forward using Crank-Nicolson on continuity equation.
-    """
-
-    npts = Nz + 2
-
-    ab_A = np.zeros((3, npts))
-    bd_main = np.zeros(npts)
-    bd_lower = np.zeros(npts)
-    bd_upper = np.zeros(npts)
-
-    # Interior points
-    for j in range(1, Nz + 1):
-        C1 = -tau / (8 * hz) * (v[j + 1] + vp[j + 1])
-        C2 = -tau / (8 * hz) * (v[j - 1] + vp[j - 1])
-
-        ab_A[2, j - 1] = C2
-        ab_A[1, j] = 1.0
-        ab_A[0, j + 1] = -C1
-
-        bd_lower[j] = -C2
-        bd_main[j] = 1.0
-        bd_upper[j] = C1
-
-    # Left boundary
-    C = -tau / (8 * hz) * (vp[0] + v[0] - vp[1] - v[1])
-
-    ab_A[1, 0] = 0.5 + C
-    ab_A[0, 1] = 0.5 + C
-
-    bd_main[0] = 0.5 - C
-    bd_upper[0] = 0.5 - C
-
-    # Right boundary
-    C = -tau / (8 * hz) * (vp[-1] + v[-1] - vp[-2] - v[-2])
-
-    ab_A[2, npts - 2] = 0.5 - C
-    ab_A[1, npts - 1] = 0.5 - C
-
-    bd_lower[npts - 1] = 0.5 + C
-    bd_main[npts - 1] = 0.5 + C
-
-    r = bd_main * rho
-    r[1:] += bd_lower[1:] * rho[:-1]
-    r[:-1] += bd_upper[:-1] * rho[1:]
-
-    ret = solve_banded((1, 1), ab_A, r)
-    ret = np.maximum(ret, 0)
-
-    ###################
-    # If there are zero values, propagate the zero value to the edges
-    ###################
-    n = len(ret)
-    center = n // 2
-
-    # Right side (center -> end)
-    right = ret[center:]
-    zero_mask_right = right == 0
-    propagate_right = np.cumsum(zero_mask_right) > 0
-    ret[center:] = right * (~propagate_right)
-
-    # Left side (center -> start)
-    left = ret[: center + 1][::-1]  # reverse
-    zero_mask_left = left == 0
-    propagate_left = np.cumsum(zero_mask_left) > 0
-    ret[: center + 1] = (left * (~propagate_left))[::-1]
-
-    return ret
-
-
-def S_v(v, vbar, vbarp, rho, rhop, hz, zbar, tau, Nz, Stj):
-    """
-    Step velocity forward using Crank-Nicolson.
-    """
-
-    npts = Nz + 2
-
-    ab_A = np.zeros((3, npts))
-    bd_main = np.zeros(npts)
-    bd_lower = np.zeros(npts)
-    bd_upper = np.zeros(npts)
-    E0 = np.zeros_like(v)
-
-    for j in range(1, Nz + 1):
-        E0[j] = -zbar[j] / (1 + zbar[j] ** 2) ** 1.5
-
-        E1 = (vbar[j] + vbarp[j]) / (8 * hz)
-        E2 = 1.0 / (2.0 * Stj[j])
-
-        ab_A[2, j - 1] = -E1
-        ab_A[1, j] = 1.0 / tau + E2
-        ab_A[0, j + 1] = E1
-
-        bd_lower[j] = E1
-        bd_main[j] = 1.0 / tau - E2
-        bd_upper[j] = -E1
-
-    # Boundary conditions
-    ab_A[1, 0] = 1
-    ab_A[0, 1] = 1
-
-    ab_A[2, npts - 2] = 1
-    ab_A[1, npts - 1] = 1
-
-    r = bd_main * v
-    r[1:] += bd_lower[1:] * v[:-1]
-    r[:-1] += bd_upper[:-1] * v[1:]
-    r += E0
-
-    return solve_banded((1, 1), ab_A, r)
-
-
-S_rho = maybe_njit(S_rho)
-S_v = maybe_njit(S_v)
-
-
-class ReferenceDustySettle:
-    def __init__(self, Nz, H, rho_mid, R0, dust_to_gas, dt):
-        self.H = H
-        self.rho_mid = rho_mid
-        self.rho_0 = rho_mid * np.sqrt(2 * np.pi)
-        self.R0 = R0
-        self.dust_to_gas = dust_to_gas
-        self.dt = dt
-
-        self.Nz = Nz
-
-        zout = reference_zrange * H / R0
-        zmin = -zout
-        zmax = zout
-
-        self.hz = (zmax - zmin) / self.Nz
-
-        # exactly Nz+2 points
-        self.zbar = np.linspace(zmin - 0.5 * self.hz, zmax + 0.5 * self.hz, Nz + 2)
-
-    def z_arr(self):
-        return self.zbar * self.R0
-
-    def rho_g_func(self, z):
-        loc_h = self.H
-        ampl = self.rho_0 / (np.sqrt(2 * np.pi))
-        return ampl * np.exp(-(z**2) / (2 * loc_h * loc_h))
-
-    def rho_g_bar_func(self, z):
-        return self.rho_g_func(z) / self.rho_mid
-
-    def rho_d_bar_func(self, z):
-
-        mask = 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
-
-        return mask * self.dust_to_gas * self.rho_g_func(z) / self.rho_mid
-
-    def rho_g(self):
-        return self.rho_g_func(self.z_arr())
-
-    def rho_d_bar(self):
-        return self.rho_d_bar_func(self.z_arr())
-
-    def gen_IC(self, rhoeff, sj, cs, OmegaK):
-
-        self.z = self.z_arr()
-        self.rhog = self.rho_g()
-
-        self.rhodin = self.rho_d_bar()
-        self.rho = self.rhodin.copy()
-
-        self.vdin = np.zeros_like(self.rhodin)
-        self.v = self.vdin.copy()
-
-        self.ts = rhoeff * sj / (cs * self.rhog)
-        self.Stj = self.ts * OmegaK
-
-        self.tbar = 0.0
-
-    def advance(self, tau):
-
-        rhop = S_rho(self.rho, self.v, self.v, self.hz, tau, self.Nz)
-
-        vp = S_v(self.v, self.v, self.v, self.rho, rhop, self.hz, self.zbar, tau, self.Nz, self.Stj)
-
-        rhop = S_rho(self.rho, self.v, vp, self.hz, tau, self.Nz)
-
-        self.v = S_v(self.v, self.v, vp, self.rho, rhop, self.hz, self.zbar, tau, self.Nz, self.Stj)
-
-        self.rho = rhop
-
-        self.tbar += tau
-
-    def advance_until(self, tfinal):
-        print(f"tfinal = {tfinal}")
-        while self.tbar < tfinal:
-            print(self.tbar)
-            self.advance(self.dt)
-
-    def setup(self):
-        return
-
-
-class ReferenceDustySettleAll:
-    def __init__(self):
-        self.rhomid = get_max_rho()
-        self.tau = reference_tau
-
-        self.vK = kep_profile(R0) * codeu.to("m") / codeu.to("s")
-        self.OmegaK = omega_k(R0) * codeu.to("s") ** -1
-        self.tK = 1 / self.OmegaK
-
-        self.rscale = R0
-        self.rhoscale = self.rhomid
-        self.vscale = self.vK
-        self.tscale = self.tK
-
-        self.cs = cs * codeu.to("m") / codeu.to("s")
-
-        print(f"vK = {self.vK}")
-        print(f"OmegaK = {self.OmegaK}")
-        print(f"tK = {self.tK}")
-
-        self.soluces = []
-        for j in range(ndust):
-            mrn_weight_j = mrn_distribution.mrn_weight[j]
-            eps_j = mrn_weight_j * epsilon_base
-            dtg_j = eps_j / (1 - epsilon_base)
-            self.soluces.append(
-                ReferenceDustySettle(reference_Nz, H, self.rhomid, R0, dtg_j, self.tau)
-            )
-
-            rhoeff = mrn_distribution.rho_grains_si_edges[j] * np.sqrt(np.pi * gamma / 8)
-
-            self.soluces[j].setup()
-            self.soluces[j].gen_IC(rhoeff, mrn_distribution.grain_size_si[j], self.cs, self.OmegaK)
-
-    def evolve_until(self, t):
-        for k in range(ndust):
-            self.soluces[k].advance_until(t * codeu.to("s") / self.tscale)
-
-
-reference_dusty_settle = None
-
-
-def compute_L2_error(z, field, z_ref, field_ref):
-    """
-    Compute the L2 error between two fields on a given grid.
-    """
-
-    z_field_sort_args = np.argsort(z)
-    z_field_sorted = z[z_field_sort_args]
-    field_field_sorted = field[z_field_sort_args]
-
-    # Interpolate field to the same grid as the reference field
-    field_interp = np.interp(z_ref, z_field_sorted, field_field_sorted)
-
-    # Compute delta
-    delta = field_interp - field_ref
-
-    # Compute L2 func
-    L2_func = delta**2
-
-    trap_func = None
-    if hasattr(np, "trapezoid"):
-        trap_func = np.trapezoid
-    else:
-        trap_func = np.trapz  # noqa: NPY201
-
-    # Compute L2 integral
-    L2_integral = trap_func(L2_func, z_ref)
-
-    return np.sqrt(L2_integral)
-
-
-# %%
 # Analysis helpers
 # ------------------------------------------
 
@@ -573,16 +287,6 @@ def load_data_from_json(filename, key):
     t = [d["t"] for d in data]
     values = [d[key] for d in data]
     return t, values
-
-
-def get_max_rho():
-    pmass = model.get_particle_mass()
-    hfact = model.get_hfact()
-    dic = ctx.collect_data()
-    hpart = dic["hpart"]
-    rho = pmass * (hfact / np.array(hpart)) ** 3
-    to_dens = codeu.to("kg") * codeu.to("m") ** -3
-    return rho.max() * to_dens
 
 
 def get_max_v():
@@ -649,8 +353,6 @@ def analyse_and_plot(j):
     rho_dust_all = np.zeros(len(z))
     epsilon_dust_all = np.zeros(len(z))
 
-    l2_error_all = [np.nan for _ in range(ndust)]
-
     for i in range(ndust):
         c = dust_colors[i]
         ax_rho.scatter(z, s_j[:, i] ** 2 * to_dens, s=sz, color=c, edgecolors="none")
@@ -658,30 +360,6 @@ def analyse_and_plot(j):
 
         rho_dust_all += s_j[:, i] ** 2 * to_dens
         epsilon_dust_all += s_j[:, i] ** 2 / rho
-
-        if reference_dusty_settle is not None:
-            ax_rho.plot(
-                reference_dusty_settle.soluces[i].zbar,
-                reference_dusty_settle.soluces[i].rho * reference_dusty_settle.rhoscale,
-                "--",
-                color="0.0",
-            )
-
-            ana_epsilon = (
-                reference_dusty_settle.soluces[i].rho
-                * reference_dusty_settle.rhoscale
-                / reference_dusty_settle.soluces[i].rhog
-            )
-            print(ana_epsilon.max(), ana_epsilon.min())
-            ax_epsilon.plot(reference_dusty_settle.soluces[i].zbar, ana_epsilon, "--", color="0.0")
-
-            L2_error = compute_L2_error(
-                z, s_j[:, i] ** 2 / rho, reference_dusty_settle.soluces[i].zbar, ana_epsilon
-            )
-
-            l2_error_all[i] = L2_error
-
-    save_analysis_data("l2_error.json", "l2_error", l2_error_all, j)
 
     dust_mass = analysis_dust_mass.get_dust_mass()
 
@@ -711,23 +389,21 @@ def analyse_and_plot(j):
     ax_epsilon.set_ylim(1e-4, 1e-1)  # if you want to see the dust only
     ax_epsilon.set_xlim(-range_plot, range_plot)
 
-    ax_delta_v.set_ylabel(r"$\Delta v_z$ [m/s]")
+    ax_delta_v.set_ylabel(
+        r"$\Delta v_{z,j} \, \mathbb{1}_{\rho_{{\rm d},j} > \rho_\epsilon}$ [m/s]"
+    )
     ax_delta_v.set_xlabel(r"$z$")
     ax_delta_v.set_xlim(-range_plot, range_plot)
-    ax_delta_v.set_yscale("symlog", linthresh=1.0)
-    ax_delta_v.set_ylim(-4e3, 4e3)
+    ax_delta_v.set_yscale("symlog", linthresh=1e-1)
+    ax_delta_v.set_ylim(-1e2, 1e2)
 
     for i in range(ndust):
         c = dust_colors[i]
-        ax_delta_v.scatter(z, delta_v[:, i, 2] * to_speed, s=sz, color=c, edgecolors="none")
-
-        if reference_dusty_settle is not None:
-            ax_delta_v.plot(
-                reference_dusty_settle.soluces[i].zbar,
-                reference_dusty_settle.soluces[i].v * reference_dusty_settle.vscale,
-                "--",
-                color="0.0",
-            )
+        # null where the bin is below the dust density floor
+        resolved = s_j[:, i] ** 2 > rhodust_eps
+        ax_delta_v.scatter(
+            z, delta_v[:, i, 2] * resolved * to_speed, s=sz, color=c, edgecolors="none"
+        )
 
     gas_handle = Line2D(
         [0],
@@ -751,20 +427,12 @@ def analyse_and_plot(j):
         label="dust",
     )
 
-    analytic_handle = Line2D(
-        [0],
-        [0],
-        linestyle="--",
-        color="0.0",
-        label="reference (no coagulation)",
-    )
-
     shamrock.matplotlib.add_cmap_legend_entry(
         ax_rho,
         dust_cmap,
         label="dust species",
-        extra_handles=[gas_handle, dust_handle, analytic_handle],
-        extra_labels=["gas", "dust sum", "reference (no coagulation)"],
+        extra_handles=[gas_handle, dust_handle],
+        extra_labels=["gas", "dust sum"],
         loc="upper right",
         fontsize=8,
     )
@@ -844,7 +512,9 @@ def setup_model():
     )
     cfg.set_dust_drag_epstein(gamma, mrn_distribution.grain_size, mrn_distribution.rho_grains)
     if use_coala:
-        cfg.set_dust_evol_coala_coag(rhodust_eps, dv_max, massgrid_edges, tabflux_coag)
+        cfg.set_dust_evol_coala_coag(
+            rhodust_eps, dv_max, massgrid_edges, tabflux_coag, tau_frac=tau_frac
+        )
     cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
     cfg.add_ext_force_velocity_dissipation(eta=vel_dissipation_eta)
     cfg.set_neigh_cache_strategy(NeighCacheStrategy.SingleStage)
@@ -934,16 +604,6 @@ class Simulation(SimulationRunner):
 
     @callback(tsim_interval=0.1)  # Do the analysis every dt_stop
     def analysis_plots(self, j):
-        global reference_dusty_settle
-
-        model_time = self.model.get_time()
-
-        if model_time > tinject and reference_dusty_settle is None:
-            reference_dusty_settle = ReferenceDustySettleAll()
-
-        if reference_dusty_settle is not None:
-            reference_dusty_settle.evolve_until(model_time - tinject)
-
         analyse_and_plot(j)
 
     @callback(walltime_interval=30.0)  # Checkpoint the simulation every 30 seconds
@@ -1037,40 +697,11 @@ plt.tight_layout()
 plt.savefig(f"{dump_folder}/plots/dust_mass_history.png")
 plt.show()
 
-
-# %%
-# Plot L2 error history
-# ------------------------------------------
-
-t, l2_error = load_data_from_json("l2_error.json", "l2_error")
-l2_error = np.array(l2_error)
-
-t = np.array(t) - tinject
-
-print(t)
-print(l2_error)
-
-plt.figure()
-for k in range(ndust):
-    plt.plot(
-        t,
-        l2_error[:, k],
-        label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m], St = {St[k]:.1e}",
-    )
-plt.legend()
-plt.xlabel("t")
-plt.ylabel("L2 error")
-plt.yscale("log")
-plt.tight_layout()
-plt.savefig(f"{dump_folder}/plots/l2_error.png")
-plt.show()
-
 # %%
 
 print("##### Test result #####")
 result = {
     "t": float(t[-1]),
-    "l2_error": l2_error[-1].tolist(),
     "dust_mass": (dust_mass[-1] / dust_mass[iinject] - 1).tolist(),
     "St": St.tolist(),
     "lz": lz,
