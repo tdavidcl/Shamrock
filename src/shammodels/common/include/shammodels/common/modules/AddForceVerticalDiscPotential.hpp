@@ -12,8 +12,8 @@
 /**
  * @file AddForceVerticalDiscPotential.hpp
  * @author Timothée David--Cléris (tim.shamrock@proton.me)
- * @brief Adds the vertical acceleration of a central mass seen at cylindrical radius R0,
- * a_z = -GMz / (R0^2 + z^2)^(3/2).
+ * @brief Adds the thin disc vertical acceleration of a central mass at cylindrical radius R0,
+ * a_z = -GMz / (R0^2 sqrt(R0^2 + z^2)), which reduces to -Omega_K^2 z for z << R0.
  *
  */
 
@@ -67,11 +67,11 @@ namespace shammodels::common::modules {
                 sham::DDMultiRef{edges.spans_positions.get_spans()},
                 sham::DDMultiRef{edges.spans_accel_ext.get_spans()},
                 edges.sizes.indexes,
-                [mGM = -cmass * G, R02 = R0 * R0](u32 gid, const Tvec *xyz, Tvec *axyz_ext) {
-                    // Phi = -GM / sqrt(R0^2 + z^2) => a_z = -GM z / (R0^2 + z^2)^(3/2)
+                [mGM_R02 = -cmass * G / (R0 * R0),
+                 R02     = R0 * R0](u32 gid, const Tvec *xyz, Tvec *axyz_ext) {
+                    // thin disc approx: a_z = -GM z / (R0^2 sqrt(R0^2 + z^2)) ~ -Omega_K^2 z
                     Tscal z_a = xyz[gid].z();
-                    Tscal r2  = R02 + z_a * z_a;
-                    axyz_ext[gid].z() += mGM * z_a / (r2 * sycl::sqrt(r2));
+                    axyz_ext[gid].z() += mGM_R02 * z_a / sycl::sqrt(R02 + z_a * z_a);
                 });
         }
 

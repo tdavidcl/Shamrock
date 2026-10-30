@@ -78,7 +78,7 @@ namespace shammodels {
                 : shear_base(shear_base), shear_dir(shear_dir), Omega_0(Omega_0), eta(eta), q(q) {};
         };
 
-        /// a_z = -GMz / (R0^2 + z^2)^(3/2), from Phi = -GM / sqrt(R0^2 + z^2)
+        /// thin disc approx: a_z = -GMz / (R0^2 sqrt(R0^2 + z^2)) ~ -Omega_K^2 z for z << R0
         struct VerticalDiscPotential {
             Tscal central_mass;
             Tscal R0;
