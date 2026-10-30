@@ -133,10 +133,11 @@ lx = 12
 ly = 12
 lz = int(os.environ.get("LZ", "64"))
 
-# Time
-tinject = 2.0  # time at which the dust is injected
-t_end = tinject + 3.0
-dt_analysis = 0.1  # time between two analysis plots
+# Time, in units of the orbital period at R0
+t_orb = 2 * np.pi * np.sqrt(R0**3 / (ucte.G() * central_mass))
+tinject = 2.0 * t_orb  # time at which the dust is injected
+t_end = tinject + 3.0 * t_orb
+dt_analysis = 0.1 * t_orb  # time between two analysis plots
 
 # Scheduler
 scheduler_split_val = int(2e7)
@@ -148,7 +149,7 @@ av_alpha_max = 1
 av_sigma_decay = 0.1
 av_alpha_u = 1
 av_beta_AV = 2
-vel_dissipation_eta = 5
+vel_dissipation_eta = 5 / t_orb
 
 # CFL (before dust injection)
 cfl_cour_setup = 0.25
@@ -158,7 +159,7 @@ cfl_cour_inject = 0.1
 cfl_force_inject = 0.1
 
 # Injection check
-max_v_inject_threshold = 1.0
+max_v_inject_threshold = 3.0  # in units of cs
 
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}_coala_{use_coala}/"
@@ -605,7 +606,7 @@ def setup_model():
         cfg.set_dust_evol_coala_coag(
             rhodust_eps, dv_max, massgrid_edges, tabflux_coag, tau_frac=tau_frac
         )
-    cfg.add_ext_force_vertical_disc_potential(central_mass=1, R0=1)
+    cfg.add_ext_force_vertical_disc_potential(central_mass=central_mass, R0=R0)
     cfg.add_ext_force_velocity_dissipation(eta=vel_dissipation_eta)
     cfg.set_neigh_cache_strategy(NeighCacheStrategy.SingleStage)
     cfg.set_show_cfl_detail(True)
@@ -642,7 +643,7 @@ def setup_model():
     if random_vel_pert:
         rng = np.random.default_rng(42)
 
-        ampl = dr / 1.0
+        ampl = dr / t_orb
         print(f"random velocity perturbation amplitude = {ampl}")
 
         def pert_func(r):
@@ -677,7 +678,7 @@ class Simulation(SimulationRunner):
         max_v = get_max_v()
         print(f"max_v = {max_v}")
 
-        if max_v > max_v_inject_threshold:
+        if max_v > max_v_inject_threshold * cs:
             raise ValueError("max_v is too high, please increase the injection time")
 
         for k in range(ndust):
