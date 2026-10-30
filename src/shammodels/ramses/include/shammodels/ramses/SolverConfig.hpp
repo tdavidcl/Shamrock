@@ -40,6 +40,7 @@
 #include "shamrock/scheduler/PatchScheduler.hpp"
 #include <nlohmann/json.hpp>
 #include <shamrock/io/json_std_optional.hpp>
+#include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
 #include <shamunits/constant_table.hpp>
 #include <stdexcept>
@@ -87,7 +88,12 @@ namespace shammodels::basegodunov {
         using Tscal              = shambase::VecComponent<Tvec>;
         GravityMode gravity_mode = NoGravity;
         bool analytical_gravity  = false; // whether to use an external analytical gravity
-        Tscal tol                = 1e-6;
+        /// Convergence tolerance of the Poisson solver
+        Tscal tol = 1e-6;
+        /// Tolerance of the BiCGSTAB lucky breakdown test (restarts the solver below it)
+        Tscal tol_hp_bk = 1e-6;
+        /// Maximum number of iterations of the Poisson solver
+        u32 Niter_max = 100;
         inline Tscal get_tolerance() { return tol; }
         inline bool is_gravity_on() { return gravity_mode != NoGravity; }
     };
@@ -308,21 +314,23 @@ struct shammodels::basegodunov::SolverConfig {
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Gravity config
     //////////////////////////////////////////////////////////////////////////////////////////////
-    inline Tscal get_constant_G() {
+    /// The unit system of the config, or the default one (SI) if it is not set
+    inline shamunits::UnitSystem<Tscal> get_unit_sys() {
         if (!unit_sys) {
             ON_RANK_0(logger::warn_ln("amr::Config", "the unit system is not set"));
-            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::G>();
+            return shamunits::UnitSystem<Tscal>{};
         } else {
-            return unit_sys->template get<shamunits::constants::G>();
+            return *unit_sys;
         }
+    }
+    inline Tscal get_constant_G() { return get_unit_sys().template get<shamunits::constants::G>(); }
+    inline Tscal get_constant_4piG() {
+        return get_unit_sys().template get<4 * shamunits::pi<double> * shamunits::constants::G>();
     }
     inline bool is_boundary_periodic() { return true; }
     GravityConfig<Tvec> gravity_config{};
-    inline Tscal get_constant_4piG() {
-        auto scal_G = get_constant_G();
-        return 4 * M_PI * scal_G;
-    }
     inline Tscal get_grav_tol() { return gravity_config.get_tolerance(); }
+    inline Tscal get_happy_bk_grav_tol() { return gravity_config.tol_hp_bk; }
     inline bool is_gravity_on() { return gravity_config.is_gravity_on(); }
     inline bool is_coordinate_field_required() { return gravity_config.analytical_gravity; }
 

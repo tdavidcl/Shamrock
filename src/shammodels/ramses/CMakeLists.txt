@@ -43,6 +43,12 @@ set(Sources
     src/modules/ComputeSumOverV.cpp
     src/modules/InterpolateToFace.cpp
     src/modules/CGInit.cpp
+    src/modules/NodeSpMVPoisson3D.cpp
+    src/modules/NodeCGLoop.cpp
+    src/modules/NodeJacobiPreconditioner.cpp
+    src/modules/BiCGSTABInit.cpp
+    src/modules/NodeBiCGSTABLoop.cpp
+    src/modules/NodeSelfGravityAcceleration.cpp
     src/modules/ComputeAMRLevel.cpp
     src/modules/ResidualDot.cpp
     src/modules/FindGhostLayerCandidates.cpp
