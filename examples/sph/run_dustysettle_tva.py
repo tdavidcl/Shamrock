@@ -28,7 +28,6 @@ import numpy as np
 from matplotlib import cm
 from matplotlib.animation import PillowWriter
 from matplotlib.lines import Line2D
-from scipy.linalg import solve_banded
 from scipy.special import erfinv
 from shamrock.utils.DustMRNDistribution import DustMRNDistribution
 from shamrock.utils.numba_helper import maybe_njit
@@ -122,6 +121,7 @@ max_v_inject_threshold = 1.0
 reference_tau = 0.025
 reference_Nz = 4000
 reference_zrange = 3.5  # in units of H
+reference_cfl = 0.4  # substep CFL, must stay <= 0.5 to keep rho positive
 
 # Paths
 sim_folder = f"_to_trash/dusty_settle_{lz}/"
@@ -249,119 +249,141 @@ def compute_sj_new_j(patchdata, j):
 # ------------------------------------------
 
 
+# The reference solves, for each species, the 1D pressureless dust equations
+#   d(rho)/dt + d(rho v)/dz = 0
+#   dv/dt + v dv/dz = -z / (1 + z^2)^1.5 - v / St(z)
+# in units of R0 and 1 / Omega_K, on Nz cells plus one ghost point on each side.
+# Both use conservative upwind fluxes on a van Leer limited (MUSCL) reconstruction,
+# integrated with SSP-RK2 (Heun) on substeps of CFL <= reference_cfl. For large
+# grains the fast falling upper layers catch up with the ones below, giving a
+# shock in v and a very thin settled layer: these schemes keep v free of
+# oscillations and rho positive, and conserve the dust mass to round-off (zero
+# flux walls).
+
+
+def van_leer_slope(q):
+    """
+    van Leer limited slope of q, zero on the first and last point. The face
+    values q +- slope / 2 always lie between the neighbouring values of q.
+    """
+    dq = q[1:] - q[:-1]
+    a = dq[:-1]
+    b = dq[1:]
+    ab = a * b
+    slope = np.zeros_like(q)
+    slope[1:-1] = np.where(ab > 0, 2 * ab / np.where(ab > 0, a + b, 1.0), 0.0)
+    return slope
+
+
+def rho_flux_divergence(q, uf):
+    """
+    Flux divergence of the continuity equation on the Nz interior cells.
+
+    ``uf`` holds the Nz+1 face velocities (face k sits between cells k-1 and k),
+    the two outer faces are zero-flux walls. With CFL <= 1/2 a forward Euler
+    step keeps q >= 0.
+    """
+    slope = van_leer_slope(q)
+
+    # upwind face value for the Nz-1 interior faces
+    u = uf[1:-1]
+    q_face = np.where(u > 0, q[:-1] + 0.5 * slope[:-1], q[1:] - 0.5 * slope[1:])
+
+    flux = np.zeros(len(q) + 1)
+    flux[1:-1] = u * q_face
+    return flux[1:] - flux[:-1]
+
+
+def burgers_flux_divergence(q):
+    """
+    Flux divergence of v^2 / 2 on the Nz interior cells (Godunov flux).
+
+    The ghost points mirror the first and last cells (v -> -v), so that the
+    velocity vanishes on the walls.
+    """
+    w = np.empty(len(q) + 2)
+    w[1:-1] = q
+    w[0] = -q[0]
+    w[-1] = -q[-1]
+
+    slope = van_leer_slope(w)
+    wl = w[:-1] + 0.5 * slope[:-1]
+    wr = w[1:] - 0.5 * slope[1:]
+
+    flux = 0.5 * np.maximum(np.maximum(wl, 0) ** 2, np.minimum(wr, 0) ** 2)
+    return flux[1:] - flux[:-1]
+
+
 def S_rho(rho, v, vp, hz, tau, Nz):
     """
-    Step rho forward using Crank-Nicolson on continuity equation.
+    Step rho forward over tau, the face velocities being interpolated linearly
+    in time between v (start of the step) and vp (end of the step).
     """
 
-    npts = Nz + 2
+    # Nz+1 faces between the Nz+2 points, the outer two being the walls
+    uf0 = 0.5 * (v[:-1] + v[1:])
+    uf1 = 0.5 * (vp[:-1] + vp[1:])
+    umax = max(np.max(np.abs(uf0[1:-1])), np.max(np.abs(uf1[1:-1])))
+    nsub = max(1, int(np.ceil(umax * tau / (reference_cfl * hz))))
+    dt = tau / nsub
 
-    ab_A = np.zeros((3, npts))
-    bd_main = np.zeros(npts)
-    bd_lower = np.zeros(npts)
-    bd_upper = np.zeros(npts)
+    q = rho[1 : Nz + 1].copy()
+    for isub in range(nsub):
+        ua = uf0 + (isub / nsub) * (uf1 - uf0)
+        ub = uf0 + ((isub + 1) / nsub) * (uf1 - uf0)
 
-    # Interior points
-    for j in range(1, Nz + 1):
-        C1 = -tau / (8 * hz) * (v[j + 1] + vp[j + 1])
-        C2 = -tau / (8 * hz) * (v[j - 1] + vp[j - 1])
+        q1 = q - (dt / hz) * rho_flux_divergence(q, ua)
+        q2 = q1 - (dt / hz) * rho_flux_divergence(q1, ub)
+        q = 0.5 * (q + q2)
 
-        ab_A[2, j - 1] = C2
-        ab_A[1, j] = 1.0
-        ab_A[0, j + 1] = -C1
-
-        bd_lower[j] = -C2
-        bd_main[j] = 1.0
-        bd_upper[j] = C1
-
-    # Left boundary
-    C = -tau / (8 * hz) * (vp[0] + v[0] - vp[1] - v[1])
-
-    ab_A[1, 0] = 0.5 + C
-    ab_A[0, 1] = 0.5 + C
-
-    bd_main[0] = 0.5 - C
-    bd_upper[0] = 0.5 - C
-
-    # Right boundary
-    C = -tau / (8 * hz) * (vp[-1] + v[-1] - vp[-2] - v[-2])
-
-    ab_A[2, npts - 2] = 0.5 - C
-    ab_A[1, npts - 1] = 0.5 - C
-
-    bd_lower[npts - 1] = 0.5 + C
-    bd_main[npts - 1] = 0.5 + C
-
-    r = bd_main * rho
-    r[1:] += bd_lower[1:] * rho[:-1]
-    r[:-1] += bd_upper[:-1] * rho[1:]
-
-    ret = solve_banded((1, 1), ab_A, r)
-    ret = np.maximum(ret, 0)
-
-    ###################
-    # If there are zero values, propagate the zero value to the edges
-    ###################
-    n = len(ret)
-    center = n // 2
-
-    # Right side (center -> end)
-    right = ret[center:]
-    zero_mask_right = right == 0
-    propagate_right = np.cumsum(zero_mask_right) > 0
-    ret[center:] = right * (~propagate_right)
-
-    # Left side (center -> start)
-    left = ret[: center + 1][::-1]  # reverse
-    zero_mask_left = left == 0
-    propagate_left = np.cumsum(zero_mask_left) > 0
-    ret[: center + 1] = (left * (~propagate_left))[::-1]
+    ret = np.empty_like(rho)
+    ret[1 : Nz + 1] = q
+    # ghost points only matter for plotting, use a zero gradient
+    ret[0] = q[0]
+    ret[Nz + 1] = q[Nz - 1]
 
     return ret
 
 
-def S_v(v, vbar, vbarp, rho, rhop, hz, zbar, tau, Nz, Stj):
+def S_v(v, hz, zbar, tau, Nz, Stj):
     """
-    Step velocity forward using Crank-Nicolson.
+    Step v forward over tau. Strang splitting between the advection and the
+    gravity + drag source, the latter being integrated exactly (relaxation
+    towards the terminal velocity), so that small St are not a constraint.
     """
 
-    npts = Nz + 2
+    z = zbar[1 : Nz + 1]
+    St = Stj[1 : Nz + 1]
+    g = -z / (1 + z**2) ** 1.5
+    v_term = St * g
 
-    ab_A = np.zeros((3, npts))
-    bd_main = np.zeros(npts)
-    bd_lower = np.zeros(npts)
-    bd_upper = np.zeros(npts)
-    E0 = np.zeros_like(v)
+    # the source changes v by less than tau * max|g| over the step
+    umax = np.max(np.abs(v)) + tau * np.max(np.abs(g))
+    nsub = max(1, int(np.ceil(umax * tau / (reference_cfl * hz))))
+    dt = tau / nsub
+    half_decay = np.exp(-0.5 * dt / St)
 
-    for j in range(1, Nz + 1):
-        E0[j] = -zbar[j] / (1 + zbar[j] ** 2) ** 1.5
+    q = v[1 : Nz + 1].copy()
+    for isub in range(nsub):
+        q = v_term + (q - v_term) * half_decay
 
-        E1 = (vbar[j] + vbarp[j]) / (8 * hz)
-        E2 = 1.0 / (2.0 * Stj[j])
+        q1 = q - (dt / hz) * burgers_flux_divergence(q)
+        q2 = q1 - (dt / hz) * burgers_flux_divergence(q1)
+        q = 0.5 * (q + q2)
 
-        ab_A[2, j - 1] = -E1
-        ab_A[1, j] = 1.0 / tau + E2
-        ab_A[0, j + 1] = E1
+        q = v_term + (q - v_term) * half_decay
 
-        bd_lower[j] = E1
-        bd_main[j] = 1.0 / tau - E2
-        bd_upper[j] = -E1
+    ret = np.empty_like(v)
+    ret[1 : Nz + 1] = q
+    ret[0] = -q[0]
+    ret[Nz + 1] = -q[Nz - 1]
 
-    # Boundary conditions
-    ab_A[1, 0] = 1
-    ab_A[0, 1] = 1
-
-    ab_A[2, npts - 2] = 1
-    ab_A[1, npts - 1] = 1
-
-    r = bd_main * v
-    r[1:] += bd_lower[1:] * v[:-1]
-    r[:-1] += bd_upper[:-1] * v[1:]
-    r += E0
-
-    return solve_banded((1, 1), ab_A, r)
+    return ret
 
 
+van_leer_slope = maybe_njit(van_leer_slope)
+rho_flux_divergence = maybe_njit(rho_flux_divergence)
+burgers_flux_divergence = maybe_njit(burgers_flux_divergence)
 S_rho = maybe_njit(S_rho)
 S_v = maybe_njit(S_v)
 
@@ -424,18 +446,20 @@ class ReferenceDustySettle:
         self.Stj = self.ts * OmegaK
 
         self.tbar = 0.0
+        self.mass_0 = self.dust_mass()
+
+    def dust_mass(self):
+        # Ghost points excluded, S_rho conserves this to round-off
+        return np.sum(self.rho[1:-1]) * self.hz
 
     def advance(self, tau):
 
-        rhop = S_rho(self.rho, self.v, self.v, self.hz, tau, self.Nz)
+        # v does not depend on rho, so advance it first and then move rho with
+        # the velocity interpolated in time over the step
+        vp = S_v(self.v, self.hz, self.zbar, tau, self.Nz, self.Stj)
 
-        vp = S_v(self.v, self.v, self.v, self.rho, rhop, self.hz, self.zbar, tau, self.Nz, self.Stj)
-
-        rhop = S_rho(self.rho, self.v, vp, self.hz, tau, self.Nz)
-
-        self.v = S_v(self.v, self.v, vp, self.rho, rhop, self.hz, self.zbar, tau, self.Nz, self.Stj)
-
-        self.rho = rhop
+        self.rho = S_rho(self.rho, self.v, vp, self.hz, tau, self.Nz)
+        self.v = vp
 
         self.tbar += tau
 
@@ -444,6 +468,7 @@ class ReferenceDustySettle:
         while self.tbar < tfinal:
             print(self.tbar)
             self.advance(self.dt)
+        print(f"reference dust mass drift = {self.dust_mass() / self.mass_0 - 1:.3e}")
 
     def setup(self):
         return
