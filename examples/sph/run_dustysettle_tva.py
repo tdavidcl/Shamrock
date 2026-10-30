@@ -512,9 +512,9 @@ reference_dusty_settle = None
 # closed walls), upwind continuity, upwind velocity advection (Godunov flux of v^2/2), explicit
 # pressure / gravity / dissipation and a drag step solved exactly per face (conserves the
 # momentum and keeps the terminal velocity exact). With ``order=1`` the reconstruction is
-# piecewise constant with semi-implicit Euler + backward-Euler drag; with ``order=2`` it is van Leer
-# limited (MUSCL) with a midpoint predictor-corrector and Crank-Nicolson drag. The gas starts
-# in discrete hydrostatic equilibrium, so it stays at rest without dust.
+# piecewise constant with semi-implicit Euler + backward-Euler drag; with ``order=2`` it is
+# van Leer limited (MUSCL) with a midpoint predictor-corrector and Crank-Nicolson drag. The gas
+# starts in discrete hydrostatic equilibrium, so it stays at rest without dust.
 
 
 def vertical_gravity(zbar):
