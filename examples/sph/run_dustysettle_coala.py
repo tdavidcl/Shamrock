@@ -115,7 +115,7 @@ box_H_count = 8  # box size in number of H
 random_vel_pert = True  # add a small vecolity pertubation to fasten the setup
 
 # Dust
-ndust = 20
+ndust = 5 # not below 20 in prod otherwise the rate is too low
 mrn_pow = 3.5
 mrn_cutoff_si = 250e-9  # like standard MRN
 epsilon_base = 0.01
@@ -138,8 +138,8 @@ lz = int(os.environ.get("LZ", "64"))
 # Time, in units of the orbital period at R0
 t_orb = 2 * np.pi * np.sqrt(R0**3 / (ucte.G() * central_mass))
 tinject = 2.0 * t_orb  # time at which the dust is injected
-t_end = np.inf  # tinject + 3.0 * t_orb
-dt_analysis = 2 * t_orb  # time between two analysis plots
+t_end =  tinject + 3.0 * t_orb # use np.inf instead for long runs
+dt_analysis = 0.1 * t_orb  # time between two analysis plots
 
 # Scheduler
 scheduler_split_val = int(2e7)
