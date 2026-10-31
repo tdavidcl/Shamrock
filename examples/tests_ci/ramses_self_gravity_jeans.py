@@ -15,6 +15,8 @@ dispersion relation :math:`\\omega^2 = c_s^2 k^2 - 4 \\pi G \\rho_0`:
 
 The growth rate (with both Poisson solvers) and the oscillation frequency are checked against the
 linear theory. The gravitational constant comes from the unit system, set so that :math:`G = 1`.
+The box is split into several patches, so that the ghost exchanges of the Poisson solvers are
+tested between patches (and between ranks when run with MPI).
 """
 
 import numpy as np
@@ -66,12 +68,16 @@ def run(cs, solver, dt, nsteps):
         cfg.set_gravity_mode_cg()
     else:
         cfg.set_gravity_mode_bicgstab()
-    cfg.set_self_gravity_tol(1e-10)
+    # well above the round-off floor of the (singular, periodic) Poisson problem: when the
+    # perturbation is small (e.g. near a zero of cos(omega t)) a tolerance at that floor is not
+    # reached and the CG iterations diverge (see the TODO in NodeCGLoop)
+    cfg.set_self_gravity_tol(1e-8)
     cfg.set_self_gravity_Niter_max(500)
     cfg.set_ext_force_coupling(ExtForceCoupling.Trapezoidal)
     model.set_solver_config(cfg)
 
-    model.init_scheduler(int(1e7), 1)
+    # split the 512 blocks into several patches
+    model.init_scheduler(64, 1)
     model.make_base_grid((0, 0, 0), (sz, sz, sz), (base, base, base))
 
     P0 = cs * cs * rho0 / gamma
@@ -120,6 +126,14 @@ def run(cs, solver, dt, nsteps):
         times.append(dt * (i + 1))
         amps.append(a)
         p_max = max(p_max, p)
+
+    # every rank must own patches, otherwise the exchanges between ranks are not tested
+    owners = [p.node_owner_id for p in ctx.get_patch_list_global()]
+    patches_per_rank = np.bincount(owners, minlength=shamrock.sys.world_size())
+    if shamrock.sys.world_rank() == 0:
+        print(f"patches per rank: {patches_per_rank.tolist()}")
+    assert len(owners) > 1, "the box is not split into several patches"
+    assert np.all(patches_per_rank > 0), f"a rank owns no patch ({patches_per_rank.tolist()})"
 
     return np.array(times), np.array(amps), p_max
 
