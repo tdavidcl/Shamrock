@@ -598,34 +598,25 @@ struct shammodels::sph::SolverConfig {
     /// Set the unit system of the simulation
     inline void set_units(shamunits::UnitSystem<Tscal> new_sys) { unit_sys = new_sys; }
 
-    /// Retrieves the value of the constant G based on the unit system.
-    inline Tscal get_constant_G() {
+    /// The unit system of the config, or the default one (SI) if it is not set
+    inline shamunits::UnitSystem<Tscal> get_unit_sys() {
         if (!unit_sys) {
             ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::G>();
+            return shamunits::UnitSystem<Tscal>{};
         } else {
-            return unit_sys->template get<shamunits::constants::G>();
+            return *unit_sys;
         }
     }
 
+    /// Retrieves the value of the constant G based on the unit system.
+    inline Tscal get_constant_G() { return get_unit_sys().template get<shamunits::constants::G>(); }
+
     /// Retrieves the value of the constant c based on the unit system.
-    inline Tscal get_constant_c() {
-        if (!unit_sys) {
-            ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::c>();
-        } else {
-            return unit_sys->template get<shamunits::constants::c>();
-        }
-    }
+    inline Tscal get_constant_c() { return get_unit_sys().template get<shamunits::constants::c>(); }
 
     /// Retrieves the value of the constant mu_0 based on the unit system.
     inline Tscal get_constant_mu_0() {
-        if (!unit_sys) {
-            ON_RANK_0(logger::warn_ln("sph::Config", "the unit system is not set"));
-            return shamunits::UnitSystem<Tscal>{}.template get<shamunits::constants::mu_0>();
-        } else {
-            return unit_sys->template get<shamunits::constants::mu_0>();
-        }
+        return get_unit_sys().template get<shamunits::constants::mu_0>();
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
