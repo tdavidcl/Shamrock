@@ -70,7 +70,6 @@ mpl.rcParams.update(
         "axes.labelpad": 2,
         "axes.titlepad": 4,
         "axes.linewidth": 0.6,
-        "legend.linewidth": 0.6,
         "legend.framealpha": 1.0,
         "lines.linewidth": 1.0,
         "lines.markersize": 3.0,
@@ -89,6 +88,8 @@ mpl.rcParams.update(
         "grid.linewidth": 0.5,
     }
 )
+if "legend.linewidth" in mpl.rcParams:  # only in matplotlib >= 3.11
+    mpl.rcParams["legend.linewidth"] = 0.6
 
 # %%
 # Define simulation parameters and unit system
