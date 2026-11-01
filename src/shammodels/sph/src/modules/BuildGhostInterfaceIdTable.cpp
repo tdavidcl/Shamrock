@@ -16,6 +16,9 @@
 
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
+#include "shamalgs/numeric.hpp"
+#include "shambackends/kernel_call.hpp"
+#include "shambackends/math.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
 #include "shammodels/sph/modules/BuildGhostInterfaceIdTable.hpp"
@@ -35,6 +38,7 @@ void shammodels::sph::modules::BuildGhostInterfaceIdTable<Tvec>::_impl_evaluate_
 
     // inputs
     auto &positions       = edges.positions;
+    auto &hpart           = edges.hpart;
     auto &interface_infos = edges.interface_infos.values;
 
     // positions only holds non-empty patches, an interface whose sender is absent from it has no
@@ -48,19 +52,44 @@ void shammodels::sph::modules::BuildGhostInterfaceIdTable<Tvec>::_impl_evaluate_
 
     std::map<u64, f64> send_count_stats;
 
+    auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
+    sham::DeviceQueue &q = shambase::get_check_ref(dev_sched).get_queue();
+
     interface_infos.for_each([&](u64 sender, u64 receiver, const InterfaceBuildInfos &build) {
         if (non_empty_senders.find(sender) == non_empty_senders.end()) {
             return;
         }
 
         PatchDataField<Tvec> &xyz = positions.get_field(sender);
+        PatchDataField<Tscal> &h  = hpart.get_field(sender);
+        u32 obj_cnt               = xyz.get_obj_cnt();
 
-        sham::DeviceBuffer<u32> idxs_res = xyz.get_ids_where(
-            [](auto access, u32 id, Tvec vmin, Tvec vmax) {
-                return Patch::is_in_patch_converted(access[id], vmin, vmax);
-            },
-            build.cut_volume.lower,
-            build.cut_volume.upper);
+        // object-group criterion: sender particle b interacts with some receiver particle a only
+        // if b is in the ball of a (so in recv_ext) or a is in the ball of b (so b is within l_b
+        // of recv_box)
+        sham::DeviceBuffer<u32> mask(obj_cnt, dev_sched);
+        sham::kernel_call(
+            q,
+            sham::MultiRef{xyz.get_buf(), h.get_buf()},
+            sham::MultiRef{mask},
+            obj_cnt,
+            [recv_box   = build.recv_box,
+             recv_ext   = build.recv_ext,
+             h_evol_max = h_evol_max,
+             rkern      = rkern](
+                u32 i, const Tvec *__restrict r, const Tscal *__restrict hp, u32 *__restrict m) {
+                Tvec rb  = r[i];
+                Tscal lb = hp[i] * h_evol_max * rkern;
+
+                bool in_ext   = sham::vec_compare_geq(rb, recv_ext.lower)
+                                && sham::vec_compare_geq(recv_ext.upper, rb);
+                bool in_reach = sham::vec_compare_geq(rb, recv_box.lower - lb)
+                                && sham::vec_compare_geq(recv_box.upper + lb, rb);
+
+                m[i] = in_ext || in_reach;
+            });
+
+        sham::DeviceBuffer<u32> idxs_res = shamalgs::stream_compact(dev_sched, mask, obj_cnt);
 
         u32 pcnt = idxs_res.get_size();
 

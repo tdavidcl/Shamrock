@@ -262,6 +262,7 @@ void shammodels::sph::modules::FindGhostInterfacesFree<Tvec>::_impl_evaluate_int
 
     SerialPatchTree<Tvec> &sptree                         = edges.patch_tree.get_patch_tree();
     const shambase::DistributedData<Tscal> &int_range_max = edges.interact_radius.values;
+    const shambase::DistributedData<GhostMargins<Tvec>> &margins = edges.margins.values;
 
     std::vector<std::pair<u64, CoordRange<Tvec>>> senders;
     edges.local_patch_boxes.values.for_each([&](u64 id, const CoordRange<Tvec> &box) {
@@ -271,7 +272,7 @@ void shammodels::sph::modules::FindGhostInterfacesFree<Tvec>::_impl_evaluate_int
     shambase::DistributedDataShared<InterfaceBuildInfos> &interf_map = edges.interface_infos.values;
     interf_map                                                       = {};
 
-    sycl::host_accessor acc_tf{edges.interact_radius_tree.get_buf(), sycl::read_only};
+    sycl::host_accessor acc_tf{edges.margins_tree.get_buf(), sycl::read_only};
     // sender translation
     Tvec periodic_offset = Tvec{0, 0, 0};
 
@@ -285,14 +286,20 @@ void shammodels::sph::modules::FindGhostInterfacesFree<Tvec>::_impl_evaluate_int
 
         CoordRange<Tvec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
 
-        Tscal sender_volume = sender_bsize.get_volume();
+        Tscal sender_volume               = sender_bsize.get_volume();
+        Tscal sender_h_max                = int_range_max.get(sender_id);
+        GhostMargins<Tvec> sender_margins = margins.get(sender_id);
 
         using PtNode = typename SerialPatchTree<Tvec>::PtNode;
 
         sptree.host_for_each_leafs_internal(
             [&](u64 tree_id, PtNode n) {
-                Tscal receiv_h_max = acc_tf[tree_id];
-                CoordRange<Tvec> receiv_exp{n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+                // group-group criterion: extend the node box by the join of its margins
+                // and of the reflected (lower <-> upper) margins of the sender
+                GhostMargins<Tvec> node_margins = acc_tf[tree_id];
+                Tvec ext_lower = sham::max(node_margins.lower, sender_margins.upper);
+                Tvec ext_upper = sham::max(node_margins.upper, sender_margins.lower);
+                CoordRange<Tvec> receiv_exp{n.box_min - ext_lower, n.box_max + ext_upper};
 
                 return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
             },
@@ -301,11 +308,24 @@ void shammodels::sph::modules::FindGhostInterfacesFree<Tvec>::_impl_evaluate_int
                     return;
                 }
 
-                CoordRange<Tvec> receiv_exp = CoordRange<Tvec>{n.box_min, n.box_max}.expand_all(
-                    int_range_max.get(id_found));
+                // object-group criterion: a sender particle b can interact with the
+                // receiver only if it lies in the receiver box extended by
+                // max(receiver margins, l_b), and l_b <= sender_h_max
+                GhostMargins<Tvec> receiv_margins = margins.get(id_found);
+                Tvec sender_l                     = Tvec(sender_h_max);
+                CoordRange<Tvec> receiv_exp{
+                    n.box_min - sham::max(receiv_margins.lower, sender_l),
+                    n.box_max + sham::max(receiv_margins.upper, sender_l)};
 
                 CoordRange<Tvec> interf_volume
                     = sender_bsize.get_intersect(receiv_exp.add_offset(-periodic_offset));
+
+                CoordRange<Tvec> recv_box
+                    = CoordRange<Tvec>{n.box_min, n.box_max}.add_offset(-periodic_offset);
+                Tvec recv_ext_min = n.box_min - receiv_margins.lower;
+                Tvec recv_ext_max = n.box_max + receiv_margins.upper;
+                CoordRange<Tvec> recv_ext
+                    = CoordRange<Tvec>{recv_ext_min, recv_ext_max}.add_offset(-periodic_offset);
 
 #pragma omp critical
                 interf_map.add_obj(
@@ -315,7 +335,9 @@ void shammodels::sph::modules::FindGhostInterfacesFree<Tvec>::_impl_evaluate_int
                      {0, 0, 0},
                      {0, 0, 0},
                      interf_volume,
-                     interf_volume.get_volume() / sender_volume});
+                     interf_volume.get_volume() / sender_volume,
+                     recv_box,
+                     recv_ext});
             },
             tree,
             lpid);
@@ -335,6 +357,7 @@ void shammodels::sph::modules::FindGhostInterfacesPeriodic<Tvec>::_impl_evaluate
 
     SerialPatchTree<Tvec> &sptree                         = edges.patch_tree.get_patch_tree();
     const shambase::DistributedData<Tscal> &int_range_max = edges.interact_radius.values;
+    const shambase::DistributedData<GhostMargins<Tvec>> &margins = edges.margins.values;
 
     std::vector<std::pair<u64, CoordRange<Tvec>>> senders;
     edges.local_patch_boxes.values.for_each([&](u64 id, const CoordRange<Tvec> &box) {
@@ -348,7 +371,7 @@ void shammodels::sph::modules::FindGhostInterfacesPeriodic<Tvec>::_impl_evaluate
     i32 repetition_y = 1;
     i32 repetition_z = 1;
 
-    sycl::host_accessor acc_tf{edges.interact_radius_tree.get_buf(), sycl::read_only};
+    sycl::host_accessor acc_tf{edges.margins_tree.get_buf(), sycl::read_only};
 
     for (i32 xoff = -repetition_x; xoff <= repetition_x; xoff++) {
         for (i32 yoff = -repetition_y; yoff <= repetition_y; yoff++) {
@@ -369,15 +392,21 @@ void shammodels::sph::modules::FindGhostInterfacesPeriodic<Tvec>::_impl_evaluate
 
                     CoordRange<Tvec> sender_bsize_off = sender_bsize.add_offset(periodic_offset);
 
-                    Tscal sender_volume = sender_bsize.get_volume();
+                    Tscal sender_volume               = sender_bsize.get_volume();
+                    Tscal sender_h_max                = int_range_max.get(sender_id);
+                    GhostMargins<Tvec> sender_margins = margins.get(sender_id);
 
                     using PtNode = typename SerialPatchTree<Tvec>::PtNode;
 
                     sptree.host_for_each_leafs_internal(
                         [&](u64 tree_id, PtNode n) {
-                            Tscal receiv_h_max = acc_tf[tree_id];
+                            // group-group criterion: extend the node box by the join of its margins
+                            // and of the reflected (lower <-> upper) margins of the sender
+                            GhostMargins<Tvec> node_margins = acc_tf[tree_id];
+                            Tvec ext_lower = sham::max(node_margins.lower, sender_margins.upper);
+                            Tvec ext_upper = sham::max(node_margins.upper, sender_margins.lower);
                             CoordRange<Tvec> receiv_exp{
-                                n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+                                n.box_min - ext_lower, n.box_max + ext_upper};
 
                             return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
                         },
@@ -387,12 +416,26 @@ void shammodels::sph::modules::FindGhostInterfacesPeriodic<Tvec>::_impl_evaluate
                                 return;
                             }
 
-                            CoordRange<Tvec> receiv_exp
-                                = CoordRange<Tvec>{n.box_min, n.box_max}.expand_all(
-                                    int_range_max.get(id_found));
+                            // object-group criterion: a sender particle b can interact with the
+                            // receiver only if it lies in the receiver box extended by
+                            // max(receiver margins, l_b), and l_b <= sender_h_max
+                            GhostMargins<Tvec> receiv_margins = margins.get(id_found);
+                            Tvec sender_l                     = Tvec(sender_h_max);
+                            CoordRange<Tvec> receiv_exp{
+                                n.box_min - sham::max(receiv_margins.lower, sender_l),
+                                n.box_max + sham::max(receiv_margins.upper, sender_l)};
 
                             CoordRange<Tvec> interf_volume = sender_bsize.get_intersect(
                                 receiv_exp.add_offset(-periodic_offset));
+
+                            CoordRange<Tvec> recv_box
+                                = CoordRange<Tvec>{n.box_min, n.box_max}.add_offset(
+                                    -periodic_offset);
+                            Tvec recv_ext_min = n.box_min - receiv_margins.lower;
+                            Tvec recv_ext_max = n.box_max + receiv_margins.upper;
+                            CoordRange<Tvec> recv_ext
+                                = CoordRange<Tvec>{recv_ext_min, recv_ext_max}.add_offset(
+                                    -periodic_offset);
 
 #pragma omp critical
                             interf_map.add_obj(
@@ -402,7 +445,9 @@ void shammodels::sph::modules::FindGhostInterfacesPeriodic<Tvec>::_impl_evaluate
                                  {0, 0, 0},
                                  {xoff, yoff, zoff},
                                  interf_volume,
-                                 interf_volume.get_volume() / sender_volume});
+                                 interf_volume.get_volume() / sender_volume,
+                                 recv_box,
+                                 recv_ext});
                         },
                         tree,
                         lpid);
@@ -428,6 +473,7 @@ void shammodels::sph::modules::FindGhostInterfacesShearingPeriodic<
 
     SerialPatchTree<Tvec> &sptree                         = edges.patch_tree.get_patch_tree();
     const shambase::DistributedData<Tscal> &int_range_max = edges.interact_radius.values;
+    const shambase::DistributedData<GhostMargins<Tvec>> &margins = edges.margins.values;
 
     std::vector<std::pair<u64, CoordRange<Tvec>>> senders;
     edges.local_patch_boxes.values.for_each([&](u64 id, const CoordRange<Tvec> &box) {
@@ -437,7 +483,7 @@ void shammodels::sph::modules::FindGhostInterfacesShearingPeriodic<
     shambase::DistributedDataShared<InterfaceBuildInfos> &interf_map = edges.interface_infos.values;
     interf_map                                                       = {};
 
-    sycl::host_accessor acc_tf{edges.interact_radius_tree.get_buf(), sycl::read_only};
+    sycl::host_accessor acc_tf{edges.margins_tree.get_buf(), sycl::read_only};
 
     for_each_patch_shift<Tscal>(shear_info, bsize, [&](i32_3 ioff, ShiftInfo<Tscal> shift) {
         i32 xoff = ioff.x();
@@ -457,14 +503,20 @@ void shammodels::sph::modules::FindGhostInterfacesShearingPeriodic<
 
             CoordRange<Tvec> sender_bsize_off = sender_bsize.add_offset(offset);
 
-            Tscal sender_volume = sender_bsize.get_volume();
+            Tscal sender_volume               = sender_bsize.get_volume();
+            Tscal sender_h_max                = int_range_max.get(sender_id);
+            GhostMargins<Tvec> sender_margins = margins.get(sender_id);
 
             using PtNode = typename SerialPatchTree<Tvec>::PtNode;
 
             sptree.host_for_each_leafs_internal(
                 [&](u64 tree_id, PtNode n) {
-                    Tscal receiv_h_max = acc_tf[tree_id];
-                    CoordRange<Tvec> receiv_exp{n.box_min - receiv_h_max, n.box_max + receiv_h_max};
+                    // group-group criterion: extend the node box by the join of its margins
+                    // and of the reflected (lower <-> upper) margins of the sender
+                    GhostMargins<Tvec> node_margins = acc_tf[tree_id];
+                    Tvec ext_lower = sham::max(node_margins.lower, sender_margins.upper);
+                    Tvec ext_upper = sham::max(node_margins.upper, sender_margins.lower);
+                    CoordRange<Tvec> receiv_exp{n.box_min - ext_lower, n.box_max + ext_upper};
 
                     return receiv_exp.get_intersect(sender_bsize_off).is_not_empty();
                 },
@@ -473,11 +525,24 @@ void shammodels::sph::modules::FindGhostInterfacesShearingPeriodic<
                         return;
                     }
 
-                    CoordRange<Tvec> receiv_exp = CoordRange<Tvec>{n.box_min, n.box_max}.expand_all(
-                        int_range_max.get(id_found));
+                    // object-group criterion: a sender particle b can interact with the
+                    // receiver only if it lies in the receiver box extended by
+                    // max(receiver margins, l_b), and l_b <= sender_h_max
+                    GhostMargins<Tvec> receiv_margins = margins.get(id_found);
+                    Tvec sender_l                     = Tvec(sender_h_max);
+                    CoordRange<Tvec> receiv_exp{
+                        n.box_min - sham::max(receiv_margins.lower, sender_l),
+                        n.box_max + sham::max(receiv_margins.upper, sender_l)};
 
                     CoordRange<Tvec> interf_volume
                         = sender_bsize.get_intersect(receiv_exp.add_offset(-offset));
+
+                    CoordRange<Tvec> recv_box
+                        = CoordRange<Tvec>{n.box_min, n.box_max}.add_offset(-offset);
+                    Tvec recv_ext_min = n.box_min - receiv_margins.lower;
+                    Tvec recv_ext_max = n.box_max + receiv_margins.upper;
+                    CoordRange<Tvec> recv_ext
+                        = CoordRange<Tvec>{recv_ext_min, recv_ext_max}.add_offset(-offset);
 
 #pragma omp critical
                     interf_map.add_obj(
@@ -487,7 +552,9 @@ void shammodels::sph::modules::FindGhostInterfacesShearingPeriodic<
                          shift.shift_speed,
                          {xoff, yoff, zoff},
                          interf_volume,
-                         interf_volume.get_volume() / sender_volume});
+                         interf_volume.get_volume() / sender_volume,
+                         recv_box,
+                         recv_ext});
                 },
                 tree,
                 lpid);

@@ -25,6 +25,7 @@
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamalgs/collective/gather_str.hpp"
 #include "shamalgs/collective/reduction.hpp"
+#include "shamalgs/primitives/reduction.hpp"
 #include "shamalgs/reduction.hpp"
 #include "shambackends/MemPerfInfos.hpp"
 #include "shambackends/details/memoryHandle.hpp"
@@ -1530,44 +1531,133 @@ void shammodels::sph::Solver<Tvec, Kern>::build_ghost_cache() {
     SerialPatchTree<Tvec> &sptree = storage.serial_patch_tree.get();
     const Tscal h_evol_max        = solver_config.htol_up_coarse_cycle;
 
+    const u32 ixyz   = sched.pdl_old().template get_field_idx<Tvec>("xyz");
     const u32 ihpart = sched.pdl_old().template get_field_idx<Tscal>("hpart");
 
-    PatchField<Tscal> interactR_patch = sched.map_owned_to_patch_field_simple<Tscal>(
-        [&](const Patch p, PatchDataLayer &pdat) -> Tscal {
-            if (!pdat.is_empty()) {
-                Tscal rghost = pdat.get_field<Tscal>(ihpart).compute_max() * h_evol_max * Rkern;
-                shamlog_debug_ln("Ghost", "patch", p.id_patch, "Rghost =", rghost);
-                return rghost;
-            } else {
-                return shambase::VectorProperties<Tscal>::get_min();
-            }
-        });
-
-    PatchtreeField<Tscal> interactR_mpi_tree = sptree.make_patch_tree_field(
-        sched,
-        shamsys::instance::get_compute_queue(),
-        interactR_patch,
-        [](Tscal h0, Tscal h1, Tscal h2, Tscal h3, Tscal h4, Tscal h5, Tscal h6, Tscal h7) {
-            return sham::max_8points(h0, h1, h2, h3, h4, h5, h6, h7);
-        });
-
-    // ----------------------------------------------------------------------------------------
-    // temporary wrapper to slowly migrate to the new solvergraph
     SimulationBoxInfo &sim_box                   = sched.get_sim_box();
     PatchCoordTransform<Tvec> patch_coord_transf = sim_box.get_patch_transform<Tvec>();
     auto [bmin, bmax]                            = sim_box.get_bounding_box<Tvec>();
 
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+    auto &q        = shambase::get_check_ref(dev_sched).get_queue();
+
+    using Margins = modules::GhostMargins<Tvec>;
+
+    // For each patch: the max interaction radius l_S, and the margins of the smallest box
+    // containing the interaction balls B(r_b, l_b) relative to the patch box (lower and upper
+    // margins are gathered separately since only Tvec has an MPI type)
+    shambase::DistributedData<Tscal> interactR_local;
+    shambase::DistributedData<Tvec> margins_lower_local;
+    shambase::DistributedData<Tvec> margins_upper_local;
+
+    sched.for_each_patch_data([&](u64 id_patch, Patch p, PatchDataLayer &pdat) {
+        if (pdat.is_empty()) {
+            interactR_local.add_obj(id_patch, shambase::VectorProperties<Tscal>::get_min());
+            margins_lower_local.add_obj(id_patch, shambase::VectorProperties<Tvec>::get_min());
+            margins_upper_local.add_obj(id_patch, shambase::VectorProperties<Tvec>::get_min());
+            return;
+        }
+
+        PatchDataField<Tvec> &xyz    = pdat.get_field<Tvec>(ixyz);
+        PatchDataField<Tscal> &hpart = pdat.get_field<Tscal>(ihpart);
+        u32 obj_cnt                  = pdat.get_obj_cnt();
+
+        Tscal rghost = hpart.compute_max() * h_evol_max * Rkern;
+        shamlog_debug_ln("Ghost", "patch", p.id_patch, "Rghost =", rghost);
+
+        interactR_local.add_obj(id_patch, Tscal{rghost});
+
+        if (!solver_config.ghost_per_direction_margins) {
+            // uniform margins: every criterion reduces to the plain one of the paper
+            margins_lower_local.add_obj(id_patch, Tvec(rghost));
+            margins_upper_local.add_obj(id_patch, Tvec(rghost));
+            return;
+        }
+
+        sham::DeviceBuffer<Tvec> ball_lower(obj_cnt, dev_sched);
+        sham::DeviceBuffer<Tvec> ball_upper(obj_cnt, dev_sched);
+
+        sham::kernel_call(
+            q,
+            sham::MultiRef{xyz.get_buf(), hpart.get_buf()},
+            sham::MultiRef{ball_lower, ball_upper},
+            obj_cnt,
+            [h_evol_max](
+                u32 i,
+                const Tvec *__restrict r,
+                const Tscal *__restrict h,
+                Tvec *__restrict lower,
+                Tvec *__restrict upper) {
+                Tscal l  = h[i] * h_evol_max * Rkern;
+                lower[i] = r[i] - l;
+                upper[i] = r[i] + l;
+            });
+
+        // min / max reductions do not depend on the summation order, so this is deterministic
+        Tvec ext_lower = shamalgs::primitives::min(dev_sched, ball_lower, 0, obj_cnt);
+        Tvec ext_upper = shamalgs::primitives::max(dev_sched, ball_upper, 0, obj_cnt);
+
+        shammath::CoordRange<Tvec> patch_box = patch_coord_transf.to_obj_coord(p);
+
+        margins_lower_local.add_obj(id_patch, sham::max(patch_box.lower - ext_lower, Tvec(0)));
+        margins_upper_local.add_obj(id_patch, sham::max(ext_upper - patch_box.upper, Tvec(0)));
+    });
+
+    PatchField<Tscal> interactR_patch(sched.distrib_data_local_to_all_simple(interactR_local));
+    shambase::DistributedData<Tvec> margins_lower
+        = sched.distrib_data_local_to_all_simple(margins_lower_local);
+    shambase::DistributedData<Tvec> margins_upper
+        = sched.distrib_data_local_to_all_simple(margins_upper_local);
+
+    shambase::DistributedData<Margins> margins_all;
+    margins_lower.for_each([&](u64 id_patch, Tvec &lower) {
+        margins_all.add_obj(id_patch, Margins{lower, margins_upper.get(id_patch)});
+    });
+    PatchField<Margins> margins_patch(std::move(margins_all));
+
+    // the margins of a tree node are the componentwise max of its children ones (children boxes
+    // are within the node box and margins are >= 0, so the node box extended by them contains
+    // every child extended box)
+    PatchtreeField<Margins> margins_tree = sptree.make_patch_tree_field(
+        sched,
+        shamsys::instance::get_compute_queue(),
+        margins_patch,
+        [](Margins m0,
+           Margins m1,
+           Margins m2,
+           Margins m3,
+           Margins m4,
+           Margins m5,
+           Margins m6,
+           Margins m7) {
+            return Margins{
+                sham::max_8points(
+                    m0.lower, m1.lower, m2.lower, m3.lower, m4.lower, m5.lower, m6.lower, m7.lower),
+                sham::max_8points(
+                    m0.upper,
+                    m1.upper,
+                    m2.upper,
+                    m3.upper,
+                    m4.upper,
+                    m5.upper,
+                    m6.upper,
+                    m7.upper)};
+        });
+
+    // ----------------------------------------------------------------------------------------
+    // temporary wrapper to slowly migrate to the new solvergraph
     auto sim_box_edge   = std::make_shared<ScalarEdge<shammath::AABB<Tvec>>>("", "");
     sim_box_edge->value = shammath::AABB<Tvec>(bmin, bmax);
 
     auto patch_tree_edge        = std::make_shared<SerialPatchTreeRefEdge<Tvec>>("", "");
     patch_tree_edge->patch_tree = std::ref(sptree);
 
-    auto interact_radius_tree             = std::make_shared<PatchtreeFieldEdge<Tscal>>("", "");
-    interact_radius_tree->patchtree_field = std::move(interactR_mpi_tree);
+    auto margins_tree_edge             = std::make_shared<PatchtreeFieldEdge<Margins>>("", "");
+    margins_tree_edge->patchtree_field = std::move(margins_tree);
 
-    // interactR_patch is not used afterwards, so move it (O(1)) instead of copying over all
-    // global patches
+    auto margins_edge    = std::make_shared<ScalarsEdge<Margins>>("", "");
+    margins_edge->values = std::move(margins_patch.field_all);
+
     auto interact_radius    = std::make_shared<ScalarsEdge<Tscal>>("", "");
     interact_radius->values = std::move(interactR_patch.field_all);
 
@@ -1589,7 +1679,8 @@ void shammodels::sph::Solver<Tvec, Kern>::build_ghost_cache() {
         node.set_edges(
             sim_box_edge,
             patch_tree_edge,
-            interact_radius_tree,
+            margins_tree_edge,
+            margins_edge,
             interact_radius,
             local_patch_boxes,
             interface_infos);
@@ -1603,7 +1694,8 @@ void shammodels::sph::Solver<Tvec, Kern>::build_ghost_cache() {
         node.set_edges(
             sim_box_edge,
             patch_tree_edge,
-            interact_radius_tree,
+            margins_tree_edge,
+            margins_edge,
             interact_radius,
             local_patch_boxes,
             shear_value,
@@ -1614,7 +1706,8 @@ void shammodels::sph::Solver<Tvec, Kern>::build_ghost_cache() {
         node.set_edges(
             sim_box_edge,
             patch_tree_edge,
-            interact_radius_tree,
+            margins_tree_edge,
+            margins_edge,
             interact_radius,
             local_patch_boxes,
             interface_infos);
@@ -1677,8 +1770,8 @@ void shammodels::sph::Solver<Tvec, Kern>::build_ghost_cache() {
         "empty_either:",
         empty_either);
 
-    storage.ghost_patch_cache.set(
-        ghost_handle.gen_id_table_interfaces(std::move(interface_infos->values)));
+    storage.ghost_patch_cache.set(ghost_handle.gen_id_table_interfaces(
+        std::move(interface_infos->values), h_evol_max, Rkern));
 
     // storage.ghost_handler.get().gen_debug_patch_ghost(storage.ghost_patch_cache.get());
 }

@@ -29,7 +29,8 @@
 using namespace shammodels::sph;
 
 template<class vec>
-auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
+auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(
+    GeneratorMap &&gen, flt h_evol_max, flt rkern)
     -> shambase::DistributedDataShared<InterfaceIdTable> {
     StackEntry stack_loc{};
     using namespace shamrock::patch;
@@ -43,6 +44,14 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     });
     positions->set_refs(positions_refs);
 
+    const u32 ihpart = sched.pdl_old().template get_field_idx<flt>("hpart");
+    auto hpart       = std::make_shared<shamrock::solvergraph::FieldRefs<flt>>("", "");
+    shamrock::solvergraph::DDPatchDataFieldRef<flt> hpart_refs = {};
+    sched.for_each_patchdata_nonempty([&](const Patch p, PatchDataLayer &pdat) {
+        hpart_refs.add_obj(p.id_patch, std::ref(pdat.get_field<flt>(ihpart)));
+    });
+    hpart->set_refs(hpart_refs);
+
     auto interface_infos
         = std::make_shared<shamrock::solvergraph::DDSharedScalar<InterfaceBuildInfos>>("", "");
     interface_infos->values = std::forward<GeneratorMap>(gen);
@@ -50,8 +59,8 @@ auto BasicSPHGhostHandler<vec>::gen_id_table_interfaces(GeneratorMap &&gen)
     auto interface_id_table
         = std::make_shared<shamrock::solvergraph::DDSharedScalar<InterfaceIdTable>>("", "");
 
-    modules::BuildGhostInterfaceIdTable<vec> node;
-    node.set_edges(positions, interface_infos, interface_id_table);
+    modules::BuildGhostInterfaceIdTable<vec> node(h_evol_max, rkern);
+    node.set_edges(positions, hpart, interface_infos, interface_id_table);
     node.evaluate();
     // ----------------------------------------------------------------------------------------
 

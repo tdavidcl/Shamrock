@@ -73,6 +73,11 @@ namespace shammodels::sph {
             per_index periodicity_index;
             shammath::CoordRange<vec> cut_volume;
             flt volume_ratio;
+            /// receiver patch box, in the sender frame
+            shammath::CoordRange<vec> recv_box;
+            /// receiver patch box extended by the receiver margins (contains the interaction balls
+            /// of the receiver particles), in the sender frame
+            shammath::CoordRange<vec> recv_ext;
         };
 
         struct InterfaceIdTable {
@@ -102,10 +107,13 @@ namespace shammodels::sph {
          * @brief precompute interfaces members and cache result in the return
          *
          * @param gen
+         * @param h_evol_max tolerance on h, the interaction radius of a particle is
+         * h * h_evol_max * rkern
+         * @param rkern kernel radius
          * @return shambase::DistributedDataShared<InterfaceIdTable>
          */
         shambase::DistributedDataShared<InterfaceIdTable> gen_id_table_interfaces(
-            GeneratorMap &&gen);
+            GeneratorMap &&gen, flt h_evol_max, flt rkern);
 
         void gen_debug_patch_ghost(shambase::DistributedDataShared<InterfaceIdTable> &interf_info);
 

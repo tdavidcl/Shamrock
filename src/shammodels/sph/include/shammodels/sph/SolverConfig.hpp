@@ -592,6 +592,11 @@ struct shammodels::sph::SolverConfig {
 
     inline bool has_filter_empty_patch_gz() { return filter_empty_patch_gz; }
 
+    /// If true the ghost criteria use per direction margins of the patches, otherwise the
+    /// margins are the uniform max interaction radius of the patch (plain criteria of the paper)
+    bool ghost_per_direction_margins = true;
+    inline void set_ghost_per_direction_margins(bool state) { ghost_per_direction_margins = state; }
+
     PatchSchedulerConfig scheduler_conf = {};
 
     //////////////////////////////////////////////////////////////////////////////////////////////

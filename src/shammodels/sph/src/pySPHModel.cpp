@@ -118,6 +118,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                               "    -> you can remove the call to that function"););
             })
         .def("set_filter_empty_patch_gz", &TConfig::set_filter_empty_patch_gz)
+        .def("set_ghost_per_direction_margins", &TConfig::set_ghost_per_direction_margins)
         .def("set_smoothing_length_density_based", &TConfig::set_smoothing_length_density_based)
         .def(
             "set_smoothing_length_density_based_neigh_lim",

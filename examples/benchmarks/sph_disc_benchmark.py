@@ -33,13 +33,13 @@ print(f"device_properties = {device_properties}")
 N_target_base = min(N_target_base, 2**25)
 
 if device_properties["type"] == "CPU":
-    N_target_base = min(N_target_base, 2**23)
+    N_target_base = min(N_target_base, 2**21)
 
 shamrock.backends.reset_mem_info_max()
 
 compute_multiplier = shamrock.sys.world_size()
 # compute_multiplier = 12
-scheduler_split_val = int(2e7)
+scheduler_split_val = int(0.25e6)
 scheduler_merge_val = 1
 
 N_target = N_target_base * compute_multiplier
@@ -97,6 +97,7 @@ cfg.set_units(codeu)
 cfg.set_particle_mass(disc.part_mass(N_target))
 cfg.set_cfl_cour(0.1)
 cfg.set_cfl_force(0.1)
+cfg.set_show_ghost_stats(True)
 cfg.print_status()
 model.set_solver_config(cfg)
 model.init_scheduler(scheduler_split_val, scheduler_merge_val)

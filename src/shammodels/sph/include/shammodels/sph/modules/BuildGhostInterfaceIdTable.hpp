@@ -25,6 +25,7 @@
 #define NODE_EDGES(X_RO, X_RW)                                                                     \
     /* ------------------- inputs ------------------- */                                           \
     X_RO(shamrock::solvergraph::IFieldRefs<Tvec>, positions)                                       \
+    X_RO(shamrock::solvergraph::IFieldRefs<Tscal>, hpart)                                          \
     X_RO(shamrock::solvergraph::DDSharedScalar<InterfaceBuildInfos>, interface_infos)              \
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
@@ -36,7 +37,9 @@ namespace shammodels::sph::modules {
      * @brief Build the id table of every ghost interface
      *
      * For each interface (sender -> receiver) described in `interface_infos`, select the ids of
-     * the particles of the sender patch that lie within the interface cut volume. Interfaces
+     * the particles of the sender patch that satisfy the object-group criterion: a sender
+     * particle b of interaction radius l_b is kept if it lies in the extended receiver box
+     * `recv_ext` or within l_b of the receiver box `recv_box`. Interfaces
      * that end up empty are dropped, as are interfaces whose sender is not in `positions` (which
      * only holds non-empty patches). A warning is emitted if the ghost volume of a patch is too
      * large compared to the patch itself.
@@ -49,9 +52,15 @@ namespace shammodels::sph::modules {
         using GhostHandle         = BasicSPHGhostHandler<Tvec>;
         using InterfaceBuildInfos = typename GhostHandle::InterfaceBuildInfos;
         using InterfaceIdTable    = typename GhostHandle::InterfaceIdTable;
+        using Tscal               = shambase::VecComponent<Tvec>;
+
+        /// the interaction radius of a particle is h * h_evol_max * rkern
+        Tscal h_evol_max;
+        Tscal rkern;
 
         public:
-        BuildGhostInterfaceIdTable() = default;
+        BuildGhostInterfaceIdTable(Tscal h_evol_max, Tscal rkern)
+            : h_evol_max(h_evol_max), rkern(rkern) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 

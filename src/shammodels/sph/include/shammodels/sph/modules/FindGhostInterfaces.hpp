@@ -35,7 +35,8 @@
 #define FIND_GHOST_INTERFACES_EDGES_IN(X_RO)                                                       \
     X_RO(shamrock::solvergraph::ScalarEdge<shammath::AABB<Tvec>>, sim_box)                         \
     X_RO(shamrock::solvergraph::SerialPatchTreeRefEdge<Tvec>, patch_tree)                          \
-    X_RO(shamrock::solvergraph::PatchtreeFieldEdge<Tscal>, interact_radius_tree)                   \
+    X_RO(shamrock::solvergraph::PatchtreeFieldEdge<GhostMargins<Tvec>>, margins_tree)              \
+    X_RO(shamrock::solvergraph::ScalarsEdge<GhostMargins<Tvec>>, margins)                          \
     X_RO(shamrock::solvergraph::ScalarsEdge<Tscal>, interact_radius)                               \
     X_RO(shamrock::solvergraph::ScalarsEdge<shammath::CoordRange<Tvec>>, local_patch_boxes)
 
@@ -45,15 +46,37 @@
 namespace shammodels::sph::modules {
 
     /**
+     * @brief Distances by which a box must be extended toward lower (`lower`) and higher
+     * (`upper`) coordinates, per axis, to contain the interaction balls of a group of particles
+     *
+     * For a patch P holding the particles b of radius l_b, `lower = P.lower - min_b(r_b - l_b)`
+     * and `upper = max_b(r_b + l_b) - P.upper`, clamped at 0, so that the extended box
+     * `[P.lower - lower, P.upper + upper]` contains every ball B(r_b, l_b).
+     */
+    template<class Tvec>
+    struct GhostMargins {
+        Tvec lower; ///< extension toward lower coordinates
+        Tvec upper; ///< extension toward higher coordinates
+    };
+
+    /**
      * @brief Types shared by the ghost interface finders
      *
      * Edges description:
      *  - `sim_box` : bounding box of the simulation domain
      *  - `patch_tree` : the serial patch tree
-     *  - `interact_radius_tree` : max of `interact_radius` over each patch tree node
-     *  - `interact_radius` : interaction radius of every (global) patch
+     *  - `margins_tree` : componentwise max of `margins` over each patch tree node
+     *  - `margins` : margins of every (global) patch
+     *  - `interact_radius` : max interaction radius of every (global) patch
      *  - `local_patch_boxes` : bounding box of every local patch, i.e. the interface senders
      *  - `interface_infos` (output) : metadata of every interface (sender -> receiver)
+     *
+     * The tree walk prunes a tree node N for a sender patch S with the group-group criterion:
+     * the node box extended by max(margins_N.lower, margins_S.upper) toward lower coordinates and
+     * by max(margins_N.upper, margins_S.lower) toward higher ones (the sender margins change side)
+     * must meet the sender box. The volume of an interface is given by the object-group criterion:
+     * the receiver box extended by max(margins_R, l_S), l_S the max interaction radius of the
+     * sender.
      *
      * @tparam Tvec position vector type
      */
