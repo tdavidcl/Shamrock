@@ -321,3 +321,86 @@ NEW_TEST(Unittest, "shambase/DistributedDataShared::get_native", 1) {
         REQUIRE(found_modified);
     }
 }
+
+NEW_TEST(Unittest, "shambase/DistributedDataShared::reshape_like", 1) {
+    using namespace shambase;
+
+    // the object identity tells which object of the original container got reused
+    struct Obj {
+        int identity;
+        u32 size;
+    };
+
+    using entry_t = std::tuple<u64, u64, int, u32>;
+
+    auto collect = [](const DistributedDataShared<Obj> &data) {
+        std::vector<entry_t> ret;
+        data.for_each([&](u64 left, u64 right, const Obj &obj) {
+            ret.emplace_back(left, right, obj.identity, obj.size);
+        });
+        return ret;
+    };
+
+    int create_count = 0;
+    auto create      = [&]() {
+        create_count++;
+        return Obj{100 + create_count, 0};
+    };
+    auto update = [](u64, u64, Obj &obj, const u32 &size) {
+        obj.size = size;
+    };
+
+    { // same keys, duplicated keys are matched by occurrence rank, nothing is created
+        DistributedDataShared<Obj> data{};
+        data.add_obj(0, 0, Obj{1, 5});
+        data.add_obj(0, 0, Obj{2, 6});
+        data.add_obj(0, 1, Obj{3, 7});
+
+        DistributedDataShared<u32> ref{};
+        ref.add_obj(0, 0, 10);
+        ref.add_obj(0, 0, 11);
+        ref.add_obj(0, 1, 12);
+
+        create_count = 0;
+        data.reshape_like(ref, create, update);
+
+        REQUIRE_EQUAL(create_count, 0);
+        REQUIRE(
+            collect(data) == (std::vector<entry_t>{{0, 0, 1, 10}, {0, 0, 2, 11}, {0, 1, 3, 12}}));
+    }
+
+    { // leftovers are recycled for missing keys in their iteration order, then objects created
+        DistributedDataShared<Obj> data{};
+        data.add_obj(0, 1, Obj{1, 5});
+        data.add_obj(2, 3, Obj{2, 6});
+        data.add_obj(4, 5, Obj{3, 7});
+
+        DistributedDataShared<u32> ref{};
+        ref.add_obj(0, 0, 10);
+        ref.add_obj(2, 3, 11);
+        ref.add_obj(6, 7, 12);
+        ref.add_obj(6, 7, 13);
+        ref.add_obj(8, 9, 14);
+
+        create_count = 0;
+        data.reshape_like(ref, create, update);
+
+        // (0,0) <- leftover (0,1), (6,7) <- leftover (4,5), then two new objects
+        REQUIRE_EQUAL(create_count, 2);
+        REQUIRE(
+            collect(data)
+            == (std::vector<entry_t>{
+                {0, 0, 1, 10}, {2, 3, 2, 11}, {6, 7, 3, 12}, {6, 7, 101, 13}, {8, 9, 102, 14}}));
+    }
+
+    { // an empty reference empties the container
+        DistributedDataShared<Obj> data{};
+        data.add_obj(0, 1, Obj{1, 5});
+
+        create_count = 0;
+        data.reshape_like(DistributedDataShared<u32>{}, create, update);
+
+        REQUIRE_EQUAL(create_count, 0);
+        REQUIRE(data.is_empty());
+    }
+}

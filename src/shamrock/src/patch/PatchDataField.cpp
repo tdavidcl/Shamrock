@@ -145,6 +145,30 @@ void PatchDataField<T>::append_subset_to(
 }
 
 template<class T>
+void PatchDataField<T>::assign_subset_to(
+    const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataField &pfield) const {
+
+    if (&pfield == this) {
+        throw shambase::make_except_with_loc<std::invalid_argument>(
+            "the source and destination fields must not be the same");
+    }
+
+    if (static_cast<size_t>(sz) != idxs_buf.get_size())
+        throw shambase::make_except_with_loc<std::invalid_argument>(
+            "the size of the idxs buffer does not match the size of the subset");
+
+    pfield.field_name = field_name;
+    pfield.nvar       = nvar;
+
+    // every value is overwritten below, no need to keep the old content
+    pfield.buf.resize_discard_data(shambase::narrow_or_throw<u32>(u64(sz) * u64(nvar)));
+
+    if (sz > 0) {
+        shamalgs::primitives::append_subset_to(buf, idxs_buf, nvar, pfield.buf, 0);
+    }
+}
+
+template<class T>
 void PatchDataField<T>::append_subset_to(
     sycl::buffer<u32> &idxs_buf, u32 sz, PatchDataField &pfield) {
 
@@ -415,6 +439,21 @@ PatchDataField<T> PatchDataField<T>::deserialize_buf(
 }
 
 template<class T>
+void PatchDataField<T>::deserialize_buf_inplace(shamalgs::SerializeHelper &serializer) {
+    StackEntry stack_loc{false};
+    u32 cnt;
+    serializer.load(cnt);
+    shamlog_debug_sycl_ln("PatchDataField", "deserialize inplace patchdatafield len=", cnt);
+
+    // every value is overwritten below, no need to keep the old content
+    buf.resize_discard_data(shambase::narrow_or_throw<u32>(u64(cnt) * u64(nvar)));
+
+    if (cnt > 0) {
+        serializer.load_buf(buf, cnt * nvar);
+    }
+}
+
+template<class T>
 shamalgs::SerializeSize PatchDataField<T>::serialize_buf_byte_size() {
 
     using H = shamalgs::SerializeHelper;
@@ -445,6 +484,21 @@ PatchDataField<T> PatchDataField<T>::deserialize_full(shamalgs::SerializeHelper 
     serializer.load(field_name);
 
     return deserialize_buf(serializer, field_name, nvar);
+}
+
+template<class T>
+void PatchDataField<T>::deserialize_full_inplace(shamalgs::SerializeHelper &serializer) {
+    StackEntry stack_loc{false};
+    u32 new_nvar;
+    serializer.load(new_nvar);
+    std::string new_field_name;
+    serializer.load(new_field_name);
+
+    nvar       = new_nvar;
+    field_name = std::move(new_field_name);
+    check_nvar();
+
+    deserialize_buf_inplace(serializer);
 }
 
 template<class T>

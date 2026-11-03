@@ -305,6 +305,39 @@ namespace shamrock::patch {
         }
     }
 
+    void PatchDataLayer::assign_subset_to(
+        const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) const {
+        StackEntry stack_loc{};
+
+        if (fields.size() != pdat.fields.size()) {
+            throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                "Mismatch in layout\n source layout = {}\n dest layout = {}",
+                pdl().get_description_str(),
+                pdat.pdl().get_description_str()));
+        }
+
+        for (u32 idx = 0; idx < fields.size(); idx++) {
+
+            std::visit(
+                [&](auto &field, auto &out_field) {
+                    using t1 = typename std::remove_reference<decltype(field)>::type::Field_type;
+                    using t2 =
+                        typename std::remove_reference<decltype(out_field)>::type::Field_type;
+
+                    if constexpr (std::is_same<t1, t2>::value) {
+                        field.assign_subset_to(idxs_buf, sz, out_field);
+                    } else {
+                        throw shambase::make_except_with_loc<std::invalid_argument>(sham::format(
+                            "Mismatch in layout\n source layout = {}\n dest layout = {}",
+                            pdl().get_description_str(),
+                            pdat.pdl().get_description_str()));
+                    }
+                },
+                fields[idx].value,
+                pdat.fields[idx].value);
+        }
+    }
+
     void PatchDataLayer::serialize_buf(shamalgs::SerializeHelper &serializer) {
         StackEntry stack_loc{};
         for_each_field_any([&](auto &f) {
@@ -335,6 +368,14 @@ namespace shamrock::patch {
                                               serializer, field.name, field.nvar)});
                                   });
                               }};
+    }
+
+    void PatchDataLayer::deserialize_buf_inplace(shamalgs::SerializeHelper &serializer) {
+        StackEntry stack_loc{};
+        // same field order as serialize_buf
+        for_each_field_any([&](auto &f) {
+            f.deserialize_buf_inplace(serializer);
+        });
     }
 
     void PatchDataLayer::fields_raz() {

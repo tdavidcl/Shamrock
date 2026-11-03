@@ -37,6 +37,9 @@ void shammodels::basegodunov::modules::FindGhostLayerCandidates<
     // outputs
     auto &ghost_layers_candidates = edges.ghost_layers_candidates.values;
 
+    // the edge is kept between evaluations, start from an empty list of candidates
+    ghost_layers_candidates.reset();
+
     auto paving = get_paving(mode, sim_box);
 
     using namespace shamrock::patch;

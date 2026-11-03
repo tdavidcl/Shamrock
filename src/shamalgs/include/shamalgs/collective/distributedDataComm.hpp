@@ -216,6 +216,86 @@ namespace shamalgs::collective {
     }
 
     /**
+     * @brief In place variant of serialize_sparse_comm reusing the objects of the container
+     *
+     * On input `data` holds the objects to send, on output it holds the received objects, as
+     * `serialize_sparse_comm(dev_sched, std::move(data), data, ...)` would, with the same entries
+     * in the same order.
+     *
+     * Instead of being destroyed and recreated, the objects are reused:
+     *   - objects exchanged within the same rank are kept in place,
+     *   - objects sent to another rank are recycled to receive the objects coming from other
+     *     ranks, `deserialize_into` overwrites them (see DistributedDataShared::reshape_like),
+     *   - `create` is only called when more objects are received than sent.
+     *
+     * Hence when `data` is kept alive between calls, the allocations owned by its objects are
+     * reused instead of being reallocated at every exchange.
+     *
+     * @tparam T type of the exchanged objects
+     * @param dev_sched device scheduler
+     * @param data objects to send on input, received objects on output
+     * @param rank_getter rank owning a patch id
+     * @param serialize serialize an object into a buffer
+     * @param deserialize_into deserialize a buffer into an existing object, overwriting it
+     * @param create create an object to deserialize into
+     * @param cache communication buffers cache
+     */
+    template<class T>
+    inline void serialize_sparse_comm_inplace(
+        std::shared_ptr<sham::DeviceScheduler> dev_sched,
+        shambase::DistributedDataShared<T> &data,
+        std::function<i32(u64)> rank_getter,
+        std::function<sham::DeviceBuffer<u8>(T &)> serialize,
+        std::function<void(sham::DeviceBuffer<u8> &&, T &)> deserialize_into,
+        std::function<T()> create,
+        DDSCommCache &cache) {
+
+        StackEntry stack_loc{};
+
+        auto is_same_rank = [&](u64 l, u64 r) {
+            return rank_getter(l) == rank_getter(r);
+        };
+
+        // serialize the objects going to another rank, they stay in data to be recycled
+        SerializedDDataComm dcomm_send;
+        data.for_each([&](u64 l, u64 r, T &obj) {
+            if (!is_same_rank(l, r)) {
+                dcomm_send.add_obj(l, r, serialize(obj));
+            }
+        });
+
+        SerializedDDataComm dcomm_recv;
+
+        distributed_data_sparse_comm(dev_sched, dcomm_send, dcomm_recv, rank_getter, cache);
+
+        // entries of the result : the same rank objects (nullptr, kept in place) and the received
+        // ones. The keys of the two sets are disjoint.
+        shambase::DistributedDataShared<sham::DeviceBuffer<u8> *> result_entries;
+        u64 same_rank_count = 0;
+        data.for_each([&](u64 l, u64 r, T &) {
+            if (is_same_rank(l, r)) {
+                result_entries.add_obj(l, r, nullptr);
+                same_rank_count++;
+            }
+        });
+        dcomm_recv.for_each([&](u64 l, u64 r, sham::DeviceBuffer<u8> &buf) {
+            result_entries.add_obj(l, r, &buf);
+        });
+
+        // same rank objects are matched to themselves (same key, same occurrence rank), the
+        // objects sent to other ranks are leftovers recycled for the received entries
+        data.reshape_like(
+            result_entries, create, [&](u64, u64, T &obj, sham::DeviceBuffer<u8> *const &buf) {
+                if (buf != nullptr) {
+                    // exchange the buffer held by the distrib data and give it to the deserializer
+                    deserialize_into(std::move(*buf), obj);
+                }
+            });
+
+        shamlog_debug_ln("SparseComm", "skipped", same_rank_count, "communications");
+    }
+
+    /**
      * @brief global ids = allgatherv(local_ids)
      *
      * @tparam T

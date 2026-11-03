@@ -284,6 +284,44 @@ NEW_TEST(Unittest, "shambackends/DeviceBuffer:resize", 1) {
     REQUIRE(a.get_mem_usage() == 0);
 }
 
+NEW_TEST(Unittest, "shambackends/DeviceBuffer:resize_no_shrink", 1) {
+
+    std::shared_ptr<sham::DeviceScheduler> dev_sched
+        = shamsys::instance::get_compute_scheduler_ptr();
+
+    sham::DeviceBuffer<int> a{1000, dev_sched};
+    a.fill(77);
+
+    size_t mem_usage = a.get_mem_usage();
+
+    // shrinking keeps the allocation (resize would reallocate below half the capacity)
+    a.resize_no_shrink(10);
+    REQUIRE_EQUAL(a.get_size(), 10);
+    REQUIRE_EQUAL(a.get_mem_usage(), mem_usage);
+
+    // growing back within the capacity keeps the allocation and the data
+    a.resize_no_shrink(1000);
+    REQUIRE_EQUAL(a.get_size(), 1000);
+    REQUIRE_EQUAL(a.get_mem_usage(), mem_usage);
+    {
+        std::vector<int> b = a.copy_to_stdvec();
+        for (int i = 0; i < 10; i++) {
+            REQUIRE(b[i] == 77);
+        }
+    }
+
+    // growing beyond the capacity reallocates and keeps the data
+    a.resize_no_shrink(4000);
+    REQUIRE_EQUAL(a.get_size(), 4000);
+    REQUIRE(a.get_mem_usage() >= sizeof(int) * 4000);
+    {
+        std::vector<int> b = a.copy_to_stdvec();
+        for (int i = 0; i < 10; i++) {
+            REQUIRE(b[i] == 77);
+        }
+    }
+}
+
 NEW_TEST(Unittest, "shambackends/DeviceBuffer:copy_to_stdvec_idx_range", 1) {
 
     auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();

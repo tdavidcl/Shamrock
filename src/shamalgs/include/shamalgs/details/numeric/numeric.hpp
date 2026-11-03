@@ -77,6 +77,23 @@ namespace shamalgs::numeric {
     sham::DeviceBuffer<u32> stream_compact(
         const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf_flags, u32 len);
 
+    /**
+     * @brief Stream compaction algorithm writing to an existing buffer
+     *
+     * Same as the overload returning a buffer, but `index_map` is resized to the number of
+     * selected elements and filled, reusing its allocation when its capacity is sufficient.
+     *
+     * @param sched the device scheduler to run on
+     * @param buf_flags buffer of only 0 and ones
+     * @param len the length of the buffer considered
+     * @param index_map output table of the index to extract
+     */
+    void stream_compact(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<u32> &buf_flags,
+        u32 len,
+        sham::DeviceBuffer<u32> &index_map);
+
     template<class T>
     struct histogram_result {
         sham::DeviceBuffer<u64> counts;

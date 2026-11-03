@@ -449,6 +449,20 @@ class PatchDataField {
     void append_subset_to(
         const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataField &pfield) const;
 
+    /**
+     * @brief Replace pfield by the objects of this field at the indexes in idxs_buf
+     *
+     * Same as append_subset_to on an empty field, but pfield is resized instead of recreated so
+     * that its allocation is reused when its capacity is sufficient. pfield takes the name and the
+     * number of variables of this field.
+     *
+     * @param idxs_buf indexes of the objects to copy
+     * @param sz number of indexes (must match the size of idxs_buf)
+     * @param pfield the field to overwrite
+     */
+    void assign_subset_to(
+        const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataField &pfield) const;
+
     inline PatchDataField make_new_from_subset(sham::DeviceBuffer<u32> &idxs_buf, u32 sz) {
         PatchDataField pfield(field_name, nvar);
         append_subset_to(idxs_buf, sz, pfield);
@@ -513,6 +527,17 @@ class PatchDataField {
         shamalgs::SerializeHelper &serializer, std::string field_name, u32 nvar);
 
     /**
+     * @brief deserialize a field serialized with serialize_buf into this field
+     *
+     * Same as deserialize_buf, but the field is resized instead of recreated so that its
+     * allocation is reused when its capacity is sufficient. The name and the number of variables
+     * of this field are kept.
+     *
+     * @param serializer
+     */
+    void deserialize_buf_inplace(shamalgs::SerializeHelper &serializer);
+
+    /**
      * @brief record the size usage of the serialization using serialize_buf
      *
      * @return u64
@@ -533,6 +558,17 @@ class PatchDataField {
      * @return PatchDataField
      */
     static PatchDataField deserialize_full(shamalgs::SerializeHelper &serializer);
+
+    /**
+     * @brief deserialize a field serialized with serialize_full into this field
+     *
+     * Same as deserialize_full, but the field is resized instead of recreated so that its
+     * allocation is reused when its capacity is sufficient. The name and the number of variables
+     * are set from the serialized data.
+     *
+     * @param serializer
+     */
+    void deserialize_full_inplace(shamalgs::SerializeHelper &serializer);
 
     /**
      * @brief give the size usage of serialize_full

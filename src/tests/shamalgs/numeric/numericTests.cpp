@@ -24,6 +24,39 @@ NEW_TEST(Unittest, "shamalgs/numeric/stream_compact(usm)", 1) {
     test.check();
 }
 
+NEW_TEST(Unittest, "shamalgs/numeric/stream_compact(usm, into existing buffer)", 1) {
+    auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
+
+    auto expected_idxs = [](const std::vector<u32> &flags) {
+        std::vector<u32> idxs;
+        for (u32 idx = 0; idx < flags.size(); idx++) {
+            if (flags[idx]) {
+                idxs.push_back(idx);
+            }
+        }
+        return idxs;
+    };
+
+    // the output buffer is reused between calls, with a previous content larger or smaller than
+    // the result, including the small cases handled by the fallback
+    sham::DeviceBuffer<u32> out(1000, dev_sched);
+    out.fill(u32_max);
+
+    for (u32 len : {u32(10000), u32(0), u32(1), u32(13), u32(20000), u32(2)}) {
+        std::vector<u32> flags
+            = shamalgs::primitives::mock_vector<u32>(u32(0x111) + len, len, 0, 1);
+
+        sham::DeviceBuffer<u32> buf(len, dev_sched);
+        buf.copy_from_stdvec(flags);
+
+        shamalgs::numeric::stream_compact(dev_sched, buf, len, out);
+
+        std::vector<u32> idxs = expected_idxs(flags);
+        REQUIRE_EQUAL_NAMED("same length", out.get_size(), idxs.size());
+        REQUIRE_NAMED("same indexes", out.copy_to_stdvec() == idxs);
+    }
+}
+
 NEW_TEST(Unittest, "shamalgs/numeric/device_histogram", 1) {
     std::vector<double> bin_edges = {0.0, 1.0, 2.0, 3.0, 4.0}; // 4 bins: [0,1), [1,2), [2,3), [3,4)
     u64 nbins                     = bin_edges.size() - 1;

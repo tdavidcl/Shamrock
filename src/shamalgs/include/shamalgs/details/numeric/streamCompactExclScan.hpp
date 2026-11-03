@@ -43,4 +43,21 @@ namespace shamalgs::numeric::details {
     sham::DeviceBuffer<u32> stream_compact_excl_scan(
         const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf_flags, u32 len);
 
+    /**
+     * @brief Same as stream_compact_excl_scan but writing the indices to an existing buffer.
+     *
+     * `index_map` is resized to the number of selected elements, so its allocation is reused when
+     * its capacity is sufficient.
+     *
+     * @param sched Device scheduler that manages the computation queue.
+     * @param buf_flags Buffer containing flags (0s and 1s) indicating elements to keep.
+     * @param len Length of the buffer, representing the number of elements to process.
+     * @param index_map Output buffer receiving the indices of the elements to keep.
+     */
+    void stream_compact_excl_scan(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<u32> &buf_flags,
+        u32 len,
+        sham::DeviceBuffer<u32> &index_map);
+
 } // namespace shamalgs::numeric::details

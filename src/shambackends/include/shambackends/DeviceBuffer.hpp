@@ -1179,6 +1179,28 @@ namespace sham {
         inline void resize_discard_data(size_t new_size) { resize(new_size, false); }
 
         /**
+         * @brief Resizes the buffer without ever releasing its storage.
+         *
+         * Same as resize, except that the storage is never shrunk: if the current allocation can
+         * hold `new_size` elements, only the size changes. This avoids a reallocation cycle for a
+         * buffer that alternates between a small and a large size (e.g. a patch whose ghost zones
+         * are removed then appended back at every step), at the cost of keeping the largest
+         * allocation alive.
+         *
+         * @param new_size The new size of the buffer.
+         * @param keep_data If `true`, the content of the buffer is preserved up to the minimum of
+         * the old and new sizes. If `false`, the content may be discarded if a reallocation occurs.
+         */
+        inline void resize_no_shrink(size_t new_size, bool keep_data = true) {
+            if (alloc_request_size_fct(new_size, hold.get_dev_scheduler_ptr())
+                <= hold.get_bytesize()) {
+                size = new_size;
+            } else {
+                resize(new_size, keep_data);
+            }
+        }
+
+        /**
          * @brief Alias for resize_discard_data(0).
          */
         inline void free_alloc() { resize_discard_data(0); }

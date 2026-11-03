@@ -231,6 +231,21 @@ namespace shamrock::patch {
             const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) const;
 
         /**
+         * @brief Replace the content of pdat by the objects of this layer at the indexes in
+         * idxs_buf
+         *
+         * Same as append_subset_to on an empty layer, but the fields of pdat are resized instead
+         * of recreated so that their allocations are reused when their capacity is sufficient.
+         * pdat must have the same field types as this layer.
+         *
+         * @param idxs_buf indexes of the objects to copy
+         * @param sz number of indexes (must match the size of idxs_buf)
+         * @param pdat the layer to overwrite
+         */
+        void assign_subset_to(
+            const sham::DeviceBuffer<u32> &idxs_buf, u32 sz, PatchDataLayer &pdat) const;
+
+        /**
          * @brief get the number of objects (particles) stored in this layer
          *
          * @return u32 the object count
@@ -396,6 +411,17 @@ namespace shamrock::patch {
         static PatchDataLayer deserialize_buf(
             shamalgs::SerializeHelper &serializer,
             const std::shared_ptr<PatchDataLayerLayout> &pdl);
+
+        /**
+         * @brief deserialize a layer serialized with serialize_buf into this layer
+         *
+         * Same as deserialize_buf, but the fields are resized instead of recreated so that their
+         * allocations are reused when their capacity is sufficient. The serialized layer must have
+         * the same layout as this one.
+         *
+         * @param serializer
+         */
+        void deserialize_buf_inplace(shamalgs::SerializeHelper &serializer);
 
         void fields_raz();
 

@@ -23,8 +23,6 @@ namespace shamrock::solvergraph {
 
         auto edges = get_edges();
 
-        edges.target.set_patchdatas({});
-
         // Ensures that the layout are all matching sources and targets
         edges.original.get_const_refs().for_each(
             [&](u64 id_patch, const patch::PatchDataLayer &pdat) {
@@ -37,19 +35,25 @@ namespace shamrock::solvergraph {
             throw shambase::make_except_with_loc<std::invalid_argument>("layout mismatch");
         }
 
-        // Copy the fields from the original to the target
-        edges.target.set_patchdatas(edges.original.get_const_refs().map<patch::PatchDataLayer>(
+        // Resize the target layers in place (reusing their allocations from the previous
+        // evaluation), then copy the fields from the original to the target
+        edges.target.ensure_sizes(edges.original.get_const_refs().map<u32>(
             [&](u64 id_patch, const patch::PatchDataLayer &pdat) {
-                patch::PatchDataLayer pdat_new(layout_target);
+                return pdat.get_obj_cnt();
+            }));
 
-                pdat_new.for_each_field_any([&](auto &field) {
+        edges.original.get_const_refs().for_each(
+            [&](u64 id_patch, const patch::PatchDataLayer &pdat) {
+                patch::PatchDataLayer &pdat_target = edges.target.get(id_patch);
+
+                pdat_target.for_each_field_any([&](auto &field) {
                     using T = typename std::remove_reference<decltype(field)>::type::Field_type;
-                    field.insert(pdat.get_field<T>(field.get_name()));
+                    const PatchDataField<T> &field_source = pdat.get_field<T>(field.get_name());
+                    field.overwrite(field_source, field_source.get_obj_cnt());
                 });
 
-                pdat_new.check_field_obj_cnt_match();
-                return pdat_new;
-            }));
+                pdat_target.check_field_obj_cnt_match();
+            });
     }
 
 } // namespace shamrock::solvergraph

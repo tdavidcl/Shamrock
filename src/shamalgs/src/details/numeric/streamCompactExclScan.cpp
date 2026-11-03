@@ -93,6 +93,58 @@ namespace shamalgs::numeric::details {
         return {std::move(index_map), new_len};
     };
 
+    namespace {
+
+        /**
+         * @brief Stream compaction of buf_flags into index_map
+         *
+         * @param get_index_map called with the number of selected elements, returns the buffer to
+         * write the indexes to (with at least that size)
+         */
+        template<class FuncGetIndexMap>
+        void stream_compact_excl_scan_impl(
+            const sham::DeviceScheduler_ptr &sched,
+            sham::DeviceBuffer<u32> &buf_flags,
+            u32 len,
+            FuncGetIndexMap &&get_index_map) {
+
+            // perform the exclusive sum of the buf flag
+            sham::DeviceBuffer<u32> excl_sum = scan_exclusive(sched, buf_flags, len);
+
+            // recover the end value of the sum to know the new size
+            u32 new_len = excl_sum.get_val_at_idx(len - 1);
+
+            u32 end_flag = buf_flags.get_val_at_idx(len - 1);
+
+            if (end_flag) {
+                new_len++;
+            }
+
+            sham::DeviceBuffer<u32> &index_map = get_index_map(new_len);
+
+            if (new_len > 0) {
+                sham::kernel_call(
+                    sched->get_queue(),
+                    sham::MultiRef{excl_sum},
+                    sham::MultiRef{index_map},
+                    len,
+                    [last_idx  = len - 1,
+                     last_flag = end_flag](u32 idx, const u32 *sum_vals, u32 *new_idx) {
+                        u32 current_val = sum_vals[idx];
+
+                        bool _if1 = (idx < last_idx);
+                        bool should_write
+                            = (_if1) ? (current_val < sum_vals[idx + 1]) : (bool(last_flag));
+
+                        if (should_write) {
+                            new_idx[current_val] = idx;
+                        }
+                    });
+            }
+        }
+
+    } // namespace
+
     sham::DeviceBuffer<u32> stream_compact_excl_scan(
         const sham::DeviceScheduler_ptr &sched, sham::DeviceBuffer<u32> &buf_flags, u32 len) {
 
@@ -100,52 +152,34 @@ namespace shamalgs::numeric::details {
             return stream_compact_fallback(sched, buf_flags, len);
         }
 
-        // perform the exclusive sum of the buf flag
-        sham::DeviceBuffer<u32> excl_sum = scan_exclusive(sched, buf_flags, len);
-
-        // recover the end value of the sum to know the new size
-        u32 new_len = excl_sum.get_val_at_idx(len - 1);
-
-        u32 end_flag = buf_flags.get_val_at_idx(len - 1);
-
-        if (end_flag) {
-            new_len++;
-        }
-
         // create the index buffer that we will return
-        sham::DeviceBuffer<u32> index_map{new_len, sched};
+        std::optional<sham::DeviceBuffer<u32>> index_map;
+        stream_compact_excl_scan_impl(
+            sched, buf_flags, len, [&](u32 new_len) -> sham::DeviceBuffer<u32> & {
+                index_map.emplace(new_len, sched);
+                return *index_map;
+            });
 
-        if (new_len > 0) {
-            // logger::raw_ln(
-            //     sham::format("len = {}, new_len = {}, end_flag = {}", len, new_len,
-            //     end_flag));
-            sham::kernel_call(
-                sched->get_queue(),
-                sham::MultiRef{excl_sum},
-                sham::MultiRef{index_map},
-                len,
-                [last_idx  = len - 1,
-                 last_flag = end_flag](u32 idx, const u32 *sum_vals, u32 *new_idx) {
-                    u32 current_val = sum_vals[idx];
+        return std::move(*index_map);
+    }
 
-                    bool _if1 = (idx < last_idx);
-                    bool should_write
-                        = (_if1) ? (current_val < sum_vals[idx + 1]) : (bool(last_flag));
+    void stream_compact_excl_scan(
+        const sham::DeviceScheduler_ptr &sched,
+        sham::DeviceBuffer<u32> &buf_flags,
+        u32 len,
+        sham::DeviceBuffer<u32> &index_map) {
 
-                    // logger::raw_ln(sham::format(
-                    //     "idx = {}, sum = {}, _if1 = {}, should_write = {}",
-                    //     idx,
-                    //     sum_vals[idx],
-                    //     _if1,
-                    //     should_write));
-
-                    if (should_write) {
-                        new_idx[current_val] = idx;
-                    }
-                });
+        if (len < 2) {
+            index_map = stream_compact_fallback(sched, buf_flags, len);
+            return;
         }
 
-        return index_map;
+        stream_compact_excl_scan_impl(
+            sched, buf_flags, len, [&](u32 new_len) -> sham::DeviceBuffer<u32> & {
+                // every index in [0, new_len) is written by the compaction
+                index_map.resize_discard_data(new_len);
+                return index_map;
+            });
     }
 
 } // namespace shamalgs::numeric::details

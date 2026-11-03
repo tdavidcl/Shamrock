@@ -31,12 +31,11 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
     auto &ghost_layer                                   = edges.ghost_layer;
     const shamrock::solvergraph::RankGetter &rank_owner = edges.rank_owner;
 
-    shambase::DistributedDataShared<shamrock::patch::PatchDataLayer> recv_dat;
-
-    shamalgs::collective::serialize_sparse_comm<shamrock::patch::PatchDataLayer>(
+    // exchange in place, the layers held by the edge are reused to receive the data (see
+    // serialize_sparse_comm_inplace) instead of being reallocated at every exchange
+    shamalgs::collective::serialize_sparse_comm_inplace<shamrock::patch::PatchDataLayer>(
         shamsys::instance::get_compute_scheduler_ptr(),
-        std::move(ghost_layer.patchdatas),
-        recv_dat,
+        ghost_layer.patchdatas,
         [&](u64 id) {
             return rank_owner.get_rank_owner(id);
         },
@@ -46,16 +45,22 @@ void shamrock::solvergraph::ExchangeGhostLayer::_impl_evaluate_internal() {
             pdat.serialize_buf(ser);
             return ser.finalize();
         },
-        [&](sham::DeviceBuffer<u8> &&buf) {
+        [&](sham::DeviceBuffer<u8> &&buf, shamrock::patch::PatchDataLayer &pdat) {
             // exchange the buffer held by the distrib data and give it to the serializer
             shamalgs::SerializeHelper ser(
                 shamsys::instance::get_compute_scheduler_ptr(),
                 std::forward<sham::DeviceBuffer<u8>>(buf));
-            return shamrock::patch::PatchDataLayer::deserialize_buf(ser, ghost_layer_layout);
+
+            // a recycled layer may come with another layout
+            if (pdat.get_layout_ptr().get() != ghost_layer_layout.get()) {
+                pdat = shamrock::patch::PatchDataLayer(ghost_layer_layout);
+            }
+            pdat.deserialize_buf_inplace(ser);
+        },
+        [&]() {
+            return shamrock::patch::PatchDataLayer(ghost_layer_layout);
         },
         cache);
-
-    ghost_layer.patchdatas = std::move(recv_dat);
 }
 
 std::string shamrock::solvergraph::ExchangeGhostLayer::_impl_get_tex() const {

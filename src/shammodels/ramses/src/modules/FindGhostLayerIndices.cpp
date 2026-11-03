@@ -15,6 +15,7 @@
 
 #include "shambase/assert.hpp"
 #include "shambase/exception.hpp"
+#include "shamalgs/numeric.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include "shammath/AABB.hpp"
@@ -28,14 +29,16 @@
 
 namespace {
 
+    /// Write in idx_in_ghost the indexes of the blocks intersecting test_volume
     template<class TgridVec>
-    sham::DeviceBuffer<u32> get_ids_in_ghost(
+    void get_ids_in_ghost(
         const sham::DeviceScheduler_ptr &dev_sched,
         sham::DeviceQueue &q,
         const sham::DeviceBuffer<TgridVec> &block_min,
         const sham::DeviceBuffer<TgridVec> &block_max,
         const shammath::AABB<TgridVec> &test_volume,
-        u32 obj_cnt) {
+        u32 obj_cnt,
+        sham::DeviceBuffer<u32> &idx_in_ghost) {
 
         if (obj_cnt > 0) {
             // buffer of booleans to store result of the condition
@@ -56,9 +59,9 @@ namespace {
                                           .is_not_empty();
                 });
 
-            return shamalgs::stream_compact(dev_sched, mask, obj_cnt);
+            shamalgs::stream_compact(dev_sched, mask, obj_cnt, idx_in_ghost);
         } else {
-            return sham::DeviceBuffer<u32>(0, dev_sched);
+            idx_in_ghost.resize_discard_data(0);
         }
     }
 } // namespace
@@ -84,11 +87,17 @@ void shammodels::basegodunov::modules::FindGhostLayerIndices<TgridVec>::_impl_ev
 
     auto &patch_data_layers_ref = patch_data_layers.get_const_refs();
 
-    // map candidates to indexes in ghosts
-    idx_in_ghost.buffers = ghost_layers_candidates.values.template map<sham::DeviceBuffer<u32>>(
+    // map candidates to indexes in ghosts, the buffers held by the edge (from the previous
+    // evaluation) are reused instead of being reallocated
+    idx_in_ghost.buffers.reshape_like(
+        ghost_layers_candidates.values,
+        [&]() {
+            return sham::DeviceBuffer<u32>(0, dev_sched);
+        },
         [&](u64 sender,
             u64 receiver,
-            const GhostLayerCandidateInfos &infos) -> sham::DeviceBuffer<u32> {
+            sham::DeviceBuffer<u32> &sender_idx_in_ghost,
+            const GhostLayerCandidateInfos &infos) {
             shamrock::patch::PatchDataLayer &sender_patch = patch_data_layers_ref.get(sender).get();
 
             PatchDataField<TgridVec> &block_min = sender_patch.get_field<TgridVec>(0);
@@ -99,13 +108,14 @@ void shammodels::basegodunov::modules::FindGhostLayerIndices<TgridVec>::_impl_ev
             auto test_volume
                 = paving_function.f_aabb_inv(brecv, infos.xoff, infos.yoff, infos.zoff);
 
-            return get_ids_in_ghost(
+            get_ids_in_ghost(
                 dev_sched,
                 q,
                 block_min.get_buf(),
                 block_max.get_buf(),
                 test_volume,
-                sender_patch.get_obj_cnt());
+                sender_patch.get_obj_cnt(),
+                sender_idx_in_ghost);
         });
 }
 

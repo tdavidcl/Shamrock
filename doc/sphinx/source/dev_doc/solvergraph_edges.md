@@ -53,6 +53,26 @@ auto e = shamrock::solvergraph::IDataEdge<f64>::make_shared(label, tex_symbol);
 e->data = 1.0;
 ```
 
+## Reusing allocations between evaluations
+
+An edge kept alive between steps should be resized by the node writing it
+rather than recreated, so that its buffers are reused instead of being
+reallocated at every step (`DeviceBuffer::resize` only reallocates when
+growing beyond the capacity, or shrinking below half of it):
+
+- per-patch fields (`Field<T>`, `FieldRefs<T>`, `PatchDataLayerEdge`) use
+  `ensure_sizes(sizes)`;
+- per patch-pair containers (`DistributedDataShared<T>`, held by
+  `DDSharedBuffers<T>`, `PatchDataFieldDDShared<T>`,
+  `PatchDataLayerDDShared`) use `reshape_like(reference, create, update)`,
+  which reuses the object stored under the same key, then recycles the
+  leftover objects, and only calls `create()` when none is left.
+
+Writers then overwrite the content in place (e.g. `assign_subset_to`,
+`deserialize_buf_inplace`) instead of clearing and appending. Do not call
+`free_alloc()` on such edges at the end of a step, it would drop the
+allocations that are meant to be reused.
+
 ## Related files
 
 - [`IEdge.hpp`](../../../src/shamsolvergraph/include/shamsolvergraph/edge/IEdge.hpp)

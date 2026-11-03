@@ -29,18 +29,25 @@ void shammodels::basegodunov::modules::ExtractGhostLayer::_impl_evaluate_interna
     // outputs
     auto &ghost_layer = edges.ghost_layer;
 
-    // iterate on buffer storing indexes in ghost layer
-    for (const auto &[key, sender_idx_in_ghost] : idx_in_ghost.buffers) {
-        auto [sender, receiver] = key;
+    // one ghost layer per entry of idx_in_ghost, the layers held by the edge (from the previous
+    // evaluation) are reused instead of being reallocated
+    ghost_layer.patchdatas.reshape_like(
+        idx_in_ghost.buffers,
+        [&]() {
+            return shamrock::patch::PatchDataLayer(ghost_layer_layout);
+        },
+        [&](u64 sender,
+            [[maybe_unused]] u64 receiver,
+            shamrock::patch::PatchDataLayer &ghost_zone,
+            const sham::DeviceBuffer<u32> &sender_idx_in_ghost) {
+            if (ghost_zone.get_layout_ptr().get() != ghost_layer_layout.get()) {
+                ghost_zone = shamrock::patch::PatchDataLayer(ghost_layer_layout);
+            }
 
-        shamrock::patch::PatchDataLayer ghost_zone(ghost_layer_layout);
-
-        // extract the actual data
-        patch_data_layers.get(sender).append_subset_to(
-            sender_idx_in_ghost, u32(sender_idx_in_ghost.get_size()), ghost_zone);
-
-        ghost_layer.patchdatas.add_obj(sender, receiver, std::move(ghost_zone));
-    }
+            // extract the actual data
+            patch_data_layers.get(sender).assign_subset_to(
+                sender_idx_in_ghost, u32(sender_idx_in_ghost.get_size()), ghost_zone);
+        });
 }
 
 std::string shammodels::basegodunov::modules::ExtractGhostLayer::_impl_get_tex() const {

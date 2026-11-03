@@ -218,6 +218,98 @@ namespace shambase {
         }
 
         /**
+         * @brief Reshape the container to hold exactly the entries of `reference`, reusing the
+         * objects already stored instead of creating new ones.
+         *
+         * This is the DistributedDataShared equivalent of the `ensure_sizes` pattern: a container
+         * kept alive between steps keeps its objects (and the allocations they own), only the
+         * entries that cannot be reused are created.
+         *
+         * After the call, the container holds one object per entry of `reference`, with the same
+         * keys, the same multiplicity and the same iteration order. The objects are taken, in
+         * priority order, from:
+         *   1. the object stored under the same key at the same occurrence rank (the k-th object
+         *      stored for a key is reused for the k-th entry of that key in `reference`),
+         *   2. the objects left over by step 1 (keys absent from `reference`, or surplus
+         *      occurrences of a key), recycled in their iteration order,
+         *   3. `create()` once no leftover object remains.
+         * Leftover objects that were not recycled are destroyed.
+         *
+         * `update(left_id, right_id, obj, ref_obj)` is then called on every entry, in the
+         * iteration order of `reference`. Reused objects keep their previous content, so `update`
+         * must set the full state it relies on (e.g. resize and overwrite a buffer).
+         *
+         * Every step is driven by the iteration order of the two containers, so the result is
+         * deterministic.
+         *
+         * @tparam Tref type of the objects stored in the reference container
+         * @param reference container whose entries are reproduced
+         * @param create function `() -> T` called when no stored object can be reused
+         * @param update function `(u64 left_id, u64 right_id, T &obj, const Tref &ref_obj)`
+         *
+         * @code{.cpp}
+         * DistributedDataShared<std::vector<int>> buffers;
+         * DistributedDataShared<u32> sizes;
+         * buffers.reshape_like(
+         *     sizes,
+         *     []() { return std::vector<int>{}; },
+         *     [](u64, u64, std::vector<int> &buf, const u32 &size) { buf.resize(size); });
+         * @endcode
+         */
+        template<class Tref, class FuncCreate, class FuncUpdate>
+        inline void reshape_like(
+            const DistributedDataShared<Tref> &reference,
+            FuncCreate &&create,
+            FuncUpdate &&update) {
+
+            using map_t  = std::multimap<std::pair<u64, u64>, T>;
+            using node_t = typename map_t::node_type;
+
+            // one node per entry of reference, in the iteration order of reference
+            std::vector<node_t> slots;
+            slots.reserve(reference.get_element_count());
+
+            // indices in slots that are not matched by key
+            std::vector<size_t> unmatched;
+
+            // 1. reuse the object with the same key and the same occurrence rank
+            // (lower_bound gives the first remaining occurrence of the key in insertion order)
+            for (const auto &entry : reference) {
+                auto it = data.lower_bound(entry.first);
+                if (it != data.end() && it->first == entry.first) {
+                    slots.push_back(data.extract(it));
+                } else {
+                    unmatched.push_back(slots.size());
+                    slots.emplace_back();
+                }
+            }
+
+            // 2. recycle the leftovers, 3. then create the missing objects
+            for (size_t i : unmatched) {
+                if (!data.empty()) {
+                    slots[i] = data.extract(data.begin());
+                } else {
+                    map_t tmp;
+                    tmp.emplace(std::pair<u64, u64>{0, 0}, create());
+                    slots[i] = tmp.extract(tmp.begin());
+                }
+            }
+
+            // drop the leftovers that were not recycled
+            data.clear();
+
+            // insert in the iteration order of reference, inserting at the end keeps the
+            // relative order of equal keys
+            size_t i = 0;
+            for (const auto &entry : reference) {
+                node_t &node = slots[i++];
+                node.key()   = entry.first;
+                auto it      = data.insert(data.end(), std::move(node));
+                update(entry.first.first, entry.first.second, it->second, entry.second);
+            }
+        }
+
+        /**
          * @brief Clear all objects from the container
          */
         inline void reset() { data.clear(); }

@@ -31,12 +31,11 @@ void shamrock::solvergraph::ExchangeGhostField<T>::_impl_evaluate_internal() {
     auto &ghost_layer                                   = edges.ghost_layer;
     const shamrock::solvergraph::RankGetter &rank_owner = edges.rank_owner;
 
-    shambase::DistributedDataShared<PatchDataField<T>> recv_dat;
-
-    shamalgs::collective::serialize_sparse_comm<PatchDataField<T>>(
+    // exchange in place, the fields held by the edge are reused to receive the data (see
+    // serialize_sparse_comm_inplace) instead of being reallocated at every exchange
+    shamalgs::collective::serialize_sparse_comm_inplace<PatchDataField<T>>(
         shamsys::instance::get_compute_scheduler_ptr(),
-        std::move(ghost_layer.patchdata_fields),
-        recv_dat,
+        ghost_layer.patchdata_fields,
         [&](u64 id) {
             return rank_owner.get_rank_owner(id);
         },
@@ -46,16 +45,18 @@ void shamrock::solvergraph::ExchangeGhostField<T>::_impl_evaluate_internal() {
             pdat.serialize_full(ser);
             return ser.finalize();
         },
-        [&](sham::DeviceBuffer<u8> &&buf) {
+        [&](sham::DeviceBuffer<u8> &&buf, PatchDataField<T> &pdat) {
             // exchange the buffer held by the distrib data and give it to the serializer
             shamalgs::SerializeHelper ser(
                 shamsys::instance::get_compute_scheduler_ptr(),
                 std::forward<sham::DeviceBuffer<u8>>(buf));
-            return PatchDataField<T>::deserialize_full(ser);
+            pdat.deserialize_full_inplace(ser);
+        },
+        []() {
+            // name and number of variables are set by deserialize_full_inplace
+            return PatchDataField<T>("", 1);
         },
         cache);
-
-    ghost_layer.patchdata_fields = std::move(recv_dat);
 }
 
 template<class T>

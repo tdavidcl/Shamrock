@@ -2256,10 +2256,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
 
     shambase::get_check_ref(storage.source_patches).free_alloc();
 
-    shambase::get_check_ref(storage.exchange_gz_edge).free_alloc();
-    shambase::get_check_ref(storage.idx_in_ghost).free_alloc();
-
-    shambase::get_check_ref(storage.ghost_layers_candidates_edge).free_alloc();
+    // The ghost zone edges (exchange_gz_edge, idx_in_ghost, ghost_layers_candidates_edge,
+    // merged_patchdata_ghost) are kept between steps on purpose: the nodes writing them resize
+    // the objects they already hold instead of reallocating them at every step.
 
     tstep.stop();
 

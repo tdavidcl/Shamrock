@@ -30,20 +30,24 @@ namespace shamrock::solvergraph {
         auto &idx_in_ghost     = edges.idx_in_ghosts;
         auto &ghost_fields     = edges.ghost_fields;
 
-        ghost_fields.patchdata_fields.reset(); // To make sure there is no residual of last timestep
-
-        for (const auto &[key, sender_idx_in_ghost] : idx_in_ghost.buffers) {
-            auto [sender, receiver] = key;
-            auto field_name         = orig_data_fields.get_field(sender).get_name();
-            auto nvar               = orig_data_fields.get_field(sender).get_nvar();
-            PatchDataField<T> gz_field(field_name, nvar);
-
-            // TODO: replace cast by narrowing when added
-            orig_data_fields.get_field(sender).append_subset_to(
-                sender_idx_in_ghost, static_cast<u32>(sender_idx_in_ghost.get_size()), gz_field);
-
-            ghost_fields.patchdata_fields.add_obj(sender, receiver, std::move(gz_field));
-        }
+        // one ghost field per entry of idx_in_ghost, the fields held by the edge (from the
+        // previous evaluation) are reused instead of being reallocated
+        ghost_fields.patchdata_fields.reshape_like(
+            idx_in_ghost.buffers,
+            []() {
+                // name and number of variables are set by assign_subset_to
+                return PatchDataField<T>("", 1);
+            },
+            [&](u64 sender,
+                [[maybe_unused]] u64 receiver,
+                PatchDataField<T> &gz_field,
+                const sham::DeviceBuffer<u32> &sender_idx_in_ghost) {
+                // TODO: replace cast by narrowing when added
+                orig_data_fields.get_field(sender).assign_subset_to(
+                    sender_idx_in_ghost,
+                    static_cast<u32>(sender_idx_in_ghost.get_size()),
+                    gz_field);
+            });
     }
 
     template class ExtractGhostField<f64>;
