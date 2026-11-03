@@ -1151,8 +1151,12 @@ namespace sham {
                 // override old buffer
                 std::swap(new_buf, *this);
 
-            } else if (alloc_request_size_fct(new_size, dev_sched) < hold.get_bytesize() * 0.5) {
-                // shrink storage
+            } else if (
+                new_size < size
+                && alloc_request_size_fct(new_size, dev_sched) < hold.get_bytesize() * 0.5) {
+                // shrink storage (only when the size decreases, growing within the current
+                // storage never reallocates even if the storage is more than twice the new size,
+                // which can happen after resize_no_shrink)
 
                 size_t new_storage_size = alloc_request_size_fct(new_size, dev_sched);
 

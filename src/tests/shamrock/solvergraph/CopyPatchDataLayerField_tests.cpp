@@ -146,4 +146,23 @@ NEW_TEST(Unittest, "shamrock/solvergraph/CopyPatchDataLayerFields(reused target)
 
     copy_node->evaluate();
     check_copy({1, 3});
+
+    // append ghost zones again: the layer of patch 1 now has a storage much larger than its size,
+    // growing it within that storage must keep the copied data
+    auto gz_1 = PatchDataLayer::mock_patchdata(0x6, 300, layout_target);
+    target_edge->get(1).insert_elements(gz_1);
+    REQUIRE_EQUAL(target_edge->get(1).get_obj_cnt(), 400);
+
+    target_edge->get(1).for_each_field_any([&](auto &target_field) {
+        using T = typename std::remove_reference<decltype(target_field)>::type::Field_type;
+        auto &source_field = pdat_1b.get_field<T>(target_field.get_name());
+        auto &gz_field     = gz_1.get_field<T>(target_field.get_name());
+
+        auto target_data = target_field.get_buf().copy_to_stdvec();
+        auto expected    = source_field.get_buf().copy_to_stdvec();
+        auto gz_data     = gz_field.get_buf().copy_to_stdvec();
+        expected.insert(expected.end(), gz_data.begin(), gz_data.end());
+
+        REQUIRE_EQUAL_CUSTOM_COMP(expected, target_data, sham::equals);
+    });
 }

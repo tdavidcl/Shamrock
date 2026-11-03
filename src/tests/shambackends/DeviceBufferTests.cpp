@@ -310,6 +310,24 @@ NEW_TEST(Unittest, "shambackends/DeviceBuffer:resize_no_shrink", 1) {
         }
     }
 
+    // a regular resize growing the size within the storage, even to less than half of it, keeps
+    // the allocation and the data
+    a.resize_no_shrink(10);
+    a.resize(100);
+    REQUIRE_EQUAL(a.get_size(), 100);
+    REQUIRE_EQUAL(a.get_mem_usage(), mem_usage);
+    {
+        std::vector<int> b = a.copy_to_stdvec();
+        for (int i = 0; i < 10; i++) {
+            REQUIRE(b[i] == 77);
+        }
+    }
+
+    // a regular resize decreasing the size below half of the storage shrinks it
+    a.resize(20);
+    REQUIRE_EQUAL(a.get_size(), 20);
+    REQUIRE(a.get_mem_usage() < mem_usage);
+
     // growing beyond the capacity reallocates and keeps the data
     a.resize_no_shrink(4000);
     REQUIRE_EQUAL(a.get_size(), 4000);
