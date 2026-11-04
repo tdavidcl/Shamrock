@@ -105,26 +105,33 @@ namespace shammath {
                 + (0.5 * (1. + gamma_r) / (Tscal) gamma_r) * (press_star / (Tscal) press_r - 1.));
         }
 
+        // NOLINTBEGIN(readability-identifier-naming)
+
+        // S* speed estimate for the wave speeds (s_l, s_r)
+        // Equation (10.37) from Toro 3rd Edition , Springer 2009
+        // The pressure and momentum terms are summed separately so that the mirror
+        // (L, R, n) -> (R, L, -n) maps S_star onto -S_star (and press_lr onto itself below)
+        // without rounding differences, so that the two sides of a face get opposite fluxes.
+        auto get_S_star = [&](Tscal speed_l, Tscal speed_r) -> Tscal {
+            const Tscal lag_l = rho_l * (speed_l - velx_l);
+            const Tscal lag_r = rho_r * (speed_r - velx_r);
+            return ((press_r - press_l) + (velx_l * lag_l - velx_r * lag_r)) / (lag_l - lag_r);
+        };
+
         // wave speed Toro from Equation (10.59)
-        Tscal s_l = velx_l - cs_l * q_l;
-        Tscal s_r = velx_r + cs_r * q_r;
+        Tscal s_l    = velx_l - cs_l * q_l;
+        Tscal s_r    = velx_r + cs_r * q_r;
+        Tscal S_star = get_S_star(s_l, s_r);
 
         // lagrangian sound speed
         const Tscal var_l = rho_l * (s_l - velx_l);
         const Tscal var_r = rho_r * (s_r - velx_r);
 
-        // NOLINTBEGIN(readability-identifier-naming)
-
-        // S* speed estimate
-        // Equation (10.37) from Toro 3rd Edition , Springer 2009
-        const Tscal S_star
-            = (prim_r.press - prim_l.press + velx_l * var_l - velx_r * var_r) / (var_l - var_r);
-
         // New pressure estimate in the star region as average the pressure estimate at right
         // and left of S_star in the star region
         // Equation (10.42) from Toro 3rd Edition , Springer 2009
         const Tscal press_lr
-            = 0.5 * (press_l + press_r + var_l * (S_star - velx_l) + var_r * (S_star - velx_r));
+            = 0.5 * ((press_l + press_r) + (var_l * (S_star - velx_l) + var_r * (S_star - velx_r)));
         Tcons D_star{0, S_star, n};
 
         // NOLINTEND(readability-identifier-naming)
@@ -213,14 +220,17 @@ namespace shammath {
 
         // S* speed estimate
         // Equation (10.37) from Toro 3rd Edition , Springer 2009
+        // The pressure and momentum terms are summed separately so that the mirror
+        // (L, R, n) -> (R, L, -n) maps S_star onto -S_star (and press_lr onto itself below)
+        // without rounding differences, so that the two sides of a face get opposite fluxes.
         const Tscal S_star
-            = (prim_r.press - prim_l.press + velx_l * var_l - velx_r * var_r) / (var_l - var_r);
+            = ((prim_r.press - prim_l.press) + (velx_l * var_l - velx_r * var_r)) / (var_l - var_r);
 
         // New pressure estimate in the star region as average the pressure estimate at right
         // and left of S_star in the star region
         // Equation (10.42) from Toro 3rd Edition , Springer 2009
         const Tscal press_lr
-            = 0.5 * (press_l + press_r + var_l * (S_star - velx_l) + var_r * (S_star - velx_r));
+            = 0.5 * ((press_l + press_r) + (var_l * (S_star - velx_l) + var_r * (S_star - velx_r)));
         Tcons D_star{0, S_star, n};
 
         // NOLINTEND(readability-identifier-naming)
