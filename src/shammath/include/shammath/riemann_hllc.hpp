@@ -24,9 +24,13 @@ namespace shammath {
 
     /**
      * @brief HLLC solver based on section 10.4 from Toro 3rd Edition , Springer 2009.
-     *         The wave speeds estimates are based on Bernd Einfeldt (SIAM, 1988), On Godunov-Type
-     *          Methods for Gas Dynamics, using the pressure in the star region estimated through
-     *          the primitive variable solver (valid for an adiabatic equation of state).
+     *        The wave speeds are the pressure based estimates of Toro, equation (10.59), using
+     *        the pressure in the star region estimated through the primitive variable solver
+     *        (PVRS, valid for an adiabatic equation of state). On faces where these give an
+     *        inconsistent wave fan (s_l < S* < s_r fails, e.g. crossed speeds in strongly
+     *        converging flows), they are replaced by the Einfeldt / Batten et al. (SIAM J. Sci.
+     *        Comput. 18, 1997) Roe average estimates, or by the Davis estimates when the
+     *        adiabatic index is state dependent.
      *        Computes the flux across a face with unit normal n.
      * @tparam FSpec
      * @param fspec fluid state spec (adiabatic equation of state + flux/wave-speed operations)
@@ -122,6 +126,41 @@ namespace shammath {
         Tscal s_l    = velx_l - cs_l * q_l;
         Tscal s_r    = velx_r + cs_r * q_r;
         Tscal S_star = get_S_star(s_l, s_r);
+
+        // The PVRS can underestimate the star pressure (e.g. converging flows from Mach ~2),
+        // giving s_l > s_r, or S_star outside of [s_l, s_r]. The flux is then not invariant under
+        // the mirror (L, R, n) -> (R, L, -n): the two sides of a face pick different branches
+        // below and, since a face flux is computed from both of its sides (xp/xm, ...), the
+        // scheme no longer conserves mass, momentum and energy (each side can even see its own
+        // state as upwind and only let matter out). On such faces (this test is mirror
+        // invariant and also catches NaNs) fall back to wave speeds that bracket the fan:
+        // Einfeldt / Batten et al. (1997) with Roe averages, or Davis if gamma is state dependent.
+        if (!(s_l < S_star && S_star < s_r)) {
+            if constexpr (details::HasGlobalGamma<FSpec>) {
+                const Tscal sqrt_rho_l = sycl::sqrt(rho_l);
+                const Tscal sqrt_rho_r = sycl::sqrt(rho_r);
+                const Tscal norm_roe   = 1 / (sqrt_rho_l + sqrt_rho_r);
+
+                const Tvec vel_roe = (sqrt_rho_l * prim_l.vel + sqrt_rho_r * prim_r.vel) * norm_roe;
+                const Tscal enthalpy_l = (c_l.rhoe + press_l) / rho_l;
+                const Tscal enthalpy_r = (c_r.rhoe + press_r) / rho_r;
+                const Tscal enthalpy_roe
+                    = (sqrt_rho_l * enthalpy_l + sqrt_rho_r * enthalpy_r) * norm_roe;
+
+                const Tscal velx_roe = sham::dot(vel_roe, n);
+                const Tscal cs_roe   = sycl::sqrt(
+                    sham::max(
+                        Tscal{0},
+                        (gamma_l - 1) * (enthalpy_roe - Tscal{0.5} * sham::dot(vel_roe, vel_roe))));
+
+                s_l = sham::min(velx_l - cs_l, velx_roe - cs_roe);
+                s_r = sham::max(velx_r + cs_r, velx_roe + cs_roe);
+            } else {
+                s_l = sham::min(velx_l - cs_l, velx_r - cs_r);
+                s_r = sham::max(velx_l + cs_l, velx_r + cs_r);
+            }
+            S_star = get_S_star(s_l, s_r);
+        }
 
         // lagrangian sound speed
         const Tscal var_l = rho_l * (s_l - velx_l);

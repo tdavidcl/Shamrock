@@ -13,7 +13,9 @@
 #include "shammath/riemann.hpp"
 #include "shammath/riemann_dust.hpp"
 #include "shamtest/shamtest.hpp"
+#include <array>
 #include <utility>
+#include <vector>
 
 NEW_TEST(Unittest, "shammath/flux_symmetry", 1) {
 
@@ -291,6 +293,126 @@ NEW_TEST(Unittest, "shammath/flux_n_matches_directional", 1) {
         shammath::FluidStateDust<Tvec> fspec{};
         return shammath::huang_bai_flux(fspec, a, b, n);
     });
+}
+
+NEW_TEST(Unittest, "shammath/flux_mirror_symmetry", 1) {
+
+    // A face flux is computed from both of its sides (xp/xm, ...) by the godunov solver, so
+    // conservation requires F(L, R, n) == -F(R, L, -n) for every pair of states, including
+    // hypersonic ones (converging flows broke this for hllc_adiab_toro_flux, whose pressure
+    // based wave speeds could give s_l > s_r, or S* outside of [s_l, s_r]).
+
+    using Tvec  = f64_3;
+    using Tcons = shammath::ConsState<Tvec>;
+    using Tprim = shammath::PrimState<Tvec>;
+
+    constexpr f64 gamma = 1.4;
+    constexpr f64 cs2   = 0.0364; // isothermal sound speed^2 of the decaying turbulence test
+
+    shammath::FluidStateAdiabatic<Tvec> fspec{.m_gamma = gamma};
+
+    auto mirror_error = [&](auto solver, Tprim l, Tprim r, Tvec n) {
+        Tcons f1  = solver(l, r, n);
+        Tcons f2  = solver(r, l, -n);
+        Tcons d   = f1 + f2;
+        f64 scale = sham::max(
+            1., sham::max(sham::abs(f1.rho), sycl::length(f1.rhovel)) + sham::abs(f1.rhoe));
+        return sham::max(sham::max(sham::abs(d.rho), sycl::length(d.rhovel)), sham::abs(d.rhoe))
+               / scale;
+    };
+
+    auto rusanov = [&](Tprim l, Tprim r, Tvec n) {
+        return shammath::rusanov_flux(fspec, l, r, n);
+    };
+    auto hll = [&](Tprim l, Tprim r, Tvec n) {
+        return shammath::hll_flux(fspec, l, r, n);
+    };
+    auto hllc_toro = [&](Tprim l, Tprim r, Tvec n) {
+        return shammath::hllc_adiab_toro_flux(fspec, l, r, n);
+    };
+    auto hllc_davis = [&](Tprim l, Tprim r, Tvec n) {
+        return shammath::hllc_davis_flux(fspec, l, r, n);
+    };
+
+    constexpr f64 eps = 1e-12;
+
+    // unit normal of an axis, and the state with its x velocity component moved along that
+    // axis (so that the converging/diverging velocity is the normal one)
+    auto axis_normal = [](u32 axis) {
+        return Tvec{f64(axis == 0), f64(axis == 1), f64(axis == 2)};
+    };
+    auto along_axis = [](Tprim p, u32 axis) {
+        Tvec v = p.vel;
+        if (axis == 1) {
+            p.vel = Tvec{v.z(), v.x(), v.y()};
+        } else if (axis == 2) {
+            p.vel = Tvec{v.y(), v.z(), v.x()};
+        }
+        return p;
+    };
+
+    // Regressions, faces where the plain equation (10.59) PVRS wave speeds break the symmetry
+    const f64 mach2_vel = 2. * sycl::sqrt(gamma);
+    const std::array<std::pair<Tprim, Tprim>, 3> regression_faces{{
+        // a face of the Mach 8 decaying turbulence run (s_l > s_r, mismatch of the mass flux
+        // ~ 9 between the two sides)
+        {Tprim{.rho = 0.0765, .press = cs2 * 0.0765, .vel = Tvec{5.9, 0.3, -0.2}},
+         Tprim{.rho = 3.904, .press = cs2 * 3.904, .vel = Tvec{-2.2, -0.1, 0.4}}},
+        // symmetric Mach 2 collision (s_l > 0 > s_r: each side sees itself upwind and only
+        // lets mass out, so no shock forms and the mass vanishes at the face)
+        {Tprim{.rho = 1., .press = 1., .vel = Tvec{mach2_vel, 0., 0.}},
+         Tprim{.rho = 1., .press = 1., .vel = Tvec{-mach2_vel, 0., 0.}}},
+        // ordered s_l < s_r but S* outside of [s_l, s_r] (mass flux +2.78 vs -2.76)
+        {Tprim{.rho = 1.049, .press = 0.021, .vel = Tvec{2.65, 0., 0.}},
+         Tprim{.rho = 5.153, .press = 3.842, .vel = Tvec{-0.86, 0., 0.}}},
+    }};
+    for (const auto &[l, r] : regression_faces) {
+        for (u32 axis = 0; axis < 3; axis++) {
+            Tvec n   = axis_normal(axis);
+            Tprim la = along_axis(l, axis), ra = along_axis(r, axis);
+            REQUIRE_FLOAT_EQUAL(mirror_error(hllc_toro, la, ra, n), 0., eps);
+            REQUIRE_FLOAT_EQUAL(mirror_error(hllc_davis, la, ra, n), 0., eps);
+            REQUIRE_FLOAT_EQUAL(mirror_error(hll, la, ra, n), 0., eps);
+            REQUIRE_FLOAT_EQUAL(mirror_error(rusanov, la, ra, n), 0., eps);
+        }
+    }
+
+    // Sweep: subsonic to hypersonic converging/diverging pairs, large density contrasts,
+    // isothermal and hot pressures
+    const f64 rhos[]  = {1e-3, 0.0765, 0.3, 1., 3.904, 50.};
+    const f64 vels[]  = {-8., -2.2, -0.5, 0., 0.3, 1., 5.9, 8.};
+    const f64 temps[] = {cs2, 1.};
+
+    std::vector<Tprim> states;
+    u32 k = 0;
+    for (f64 rho : rhos) {
+        for (f64 v : vels) {
+            for (f64 T : temps) {
+                f64 vt = 0.1 * f64(k % 7) - 0.3; // tangential velocity
+                states.push_back(Tprim{.rho = rho, .press = T * rho, .vel = Tvec{v, vt, -vt}});
+                k++;
+            }
+        }
+    }
+
+    f64 err_rusanov = 0, err_hll = 0, err_toro = 0, err_davis = 0;
+    for (const Tprim &l : states) {
+        for (const Tprim &r : states) {
+            for (u32 axis = 0; axis < 3; axis++) {
+                Tvec n   = axis_normal(axis);
+                Tprim la = along_axis(l, axis), ra = along_axis(r, axis);
+                err_rusanov = sham::max(err_rusanov, mirror_error(rusanov, la, ra, n));
+                err_hll     = sham::max(err_hll, mirror_error(hll, la, ra, n));
+                err_toro    = sham::max(err_toro, mirror_error(hllc_toro, la, ra, n));
+                err_davis   = sham::max(err_davis, mirror_error(hllc_davis, la, ra, n));
+            }
+        }
+    }
+
+    REQUIRE_FLOAT_EQUAL_NAMED("rusanov mirror symmetry", err_rusanov, 0., eps);
+    REQUIRE_FLOAT_EQUAL_NAMED("hll mirror symmetry", err_hll, 0., eps);
+    REQUIRE_FLOAT_EQUAL_NAMED("hllc toro mirror symmetry", err_toro, 0., eps);
+    REQUIRE_FLOAT_EQUAL_NAMED("hllc davis mirror symmetry", err_davis, 0., eps);
 }
 
 NEW_TEST(Unittest, "shammath/fluid_state_barotropic", 1) {
