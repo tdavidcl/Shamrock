@@ -11,8 +11,8 @@ This is a demanding case for HLLC with pressure based (PVRS) wave speed estimate
 collision face the PVRS underestimates the star pressure so much that the estimated wave
 speeds cross (:math:`s_L > 0 > s_R`). Since the RAMSES solver computes each face flux from
 both of its sides, each cell then sees itself as upwind and only lets mass out: no shock
-forms and mass vanishes at the collision face. HLLC therefore falls back to Roe average
-(Einfeldt / Batten et al. 1997) wave speeds on such faces.
+forms and mass vanishes at the collision face. HLLC therefore averages the branch selected
+by both sides of a face, which makes the two face fluxes exactly opposite.
 
 We compare the Riemann solvers against the exact solution and check that the mass is
 conserved.

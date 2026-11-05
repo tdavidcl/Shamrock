@@ -26,11 +26,12 @@ namespace shammath {
      * @brief HLLC solver based on section 10.4 from Toro 3rd Edition , Springer 2009.
      *        The wave speeds are the pressure based estimates of Toro, equation (10.59), using
      *        the pressure in the star region estimated through the primitive variable solver
-     *        (PVRS, valid for an adiabatic equation of state). On faces where these give an
-     *        inconsistent wave fan (s_l < S* < s_r fails, e.g. crossed speeds in strongly
-     *        converging flows), they are replaced by the Einfeldt / Batten et al. (SIAM J. Sci.
-     *        Comput. 18, 1997) Roe average estimates, or by the Davis estimates when the
-     *        adiabatic index is state dependent.
+     *        (PVRS, valid for an adiabatic equation of state). The returned flux is the average
+     *        of the HLLC branch selected for (L, R, n) and of the one the mirrored call
+     *        (R, L, -n) selects, so that F(L, R, n) == -F(R, L, -n) holds exactly even where
+     *        these wave speeds give an inconsistent fan (crossed speeds, or S* outside of
+     *        [s_l, s_r], e.g. in strongly converging flows). Where the fan is consistent both
+     *        selections agree and the flux is the plain HLLC one.
      *        Computes the flux across a face with unit normal n.
      * @tparam FSpec
      * @param fspec fluid state spec (adiabatic equation of state + flux/wave-speed operations)
@@ -127,41 +128,6 @@ namespace shammath {
         Tscal s_r    = velx_r + cs_r * q_r;
         Tscal S_star = get_S_star(s_l, s_r);
 
-        // The PVRS can underestimate the star pressure (e.g. converging flows from Mach ~2),
-        // giving s_l > s_r, or S_star outside of [s_l, s_r]. The flux is then not invariant under
-        // the mirror (L, R, n) -> (R, L, -n): the two sides of a face pick different branches
-        // below and, since a face flux is computed from both of its sides (xp/xm, ...), the
-        // scheme no longer conserves mass, momentum and energy (each side can even see its own
-        // state as upwind and only let matter out). On such faces (this test is mirror
-        // invariant and also catches NaNs) fall back to wave speeds that bracket the fan:
-        // Einfeldt / Batten et al. (1997) with Roe averages, or Davis if gamma is state dependent.
-        if (!(s_l < S_star && S_star < s_r)) {
-            if constexpr (details::HasGlobalGamma<FSpec>) {
-                const Tscal sqrt_rho_l = sycl::sqrt(rho_l);
-                const Tscal sqrt_rho_r = sycl::sqrt(rho_r);
-                const Tscal norm_roe   = 1 / (sqrt_rho_l + sqrt_rho_r);
-
-                const Tvec vel_roe = (sqrt_rho_l * prim_l.vel + sqrt_rho_r * prim_r.vel) * norm_roe;
-                const Tscal enthalpy_l = (c_l.rhoe + press_l) / rho_l;
-                const Tscal enthalpy_r = (c_r.rhoe + press_r) / rho_r;
-                const Tscal enthalpy_roe
-                    = (sqrt_rho_l * enthalpy_l + sqrt_rho_r * enthalpy_r) * norm_roe;
-
-                const Tscal velx_roe = sham::dot(vel_roe, n);
-                const Tscal cs_roe   = sycl::sqrt(
-                    sham::max(
-                        Tscal{0},
-                        (gamma_l - 1) * (enthalpy_roe - Tscal{0.5} * sham::dot(vel_roe, vel_roe))));
-
-                s_l = sham::min(velx_l - cs_l, velx_roe - cs_roe);
-                s_r = sham::max(velx_r + cs_r, velx_roe + cs_roe);
-            } else {
-                s_l = sham::min(velx_l - cs_l, velx_r - cs_r);
-                s_r = sham::max(velx_l + cs_l, velx_r + cs_r);
-            }
-            S_star = get_S_star(s_l, s_r);
-        }
-
         // lagrangian sound speed
         const Tscal var_l = rho_l * (s_l - velx_l);
         const Tscal var_r = rho_r * (s_r - velx_r);
@@ -190,15 +156,29 @@ namespace shammath {
         Tcons f_l_star = f_l + s_l * (c_l_star - c_l);
         Tcons f_r_star = f_r + s_r * (c_r_star - c_r);
 
-        // HLLC flux
-        if (s_l >= 0) {
-            return f_l;
-        } else if (S_star >= 0) {
-            return f_l_star;
-        } else if (s_r >= 0) {
-            return f_r_star;
-        } else
-            return f_r;
+        // HLLC flux, as selected by this call
+        const Tcons &f_this = (s_l >= 0)      ? f_l
+                              : (S_star >= 0) ? f_l_star
+                              : (s_r >= 0)    ? f_r_star
+                                              : f_r;
+
+        // The PVRS can underestimate the star pressure (e.g. converging flows from Mach ~2),
+        // giving s_l > s_r, or S_star outside of [s_l, s_r]. The call made from the other side of
+        // the face, (R, L, -n), then selects a different branch: since a face flux is computed
+        // from both of its sides (xp/xm, ...), the scheme would no longer conserve mass, momentum
+        // and energy (each side can even see its own state as upwind and only let matter out).
+        // That mirrored call has s_l' = -s_r, s_r' = -s_l, S_star' = -S_star, and its candidate
+        // fluxes are -f_r, -f_r_star, -f_l_star, -f_l (exactly, given the summation order of
+        // S_star and press_lr), so minus its flux is the selection below over the same
+        // candidates. Averaging both makes F(L, R, n) == -F(R, L, -n) hold exactly, and costs
+        // nothing more where the fan is consistent: both selections agree and the average is
+        // the plain HLLC flux.
+        const Tcons &f_mirror = (s_r <= 0)      ? f_r
+                                : (S_star <= 0) ? f_r_star
+                                : (s_l <= 0)    ? f_l_star
+                                                : f_l;
+
+        return Tscal{0.5} * (f_this + f_mirror);
     }
 
     /**
