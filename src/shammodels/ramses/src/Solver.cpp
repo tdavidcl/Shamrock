@@ -1812,6 +1812,18 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                                 std::make_shared<decltype(node_mean)>(std::move(node_mean)));
                         }
 
+                        // warm start of the phi^{n+1} solve from phi^n (solved just above, ghosts
+                        // exchanged) rather than from the previous step's phi^{n+1}: rho^{n+1}
+                        // differs from rho^n by one dt only, so phi^n is the closer guess. Both
+                        // refs are fields of the same ghost patch data, so their sizes match.
+                        {
+                            CopyPatchDataField<Tscal> copy_phi_guess{};
+                            copy_phi_guess.set_edges(storage.refs_phi, storage.refs_phi_new);
+                            ext_force_sequence.push_back(
+                                std::make_shared<decltype(copy_phi_guess)>(
+                                    std::move(copy_phi_guess)));
+                        }
+
                         rho_level      = storage.rho_next;
                         rho_mean_level = rho_mean_np1;
                         phi_level      = storage.refs_phi_new;
