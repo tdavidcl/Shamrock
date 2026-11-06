@@ -70,7 +70,7 @@ def run(cs, solver, dt, nsteps):
         cfg.set_gravity_mode_bicgstab()
     # well above the round-off floor of the (singular, periodic) Poisson problem: when the
     # perturbation is small (e.g. near a zero of cos(omega t)) a tolerance at that floor is not
-    # reached and the CG iterations diverge (see the TODO in NodeCGLoop)
+    # reached and the CG iterations diverge
     cfg.set_self_gravity_tol(1e-8)
     cfg.set_self_gravity_Niter_max(500)
     cfg.set_ext_force_coupling(ExtForceCoupling.Trapezoidal)

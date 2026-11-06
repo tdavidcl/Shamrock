@@ -63,13 +63,17 @@ namespace shammodels::basegodunov::modules {
                 edges.rz_old_values.data,
                 edges.rhs_norm_values.data));
 
-        // TODO: (kept from #1942) if <p, A p> == 0 (e.g. r0 == 0 when phi0 is already the
-        // solution, or a uniform density with a uniform phi0), alpha = 0 / 0 is NaN and phi becomes
-        // NaN. Likewise, <b, b> == 0 (uniform density) makes the convergence test always false.
+        // The convergence test is |r| / |b| < tol. With a uniform density b == 0, so |r0| is the
+        // reference norm instead (the residual of a non-uniform phi0 must still be reduced by tol).
+        // All the values below are global reductions, so every rank takes the same branches.
+        const Tscal ref_norm2
+            = (edges.rhs_norm_values.data > 0) ? edges.rhs_norm_values.data : edges.old_values.data;
 
-        u32 k          = 0;
-        bool converged = false;
-        while (k < Niter_max) {
+        u32 k = 0;
+        // r0 == 0: phi0 is already the solution (e.g. a uniform density with a uniform phi0).
+        // Iterating would compute alpha = 0 / 0 and set phi to NaN.
+        bool converged = (edges.old_values.data == 0);
+        while (!converged && k < Niter_max) {
             k = k + 1;
 
             // exchange the ghost blocks of p_k (on them the stencil is incomplete, so the update of
@@ -84,6 +88,15 @@ namespace shammodels::basegodunov::modules {
             // <p_k, A p_k>
             hadamard_prod_node.evaluate();
             a_norm_node.evaluate();
+
+            if (edges.e_norm.data == 0) {
+                // alpha_k would be infinite or NaN and would corrupt phi, keep phi_k instead
+                ON_RANK_0(
+                    logger::warn_ln(
+                        "Ramses::CG",
+                        sham::format("breakdown: <p_k, A p_k> = {}", edges.e_norm.data)));
+                break;
+            }
 
             // alpha_k = <r_k, z_k> / <p_k, A p_k>
             edges.alpha.data = edges.rz_old_values.data / edges.e_norm.data;
@@ -121,7 +134,7 @@ namespace shammodels::basegodunov::modules {
             // p_{k+1} = z_{k+1} + beta_k p_k
             new_p_node.evaluate();
 
-            if ((edges.old_values.data / edges.rhs_norm_values.data) < tol * tol) {
+            if ((edges.old_values.data / ref_norm2) < tol * tol) {
                 converged = true;
                 break;
             }
@@ -135,7 +148,9 @@ namespace shammodels::basegodunov::modules {
         last_iteration_count = k;
 
         if (shamcomm::world_rank() == 0) {
-            Tscal rel_res = std::sqrt(edges.old_values.data / edges.rhs_norm_values.data);
+            // 0 when r0 == 0 (with b == 0, ref_norm2 is then 0 too)
+            Tscal rel_res
+                = (ref_norm2 > 0) ? std::sqrt(edges.old_values.data / ref_norm2) : Tscal{0};
             if (converged) {
                 logger::info_ln(
                     "Ramses::CG",

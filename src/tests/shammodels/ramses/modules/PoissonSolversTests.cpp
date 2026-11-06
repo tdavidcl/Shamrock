@@ -437,14 +437,88 @@ namespace {
         REQUIRE_NAMED(solver_name(kind) + " level jump residual", res_norm < 10 * tol);
     }
 
+    bool all_finite(const std::vector<Tscal> &v) {
+        for (Tscal x : v) {
+            if (!std::isfinite(x)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Uniform density (b == 0, Shamrock-code/Shamrock#2695): a uniform phi0 is already the
+     * solution and must be returned untouched without iterating (it used to become NaN), and a
+     * non-uniform phi0 must be relaxed to a uniform one (the residual is measured against |r0|).
+     */
+    void test_solver_uniform_density(SolverKind kind) {
+        const Tscal tol     = 1e-8;
+        const u32 Niter_max = 1000;
+        const u32 n         = 8;
+
+        GhostedGrid g = make_uniform_ghosted_grid(n);
+        std::vector<Tscal> rho(g.grid.cell_count(), 1);
+
+        auto run = [&](const std::vector<Tscal> &phi0) {
+            PoissonProblem pb = make_problem(
+                g.grid, g.graph, g.patch_block_count(), g.ghost_src_block, rho, phi0);
+            return solve(kind, pb, Niter_max, tol);
+        };
+
+        for (Tscal c : {Tscal{0}, Tscal{3}}) {
+            std::vector<Tscal> phi0(g.grid.cell_count(), c);
+            SolveResult res = run(phi0);
+
+            logger::raw_ln(
+                sham::format(
+                    "{} uniform density, phi0 = {} : {} iterations",
+                    solver_name(kind),
+                    c,
+                    res.iterations));
+
+            REQUIRE_EQUAL_NAMED(
+                solver_name(kind) + " uniform density & phi0: no iteration", res.iterations, 0_u32);
+            REQUIRE_EQUAL_NAMED(
+                solver_name(kind) + " uniform density & phi0: phi unchanged", res.phi, phi0);
+        }
+
+        // non-uniform initial guess: the solution is a uniform phi
+        std::vector<Tscal> phi0 = shamalgs::primitives::mock_vector<Tscal>(
+            0x222, g.grid.cell_count(), Tscal{-1e-2}, Tscal{1e-2});
+        fill_ghosts(g, phi0);
+        SolveResult res = run(phi0);
+
+        REQUIRE_NAMED(solver_name(kind) + " uniform density: finite phi", all_finite(res.phi));
+        REQUIRE_NAMED(
+            solver_name(kind) + " uniform density: converged before Niter_max",
+            res.iterations < Niter_max);
+
+        std::vector<Tscal> b;
+        std::vector<Tscal> r0 = true_residual(g.periodic_grid, rho, 1, phi0, b);
+        std::vector<Tscal> r  = true_residual(g.periodic_grid, rho, 1, res.phi, b);
+        Tscal res_norm        = l2(r) / l2(r0);
+
+        logger::raw_ln(
+            sham::format(
+                "{} uniform density, random phi0 : {} iterations, |r|/|r0| = {:.3e}",
+                solver_name(kind),
+                res.iterations,
+                res_norm));
+
+        REQUIRE_EQUAL_NAMED(solver_name(kind) + " uniform density: b == 0", l2(b), Tscal{0});
+        REQUIRE_NAMED(solver_name(kind) + " uniform density: residual", res_norm < 10 * tol);
+    }
+
 } // namespace
 
 NEW_TEST(Unittest, "shammodels/ramses/modules/NodeCGLoop", 1) {
     test_solver_uniform(SolverKind::CG);
     test_solver_level_jump(SolverKind::CG);
+    test_solver_uniform_density(SolverKind::CG);
 }
 
 NEW_TEST(Unittest, "shammodels/ramses/modules/NodeBiCGSTABLoop", 1) {
     test_solver_uniform(SolverKind::BiCGSTAB);
     test_solver_level_jump(SolverKind::BiCGSTAB);
+    test_solver_uniform_density(SolverKind::BiCGSTAB);
 }

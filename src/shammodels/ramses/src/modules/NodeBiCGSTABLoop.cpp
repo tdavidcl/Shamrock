@@ -52,20 +52,29 @@ namespace shammodels::basegodunov::modules {
         // <r'_0, r'_0>
         node_ddot_rstarj_rstarj.evaluate();
 
+        // The convergence test is |r| / |b| < tol. With a uniform density b == 0, so |r_0| is the
+        // reference norm instead (the residual of a non-uniform phi_0 must still be reduced by
+        // tol). All the values below are global reductions, so every rank takes the same branches.
+        const Tscal res0_norm2 = 4 * edges.shadow_res_norm.data; // <r_0, r_0>, as r'_0 = r_0 / 2
+        const Tscal ref_norm2
+            = (edges.rhs_norm_value.data > 0) ? edges.rhs_norm_value.data : res0_norm2;
+
         shamlog_debug_ln(
             "Ramses::BiCGSTAB",
             sham::format(
-                "k = 0, <b,b> = {}, |r'_0| / |b| = {}",
+                "k = 0, <b,b> = {}, |r_0| / |b| = {}",
                 edges.rhs_norm_value.data,
-                std::sqrt(edges.shadow_res_norm.data / edges.rhs_norm_value.data)));
+                (ref_norm2 > 0) ? std::sqrt(res0_norm2 / ref_norm2) : Tscal{0}));
 
         // a breakdown is detected when the denominator is exactly 0
         const Tscal breakdown_tol = 0;
 
-        u32 k                     = 0;
-        bool converged            = false;
+        u32 k = 0;
+        // r_0 == 0: phi_0 is already the solution (e.g. a uniform density with a uniform phi_0),
+        // iterating would only end on a breakdown (<A p_0, r'_0> = 0)
+        bool converged            = (res0_norm2 == 0);
         Tscal last_residual_norm2 = 0;
-        while (k < Niter_max) {
+        while (!converged && k < Niter_max) {
 
             // <r_k, r'_0>
             node_had_prod_rj_rp0.evaluate();
@@ -105,7 +114,7 @@ namespace shammodels::basegodunov::modules {
             // <s_k, s_k>
             node_ddot_sj_sj.evaluate();
 
-            const Tscal rel_sj_sqr = edges.e_norm.data / edges.rhs_norm_value.data;
+            const Tscal rel_sj_sqr = edges.e_norm.data / ref_norm2;
             last_residual_norm2    = rel_sj_sqr;
             if (rel_sj_sqr < tol_cvg * tol_cvg) {
                 // phi_{k+1} = phi_k + alpha_k p_k
@@ -166,7 +175,7 @@ namespace shammodels::basegodunov::modules {
             // <r_{k+1}, r_{k+1}>
             node_ddot_rj_rj.evaluate();
 
-            const Tscal rel_rj_sqr = edges.e_norm.data / edges.rhs_norm_value.data;
+            const Tscal rel_rj_sqr = edges.e_norm.data / ref_norm2;
             last_residual_norm2    = rel_rj_sqr;
 
             shamlog_debug_ln(
