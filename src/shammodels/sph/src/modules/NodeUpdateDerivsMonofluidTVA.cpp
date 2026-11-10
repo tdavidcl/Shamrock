@@ -25,10 +25,11 @@
  * @brief TVA ds_j/dt kernel body (eq. 51, Hutchison 2018), shared by the plain and the pairwise
  * limited variants.
  *
- * The flux term of the pair (a,b) is multiplied by `pair_weight(id_b)`. Since the dust mass flux of
- * the pair is antisymmetric in (a,b), any weight symmetric in (a,b) keeps the dust mass
- * conservation exact. The compression term (s_a / 2 rho_a) drho_a/dt is not a flux (it cancels in
- * d(m s^2/rho)/dt) and is left untouched.
+ * The flux term of the pair (a,b) is multiplied by `pair_weight(id_b, s_j_a, s_j_b, g_ab)`, with
+ * g_ab = Tw_ab (P_a - P_b) Fbar_ab / r_ab (antisymmetric, g_ba = -g_ab bitwise). Since the dust
+ * mass flux of the pair is antisymmetric in (a,b), any weight symmetric in (a,b) keeps the dust
+ * mass conservation exact. The compression term (s_a / 2 rho_a) drho_a/dt is not a flux (it cancels
+ * in d(m s^2/rho)/dt) and is left untouched.
  */
 template<class Tvec, template<class> class SPHKernel, class PairWeight>
 inline shambase::VecComponent<Tvec> compute_ds_j_dt_monofluid_tva(
@@ -98,8 +99,10 @@ inline shambase::VecComponent<Tvec> compute_ds_j_dt_monofluid_tva(
         Tscal delta_P     = P_a - P_b;
         Tscal Ts_weighted = (Ttilde_sj_a / rho_a + Ttilde_sj_b / rho_b);
 
-        term1 += pair_weight(id_b) * (pmass * s_j_b / rho_b) * Ts_weighted * delta_P * F_ab_bar
-                 * rab_inv_sat;
+        Tscal g_ab = Ts_weighted * delta_P * F_ab_bar * rab_inv_sat;
+
+        term1 += pair_weight(id_b, s_j_a, s_j_b, g_ab) * (pmass * s_j_b / rho_b) * Ts_weighted
+                 * delta_P * F_ab_bar * rab_inv_sat;
         term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
     });
 
@@ -144,8 +147,68 @@ struct KernelUpdateDerivsMonofluidTVA {
             s_j,
             Ttilde_sj,
             ploop_ptrs,
-            [](u32) {
+            [](u32, Tscal, Tscal, Tscal) {
                 return Tscal{1};
+            });
+    }
+};
+
+/**
+ * @brief Symmetrized per-pair gate of the smooth positivity limiter.
+ *
+ * A particle with s_j < 0 does not accept a flux contribution that decreases s_j, and the pair is
+ * switched off if either member refuses it:
+ *   blocked = (s_a < 0 && f_ab > 0) || (s_b < 0 && f_ba > 0)
+ * with f_ab = (m s_b / rho_b) g_ab and f_ba = -(m s_a / rho_a) g_ab. Only signs are used, so both
+ * members of the pair take bitwise the same decision (g_ba = -g_ab exactly).
+ */
+template<class Tscal>
+inline Tscal monofluid_tva_pair_gate(Tscal s_a, Tscal s_b, Tscal g_ab) {
+    bool f_ab_pos = (s_b > 0 && g_ab > 0) || (s_b < 0 && g_ab < 0);
+    bool f_ba_pos = (s_a > 0 && g_ab < 0) || (s_a < 0 && g_ab > 0);
+    bool blocked  = (s_a < 0 && f_ab_pos) || (s_b < 0 && f_ba_pos);
+    return blocked ? Tscal{0} : Tscal{1};
+}
+
+template<class Tvec, template<class> class SPHKernel>
+struct KernelUpdateDerivsMonofluidTVAPairGate {
+    using Tscal = shambase::VecComponent<Tvec>;
+
+    Tscal pmass;
+    u32 ndust;
+
+    inline void operator()(
+        u32 thread_id,
+        // input
+        const Tvec *__restrict xyz,
+        const Tscal *__restrict hpart,
+        const Tvec *__restrict vxyz,
+        const Tscal *__restrict omega,
+        const Tscal *__restrict pressure,
+        const Tscal *__restrict s_j,
+        const Tscal *__restrict Ttilde_sj,
+        shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+        // output
+        Tscal *__restrict ds_j_dt) const {
+
+        u32 id_a  = thread_id / ndust;
+        u32 jdust = thread_id % ndust;
+
+        ds_j_dt[thread_id] = compute_ds_j_dt_monofluid_tva<Tvec, SPHKernel>(
+            pmass,
+            ndust,
+            id_a,
+            jdust,
+            xyz,
+            hpart,
+            vxyz,
+            omega,
+            pressure,
+            s_j,
+            Ttilde_sj,
+            ploop_ptrs,
+            [](u32, Tscal s_a, Tscal s_b, Tscal g_ab) {
+                return monofluid_tva_pair_gate(s_a, s_b, g_ab);
             });
     }
 };
@@ -191,7 +254,7 @@ struct KernelUpdateDerivsMonofluidTVAPairLimited {
             s_j,
             Ttilde_sj,
             ploop_ptrs,
-            [=](u32 id_b) {
+            [=](u32 id_b, Tscal, Tscal, Tscal) {
                 return xi_a * xi[id_b * nd + jdust];
             });
     }
@@ -222,27 +285,33 @@ void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>::
 
     const Tscal pmass = edges.gpart_mass.data;
 
-    using ComputeKernel = KernelUpdateDerivsMonofluidTVA<Tvec, SPHKernel>;
-
     auto total_specie_count = part_counts.template map<u32>([&](u64 id, u32 count) {
         return count * ndust;
     });
 
-    // call the kernel for each patches with part_counts.get(id_patch) threads of patch id_patch
-    sham::distributed_data_kernel_call(
-        shamsys::instance::get_compute_scheduler_ptr(),
-        sham::DDMultiRef{
-            edges.xyz.get_spans(),
-            edges.hpart.get_spans(),
-            edges.vxyz.get_spans(),
-            edges.omega.get_spans(),
-            edges.pressure.get_spans(),
-            edges.s_j.get_spans(),
-            edges.Ttilde_sj.get_spans(),
-            edges.neigh_cache},
-        sham::DDMultiRef{edges.ds_j_dt.get_spans()},
-        total_specie_count,
-        ComputeKernel{pmass, ndust});
+    auto launch = [&](auto kernel) {
+        // call the kernel for each patches with part_counts.get(id_patch) threads of patch id_patch
+        sham::distributed_data_kernel_call(
+            shamsys::instance::get_compute_scheduler_ptr(),
+            sham::DDMultiRef{
+                edges.xyz.get_spans(),
+                edges.hpart.get_spans(),
+                edges.vxyz.get_spans(),
+                edges.omega.get_spans(),
+                edges.pressure.get_spans(),
+                edges.s_j.get_spans(),
+                edges.Ttilde_sj.get_spans(),
+                edges.neigh_cache},
+            sham::DDMultiRef{edges.ds_j_dt.get_spans()},
+            total_specie_count,
+            kernel);
+    };
+
+    if (pair_gate) {
+        launch(KernelUpdateDerivsMonofluidTVAPairGate<Tvec, SPHKernel>{pmass, ndust});
+    } else {
+        launch(KernelUpdateDerivsMonofluidTVA<Tvec, SPHKernel>{pmass, ndust});
+    }
 }
 
 template<class Tvec, template<class> class SPHKernel>

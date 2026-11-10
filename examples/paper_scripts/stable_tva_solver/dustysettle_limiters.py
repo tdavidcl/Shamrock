@@ -11,7 +11,10 @@ The symmetric smooth limiter replaces the per-particle switch :math:`\xi_a` of
 the smooth limiter by the pairwise :math:`\xi_a \xi_b` applied to the TVA flux
 between :math:`a` and :math:`b`, which keeps the pairwise antisymmetry of the
 dust mass flux (the restoring term :math:`\phi_a` is unchanged). The
-``smooth_abs`` variants use :math:`|\tilde{T}_{s_j}|` instead of
+``smooth_gate`` variant uses instead a symmetrized per-pair gate: a particle
+with :math:`s_j < 0` does not accept a flux contribution that decreases
+:math:`s_j`, and the pair is switched off if either member refuses it (no ghost
+exchange needed). The ``smooth_abs`` variants use :math:`|\tilde{T}_{s_j}|` instead of
 :math:`\tilde{T}_{s_j}` in :math:`\phi_a`, as it can become negative.
 
 The ``LIMITERS`` environment variable selects a subset of the runs, e.g.
@@ -109,6 +112,7 @@ class DustLimiter(Enum):
     SMOOTH_SYM = "smooth_sym"
     SMOOTH_ABS = "smooth_abs"
     SMOOTH_ABS_SYM = "smooth_abs_sym"
+    SMOOTH_GATE = "smooth_gate"
     BALLABIO = "ballabio"
     HARD = "hard"
 
@@ -121,6 +125,7 @@ limiter_panels = [
     (DustLimiter.SMOOTH_SYM, r"smooth ($\xi_a \xi_b$)"),
     (DustLimiter.SMOOTH_ABS, r"smooth ($|\tilde{T}|$)"),
     (DustLimiter.SMOOTH_ABS_SYM, r"smooth ($|\tilde{T}|$, $\xi_a \xi_b$)"),
+    (DustLimiter.SMOOTH_GATE, r"smooth (pair gate)"),
     (DustLimiter.HARD, "hard"),
 ]
 
@@ -632,6 +637,13 @@ class DustySettleSimulation(SimulationRunner):
                 in (DustLimiter.SMOOTH_SYM, DustLimiter.SMOOTH_ABS_SYM),
                 smooth_s_limiter_abs_ttilde=self.limiter
                 in (DustLimiter.SMOOTH_ABS, DustLimiter.SMOOTH_ABS_SYM),
+            )
+        elif self.limiter == DustLimiter.SMOOTH_GATE:
+            cfg.set_dust_mode_monofluid_tva(
+                **common_kwargs,
+                ensure_s_j_positivity=False,
+                smooth_s_positivity_limiter=True,
+                pair_gate_s_positivity_limiter=True,
             )
         elif self.limiter == DustLimiter.BALLABIO:
             cfg.set_dust_mode_monofluid_tva(
