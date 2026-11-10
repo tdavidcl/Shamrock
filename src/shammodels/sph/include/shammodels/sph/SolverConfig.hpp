@@ -165,7 +165,9 @@ namespace shammodels::sph {
             // Symmetrized per-pair gate variant of the smooth positivity limiter: a particle with
             // s_j < 0 does not accept a flux contribution that decreases s_j, and the pair is
             // switched off if either member refuses it. Conserves dust mass (without phi) and needs
-            // no ghost exchange. Exclusive with symmetric_s_positivity_limiter.
+            // no ghost exchange. Exclusive with symmetric_s_positivity_limiter. Independent of
+            // smooth_s_positivity_limiter (then only phi is kept from it) and can be combined with
+            // ensure_s_j_positivity (hard limiter).
             bool pair_gate_s_positivity_limiter = false;
 
             inline bool should_clamp_dust_density() const { return clamp_dust_frac.has_value(); }

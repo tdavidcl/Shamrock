@@ -1608,8 +1608,9 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     const bool use_symmetric_limiter = cfg_monofluid_tva.smooth_s_positivity_limiter
                                        && cfg_monofluid_tva.symmetric_s_positivity_limiter;
 
-    const bool use_pair_gate = cfg_monofluid_tva.smooth_s_positivity_limiter
-                               && cfg_monofluid_tva.pair_gate_s_positivity_limiter;
+    // the gate acts on the TVA flux only, it can be combined with the smooth limiter (phi) or with
+    // the hard limiter (ensure_s_j_positivity)
+    const bool use_pair_gate = cfg_monofluid_tva.pair_gate_s_positivity_limiter;
 
     if (use_symmetric_limiter && use_pair_gate) {
         shambase::throw_with_loc<std::invalid_argument>(
