@@ -74,3 +74,61 @@ namespace shammodels::sph::modules {
 } // namespace shammodels::sph::modules
 
 #undef NODE_EDGES
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* ------------------- inputs ------------------- */                                           \
+    /* scalars */                                                                                  \
+    X_RO(shamrock::solvergraph::IDataEdge<Tscal>, gpart_mass)                                      \
+                                                                                                   \
+    /* counts */                                                                                   \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts_with_ghost)                              \
+                                                                                                   \
+    /* fields */                                                                                   \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, xyz)                                             \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, hpart)                                          \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, vxyz)                                            \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, omega)                                          \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, pressure)                                       \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, Ttilde_sj)                                      \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, xi)                                             \
+                                                                                                   \
+    /* neigh */                                                                                    \
+    X_RO(shammodels::sph::solvergraph::NeighCache, neigh_cache)                                    \
+                                                                                                   \
+    /* ------------------- outputs ------------------- */                                          \
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, ds_j_dt)
+
+namespace shammodels::sph::modules {
+
+    /**
+     * @brief TVA ds_j/dt with the flux of each pair (a,b) weighted by xi_a * xi_b.
+     *
+     * Symmetric (pairwise) variant of the xi switch of the smooth positivity limiter: the dust
+     * mass flux between a and b stays antisymmetric so the total dust mass is conserved. xi must
+     * be provided with ghosts.
+     */
+    template<class Tvec, template<class> class SPHKernel>
+    class NodeUpdateDerivsMonofluidTVAPairLimited : public shamrock::solvergraph::INode {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        u32 ndust;
+
+        public:
+        NodeUpdateDerivsMonofluidTVAPairLimited(u32 ndust) : ndust(ndust) {}
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        void _impl_evaluate_internal();
+
+        inline virtual std::string _impl_get_label() const {
+            return "NodeUpdateDerivsMonofluidTVAPairLimited";
+        };
+
+        virtual std::string _impl_get_tex() const;
+    };
+} // namespace shammodels::sph::modules
+
+#undef NODE_EDGES

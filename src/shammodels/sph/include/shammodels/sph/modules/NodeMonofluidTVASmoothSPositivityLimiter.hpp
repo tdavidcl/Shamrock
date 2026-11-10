@@ -44,8 +44,13 @@ namespace shammodels::sph::modules {
 
         u32 ndust;
 
+        /// if false only the restoring term (phi) is applied, the xi switch being handled
+        /// pairwise in NodeUpdateDerivsMonofluidTVAPairLimited
+        bool apply_xi;
+
         public:
-        NodeMonofluidTVASmoothSPositivityLimiter(u32 ndust) : ndust(ndust) {}
+        NodeMonofluidTVASmoothSPositivityLimiter(u32 ndust, bool apply_xi = true)
+            : ndust(ndust), apply_xi(apply_xi) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -68,16 +73,19 @@ namespace shammodels::sph::modules {
                 sham::DDMultiRef{edges.s_j.get_spans(), edges.Ttilde_sj.get_spans()},
                 sham::DDMultiRef{edges.ds_j_dt.get_spans()},
                 total_specie_count,
-                [](u32 thread_id,
-                   const Tscal *__restrict s_j,
-                   const Tscal *__restrict Ttilde_sj,
-                   Tscal *__restrict ds_j_dt) {
+                [apply_xi = apply_xi](
+                    u32 thread_id,
+                    const Tscal *__restrict s_j,
+                    const Tscal *__restrict Ttilde_sj,
+                    Tscal *__restrict ds_j_dt) {
                     Tscal s_j_a       = s_j[thread_id];
                     Tscal Ttilde_sj_a = Ttilde_sj[thread_id];
                     Tscal ds_j_dt_a   = ds_j_dt[thread_id];
 
                     // if we dip in the negative range do not dip further
-                    ds_j_dt_a *= (s_j_a < 0 && ds_j_dt_a < 0) ? 0 : 1;
+                    if (apply_xi) {
+                        ds_j_dt_a *= (s_j_a < 0 && ds_j_dt_a < 0) ? 0 : 1;
+                    }
 
                     // restore it slowly to 0
                     ds_j_dt_a += (s_j_a < 0) ? -s_j_a / (10 * Ttilde_sj_a) : 0;
@@ -87,7 +95,8 @@ namespace shammodels::sph::modules {
         }
 
         inline virtual std::string _impl_get_label() const {
-            return "NodeMonofluidTVASmoothSPositivityLimiter";
+            return apply_xi ? "NodeMonofluidTVASmoothSPositivityLimiter"
+                            : "NodeMonofluidTVASmoothSPositivityLimiter (phi only)";
         };
 
         inline virtual std::string _impl_get_tex() const {
@@ -106,6 +115,92 @@ namespace shammodels::sph::modules {
                     \begin{cases}
                         -{s_j}_{j,a} / (10\, {Ttilde_sj}_{j,a}) & {s_j}_{j,a} < 0 \\
                         0 & \text{otherwise}
+                    \end{cases}
+                \end{align}
+
+                $a \in [0,{part_counts})$, $j \in [0,{ndust})$.
+            )tex";
+
+            replace_edges_tex_symbols(tex);
+
+            shambase::replace_all(tex, "{ndust}", sham::format("{}", ndust));
+
+            return tex;
+        }
+    };
+} // namespace shammodels::sph::modules
+
+#undef NODE_EDGES
+
+#define NODE_EDGES(X_RO, X_RW)                                                                     \
+    /* counts */                                                                                   \
+    X_RO(shamrock::solvergraph::Indexes<u32>, part_counts)                                         \
+                                                                                                   \
+    /* fields */                                                                                   \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, s_j)                                            \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, ds_j_dt)                                        \
+                                                                                                   \
+    /* outputs */                                                                                  \
+    X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, xi)
+
+namespace shammodels::sph::modules {
+
+    /**
+     * @brief Per particle switch of the smooth positivity limiter, xi = 0 if s_j < 0 and the
+     * (unlimited) ds_j/dt < 0, 1 otherwise. Used by the pairwise (xi_a xi_b) variant.
+     */
+    template<class Tvec>
+    class NodeMonofluidTVAPositivityFlag : public shamrock::solvergraph::INode {
+
+        using Tscal = shambase::VecComponent<Tvec>;
+
+        u32 ndust;
+
+        public:
+        NodeMonofluidTVAPositivityFlag(u32 ndust) : ndust(ndust) {}
+
+        EXPAND_NODE_EDGES(NODE_EDGES)
+
+        inline void _impl_evaluate_internal() {
+
+            __shamrock_stack_entry();
+
+            auto edges = get_edges();
+
+            auto &part_counts = edges.part_counts.indexes;
+
+            edges.xi.ensure_sizes(part_counts);
+
+            auto total_specie_count = part_counts.template map<u32>([&](u64 id, u32 count) {
+                return count * ndust;
+            });
+
+            sham::distributed_data_kernel_call(
+                shamsys::instance::get_compute_scheduler_ptr(),
+                sham::DDMultiRef{edges.s_j.get_spans(), edges.ds_j_dt.get_spans()},
+                sham::DDMultiRef{edges.xi.get_spans()},
+                total_specie_count,
+                [](u32 thread_id,
+                   const Tscal *__restrict s_j,
+                   const Tscal *__restrict ds_j_dt,
+                   Tscal *__restrict xi) {
+                    xi[thread_id] = (s_j[thread_id] < 0 && ds_j_dt[thread_id] < 0) ? 0 : 1;
+                });
+        }
+
+        inline virtual std::string _impl_get_label() const {
+            return "NodeMonofluidTVAPositivityFlag";
+        };
+
+        inline virtual std::string _impl_get_tex() const {
+            std::string tex = R"tex(
+                NodeMonofluidTVAPositivityFlag
+
+                \begin{align}
+                {xi}_{j,a} &=
+                    \begin{cases}
+                        0 & {s_j}_{j,a} < 0 \land {ds_j_dt}_{j,a} < 0 \\
+                        1 & \text{otherwise}
                     \end{cases}
                 \end{align}
 

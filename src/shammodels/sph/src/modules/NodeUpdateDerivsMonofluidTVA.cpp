@@ -21,13 +21,95 @@
 #include "shammodels/sph/modules/NodeUpdateDerivsMonofluidTVA.hpp"
 #include "shamrock/patch/PatchDataField.hpp" // IWYU pragma: keep
 
+/**
+ * @brief TVA ds_j/dt kernel body (eq. 51, Hutchison 2018), shared by the plain and the pairwise
+ * limited variants.
+ *
+ * The flux term of the pair (a,b) is multiplied by `pair_weight(id_b)`. Since the dust mass flux of
+ * the pair is antisymmetric in (a,b), any weight symmetric in (a,b) keeps the dust mass
+ * conservation exact. The compression term (s_a / 2 rho_a) drho_a/dt is not a flux (it cancels in
+ * d(m s^2/rho)/dt) and is left untouched.
+ */
+template<class Tvec, template<class> class SPHKernel, class PairWeight>
+inline shambase::VecComponent<Tvec> compute_ds_j_dt_monofluid_tva(
+    shambase::VecComponent<Tvec> pmass,
+    u32 ndust,
+    u32 id_a,
+    u32 jdust,
+    const Tvec *__restrict xyz,
+    const shambase::VecComponent<Tvec> *__restrict hpart,
+    const Tvec *__restrict vxyz,
+    const shambase::VecComponent<Tvec> *__restrict omega,
+    const shambase::VecComponent<Tvec> *__restrict pressure,
+    const shambase::VecComponent<Tvec> *__restrict s_j,
+    const shambase::VecComponent<Tvec> *__restrict Ttilde_sj,
+    shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+    PairWeight &&pair_weight) {
+
+    using Tscal                  = shambase::VecComponent<Tvec>;
+    using Kernel                 = SPHKernel<Tscal>;
+    static constexpr Tscal Rkern = Kernel::Rkern;
+    static constexpr Tscal Rker2 = Rkern * Rkern;
+
+    u32 thread_id = id_a * ndust + jdust;
+
+    Tscal h_a         = hpart[id_a];
+    Tvec xyz_a        = xyz[id_a];
+    Tvec vxyz_a       = vxyz[id_a];
+    Tscal P_a         = pressure[id_a];
+    Tscal omega_a     = omega[id_a];
+    Tscal s_j_a       = s_j[thread_id];
+    Tscal Ttilde_sj_a = Ttilde_sj[thread_id];
+
+    using namespace shamrock::sph;
+    Tscal rho_a = rho_h(pmass, h_a, Kernel::hfactd);
+
+    Tscal term1 = 0;
+    Tscal term2 = 0;
+
+    shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
+    particle_looper.for_each_object(id_a, [&](u32 id_b) {
+        Tvec dr    = xyz_a - xyz[id_b];
+        Tscal rab2 = sycl::dot(dr, dr);
+        Tscal h_b  = hpart[id_b];
+
+        if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
+            return;
+        }
+
+        Tvec vxyz_b       = vxyz[id_b];
+        Tscal P_b         = pressure[id_b];
+        Tscal s_j_b       = s_j[id_b * ndust + jdust];
+        Tscal Ttilde_sj_b = Ttilde_sj[id_b * ndust + jdust];
+
+        Tscal rab         = sycl::sqrt(rab2);
+        Tscal rab_inv_sat = sham::inv_sat_positive(rab);
+
+        Tscal rho_b = rho_h(pmass, h_b, Kernel::hfactd);
+
+        Tscal Fab_a = Kernel::dW_3d(rab, h_a);
+        Tscal Fab_b = Kernel::dW_3d(rab, h_b);
+
+        Tvec v_ab = vxyz_a - vxyz_b;
+
+        Tvec r_ab_unit = dr * rab_inv_sat;
+
+        Tscal F_ab_bar    = (Fab_a + Fab_b) / 2;
+        Tscal delta_P     = P_a - P_b;
+        Tscal Ts_weighted = (Ttilde_sj_a / rho_a + Ttilde_sj_b / rho_b);
+
+        term1 += pair_weight(id_b) * (pmass * s_j_b / rho_b) * Ts_weighted * delta_P * F_ab_bar
+                 * rab_inv_sat;
+        term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
+    });
+
+    // eq 51, Hutchison 2018
+    return Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
+}
+
 template<class Tvec, template<class> class SPHKernel>
 struct KernelUpdateDerivsMonofluidTVA {
-    using Tscal                   = shambase::VecComponent<Tvec>;
-    using Kernel                  = SPHKernel<Tscal>;
-    static constexpr Tscal hfactd = Kernel::hfactd;
-    static constexpr Tscal Rkern  = Kernel::Rkern;
-    static constexpr Tscal Rker2  = Rkern * Rkern;
+    using Tscal = shambase::VecComponent<Tvec>;
 
     Tscal pmass;
     u32 ndust;
@@ -49,63 +131,69 @@ struct KernelUpdateDerivsMonofluidTVA {
         u32 id_a  = thread_id / ndust;
         u32 jdust = thread_id % ndust;
 
-        Tscal h_a         = hpart[id_a];
-        Tvec xyz_a        = xyz[id_a];
-        Tvec vxyz_a       = vxyz[id_a];
-        Tscal P_a         = pressure[id_a];
-        Tscal omega_a     = omega[id_a];
-        Tscal s_j_a       = s_j[thread_id];
-        Tscal Ttilde_sj_a = Ttilde_sj[thread_id];
+        ds_j_dt[thread_id] = compute_ds_j_dt_monofluid_tva<Tvec, SPHKernel>(
+            pmass,
+            ndust,
+            id_a,
+            jdust,
+            xyz,
+            hpart,
+            vxyz,
+            omega,
+            pressure,
+            s_j,
+            Ttilde_sj,
+            ploop_ptrs,
+            [](u32) {
+                return Tscal{1};
+            });
+    }
+};
 
-        using namespace shamrock::sph;
-        Tscal rho_a             = rho_h(pmass, h_a, Kernel::hfactd);
-        Tscal rho_a_sq          = rho_a * rho_a;
-        Tscal rho_a_inv         = 1. / rho_a;
-        Tscal omega_a_rho_a_inv = 1 / (omega_a * rho_a);
+template<class Tvec, template<class> class SPHKernel>
+struct KernelUpdateDerivsMonofluidTVAPairLimited {
+    using Tscal = shambase::VecComponent<Tvec>;
 
-        Tscal term1 = 0;
-        Tscal term2 = 0;
+    Tscal pmass;
+    u32 ndust;
 
-        shamrock::tree::ObjectCacheIterator particle_looper(ploop_ptrs);
-        particle_looper.for_each_object(id_a, [&](u32 id_b) {
-            Tvec dr    = xyz_a - xyz[id_b];
-            Tscal rab2 = sycl::dot(dr, dr);
-            Tscal h_b  = hpart[id_b];
+    inline void operator()(
+        u32 thread_id,
+        // input
+        const Tvec *__restrict xyz,
+        const Tscal *__restrict hpart,
+        const Tvec *__restrict vxyz,
+        const Tscal *__restrict omega,
+        const Tscal *__restrict pressure,
+        const Tscal *__restrict s_j,
+        const Tscal *__restrict Ttilde_sj,
+        const Tscal *__restrict xi,
+        shamrock::tree::ObjectCache::ptrs_read ploop_ptrs,
+        // output
+        Tscal *__restrict ds_j_dt) const {
 
-            if (rab2 > h_a * h_a * Rker2 && rab2 > h_b * h_b * Rker2) {
-                return;
-            }
+        u32 id_a  = thread_id / ndust;
+        u32 jdust = thread_id % ndust;
 
-            Tvec vxyz_b       = vxyz[id_b];
-            Tscal P_b         = pressure[id_b];
-            Tscal omega_b     = omega[id_b];
-            Tscal s_j_b       = s_j[id_b * ndust + jdust];
-            Tscal Ttilde_sj_b = Ttilde_sj[id_b * ndust + jdust];
+        Tscal xi_a = xi[thread_id];
+        u32 nd     = ndust;
 
-            Tscal rab         = sycl::sqrt(rab2);
-            Tscal rab_inv_sat = sham::inv_sat_positive(rab);
-
-            Tscal rho_b = rho_h(pmass, h_b, Kernel::hfactd);
-
-            Tscal Fab_a = Kernel::dW_3d(rab, h_a);
-            Tscal Fab_b = Kernel::dW_3d(rab, h_b);
-
-            Tvec v_ab = vxyz_a - vxyz_b;
-
-            Tvec r_ab_unit = dr * rab_inv_sat;
-
-            Tscal F_ab_bar    = (Fab_a + Fab_b) / 2;
-            Tscal delta_P     = P_a - P_b;
-            Tscal Ts_weighted = (Ttilde_sj_a / rho_a + Ttilde_sj_b / rho_b);
-
-            term1 += (pmass * s_j_b / rho_b) * Ts_weighted * delta_P * F_ab_bar * rab_inv_sat;
-            term2 += pmass * sham::dot(v_ab, r_ab_unit * Fab_a);
-        });
-
-        // eq 51, Hutchison 2018
-        Tscal ds_j_dt_a = Tscal{-0.5} * term1 + (s_j_a / (2 * rho_a * omega_a)) * term2;
-
-        ds_j_dt[thread_id] = ds_j_dt_a;
+        ds_j_dt[thread_id] = compute_ds_j_dt_monofluid_tva<Tvec, SPHKernel>(
+            pmass,
+            ndust,
+            id_a,
+            jdust,
+            xyz,
+            hpart,
+            vxyz,
+            omega,
+            pressure,
+            s_j,
+            Ttilde_sj,
+            ploop_ptrs,
+            [=](u32 id_b) {
+                return xi_a * xi[id_b * nd + jdust];
+            });
     }
 };
 
@@ -155,6 +243,89 @@ void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>::
         sham::DDMultiRef{edges.ds_j_dt.get_spans()},
         total_specie_count,
         ComputeKernel{pmass, ndust});
+}
+
+template<class Tvec, template<class> class SPHKernel>
+void shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<Tvec, SPHKernel>::
+    _impl_evaluate_internal() {
+
+    __shamrock_stack_entry();
+
+    auto edges = get_edges();
+
+    auto &part_counts_with_ghost = edges.part_counts_with_ghost.indexes;
+    auto &part_counts            = edges.part_counts.indexes;
+
+    edges.xyz.check_sizes(part_counts_with_ghost);
+    edges.hpart.check_sizes(part_counts_with_ghost);
+    edges.vxyz.check_sizes(part_counts_with_ghost);
+    edges.omega.check_sizes(part_counts_with_ghost);
+    edges.pressure.check_sizes(part_counts_with_ghost);
+    edges.s_j.check_sizes(part_counts_with_ghost);
+    edges.Ttilde_sj.check_sizes(part_counts_with_ghost);
+    edges.xi.check_sizes(part_counts_with_ghost);
+
+    edges.ds_j_dt.ensure_sizes(part_counts);
+
+    const Tscal pmass = edges.gpart_mass.data;
+
+    using ComputeKernel = KernelUpdateDerivsMonofluidTVAPairLimited<Tvec, SPHKernel>;
+
+    auto total_specie_count = part_counts.template map<u32>([&](u64 id, u32 count) {
+        return count * ndust;
+    });
+
+    sham::distributed_data_kernel_call(
+        shamsys::instance::get_compute_scheduler_ptr(),
+        sham::DDMultiRef{
+            edges.xyz.get_spans(),
+            edges.hpart.get_spans(),
+            edges.vxyz.get_spans(),
+            edges.omega.get_spans(),
+            edges.pressure.get_spans(),
+            edges.s_j.get_spans(),
+            edges.Ttilde_sj.get_spans(),
+            edges.xi.get_spans(),
+            edges.neigh_cache},
+        sham::DDMultiRef{edges.ds_j_dt.get_spans()},
+        total_specie_count,
+        ComputeKernel{pmass, ndust});
+}
+
+template<class Tvec, template<class> class SPHKernel>
+std::string shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<Tvec, SPHKernel>::
+    _impl_get_tex() const {
+    std::string tex = R"tex(
+        NodeUpdateDerivsMonofluidTVAPairLimited
+
+        Same as NodeUpdateDerivsMonofluidTVA (eq. 51, Hutchison 2018), with the flux term of
+        each pair $(a,b)$ multiplied by the symmetric switch ${xi}_{j,a}\,{xi}_{j,b}$:
+
+        \begin{align}
+        {ds_j_dt}_{j,a} &=
+            -\frac{1}{2}\sum_{b \in \mathcal{N}(a)}
+            {xi}_{j,a}\,{xi}_{j,b}\;
+            {gpart_mass}\;
+            \frac{{s_j}_{j,b}}{\rho_b}\;
+            T^{\rm w}_{j,a,b}\;
+            ({pressure}_a - {pressure}_b)\;
+            \bar{F}_{a,b}
+        \\
+        &\quad +
+            \frac{{s_j}_{j,a}}{2\rho_a\,{omega}_a}
+            \sum_{b \in \mathcal{N}(a)}
+            {gpart_mass}\;
+            \mathbf{v}_{a,b}\cdot\left(\hat{\mathbf{r}}_{a,b} F_{a,b}^a\right)
+        \end{align}
+
+        $a \in [0,{part_counts})$, $j \in [0,{ndust})$.
+    )tex";
+
+    replace_edges_tex_symbols(tex);
+
+    shambase::replace_all(tex, "{ndust}", std::to_string(ndust));
+
+    return tex;
 }
 
 template<class Tvec, template<class> class SPHKernel>
@@ -215,3 +386,11 @@ template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<f64_3, M8>
 template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<f64_3, C2>;
 template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<f64_3, C4>;
 template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVA<f64_3, C6>;
+
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, M4>;
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, M6>;
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, M8>;
+
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, C2>;
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, C4>;
+template class shammodels::sph::modules::NodeUpdateDerivsMonofluidTVAPairLimited<f64_3, C6>;

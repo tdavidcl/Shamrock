@@ -16,12 +16,14 @@
  */
 
 #include "shambase/DistributedData.hpp"
+#include "shambase/Timer.hpp"
 #include "shambase/memory.hpp"
 #include "shambackends/kernel_call.hpp"
 #include "shambackends/kernel_call_distrib.hpp"
 #include "shambackends/math.hpp"
 #include "shamcomm/logs.hpp"
 #include "shammath/sphkernels.hpp"
+#include "shammodels/sph/BasicSPHGhosts.hpp"
 #include "shammodels/sph/SolverConfig.hpp"
 #include "shammodels/sph/math/density.hpp"
 #include "shammodels/sph/math/forces.hpp"
@@ -43,6 +45,7 @@
 #include "shamphys/mhd.hpp"
 #include "shamrock/patch/PatchDataFieldSpan.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
+#include "shamrock/solvergraph/ExchangeGhostField.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
@@ -1617,6 +1620,87 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     }
     node->evaluate();
 
+    MonofluidTVA &cfg_monofluid_tva
+        = shambase::get_check_ref((std::get_if<MonofluidTVA>(&cfg.current_mode)));
+
+    const bool use_symmetric_limiter = cfg_monofluid_tva.smooth_s_positivity_limiter
+                                       && cfg_monofluid_tva.symmetric_s_positivity_limiter;
+
+    if (use_symmetric_limiter) {
+        // Pairwise variant of the xi switch of the smooth limiter:
+        //  1. xi_a from the unlimited ds_j/dt
+        //  2. communicate xi to the ghosts
+        //  3. recompute ds_j/dt with the flux of each pair weighted by xi_a * xi_b
+
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> xi_field
+            = std::make_shared<shamrock::solvergraph::Field<Tscal>>(ndust, "xi_sj", "\\xi");
+
+        auto node_flag = std::make_shared<NodeMonofluidTVAPositivityFlag<Tvec>>(ndust);
+        node_flag->set_edges(part_counts, s_j_refs, ds_j_dt_refs, xi_field);
+        node_flag->evaluate();
+
+        using InterfaceBuildInfos = typename sph::BasicSPHGhostHandler<Tvec>::InterfaceBuildInfos;
+
+        sph::BasicSPHGhostHandler<Tvec> &ghost_handle = storage.ghost_handler.get();
+
+        shambase::Timer time_interf;
+        time_interf.start();
+
+        auto field_interf = ghost_handle.template build_interface_native<PatchDataField<Tscal>>(
+            storage.ghost_patch_cache.get(),
+            [&](u64 sender,
+                u64 /*receiver*/,
+                InterfaceBuildInfos binfo,
+                sham::DeviceBuffer<u32> &buf_idx,
+                u32 cnt) -> PatchDataField<Tscal> {
+                return xi_field->get(sender).make_new_from_subset(buf_idx, cnt);
+            });
+
+        auto exchange_gz_xi = std::make_shared<shamrock::solvergraph::ExchangeGhostField<Tscal>>();
+
+        shambase::DistributedDataShared<PatchDataField<Tscal>> interf_xi
+            = ghost_handle.communicate_pdatfield(std::move(field_interf), ndust, exchange_gz_xi);
+
+        shambase::DistributedData<PatchDataField<Tscal>> xi_with_ghosts
+            = ghost_handle.template merge_native<PatchDataField<Tscal>, PatchDataField<Tscal>>(
+                std::move(interf_xi),
+                [&](const shamrock::patch::Patch p, shamrock::patch::PatchDataLayer &pdat) {
+                    return xi_field->get(p.id_patch).duplicate();
+                },
+                [](PatchDataField<Tscal> &mpdat, PatchDataField<Tscal> &pdat_interf) {
+                    mpdat.insert(pdat_interf);
+                });
+
+        time_interf.stop();
+        storage.timings_details.interface += time_interf.elapsed_sec();
+
+        std::shared_ptr<shamrock::solvergraph::FieldRefs<Tscal>> xi_refs
+            = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("xi_sj_ghost", "\\xi");
+        xi_refs->set_refs(
+            xi_with_ghosts.template map<std::reference_wrapper<PatchDataField<Tscal>>>(
+                [&](u64 id, PatchDataField<Tscal> &f) {
+                    return std::ref(f);
+                }));
+
+        auto node_pair
+            = std::make_shared<NodeUpdateDerivsMonofluidTVAPairLimited<Tvec, SPHKernel>>(ndust);
+        node_pair->set_edges(
+            gpart_mass,
+            part_counts,
+            part_counts_with_ghost,
+            xyz_refs,
+            hpart_refs,
+            vxyz_refs,
+            omega_refs,
+            pressure_field,
+            s_j_refs,
+            Ttilde_sj_field,
+            xi_refs,
+            storage.neigh_cache,
+            ds_j_dt_refs);
+        node_pair->evaluate();
+    }
+
     if (DustEvolCoalaCoag<Tscal> *cfg_evol
         = std::get_if<DustEvolCoalaCoag<Tscal>>(&cfg.dust_evol_config)) {
 
@@ -1690,12 +1774,12 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         node_add_source_term->evaluate();
     }
 
-    MonofluidTVA &cfg_monofluid_tva
-        = shambase::get_check_ref((std::get_if<MonofluidTVA>(&cfg.current_mode)));
-
     if (cfg_monofluid_tva.smooth_s_positivity_limiter) {
+        // in the symmetric variant the xi switch was already applied pairwise above, only the
+        // restoring term (phi) remains
         std::shared_ptr<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>> node_limiter
-            = std::make_shared<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>>(ndust);
+            = std::make_shared<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>>(
+                ndust, !use_symmetric_limiter);
         {
             node_limiter->set_edges(part_counts, s_j_refs, Ttilde_sj_field, ds_j_dt_refs);
         }
