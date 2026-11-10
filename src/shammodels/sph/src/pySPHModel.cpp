@@ -319,7 +319,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                bool smooth_s_positivity_limiter,
                bool dust_corrected_av,
                std::optional<Tscal> clamp_dust_frac,
-               bool symmetric_s_positivity_limiter) {
+               bool symmetric_s_positivity_limiter,
+               bool smooth_s_limiter_abs_ttilde) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
@@ -330,7 +331,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     smooth_s_positivity_limiter,
                     dust_corrected_av,
                     clamp_dust_frac,
-                    symmetric_s_positivity_limiter);
+                    symmetric_s_positivity_limiter,
+                    smooth_s_limiter_abs_ttilde);
             },
             py::kw_only(),
             py::arg("nvar"),
@@ -342,7 +344,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("smooth_s_positivity_limiter")    = false,
             py::arg("dust_corrected_av")              = false,
             py::arg("clamp_dust_frac")                = std::nullopt,
-            py::arg("symmetric_s_positivity_limiter") = false)
+            py::arg("symmetric_s_positivity_limiter") = false,
+            py::arg("smooth_s_limiter_abs_ttilde")    = false)
         .def(
             "set_dust_mode_monofluid_complete",
             [](TConfig &self, u32 ndust) {

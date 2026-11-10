@@ -3,14 +3,16 @@ Dusty settling: comparison of the TVA positivity limiters
 =========================================================
 
 Run the dusty settling test (multi-grain TVA monofluid in a local stratified
-box) once per positivity limiter (none, Ballabio, smooth, symmetric smooth,
+box) once per positivity limiter (none, Ballabio, smooth and its variants,
 hard), then plot the vertical density profiles at the final time and the dust
 mass conservation history of the runs side by side.
 
 The symmetric smooth limiter replaces the per-particle switch :math:`\xi_a` of
 the smooth limiter by the pairwise :math:`\xi_a \xi_b` applied to the TVA flux
 between :math:`a` and :math:`b`, which keeps the pairwise antisymmetry of the
-dust mass flux (the restoring term :math:`\phi_a` is unchanged).
+dust mass flux (the restoring term :math:`\phi_a` is unchanged). The
+``smooth_abs`` variants use :math:`|\tilde{T}_{s_j}|` instead of
+:math:`\tilde{T}_{s_j}` in :math:`\phi_a`, as it can become negative.
 
 The ``LIMITERS`` environment variable selects a subset of the runs, e.g.
 ``LIMITERS=smooth,smooth_sym``.
@@ -105,6 +107,8 @@ class DustLimiter(Enum):
     NONE = "none"
     SMOOTH = "smooth"
     SMOOTH_SYM = "smooth_sym"
+    SMOOTH_ABS = "smooth_abs"
+    SMOOTH_ABS_SYM = "smooth_abs_sym"
     BALLABIO = "ballabio"
     HARD = "hard"
 
@@ -115,6 +119,8 @@ limiter_panels = [
     (DustLimiter.BALLABIO, "Ballabio"),
     (DustLimiter.SMOOTH, "smooth"),
     (DustLimiter.SMOOTH_SYM, r"smooth ($\xi_a \xi_b$)"),
+    (DustLimiter.SMOOTH_ABS, r"smooth ($|\tilde{T}|$)"),
+    (DustLimiter.SMOOTH_ABS_SYM, r"smooth ($|\tilde{T}|$, $\xi_a \xi_b$)"),
     (DustLimiter.HARD, "hard"),
 ]
 
@@ -613,12 +619,19 @@ class DustySettleSimulation(SimulationRunner):
             cfg.set_dust_mode_monofluid_tva(
                 **common_kwargs, ensure_s_j_positivity=False, smooth_s_positivity_limiter=True
             )
-        elif self.limiter == DustLimiter.SMOOTH_SYM:
+        elif self.limiter in (
+            DustLimiter.SMOOTH_SYM,
+            DustLimiter.SMOOTH_ABS,
+            DustLimiter.SMOOTH_ABS_SYM,
+        ):
             cfg.set_dust_mode_monofluid_tva(
                 **common_kwargs,
                 ensure_s_j_positivity=False,
                 smooth_s_positivity_limiter=True,
-                symmetric_s_positivity_limiter=True,
+                symmetric_s_positivity_limiter=self.limiter
+                in (DustLimiter.SMOOTH_SYM, DustLimiter.SMOOTH_ABS_SYM),
+                smooth_s_limiter_abs_ttilde=self.limiter
+                in (DustLimiter.SMOOTH_ABS, DustLimiter.SMOOTH_ABS_SYM),
             )
         elif self.limiter == DustLimiter.BALLABIO:
             cfg.set_dust_mode_monofluid_tva(

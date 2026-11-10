@@ -1779,7 +1779,7 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
         // restoring term (phi) remains
         std::shared_ptr<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>> node_limiter
             = std::make_shared<NodeMonofluidTVASmoothSPositivityLimiter<Tvec>>(
-                ndust, !use_symmetric_limiter);
+                ndust, !use_symmetric_limiter, cfg_monofluid_tva.smooth_s_limiter_abs_ttilde);
         {
             node_limiter->set_edges(part_counts, s_j_refs, Ttilde_sj_field, ds_j_dt_refs);
         }

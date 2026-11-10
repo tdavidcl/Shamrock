@@ -48,9 +48,13 @@ namespace shammodels::sph::modules {
         /// pairwise in NodeUpdateDerivsMonofluidTVAPairLimited
         bool apply_xi;
 
+        /// use |Ttilde_sj| in the restoring term (Ttilde_sj can become negative)
+        bool abs_ttilde;
+
         public:
-        NodeMonofluidTVASmoothSPositivityLimiter(u32 ndust, bool apply_xi = true)
-            : ndust(ndust), apply_xi(apply_xi) {}
+        NodeMonofluidTVASmoothSPositivityLimiter(
+            u32 ndust, bool apply_xi = true, bool abs_ttilde = false)
+            : ndust(ndust), apply_xi(apply_xi), abs_ttilde(abs_ttilde) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
@@ -73,7 +77,7 @@ namespace shammodels::sph::modules {
                 sham::DDMultiRef{edges.s_j.get_spans(), edges.Ttilde_sj.get_spans()},
                 sham::DDMultiRef{edges.ds_j_dt.get_spans()},
                 total_specie_count,
-                [apply_xi = apply_xi](
+                [apply_xi = apply_xi, abs_ttilde = abs_ttilde](
                     u32 thread_id,
                     const Tscal *__restrict s_j,
                     const Tscal *__restrict Ttilde_sj,
@@ -81,6 +85,10 @@ namespace shammodels::sph::modules {
                     Tscal s_j_a       = s_j[thread_id];
                     Tscal Ttilde_sj_a = Ttilde_sj[thread_id];
                     Tscal ds_j_dt_a   = ds_j_dt[thread_id];
+
+                    if (abs_ttilde) {
+                        Ttilde_sj_a = sycl::fabs(Ttilde_sj_a);
+                    }
 
                     // if we dip in the negative range do not dip further
                     if (apply_xi) {
@@ -95,8 +103,8 @@ namespace shammodels::sph::modules {
         }
 
         inline virtual std::string _impl_get_label() const {
-            return apply_xi ? "NodeMonofluidTVASmoothSPositivityLimiter"
-                            : "NodeMonofluidTVASmoothSPositivityLimiter (phi only)";
+            return std::string("NodeMonofluidTVASmoothSPositivityLimiter")
+                   + (apply_xi ? "" : " (phi only)") + (abs_ttilde ? " (|Ttilde|)" : "");
         };
 
         inline virtual std::string _impl_get_tex() const {
