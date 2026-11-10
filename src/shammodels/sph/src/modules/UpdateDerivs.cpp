@@ -1618,7 +1618,8 @@ void shammodels::sph::modules::UpdateDerivs<Tvec, SPHKernel>::update_derivs_dust
     }
 
     std::shared_ptr<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>> node
-        = std::make_shared<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>>(ndust, use_pair_gate);
+        = std::make_shared<NodeUpdateDerivsMonofluidTVA<Tvec, SPHKernel>>(
+            ndust, use_pair_gate, cfg_monofluid_tva.pair_gate_upwind);
     {
         node->set_edges(
             gpart_mass,

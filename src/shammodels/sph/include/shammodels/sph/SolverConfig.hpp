@@ -170,6 +170,11 @@ namespace shammodels::sph {
             // ensure_s_j_positivity (hard limiter).
             bool pair_gate_s_positivity_limiter = false;
 
+            // Upwind form of the pair gate (from branch claude/feat/tva-smooth-limiter-pair-gate):
+            // the pair is switched off when its upwind (donor) particle has s_j < 0. Differs from
+            // the gate above only when the receiver has exactly s_j = 0.
+            bool pair_gate_upwind = false;
+
             inline bool should_clamp_dust_density() const { return clamp_dust_frac.has_value(); }
 
             inline Tscal get_clamp_dust_frac() const {
@@ -199,7 +204,8 @@ namespace shammodels::sph {
             std::optional<Tscal> clamp_dust_frac = std::nullopt,
             bool symmetric_s_positivity_limiter  = false,
             bool smooth_s_limiter_abs_ttilde     = false,
-            bool pair_gate_s_positivity_limiter  = false) {
+            bool pair_gate_s_positivity_limiter  = false,
+            bool pair_gate_upwind                = false) {
             current_mode = MonofluidTVA{
                 nvar,
                 pure_diffusion_mode,
@@ -212,7 +218,8 @@ namespace shammodels::sph {
                 clamp_dust_frac,
                 symmetric_s_positivity_limiter,
                 smooth_s_limiter_abs_ttilde,
-                pair_gate_s_positivity_limiter};
+                pair_gate_s_positivity_limiter,
+                pair_gate_upwind};
         }
         inline void set_monofluid_complete(u32 nvar) { current_mode = MonofluidComplete{nvar}; }
 
@@ -243,7 +250,8 @@ namespace shammodels::sph {
                        {"clamp_dust_frac", cfg->clamp_dust_frac},
                        {"symmetric_s_positivity_limiter", cfg->symmetric_s_positivity_limiter},
                        {"smooth_s_limiter_abs_ttilde", cfg->smooth_s_limiter_abs_ttilde},
-                       {"pair_gate_s_positivity_limiter", cfg->pair_gate_s_positivity_limiter}};
+                       {"pair_gate_s_positivity_limiter", cfg->pair_gate_s_positivity_limiter},
+                       {"pair_gate_upwind", cfg->pair_gate_upwind}};
             } else if (
                 const MonofluidComplete *cfg = std::get_if<MonofluidComplete>(&current_mode)) {
                 j = {{"type", "monofluid_complete"}, {"ndust", cfg->ndust}};
@@ -269,7 +277,8 @@ namespace shammodels::sph {
                     j.value("clamp_dust_frac", std::optional<Tscal>{}),
                     j.value("symmetric_s_positivity_limiter", false),
                     j.value("smooth_s_limiter_abs_ttilde", false),
-                    j.value("pair_gate_s_positivity_limiter", false));
+                    j.value("pair_gate_s_positivity_limiter", false),
+                    j.value("pair_gate_upwind", false));
             } else if (type == "monofluid_complete") {
                 set_monofluid_complete(j.at("ndust").get<u32>());
             } else {

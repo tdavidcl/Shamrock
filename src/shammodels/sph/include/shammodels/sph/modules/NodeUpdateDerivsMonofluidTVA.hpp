@@ -61,16 +61,21 @@ namespace shammodels::sph::modules {
         /// apply the symmetrized per-pair positivity gate on the flux term
         bool pair_gate;
 
+        /// use the upwind (donor) form of the pair gate (branch tva-smooth-limiter-pair-gate)
+        bool pair_gate_upwind;
+
         public:
-        NodeUpdateDerivsMonofluidTVA(u32 ndust, bool pair_gate = false)
-            : ndust(ndust), pair_gate(pair_gate) {}
+        NodeUpdateDerivsMonofluidTVA(
+            u32 ndust, bool pair_gate = false, bool pair_gate_upwind = false)
+            : ndust(ndust), pair_gate(pair_gate), pair_gate_upwind(pair_gate_upwind) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)
 
         void _impl_evaluate_internal();
 
         inline virtual std::string _impl_get_label() const {
-            return pair_gate ? "NodeUpdateDerivsMonofluidTVA (pair gate)"
+            return pair_gate ? (pair_gate_upwind ? "NodeUpdateDerivsMonofluidTVA (upwind pair gate)"
+                                                 : "NodeUpdateDerivsMonofluidTVA (pair gate)")
                              : "NodeUpdateDerivsMonofluidTVA";
         };
 

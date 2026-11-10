@@ -115,6 +115,7 @@ class DustLimiter(Enum):
     SMOOTH_ABS = "smooth_abs"
     SMOOTH_ABS_SYM = "smooth_abs_sym"
     SMOOTH_GATE = "smooth_gate"
+    SMOOTH_GATE_UPWIND = "smooth_gate_upwind"
     HARD_GATE = "hard_gate"
     BALLABIO = "ballabio"
     HARD = "hard"
@@ -129,6 +130,7 @@ limiter_panels = [
     (DustLimiter.SMOOTH_ABS, r"smooth ($|\tilde{T}|$)"),
     (DustLimiter.SMOOTH_ABS_SYM, r"smooth ($|\tilde{T}|$, $\xi_a \xi_b$)"),
     (DustLimiter.SMOOTH_GATE, r"smooth (pair gate)"),
+    (DustLimiter.SMOOTH_GATE_UPWIND, r"smooth (upwind pair gate)"),
     (DustLimiter.HARD, "hard"),
     (DustLimiter.HARD_GATE, r"hard (pair gate)"),
 ]
@@ -648,6 +650,14 @@ class DustySettleSimulation(SimulationRunner):
                 ensure_s_j_positivity=False,
                 smooth_s_positivity_limiter=True,
                 pair_gate_s_positivity_limiter=True,
+            )
+        elif self.limiter == DustLimiter.SMOOTH_GATE_UPWIND:
+            cfg.set_dust_mode_monofluid_tva(
+                **common_kwargs,
+                ensure_s_j_positivity=False,
+                smooth_s_positivity_limiter=True,
+                pair_gate_s_positivity_limiter=True,
+                pair_gate_upwind=True,
             )
         elif self.limiter == DustLimiter.HARD_GATE:
             cfg.set_dust_mode_monofluid_tva(
