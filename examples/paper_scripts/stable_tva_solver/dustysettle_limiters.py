@@ -28,7 +28,7 @@ source .pyvenv/bin/activate
 LZ=64 ./shamrock --sycl-cfg 0:0 --loglevel 1 --pypath-from-bin python --rscript ../examples/paper_scripts/stable_tva_solver/dustysettle_limiters.py
 ```
 
-Output: ``_to_trash/stable_tva_solver/dusty_settle_lz<LZ>/dustysettle_rho_limiters_0050.pdf``
+Output: ``_to_trash/stable_tva_solver/dusty_settle_R0_50_lz<LZ>/dustysettle_rho_limiters_0040.pdf``
 """
 
 # %%
@@ -70,7 +70,9 @@ shamrock.matplotlib.set_shamrock_mpl_style()
 # %%
 # Simulation parameters and unit system
 # ------------------------------------------
-# Identical to ``examples/sph/run_dustysettle_tva.py``.
+# Same setup as ``examples/sph/run_dustysettle_tva.py``, but at R0 = 50 au with
+# the midplane gas density of the disc of ``examples/sph/run_dustydisc.py`` at
+# that radius, and grain sizes from 1 um to 1 cm.
 
 si = shamrock.UnitSystem()
 sicte = shamrock.Constants(si)
@@ -82,12 +84,19 @@ codeu = shamrock.UnitSystem(
 ucte = shamrock.Constants(codeu)
 
 # Disc / box
-rho_i = 1e-6  # Initial density
 central_mass = 1  # Central mass
-R0 = 1  # Where are we in radius
+R0 = 50  # Where are we in radius
 H_r_0 = 0.05  # Disc aspect ratio
 gamma = 1.4  # Adiabatic index
 box_H_count = 8  # box size in number of H
+
+# Midplane gas density [kg.m^-3]: the disc of ``examples/sph/run_dustydisc.py``
+# (0.05 Msol, Sigma ~ r^-1.5 with inner tapering, 10 -> 150 au) has
+# Sigma ~ 11.5 g.cm^-2 and rho_mid ~ 6.1e-11 kg.m^-3 at 50 au.
+rho_mid_si = 6.1e-11
+# Mean density of the box (code units) giving rho_mid_si once the gas is in
+# hydrostatic equilibrium (gaussian of width H over a box of height 2 * box_H_count * H)
+rho_i = rho_mid_si / (codeu.to("kg") * codeu.to("m") ** -3) * np.sqrt(2 * np.pi) / (2 * box_H_count)
 random_vel_pert = True  # add a small vecolity pertubation to fasten the setup
 
 # Dust
@@ -96,7 +105,7 @@ mrn_pow = 3.5
 mrn_cutoff_si = np.inf  # would be 250e-9 normally
 epsilon_base = 0.01
 rho_grains_si_edges = np.array([2.3 * 1000 for i in range(ndust + 1)])
-grain_size_si_edges = np.logspace(-5, -3, ndust + 1)
+grain_size_si_edges = np.logspace(-6, -2, ndust + 1)  # 1 um -> 1 cm
 
 
 class DustLimiter(Enum):
@@ -123,11 +132,15 @@ lz = int(os.environ.get("LZ", "64"))
 # The analysis times are listed explicitly so that the dust injection and the
 # end of the simulation fall exactly on an analysis, whatever the rounding.
 t_orb = 2 * np.pi * np.sqrt(R0**3 / (ucte.G() * central_mass))
-dt_analysis = 0.1 * t_orb  # time between two analyses
+dt_analysis = 0.1 * t_orb  # time between two analyses before the injection
 iinject = 20  # analysis at which the dust is injected (t = 2 t_orb)
-n_analysis = 50  # last analysis (t = 5 t_orb, i.e. 3 t_orb after injection)
-analysis_times = [i * dt_analysis for i in range(n_analysis + 1)]
-tinject = analysis_times[iinject]
+t_settle = 100.0  # duration of the run after the injection [yr]
+n_analysis_dust = 20  # number of analyses after the injection (every 5 yr)
+tinject = iinject * dt_analysis
+analysis_times = [i * dt_analysis for i in range(iinject + 1)] + [
+    tinject + i * t_settle / n_analysis_dust for i in range(1, n_analysis_dust + 1)
+]
+n_analysis = len(analysis_times) - 1  # last analysis (t = tinject + t_settle)
 t_end = analysis_times[-1]
 
 # Scheduler
@@ -160,7 +173,7 @@ multifluid_Nz = 4000  # cells of the multifluid (non-TVA) reference, must be eve
 multifluid_order = 2  # order of the multifluid scheme (1 or 2)
 
 # Paths
-base_folder = f"_to_trash/stable_tva_solver/dusty_settle_lz{lz}/"
+base_folder = f"_to_trash/stable_tva_solver/dusty_settle_R0_{R0}_lz{lz}/"
 
 # Plotting
 cmap = "plasma"
@@ -262,7 +275,7 @@ def compute_sj_new_j(model, patchdata, j):
 
     z = patchdata["xyz"][:, 2]
     # mask to only modify particles with |z| < H
-    mask = 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
+    mask = 1#1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
 
     epsilon_target = epsilon_base * mrn_distribution.mrn_weight[j] * mask
     return np.sqrt(rho * epsilon_target)
