@@ -35,6 +35,7 @@ Output: ``_to_trash/stable_tva_solver/dusty_settle_R0_50_lz<LZ>/dustysettle_rho_
 # Imports
 # ------------------------------------------
 
+import hashlib
 import json
 import os
 from enum import Enum
@@ -275,7 +276,7 @@ def compute_sj_new_j(model, patchdata, j):
 
     z = patchdata["xyz"][:, 2]
     # mask to only modify particles with |z| < H
-    mask = 1#1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
+    mask = 1  # 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
 
     epsilon_target = epsilon_base * mrn_distribution.mrn_weight[j] * mask
     return np.sqrt(rho * epsilon_target)
@@ -454,7 +455,7 @@ class ReferenceDustySettle:
 
     def rho_d_bar_func(self, z):
 
-        mask = 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
+        mask = 1  # 1 / (1 + np.exp((np.abs(z) - 1.75 * H) / (H / 16)))
 
         return mask * self.dust_to_gas * self.rho_g_func(z) / self.rho_mid
 
@@ -1015,8 +1016,9 @@ for limiter, _ in limiter_panels:
 # %%
 # Figure
 # ------------------------------------------
-# Top row: vertical density profiles at the end of the simulation. Bottom row:
-# relative variation of the mass of each dust species since the injection.
+# Top row: vertical density profiles. Bottom row: relative variation of the mass
+# of each dust species since the injection. One figure per analysis since the
+# injection in ``plots/``, and the final one as a PDF.
 
 
 def load_snapshot(path):
@@ -1034,31 +1036,50 @@ def load_dust_mass(dump_folder):
     return t, values
 
 
-def compute_multifluid_plots(rhomid, snapshot_index, time):
+def compute_multifluid_plots(rhomid, times):
     """
-    Multifluid (non-TVA) reference at ``time`` after the injection, normalised by
+    Multifluid (non-TVA) reference at each analysis, ``times`` mapping the
+    analysis index to the time after the injection (increasing), normalised by
     the midplane density ``rhomid`` (same as the gas-at-rest reference).
 
-    It does not depend on the limiter, so it is computed once for all the panels.
-    It takes about a minute, so the result is cached in ``base_folder`` and only
-    recomputed when its inputs change.
+    It does not depend on the limiter, so it is computed once for all the panels,
+    in a single integration through all the analysis times. The results are
+    cached in ``base_folder`` and only recomputed when an input changes (the
+    initial profiles are part of the cache key).
     """
-    key = {"rhomid": rhomid, "time": time, "Nz": multifluid_Nz, "order": multifluid_order}
-
-    cache_path = base_folder + f"multifluid_reference_{snapshot_index:04d}.npy"
-    if os.path.exists(cache_path):
-        cached = load_snapshot(cache_path)
-        if cached["key"] == key:
-            return cached["plots"]
-
     multifluid = MultifluidDustySettleAll(rhomid)
-    multifluid.evolve_until(time)
     mf = multifluid.sol
-    plots = [
-        {"z": mf.zc * multifluid.rscale, "rho": mf.rho_d[i] * multifluid.rhoscale}
-        for i in range(ndust)
-    ]
-    np.save(cache_path, {"key": key, "plots": plots})
+    ic_hash = hashlib.sha1(mf.rho_g.tobytes() + mf.rho_d.tobytes()).hexdigest()
+
+    def key(time):
+        return {
+            "rhomid": rhomid,
+            "time": time,
+            "Nz": multifluid_Nz,
+            "order": multifluid_order,
+            "ic": ic_hash,
+        }
+
+    def cache_path(snapshot_index):
+        return base_folder + f"multifluid_reference_{snapshot_index:04d}.npy"
+
+    plots = {}
+    for snapshot_index, time in times.items():
+        if os.path.exists(cache_path(snapshot_index)):
+            cached = load_snapshot(cache_path(snapshot_index))
+            if cached["key"] == key(time):
+                plots[snapshot_index] = cached["plots"]
+    if len(plots) == len(times):
+        return plots
+
+    print("computing the multifluid reference")
+    for snapshot_index, time in sorted(times.items(), key=lambda item: item[1]):
+        multifluid.evolve_until(time)
+        plots[snapshot_index] = [
+            {"z": mf.zc * multifluid.rscale, "rho": mf.rho_d[i] * multifluid.rhoscale}
+            for i in range(ndust)
+        ]
+        np.save(cache_path(snapshot_index), {"key": key(time), "plots": plots[snapshot_index]})
     return plots
 
 
@@ -1105,31 +1126,37 @@ def plot_rho(ax, snapshot_data, multifluid_plots, dust_colors):
     ax.set_xlim(-range_plot, range_plot)
 
 
-def plot_dust_mass_conservation(ax, t, dust_mass, dust_colors):
+def plot_dust_mass_conservation(ax, t, dust_mass, time, dust_colors):
+    """
+    History since the injection, up to ``time`` after the injection. The x range
+    is the whole run, so that all the analyses share the axes of the final one.
+    Returns the range of the relative variations over the whole run.
+    """
     # first analysis with dust (the dust mass is nan before the injection)
     i0 = np.argmax(~np.isnan(dust_mass)[:, 0])
     t = t - t[i0]
 
-    for k in range(ndust):
-        mh = dust_mass[:, k]
-        ax.plot(t, (mh / mh[i0]) - 1, color=dust_colors[k], linewidth=1)
-
+    curves = [(dust_mass[:, k] / dust_mass[i0, k]) - 1 for k in range(ndust)]
     total_dust_mass = np.sum(dust_mass, axis=1)
-    ax.plot(
-        t,
-        (total_dust_mass / total_dust_mass[i0]) - 1,
-        color="grey",
-        linestyle="--",
-        linewidth=1,
-    )
+    total_curve = (total_dust_mass / total_dust_mass[i0]) - 1
+
+    keep = t <= time * (1 + 1e-10)
+    for k in range(ndust):
+        ax.plot(t[keep], curves[k][keep], color=dust_colors[k], linewidth=1)
+    ax.plot(t[keep], total_curve[keep], color="grey", linestyle="--", linewidth=1)
 
     ax.axhline(0, color="k", linestyle=":", linewidth=0.8)
 
+    margin = 0.05 * (t[-1] - t[i0])
+    ax.set_xlim(t[i0] - margin, t[-1] + margin)
     ax.set_xlabel("t")
     ax.set_yscale("symlog", linthresh=1e-8)
 
+    all_curves = np.array(curves + [total_curve])[:, i0:]
+    return np.nanmin(all_curves), np.nanmax(all_curves)
 
-def plot_limiter_comparison(snapshot_index):
+
+def plot_limiter_comparison(snapshot_index, multifluid_plots, out_path):
     snapshots = []
     mass_histories = []
     for limiter, label in limiter_panels:
@@ -1140,13 +1167,6 @@ def plot_limiter_comparison(snapshot_index):
 
     grain_size_si = snapshots[0][1]["grain_size_si"]
     time = snapshots[0][1]["time"]
-
-    # same multifluid reference for all the panels, normalised by the midplane
-    # density of the first run
-    print("computing the multifluid reference")
-    multifluid_plots = compute_multifluid_plots(
-        load_rhomid(dump_folders[limiter_panels[0][0]]), snapshot_index, time
-    )
 
     dust_cmap = plt.colormaps[cmap]
     dust_norm = mcolors.LogNorm(vmin=grain_size_si.min(), vmax=grain_size_si.max() * 10)
@@ -1175,8 +1195,14 @@ def plot_limiter_comparison(snapshot_index):
     for ax in axes_rho[1:]:
         ax.tick_params(labelleft=False)
 
-    for ax, (t, dust_mass) in zip(axes_mass, mass_histories):
-        plot_dust_mass_conservation(ax, t, dust_mass, dust_colors)
+    variation_ranges = [
+        plot_dust_mass_conservation(ax, t, dust_mass, time, dust_colors)
+        for ax, (t, dust_mass) in zip(axes_mass, mass_histories)
+    ]
+    # same y range for all the analyses (the axes are shared between the panels)
+    lo = min(0.0, min(r[0] for r in variation_ranges))
+    hi = max(0.0, max(r[1] for r in variation_ranges))
+    axes_mass[0].set_ylim(3 * lo if lo < 0 else 0.0, 3 * hi if hi > 0 else 1e-8)
 
     axes_mass[0].set_ylabel(r"$\delta M_{\mathrm{dust}} / M_{\mathrm{dust},0}$")
     for ax in axes_mass[1:]:
@@ -1237,11 +1263,38 @@ def plot_limiter_comparison(snapshot_index):
     cbar = fig.colorbar(dust_sm, ax=axes_rho + axes_mass, pad=0.01, shrink=0.95, aspect=40)
     cbar.set_label(r"grain size $s$ [m]")
 
-    out_path = base_folder + f"dustysettle_rho_limiters_{snapshot_index:04d}.pdf"
     fig.savefig(out_path)
     print(f"saved {out_path}")
     plt.close(fig)
 
 
+def plot_all_analyses():
+    """
+    One figure per analysis since the injection (as the per-analysis plots of
+    ``examples/sph/run_dustysettle_tva.py``) in ``plots/``, then the final one.
+    """
+    indices = range(iinject, n_analysis + 1)
+    first_dump_folder = dump_folders[limiter_panels[0][0]]
+    times = {
+        j: load_snapshot(first_dump_folder + f"snapshot_data_{j:04d}.npy")["time"] for j in indices
+    }
+
+    # same multifluid reference for all the panels, normalised by the midplane
+    # density of the first run
+    multifluid_plots = compute_multifluid_plots(load_rhomid(first_dump_folder), times)
+
+    os.makedirs(base_folder + "plots", exist_ok=True)
+    for j in indices:
+        plot_limiter_comparison(
+            j, multifluid_plots[j], base_folder + f"plots/dustysettle_rho_limiters_{j:04d}.png"
+        )
+
+    plot_limiter_comparison(
+        n_analysis,
+        multifluid_plots[n_analysis],
+        base_folder + f"dustysettle_rho_limiters_{n_analysis:04d}.pdf",
+    )
+
+
 if shamrock.sys.world_rank() == 0:
-    plot_limiter_comparison(n_analysis)
+    plot_all_analyses()
