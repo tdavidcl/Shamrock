@@ -638,7 +638,7 @@ class MultifluidDustySettle:
         self.rho_g = np.exp(ln_rho)
         self.v_g = np.zeros(Nz + 1)
 
-        mask = 1 / (1 + np.exp((np.abs(self.zc) - 1.75 * H / R0) / (H / R0 / 16)))
+        mask = 1# 1 / (1 + np.exp((np.abs(self.zc) - 1.75 * H / R0) / (H / R0 / 16)))
         self.rho_d = np.array([dtg * mask * self.rho_g for dtg in dust_to_gas])
         self.v_d = np.zeros((len(dust_to_gas), Nz + 1))
 
