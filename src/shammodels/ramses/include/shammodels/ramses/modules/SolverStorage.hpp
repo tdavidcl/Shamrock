@@ -285,6 +285,8 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::Field<Tscal>> rho_d_next_no_drag;
         // next time step dust momentum before drag
         std::shared_ptr<shamrock::solvergraph::Field<Tvec>> rhov_d_next_no_drag;
+        // dust collision rates (inverse stopping times) read by the drag integrator, ndust per cell
+        std::shared_ptr<shamrock::solvergraph::Field<Tscal>> drag_alphas;
 
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>>
             rho_dust_face_xp;

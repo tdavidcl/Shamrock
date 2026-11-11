@@ -22,9 +22,10 @@
 
 namespace {
 
-    using Config           = shammodels::basegodunov::SolverConfig<f64_3, i64_3>;
-    using ExtForceCoupling = shammodels::basegodunov::ExtForceCoupling;
-    using ConstantGravity  = Config::ExtForceConfig::ConstantGravity;
+    using Config                = shammodels::basegodunov::SolverConfig<f64_3, i64_3>;
+    using ExtForceCoupling      = shammodels::basegodunov::ExtForceCoupling;
+    using ConstantGravity       = Config::ExtForceConfig::ConstantGravity;
+    using VerticalDiscPotential = Config::ExtForceConfig::VerticalDiscPotential;
 
     /// REQUIRE_EQUAL needs a formattable type, so modes are compared through their json name
     std::string coupling_name(ExtForceCoupling mode) {
@@ -72,6 +73,28 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::ext_force_config", 1) {
         if (g != nullptr) {
             REQUIRE_EQUAL(g->g.y(), -0.1);
         }
+    }
+
+    { // vertical disc potential json roundtrip, it needs the cell coordinates
+        Config in{};
+        in.ext_force_config.add_vertical_disc_potential(2., 1.5, 0.25);
+        REQUIRE(in.is_coordinate_field_required());
+
+        Config out = json_roundtrip(in);
+        REQUIRE_EQUAL(out.ext_force_config.ext_forces.size(), 1_u64);
+
+        const VerticalDiscPotential *f
+            = std::get_if<VerticalDiscPotential>(&out.ext_force_config.ext_forces[0]);
+        REQUIRE(f != nullptr);
+        if (f != nullptr) {
+            REQUIRE_EQUAL(f->central_mass, 2.);
+            REQUIRE_EQUAL(f->R0, 1.5);
+            REQUIRE_EQUAL(f->z0, 0.25);
+        }
+
+        Config bad{};
+        REQUIRE_EXCEPTION_THROW(
+            bad.ext_force_config.add_vertical_disc_potential(1., 0., 0.), std::invalid_argument);
     }
 
     { // configs dumped before the coupling was configurable fall back on the midpoint rule

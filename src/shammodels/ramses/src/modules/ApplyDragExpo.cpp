@@ -45,7 +45,7 @@ namespace {
         const Tscal *rhoe_next;
         const Tscal *rho_d_next;
         const Tvec *rhov_d_next;
-        const Tscal *alphas;
+        const Tscal *alphas_all; ///< collision rates, ndust per cell
 
         Tscal *rho;
         Tvec *rhov;
@@ -55,6 +55,9 @@ namespace {
 
         inline void operator()(
             u32 id_a, Tscal *ptr_A, Tscal *ptr_B, Tscal *ptr_F, Tscal *ptr_I, Tscal *ptr_Id) const {
+
+            // collision rates of the dust species in this cell
+            const Tscal *alphas = alphas_all + id_a * ndust;
 
             // sparse jacobian matrix
             auto get_jacobian = [&](u32 id, mdspan_t &jacobian) {
@@ -178,6 +181,7 @@ namespace shammodels::basegodunov::modules {
         edges.spans_rhoe.check_sizes(edges.sizes.indexes);
         edges.spans_rho_d.check_sizes(edges.sizes.indexes);
         edges.spans_rhov_d.check_sizes(edges.sizes.indexes);
+        edges.spans_alphas.check_sizes(edges.sizes.indexes);
 
         Tscal dt             = edges.dt.value;
         u32 ndust            = this->ndust;
@@ -185,9 +189,6 @@ namespace shammodels::basegodunov::modules {
 
         auto dev_sched       = shamsys::instance::get_compute_scheduler_ptr();
         sham::DeviceQueue &q = dev_sched->get_queue();
-
-        sham::DeviceBuffer<Tscal> alphas_buf(ndust, dev_sched);
-        alphas_buf.copy_from_stdvec(alphas);
 
         size_t mat_size         = ndust + 1;
         size_t mat_size_squared = mat_size * mat_size;
@@ -222,7 +223,7 @@ namespace shammodels::basegodunov::modules {
                 edges.spans_rhoe_next.get_spans().get(id_patch),
                 edges.spans_rho_d_next.get_spans().get(id_patch),
                 edges.spans_rhov_d_next.get_spans().get(id_patch),
-                alphas_buf};
+                edges.spans_alphas.get_spans().get(id_patch)};
 
             auto make_cell = [dt, ndust, friction_control, mat_size](
                                  const Tscal *rho_next,

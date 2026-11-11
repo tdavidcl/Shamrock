@@ -28,6 +28,7 @@
 #include "shammodels/ramses/modules/AddExtForceConstantGravity.hpp"
 #include "shammodels/ramses/modules/AddExtForceField.hpp"
 #include "shammodels/ramses/modules/AddExtForcePointMassGravity.hpp"
+#include "shammodels/ramses/modules/AddExtForceVerticalDiscPotential.hpp"
 #include "shammodels/ramses/modules/ApplyDragExpo.hpp"
 #include "shammodels/ramses/modules/ApplyDragIRK1.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceDust.hpp"
@@ -59,6 +60,7 @@
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeBiCGSTABLoop.hpp"
 #include "shammodels/ramses/modules/NodeCGLoop.hpp"
+#include "shammodels/ramses/modules/NodeComputeDragAlphas.hpp"
 #include "shammodels/ramses/modules/NodeComputeFlux.hpp"
 #include "shammodels/ramses/modules/NodeSelfGravityAcceleration.hpp"
 #include "shammodels/ramses/modules/ResetExtForceAcc.hpp"
@@ -1598,9 +1600,10 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         // the time integration, so that they are taken into account by every integrator (with or
         // without drag). Self-gravity is one of them.
 
-        using ExtForceConfig   = typename Config::ExtForceConfig;
-        using ConstantGravity  = typename ExtForceConfig::ConstantGravity;
-        using PointMassGravity = typename ExtForceConfig::PointMassGravity;
+        using ExtForceConfig        = typename Config::ExtForceConfig;
+        using ConstantGravity       = typename ExtForceConfig::ConstantGravity;
+        using PointMassGravity      = typename ExtForceConfig::PointMassGravity;
+        using VerticalDiscPotential = typename ExtForceConfig::VerticalDiscPotential;
 
         const bool trapezoidal
             = solver_config.ext_force_config.coupling == ExtForceCoupling::Trapezoidal;
@@ -1935,6 +1938,22 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                                 std::make_shared<decltype(node)>(std::move(node)));
                         }
                     },
+                    [&](const VerticalDiscPotential &cfg) {
+                        // time independent, the same acceleration is added at every level
+                        for (auto &[a_ext_level, dt_level] : a_ext_levels) {
+                            auto constant_G
+                                = std::make_shared<shamrock::solvergraph::ScalarEdge<Tscal>>(
+                                    "G", "G");
+                            constant_G->value = solver_config.get_constant_G();
+
+                            modules::AddExtForceVerticalDiscPotential<Tvec> node{
+                                AMRBlock::block_size, cfg.central_mass, cfg.R0, cfg.z0};
+                            node.set_edges(
+                                storage.block_counts, storage.coordinates, constant_G, a_ext_level);
+                            ext_force_sequence.push_back(
+                                std::make_shared<decltype(node)>(std::move(node)));
+                        }
+                    },
                 },
                 var_force);
         }
@@ -2133,14 +2152,34 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             attach_source_field(sequence, refs_rho_dust, "rho_dust");
             attach_source_field(sequence, refs_rhov_dust, "rhovel_dust");
 
-            {
-                // alphas are dust collision rates
-                const auto &alphas = solver_config.drag_config.alphas;
+            { // dust collision rates (inverse stopping times) of each cell, from the state at t^n
+                using NodeAlphas        = modules::NodeComputeDragAlphas<Tvec>;
+                const auto &drag_config = solver_config.drag_config;
 
+                typename NodeAlphas::Mode mode;
+                if (drag_config.epstein) {
+                    const auto &ep = *drag_config.epstein;
+                    mode           = typename NodeAlphas::Epstein{
+                        solver_config.get_eos_gamma(),
+                        std::vector<Tscal>(ep.grain_sizes.begin(), ep.grain_sizes.end()),
+                        std::vector<Tscal>(ep.grain_densities.begin(), ep.grain_densities.end())};
+                } else {
+                    mode = typename NodeAlphas::Static{
+                        std::vector<Tscal>(drag_config.alphas.begin(), drag_config.alphas.end())};
+                }
+
+                storage.drag_alphas = std::make_shared<Field<Tscal>>(
+                    ndust * AMRBlock::block_size, "drag_alphas", "\\alpha_{j}");
+
+                NodeAlphas node{AMRBlock::block_size, ndust, std::move(mode)};
+                node.set_edges(storage.block_counts, refs_rho, storage.press, storage.drag_alphas);
+                sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+            }
+
+            {
                 NodeDrag node{
                     AMRBlock::block_size,
                     ndust,
-                    std::vector<Tscal>(alphas.begin(), alphas.end()),
                     solver_config.drag_config.enable_frictional_heating};
                 node.set_edges(
                     storage.dt,
@@ -2150,6 +2189,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
                     storage.rhoe_next_no_drag,
                     storage.rho_d_next_no_drag,
                     storage.rhov_d_next_no_drag,
+                    storage.drag_alphas,
                     refs_rho,
                     refs_rhov,
                     refs_rhoe,
@@ -2404,6 +2444,7 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         shambase::get_check_ref(storage.rhoe_next_no_drag).free_alloc();
         shambase::get_check_ref(storage.rho_d_next_no_drag).free_alloc();
         shambase::get_check_ref(storage.rhov_d_next_no_drag).free_alloc();
+        shambase::get_check_ref(storage.drag_alphas).free_alloc();
     }
 
     storage.merge_patch_bounds.reset();

@@ -34,6 +34,7 @@
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rhoe_next)                                \
     X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho_d_next)                               \
     X_RO(shamrock::solvergraph::IFieldSpan<Tvec>, spans_rhov_d_next)                               \
+    X_RO(shamrock::solvergraph::IFieldSpan<Tscal>, spans_alphas) /* ndust per cell */              \
                                                                                                    \
     /* ------------------- outputs ------------------- */                                          \
     X_RW(shamrock::solvergraph::IFieldSpan<Tscal>, spans_rho)                                      \
@@ -50,7 +51,8 @@ namespace shammodels::basegodunov::modules {
      * The momenta at t^{n+1} are the momenta without drag multiplied by the exponential of the
      * drag jacobian (a `ndust + 1` square matrix per cell). The `*_next` inputs are the state at
      * t^{n+1} without drag (U^n + dt dU/dt), the outputs are overwritten with the state at t^{n+1}
-     * including the drag.
+     * including the drag. The collision rates (the inverse of the stopping times) are read per cell
+     * from `spans_alphas` (ndust values per cell).
      *
      * The matrices are stored in local memory when the device has enough of it for a work group of
      * at least 8 cells, and in a global memory scratch buffer otherwise.
@@ -61,14 +63,11 @@ namespace shammodels::basegodunov::modules {
 
         u32 block_size;
         u32 ndust;
-        /// dust collision rates (the inverse of the stopping times), one per dust species
-        std::vector<Tscal> alphas;
         bool enable_frictional_heating;
 
         public:
-        ApplyDragExpo(
-            u32 block_size, u32 ndust, std::vector<Tscal> alphas, bool enable_frictional_heating)
-            : block_size(block_size), ndust(ndust), alphas(std::move(alphas)),
+        ApplyDragExpo(u32 block_size, u32 ndust, bool enable_frictional_heating)
+            : block_size(block_size), ndust(ndust),
               enable_frictional_heating(enable_frictional_heating) {}
 
         EXPAND_NODE_EDGES(NODE_EDGES)

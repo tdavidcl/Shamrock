@@ -44,19 +44,34 @@
 #include <shamunits/Constants.hpp>
 #include <shamunits/UnitSystem.hpp>
 #include <shamunits/constant_table.hpp>
+#include <optional>
 #include <stdexcept>
 #include <variant>
 
 namespace shammodels::basegodunov {
 
     /**
+     * @brief Epstein drag, the collision rates are computed in each cell from the gas state
+     *
+     * alpha_j = 1 / t_j with t_j = rho_grain_j s_j sqrt(pi gamma / 8) / (rho_g c_s), c_s being the
+     * adiabatic sound speed of the gas and gamma the adiabatic index of its equation of state.
+     */
+    struct EpsteinDragConfig {
+        std::vector<f64> grain_sizes;     ///< s_j, one per dust species
+        std::vector<f64> grain_densities; ///< rho_grain_j, one per dust species
+    };
+
+    /**
      * @brief alphas is the dust collision rate (the inverse of the stopping time)
+     *
+     * The collision rates are the static alphas, or computed in each cell when epstein is set.
      */
     struct DragConfig {
         DragSolverMode drag_solver_config = NoDrag;
         std::vector<f64> alphas;
         bool enable_frictional_heating
             = false; // 0 to turn off and 1 when all dissipation is deposited to the gas
+        std::optional<EpsteinDragConfig> epstein;
     };
 
     struct DustConfig {
@@ -423,6 +438,25 @@ struct shammodels::basegodunov::SolverConfig {
 
         cooling_config.check_config();
 
+        if (drag_config.drag_solver_config != NoDrag) {
+            const u32 ndust     = dust_config.ndust;
+            auto check_per_dust = [&](const std::vector<f64> &v, const char *name) {
+                if (v.size() != ndust) {
+                    shambase::throw_with_loc<std::invalid_argument>(sham::format(
+                        "drag: {} has {} values, expected one per dust species (ndust = {})",
+                        name,
+                        v.size(),
+                        ndust));
+                }
+            };
+            if (drag_config.epstein) {
+                check_per_dust(drag_config.epstein->grain_sizes, "grain_sizes");
+                check_per_dust(drag_config.epstein->grain_densities, "grain_densities");
+            } else {
+                check_per_dust(drag_config.alphas, "alphas");
+            }
+        }
+
         if (is_gas_passive_scalar_on()) {
             ON_RANK_0(logger::warn_ln("Ramses::SolverConfig", "Passive scalars are experimental"));
             shamrock::experimental_feature_check(
@@ -499,17 +533,32 @@ namespace shammodels::basegodunov {
         j.at("ghost_type_z").get_to(p.ghost_type_z);
     }
 
+    inline void to_json(nlohmann::json &j, const EpsteinDragConfig &p) {
+        j = nlohmann::json{{"grain_sizes", p.grain_sizes}, {"grain_densities", p.grain_densities}};
+    }
+
+    inline void from_json(const nlohmann::json &j, EpsteinDragConfig &p) {
+        j.at("grain_sizes").get_to(p.grain_sizes);
+        j.at("grain_densities").get_to(p.grain_densities);
+    }
+
     inline void to_json(nlohmann::json &j, const DragConfig &p) {
         j = nlohmann::json{
             {"drag_solver", p.drag_solver_config},
             {"alphas", p.alphas},
-            {"enable_frictional_heating", p.enable_frictional_heating}};
+            {"enable_frictional_heating", p.enable_frictional_heating},
+            {"epstein", p.epstein}};
     }
 
     inline void from_json(const nlohmann::json &j, DragConfig &p) {
         j.at("drag_solver").get_to(p.drag_solver_config);
         j.at("alphas").get_to(p.alphas);
         j.at("enable_frictional_heating").get_to(p.enable_frictional_heating);
+        // configs dumped before the Epstein drag was added only had static alphas
+        p.epstein = std::nullopt;
+        if (j.contains("epstein")) {
+            j.at("epstein").get_to(p.epstein);
+        }
     }
 
     template<class Tvec, class TgridVec>

@@ -466,7 +466,8 @@ namespace shammath {
     inline constexpr DustPrimState<Tvec> d_cons_to_prim(const DustConsState<Tvec> d_cons) {
         DustPrimState<Tvec> d_prim;
         d_prim.rho = d_cons.rho;
-        d_prim.vel = (d_cons.rhovel * (1 / d_cons.rho));
+        // a pressureless fluid can empty a cell, which then has no velocity (instead of 0 / 0)
+        d_prim.vel = (d_cons.rho > 0) ? (d_cons.rhovel * (1 / d_cons.rho)) : Tvec{};
         return d_prim;
     }
 

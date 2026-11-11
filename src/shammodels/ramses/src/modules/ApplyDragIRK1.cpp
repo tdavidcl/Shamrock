@@ -38,15 +38,13 @@ namespace shammodels::basegodunov::modules {
         edges.spans_rhoe.check_sizes(edges.sizes.indexes);
         edges.spans_rho_d.check_sizes(edges.sizes.indexes);
         edges.spans_rhov_d.check_sizes(edges.sizes.indexes);
+        edges.spans_alphas.check_sizes(edges.sizes.indexes);
 
         Tscal dt             = edges.dt.value;
         u32 ndust            = this->ndust;
         u32 friction_control = (enable_frictional_heating == false) ? 1 : 0;
 
         auto dev_sched = shamsys::instance::get_compute_scheduler_ptr();
-
-        sham::DeviceBuffer<Tscal> alphas_buf(ndust, dev_sched);
-        alphas_buf.copy_from_stdvec(alphas);
 
         edges.sizes.indexes.for_each([&](u64 id_patch, u32 block_count) {
             u32 cell_count = block_count * block_size;
@@ -59,7 +57,7 @@ namespace shammodels::basegodunov::modules {
                     edges.spans_rhoe_next.get_spans().get(id_patch),
                     edges.spans_rho_d_next.get_spans().get(id_patch),
                     edges.spans_rhov_d_next.get_spans().get(id_patch),
-                    alphas_buf},
+                    edges.spans_alphas.get_spans().get(id_patch)},
                 sham::MultiRef{
                     edges.spans_rho.get_spans().get(id_patch),
                     edges.spans_rhov.get_spans().get(id_patch),
@@ -74,12 +72,15 @@ namespace shammodels::basegodunov::modules {
                     const Tscal *__restrict rhoe_next,
                     const Tscal *__restrict rho_d_next,
                     const Tvec *__restrict rhov_d_next,
-                    const Tscal *__restrict alphas,
+                    const Tscal *__restrict alphas_all,
                     Tscal *__restrict rho,
                     Tvec *__restrict rhov,
                     Tscal *__restrict rhoe,
                     Tscal *__restrict rho_d,
                     Tvec *__restrict rhov_d) {
+                    // collision rates of the dust species in this cell
+                    const Tscal *alphas = alphas_all + id_a * ndust;
+
                     Tvec tmp_mom_1 = rhov_next[id_a];
                     Tscal tmp_rho  = rho[id_a];
 
@@ -110,11 +111,15 @@ namespace shammodels::basegodunov::modules {
                     for (u32 i = 0; i < ndust; i++) {
                         const Tscal inv_dt_alphas = 1.0 / (1.0 + alphas[i] * dt);
                         const Tscal dt_alphas     = dt * alphas[i];
-                        Tscal inv_rho_d           = 1.0 / rho_d_next[id_a * ndust + i];
-                        Tvec vd_bf                = inv_rho_d * rhov_d_next[id_a * ndust + i];
-                        Tvec vd_af = inv_rho_d * inv_dt_alphas
-                                     * (rhov_d_next[id_a * ndust + i]
-                                        + dt_alphas * rho_d[id_a * ndust + i] * tmp_vel);
+                        // an empty dust cell has no relative velocity, hence no dissipation
+                        if (!(rho_d_next[id_a * ndust + i] > 0)) {
+                            continue;
+                        }
+                        Tscal inv_rho_d = 1.0 / rho_d_next[id_a * ndust + i];
+                        Tvec vd_bf      = inv_rho_d * rhov_d_next[id_a * ndust + i];
+                        Tvec vd_af      = inv_rho_d * inv_dt_alphas
+                                          * (rhov_d_next[id_a * ndust + i]
+                                             + dt_alphas * rho_d[id_a * ndust + i] * tmp_vel);
                         dissipation += 0.5 * dt_alphas * inv_dt_alphas
                                        * ((rho_d[id_a * ndust + i] * tmp_vel[0]
                                            - rhov_d_next[id_a * ndust + i][0])

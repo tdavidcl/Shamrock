@@ -54,7 +54,15 @@ namespace shammodels::basegodunov {
             Tscal epsilon_soft = 0.05;
         };
 
-        using Variant = std::variant<ConstantGravity, PointMassGravity>;
+        /// Thin disc vertical gravity of a central mass seen at the cylindrical radius R0,
+        /// a_z = -G M (z - z0) / (R0^2 sqrt(R0^2 + (z - z0)^2)), with z0 the midplane
+        struct VerticalDiscPotential {
+            Tscal central_mass = 1;
+            Tscal R0           = 1;
+            Tscal z0           = 0;
+        };
+
+        using Variant = std::variant<ConstantGravity, PointMassGravity, VerticalDiscPotential>;
 
         std::vector<Variant> ext_forces;
 
@@ -71,10 +79,18 @@ namespace shammodels::basegodunov {
             }
             ext_forces.push_back(PointMassGravity{mass, pos, epsilon_soft});
         }
+        inline void add_vertical_disc_potential(Tscal central_mass, Tscal R0, Tscal z0) {
+            if (!(std::isfinite(R0) && R0 > 0)) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "vertical disc potential: R0 must be finite and > 0");
+            }
+            ext_forces.push_back(VerticalDiscPotential{central_mass, R0, z0});
+        }
 
         inline bool is_coordinates_needed() const {
             return std::any_of(ext_forces.begin(), ext_forces.end(), [](const Variant &f) {
-                return std::holds_alternative<PointMassGravity>(f);
+                return std::holds_alternative<PointMassGravity>(f)
+                       || std::holds_alternative<VerticalDiscPotential>(f);
             });
         }
 
@@ -100,6 +116,14 @@ namespace shammodels::basegodunov {
                                 {"mass", cfg.mass},
                                 {"pos", cfg.pos},
                                 {"epsilon_soft", cfg.epsilon_soft}});
+                    },
+                    [&](const typename EF::VerticalDiscPotential &cfg) {
+                        force_list.push_back(
+                            nlohmann::json{
+                                {"force_type", "vertical_disc_potential"},
+                                {"central_mass", cfg.central_mass},
+                                {"R0", cfg.R0},
+                                {"z0", cfg.z0}});
                     },
                 },
                 var_force);
@@ -128,6 +152,11 @@ namespace shammodels::basegodunov {
                     jforce.at("mass").get<Tscal>(),
                     jforce.at("pos").get<Tvec>(),
                     jforce.at("epsilon_soft").get<Tscal>());
+            } else if (force_type == "vertical_disc_potential") {
+                p.add_vertical_disc_potential(
+                    jforce.at("central_mass").get<Tscal>(),
+                    jforce.at("R0").get<Tscal>(),
+                    jforce.at("z0").get<Tscal>());
             } else {
                 shambase::throw_with_loc<std::runtime_error>(
                     "Invalid external force type: " + force_type);

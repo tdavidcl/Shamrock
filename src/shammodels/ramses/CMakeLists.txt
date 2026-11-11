@@ -16,11 +16,13 @@ set(Sources
     src/modules/NodeComputeFlux.cpp
     src/modules/ApplyDragIRK1.cpp
     src/modules/ApplyDragExpo.cpp
+    src/modules/NodeComputeDragAlphas.cpp
     src/modules/ForwardEulerGas.cpp
     src/modules/ForwardEulerDust.cpp
     src/modules/ResetExtForceAcc.cpp
     src/modules/AddExtForceConstantGravity.cpp
     src/modules/AddExtForcePointMassGravity.cpp
+    src/modules/AddExtForceVerticalDiscPotential.cpp
     src/modules/AddExtForceField.cpp
     src/modules/ComputeNextRho.cpp
     src/modules/ApplyExtForceGas.cpp

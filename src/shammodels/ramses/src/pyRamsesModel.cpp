@@ -335,6 +335,30 @@ namespace shammodels::basegodunov {
                     return self.set_alphas_static(alpha_values);
                 })
             .def(
+                "set_drag_epstein",
+                [](TConfig &self, std::vector<f64> grain_sizes, std::vector<f64> grain_densities) {
+                    self.drag_config.epstein
+                        = EpsteinDragConfig{std::move(grain_sizes), std::move(grain_densities)};
+                },
+                py::kw_only(),
+                py::arg("grain_sizes"),
+                py::arg("grain_densities"),
+                R"==(
+    Use the Epstein drag: the dust collision rates are computed in each cell from the gas state
+    instead of the static alpha values,
+
+    alpha_j = 1 / t_j,  t_j = rho_grain_j s_j sqrt(pi gamma / 8) / (rho_g c_s)
+
+    with c_s the adiabatic sound speed of the gas and gamma its adiabatic index.
+
+    Parameters
+    ----------
+    grain_sizes : list[float]
+        Grain radius s_j of each dust species (code units).
+    grain_densities : list[float]
+        Internal density rho_grain_j of the grains of each dust species (code units).
+)==")
+            .def(
                 "set_drag_mode_no_drag",
                 [](TConfig &self) {
                     self.drag_config.drag_solver_config        = NoDrag;
@@ -512,6 +536,21 @@ namespace shammodels::basegodunov {
                 Add the gravity of a fixed point mass to the external forces:
                 a = -G M (r - pos) / (|r - pos|^2 + epsilon_soft^2)^{3/2}, with G from the unit system.
                 epsilon_soft must be > 0.
+                )==")
+            .def(
+                "add_ext_force_vertical_disc_potential",
+                [](TConfig &self, Tscal central_mass, Tscal R0, Tscal z0) {
+                    self.ext_force_config.add_vertical_disc_potential(central_mass, R0, z0);
+                },
+                py::kw_only(),
+                py::arg("central_mass"),
+                py::arg("R0"),
+                py::arg("z0") = 0,
+                R"==(
+                Add the thin disc vertical gravity of a central mass seen at the cylindrical
+                radius R0 (same form as the SPH solver):
+                a_z = -G M (z - z0) / (R0^2 sqrt(R0^2 + (z - z0)^2)), with G from the unit system
+                and z0 the position of the midplane. R0 must be > 0.
                 )==")
             .def(
                 "set_ext_force_coupling",
