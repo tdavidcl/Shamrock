@@ -26,6 +26,7 @@
 #include "shambase/constants.hpp"
 #include "shambase/exception.hpp"
 #include "shambase/memory.hpp"
+#include "shambase/overloaded.hpp"
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
 #include "shamalgs/collective/exchanges.hpp"
@@ -40,14 +41,15 @@
 #include "shammodels/gsph/SolverConfig.hpp"
 #include "shammodels/gsph/config/FieldNames.hpp"
 #include "shammodels/gsph/modules/ComputeLoadBalanceValue.hpp"
-#include "shammodels/gsph/modules/GSPHUtilities.hpp"
 #include "shammodels/gsph/modules/UpdateDerivs.hpp"
 #include "shammodels/gsph/modules/io/VTKDump.hpp"
 #include "shammodels/sph/modules/ComputeOmega.hpp"
+#include "shammodels/sph/modules/FindGhostInterfaces.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensity.hpp"
 #include "shammodels/sph/modules/IterateSmoothingLengthDensityNeighLim.hpp"
 #include "shammodels/sph/modules/LoopSmoothingLengthIter.hpp"
 #include "shammodels/sph/modules/NeighbourCache.hpp"
+#include "shammodels/sph/modules/SetWhenMask.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/patch/PatchDataLayer.hpp"
 #include "shamrock/patch/PatchDataLayerLayout.hpp"
@@ -57,10 +59,16 @@
 #include "shamrock/scheduler/ReattributeDataUtility.hpp"
 #include "shamrock/scheduler/SchedulerUtility.hpp"
 #include "shamrock/scheduler/SerialPatchTree.hpp"
+#include "shamrock/solvergraph/DDSharedScalar.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/FieldRefs.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
+#include "shamrock/solvergraph/PatchtreeFieldEdge.hpp"
+#include "shamrock/solvergraph/ScalarEdge.hpp"
+#include "shamrock/solvergraph/ScalarsEdge.hpp"
+#include "shamrock/solvergraph/SerialPatchTreeEdge.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
+#include "shamsolvergraph/edge/IDataEdgeSerializable.hpp"
 #include "shamsys/NodeInstance.hpp"
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/KarrasRadixTreeField.hpp"
@@ -73,6 +81,30 @@
 
 template<class Tvec, template<class> class Kern>
 void shammodels::gsph::Solver<Tvec, Kern>::init_solver_graph() {
+
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // synchronized edges
+    ////////////////////////////////////////////////////////////////////////////////////////
+
+    auto &sync_data = scheduler().synchronized_data;
+
+    // register a synchronized edge only if missing, as it may have been restored from a dump
+    auto ensure_sync_edge
+        = [&](const std::string &name, const std::string &tex_symbol, auto init_value) {
+              using T = decltype(init_value);
+              if (!sync_data.has_edge(name)) {
+                  auto edge = sync_data.register_edge(
+                      name, shamrock::solvergraph::IDataEdgeSerializable<T>(name, tex_symbol));
+                  edge->data = std::move(init_value);
+              }
+          };
+
+    ensure_sync_edge("time", "t", Tscal{0});
+    ensure_sync_edge("dt", "dt", Tscal{0});
+
+    ////////////////////////////////////////////////////////////////////////////////////////
+    // main solver graph
+    ////////////////////////////////////////////////////////////////////////////////////////
 
     storage.part_counts = std::make_shared<shamrock::solvergraph::Indexes<u32>>(
         edges::part_counts, "N_{\\rm part}");
@@ -137,61 +169,35 @@ void shammodels::gsph::Solver<Tvec, Kern>::gen_serial_patch_tree() {
 }
 
 template<class Tvec, template<class> class Kern>
-void shammodels::gsph::Solver<Tvec, Kern>::gen_ghost_handler(Tscal time_val) {
+void shammodels::gsph::Solver<Tvec, Kern>::build_ghost_cache(Tscal time_val) {
     StackEntry stack_loc{};
 
-    using CfgClass = gsph::GSPHGhostHandlerConfig<Tvec>;
-    using BCConfig = typename CfgClass::Variant;
+    using namespace shamrock::patch;
+    using namespace shamrock::solvergraph;
 
-    using BCFree             = typename CfgClass::Free;
-    using BCPeriodic         = typename CfgClass::Periodic;
-    using BCShearingPeriodic = typename CfgClass::ShearingPeriodic;
+    using InterfaceBuildInfos = typename GhostHandle::InterfaceBuildInfos;
 
-    using SolverConfigBC           = typename Config::BCConfig;
-    using SolverBCFree             = typename SolverConfigBC::Free;
-    using SolverBCPeriodic         = typename SolverConfigBC::Periodic;
-    using SolverBCShearingPeriodic = typename SolverConfigBC::ShearingPeriodic;
+    using BCConfig           = typename Config::BCConfig;
+    using BCFree             = typename BCConfig::Free;
+    using BCPeriodic         = typename BCConfig::Periodic;
+    using BCShearingPeriodic = typename BCConfig::ShearingPeriodic;
 
-    // Boundary condition selection - similar to SPH solver
-    // Note: Wall boundaries use Periodic with dynamic wall particles
-    if (SolverBCFree *c = std::get_if<SolverBCFree>(&solver_config.boundary_config.config)) {
-        shambase::get_check_ref(storage.ghost_handler)
-            .set(
-                GhostHandle{
-                    scheduler(), BCFree{}, storage.patch_rank_owner, storage.xyzh_ghost_layout});
-    } else if (
-        SolverBCPeriodic *c
-        = std::get_if<SolverBCPeriodic>(&solver_config.boundary_config.config)) {
-        shambase::get_check_ref(storage.ghost_handler)
-            .set(
-                GhostHandle{
-                    scheduler(),
-                    BCPeriodic{},
-                    storage.patch_rank_owner,
-                    storage.xyzh_ghost_layout});
-    } else if (
-        SolverBCShearingPeriodic *c
-        = std::get_if<SolverBCShearingPeriodic>(&solver_config.boundary_config.config)) {
-        // Shearing periodic boundaries (Stone 2010) - reuse SPH implementation
-        shambase::get_check_ref(storage.ghost_handler)
-            .set(
-                GhostHandle{
-                    scheduler(),
-                    BCShearingPeriodic{
-                        c->shear_base, c->shear_dir, c->shear_speed * time_val, c->shear_speed},
-                    storage.patch_rank_owner,
-                    storage.xyzh_ghost_layout});
-    } else {
-        shambase::throw_with_loc<std::runtime_error>("GSPH: Unsupported boundary condition type.");
-    }
-}
+    const auto &bc_config = solver_config.boundary_config.config;
 
-template<class Tvec, template<class> class Kern>
-void shammodels::gsph::Solver<Tvec, Kern>::build_ghost_cache() {
-    StackEntry stack_loc{};
+    // ----------------------------------------------------------------------------------------
+    // Generate the ghost handler
+    // ----------------------------------------------------------------------------------------
 
-    using GSPHUtils = GSPHUtilities<Tvec, Kernel>;
-    GSPHUtils gsph_utils(scheduler());
+    shambase::get_check_ref(storage.ghost_handler)
+        .set(GhostHandle{scheduler(), storage.patch_rank_owner, storage.xyzh_ghost_layout});
+
+    // ----------------------------------------------------------------------------------------
+    // Build the ghost cache
+    // ----------------------------------------------------------------------------------------
+
+    PatchScheduler &sched         = scheduler();
+    GhostHandle &ghost_handle     = shambase::get_check_ref(storage.ghost_handler).get();
+    SerialPatchTree<Tvec> &sptree = storage.serial_patch_tree.get();
 
     // Same widening as compute_presteps_rint()/start_neighbors_cache(): with
     // InutsukaV2 the kernel support is sqrt(2)*h, so the patch/rank ghost
@@ -202,10 +208,99 @@ void shammodels::gsph::Solver<Tvec, Kern>::build_ghost_cache() {
         h_evol_max *= shambase::constants::sqrt_2<Tscal>;
     }
 
-    storage.ghost_patch_cache.set(gsph_utils.build_interf_cache(
-        shambase::get_check_ref(storage.ghost_handler).get(),
-        storage.serial_patch_tree.get(),
-        h_evol_max));
+    const u32 ihpart = sched.pdl_old().template get_field_idx<Tscal>("hpart");
+
+    PatchField<Tscal> interactR_patch = sched.map_owned_to_patch_field_simple<Tscal>(
+        [&](const Patch p, PatchDataLayer &pdat) -> Tscal {
+            if (!pdat.is_empty()) {
+                return pdat.get_field<Tscal>(ihpart).compute_max() * h_evol_max * Rkern;
+            } else {
+                return shambase::VectorProperties<Tscal>::get_min();
+            }
+        });
+
+    PatchtreeField<Tscal> interactR_mpi_tree = sptree.make_patch_tree_field(
+        sched,
+        shamsys::instance::get_compute_queue(),
+        interactR_patch,
+        [](Tscal h0, Tscal h1, Tscal h2, Tscal h3, Tscal h4, Tscal h5, Tscal h6, Tscal h7) {
+            return sham::max_8points(h0, h1, h2, h3, h4, h5, h6, h7);
+        });
+
+    // ----------------------------------------------------------------------------------------
+    // temporary wrapper to slowly migrate to the new solvergraph
+    SimulationBoxInfo &sim_box                   = sched.get_sim_box();
+    PatchCoordTransform<Tvec> patch_coord_transf = sim_box.get_patch_transform<Tvec>();
+    auto [bmin, bmax]                            = sim_box.get_bounding_box<Tvec>();
+
+    auto sim_box_edge   = std::make_shared<ScalarEdge<shammath::AABB<Tvec>>>("", "");
+    sim_box_edge->value = shammath::AABB<Tvec>(bmin, bmax);
+
+    auto patch_tree_edge        = std::make_shared<SerialPatchTreeRefEdge<Tvec>>("", "");
+    patch_tree_edge->patch_tree = std::ref(sptree);
+
+    auto interact_radius_tree             = std::make_shared<PatchtreeFieldEdge<Tscal>>("", "");
+    interact_radius_tree->patchtree_field = std::move(interactR_mpi_tree);
+
+    // interactR_patch is not used afterwards, so move it (O(1)) instead of copying over all
+    // global patches
+    auto interact_radius    = std::make_shared<ScalarsEdge<Tscal>>("", "");
+    interact_radius->values = std::move(interactR_patch.field_all);
+
+    auto local_patch_boxes = std::make_shared<ScalarsEdge<shammath::CoordRange<Tvec>>>("", "");
+    sched.for_each_local_patch([&](const Patch &p) {
+        local_patch_boxes->values.add_obj(p.id_patch, patch_coord_transf.to_obj_coord(p));
+    });
+
+    auto interface_infos = std::make_shared<DDSharedScalar<InterfaceBuildInfos>>("", "");
+
+    std::visit(
+        shambase::overloaded{
+            [&](const BCFree &) {
+                sph::modules::FindGhostInterfacesFree<Tvec> node;
+                node.set_edges(
+                    sim_box_edge,
+                    patch_tree_edge,
+                    interact_radius_tree,
+                    interact_radius,
+                    local_patch_boxes,
+                    interface_infos);
+                node.evaluate();
+            },
+            [&](const BCPeriodic &) {
+                sph::modules::FindGhostInterfacesPeriodic<Tvec> node;
+                node.set_edges(
+                    sim_box_edge,
+                    patch_tree_edge,
+                    interact_radius_tree,
+                    interact_radius,
+                    local_patch_boxes,
+                    interface_infos);
+                node.evaluate();
+            },
+            [&](const BCShearingPeriodic &cfg) {
+                auto shear_value  = IDataEdge<Tscal>::make_shared("", "");
+                shear_value->data = cfg.shear_speed * time_val;
+
+                sph::modules::FindGhostInterfacesShearingPeriodic<Tvec> node(
+                    cfg.shear_base, cfg.shear_dir, cfg.shear_speed);
+                node.set_edges(
+                    sim_box_edge,
+                    patch_tree_edge,
+                    interact_radius_tree,
+                    interact_radius,
+                    local_patch_boxes,
+                    shear_value,
+                    interface_infos);
+                node.evaluate();
+            },
+        },
+        bc_config);
+
+    // ----------------------------------------------------------------------------------------
+
+    storage.ghost_patch_cache.set(
+        ghost_handle.gen_id_table_interfaces(std::move(interface_infos->values)));
 }
 
 template<class Tvec, template<class> class Kern>
@@ -640,10 +735,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::gsph_prestep(Tscal time_val, Tscal dt
     using namespace shamrock;
     using namespace shamrock::patch;
 
-    using RTree    = shamtree::CompressedLeafBVH<u_morton, Tvec, 3>;
-    using SPHUtils = gsph::GSPHUtilities<Tvec, Kernel>;
-
-    SPHUtils sph_utils(scheduler());
+    using RTree = shamtree::CompressedLeafBVH<u_morton, Tvec, 3>;
     shamrock::SchedulerUtility utility(scheduler());
 
     PatchDataLayerLayout &pdl = scheduler().pdl_old();
@@ -658,8 +750,7 @@ void shammodels::gsph::Solver<Tvec, Kern>::gsph_prestep(Tscal time_val, Tscal dt
     u32 hstep_max = solver_config.h_max_subcycles_count;
     for (; hstep_cnt < hstep_max; hstep_cnt++) {
 
-        gen_ghost_handler(time_val + dt);
-        build_ghost_cache();
+        build_ghost_cache(time_val + dt);
         merge_position_ghost();
         build_merged_pos_trees();
         compute_presteps_rint();

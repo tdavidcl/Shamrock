@@ -117,6 +117,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                               "    -> calling this is a no-op,\n"
                               "    -> you can remove the call to that function"););
             })
+        .def("set_filter_empty_patch_gz", &TConfig::set_filter_empty_patch_gz)
         .def("set_smoothing_length_density_based", &TConfig::set_smoothing_length_density_based)
         .def(
             "set_smoothing_length_density_based_neigh_lim",
@@ -169,6 +170,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             },
             py::kw_only(),
             py::arg("mu_e"))
+        .def(
+            "set_eos_barotropic",
+            [](TConfig &self, Tscal cs0, Tscal rho0, Tscal gamma0) {
+                self.set_eos_barotropic(cs0, rho0, gamma0);
+            },
+            py::kw_only(),
+            py::arg("cs0"),
+            py::arg("rho0"),
+            py::arg("gamma0") = Tscal{5.0 / 3.0})
         .def("set_artif_viscosity_None", &TConfig::set_artif_viscosity_None)
         .def(
             "set_artif_viscosity_Constant",
@@ -317,7 +327,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                bool ensure_s_j_positivity,
                bool smooth_s_positivity_limiter,
                bool dust_corrected_av,
-               std::optional<Tscal> clamp_dust_frac) {
+               std::optional<Tscal> clamp_dust_frac,
+               bool pair_gate_s_positivity_limiter) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
@@ -327,18 +338,20 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     ensure_s_j_positivity,
                     smooth_s_positivity_limiter,
                     dust_corrected_av,
-                    clamp_dust_frac);
+                    clamp_dust_frac,
+                    pair_gate_s_positivity_limiter);
             },
             py::kw_only(),
             py::arg("nvar"),
-            py::arg("pure_diffusion_mode")         = false,
-            py::arg("C_1_fluid")                   = 0.1,
-            py::arg("C_drift")                     = 1.0,
-            py::arg("cfl_density_threshold")       = shambase::get_epsilon<Tscal>(),
-            py::arg("ensure_s_j_positivity")       = true,
-            py::arg("smooth_s_positivity_limiter") = false,
-            py::arg("dust_corrected_av")           = false,
-            py::arg("clamp_dust_frac")             = std::nullopt)
+            py::arg("pure_diffusion_mode")            = false,
+            py::arg("C_1_fluid")                      = 0.1,
+            py::arg("C_drift")                        = 1.0,
+            py::arg("cfl_density_threshold")          = shambase::get_epsilon<Tscal>(),
+            py::arg("ensure_s_j_positivity")          = true,
+            py::arg("smooth_s_positivity_limiter")    = false,
+            py::arg("dust_corrected_av")              = false,
+            py::arg("clamp_dust_frac")                = std::nullopt,
+            py::arg("pair_gate_s_positivity_limiter") = false)
         .def(
             "set_dust_mode_monofluid_complete",
             [](TConfig &self, u32 ndust) {
@@ -371,7 +384,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal rhodust_eps,
                Tscal vfrag_threshold,
                std::vector<Tscal> massgrid,
-               py::array_t<Tscal> tabflux_coag) {
+               py::array_t<Tscal> tabflux_coag,
+               Tscal tau_frac) {
                 if (massgrid.size() == 0) {
                     throw shambase::make_except_with_loc<std::invalid_argument>(
                         "massgrid must not be empty");
@@ -415,6 +429,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
 
                 self.dust_config.set_dust_evol_coala(
                     {.rhodust_eps     = rhodust_eps,
+                     .tau_frac        = tau_frac,
                      .vfrag_threshold = vfrag_threshold,
                      .massgrid        = massgrid,
                      .tabflux_coag    = tabflux_coag_vec});
@@ -423,6 +438,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("vfrag_threshold"),
             py::arg("massgrid"),
             py::arg("tabflux_coag"),
+            py::arg("tau_frac") = Tscal(10),
             R"pbdoc(
         Enable the COALA dust coagulation source term.
 
@@ -437,6 +453,11 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             massgrid: Dust mass grid bin edges, of size ``nbins + 1``.
             tabflux_coag: Tabulated coagulation flux, of shape
                 ``(nbins, nbins, nbins)``.
+            tau_frac: The source term on ``s_j`` is integrated implicitly over
+                ``dt_eff = max(dt, tau_frac * rhodust_eps / |S|)``, that is over at
+                least the time needed to move ``tau_frac * rhodust_eps``. This bounds
+                the rate of an empty bin when ``dt`` is null or tiny (e.g. right after
+                a dust injection). Must be positive.
         )pbdoc")
         .def(
             "set_dust_ballabio_ts_limiter",
