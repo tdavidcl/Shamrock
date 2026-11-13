@@ -1,0 +1,14 @@
+/* Text outputs of example cells */
+div.sham-output pre {
+  border-left: 3px solid var(--pst-color-info, #4a90d9);
+  max-height: 30em;
+  overflow-y: auto;
+}
+
+div.sham-error pre {
+  border-left: 3px solid var(--pst-color-danger, #d9534f);
+}
+
+img.sham-figure {
+  max-width: 100%;
+}
