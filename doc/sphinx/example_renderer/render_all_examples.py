@@ -89,10 +89,23 @@ def render_one(path, opts, executes):
     with log.open("w") as f:
         f.write(f"$ {' '.join(shlex.quote(c) for c in cmd)}\n")
         f.flush()
-        proc = subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT, check=False)
+        try:
+            proc = subprocess.run(
+                cmd,
+                env=env,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=opts.timeout or None,
+            )
+            returncode = proc.returncode
+        except subprocess.TimeoutExpired:
+            returncode = None
     elapsed = time.perf_counter() - t0
-    status = "ok" if proc.returncode == 0 else f"FAILED (exit {proc.returncode})"
-    if proc.returncode == 0 and not executes:
+    if returncode is None:
+        return path, f"FAILED (timeout {opts.timeout:.0f} s)", elapsed, log
+    status = "ok" if returncode == 0 else f"FAILED (exit {returncode})"
+    if returncode == 0 and not executes:
         status = "not-executed"
     return path, status, elapsed, log
 
@@ -123,6 +136,9 @@ def main(argv=None):
     parser.add_argument("--exec", choices=["auto", "always", "never"], default="auto")
     parser.add_argument("--cache-key", default="", help="extra cache key, e.g. shamrock commit")
     parser.add_argument("--force", action="store_true", help="ignore the cache")
+    parser.add_argument(
+        "--timeout", type=float, default=0, help="kill an example after this many seconds"
+    )
     parser.add_argument(
         "--missing-only",
         action="store_true",
