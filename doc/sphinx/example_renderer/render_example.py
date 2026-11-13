@@ -66,6 +66,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -277,34 +278,51 @@ def _write_all(fd, data):
 class StdoutCapture:
     """Capture everything written to fd 1 (Python, C, C++) and still echo it live.
 
-    fd 1 is redirected to a temporary *file*, not a pipe: pybind11 calls (all of
-    Shamrock) run while holding the GIL, so a pipe drained by a Python thread fills
-    up (64 kB) and blocks the C++ writer forever, while the reader thread waits for
-    the GIL. Writing to a regular file never blocks; a thread tails the file to
-    echo it to the real stdout, and merely lags while the GIL is held.
+    Nothing on the capture path may need the GIL: pybind11 calls (all of Shamrock)
+    hold it for their whole duration, e.g. a full ``model.evolve_until(...)``.
+
+    * With ``tee`` available (Linux, macOS), fd 1 is a pipe into a ``tee`` *process*
+      that writes a temporary file and the real stdout. A separate process drains
+      the pipe whatever the GIL does, so output stays live and the writer never
+      blocks for good.
+    * Otherwise fd 1 goes straight to the temporary file (writing a regular file
+      never blocks) and a Python thread echoes it; the echo then only appears when
+      the GIL is released.
+
+    A pipe drained by a Python thread must not be used: once it holds 64 kB the
+    C++ writer blocks while the reader waits for the GIL, a deadlock.
     """
 
     def __enter__(self):
         sys.stdout.flush()
         _libc_fflush()
         self._saved = os.dup(1)
-        self._file = tempfile.TemporaryFile()
-        os.dup2(self._file.fileno(), 1)
-        self._echoed = 0
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._tail, daemon=True)
-        self._thread.start()
+        fd, self._path = tempfile.mkstemp(prefix="shamdoc-", suffix=".out")
+        os.close(fd)
+        self._proc = None
+        self._thread = None
+        tee = shutil.which("tee")
+        if tee:
+            self._proc = subprocess.Popen(
+                [tee, self._path], stdin=subprocess.PIPE, stdout=self._saved, close_fds=True
+            )
+            os.dup2(self._proc.stdin.fileno(), 1)
+        else:
+            self._file = open(self._path, "wb")  # closed in __exit__
+            os.dup2(self._file.fileno(), 1)
+            self._echoed = 0
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._tail, daemon=True)
+            self._thread.start()
         return self
 
     def _echo_new(self):
-        fd = self._file.fileno()
-        while True:
-            data = os.pread(fd, 1 << 20, self._echoed)
-            if not data:
-                return
-            self._echoed += len(data)
-            with contextlib.suppress(OSError):
-                _write_all(self._saved, data)
+        with open(self._path, "rb") as f:
+            f.seek(self._echoed)
+            while data := f.read(1 << 20):
+                self._echoed += len(data)
+                with contextlib.suppress(OSError):
+                    _write_all(self._saved, data)
 
     def _tail(self):
         while not self._stop.wait(0.2):
@@ -313,14 +331,19 @@ class StdoutCapture:
     def __exit__(self, *exc):
         sys.stdout.flush()
         _libc_fflush()
-        os.dup2(self._saved, 1)
-        self._stop.set()
-        self._thread.join()
-        self._echo_new()
+        os.dup2(self._saved, 1)  # fd 1 no longer refers to the pipe / file
+        if self._proc is not None:
+            self._proc.stdin.close()  # last write end: tee gets EOF and exits
+            self._proc.wait()
+        else:
+            self._stop.set()
+            self._thread.join()
+            self._file.close()
+            self._echo_new()
         os.close(self._saved)
-        self._file.seek(0)
-        self.text = self._file.read().decode("utf-8", "replace")
-        self._file.close()
+        with open(self._path, "rb") as f:
+            self.text = f.read().decode("utf-8", "replace")
+        os.unlink(self._path)
         return False
 
 
