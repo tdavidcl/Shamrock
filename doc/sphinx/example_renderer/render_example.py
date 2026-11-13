@@ -275,37 +275,52 @@ def _write_all(fd, data):
 
 
 class StdoutCapture:
-    """Capture everything written to fd 1 (Python, C, C++) and still echo it."""
+    """Capture everything written to fd 1 (Python, C, C++) and still echo it live.
+
+    fd 1 is redirected to a temporary *file*, not a pipe: pybind11 calls (all of
+    Shamrock) run while holding the GIL, so a pipe drained by a Python thread fills
+    up (64 kB) and blocks the C++ writer forever, while the reader thread waits for
+    the GIL. Writing to a regular file never blocks; a thread tails the file to
+    echo it to the real stdout, and merely lags while the GIL is held.
+    """
 
     def __enter__(self):
         sys.stdout.flush()
         _libc_fflush()
         self._saved = os.dup(1)
-        self._read, write = os.pipe()
-        os.dup2(write, 1)
-        os.close(write)
-        self._chunks = []
-        self._thread = threading.Thread(target=self._pump, daemon=True)
+        self._file = tempfile.TemporaryFile()
+        os.dup2(self._file.fileno(), 1)
+        self._echoed = 0
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._tail, daemon=True)
         self._thread.start()
         return self
 
-    def _pump(self):
+    def _echo_new(self):
+        fd = self._file.fileno()
         while True:
-            data = os.read(self._read, 65536)
+            data = os.pread(fd, 1 << 20, self._echoed)
             if not data:
-                break
-            self._chunks.append(data)
+                return
+            self._echoed += len(data)
             with contextlib.suppress(OSError):
                 _write_all(self._saved, data)
-        os.close(self._read)
+
+    def _tail(self):
+        while not self._stop.wait(0.2):
+            self._echo_new()
 
     def __exit__(self, *exc):
         sys.stdout.flush()
         _libc_fflush()
-        os.dup2(self._saved, 1)  # drops the last reference to the pipe write end
-        self._thread.join(timeout=10)
+        os.dup2(self._saved, 1)
+        self._stop.set()
+        self._thread.join()
+        self._echo_new()
         os.close(self._saved)
-        self.text = b"".join(self._chunks).decode("utf-8", "replace")
+        self._file.seek(0)
+        self.text = self._file.read().decode("utf-8", "replace")
+        self._file.close()
         return False
 
 
