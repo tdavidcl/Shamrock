@@ -128,7 +128,7 @@ grain_size_si_edges = np.logspace(-9, -2, ndust + 1)
 use_coala = True
 dv_max = 1000000 * codeu.get("m") / codeu.get("s")
 Q = 5  # number of points for the Gauss-Legendre quadrature
-rhodust_eps = 1e-17  # dust density floor
+rhodust_eps = 1e-20 * codeu.get("kg") * codeu.get("m") ** -3  # dust density floor
 tau_frac = 10.0  # the source term step moves at least tau_frac * rhodust_eps
 K0_multiplier = 1
 
