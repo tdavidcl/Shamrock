@@ -475,8 +475,9 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                 differential velocity ``|dv_ij|`` exceeds this value gets
                 ``dv_ij = 0``. This is a crude stand-in for fragmentation
                 ("poor man" fragmentation), not a fragmentation model. Pass
-                ``math.inf`` to disable it. With the fragmentation tensors, it is
-                also the fragmentation velocity of the fragmentation probability.
+                ``math.inf`` to disable it. With the fragmentation tensors there
+                is no cutoff, it is the fragmentation velocity of the fragmentation
+                probability.
             massgrid: Dust mass grid bin edges, of size ``nbins + 1``.
             tabflux_coag: Tabulated coagulation flux, of shape
                 ``(nbins, nbins, nbins)``.

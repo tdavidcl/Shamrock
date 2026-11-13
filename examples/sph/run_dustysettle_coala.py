@@ -1,9 +1,10 @@
 """
-Dusty settling SPH test with COALA coagulation
-===============================================
+Dusty settling SPH test with COALA coagulation and fragmentation
+=================================================================
 
 Perform a dust settling test in a local stratified box, with the dust size
-distribution evolved by the COALA coagulation source term.
+distribution evolved by the COALA coagulation source term, and by the COALA
+fragmentation source term when ``use_coala_frag`` is set.
 
 If you want to change the resolution, you can set the LZ environment variable.
 
@@ -116,7 +117,7 @@ box_H_count = 8  # box size in number of H
 random_vel_pert = True  # add a small vecolity pertubation to fasten the setup
 
 # Dust
-ndust = 5  # not below 20 in prod otherwise the rate is too low
+ndust = 30  # not below 20 in prod otherwise the rate is too low
 mrn_pow = 3.5
 mrn_cutoff_si = 250e-9  # like standard MRN
 epsilon_base = 0.01
@@ -130,6 +131,12 @@ Q = 5  # number of points for the Gauss-Legendre quadrature
 rhodust_eps = 1e-17  # dust density floor
 tau_frac = 10.0  # the source term step moves at least tau_frac * rhodust_eps
 K0_multiplier = 1
+
+# COALA fragmentation (same setup as examples/physics/run_coala_coag_frag.py)
+use_coala_frag = True
+frac_mass_fragments = 0.1  # mass fraction of the colliding pair that ends up in fragments
+beta = -11.0 / 6.0  # power law of the fragment mass distribution
+v_frag = 1 * codeu.get("m") / codeu.get("s")  # fragmentation velocity (1e2 cm/s)
 
 # Resolution (lattice size)
 lx = 12
@@ -165,7 +172,7 @@ cfl_force_inject = 0.1
 max_v_inject_threshold = 3.0  # in units of cs
 
 # Paths
-sim_folder = f"_to_trash/dusty_settle_{lz}_coala_{use_coala}/"
+sim_folder = f"_to_trash/dusty_settle_{lz}_coala_{use_coala}_frag_{use_coala_frag}/"
 dump_folder = sim_folder + "dump/"
 
 # Plotting
@@ -216,6 +223,11 @@ if use_coala:
     print(f"K0 = {K0}")
 
     tabflux_coag = coala.coala_precalc_tabflux_coag(K0, ndust, Q, massgrid_edges)
+
+    if use_coala_frag:
+        tabflux_frag_T1, tabflux_frag_T2 = coala.coala_precalc_tabflux_frag(
+            K0, ndust, Q, massgrid_edges, frac_mass_fragments, beta
+        )
 
 lmin = (-(lx // 2), -(ly // 2), -(lz // 2))
 lmax = (lx // 2, ly // 2, lz // 2)
@@ -649,7 +661,18 @@ def setup_model():
         nvar=ndust, C_1_fluid=0.1, C_drift=1.0, cfl_density_threshold=1e-50
     )
     cfg.set_dust_drag_epstein(gamma, mrn_distribution.grain_size, mrn_distribution.rho_grains)
-    if use_coala:
+    if use_coala and use_coala_frag:
+        # with the fragmentation tensors the threshold is the fragmentation velocity
+        cfg.set_dust_evol_coala_coag(
+            rhodust_eps,
+            v_frag,
+            massgrid_edges,
+            tabflux_coag,
+            tau_frac=tau_frac,
+            tensor_tabflux_frag_T1=tabflux_frag_T1,
+            tensor_tabflux_frag_T2=tabflux_frag_T2,
+        )
+    elif use_coala:
         cfg.set_dust_evol_coala_coag(
             rhodust_eps, dv_max, massgrid_edges, tabflux_coag, tau_frac=tau_frac
         )

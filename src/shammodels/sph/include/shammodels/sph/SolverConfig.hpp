@@ -123,6 +123,8 @@ namespace shammodels::sph {
         /// Fragmentation velocity threshold, must be positive (infinity disables it).
         /// In coagulation-only mode, a dust pair whose differential velocity exceeds it gets
         /// dv_ij = 0 ("poor man" fragmentation, not a real fragmentation model).
+        /// With the fragmentation tensors there is no cutoff, it only sets the fragmentation
+        /// probability.
         Tscal vfrag_threshold;
         std::vector<Tscal> massgrid;
         std::vector<Tscal> tabflux_coag;

@@ -244,8 +244,8 @@ namespace shammodels::sph::modules {
 
                     auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
                         // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
-                        auto tmp = sycl::length(delta_v[j] - delta_v[i]);
-                        return (tmp > vfrag_threshold) ? 0 : tmp;
+                        // no threshold here, vfrag_threshold enters through evol_prob
+                        return sycl::length(delta_v[j] - delta_v[i]);
                     };
 
                     auto evol_prob = [&](Tscal dv_val) {
