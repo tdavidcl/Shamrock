@@ -26,7 +26,6 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamtree/TreeTraversal.hpp"
 #include "shamtree/kernels/geometry_utils.hpp"
-#include "shamunits/Constants.hpp"
 
 template<class Tvec, class Tmorton, template<class> class SPHKernel>
 void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::start_neighbors_cache() {
@@ -233,7 +232,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         u32 tree_depth = tree.get_exact_tree_depth();
         u32 stack_size = tree_depth + 1;
 
-        shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
+        // shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
 
         u32 obj_cnt = shambase::get_check_ref(storage.part_counts).indexes.get(patch_id);
 
@@ -777,7 +776,7 @@ void shammodels::sph::modules::NeighbourCache<Tvec, Tmorton, SPHKernel>::
         u32 tree_depth = tree.get_exact_tree_depth();
         u32 stack_size = tree_depth + 1;
 
-        shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
+        // shamlog_info_ln("Cache", "patch", patch_id, "tree depth =", tree_depth);
 
         u32 leaf_cnt    = tree.get_leaf_cell_count();
         u32 intnode_cnt = tree.get_internal_cell_count();

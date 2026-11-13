@@ -7,6 +7,20 @@ and Python. SYCL backend support covers every major implementation
 (AdaptiveCpp, DPC++, intel/llvm). It uses CMake (generators: make or
 Ninja depending on availability) and has submodules.
 
+## Determinism is a hard invariant
+
+Shamrock is deterministic, in the sense that the same inputs always give
+the same outputs under the same conditions (bitwise run-to-run
+reproducibility): the same binary, on the same hardware, with the same
+inputs, must give bit-identical outputs from one run to the next. Do not
+trade this for speed: a change that makes two runs differ, even within
+floating-point tolerance, is a regression.
+
+Before optimizing or changing kernels, reductions, communications or the
+scheduler, read `doc/sphinx/source/dev_doc/determinism.md` (scope, what
+breaks determinism, patterns to keep it, how to check). If a request can
+only be met by giving up determinism, stop and ask the user.
+
 ## Building
 
 A "machine" is one OS + hardware combination.
@@ -197,25 +211,28 @@ follow this format (try to stay under 70 total characters if possible):
 
 ### Commit authorship
 
-Commit-msg hooks can rewrite the author and inject `Co-authored-by` (often
-with a model name). After every `git commit`, amend with `--no-verify`
-before pushing (a plain amend re-runs the hook):
+Commit-msg hooks can rewrite the author and inject `Co-authored-by`. After
+every `git commit`, amend with `--no-verify` before pushing (a plain amend
+re-runs the hook):
 
 - **Author** = the human who initiated the work. Use `--author`; do not
-  change gitconfig.
-- Trailer = `Assisted-by: <agent>` only. No model names. No
-  `Co-authored-by` (`Co-authored-by` is for extra human authors only). Also
-  no session url.
+  change gitconfig. If that identity appears in `.mailmap`, use the
+  canonical name and email it maps to (`git check-mailmap "<name> <email>"`
+  prints it).
+- Trailer = `Assisted-by: <agent>` only. No `Co-authored-by`
+  (`Co-authored-by` is for extra human authors only). Also no session url.
 
 Check `git log -1 --format='Author: %an <%ae>%n%B'` before push.
 
 ### Opening pull requests
 
-Target upstream `Shamrock-code/Shamrock` and base branch `main`.
+Open PRs **only** against upstream `Shamrock-code/Shamrock`, base branch
+`main`. **Never open a PR on a fork** (e.g. `<user>/Shamrock`).
 
-If the agent environment can only open a PR on a fork, put an upstream compare
-link at the top of the PR description so the user can open the PR against
-upstream directly:
+If the agent environment cannot open a PR on upstream (e.g. a cloud session
+whose GitHub access only covers a fork), do not fall back to the fork. Push
+the branch and give the user this upstream compare link in chat, so they
+can open the PR against upstream themselves:
 
 ```text
 https://github.com/Shamrock-code/Shamrock/compare/main...<fork-owner>:Shamrock:<branch>?expand=1

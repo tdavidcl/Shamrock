@@ -432,8 +432,7 @@ namespace shamrock::patch {
         void override_patch_field(std::string field_name, std::vector<T> &vec) {
             u32 len              = vec.size();
             PatchDataField<T> &f = get_field<T>(pdl().get_field_idx<T>(field_name));
-            sycl::buffer<T> buf(vec.data(), len);
-            f.override(buf, len);
+            f.override(vec, len);
         }
 
         /**
@@ -509,20 +508,6 @@ namespace shamrock::patch {
                 vmin,
                 vmax);
         };
-
-        // auto get_vec_idx = [&](T vmin, T vmax) -> std::vector<u32> {
-        //     return main_field.get_elements_with_range(
-        //         [&](T val, T vmin, T vmax) {
-        //             if (shambase::VectorProperties<T>::dimension == 3) {
-        //                 return shammath::is_in_half_open(val, vmin, vmax);
-        //             } else {
-        //                 throw shambase::make_except_with_loc<std::runtime_error>(
-        //                     "dimension != 3 is not handled");
-        //             }
-        //         },
-        //         vmin,
-        //         vmax);
-        // };
 
         std::vector<u32> idx_lst = get_vec_idx(bmin, bmax);
 

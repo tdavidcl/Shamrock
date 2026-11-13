@@ -117,13 +117,18 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                               "    -> calling this is a no-op,\n"
                               "    -> you can remove the call to that function"););
             })
+        .def("set_filter_empty_patch_gz", &TConfig::set_filter_empty_patch_gz)
         .def("set_smoothing_length_density_based", &TConfig::set_smoothing_length_density_based)
         .def(
             "set_smoothing_length_density_based_neigh_lim",
             &TConfig::set_smoothing_length_density_based_neigh_lim)
+        .def(
+            "set_smoothing_length_density_based_bisecting_nr",
+            &TConfig::set_smoothing_length_density_based_bisecting_nr)
         .def("set_enable_particle_reordering", &TConfig::set_enable_particle_reordering)
         .def("set_particle_reordering_step_freq", &TConfig::set_particle_reordering_step_freq)
         .def("set_show_ghost_zone_graph", &TConfig::set_show_ghost_zone_graph)
+        .def("set_show_ghost_stats", &TConfig::set_show_ghost_stats)
         .def("use_luminosity", &TConfig::use_luminosity)
         .def("compute_GW", &TConfig::use_GW)
         .def("set_save_dt_to_fields", &TConfig::set_save_dt_to_fields)
@@ -165,6 +170,15 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             },
             py::kw_only(),
             py::arg("mu_e"))
+        .def(
+            "set_eos_barotropic",
+            [](TConfig &self, Tscal cs0, Tscal rho0, Tscal gamma0) {
+                self.set_eos_barotropic(cs0, rho0, gamma0);
+            },
+            py::kw_only(),
+            py::arg("cs0"),
+            py::arg("rho0"),
+            py::arg("gamma0") = Tscal{5.0 / 3.0})
         .def("set_artif_viscosity_None", &TConfig::set_artif_viscosity_None)
         .def(
             "set_artif_viscosity_Constant",
@@ -220,43 +234,23 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("beta_AV"))
         .def(
             "set_IdealMHD",
-            [](TConfig &self,
-               Tscal sigma_mhd,
-               Tscal sigma_u,
-               Tscal alpha_B,
-               Tscal alpha_AV,
-               Tscal beta_AV) {
-                self.set_ideal_mhd({sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV});
+            [](TConfig &self, Tscal sigma_mhd, Tscal alpha_B) {
+                self.set_ideal_mhd({sigma_mhd, alpha_B});
             },
             py::kw_only(),
             py::arg("sigma_mhd"),
-            py::arg("sigma_u"),
-            py::arg("alpha_B")  = 1.0,
-            py::arg("alpha_AV") = 1.0,
-            py::arg("beta_AV")  = 1.0)
+            py::arg("alpha_B") = 1.0)
         .def(
             "set_NonIdealMHD",
-            [](TConfig &self,
-               Tscal sigma_mhd,
-               Tscal sigma_u,
-               Tscal etaO,
-               Tscal etaH,
-               Tscal etaAD,
-               Tscal alpha_B,
-               Tscal alpha_AV,
-               Tscal beta_AV) {
-                self.set_non_ideal_mhd(
-                    {sigma_mhd, sigma_u, alpha_B, alpha_AV, beta_AV, etaO, etaH, etaAD});
+            [](TConfig &self, Tscal sigma_mhd, Tscal etaO, Tscal etaH, Tscal etaAD, Tscal alpha_B) {
+                self.set_non_ideal_mhd({sigma_mhd, alpha_B, etaO, etaH, etaAD});
             },
             py::kw_only(),
             py::arg("sigma_mhd"),
-            py::arg("sigma_u"),
             py::arg("etaO"),
             py::arg("etaH"),
             py::arg("etaAD"),
-            py::arg("alpha_B")  = 1.0,
-            py::arg("alpha_AV") = 1.0,
-            py::arg("beta_AV")  = 1.0)
+            py::arg("alpha_B") = 1.0)
         .def(
             "set_self_gravity_none",
             [](TConfig &self) {
@@ -333,7 +327,8 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                bool ensure_s_j_positivity,
                bool smooth_s_positivity_limiter,
                bool dust_corrected_av,
-               std::optional<Tscal> clamp_dust_frac) {
+               std::optional<Tscal> clamp_dust_frac,
+               bool pair_gate_s_positivity_limiter) {
                 self.dust_config.set_monofluid_tva(
                     nvar,
                     pure_diffusion_mode,
@@ -343,18 +338,20 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                     ensure_s_j_positivity,
                     smooth_s_positivity_limiter,
                     dust_corrected_av,
-                    clamp_dust_frac);
+                    clamp_dust_frac,
+                    pair_gate_s_positivity_limiter);
             },
             py::kw_only(),
             py::arg("nvar"),
-            py::arg("pure_diffusion_mode")         = false,
-            py::arg("C_1_fluid")                   = 0.1,
-            py::arg("C_drift")                     = 1.0,
-            py::arg("cfl_density_threshold")       = shambase::get_epsilon<Tscal>(),
-            py::arg("ensure_s_j_positivity")       = true,
-            py::arg("smooth_s_positivity_limiter") = false,
-            py::arg("dust_corrected_av")           = false,
-            py::arg("clamp_dust_frac")             = std::nullopt)
+            py::arg("pure_diffusion_mode")            = false,
+            py::arg("C_1_fluid")                      = 0.1,
+            py::arg("C_drift")                        = 1.0,
+            py::arg("cfl_density_threshold")          = shambase::get_epsilon<Tscal>(),
+            py::arg("ensure_s_j_positivity")          = true,
+            py::arg("smooth_s_positivity_limiter")    = false,
+            py::arg("dust_corrected_av")              = false,
+            py::arg("clamp_dust_frac")                = std::nullopt,
+            py::arg("pair_gate_s_positivity_limiter") = false)
         .def(
             "set_dust_mode_monofluid_complete",
             [](TConfig &self, u32 ndust) {
@@ -388,6 +385,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
                Tscal vfrag_threshold,
                std::vector<Tscal> massgrid,
                py::array_t<Tscal> tabflux_coag,
+               Tscal tau_frac,
                std::optional<py::array_t<Tscal>> tensor_tabflux_frag_T1,
                std::optional<py::array_t<Tscal>> tensor_tabflux_frag_T2) {
                 if (massgrid.size() == 0) {
@@ -452,6 +450,7 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
 
                 self.dust_config.set_dust_evol_coala(
                     {.rhodust_eps            = rhodust_eps,
+                     .tau_frac               = tau_frac,
                      .vfrag_threshold        = vfrag_threshold,
                      .massgrid               = massgrid,
                      .tabflux_coag           = tensor_to_vec(tabflux_coag, "tabflux_coag"),
@@ -462,8 +461,37 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             py::arg("vfrag_threshold"),
             py::arg("massgrid"),
             py::arg("tabflux_coag"),
+            py::arg("tau_frac")               = Tscal(10),
             py::arg("tensor_tabflux_frag_T1") = std::nullopt,
-            py::arg("tensor_tabflux_frag_T2") = std::nullopt)
+            py::arg("tensor_tabflux_frag_T2") = std::nullopt,
+            R"pbdoc(
+        Enable the COALA dust coagulation source term, with fragmentation when both
+        fragmentation tensors are given.
+
+        Args:
+            rhodust_eps: Dust density floor.
+            vfrag_threshold: Fragmentation velocity threshold, must be positive.
+                In coagulation-only mode, a pair of dust bins whose
+                differential velocity ``|dv_ij|`` exceeds this value gets
+                ``dv_ij = 0``. This is a crude stand-in for fragmentation
+                ("poor man" fragmentation), not a fragmentation model. Pass
+                ``math.inf`` to disable it. With the fragmentation tensors, it is
+                also the fragmentation velocity of the fragmentation probability.
+            massgrid: Dust mass grid bin edges, of size ``nbins + 1``.
+            tabflux_coag: Tabulated coagulation flux, of shape
+                ``(nbins, nbins, nbins)``.
+            tau_frac: The source term on ``s_j`` is integrated implicitly over
+                ``dt_eff = max(dt, tau_frac * rhodust_eps / |S|)``, that is over at
+                least the time needed to move ``tau_frac * rhodust_eps``. This bounds
+                the rate of an empty bin when ``dt`` is null or tiny (e.g. right after
+                a dust injection). Must be positive.
+            tensor_tabflux_frag_T1: Tabulated fragmentation flux tensor T1, of shape
+                ``(nbins, nbins, nbins)``. Must be set together with
+                ``tensor_tabflux_frag_T2``.
+            tensor_tabflux_frag_T2: Tabulated fragmentation flux tensor T2, of shape
+                ``(nbins, nbins, nbins)``. Must be set together with
+                ``tensor_tabflux_frag_T1``.
+        )pbdoc")
         .def(
             "set_dust_ballabio_ts_limiter",
             [](TConfig &self, bool enabled) {
@@ -1824,6 +1852,28 @@ void add_instance(py::module &m, std::string name_config, std::string name_model
             [](T &self) {
                 return self.get_dt_sph();
             })
+        .def(
+            "get_last_cfl_dts",
+            [](T &self) {
+                py::dict ret;
+                for (auto &[name, value] : self.solver.get_last_cfl_dts()) {
+                    ret[py::str(name)] = value;
+                }
+                return ret;
+            },
+            R"==(
+    Get the last CFL timesteps stored in the synchronized edges.
+
+    Returns a dict keyed by synchronized edge name:
+
+    - ``"cfl_dt"``: the global CFL timestep of the last step (min over all CFL conditions).
+    - ``"cfl_dt_<type>"`` (e.g. ``"cfl_dt_courant"``, ``"cfl_dt_force"``,
+      ``"cfl_dt_sink_sink"``): the CFL timestep of each condition enabled in the solver
+      config, only present when ``show_cfl_detail`` is enabled.
+
+    All values are 0 before the first step. A condition that was not evaluated during the
+    last step (e.g. ``"cfl_dt_sink_sink"`` with no sinks) keeps its previous value.
+)==")
         .def(
             "set_time",
             [](T &self, Tscal t) {
