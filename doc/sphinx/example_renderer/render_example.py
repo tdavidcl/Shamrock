@@ -409,6 +409,10 @@ def example_context(example):
     old_cwd = os.getcwd()
     old_argv = sys.argv
     old_path = list(sys.path)
+    # print() output is block-buffered when stdout is not a terminal (CI logs, tee):
+    # flush every line so it shows up live and in order with the C++ logs
+    with contextlib.suppress(AttributeError, ValueError):
+        sys.stdout.reconfigure(line_buffering=True)
     os.environ["MPLBACKEND"] = "Agg"
     plt = None
     old_show = None

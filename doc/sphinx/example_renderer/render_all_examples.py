@@ -22,6 +22,7 @@ always with the plain python interpreter (no launcher needed).
 
 import argparse
 import concurrent.futures
+import contextlib
 import fnmatch
 import hashlib
 import json
@@ -29,6 +30,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -56,6 +58,18 @@ def cache_key(path, extra):
     h.update(RUNNER.read_bytes())
     h.update((extra or "").encode())
     return h.hexdigest()
+
+
+def kill_tree(proc, grace=10):
+    """SIGTERM then SIGKILL the process group started by ``proc``."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, sig)
+        try:
+            proc.wait(timeout=grace)
+            return
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def out_folder(out, src, path):
@@ -89,18 +103,16 @@ def render_one(path, opts, executes):
     with log.open("w") as f:
         f.write(f"$ {' '.join(shlex.quote(c) for c in cmd)}\n")
         f.flush()
+        # own session: on timeout the whole process tree (launcher wrapper, mpirun,
+        # shamrock ranks) is killed, not only the direct child
+        proc = subprocess.Popen(
+            cmd, env=env, stdout=f, stderr=subprocess.STDOUT, start_new_session=True
+        )
         try:
-            proc = subprocess.run(
-                cmd,
-                env=env,
-                stdout=f,
-                stderr=subprocess.STDOUT,
-                check=False,
-                timeout=opts.timeout or None,
-            )
-            returncode = proc.returncode
+            returncode = proc.wait(timeout=opts.timeout or None)
         except subprocess.TimeoutExpired:
             returncode = None
+            kill_tree(proc)
     elapsed = time.perf_counter() - t0
     if returncode is None:
         return path, f"FAILED (timeout {opts.timeout:.0f} s)", elapsed, log
