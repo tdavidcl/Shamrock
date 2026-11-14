@@ -42,7 +42,7 @@ ucte = shamrock.Constants(codeu)
 
 
 # Resolution
-Npart = int(os.environ.get("NPART", "100000"))
+Npart = int(float(os.environ.get("NPART", "100000")))
 print(f"Npart = {Npart} (NPART={os.environ.get('NPART', 'not set')!r})")
 
 # Domain decomposition parameters
@@ -91,7 +91,7 @@ gamma = 1.4
 print(f"ndust = {ndust}")
 
 mrn_pow = 3.5
-mrn_cutoff_si = np.inf  # would be 250e-9 normally
+mrn_cutoff_si = np.inf  # would be 250e-9 normally but we test all bins
 
 epsilon_base = 0.01
 
