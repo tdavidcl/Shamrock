@@ -301,7 +301,7 @@ namespace shamphys {
      *
      * Takes the fragmentation tensors \f$T_1\f$ and \f$T_2\f$ in addition to
      * `tensor_tabflux_coag`, and weights each pair \f$(l,m)\f$ by the coagulation and
-     * fragmentation probabilities returned by `evol_prob(dv(l, m))`:
+     * fragmentation probabilities returned by `evol_prob(dv(l, m), vfrag(l, m))`:
      *
      * \f[
      *     \mathrm{flux}_j = \sum_{l,m} \mathrm{dv}_{lm}\, g_l\, g_m \left[
@@ -320,14 +320,18 @@ namespace shamphys {
      * @param tensor_tabflux_frag_T2  Rank-3 `std::mdspan` of the fragmentation tensor
      *                                \f$T_2\f$; same extents
      * @param dv                      Pair-wise differential-velocity callable
+     * @param vfrag                   Pair-wise fragmentation threshold velocity callable,
+     *                                invoked as `vfrag(l, m)`
      * @param evol_prob               Callable returning the coagulation / fragmentation
      *                                probabilities (PEvol) for a given differential velocity
+     *                                and fragmentation threshold velocity
      * @param flux                    Rank-1 `std::mdspan` of output fluxes; extent @p nbins,
      *                                written in place
      */
-    template<class Func, class FuncEvol>
-        requires requires(Func f, int a, int b) {
+    template<class Func, class FuncVfrag, class FuncEvol>
+        requires requires(Func f, FuncVfrag fv, int a, int b) {
             { f(a, b) };
+            { fv(a, b) };
         }
     inline void compute_flux_coagfrag_k0_kdv(
         int nbins,
@@ -336,13 +340,14 @@ namespace shamphys {
         shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T1,
         shambase::is_mdspan_rank<3> auto tensor_tabflux_frag_T2,
         Func &&dv,
+        FuncVfrag &&vfrag,
         FuncEvol &&evol_prob,
         shambase::is_mdspan_rank<1> auto flux) {
 
         using Tscal = typename decltype(gij)::value_type;
         static_assert(
-            std::is_same_v<std::invoke_result_t<FuncEvol, Tscal>, PEvol<Tscal>>,
-            "evol_prob must take a dv value and return a PEvol<Tscal>");
+            std::is_same_v<std::invoke_result_t<FuncEvol, Tscal, Tscal>, PEvol<Tscal>>,
+            "evol_prob must take (dv, vfrag) values and return a PEvol<Tscal>");
 
         SHAM_ASSERT(gij.extent(0) == nbins);
         SHAM_ASSERT(flux.extent(0) == nbins);
@@ -366,7 +371,7 @@ namespace shamphys {
                 auto dv_lm = dv(l, m);
                 auto term  = dv_lm * gij[l] * gij[m];
 
-                PEvol<Tscal> probas = evol_prob(dv_lm);
+                PEvol<Tscal> probas = evol_prob(dv_lm, vfrag(l, m));
 
                 auto term_coag = probas.pcoag * term;
                 auto term_frag = probas.pfrag * term;
@@ -401,15 +406,19 @@ namespace shamphys {
      * @param tabflux_frag_T1  View of the sparse fragmentation tensor \f$T_1\f$
      * @param tabflux_frag_T2  View of the sparse fragmentation tensor \f$T_2\f$
      * @param dv               Pair-wise differential-velocity callable, invoked as `dv(l, m)`
+     * @param vfrag            Pair-wise fragmentation threshold velocity callable, invoked as
+     *                         `vfrag(l, m)`
      * @param evol_prob        Callable returning the coagulation / fragmentation probabilities
-     *                         (PEvol) for a given differential velocity
+     *                         (PEvol) for a given differential velocity and fragmentation
+     *                         threshold velocity, invoked as `evol_prob(dv(l, m), vfrag(l, m))`
      * @param flux             Rank-1 `std::mdspan` of output fluxes; extent @p nbins, written in
      *                         place
      */
-    template<class T, class Tidx, class Func, class FuncEvol>
-        requires requires(Func f, int a, int b, FuncEvol fe, T dv_val) {
+    template<class T, class Tidx, class Func, class FuncVfrag, class FuncEvol>
+        requires requires(Func f, FuncVfrag fv, int a, int b, FuncEvol fe, T dv_val, T vfrag_val) {
             { f(a, b) };
-            { fe(dv_val) } -> std::same_as<PEvol<T>>;
+            { fv(a, b) };
+            { fe(dv_val, vfrag_val) } -> std::same_as<PEvol<T>>;
         }
     inline void compute_flux_coagfrag_k0_kdv(
         int nbins,
@@ -418,6 +427,7 @@ namespace shamphys {
         TabfluxCoagK0SparseView<T, Tidx> tabflux_frag_T1,
         TabfluxCoagK0SparseView<T, Tidx> tabflux_frag_T2,
         Func &&dv,
+        FuncVfrag &&vfrag,
         FuncEvol &&evol_prob,
         shambase::is_mdspan_rank<1> auto flux) {
 
@@ -443,7 +453,7 @@ namespace shamphys {
                 auto dv_lm = dv(l, m);
                 auto term  = dv_lm * gij[l] * gij[m];
 
-                PEvol<T> probas = evol_prob(dv_lm);
+                PEvol<T> probas = evol_prob(dv_lm, vfrag(l, m));
 
                 auto term_coag = probas.pcoag * term;
                 auto term_frag = probas.pfrag * term;
@@ -523,11 +533,12 @@ namespace shamphys {
     }
 
     /// Coagulation + fragmentation variant of coala_k0_source_term
-    template<class T, class FuncDv, class FuncEvol, class FuncRhoDust>
+    template<class T, class FuncDv, class FuncVfrag, class FuncEvol, class FuncRhoDust>
     void coala_k0_coagfrag_source_term(
         int nbins,
         /* inputs */
         FuncDv &&dv,
+        FuncVfrag &&vfrag,
         FuncEvol &&evol_prob,
         FuncRhoDust &&rho_dust,
         T rho_eps,
@@ -547,7 +558,15 @@ namespace shamphys {
 
         // compute flux for all dust bins
         shamphys::compute_flux_coagfrag_k0_kdv(
-            nbins, gij, tabflux_coag, tabflux_frag_T1, tabflux_frag_T2, dv, evol_prob, flux);
+            nbins,
+            gij,
+            tabflux_coag,
+            tabflux_frag_T1,
+            tabflux_frag_T2,
+            dv,
+            vfrag,
+            evol_prob,
+            flux);
 
         // compute flux diff and store result
         shamphys::coala_flux_diff(flux, S_coag);

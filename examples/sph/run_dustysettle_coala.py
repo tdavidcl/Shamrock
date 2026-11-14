@@ -136,7 +136,7 @@ K0_multiplier = 1
 use_coala_frag = True
 frac_mass_fragments = 0.1  # mass fraction of the colliding pair that ends up in fragments
 beta = -11.0 / 6.0  # power law of the fragment mass distribution
-v_frag = 1 * codeu.get("m") / codeu.get("s")  # fragmentation velocity (1e2 cm/s)
+v_frag0 = 1 * codeu.get("m") / codeu.get("s")  # fragmentation velocity (1e2 cm/s)
 
 # Resolution (lattice size)
 lx = 12
@@ -665,7 +665,7 @@ def setup_model():
         # with the fragmentation tensors the threshold is the fragmentation velocity
         cfg.set_dust_evol_coala_coag(
             rhodust_eps,
-            v_frag,
+            v_frag0,
             massgrid_edges,
             tabflux_coag,
             tau_frac=tau_frac,

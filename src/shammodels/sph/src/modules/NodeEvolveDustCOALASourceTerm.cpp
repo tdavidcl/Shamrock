@@ -244,16 +244,27 @@ namespace shammodels::sph::modules {
 
                     auto dv = [&, delta_v = delta_v_j + id_a_d](int i, int j) {
                         // dv_ij = v_dust_j - v_dust_i = delta_v_j[j] - delta_v_j[i]
-                        // no threshold here, vfrag_threshold enters through evol_prob
                         return sycl::length(delta_v[j] - delta_v[i]);
                     };
 
-                    auto evol_prob = [&](Tscal dv_val) {
+                    // fragmentation threshold of the pair (i, j), energy based such that two
+                    // grains of the same size break for dv > vfrag_threshold. With
+                    // mu_ij = m_i / m_j (log-mean bin masses):
+                    // vfrag_ij = vfrag_threshold * (1 + 1/mu_ij) * sqrt(mu_ij) / 2
+                    // (compute_v_frag in examples/physics/run_coala_coag_frag.py)
+                    auto vfrag = [&](int i, int j) {
+                        Tscal m_i   = sycl::sqrt(massgrid[i] * massgrid[i + 1]);
+                        Tscal m_j   = sycl::sqrt(massgrid[j] * massgrid[j + 1]);
+                        Tscal mu_ij = m_i / m_j;
+                        return (1 + 1 / mu_ij) * sycl::sqrt(mu_ij) * Tscal(0.5) * vfrag_threshold;
+                    };
+
+                    auto evol_prob = [&](Tscal dv_val, Tscal vfrag_val) {
                         // pfrag -> 0 when dv -> 0, handled explicitly since
-                        // vfrag_threshold / dv would give inf * 0 = NaN
+                        // vfrag / dv would give inf * 0 = NaN
                         Tscal pfrag = 0;
                         if (dv_val > 0) {
-                            Tscal x2 = vfrag_threshold / dv_val;
+                            Tscal x2 = vfrag_val / dv_val;
                             x2 *= x2;
                             pfrag = (Tscal(1.5) * x2 + 1) * sycl::exp(Tscal(-1.5) * x2);
                         }
@@ -269,6 +280,7 @@ namespace shammodels::sph::modules {
                     shamphys::coala_k0_coagfrag_source_term(
                         nbins,
                         dv,
+                        vfrag,
                         evol_prob,
                         rho_dust,
                         rho_eps,

@@ -136,9 +136,15 @@ void test_coala_flux_coagfrag_sparse(int nbins, f64 zero_fraction) {
         return std::sqrt(dx * dx + dy * dy + dz * dz) + 0.1 * (l + 1) / (m + 2);
     };
 
-    // dv dependent probabilities with pcoag + pfrag < 1 (non-zero bouncing)
-    auto evol_prob = [](f64 dv_val) {
-        f64 pfrag = 0.8 * dv_val / (1 + dv_val);
+    // pair dependent fragmentation threshold, not symmetric on purpose
+    auto vfrag = [](int l, int m) {
+        return 0.5 + 0.1 * l + 0.05 * m;
+    };
+
+    // dv and vfrag dependent probabilities with pcoag + pfrag < 1 (non-zero bouncing)
+    auto evol_prob = [](f64 dv_val, f64 vfrag_val) {
+        f64 x     = dv_val / vfrag_val;
+        f64 pfrag = 0.8 * x / (1 + x);
         return shamphys::PEvol<f64>{0.9 - pfrag, pfrag};
     };
 
@@ -153,6 +159,7 @@ void test_coala_flux_coagfrag_sparse(int nbins, f64 zero_fraction) {
         tab_frag_T1_span,
         tab_frag_T2_span,
         dv,
+        vfrag,
         evol_prob,
         flux_ref_span);
 
@@ -176,6 +183,7 @@ void test_coala_flux_coagfrag_sparse(int nbins, f64 zero_fraction) {
         make_view(sparse_frag_T1),
         make_view(sparse_frag_T2),
         dv,
+        vfrag,
         evol_prob,
         flux_span);
 
