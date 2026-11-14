@@ -636,8 +636,22 @@ class DustMassAnalysis:
             print("all dust mass is zero, replacing by nans")
             dust_mass = [np.nan for _ in range(ndust)]
 
+        # mass of the sinks and dust mass accreted by the sinks (summed over all sinks)
+        sinks = self.model.get_sinks()
+        sink_mass = float(sum(s["mass"] for s in sinks))
+        sink_dust_mass = np.zeros(ndust)
+        for s in sinks:
+            if "accreted_dust_mass" in s:
+                sink_dust_mass += np.array(s["accreted_dust_mass"])
+
         self.analysis_helper.analysis_save(
-            ianalysis, {"time": self.model.get_time(), "dust_mass": dust_mass}
+            ianalysis,
+            {
+                "time": self.model.get_time(),
+                "dust_mass": dust_mass,
+                "sink_mass": sink_mass,
+                "sink_dust_mass": sink_dust_mass,
+            },
         )
 
     def render(self):
@@ -645,13 +659,20 @@ class DustMassAnalysis:
 
         t = []
         dust_mass = []
+        sink_mass = []
+        sink_dust_mass = []
         for ianalysis in ids:
             ld = self.analysis_helper.load_analysis(ianalysis).item()
             t.append(ld["time"])
             dust_mass.append(ld["dust_mass"])
+            # records written before the sink quantities were added have none
+            sink_mass.append(ld.get("sink_mass", np.nan))
+            sink_dust_mass.append(ld.get("sink_dust_mass", [np.nan] * ndust))
 
         t = np.array(t)
         dust_mass = np.array(dust_mass)
+        sink_mass = np.array(sink_mass, dtype=float)
+        sink_dust_mass = np.array(sink_dust_mass, dtype=float)
 
         # tinject = first non nan
         iinject = np.argmax(~np.isnan(dust_mass)[:, 0])
@@ -676,9 +697,12 @@ class DustMassAnalysis:
             )
             St[k] = ts / t_dyn
 
+        # dust in the disc + dust accreted by the sinks (missing sink records count as 0)
+        dust_mass_with_sinks = dust_mass + np.nan_to_num(sink_dust_mass, nan=0.0)
+
         plt.figure(dpi=250)
         for k in range(ndust):
-            mh = dust_mass[:, k]
+            mh = dust_mass_with_sinks[:, k]
             deviation = (mh / mh[iinject]) - 1
 
             plt.plot(
@@ -687,7 +711,7 @@ class DustMassAnalysis:
                 label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m]",
             )
 
-        total_dust_mass = np.sum(dust_mass, axis=1)
+        total_dust_mass = np.sum(dust_mass_with_sinks, axis=1)
         plt.plot(
             t,
             (total_dust_mass / total_dust_mass[iinject]) - 1,
@@ -699,7 +723,7 @@ class DustMassAnalysis:
         plt.xlabel("t")
         plt.ylabel("$\\delta M_{dust} / M_{dust,0}$")
         plt.yscale("symlog", linthresh=1e-8)
-        plt.title("Dust mass conservation")
+        plt.title("Dust mass conservation (disc + accreted by sinks)")
         plt.legend()
         plt.tight_layout()
         plt.savefig(os.path.join(plot_folder, "dust_mass_history.png"))
@@ -714,6 +738,32 @@ class DustMassAnalysis:
             plt.tight_layout()
             plt.savefig(os.path.join(plot_folder, f"dust_history_dust_{k}.png"))
             plt.close()
+
+        # Dust mass accreted by the sinks
+        plt.figure(dpi=250)
+        for k in range(ndust):
+            plt.plot(
+                t,
+                sink_dust_mass[:, k],
+                label=f"dust {k}, s = {mrn_distribution.grain_size_si[k]:.1e} [m]",
+            )
+
+        plt.plot(
+            t,
+            np.sum(sink_dust_mass, axis=1),
+            color="grey",
+            label="total dust mass",
+            linestyle="--",
+        )
+
+        plt.xlabel("t")
+        plt.ylabel("$M_{dust,sink}$ [M_sol]")
+        plt.yscale("log")
+        plt.title("Dust mass accreted by the sinks")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_folder, "sink_dust_mass_history.png"))
+        plt.close()
 
 
 dust_mass_analysis = DustMassAnalysis(model, analysis_folder, "dust_mass")
