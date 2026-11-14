@@ -163,6 +163,7 @@ namespace shammodels::sph::modules {
             u32 /**/,
             // common to all kernel calls
             const Tscal *__restrict massgrid_ptr,
+            const Tscal *__restrict massgrid_geom_ptr,
             const u32 *__restrict tabflux_pair_offset,
             const u32 *__restrict tabflux_pair_jmin,
             const Tscal *__restrict tabflux_values,
@@ -215,6 +216,8 @@ namespace shammodels::sph::modules {
                         tabflux_frag_T2_pair_jmin,
                         tabflux_frag_T2_values};
                     const_mdspan_rank_1 massgrid(massgrid_ptr, nbins + 1);
+                    // log-mean bin masses sqrt(massgrid[j] * massgrid[j + 1])
+                    const_mdspan_rank_1 massgrid_geom(massgrid_geom_ptr, nbins);
 
                     /* internal */
                     // flux in local memory with a bin-major layout (stride group_size), such
@@ -253,9 +256,7 @@ namespace shammodels::sph::modules {
                     // vfrag_ij = vfrag_threshold * (1 + 1/mu_ij) * sqrt(mu_ij) / 2
                     // (compute_v_frag in examples/physics/run_coala_coag_frag.py)
                     auto vfrag = [&](int i, int j) {
-                        Tscal m_i   = sycl::sqrt(massgrid[i] * massgrid[i + 1]);
-                        Tscal m_j   = sycl::sqrt(massgrid[j] * massgrid[j + 1]);
-                        Tscal mu_ij = m_i / m_j;
+                        Tscal mu_ij = massgrid_geom[i] / massgrid_geom[j];
                         return (1 + 1 / mu_ij) * sycl::sqrt(mu_ij) * Tscal(0.5) * vfrag_threshold;
                     };
 
@@ -366,6 +367,14 @@ namespace shammodels::sph::modules {
         sham::DeviceBuffer<Tscal> massgrid_buf(nbins + 1, dev_sched);
         massgrid_buf.copy_from_stdvec(massgrid);
 
+        // log-mean bin masses, used by the fragmentation threshold of the coag + frag kernel
+        std::vector<Tscal> massgrid_geom(nbins);
+        for (u32 j = 0; j < nbins; ++j) {
+            massgrid_geom[j] = sycl::sqrt(massgrid[j] * massgrid[j + 1]);
+        }
+        sham::DeviceBuffer<Tscal> massgrid_geom_buf(nbins, dev_sched);
+        massgrid_geom_buf.copy_from_stdvec(massgrid_geom);
+
         auto tabflux_coag_bufs
             = make_tabflux_k0_sparse_buffers<Tscal>(nbins, tensor_tabflux_coag, dev_sched);
 
@@ -428,6 +437,7 @@ namespace shammodels::sph::modules {
                     q,
                     sham::MultiRef{
                         massgrid_buf,
+                        massgrid_geom_buf,
                         tabflux_coag_bufs.pair_offset,
                         tabflux_coag_bufs.pair_jmin,
                         tabflux_coag_bufs.values,

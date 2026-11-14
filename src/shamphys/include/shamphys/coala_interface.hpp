@@ -558,15 +558,7 @@ namespace shamphys {
 
         // compute flux for all dust bins
         shamphys::compute_flux_coagfrag_k0_kdv(
-            nbins,
-            gij,
-            tabflux_coag,
-            tabflux_frag_T1,
-            tabflux_frag_T2,
-            dv,
-            vfrag,
-            evol_prob,
-            flux);
+            nbins, gij, tabflux_coag, tabflux_frag_T1, tabflux_frag_T2, dv, vfrag, evol_prob, flux);
 
         // compute flux diff and store result
         shamphys::coala_flux_diff(flux, S_coag);
