@@ -206,7 +206,7 @@ namespace shammodels::sph {
 
             shammodels::sph::add_sink(edges, mass, pos, velocity, accretion_radius);
 
-            pad_sink_accreted_dust_mass();
+            resize_sink_accreted_dust_mass();
         }
 
         /// Number of dust species whose accreted mass is tracked on sinks (monofluid TVA only,
@@ -217,16 +217,18 @@ namespace shammodels::sph {
         }
 
         /**
-         * @brief Zero pad the per species accreted dust mass for sinks without an entry yet.
+         * @brief Resize the per species accreted dust mass to the current sink count, zero padding
+         * the sinks without an entry yet.
          * No-op if the edge is not registered (it only is with monofluid TVA dust, see
          * Solver::init_solver_graph).
          */
-        inline void pad_sink_accreted_dust_mass() {
+        inline void resize_sink_accreted_dust_mass() {
             auto &sync = shambase::get_check_ref(ctx.sched).synchronized_data;
             if (!has_sink_accreted_dust_mass(sync)) {
                 return;
             }
-            resize_sink_accreted_dust_mass(
+            // qualified, as the unqualified name would find this member function
+            shammodels::sph::resize_sink_accreted_dust_mass(
                 get_sink_accreted_dust_mass<Tvec>(sync),
                 get_sink_pos<Tvec>(sync).size(),
                 get_sink_tracked_ndust());
@@ -983,7 +985,7 @@ namespace shammodels::sph {
             }
 
             // dumps predating per species accreted dust mass tracking have no entry for it
-            pad_sink_accreted_dust_mass();
+            resize_sink_accreted_dust_mass();
 
             shamlog_debug_ln("Sys", "build local scheduler tables");
             sched.owned_patch_id = sched.patch_list.build_local();
