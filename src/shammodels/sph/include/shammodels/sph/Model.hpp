@@ -206,7 +206,7 @@ namespace shammodels::sph {
 
             shammodels::sph::add_sink(edges, mass, pos, velocity, accretion_radius);
 
-            ensure_sink_accreted_dust_mass();
+            pad_sink_accreted_dust_mass();
         }
 
         /// Number of dust species whose accreted mass is tracked on sinks (monofluid TVA only,
@@ -217,18 +217,19 @@ namespace shammodels::sph {
         }
 
         /**
-         * @brief With monofluid TVA dust, register the per species accreted dust mass sink edge if
-         * missing and zero pad it for sinks without an entry yet. No-op otherwise.
+         * @brief Zero pad the per species accreted dust mass for sinks without an entry yet.
+         * No-op if the edge is not registered (it only is with monofluid TVA dust, see
+         * Solver::init_solver_graph).
          */
-        inline void ensure_sink_accreted_dust_mass() {
-            u32 ndust = get_sink_tracked_ndust();
-            if (ndust == 0) {
+        inline void pad_sink_accreted_dust_mass() {
+            auto &sync = shambase::get_check_ref(ctx.sched).synchronized_data;
+            if (!has_sink_accreted_dust_mass(sync)) {
                 return;
             }
-            auto &sync = shambase::get_check_ref(ctx.sched).synchronized_data;
-            ensure_sink_accreted_dust_mass_edge<Tvec>(sync);
             resize_sink_accreted_dust_mass(
-                get_sink_accreted_dust_mass<Tvec>(sync), get_sink_pos<Tvec>(sync).size(), ndust);
+                get_sink_accreted_dust_mass<Tvec>(sync),
+                get_sink_pos<Tvec>(sync).size(),
+                get_sink_tracked_ndust());
         }
 
         template<class T>
@@ -944,28 +945,16 @@ namespace shammodels::sph {
 
             PatchScheduler &sched = shambase::get_check_ref(ctx.sched);
 
-            ensure_sink_edges<Tvec>(sched.synchronized_data);
-            if (j.contains("sinks") && !j.at("sinks").is_null()) {
-                std::vector<SinkParticle<Tvec>> out;
-                j.at("sinks").get_to(out);
-                auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
-                set_sink_particles(edges, out);
-            }
-
-            // dumps predating per species accreted dust mass tracking have no entry for it
-            ensure_sink_accreted_dust_mass();
-
-            // Migrate old dumps that stored time/dt/cfl in solver_config.time_state
-            auto sync_names = sched.synchronized_data.get_edge_names();
-
             // PR #1928 introduces time/dt/cfl synchronization edges
             // so checking for time is equivalent to commit >= PR #1928
-            bool had_time_edge
-                = std::find(sync_names.begin(), sync_names.end(), "time") != sync_names.end();
+            // (must be checked before init_solver_graph, which creates them if missing)
+            bool had_time_edge = sched.synchronized_data.has_edge("time");
 
-            // create time/dt/cfl synchronization edges if not present
-            solver.ensure_time_state_edges();
+            solver.init_ghost_layout();
 
+            solver.init_solver_graph();
+
+            // Migrate old dumps that stored time/dt/cfl in solver_config.time_state
             if (!had_time_edge) { // before PR #1928
                 if (j.at("solver_config").contains("time_state")) {
                     ON_RANK_0(
@@ -984,9 +973,17 @@ namespace shammodels::sph {
                 }
             }
 
-            solver.init_ghost_layout();
+            // Old dumps stored sinks in the metadata rather than as synchronized edges
+            // (sink edges are ensured by init_solver_graph)
+            if (j.contains("sinks") && !j.at("sinks").is_null()) {
+                std::vector<SinkParticle<Tvec>> out;
+                j.at("sinks").get_to(out);
+                auto edges = get_sink_edges<Tvec>(sched.synchronized_data);
+                set_sink_particles(edges, out);
+            }
 
-            solver.init_solver_graph();
+            // dumps predating per species accreted dust mass tracking have no entry for it
+            pad_sink_accreted_dust_mass();
 
             shamlog_debug_ln("Sys", "build local scheduler tables");
             sched.owned_patch_id = sched.patch_list.build_local();

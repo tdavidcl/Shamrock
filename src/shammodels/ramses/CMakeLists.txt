@@ -14,10 +14,15 @@ set(Sources
     src/pyRamsesModel.cpp
     src/Solver.cpp
     src/modules/NodeComputeFlux.cpp
-    src/modules/DragIntegrator.cpp
-    src/modules/TimeIntegrator.cpp
+    src/modules/ApplyDragIRK1.cpp
+    src/modules/ApplyDragExpo.cpp
+    src/modules/ForwardEulerGas.cpp
+    src/modules/ForwardEulerDust.cpp
     src/modules/ResetExtForceAcc.cpp
     src/modules/AddExtForceConstantGravity.cpp
+    src/modules/AddExtForcePointMassGravity.cpp
+    src/modules/AddExtForceField.cpp
+    src/modules/ComputeNextRho.cpp
     src/modules/ApplyExtForceGas.cpp
     src/modules/ApplyExtForceDust.cpp
     src/modules/ApplyExtForceGasTrapezoidal.cpp
@@ -43,6 +48,12 @@ set(Sources
     src/modules/ComputeSumOverV.cpp
     src/modules/InterpolateToFace.cpp
     src/modules/CGInit.cpp
+    src/modules/NodeSpMVPoisson3D.cpp
+    src/modules/NodeCGLoop.cpp
+    src/modules/NodeJacobiPreconditioner.cpp
+    src/modules/BiCGSTABInit.cpp
+    src/modules/NodeBiCGSTABLoop.cpp
+    src/modules/NodeSelfGravityAcceleration.cpp
     src/modules/ComputeAMRLevel.cpp
     src/modules/ResidualDot.cpp
     src/modules/FindGhostLayerCandidates.cpp

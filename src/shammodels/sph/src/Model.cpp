@@ -81,12 +81,6 @@ void shammodels::sph::Model<Tvec, SPHKernel>::init() {
     });
     solver.init_ghost_layout();
 
-    solver.ensure_time_state_edges();
-
-    ensure_sink_edges<Tvec>(sched.synchronized_data);
-    ensure_sink_accreted_dust_mass();
-
-    // must be bone after time state edges are ensured (it will connect to it)
     solver.init_solver_graph();
 }
 
