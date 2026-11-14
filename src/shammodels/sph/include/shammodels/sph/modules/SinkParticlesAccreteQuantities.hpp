@@ -16,12 +16,14 @@
  *
  */
 
+#include "shambase/exception.hpp"
 #include "shambackends/vec.hpp"
 #include "shamrock/solvergraph/Field.hpp"
 #include "shamrock/solvergraph/IFieldSpan.hpp"
 #include "shamrock/solvergraph/Indexes.hpp"
 #include "shamsolvergraph/edge/IDataEdge.hpp"
 #include "shamsolvergraph/node/INode.hpp"
+#include <stdexcept>
 #include <vector>
 
 #define NODE_EDGES(X_RO, X_RW, X_RO_OPTIONAL, X_RW_OPTIONAL)                                       \
@@ -65,10 +67,16 @@ namespace shammodels::sph::modules {
         /**
          * @param ndust number of dust species whose accreted mass is tracked in
          * sink_accreted_dust_mass (0 to disable the tracking)
-         * @param hfactd SPH kernel hfactd, used to recover rho from h with S_j
+         * @param hfactd SPH kernel hfactd, used to recover rho from h with S_j (required when
+         * ndust != 0)
          */
         SinkParticlesAccreteQuantities(u32 ndust = 0, Tscal hfactd = 0)
-            : ndust(ndust), hfactd(hfactd) {}
+            : ndust(ndust), hfactd(hfactd) {
+            if (ndust != 0 && hfactd == 0) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "hfactd must be set when tracking the accreted dust mass (ndust != 0)");
+            }
+        }
 
         EXPAND_NODE_EDGES_OPTIONAL(NODE_EDGES)
 
