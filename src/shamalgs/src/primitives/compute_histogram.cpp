@@ -14,10 +14,16 @@
  */
 
 #include "shamalgs/primitives/compute_histogram.hpp"
+#include "shamalgs/ImplVariant.hpp"
 #include "shamalgs/impl_registry.hpp"
 
 namespace shamalgs::primitives::impl {
 
+    /// Implementation selector type for compute_histogram
+    using ComputeHistogramImpl
+        = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
+
+    /// Implementation selector for compute_histogram
     ComputeHistogramImpl compute_histogram_impl{
         [](const sham::DeviceScheduler_ptr &dev_sched, auto &self) {
             if (dev_sched->ctx->device->prop.type == sham::DeviceType::GPU) {
@@ -29,5 +35,13 @@ namespace shamalgs::primitives::impl {
 
     // Must come after the global it registers: same TU, so it is initialized after it
     SHAMALGS_REGISTER_IMPL(compute_histogram_impl_name, compute_histogram_impl);
+
+    const ComputeHistogramVariant &get_compute_histogram_impl(
+        const sham::DeviceScheduler_ptr &dev_sched) {
+        if (!compute_histogram_impl.is_set()) {
+            shamalgs::impl_registry::autoselect_impl(compute_histogram_impl_name, dev_sched);
+        }
+        return compute_histogram_impl.get();
+    }
 
 } // namespace shamalgs::primitives::impl

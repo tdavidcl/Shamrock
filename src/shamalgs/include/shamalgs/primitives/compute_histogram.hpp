@@ -19,17 +19,17 @@
 #include "shambase/exception.hpp"
 #include "shambase/overloaded.hpp"
 #include "shambase/string.hpp"
-#include "shamalgs/ImplVariant.hpp"
-#include "shamalgs/impl_registry.hpp"
 #include "shambackends/Device.hpp"
 #include "shambackends/DeviceBuffer.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include "shambackends/kernel_call.hpp"
 #include <shambackends/sycl.hpp>
+#include <string_view>
 #include <optional>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace shamalgs::primitives {
@@ -53,12 +53,19 @@ namespace shamalgs::primitives {
             static constexpr std::string_view variant_type_name = "gpu_oversubscribe";
         };
 
-        /// Implementation selector type for compute_histogram
-        using ComputeHistogramImpl
-            = shamalgs::ImplVariantGlobal<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
+        /// The implementations of compute_histogram
+        using ComputeHistogramVariant
+            = std::variant<Reference, NaiveGpu, GpuTeamFetching, GpuOversubscribe>;
 
-        /// Implementation selector for compute_histogram (defined in compute_histogram.cpp)
-        extern ComputeHistogramImpl compute_histogram_impl;
+        /**
+         * @brief Get the selected implementation of compute_histogram, selecting the default one
+         * for the device behind `dev_sched` first if none is selected yet.
+         *
+         * The selector itself (a shamalgs::ImplVariantGlobal) is defined in
+         * compute_histogram.cpp, so that this header does not need ImplVariant.hpp.
+         */
+        const ComputeHistogramVariant &get_compute_histogram_impl(
+            const sham::DeviceScheduler_ptr &dev_sched);
 
         /// Registry name, shared by its registration and the dispatch site(s)
         constexpr std::string_view compute_histogram_impl_name = "compute_histogram";
@@ -343,10 +350,6 @@ namespace shamalgs::primitives {
 
         sham::DeviceBuffer<T> result(nbins, dev_sched);
 
-        if (!impl::compute_histogram_impl.is_set()) {
-            shamalgs::impl_registry::autoselect_impl(impl::compute_histogram_impl_name, dev_sched);
-        }
-
         std::visit(
             shambase::overloaded{
                 [&](impl::Reference) {
@@ -394,7 +397,7 @@ namespace shamalgs::primitives {
                         input_data...);
                 },
             },
-            impl::compute_histogram_impl.get());
+            impl::get_compute_histogram_impl(dev_sched));
 
         return result;
     }

@@ -34,7 +34,7 @@
 
 #include "shambase/call_lambda.hpp"
 #include "shambase/unique_name_macro.hpp"
-#include "shamalgs/ImplVariant.hpp"
+#include "shamalgs/IImplVariant.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include <string_view>
 #include <string>

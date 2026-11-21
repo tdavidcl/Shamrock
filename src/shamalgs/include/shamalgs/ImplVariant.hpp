@@ -37,6 +37,7 @@
 
 #include "shambase/exception.hpp"
 #include "sham/format/format.hpp"
+#include "shamalgs/IImplVariant.hpp"
 #include "shambackends/DeviceScheduler.hpp"
 #include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
@@ -203,31 +204,6 @@ namespace shamalgs {
     inline std::vector<std::string> variant_default_type_names() {
         return details::impl_variant_alts<Variant>::default_type_names();
     }
-
-    /**
-     * @brief Non-template virtual interface exposed by ImplVariantGlobal, for code that needs
-     * to hold or pass around an implementation selector without knowing its alternative types.
-     */
-    class IImplVariant {
-        public:
-        virtual ~IImplVariant() = default;
-
-        /// Get the currently selected implementation as a single config json string, or a json
-        /// null if no implementation has been selected yet
-        virtual std::string get_current_config() const = 0;
-
-        /// List the available implementations as config json strings, one per alternative
-        virtual std::vector<std::string> get_default_config_list() const = 0;
-
-        /// Select an implementation from a {"implementation": ..., "parameters": ...} json string
-        virtual void set(std::string_view config_json) = 0;
-
-        /// Whether an implementation has been selected yet
-        virtual bool is_set() const = 0;
-
-        /// Select the algorithm's default implementation for the device behind `sched`
-        virtual void autoselect(const sham::DeviceScheduler_ptr &sched) = 0;
-    };
 
     /**
      * @brief Drop-in replacement for the hand-rolled "global variable + enum + name mapping
