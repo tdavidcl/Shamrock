@@ -20,10 +20,7 @@
 #include "shambase/type_traits.hpp"
 #include "shambackends/typeAliasFp16.hpp"
 #include "shambackends/typeAliasVec.hpp"
-
-#if __has_include(<nlohmann/json.hpp>)
-    #include <nlohmann/json.hpp>
-#endif
+#include <nlohmann/json_fwd.hpp>
 
 namespace sham {
 
@@ -111,15 +108,10 @@ namespace sham {
 
 } // namespace sham
 
-#if __has_include(<nlohmann/json.hpp>)
 NLOHMANN_JSON_NAMESPACE_BEGIN
+/// json (de)serialization of sycl::vec, defined in shambackends/type_convert_json.hpp. It is only
+/// declared here so that converting a sycl::vec to/from json without including that header is a
+/// compile error.
 template<typename T, int n>
-struct adl_serializer<sycl::vec<T, n>> {
-    static void to_json(json &j, const sycl::vec<T, n> &p) { j = sham::sycl_vec_to_array(p); }
-
-    static void from_json(const json &j, sycl::vec<T, n> &p) {
-        p = sham::array_to_sycl_vec(j.get<std::array<T, n>>());
-    }
-};
+struct adl_serializer<sycl::vec<T, n>>;
 NLOHMANN_JSON_NAMESPACE_END
-#endif

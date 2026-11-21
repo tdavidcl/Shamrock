@@ -14,7 +14,7 @@
  */
 
 #include "shamrock/patch/SimBox.hpp"
-#include "shambackends/type_convert.hpp"
+#include "shambackends/type_convert_json.hpp"
 #include <nlohmann/json.hpp>
 
 /// from cppreference std::visit page

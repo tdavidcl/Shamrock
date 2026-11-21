@@ -19,7 +19,7 @@
 
 #include "shambase/exception.hpp"
 #include "shambase/overloaded.hpp"
-#include "shambackends/type_convert.hpp"
+#include "shambackends/type_convert_json.hpp"
 #include "shambackends/vec.hpp"
 #include "shammodels/ramses/config/enum_ExtForceCoupling.hpp"
 #include <nlohmann/json.hpp>

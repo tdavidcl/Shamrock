@@ -24,6 +24,7 @@ set(Sources
     src/SyclMpiTypes.cpp
     src/EventList.cpp
     src/sysinfo.cpp
+    src/gpu_core_timeline.cpp
 )
 
 if(SHAMROCK_USE_SHARED_LIB)

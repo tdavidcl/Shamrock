@@ -16,7 +16,7 @@
  *
  */
 
-#include "shambackends/type_convert.hpp"
+#include "shambackends/type_convert_json.hpp"
 #include "shambackends/vec.hpp"
 #include "shamsys/legacy/log.hpp"
 #include <nlohmann/json.hpp>

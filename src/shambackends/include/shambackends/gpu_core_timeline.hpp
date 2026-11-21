@@ -26,13 +26,8 @@
 #include "shamcomm/logs.hpp"
 #include <shambackends/sycl.hpp>
 #include <unordered_map>
-#include <fstream>
 #include <iostream>
 #include <vector>
-
-#if __has_include(<nlohmann/json.hpp>)
-    #include "nlohmann/json.hpp"
-#endif
 
 namespace sham {
 
@@ -46,23 +41,6 @@ namespace sham {
     };
 
 } // namespace sham
-
-#if __has_include(<nlohmann/json.hpp>)
-
-NLOHMANN_JSON_NAMESPACE_BEGIN
-template<>
-struct adl_serializer<sham::TimelineEvent> {
-    static void to_json(json &j, const sham::TimelineEvent &e) {
-        j
-            = {{"start", e.start},
-               {"first_end", e.first_end},
-               {"last_end", e.last_end},
-               {"color", e.color},
-               {"lane", e.lane}};
-    }
-};
-NLOHMANN_JSON_NAMESPACE_END
-#endif
 
 namespace sham {
 
@@ -311,11 +289,8 @@ namespace sham {
             event_count.complete_event_state(e);
         }
 
-#if __has_include(<nlohmann/json.hpp>)
         /**
          * Dumps the timeline events to a JSON file.
-         *
-         * This function is only available if <nlohmann/json.hpp> is included.
          *
          * @param filename The name of the file to dump the timeline events.
          *
@@ -332,26 +307,7 @@ namespace sham {
          * ]
          * </pre>
          */
-        inline void dump_to_file(const std::string &filename) {
-
-            u32 sz = event_count.get_val_at_idx(0);
-
-            std::cout << "dumping to " << filename << " size = " << sz << std::endl;
-
-            std::vector<TimelineEvent> events = this->events.copy_to_stdvec_idx_range(0, sz);
-
-            u64 base_clock = get_base_clock_value();
-
-            for (auto &t : events) {
-                t.start -= base_clock;
-                t.first_end -= base_clock;
-                t.last_end -= base_clock;
-            }
-
-            std::ofstream file(filename);
-            file << nlohmann::json(events).dump(4) << std::endl;
-        }
-#endif
+        void dump_to_file(const std::string &filename);
 
         // inline void open_file(const std::string &filename) {
         //     std::string cmd = "python3 ../buildbot/gpu_core_timeline_read.py ";
