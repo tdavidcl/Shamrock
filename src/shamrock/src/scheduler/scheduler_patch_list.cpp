@@ -14,11 +14,11 @@
  */
 
 #include "shambase/stacktrace.hpp"
-#include "nlohmann/json_fwd.hpp"
 #include "shamalgs/collective/exchanges.hpp"
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/scheduler/HilbertLoadBalance.hpp"
 #include "shamrock/scheduler/scheduler_patch_list.hpp"
+#include <nlohmann/json.hpp>
 #include <random>
 #include <vector>
 

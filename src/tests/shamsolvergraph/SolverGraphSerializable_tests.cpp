@@ -13,6 +13,7 @@
 #include "shamsolvergraph/edge/IEdge.hpp"
 #include "shamsolvergraph/node/INode.hpp"
 #include "shamtest/shamtest.hpp"
+#include <nlohmann/json.hpp>
 #include <string>
 
 class TestNode : public shamrock::solvergraph::INode {

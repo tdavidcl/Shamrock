@@ -17,7 +17,7 @@
 
 #include "shamrock/patch/Patch.hpp"
 #include "shamrock/scheduler/PatchTreeNode.hpp"
-#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <unordered_set>
 
 namespace shamrock::scheduler {

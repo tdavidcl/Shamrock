@@ -19,6 +19,7 @@
 #include "shamcmdopt/env.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamrock/io/ShamrockDump.hpp"
+#include <nlohmann/json.hpp>
 
 namespace shamrock {
 

@@ -18,7 +18,6 @@
 #include "shambase/stacktrace.hpp"
 #include "shambase/string.hpp"
 #include "shambase/time.hpp"
-#include "nlohmann/json.hpp"
 #include "shambackends/math.hpp"
 #include "shambackends/typeAliasVec.hpp"
 #include "shamrock/legacy/patch/base/patchdata.hpp"
@@ -29,6 +28,7 @@
 #include "shamsys/legacy/log.hpp"
 #include "shamsys/legacy/sycl_handler.hpp"
 #include "shamsys/legacy/sycl_mpi_interop.hpp"
+#include <nlohmann/json.hpp>
 #include <ctime>
 #include <memory>
 #include <optional>
@@ -1013,6 +1013,18 @@ std::vector<std::unique_ptr<shamrock::patch::PatchDataLayer>> PatchScheduler::ga
     }
 
     return ret;
+}
+
+void to_json(nlohmann::json &j, const PatchSchedulerConfig &p) {
+    j = nlohmann::json{
+        {"split_load_value", p.split_load_value},
+        {"merge_load_value", p.merge_load_value},
+    };
+}
+
+void from_json(const nlohmann::json &j, PatchSchedulerConfig &p) {
+    j.at("split_load_value").get_to<u64>(p.split_load_value);
+    j.at("merge_load_value").get_to<u64>(p.merge_load_value);
 }
 
 nlohmann::json PatchScheduler::serialize_patch_metadata() {
