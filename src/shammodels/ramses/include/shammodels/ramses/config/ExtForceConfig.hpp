@@ -25,6 +25,7 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -56,7 +57,41 @@ namespace shammodels::basegodunov {
 
         using Variant = std::variant<ConstantGravity, PointMassGravity>;
 
+        /**
+         * @brief Forces of the local shearing box frame (Hill's equations, unstratified)
+         *
+         * Same parameters as the common ``ShearingBoxForce(Omega_0, eta, q)`` of the SPH solver,
+         * with x the radial, y the azimuthal and z the vertical axis (rotation along z), and
+         * x' = x - x_c the radial coordinate relative to the center x_c of the box:
+         *
+         * \f[
+         *  \mathbf{a} = 2 q \Omega_0^2 x' \mathbf{e}_x - 2 \Omega_0 \mathbf{e}_z \times \mathbf{v}
+         *      + 2 \Omega_0 \eta \mathbf{e}_x \quad (\text{gas only for the } \eta \text{ term})
+         * \f]
+         *
+         * i.e. a_x = 2 Omega_0 (q Omega_0 x' + v_y) (+ 2 Omega_0 eta for the gas),
+         * a_y = -2 Omega_0 v_x. The equilibrium flow is v_y = -q Omega_0 x' (with the
+         * shearing-periodic boundary, shear_speed = -q Omega_0 L_x).
+         *
+         * ``eta`` is the constant radial pressure-gradient forcing of the gas, given as the
+         * headwind velocity eta_r v_K (eta_r the usual dimensionless parameter, v_K the Keplerian
+         * velocity): without dust, the gas equilibrium is v_y = -q Omega_0 x' - eta. The dust does
+         * not feel it (it is a pressure force).
+         *
+         * It is integrated with its own time quadrature (applied after the flux update, trapezoidal
+         * rule implicit in the momentum, see ShearingBoxForceUtils.hpp), whatever the coupling of
+         * the other forces.
+         */
+        struct ShearingBox {
+            Tscal Omega_0;
+            Tscal eta;
+            Tscal q;
+        };
+
         std::vector<Variant> ext_forces;
+
+        /// Shearing box forces, unset if they are not enabled
+        std::optional<ShearingBox> shearing_box = std::nullopt;
 
         /// Time quadrature of the external forces source term
         ExtForceCoupling coupling = ExtForceCoupling::Midpoint;
@@ -72,12 +107,31 @@ namespace shammodels::basegodunov {
             ext_forces.push_back(PointMassGravity{mass, pos, epsilon_soft});
         }
 
+        inline void add_shearing_box(Tscal Omega_0, Tscal eta, Tscal q) {
+            if (shearing_box.has_value()) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "shearing box forces: they can only be added once");
+            }
+            if (!(std::isfinite(Omega_0) && std::isfinite(eta) && std::isfinite(q))) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "shearing box forces: Omega_0, eta and q must be finite");
+            }
+            shearing_box = ShearingBox{Omega_0, eta, q};
+        }
+
+        inline bool has_shearing_box() const { return shearing_box.has_value(); }
+
         inline bool is_coordinates_needed() const {
+            if (has_shearing_box()) {
+                return true;
+            }
             return std::any_of(ext_forces.begin(), ext_forces.end(), [](const Variant &f) {
                 return std::holds_alternative<PointMassGravity>(f);
             });
         }
 
+        /// true if forces applied through the acceleration field a_ext are enabled (all of them
+        /// except the shearing box forces)
         inline bool has_ext_forces() const { return !ext_forces.empty(); }
     };
 
@@ -106,11 +160,30 @@ namespace shammodels::basegodunov {
         }
 
         j = nlohmann::json{{"force_list", force_list}, {"coupling", p.coupling}};
+
+        // only dumped when enabled, so that configs without it are unchanged
+        if (p.shearing_box.has_value()) {
+            const auto &sb = *p.shearing_box;
+            j["shearing_box"]
+                = nlohmann::json{{"Omega_0", sb.Omega_0}, {"eta", sb.eta}, {"q", sb.q}};
+        }
     }
 
     template<class Tvec>
     inline void from_json(const nlohmann::json &j, ExtForceConfig<Tvec> &p) {
+        using Tscal = shambase::VecComponent<Tvec>;
+
         p.ext_forces.clear();
+
+        // configs dumped before the shearing box forces existed have none
+        p.shearing_box = std::nullopt;
+        if (j.contains("shearing_box") && !j.at("shearing_box").is_null()) {
+            const auto &jsb = j.at("shearing_box");
+            p.add_shearing_box(
+                jsb.at("Omega_0").get<Tscal>(),
+                jsb.at("eta").get<Tscal>(),
+                jsb.at("q").get<Tscal>());
+        }
 
         // configs dumped before the coupling was configurable used the midpoint rule
         p.coupling = ExtForceCoupling::Midpoint;
@@ -120,7 +193,6 @@ namespace shammodels::basegodunov {
 
         for (const auto &jforce : j.at("force_list")) {
             const std::string force_type = jforce.at("force_type").get<std::string>();
-            using Tscal                  = shambase::VecComponent<Tvec>;
             if (force_type == "constant_gravity") {
                 p.add_constant_gravity(jforce.at("g").get<Tvec>());
             } else if (force_type == "point_mass_gravity") {

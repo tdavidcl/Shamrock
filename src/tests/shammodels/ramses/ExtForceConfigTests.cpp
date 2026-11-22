@@ -89,3 +89,59 @@ NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::ext_force_config", 1) {
         REQUIRE_EQUAL(out.ext_force_config.ext_forces.size(), 1_u64);
     }
 }
+
+NEW_TEST(Unittest, "shammodels/ramses/SolverConfig::ext_force_config_shearing_box", 1) {
+
+    { // disabled by default, and not dumped when disabled
+        Config cfg{};
+        REQUIRE(!cfg.has_shearing_box_forces());
+        nlohmann::json j = cfg;
+        REQUIRE(!j.at("ext_force_config").contains("shearing_box"));
+    }
+
+    { // json roundtrip, the acceleration forces list is left untouched
+        Config in{};
+        in.ext_force_config.add_shearing_box(2.0, 0.05, 1.5);
+
+        REQUIRE(in.has_shearing_box_forces());
+        REQUIRE(!in.has_ext_forces());
+        REQUIRE(in.is_coordinate_field_required());
+
+        Config out = json_roundtrip(in);
+        REQUIRE(out.has_shearing_box_forces());
+        REQUIRE_EQUAL(out.ext_force_config.ext_forces.size(), 0_u64);
+        if (out.has_shearing_box_forces()) {
+            const auto &sb = *out.ext_force_config.shearing_box;
+            REQUIRE_EQUAL(sb.Omega_0, 2.0);
+            REQUIRE_EQUAL(sb.eta, 0.05);
+            REQUIRE_EQUAL(sb.q, 1.5);
+        }
+    }
+
+    { // configs dumped before the shearing box forces existed have none
+        Config in{};
+        in.ext_force_config.add_constant_gravity({0., -0.1, 0.});
+        in.ext_force_config.add_shearing_box(1.0, 0.0, 1.5);
+
+        nlohmann::json j = in;
+        j.at("ext_force_config").erase("shearing_box");
+
+        Config out = j.get<Config>();
+        REQUIRE(!out.has_shearing_box_forces());
+        REQUIRE_EQUAL(out.ext_force_config.ext_forces.size(), 1_u64);
+    }
+
+    { // added only once
+        Config cfg{};
+        cfg.ext_force_config.add_shearing_box(1.0, 0.0, 1.5);
+        REQUIRE_EXCEPTION_THROW(
+            cfg.ext_force_config.add_shearing_box(1.0, 0.0, 1.5), std::invalid_argument);
+    }
+
+    { // the shearing-periodic boundary must shear along y across x
+        Config cfg{};
+        cfg.ext_force_config.add_shearing_box(1.0, 0.0, 1.5);
+        cfg.bc_config.set_shearing_periodic({0, 1, 0}, {1, 0, 0}, -1.5);
+        REQUIRE_EXCEPTION_THROW(cfg.check_config_shearing_box_forces(), std::invalid_argument);
+    }
+}

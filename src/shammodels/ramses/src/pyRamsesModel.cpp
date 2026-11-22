@@ -535,6 +535,44 @@ namespace shammodels::basegodunov {
                 epsilon_soft must be > 0.
                 )==")
             .def(
+                "add_ext_force_shearing_box",
+                [](TConfig &self, Tscal Omega_0, Tscal eta, Tscal q) {
+                    self.ext_force_config.add_shearing_box(Omega_0, eta, q);
+                },
+                py::kw_only(),
+                py::arg("Omega_0"),
+                py::arg("eta"),
+                py::arg("q"),
+                R"==(
+    Add the forces of the local (unstratified) shearing box frame, to the gas and to the dust.
+
+    Same parameters as the SPH ``add_ext_force_shearing_box``. x is the radial, y the azimuthal and
+    z the vertical axis (rotation along z), x' = x - x_c with x_c the center of the box along x:
+
+    - tidal term: a_x = 2 q Omega_0^2 x'
+    - Coriolis term: a = -2 Omega_0 e_z x v, i.e. a_x = 2 Omega_0 v_y, a_y = -2 Omega_0 v_x
+    - constant radial pressure-gradient forcing (gas only): a_x = 2 Omega_0 eta
+
+    The equilibrium shear flow is v_y = -q Omega_0 x' (for the shearing-periodic boundary,
+    use ``shear_speed = -q * Omega_0 * Lx``). ``eta`` is given as a velocity: the headwind
+    eta_r v_K of the gas (eta_r the dimensionless pressure-gradient parameter, v_K the Keplerian
+    velocity), the gas alone settling at v_y = -q Omega_0 x' - eta.
+
+    They are applied after the flux update with the trapezoidal rule, implicit in the momentum
+    (whatever the coupling of the other external forces): unconditionally stable, the
+    equilibrium shear flow is kept to round-off and the epicycles are not damped. The gas total
+    energy gets the kinetic energy change of the kick (the work of the forces).
+
+    Parameters
+    ----------
+    Omega_0 : float
+        Angular velocity of the frame
+    eta : float
+        Radial pressure-gradient forcing of the gas, as the headwind velocity eta_r v_K
+    q : float
+        Shear parameter (3/2 for a Keplerian disc)
+)==")
+            .def(
                 "set_ext_force_coupling",
                 [](TConfig &self, ExtForceCoupling mode) {
                     self.ext_force_config.set_coupling(mode);

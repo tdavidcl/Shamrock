@@ -34,6 +34,8 @@
 #include "shammodels/ramses/modules/ApplyExtForceDustTrapezoidal.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceGas.hpp"
 #include "shammodels/ramses/modules/ApplyExtForceGasTrapezoidal.hpp"
+#include "shammodels/ramses/modules/ApplyShearingBoxForceDust.hpp"
+#include "shammodels/ramses/modules/ApplyShearingBoxForceGas.hpp"
 #include "shammodels/ramses/modules/BarotropicEnergyReset.hpp"
 #include "shammodels/ramses/modules/BlockNeighToCellNeigh.hpp"
 #include "shammodels/ramses/modules/ComputeAMRLevel.hpp"
@@ -2103,6 +2105,88 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
 
         shamrock::solvergraph::OperationSequence seq(
             "External forces", std::move(ext_force_sequence));
+        solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
+    }
+
+    if (solver_config.has_shearing_box_forces()) { // shearing box forces
+
+        // Applied to the state at t^n (patch data without ghosts) like the other external forces,
+        // after them, with their own time quadrature (trapezoidal rule implicit in the momentum,
+        // since the Coriolis term depends on the velocity). See ShearingBoxForceUtils.hpp.
+
+        const auto &sb = shambase::get_check_ref(solver_config.ext_force_config.shearing_box);
+
+        std::vector<std::shared_ptr<shamrock::solvergraph::INode>> sb_sequence;
+
+        shamrock::patch::PatchDataLayerLayout &pdl = scheduler().pdl_old();
+
+        auto attach_source_field = [&]<class T>(
+                                       std::shared_ptr<shamrock::solvergraph::FieldRefs<T>> &refs,
+                                       const std::string &field_name) {
+            shamrock::solvergraph::GetFieldRefFromLayer<T> attach{pdl, field_name};
+            attach.set_edges(storage.source_patches, refs);
+            sb_sequence.push_back(std::make_shared<decltype(attach)>(std::move(attach)));
+        };
+
+        { // gas
+            auto refs_rho
+                = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>("rho_source", "\\rho");
+            auto refs_rhov = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_source", "(\\rho \\mathbf{v})");
+            auto refs_rhoe = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rhoetot_source", "(\\rho E)");
+
+            attach_source_field(refs_rho, "rho");
+            attach_source_field(refs_rhov, "rhovel");
+            attach_source_field(refs_rhoe, "rhoetot");
+
+            modules::ApplyShearingBoxForceGas<Tvec, TgridVec> node{
+                AMRBlock::block_size,
+                solver_config.grid_coord_to_pos_fact,
+                sb.Omega_0,
+                sb.eta,
+                sb.q};
+            node.set_edges(
+                storage.dt,
+                storage.block_counts,
+                storage.sim_box_edge,
+                storage.coordinates,
+                refs_rho,
+                storage.dtrho,
+                storage.dtrhov,
+                refs_rhov,
+                refs_rhoe);
+            sb_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        if (solver_config.is_dust_on()) { // dust
+            auto refs_rho_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tscal>>(
+                "rho_dust_source", "\\rho_{\\rm dust}");
+            auto refs_rhov_dust = std::make_shared<shamrock::solvergraph::FieldRefs<Tvec>>(
+                "rhovel_dust_source", "(\\rho_{\\rm dust} \\mathbf{v}_{\\rm dust})");
+
+            attach_source_field(refs_rho_dust, "rho_dust");
+            attach_source_field(refs_rhov_dust, "rhovel_dust");
+
+            modules::ApplyShearingBoxForceDust<Tvec, TgridVec> node{
+                AMRBlock::block_size,
+                solver_config.dust_config.ndust,
+                solver_config.grid_coord_to_pos_fact,
+                sb.Omega_0,
+                sb.q};
+            node.set_edges(
+                storage.dt,
+                storage.block_counts,
+                storage.sim_box_edge,
+                storage.coordinates,
+                refs_rho_dust,
+                storage.dtrho_dust,
+                storage.dtrhov_dust,
+                refs_rhov_dust);
+            sb_sequence.push_back(std::make_shared<decltype(node)>(std::move(node)));
+        }
+
+        shamrock::solvergraph::OperationSequence seq("Shearing box forces", std::move(sb_sequence));
         solver_sequence.push_back(std::make_shared<decltype(seq)>(std::move(seq)));
     }
 

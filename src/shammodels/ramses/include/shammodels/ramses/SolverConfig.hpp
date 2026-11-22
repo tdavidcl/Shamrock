@@ -429,6 +429,8 @@ struct shammodels::basegodunov::SolverConfig {
 
     inline bool has_ext_forces() { return ext_force_config.has_ext_forces(); }
 
+    inline bool has_shearing_box_forces() { return ext_force_config.has_shearing_box(); }
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // External forces config (END)
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -555,6 +557,27 @@ struct shammodels::basegodunov::SolverConfig {
         }
 
         check_config_shearing_periodic();
+        check_config_shearing_box_forces();
+    }
+
+    /// Checks of the shearing box forces (no-op if they are not used)
+    inline void check_config_shearing_box_forces() {
+        if (!has_shearing_box_forces()) {
+            return;
+        }
+
+        // the forces use x as the radial and y as the azimuthal axis
+        if (bc_config.is_shearing_periodic()) {
+            const auto &shear = bc_config.shearing;
+            if (shear.shear_base_axis != 0 || shear.shear_dir_axis != 1) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "the shearing box forces require the shearing-periodic boundary to be set "
+                    "with shear_base = (1,0,0) and shear_dir = (0,1,0)");
+            }
+        }
+
+        ON_RANK_0(
+            logger::warn_ln("Ramses::SolverConfig", "The shearing box forces are experimental"));
     }
 
     /// Checks of the shearing-periodic boundary (no-op if it is not used)
