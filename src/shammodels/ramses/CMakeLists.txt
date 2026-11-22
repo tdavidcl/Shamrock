@@ -46,6 +46,7 @@ set(Sources
     src/modules/SlopeLimitedGradient.cpp
     src/modules/ComputeMass.cpp
     src/modules/ComputeSumOverV.cpp
+    src/modules/InterpolateShearGhosts.cpp
     src/modules/InterpolateToFace.cpp
     src/modules/CGInit.cpp
     src/modules/NodeSpMVPoisson3D.cpp
@@ -58,8 +59,10 @@ set(Sources
     src/modules/ResidualDot.cpp
     src/modules/FindGhostLayerCandidates.cpp
     src/modules/FindGhostLayerIndices.cpp
+    src/modules/FindShearSourceGhosts.cpp
     src/modules/ExtractGhostLayer.cpp
     src/modules/TransformGhostLayer.cpp
+    src/modules/TransformShearSource.cpp
     src/modules/FuseGhostLayer.cpp
     src/modules/render/GridRender.cpp
     src/modules/ComputeCoordinates.cpp

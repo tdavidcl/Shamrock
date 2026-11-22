@@ -197,19 +197,118 @@ namespace shammodels::basegodunov {
     };
 
     struct BCConfig {
-        enum class GhostType { Periodic = 0, Reflective = 1, Outflow = 2 };
+        enum class GhostType { Periodic = 0, Reflective = 1, Outflow = 2, ShearingPeriodic = 3 };
 
         GhostType ghost_type_x = GhostType::Periodic;
         GhostType ghost_type_y = GhostType::Periodic;
         GhostType ghost_type_z = GhostType::Periodic;
 
+        /**
+         * @brief Parameters of the shearing-periodic boundary
+         *
+         * Same convention as the SPH solver: the periodic image of the box shifted by
+         * \f$ +L \f$ along `shear_base_axis` is displaced by \f$ +v_{\rm shear} t \f$ along
+         * `shear_dir_axis`, and its velocity by \f$ +v_{\rm shear} \f$ along that axis. For a
+         * shearing box with background flow \f$ v_y = -q \Omega x \f$, this is
+         * `shear_base_axis = 0`, `shear_dir_axis = 1` and \f$ v_{\rm shear} = -q \Omega L_x \f$.
+         */
+        struct ShearingPeriodicInfo {
+            u32 shear_base_axis = 0; ///< axis whose two faces are shearing periodic
+            u32 shear_dir_axis  = 1; ///< axis along which the periodic images slide
+            f64 shear_speed     = 0; ///< velocity of the image at +L along shear_dir_axis
+        };
+
+        /// Only used if one of the axes is ShearingPeriodic
+        ShearingPeriodicInfo shearing{};
+
         GhostType get_x() const { return ghost_type_x; }
         GhostType get_y() const { return ghost_type_y; }
         GhostType get_z() const { return ghost_type_z; }
 
+        /// Ghost type of the axis `axis` (0 = x, 1 = y, 2 = z)
+        GhostType get(u32 axis) const {
+            switch (axis) {
+            case 0 : return ghost_type_x;
+            case 1 : return ghost_type_y;
+            case 2 : return ghost_type_z;
+            default: break;
+            }
+            shambase::throw_with_loc<std::invalid_argument>(
+                "Invalid axis index: " + std::to_string(axis));
+            return {};
+        }
+
         void set_x(GhostType ghost_type) { ghost_type_x = ghost_type; }
         void set_y(GhostType ghost_type) { ghost_type_y = ghost_type; }
         void set_z(GhostType ghost_type) { ghost_type_z = ghost_type; }
+
+        /// Set the ghost type of the axis `axis` (0 = x, 1 = y, 2 = z)
+        void set(u32 axis, GhostType ghost_type) {
+            switch (axis) {
+            case 0 : ghost_type_x = ghost_type; return;
+            case 1 : ghost_type_y = ghost_type; return;
+            case 2 : ghost_type_z = ghost_type; return;
+            default: break;
+            }
+            shambase::throw_with_loc<std::invalid_argument>(
+                "Invalid axis index: " + std::to_string(axis));
+        }
+
+        /// True if one of the axes uses the shearing-periodic boundary
+        bool is_shearing_periodic() const {
+            return ghost_type_x == GhostType::ShearingPeriodic
+                   || ghost_type_y == GhostType::ShearingPeriodic
+                   || ghost_type_z == GhostType::ShearingPeriodic;
+        }
+
+        /**
+         * @brief Make the faces normal to `shear_base` shearing periodic
+         *
+         * `shear_base` and `shear_dir` must be distinct unit axis vectors (e.g. (1,0,0) and
+         * (0,1,0)), matching the arguments of the SPH solver's `set_boundary_shearing_periodic`.
+         * The `shear_dir` axis must be periodic, which is checked in `check_config`.
+         */
+        void set_shearing_periodic(i32_3 shear_base, i32_3 shear_dir, f64 shear_speed) {
+            auto get_axis = [](i32_3 v, const char *name) -> u32 {
+                u32 axis  = 0;
+                u32 count = 0;
+                for (u32 i = 0; i < 3; i++) {
+                    if (v[i] == 1) {
+                        axis = i;
+                        count++;
+                    } else if (v[i] != 0) {
+                        count = 2; // invalid value, reported below
+                    }
+                }
+                if (count != 1) {
+                    shambase::throw_with_loc<std::invalid_argument>(sham::format(
+                        "{} must be a unit axis vector such as (1,0,0), got ({},{},{})",
+                        name,
+                        v[0],
+                        v[1],
+                        v[2]));
+                }
+                return axis;
+            };
+
+            u32 base_axis = get_axis(shear_base, "shear_base");
+            u32 dir_axis  = get_axis(shear_dir, "shear_dir");
+
+            if (base_axis == dir_axis) {
+                shambase::throw_with_loc<std::invalid_argument>(
+                    "shear_base and shear_dir must be different axes");
+            }
+
+            // only one shearing-periodic axis at a time
+            for (u32 i = 0; i < 3; i++) {
+                if (get(i) == GhostType::ShearingPeriodic) {
+                    set(i, GhostType::Periodic);
+                }
+            }
+
+            set(base_axis, GhostType::ShearingPeriodic);
+            shearing = {base_axis, dir_axis, shear_speed};
+        }
     };
 
     template<class Tvec, class TgridVec>
@@ -454,6 +553,58 @@ struct shammodels::basegodunov::SolverConfig {
                 shambase::throw_with_loc<std::invalid_argument>("N_J must be > 0");
             }
         }
+
+        check_config_shearing_periodic();
+    }
+
+    /// Checks of the shearing-periodic boundary (no-op if it is not used)
+    inline void check_config_shearing_periodic() {
+        using GhostType = BCConfig::GhostType;
+
+        if (!bc_config.is_shearing_periodic()) {
+            return;
+        }
+
+        const auto &shear = bc_config.shearing;
+
+        u32 shearing_axis_count = 0;
+        for (u32 i = 0; i < 3; i++) {
+            shearing_axis_count += (bc_config.get(i) == GhostType::ShearingPeriodic);
+        }
+
+        if (shearing_axis_count != 1 || shear.shear_base_axis > 2 || shear.shear_dir_axis > 2
+            || shear.shear_base_axis == shear.shear_dir_axis
+            || bc_config.get(shear.shear_base_axis) != GhostType::ShearingPeriodic) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "the shearing-periodic boundary must be set with set_boundary_shearing_periodic "
+                "(exactly one shearing-periodic axis, distinct from the shear direction)");
+        }
+
+        if (bc_config.get(shear.shear_dir_axis) != GhostType::Periodic) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "the shearing-periodic boundary requires the shear direction axis to be "
+                "periodic");
+        }
+
+        // The current implementation interpolates the ghost cells assuming that the cells on the
+        // shearing faces all have the same size (see InterpolateShearGhosts).
+        using AMRNone = typename AMRMode<Tvec, TgridVec>::None;
+        if (!std::holds_alternative<AMRNone>(amr_mode.config)) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "the shearing-periodic boundary does not support mesh refinement yet");
+        }
+
+        // The Poisson solvers exchange the ghosts of phi without the shearing interpolation
+        if (is_gravity_on()) {
+            shambase::throw_with_loc<std::invalid_argument>(
+                "the shearing-periodic boundary does not support self-gravity yet");
+        }
+
+        ON_RANK_0(
+            logger::warn_ln(
+                "Ramses::SolverConfig",
+                "The shearing-periodic boundary is experimental (no flux correction across the "
+                "shearing faces, so the mass is only conserved to truncation error)"));
     }
 
     void set_layout(shamrock::patch::PatchDataLayerLayout &pdl);
@@ -463,9 +614,10 @@ namespace shammodels::basegodunov {
 
     inline void to_json(nlohmann::json &j, const BCConfig::GhostType &e) {
         switch (e) {
-        case BCConfig::GhostType::Periodic  : j = "periodic"; break;
-        case BCConfig::GhostType::Reflective: j = "reflective"; break;
-        case BCConfig::GhostType::Outflow   : j = "outflow"; break;
+        case BCConfig::GhostType::Periodic        : j = "periodic"; break;
+        case BCConfig::GhostType::Reflective      : j = "reflective"; break;
+        case BCConfig::GhostType::Outflow         : j = "outflow"; break;
+        case BCConfig::GhostType::ShearingPeriodic: j = "shearing_periodic"; break;
         default:
             shambase::throw_with_loc<std::runtime_error>(
                 "Invalid BCConfig::GhostType value: " + std::to_string(static_cast<int>(e)));
@@ -480,23 +632,43 @@ namespace shammodels::basegodunov {
             e = BCConfig::GhostType::Reflective;
         } else if (type == "outflow") {
             e = BCConfig::GhostType::Outflow;
+        } else if (type == "shearing_periodic") {
+            e = BCConfig::GhostType::ShearingPeriodic;
         } else {
             shambase::throw_with_loc<std::runtime_error>(
                 "Invalid BCConfig::GhostType value: " + type);
         }
     }
 
+    inline void to_json(nlohmann::json &j, const BCConfig::ShearingPeriodicInfo &p) {
+        j = nlohmann::json{
+            {"shear_base_axis", p.shear_base_axis},
+            {"shear_dir_axis", p.shear_dir_axis},
+            {"shear_speed", p.shear_speed}};
+    }
+
+    inline void from_json(const nlohmann::json &j, BCConfig::ShearingPeriodicInfo &p) {
+        j.at("shear_base_axis").get_to(p.shear_base_axis);
+        j.at("shear_dir_axis").get_to(p.shear_dir_axis);
+        j.at("shear_speed").get_to(p.shear_speed);
+    }
+
     inline void to_json(nlohmann::json &j, const BCConfig &p) {
         j = nlohmann::json{
             {"ghost_type_x", p.ghost_type_x},
             {"ghost_type_y", p.ghost_type_y},
-            {"ghost_type_z", p.ghost_type_z}};
+            {"ghost_type_z", p.ghost_type_z},
+            {"shearing", p.shearing}};
     }
 
     inline void from_json(const nlohmann::json &j, BCConfig &p) {
         j.at("ghost_type_x").get_to(p.ghost_type_x);
         j.at("ghost_type_y").get_to(p.ghost_type_y);
         j.at("ghost_type_z").get_to(p.ghost_type_z);
+        // absent from configs written before the shearing-periodic boundary existed
+        if (j.contains("shearing")) {
+            j.at("shearing").get_to(p.shearing);
+        }
     }
 
     inline void to_json(nlohmann::json &j, const DragConfig &p) {

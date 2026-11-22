@@ -27,6 +27,7 @@
 #include "shammodels/ramses/GhostZoneData.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerCandidates.hpp"
 #include "shammodels/ramses/modules/NodeBuildTrees.hpp"
+#include "shammodels/ramses/modules/ShearingPeriodicUtils.hpp"
 #include "shammodels/ramses/solvegraph/NeighGraphLinkFieldEdge.hpp"
 #include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include "shammodels/ramses/solvegraph/TreeEdge.hpp"
@@ -174,6 +175,19 @@ namespace shammodels::basegodunov {
         std::shared_ptr<shamrock::solvergraph::ScalarEdge<shammath::AABB<TgridVec>>> sim_box_edge;
 
         std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_in_ghost;
+
+        /// Shear offset in grid units (shearing-periodic boundary only)
+        std::shared_ptr<shamrock::solvergraph::ScalarEdge<f64>> shear_offset;
+
+        /// Interfaces of the shear source exchange (shearing-periodic boundary only)
+        std::shared_ptr<shamrock::solvergraph::DDSharedScalar<modules::ShearSourceInfos<TgridVec>>>
+            shear_src_infos;
+
+        /// Indexes of the blocks sent by the shear source exchange
+        std::shared_ptr<shamrock::solvergraph::DDSharedBuffers<u32>> idx_shear_src;
+
+        /// Blocks of the shear source exchange (never fused into the patches)
+        std::shared_ptr<shamrock::solvergraph::PatchDataLayerDDShared> shear_src_layer;
 
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>> rho_face_xp;
         std::shared_ptr<solvergraph::NeighGraphLinkFieldEdge<std::array<Tscal, 2>>> rho_face_xm;

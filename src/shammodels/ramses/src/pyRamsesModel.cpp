@@ -316,6 +316,26 @@ namespace shammodels::basegodunov {
                 py::arg("axis"),
                 py::arg("bc_type"))
             .def(
+                "set_boundary_shearing_periodic",
+                [](TConfig &self, i32_3 shear_base, i32_3 shear_dir, f64 shear_speed) {
+                    self.bc_config.set_shearing_periodic(shear_base, shear_dir, shear_speed);
+                },
+                py::arg("shear_base"),
+                py::arg("shear_dir"),
+                py::arg("shear_speed"),
+                R"==(
+    Make the faces normal to ``shear_base`` shearing periodic.
+
+    Same convention as the SPH solver: the periodic image of the box shifted by
+    +L along ``shear_base`` is displaced by ``shear_speed * t`` along
+    ``shear_dir``, and its velocity by ``shear_speed``. For a shearing box with
+    background flow v_y = -q Omega x, use ``shear_base = (1,0,0)``,
+    ``shear_dir = (0,1,0)`` and ``shear_speed = -q * Omega * Lx``.
+
+    The ``shear_dir`` axis must be periodic. Mesh refinement and self-gravity are
+    not supported with this boundary yet.
+)==")
+            .def(
                 "set_dust_mode_dhll",
                 [](TConfig &self, u32 ndust) {
                     self.dust_config = {DHLL, ndust};

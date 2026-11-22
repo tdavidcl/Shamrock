@@ -53,9 +53,11 @@
 #include "shammodels/ramses/modules/ExtractGhostLayer.hpp"
 #include "shammodels/ramses/modules/FindBlockNeigh.hpp"
 #include "shammodels/ramses/modules/FindGhostLayerIndices.hpp"
+#include "shammodels/ramses/modules/FindShearSourceGhosts.hpp"
 #include "shammodels/ramses/modules/ForwardEulerDust.hpp"
 #include "shammodels/ramses/modules/ForwardEulerGas.hpp"
 #include "shammodels/ramses/modules/FuseGhostLayer.hpp"
+#include "shammodels/ramses/modules/InterpolateShearGhosts.hpp"
 #include "shammodels/ramses/modules/InterpolateToFace.hpp"
 #include "shammodels/ramses/modules/NodeBiCGSTABLoop.hpp"
 #include "shammodels/ramses/modules/NodeCGLoop.hpp"
@@ -66,6 +68,7 @@
 #include "shammodels/ramses/modules/SumFluxDust.hpp"
 #include "shammodels/ramses/modules/SumFluxHydro.hpp"
 #include "shammodels/ramses/modules/TransformGhostLayer.hpp"
+#include "shammodels/ramses/modules/TransformShearSource.hpp"
 #include "shammodels/ramses/solvegraph/OrientedAMRGraphEdge.hpp"
 #include "shamrock/io/LegacyVtkWriter.hpp"
 #include "shamrock/solvergraph/CopyPatchDataField.hpp"
@@ -394,6 +397,19 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
     storage.ghost_layers_candidates_edge = std::make_shared<
         shamrock::solvergraph::DDSharedScalar<modules::GhostLayerCandidateInfos>>(
         "ghost_layers_candidates", "ghost_layers_candidates");
+
+    storage.shear_offset = std::make_shared<shamrock::solvergraph::ScalarEdge<f64>>(
+        "shear_offset", "o_{\\rm shear}");
+
+    storage.shear_src_infos = std::make_shared<
+        shamrock::solvergraph::DDSharedScalar<modules::ShearSourceInfos<TgridVec>>>(
+        "shear_src_infos", "shear_src_infos");
+
+    storage.idx_shear_src = std::make_shared<shamrock::solvergraph::DDSharedBuffers<u32>>(
+        "idx_shear_src", "idx_shear_src");
+
+    storage.shear_src_layer = std::make_shared<shamrock::solvergraph::PatchDataLayerDDShared>(
+        "shear_src_layer", "shear_src_layer");
 
     storage.patch_rank_owner = std::make_shared<shamrock::solvergraph::RankGetter>(
         [&](u64 patch_id) -> u32 {
@@ -793,6 +809,9 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         case BCConfig::GhostType::Periodic  : return modules::GhostType::Periodic;
         case BCConfig::GhostType::Reflective: return modules::GhostType::Reflective;
         case BCConfig::GhostType::Outflow   : return modules::GhostType::Reflective;
+        // the ghost geometry is the reflective one, the values are then interpolated from the
+        // opposite face (see InterpolateShearGhosts)
+        case BCConfig::GhostType::ShearingPeriodic: return modules::GhostType::Reflective;
         default:
             shambase::throw_with_loc<std::runtime_error>(
                 "Unsupported ghost type: " + std::to_string(static_cast<int>(ghost_type)));
@@ -804,10 +823,26 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         cfg_bc_to_geom(solver_config.bc_config.get_y()),
         cfg_bc_to_geom(solver_config.bc_config.get_z())};
 
-    // if outflow we want zero gradient so we skip the vector transformation in TransformGhostLayer
-    bool transform_vec_x = solver_config.bc_config.get_x() != BCConfig::GhostType::Outflow;
-    bool transform_vec_y = solver_config.bc_config.get_y() != BCConfig::GhostType::Outflow;
-    bool transform_vec_z = solver_config.bc_config.get_z() != BCConfig::GhostType::Outflow;
+    // if outflow we want zero gradient so we skip the vector transformation in TransformGhostLayer.
+    // For the shearing-periodic faces the values are overwritten, so no need to flip either.
+    auto should_transform_vec = [&](BCConfig::GhostType ghost_type) {
+        return ghost_type != BCConfig::GhostType::Outflow
+               && ghost_type != BCConfig::GhostType::ShearingPeriodic;
+    };
+    bool transform_vec_x = should_transform_vec(solver_config.bc_config.get_x());
+    bool transform_vec_y = should_transform_vec(solver_config.bc_config.get_y());
+    bool transform_vec_z = should_transform_vec(solver_config.bc_config.get_z());
+
+    const bool is_shearing_periodic = solver_config.bc_config.is_shearing_periodic();
+
+    modules::ShearingPeriodicGeom shear_geom{0, 1, false};
+    if (is_shearing_periodic) {
+        const auto &shear         = solver_config.bc_config.shearing;
+        shear_geom.base_axis      = shear.shear_base_axis;
+        shear_geom.dir_axis       = shear.shear_dir_axis;
+        shear_geom.third_periodic = solver_config.bc_config.get(modules::get_third_axis(shear_geom))
+                                    == BCConfig::GhostType::Periodic;
+    }
 
     { // Ghost zone finder
 
@@ -833,6 +868,20 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
         solver_sequence.push_back(
             std::make_shared<decltype(find_ghost_layer_indices)>(
                 std::move(find_ghost_layer_indices)));
+
+        if (is_shearing_periodic) {
+            auto find_shear_src
+                = std::make_shared<modules::FindShearSourceGhosts<TgridVec>>(shear_geom);
+            find_shear_src->set_edges(
+                storage.sim_box_edge,
+                graph.get_edge_ptr<SerialPatchTreeRefEdge<TgridVec>>("sptree"),
+                graph.get_edge_ptr<ScalarsEdge<shammath::AABB<TgridVec>>>("global_patch_boxes"),
+                storage.source_patches,
+                storage.shear_offset,
+                storage.shear_src_infos,
+                storage.idx_shear_src);
+            solver_sequence.push_back(std::move(find_shear_src));
+        }
     }
 
     { // Ghost zone exchange
@@ -855,6 +904,20 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             extract_gz_node->set_edges(
                 storage.merged_patchdata_ghost, storage.idx_in_ghost, storage.exchange_gz_edge);
             gz_xchg_sequence.push_back(std::move(extract_gz_node));
+        }
+
+        if (is_shearing_periodic) { // must be extracted before the ghosts are fused
+            auto extract_shear_src
+                = std::make_shared<shammodels::basegodunov::modules::ExtractGhostLayer>(
+                    ghost_layout_ptr);
+            extract_shear_src->set_edges(
+                storage.merged_patchdata_ghost, storage.idx_shear_src, storage.shear_src_layer);
+            gz_xchg_sequence.push_back(std::move(extract_shear_src));
+
+            auto transform_shear_src
+                = std::make_shared<modules::TransformShearSource<TgridVec>>(ghost_layout_ptr);
+            transform_shear_src->set_edges(storage.shear_src_infos, storage.shear_src_layer);
+            gz_xchg_sequence.push_back(std::move(transform_shear_src));
         }
 
         {
@@ -880,11 +943,32 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::init_solver_graph() {
             gz_xchg_sequence.push_back(std::move(exchange_gz_node));
         }
 
+        if (is_shearing_periodic) {
+            auto exchange_shear_src
+                = std::make_shared<shamrock::solvergraph::ExchangeGhostLayer>(ghost_layout_ptr);
+            exchange_shear_src->set_edges(storage.patch_rank_owner, storage.shear_src_layer);
+            gz_xchg_sequence.push_back(std::move(exchange_shear_src));
+        }
+
         {
             auto fuse_gz_node
                 = std::make_shared<shammodels::basegodunov::modules::FuseGhostLayer>();
             fuse_gz_node->set_edges(storage.exchange_gz_edge, storage.merged_patchdata_ghost);
             gz_xchg_sequence.push_back(std::move(fuse_gz_node));
+        }
+
+        if (is_shearing_periodic) { // overwrite the ghosts beyond the shearing faces
+            auto interp_shear = std::make_shared<modules::InterpolateShearGhosts<Tvec, TgridVec>>(
+                shear_geom,
+                Tscal(solver_config.bc_config.shearing.shear_speed),
+                solver_config.slope_config,
+                ghost_layout_ptr);
+            interp_shear->set_edges(
+                storage.sim_box_edge,
+                storage.shear_offset,
+                storage.shear_src_layer,
+                storage.merged_patchdata_ghost);
+            gz_xchg_sequence.push_back(std::move(interp_shear));
         }
 
         // enable this to debug GZ
@@ -2302,6 +2386,15 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
         auto [bmin, bmax]                           = sim_box.get_bounding_box<TgridVec>();
 
         shambase::get_check_ref(storage.sim_box_edge).value = shammath::AABB<TgridVec>(bmin, bmax);
+
+        if (solver_config.bc_config.is_shearing_periodic()) {
+            const auto &shear                                   = solver_config.bc_config.shearing;
+            shambase::get_check_ref(storage.shear_offset).value = modules::get_shear_offset_grid(
+                shear.shear_speed,
+                t_current,
+                solver_config.grid_coord_to_pos_fact,
+                bmax[shear.shear_dir_axis] - bmin[shear.shear_dir_axis]);
+        }
     }
 
     SerialPatchTree<TgridVec> _sptree = SerialPatchTree<TgridVec>::build(scheduler());
@@ -2421,6 +2514,10 @@ void shammodels::basegodunov::Solver<Tvec, TgridVec>::evolve_once() {
     shambase::get_check_ref(storage.idx_in_ghost).free_alloc();
 
     shambase::get_check_ref(storage.ghost_layers_candidates_edge).free_alloc();
+
+    shambase::get_check_ref(storage.shear_src_infos).free_alloc();
+    shambase::get_check_ref(storage.idx_shear_src).free_alloc();
+    shambase::get_check_ref(storage.shear_src_layer).free_alloc();
 
     tstep.stop();
 
