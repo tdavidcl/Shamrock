@@ -156,13 +156,19 @@ def test_epicycles():
     if shamrock.sys.world_rank() != 0:
         return
 
-    # w = v_y + q Omega x' is the deviation from the shear flow
+    # w = v_y + q Omega x' is the deviation from the shear flow. The fluxes (advection of the
+    # background shear) and the forces are split, which gives a bounded phase offset of order
+    # Omega dt along the orbit, that does not accumulate: after each full period the state is
+    # back to the initial one to second order, and the amplitude does not drift.
     ratio = kappa / (2 * Omega)
     max_err = {"gas": 0.0, "dust": 0.0}
+    period_err = {"gas": 0.0, "dust": 0.0}
+    amp_err = {"gas": 0.0, "dust": 0.0}
     max_spread = 0.0
     for t, data in samples:
         u_exp = du * np.cos(kappa * t)
         w_exp = -ratio * du * np.sin(kappa * t)
+        at_period = abs(t / period - round(t / period)) < 1e-6 and t > 0
 
         for name, rho_key, rhov_key in [
             ("gas", "rho", "rhovel"),
@@ -176,15 +182,32 @@ def test_epicycles():
 
             err = max(np.max(np.abs(u - u_exp)), np.max(np.abs(w - w_exp))) / du
             max_err[name] = max(max_err[name], err)
+            if at_period:
+                period_err[name] = max(period_err[name], err)
+
+            amp = np.sqrt(u**2 + (w / ratio) ** 2)
+            amp_err[name] = max(amp_err[name], float(np.max(np.abs(amp - du))) / du)
             max_spread = max(max_spread, (np.max(u) - np.min(u)) / du)
 
     print(
-        f"epicycles over 2 periods (dt = T/400): max rel err gas = {max_err['gas']:.3e}, "
-        f"dust = {max_err['dust']:.3e}, max spread of v_x = {max_spread:.3e}"
+        f"epicycles over 2 periods (Omega dt = {Omega * dt:.3e}): max rel err gas = {max_err['gas']:.3e}, "
+        f"dust = {max_err['dust']:.3e}, at full periods gas = {period_err['gas']:.3e}, "
+        f"dust = {period_err['dust']:.3e}, amplitude gas = {amp_err['gas']:.3e}, "
+        f"dust = {amp_err['dust']:.3e}, max spread of v_x = {max_spread:.3e}"
     )
 
-    assert max_err["gas"] < 1e-2, f"gas epicycles do not match kappa ({max_err['gas']})"
-    assert max_err["dust"] < 1e-2, f"dust epicycles do not match kappa ({max_err['dust']})"
+    for name in ["gas", "dust"]:
+        assert max_err[name] < 2 * Omega * dt, (
+            f"{name}: phase offset along the epicycle above 2 Omega dt ({max_err[name]})"
+        )
+        assert period_err[name] < 1e-3, (
+            f"{name}: not back to the initial state after full periods, wrong kappa "
+            f"({period_err[name]})"
+        )
+        # the invariant u^2 + (w / ratio)^2 of the exact solution oscillates by O(Omega dt) along
+        # the discrete orbit, without drift (checked by the full period error above)
+        assert amp_err[name] < Omega * dt, f"{name}: epicycle amplitude error ({amp_err[name]})"
+    assert max_spread < 1e-9, f"the perturbation does not stay uniform ({max_spread})"
 
 
 test_equilibrium()
