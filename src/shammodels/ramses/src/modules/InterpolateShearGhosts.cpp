@@ -14,6 +14,7 @@
  */
 
 #include "shambase/exception.hpp"
+#include "shambase/integer.hpp"
 #include "shamalgs/details/numeric/numeric.hpp"
 #include "shamalgs/primitives/reduction.hpp"
 #include "shambackends/DeviceBuffer.hpp"
@@ -137,6 +138,14 @@ void shammodels::basegodunov::modules::InterpolateShearGhosts<Tvec, TgridVec>::
         AABB tree_box{
             shamalgs::primitives::min(dev_sched, src_cmin, 0, n_scells),
             shamalgs::primitives::max(dev_sched, src_cmax, 0, n_scells)};
+
+        { // the integer Morton codes need power of two extents (same as NodeBuildTrees)
+            TgridVec diff  = tree_box.upper - tree_box.lower;
+            diff.x()       = shambase::roundup_pow2(diff.x());
+            diff.y()       = shambase::roundup_pow2(diff.y());
+            diff.z()       = shambase::roundup_pow2(diff.z());
+            tree_box.upper = tree_box.lower + diff;
+        }
 
         RTree tree = RTree::make_empty(dev_sched);
         tree.rebuild_from_position_range(src_cmin, src_cmax, n_scells, tree_box, 0);
