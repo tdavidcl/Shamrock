@@ -7,14 +7,16 @@ shearing-periodic box (``cfg.set_boundary_shearing_periodic``), shearing box for
 pressure-gradient forcing (``cfg.add_ext_force_shearing_box``), one dust species with drag.
 
 Units: Omega = 1, c_s = 1 (H = 1). tau_s = Omega t_stop = 0.1, eps = rho_d / rho_g = 1,
-Pi = eta v_K / c_s = 0.05, box L = 0.1 H = 2 eta r on a side, 64^3 cells in a single patch.
-The gas and dust start at the Nakagawa-Sekiya-Hayashi equilibrium, with a 2% white noise on the
-dust density.
+Pi = eta v_K / c_s = 0.05. Cubic cells of size dx = 0.1 H / 64 (= 2 eta r / 64), on a grid of
+``SI_NX`` x ``SI_NY`` x ``SI_NZ`` cells (default 128 x 128 x 64, i.e. a 0.2 H x 0.2 H x 0.1 H
+box). The gas and dust start at the Nakagawa-Sekiya-Hayashi equilibrium, with a 2% white noise on
+the dust density.
 
-The run is long (about 20 min of wall time per 1/Omega on 4 CPU cores), it stops at
-``SI_TEND`` (simulation time) or ``SI_WALL`` (wall time, in seconds), writing an x-z slice of the
-dust density and statistics every ``SI_DTFRAME``, then makes a GIF of the slices with the growth
-of the dust density.
+The run is long (about 20 min of wall time per 1/Omega for 64^3 cells on 4 CPU cores, roughly
+four times more at the default resolution), it stops at ``SI_TEND`` (simulation time) or
+``SI_WALL`` (wall time, in seconds). Every ``SI_DTFRAME`` it writes an x-z slice of the dust
+density and statistics in ``SI_OUTDIR``, and updates the GIF of the slices with the growth of the
+dust density (``streaming_instability.gif``), so that it can be followed during the run.
 """
 
 import json
@@ -49,10 +51,13 @@ rho_g0 = 1.0
 rho_d0 = eps * rho_g0
 P0 = rho_g0 * cs**2 / gamma
 
-L = 0.1
-N = 64
-nblock = N // 2  # blocks of 2^3 cells
-x_c = L / 2
+# cells per axis (multiples of 2, blocks of 2^3 cells)
+Nx = int(os.environ.get("SI_NX", "128"))
+Ny = int(os.environ.get("SI_NY", "128"))
+Nz = int(os.environ.get("SI_NZ", "64"))
+dxg = 0.1 / 64  # cell size
+Lx, Ly, Lz = Nx * dxg, Ny * dxg, Nz * dxg
+x_c = Lx / 2
 
 # Nakagawa-Sekiya-Hayashi equilibrium (velocities relative to the Keplerian shear)
 Delta = (1 + eps) ** 2 + tau_s**2
@@ -66,7 +71,7 @@ ctx.pdata_layout_new()
 model = shamrock.get_Model_Ramses(context=ctx, vector_type="f64_3", grid_repr="i64_3")
 
 cfg = model.gen_default_config()
-cfg.set_scale_factor(L / N)
+cfg.set_scale_factor(dxg)
 cfg.set_eos_gamma(gamma)
 cfg.set_slope_lim_vanleer_sym()
 cfg.set_face_time_interpolation(True)
@@ -74,14 +79,14 @@ cfg.set_Csafe(0.8)
 cfg.set_dust_mode_hb(1)
 cfg.set_drag_mode_irk1(True)
 cfg.set_alpha_values(1.0 / t_stop)
-cfg.set_boundary_shearing_periodic((1, 0, 0), (0, 1, 0), -q * Omega * L)
+cfg.set_boundary_shearing_periodic((1, 0, 0), (0, 1, 0), -q * Omega * Lx)
 cfg.add_ext_force_shearing_box(Omega_0=Omega, eta=eta_vK, q=q)
 model.set_solver_config(cfg)
 
 model.init_scheduler(int(1e7), 1)
-model.make_base_grid((0, 0, 0), (2, 2, 2), (nblock, nblock, nblock))
-
-dxg = L / N
+# blocks of 2^3 cells, the patches are cubes of gcd(block counts) blocks (2 x 2 x 1 patches
+# for 128 x 128 x 64 cells)
+model.make_base_grid((0, 0, 0), (2, 2, 2), (Nx // 2, Ny // 2, Nz // 2))
 
 
 # the lambdas get the cell bounds in physical units
@@ -91,7 +96,7 @@ def center(rmin, rmax):
 
 # deterministic white noise on the dust density, indexed by the integer cell coordinates
 rng = np.random.default_rng(1234)
-noise = rng.uniform(-1.0, 1.0, size=(N, N, N))
+noise = rng.uniform(-1.0, 1.0, size=(Nx, Ny, Nz))
 noise_amp = 0.02
 
 
@@ -126,55 +131,16 @@ def rhoetot(rmin, rmax):
 model.set_field_value_lambda_f64("rhoetot", rhoetot)
 model.set_field_value_lambda_f64("rho_dust", rho_dust, 0)
 model.set_field_value_lambda_f64_3(
-    "rhovel_dust", lambda rmin, rmax: tuple(rho_dust(rmin, rmax) * vel_dust(rmin, rmax)), 0
+    "rhovel_dust",
+    lambda rmin, rmax: tuple(rho_dust(rmin, rmax) * vel_dust(rmin, rmax)),
+    0,
 )
 
 # x-z slice at the mid plane in y, sampled at the cell centers
-xs = (np.arange(N) + 0.5) * dxg
-X, Z = np.meshgrid(xs, xs, indexing="xy")
-positions = [(float(x), L / 2 + 0.5 * dxg, float(z)) for x, z in zip(X.ravel(), Z.ravel())]
-
-
-def dump_frame(iframe, t):
-    sl = np.array(model.render_slice("rho_dust", "f64", positions)).reshape(N, N)
-    data = ctx.collect_data()
-    if shamrock.sys.world_rank() == 0:
-        rd = np.array(data["rho_dust"])
-        rg = np.array(data["rho"])
-        stats = {
-            "t": t,
-            "rho_d_max": float(rd.max()),
-            "rho_d_rms": float(np.sqrt(np.mean((rd - rd.mean()) ** 2))),
-            "rho_d_mean": float(rd.mean()),
-            "rho_g_min": float(rg.min()),
-            "rho_g_max": float(rg.max()),
-            "dust_mass": float(rd.sum()),
-            "gas_mass": float(rg.sum()),
-        }
-        np.save(os.path.join(outdir, f"slice_{iframe:04d}.npy"), sl)
-        with open(os.path.join(outdir, "stats.jsonl"), "a") as f:
-            f.write(json.dumps(stats) + "\n")
-        print("SI frame", iframe, json.dumps(stats), flush=True)
-
-
-open(os.path.join(outdir, "stats.jsonl"), "w").close()
-
-wall0 = time.time()
-t = 0.0
-iframe = 0
-dump_frame(iframe, t)
-nstep = 0
-while t < t_end and time.time() - wall0 < wall_max:
-    t_next = min(t_end, (iframe + 1) * dt_frame)
-    model.evolve_until(t_next)
-    t = model.get_time()
-    iframe += 1
-    dump_frame(iframe, t)
-    if shamrock.sys.world_rank() == 0:
-        print(
-            f"SI t = {t:.3f}, dt = {model.get_dt():.3e}, wall = {time.time() - wall0:.0f} s",
-            flush=True,
-        )
+xs = (np.arange(Nx) + 0.5) * dxg
+zs = (np.arange(Nz) + 0.5) * dxg
+X, Z = np.meshgrid(xs, zs, indexing="xy")
+positions = [(float(x), Ly / 2 + 0.5 * dxg, float(z)) for x, z in zip(X.ravel(), Z.ravel())]
 
 
 # %%
@@ -203,11 +169,11 @@ def make_gif(outdir, gif):
     rms = np.array([s["rho_d_rms"] for s in stats])
     dmax = np.array([s["rho_d_max"] for s in stats])
 
-    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(10, 4.6), gridspec_kw={"width_ratios": [1, 1.1]})
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 4.6), gridspec_kw={"width_ratios": [1, 1.1]})
     im = ax.imshow(
         slices[0],
         origin="lower",
-        extent=(0, L, 0, L),
+        extent=(0, Lx, 0, Lz),
         cmap="magma",
         norm=matplotlib.colors.LogNorm(vmin=max(vmin, 1e-3), vmax=vmax),
     )
@@ -226,17 +192,66 @@ def make_gif(outdir, gif):
 
     def update(i):
         im.set_data(slices[i])
-        title.set_text(rf"$\rho_d$, x-z slice, $\Omega t$ = {t[i]:.1f}")
+        title.set_text(rf"$\rho_d$, x-z slice, $\Omega t$ = {t[i]:.2f}")
         marker.set_xdata([t[i], t[i]])
         return im, title, marker
 
+    # written to temporary files then renamed, so that the GIF can be opened during the run
     anim = animation.FuncAnimation(fig, update, frames=len(slices), blit=False)
-    anim.save(gif, writer=animation.PillowWriter(fps=8), dpi=90)
-    fig.savefig(gif.replace(".gif", "_last.png"), dpi=110)
-    print("wrote", gif, len(slices), "frames")
+    tmp_gif = gif + ".tmp.gif"
+    anim.save(tmp_gif, writer=animation.PillowWriter(fps=8), dpi=90)
+    os.replace(tmp_gif, gif)
+    update(len(slices) - 1)
+    tmp_png = gif.replace(".gif", "_last.tmp.png")
+    fig.savefig(tmp_png, dpi=110)
+    os.replace(tmp_png, gif.replace(".gif", "_last.png"))
+    plt.close(fig)
+    print("wrote", gif, len(slices), "frames", flush=True)
 
 
-if shamrock.sys.world_rank() == 0:
-    make_gif(outdir, os.path.join(outdir, "streaming_instability.gif"))
+gif_path = os.path.join(outdir, "streaming_instability.gif")
+
+
+def dump_frame(iframe, t):
+    sl = np.array(model.render_slice("rho_dust", "f64", positions)).reshape(Nz, Nx)
+    data = ctx.collect_data()
+    if shamrock.sys.world_rank() == 0:
+        rd = np.array(data["rho_dust"])
+        rg = np.array(data["rho"])
+        stats = {
+            "t": t,
+            "rho_d_max": float(rd.max()),
+            "rho_d_rms": float(np.sqrt(np.mean((rd - rd.mean()) ** 2))),
+            "rho_d_mean": float(rd.mean()),
+            "rho_g_min": float(rg.min()),
+            "rho_g_max": float(rg.max()),
+            "dust_mass": float(rd.sum()),
+            "gas_mass": float(rg.sum()),
+        }
+        np.save(os.path.join(outdir, f"slice_{iframe:04d}.npy"), sl)
+        with open(os.path.join(outdir, "stats.jsonl"), "a") as f:
+            f.write(json.dumps(stats) + "\n")
+        print("SI frame", iframe, json.dumps(stats), flush=True)
+        make_gif(outdir, gif_path)
+
+
+open(os.path.join(outdir, "stats.jsonl"), "w").close()
+
+wall0 = time.time()
+t = 0.0
+iframe = 0
+dump_frame(iframe, t)
+while t < t_end and time.time() - wall0 < wall_max:
+    t_next = min(t_end, (iframe + 1) * dt_frame)
+    model.evolve_until(t_next)
+    t = model.get_time()
+    iframe += 1
+    dump_frame(iframe, t)
+    if shamrock.sys.world_rank() == 0:
+        print(
+            f"SI t = {t:.3f}, dt = {model.get_dt():.3e}, wall = {time.time() - wall0:.0f} s",
+            flush=True,
+        )
+
 
 print("SI run done")
