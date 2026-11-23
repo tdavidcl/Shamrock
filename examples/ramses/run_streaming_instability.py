@@ -8,7 +8,7 @@ pressure-gradient forcing (``cfg.add_ext_force_shearing_box``), one dust species
 
 Units: Omega = 1, c_s = 1 (H = 1). tau_s = Omega t_stop = 0.1, eps = rho_d / rho_g = 1,
 Pi = eta v_K / c_s = 0.05. Cubic cells of size dx = 0.1 H / 64 (= 2 eta r / 64), on a grid of
-``SI_NX`` x ``SI_NY`` x ``SI_NZ`` cells (default 128 x 128 x 64, i.e. a 0.2 H x 0.2 H x 0.1 H
+``SI_NX`` x ``SI_NY`` x ``SI_NZ`` cells (default 128 x 64 x 128, i.e. a 0.2 H x 0.1 H x 0.2 H
 box). The gas and dust start at the Nakagawa-Sekiya-Hayashi equilibrium, with a 2% white noise on
 the dust density.
 
@@ -53,8 +53,8 @@ P0 = rho_g0 * cs**2 / gamma
 
 # cells per axis (multiples of 2, blocks of 2^3 cells)
 Nx = int(os.environ.get("SI_NX", "128"))
-Ny = int(os.environ.get("SI_NY", "128"))
-Nz = int(os.environ.get("SI_NZ", "64"))
+Ny = int(os.environ.get("SI_NY", "64"))
+Nz = int(os.environ.get("SI_NZ", "128"))
 dxg = 0.1 / 64  # cell size
 Lx, Ly, Lz = Nx * dxg, Ny * dxg, Nz * dxg
 x_c = Lx / 2
@@ -84,8 +84,8 @@ cfg.add_ext_force_shearing_box(Omega_0=Omega, eta=eta_vK, q=q)
 model.set_solver_config(cfg)
 
 model.init_scheduler(int(1e7), 1)
-# blocks of 2^3 cells, the patches are cubes of gcd(block counts) blocks (2 x 2 x 1 patches
-# for 128 x 128 x 64 cells)
+# blocks of 2^3 cells, the patches are cubes of gcd(block counts) blocks (2 x 1 x 2 patches
+# for 128 x 64 x 128 cells)
 model.make_base_grid((0, 0, 0), (2, 2, 2), (Nx // 2, Ny // 2, Nz // 2))
 
 
