@@ -323,6 +323,33 @@ namespace sham {
             mem_base_addr_align = CHAR_BIT * 8;
         }
 
+        // Some backends (e.g. the acpp Vulkan backend) report 0 (no mapping available). Anything
+        // below one byte would become a 0-byte alignment once converted below, and alignment
+        // checks would then divide by zero, so default to 64 bits (8 bytes) as well.
+        if (mem_base_addr_align && *mem_base_addr_align < CHAR_BIT) {
+            warnings.push_back(
+                sham::format(
+                    "mem_base_addr_align is {} bits (less than a byte), defaulting to 64 bits (8 "
+                    "bytes) instead.",
+                    *mem_base_addr_align));
+            mem_base_addr_align = CHAR_BIT * 8;
+        }
+
+        // Some backends (e.g. the acpp Vulkan backend) only support device USM
+        bool usm_host_allocations = true;
+        try {
+            usm_host_allocations = dev.has(sycl::aspect::usm_host_allocations);
+        } catch (...) {
+            warnings.push_back(
+                "dev.has(sycl::aspect::usm_host_allocations) raised an exception for device "
+                + name + ", assuming host USM is supported");
+        }
+        if (!usm_host_allocations) {
+            warnings.push_back(
+                "device does not support host USM allocations, host buffers will fall back to "
+                "std::aligned_alloc (not accessible from device kernels)");
+        }
+
         // Some backends do not report sub_group_sizes, so we default to {1}
         u32 default_work_group_size = 1;
         if (!sub_group_sizes) {
@@ -366,7 +393,8 @@ namespace sham {
             .max_mem_alloc_size_host    = max_alloc_host,
             // the SYCL standard returns the alignment in bits, we convert to bytes for convenience
             .mem_base_addr_align     = shambase::get_check_ref(mem_base_addr_align) / CHAR_BIT,
-            .sub_group_sizes         = shambase::get_check_ref(sub_group_sizes),
+            .usm_host_allocations    = usm_host_allocations,
+            .sub_group_sizes        = shambase::get_check_ref(sub_group_sizes),
             .default_work_group_size = default_work_group_size,
             .pci_address             = std::nullopt,
             .warnings                = warnings};

@@ -19,11 +19,28 @@
 #include "shambackends/details/internal_alloc.hpp"
 #include "shamcomm/logs.hpp"
 #include "shamcomm/worldInfo.hpp"
+#include <cstddef>
+#include <cstdlib>
 #include <exception>
 
 namespace {
 
     sham::MemPerfInfos mem_perf_infos;
+
+    /// True if host USM is not supported by the device (e.g. acpp Vulkan backend), in which case
+    /// host USM allocations fall back to plain host memory.
+    bool use_host_alloc_fallback(const std::shared_ptr<sham::DeviceScheduler> &dev_sched) {
+        return !shambase::get_check_ref(dev_sched).get_queue().get_device_prop().usm_host_allocations;
+    }
+
+    /// Plain host memory replacement for sycl::malloc_host / sycl::aligned_alloc_host.
+    /// The pointer is usable on the host and in queue copies, but not inside device kernels.
+    void *host_alloc_fallback(size_t sz, std::optional<size_t> alignment) {
+        size_t align = alignment.value_or(alignof(std::max_align_t));
+        // std::aligned_alloc requires the size to be a non-zero multiple of the alignment
+        size_t alloc_sz = ((std::max<size_t>(sz, 1) + align - 1) / align) * align;
+        return std::aligned_alloc(align, alloc_sz);
+    }
 
     void register_alloc_device(size_t size, f64 timed) {
 
@@ -174,7 +191,15 @@ namespace sham::details {
             get_mode_name<target>());
 
         sycl::context &sycl_ctx = dev_sched->ctx->ctx;
-        sycl::free(usm_ptr, sycl_ctx);
+        if constexpr (target == host) {
+            if (use_host_alloc_fallback(dev_sched)) {
+                std::free(usm_ptr);
+            } else {
+                sycl::free(usm_ptr, sycl_ctx);
+            }
+        } else {
+            sycl::free(usm_ptr, sycl_ctx);
+        }
 
         f64 end_time = shambase::details::get_wtime();
 
@@ -290,6 +315,9 @@ namespace sham::details {
                 });
             } else if constexpr (target == host) {
                 catch_alloc_except([&] {
+                    if (use_host_alloc_fallback(dev_sched)) {
+                        return host_alloc_fallback(sz, alignment);
+                    }
                     return sycl::aligned_alloc_host(*alignment, sz, sycl_ctx);
                 });
             } else {
@@ -306,6 +334,9 @@ namespace sham::details {
                 });
             } else if constexpr (target == host) {
                 catch_alloc_except([&] {
+                    if (use_host_alloc_fallback(dev_sched)) {
+                        return host_alloc_fallback(sz, std::nullopt);
+                    }
                     return sycl::malloc_host(sz, sycl_ctx);
                 });
             } else {

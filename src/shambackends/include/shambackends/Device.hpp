@@ -124,6 +124,11 @@ namespace sham {
         /// The base address alignment for memory allocations on the device in bytes
         uint32_t mem_base_addr_align;
 
+        /// Whether the device supports host USM allocations (sycl::aspect::usm_host_allocations).
+        /// If false, host USM buffers fall back to plain host memory (std::aligned_alloc), which
+        /// can be used for host access and copies but not inside device kernels.
+        bool usm_host_allocations;
+
         /// SYCL sub group sizes property
         std::vector<size_t> sub_group_sizes;
 
