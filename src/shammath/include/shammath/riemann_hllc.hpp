@@ -141,44 +141,60 @@ namespace shammath {
 
         // NOLINTEND(readability-identifier-naming)
 
-        // Equation (10.40) from Toro 3rd Edition , Springer 2009
-        // Left intermediate conservative state in the star region
-        // Tcons c_l_star = (s_l * c_l - f_l + press_star * D_star) * (1.0 / (s_l - S_star));
-        Tcons c_l_star = (s_l * c_l - f_l + press_lr * D_star) * (1.0 / (s_l - S_star));
+        // Star region fluxes, computed only when selected
+        // Equations (10.38-10.40) from Toro 3rd Edition , Springer 2009
+        auto get_f_l_star = [&]() -> Tcons {
+            Tcons c_l_star = (s_l * c_l - f_l + press_lr * D_star) * (1.0 / (s_l - S_star));
+            return f_l + s_l * (c_l_star - c_l);
+        };
+        auto get_f_r_star = [&]() -> Tcons {
+            Tcons c_r_star = (s_r * c_r - f_r + press_lr * D_star) * (1.0 / (s_r - S_star));
+            return f_r + s_r * (c_r_star - c_r);
+        };
 
-        // Equation (10.40) from Toro 3rd Edition , Springer 2009
-        // Right intermediate conservative state in the star region
-        // Tcons c_r_star = (s_r * c_r - f_r + press_star * D_star) * (1.0 / (s_r - S_star));
-        Tcons c_r_star = (s_r * c_r - f_r + press_lr * D_star) * (1.0 / (s_r - S_star));
-
-        // intemediate Flux in the star region
-        // Equation (10.38) from Toro 3rd Edition , Springer 2009
-        Tcons f_l_star = f_l + s_l * (c_l_star - c_l);
-        Tcons f_r_star = f_r + s_r * (c_r_star - c_r);
-
-        // HLLC flux, as selected by this call
-        const Tcons &f_this = (s_l >= 0)      ? f_l
-                              : (S_star >= 0) ? f_l_star
-                              : (s_r >= 0)    ? f_r_star
-                                              : f_r;
+        // HLLC flux. With a consistent fan and no speed exactly zero, this call and the one made
+        // from the other side of the face, (R, L, -n), select the same branch, so the plain HLLC
+        // selection is already mirror antisymmetric.
+        if (s_l < S_star && S_star < s_r && s_l != 0 && S_star != 0 && s_r != 0) {
+            if (s_l > 0) {
+                return f_l;
+            } else if (S_star > 0) {
+                return get_f_l_star();
+            } else if (s_r > 0) {
+                return get_f_r_star();
+            }
+            return f_r;
+        }
 
         // The PVRS can underestimate the star pressure (e.g. converging flows from Mach ~2),
         // giving s_l > s_r, or S_star outside of [s_l, s_r]. The call made from the other side of
-        // the face, (R, L, -n), then selects a different branch: since a face flux is computed
-        // from both of its sides (xp/xm, ...), the scheme would no longer conserve mass, momentum
-        // and energy (each side can even see its own state as upwind and only let matter out).
+        // the face then selects a different branch: since a face flux is computed from both of
+        // its sides (xp/xm, ...), the scheme would no longer conserve mass, momentum and energy
+        // (each side can even see its own state as upwind and only let matter out).
         // That mirrored call has s_l' = -s_r, s_r' = -s_l, S_star' = -S_star, and its candidate
         // fluxes are -f_r, -f_r_star, -f_l_star, -f_l (exactly, given the summation order of
-        // S_star and press_lr), so minus its flux is the selection below over the same
-        // candidates. Averaging both makes F(L, R, n) == -F(R, L, -n) hold exactly, and costs
-        // nothing more where the fan is consistent: both selections agree and the average is
-        // the plain HLLC flux.
-        const Tcons &f_mirror = (s_r <= 0)      ? f_r
-                                : (S_star <= 0) ? f_r_star
-                                : (s_l <= 0)    ? f_l_star
-                                                : f_l;
+        // S_star and press_lr), so minus its flux is the second selection below over the same
+        // candidates. Returning the average of both selections makes
+        // F(L, R, n) == -F(R, L, -n) hold exactly; only the selected candidates are computed.
+        // Branch indices: 0 = f_l, 1 = f_l_star, 2 = f_r_star, 3 = f_r.
+        const int sel_this   = (s_l >= 0) ? 0 : (S_star >= 0) ? 1 : (s_r >= 0) ? 2 : 3;
+        const int sel_mirror = (s_r <= 0) ? 3 : (S_star <= 0) ? 2 : (s_l <= 0) ? 1 : 0;
 
-        return Tscal{0.5} * (f_this + f_mirror);
+        auto candidate = [&](int sel) -> Tcons {
+            if (sel == 0) {
+                return f_l;
+            } else if (sel == 1) {
+                return get_f_l_star();
+            } else if (sel == 2) {
+                return get_f_r_star();
+            }
+            return f_r;
+        };
+
+        if (sel_this == sel_mirror) {
+            return candidate(sel_this);
+        }
+        return Tscal{0.5} * (candidate(sel_this) + candidate(sel_mirror));
     }
 
     /**
